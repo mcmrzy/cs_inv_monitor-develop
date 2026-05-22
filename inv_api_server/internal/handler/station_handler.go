@@ -299,6 +299,10 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 			todayIncome = todayData.Income
 		}
 
+		if dailyEnergy == 0 {
+			dailyEnergy, _ = h.deviceService.GetStationTodayEnergy(c.Request.Context(), station.ID)
+		}
+
 		stationTotal, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), station.ID)
 
 		summaries = append(summaries, StationSummary{

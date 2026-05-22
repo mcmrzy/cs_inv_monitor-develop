@@ -651,6 +651,18 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 	return totalEnergy, monthEnergy
 }
 
+func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID int64) (float64, error) {
+	query := `
+		SELECT COALESCE(SUM(energy_produce), 0)
+		FROM device_day_data
+		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
+		AND data_date = CURRENT_DATE
+	`
+	var energy float64
+	err := r.db.QueryRow(ctx, query, stationID).Scan(&energy)
+	return energy, err
+}
+
 func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (*model.DeviceRealtimeData, error) {
 	if r.cache != nil {
 		for _, cacheKey := range []string{"realtime:latest:" + sn, "telemetry:latest:" + sn} {

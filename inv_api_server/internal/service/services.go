@@ -197,6 +197,10 @@ func (s *DeviceService) GetStationEnergySummary(ctx context.Context, stationID i
 	return s.repo.GetStationEnergySummary(ctx, stationID)
 }
 
+func (s *DeviceService) GetStationTodayEnergy(ctx context.Context, stationID int64) (float64, error) {
+	return s.repo.GetStationTodayEnergy(ctx, stationID)
+}
+
 func (s *DeviceService) GetRealtimeData(ctx context.Context, sn string) (*model.DeviceRealtimeData, error) {
 	return s.repo.GetRealtimeData(ctx, sn)
 }
