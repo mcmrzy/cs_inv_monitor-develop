@@ -157,7 +157,13 @@ func (r *DeviceRepository) UpsertStationDayData(ctx context.Context, stationID i
 		INSERT INTO station_day_data (station_id, data_date, energy_produce, income, device_count, online_count, fault_count, created_at)
 		VALUES ($1, CURRENT_DATE, $2, $3, 0, 0, 0, NOW())
 		ON CONFLICT (station_id, data_date) DO UPDATE SET
-			energy_produce = station_day_data.energy_produce + EXCLUDED.energy_produce,
+			energy_produce = (
+				SELECT COALESCE(SUM(energy_produce), 0)
+				FROM device_day_data
+				WHERE device_sn IN (
+					SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL
+				) AND data_date = CURRENT_DATE
+			),
 			income = station_day_data.income + EXCLUDED.income
 	`
 	_, err := r.db.Exec(ctx, query, stationID, energy, income)
