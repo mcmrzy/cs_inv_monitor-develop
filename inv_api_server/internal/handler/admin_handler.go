@@ -514,6 +514,11 @@ func InternalDeviceStatus(c *gin.Context) {
 		return
 	}
 
+	if !sn.ValidateSN(req.SN) {
+		c.JSON(http.StatusOK, map[string]interface{}{"status": "error", "message": "invalid SN"})
+		return
+	}
+
 	db := getDB()
 	if db == nil {
 		c.JSON(http.StatusOK, map[string]interface{}{"status": "error", "message": "db not ready"})
@@ -618,6 +623,11 @@ func InternalDeviceData(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&data); err != nil || data.SerialNumber == "" {
 		c.JSON(http.StatusOK, map[string]interface{}{"status": "error", "message": "invalid request"})
+		return
+	}
+
+	if !sn.ValidateSN(data.SerialNumber) {
+		c.JSON(http.StatusOK, map[string]interface{}{"status": "error", "message": "invalid SN"})
 		return
 	}
 

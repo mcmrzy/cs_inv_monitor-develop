@@ -292,8 +292,8 @@ func (c *Client) subscribeTopics() error {
 
 func extractSN(topic string) string {
 	parts := strings.Split(topic, "/")
-	if len(parts) >= 3 {
-		return parts[2]
+	if len(parts) >= 4 && parts[0] == "$share" {
+		return parts[3]
 	}
 	if len(parts) >= 2 {
 		return parts[1]

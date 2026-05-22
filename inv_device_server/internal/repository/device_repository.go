@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"inv-device-server/internal/model"
+	"inv-device-server/pkg/sn"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -39,6 +40,10 @@ func (r *DeviceRepository) UpsertRealtime(ctx context.Context, rt *model.DeviceR
 }
 
 func (r *DeviceRepository) UpsertDeviceInfo(ctx context.Context, info *model.DeviceInfo) error {
+	if !sn.ValidateSN(info.SN) {
+		return fmt.Errorf("invalid SN format: %s", info.SN)
+	}
+
 	rawBytes, _ := json.Marshal(info)
 	rawJSON := string(rawBytes)
 
