@@ -70,9 +70,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       (failure) => emit(DeviceError(message: failure.message)),
       (data) {
         final device = data['device'];
-        final rawRealtime = data['realtime_data'];
-        final inverterData = repository.parseRealtimeData(rawRealtime);
-        emit(DeviceDetailLoaded(device: device, realtimeData: inverterData));
+        emit(DeviceDetailLoaded(device: device, realtimeData: null));
 
         _startMQTTRealtime(event.sn);
       },
@@ -109,19 +107,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     DeviceRealtimeRefresh event,
     Emitter<DeviceState> emit,
   ) async {
-    final currentState = state;
-    if (currentState is! DeviceDetailLoaded) return;
-
-    final result = await repository.getRealtimeData(event.sn);
-    result.fold(
-      (failure) => null,
-      (data) {
-        final inverterData = repository.parseRealtimeData(data);
-        if (inverterData != null && inverterData.ac != null) {
-          emit(DeviceDetailLoaded(device: currentState.device, realtimeData: inverterData));
-        }
-      },
-    );
   }
 
   void _onMQTTUpdate(
