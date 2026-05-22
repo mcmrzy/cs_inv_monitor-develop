@@ -652,11 +652,17 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 }
 
 func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (*model.DeviceRealtimeData, error) {
-	cacheKey := "telemetry:latest:" + sn
 	if r.cache != nil {
-		if cached, err := r.cache.Get(ctx, cacheKey).Result(); err == nil && cached != "" {
+		for _, cacheKey := range []string{"realtime:latest:" + sn, "telemetry:latest:" + sn} {
+			cached, err := r.cache.Get(ctx, cacheKey).Result()
+			if err != nil || cached == "" {
+				continue
+			}
 			var m map[string]interface{}
 			if json.Unmarshal([]byte(cached), &m) == nil {
+				if _, ok := m["ac"]; ok {
+					flattenDeviceRealtime(m)
+				}
 				return mapToRealtimeData(sn, m), nil
 			}
 		}
@@ -677,6 +683,58 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (*mod
 	}
 
 	return mapToRealtimeData(sn, m), nil
+}
+
+func flattenDeviceRealtime(m map[string]interface{}) {
+	copyNested := func(key string, fields map[string]string) {
+		nested, ok := m[key]
+		if !ok {
+			return
+		}
+		nm, ok2 := nested.(map[string]interface{})
+		if !ok2 {
+			return
+		}
+		for from, to := range fields {
+			if v, exists := nm[from]; exists {
+				m[to] = v
+			}
+		}
+	}
+
+	copyNested("ac", map[string]string{
+		"voltage": "phase_a_voltage", "current": "phase_a_current",
+		"power": "total_active_power", "frequency": "grid_frequency", "pf": "power_factor",
+	})
+
+	copyNested("battery", map[string]string{
+		"voltage": "battery_voltage", "current": "battery_current",
+		"soc": "battery_soc", "temp": "battery_temp", "status": "battery_status",
+	})
+
+	copyNested("pv", map[string]string{
+		"pv_voltage": "pv_voltage", "pv_current": "pv_current", "pv_power": "pv_power",
+	})
+
+	copyNested("sys_status", map[string]string{
+		"work_state": "work_state_1", "fault_code": "fault_code",
+	})
+
+	copyNested("energy", map[string]string{
+		"daily_pv": "daily_power_yields", "total_pv": "total_power_yields",
+		"runtime_hours": "total_running_time",
+	})
+
+	if v, ok := m["device_sn"]; ok {
+		if _, exists := m["serial_number"]; !exists {
+			m["serial_number"] = v
+		}
+	}
+	if v, ok := m["updated_at"]; ok {
+		if _, exists := m["data_time"]; !exists {
+			m["data_time"] = v
+		}
+	}
 }
 
 func mapToRealtimeData(sn string, m map[string]interface{}) *model.DeviceRealtimeData {
