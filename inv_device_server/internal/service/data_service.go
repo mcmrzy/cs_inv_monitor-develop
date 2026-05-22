@@ -74,11 +74,6 @@ func (s *DataService) handleRealtime(ctx context.Context, rt *model.DeviceRealti
 	}
 
 	if rt.Energy != nil {
-		totalPower := 0.0
-		if rt.AC != nil {
-			totalPower = rt.AC.Power
-		}
-
 		logger.Info("Writing energy data to DB",
 			zap.String("sn", rt.DeviceSN),
 			zap.Float64("daily_pv", rt.Energy.DailyPV),

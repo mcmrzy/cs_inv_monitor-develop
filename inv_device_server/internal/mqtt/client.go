@@ -211,7 +211,6 @@ func NewClient(cfg *config.MQTTConfig, hub *Hub) *Client {
 	opts.SetPassword(cfg.Password)
 	opts.SetAutoReconnect(true)
 	opts.SetCleanSession(true)
-	opts.SetSessionExpiryInterval(0)
 	opts.SetKeepAlive(60 * time.Second)
 	opts.SetPingTimeout(10 * time.Second)
 	opts.SetConnectTimeout(30 * time.Second)
