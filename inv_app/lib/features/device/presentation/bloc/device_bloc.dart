@@ -117,7 +117,9 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       (failure) => null,
       (data) {
         final inverterData = repository.parseRealtimeData(data);
-        emit(DeviceDetailLoaded(device: currentState.device, realtimeData: inverterData));
+        if (inverterData != null && inverterData.ac != null) {
+          emit(DeviceDetailLoaded(device: currentState.device, realtimeData: inverterData));
+        }
       },
     );
   }
