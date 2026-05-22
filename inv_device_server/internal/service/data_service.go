@@ -79,16 +79,19 @@ func (s *DataService) handleRealtime(ctx context.Context, rt *model.DeviceRealti
 			totalPower = rt.AC.Power
 		}
 
-		if err := s.repo.UpsertRealtimeStructured(ctx, rt.DeviceSN, rt.Energy, totalPower); err != nil {
-			logger.Error("Failed to upsert realtime structured",
-				zap.String("sn", rt.DeviceSN),
-				zap.Error(err))
-		}
+		logger.Info("Writing energy data to DB",
+			zap.String("sn", rt.DeviceSN),
+			zap.Float64("daily_pv", rt.Energy.DailyPV),
+			zap.Float64("daily_load", rt.Energy.DailyLoad),
+			zap.Float64("runtime_hours", rt.Energy.RuntimeHours))
 
 		if err := s.repo.UpsertDayData(ctx, rt.DeviceSN, rt.Energy); err != nil {
 			logger.Error("Failed to upsert day data",
 				zap.String("sn", rt.DeviceSN),
 				zap.Error(err))
+		} else {
+			logger.Info("Day data upserted successfully",
+				zap.String("sn", rt.DeviceSN))
 		}
 
 		stationID, _ := s.repo.GetStationIDBySN(ctx, rt.DeviceSN)
@@ -105,6 +108,19 @@ func (s *DataService) handleRealtime(ctx context.Context, rt *model.DeviceRealti
 		cacheKey := "realtime:latest:" + rt.DeviceSN
 		if err := s.rdb.Set(ctx, cacheKey, rawJSON, 120*time.Second).Err(); err != nil {
 			logger.Warn("Redis cache set failed",
+				zap.String("sn", rt.DeviceSN),
+				zap.Error(err))
+		}
+
+		pubChannel := "realtime:channel:" + rt.DeviceSN
+		if err := s.rdb.Publish(ctx, pubChannel, rawJSON).Err(); err != nil {
+			logger.Debug("Redis publish failed",
+				zap.String("sn", rt.DeviceSN),
+				zap.Error(err))
+		}
+
+		if err := mqtt.PublishToStream(s.rdb, rawBytes, rt.DeviceSN); err != nil {
+			logger.Debug("Redis stream publish failed",
 				zap.String("sn", rt.DeviceSN),
 				zap.Error(err))
 		}

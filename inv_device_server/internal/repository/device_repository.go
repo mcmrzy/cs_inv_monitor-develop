@@ -121,7 +121,7 @@ func (r *DeviceRepository) UpsertDayData(ctx context.Context, sn string, energy 
 			energy_consume = EXCLUDED.energy_consume,
 			run_minutes = EXCLUDED.run_minutes
 	`
-	_, err := r.db.Exec(ctx, query, sn, energy.DailyPV, energy.DailyLoad, energy.RuntimeHours)
+	_, err := r.db.Exec(ctx, query, sn, energy.DailyPV, energy.DailyLoad, int(energy.RuntimeHours*60))
 	if err != nil {
 		return fmt.Errorf("upsert day data: %w", err)
 	}

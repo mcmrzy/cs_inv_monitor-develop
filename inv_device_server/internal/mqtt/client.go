@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"inv-device-server/pkg/logger"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
@@ -24,6 +26,8 @@ type Client struct {
 }
 
 type Hub struct {
+	rdb *redis.Client
+
 	snToLastSeen map[string]time.Time
 	snMux        sync.RWMutex
 
@@ -54,24 +58,30 @@ type MQTTStats struct {
 }
 
 func (h *Hub) GetStats() MQTTStats {
-	h.snMux.RLock()
-	onlineCount := len(h.snToLastSeen)
-	h.snMux.RUnlock()
-
 	s := h.stats
-	s.OnlineClients = onlineCount
+	if h.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		onlineCount, _ := h.rdb.HLen(ctx, "device:online").Result()
+		s.OnlineClients = int(onlineCount)
+	} else {
+		h.snMux.RLock()
+		s.OnlineClients = len(h.snToLastSeen)
+		h.snMux.RUnlock()
+	}
 	return s
 }
 
-func NewHub() *Hub {
+func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{
+		rdb:           rdb,
 		snToLastSeen:  make(map[string]time.Time),
 		realtimeStore: make(map[string]*model.DeviceRealtime),
-		dataChan:      make(chan *model.DeviceRealtime, 1000),
-		infoChan:      make(chan *model.DeviceInfo, 200),
-		alarmChan:     make(chan *model.AlarmData, 500),
-		cmdRespChan:   make(chan *model.CommandResponse, 200),
-		cmdChan:       make(chan *model.DeviceCommand, 100),
+		dataChan:      make(chan *model.DeviceRealtime, 2000),
+		infoChan:      make(chan *model.DeviceInfo, 500),
+		alarmChan:     make(chan *model.AlarmData, 1000),
+		cmdRespChan:   make(chan *model.CommandResponse, 500),
+		cmdChan:       make(chan *model.DeviceCommand, 200),
 	}
 }
 
@@ -102,12 +112,33 @@ func (h *Hub) GetRealtime(sn string) *model.DeviceRealtime {
 }
 
 func (h *Hub) MarkSeen(sn string) {
+	now := time.Now()
 	h.snMux.Lock()
-	defer h.snMux.Unlock()
-	h.snToLastSeen[sn] = time.Now()
+	h.snToLastSeen[sn] = now
+	h.snMux.Unlock()
+
+	if h.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		h.rdb.HSet(ctx, "device:online", sn, now.Unix())
+	}
 }
 
 func (h *Hub) IsDeviceOnline(sn string) bool {
+	if h.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		tsStr, err := h.rdb.HGet(ctx, "device:online", sn).Result()
+		if err != nil || tsStr == "" {
+			return false
+		}
+		ts, err := strconv.ParseInt(tsStr, 10, 64)
+		if err != nil {
+			return false
+		}
+		return time.Now().Unix()-ts < onlineTimeoutSeconds
+	}
+
 	h.snMux.RLock()
 	defer h.snMux.RUnlock()
 	lastSeen, ok := h.snToLastSeen[sn]
@@ -128,6 +159,36 @@ func (h *Hub) GetAllRealtimeSNs() []string {
 }
 
 func (h *Hub) GetOnlineDeviceSNs() []string {
+	if h.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		cutoff := time.Now().Unix() - onlineTimeoutSeconds
+		all, err := h.rdb.HGetAll(ctx, "device:online").Result()
+		if err != nil {
+			h.snMux.RLock()
+			defer h.snMux.RUnlock()
+			cutoffTime := time.Now().Add(-time.Duration(onlineTimeoutSeconds) * time.Second)
+			var sns []string
+			for sn, lastSeen := range h.snToLastSeen {
+				if lastSeen.After(cutoffTime) {
+					sns = append(sns, sn)
+				}
+			}
+			return sns
+		}
+		var sns []string
+		for sn, tsStr := range all {
+			ts, err := strconv.ParseInt(tsStr, 10, 64)
+			if err != nil {
+				continue
+			}
+			if ts > cutoff {
+				sns = append(sns, sn)
+			}
+		}
+		return sns
+	}
+
 	h.snMux.RLock()
 	defer h.snMux.RUnlock()
 	cutoff := time.Now().Add(-time.Duration(onlineTimeoutSeconds) * time.Second)
@@ -150,6 +211,7 @@ func NewClient(cfg *config.MQTTConfig, hub *Hub) *Client {
 	opts.SetPassword(cfg.Password)
 	opts.SetAutoReconnect(true)
 	opts.SetCleanSession(true)
+	opts.SetSessionExpiryInterval(0)
 	opts.SetKeepAlive(60 * time.Second)
 	opts.SetPingTimeout(10 * time.Second)
 	opts.SetConnectTimeout(30 * time.Second)
@@ -202,20 +264,20 @@ func (c *Client) subscribeTopics() error {
 		qos     byte
 		handler mqtt.MessageHandler
 	}{
-		{"cs_inv/+/status", 1, c.handleStatusMessage},
-		{"cs_inv/+/info", 1, c.handleInfoMessage},
-		{"cs_inv/+/data/ac", 0, c.handleDataACMessage},
-		{"cs_inv/+/data/battery", 0, c.handleDataBatteryMessage},
-		{"cs_inv/+/data/pv", 0, c.handleDataPVMessage},
-		{"cs_inv/+/data/status", 0, c.handleDataStatusMessage},
-		{"cs_inv/+/data/energy", 0, c.handleDataEnergyMessage},
-		{"cs_inv/+/data/cells", 0, c.handleDataCellsMessage},
-		{"cs_inv/+/data/alarm", 1, c.handleAlarmMessage},
-		{"cs_inv/+/cmd/response", 1, c.handleCmdResponseMessage},
-		{"cs_inv/+/ac", 0, c.handleDataACMessage},
-		{"cs_inv/+/dc", 0, c.handleDataPVMessage},
-		{"cs_inv/+/energy", 0, c.handleDataEnergyMessage},
-		{"cs_inv/+/alarm", 1, c.handleAlarmMessage},
+		{"$share/inv-group/cs_inv/+/status", 1, c.handleStatusMessage},
+		{"$share/inv-group/cs_inv/+/info", 1, c.handleInfoMessage},
+		{"$share/inv-group/cs_inv/+/data/ac", 0, c.handleDataACMessage},
+		{"$share/inv-group/cs_inv/+/data/battery", 0, c.handleDataBatteryMessage},
+		{"$share/inv-group/cs_inv/+/data/pv", 0, c.handleDataPVMessage},
+		{"$share/inv-group/cs_inv/+/data/status", 0, c.handleDataStatusMessage},
+		{"$share/inv-group/cs_inv/+/data/energy", 0, c.handleDataEnergyMessage},
+		{"$share/inv-group/cs_inv/+/data/cells", 0, c.handleDataCellsMessage},
+		{"$share/inv-group/cs_inv/+/data/alarm", 1, c.handleAlarmMessage},
+		{"$share/inv-group/cs_inv/+/cmd/response", 1, c.handleCmdResponseMessage},
+		{"$share/inv-group/cs_inv/+/ac", 0, c.handleDataACMessage},
+		{"$share/inv-group/cs_inv/+/dc", 0, c.handleDataPVMessage},
+		{"$share/inv-group/cs_inv/+/energy", 0, c.handleDataEnergyMessage},
+		{"$share/inv-group/cs_inv/+/alarm", 1, c.handleAlarmMessage},
 	}
 
 	for _, t := range topics {
@@ -229,24 +291,17 @@ func (c *Client) subscribeTopics() error {
 	return nil
 }
 
-// ==================== 消息路由 ====================
 func extractSN(topic string) string {
 	parts := strings.Split(topic, "/")
+	if len(parts) >= 3 {
+		return parts[2]
+	}
 	if len(parts) >= 2 {
 		return parts[1]
 	}
 	return ""
 }
 
-func getTopicSuffix(topic string) string {
-	parts := strings.SplitN(topic, "/", 3)
-	if len(parts) >= 3 {
-		return parts[2]
-	}
-	return ""
-}
-
-// ==================== Status 消息 ====================
 func (c *Client) handleStatusMessage(client mqtt.Client, msg mqtt.Message) {
 	sn := extractSN(msg.Topic())
 
@@ -275,7 +330,6 @@ func (c *Client) handleStatusMessage(client mqtt.Client, msg mqtt.Message) {
 		zap.Int("rssi", status.RSSI))
 }
 
-// ==================== Info 消息 ====================
 func (c *Client) handleInfoMessage(client mqtt.Client, msg mqtt.Message) {
 	var info model.DeviceInfo
 	if err := json.Unmarshal(msg.Payload(), &info); err != nil {
@@ -298,7 +352,6 @@ func (c *Client) handleInfoMessage(client mqtt.Client, msg mqtt.Message) {
 	}
 }
 
-// ==================== Data AC 消息 ====================
 func (c *Client) handleDataACMessage(client mqtt.Client, msg mqtt.Message) {
 	var data model.ACData
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
@@ -321,7 +374,6 @@ func (c *Client) handleDataACMessage(client mqtt.Client, msg mqtt.Message) {
 	sendToDataChan(c.hub, rt, sn)
 }
 
-// ==================== Data Battery 消息 ====================
 func (c *Client) handleDataBatteryMessage(client mqtt.Client, msg mqtt.Message) {
 	var data model.BatteryData
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
@@ -344,7 +396,6 @@ func (c *Client) handleDataBatteryMessage(client mqtt.Client, msg mqtt.Message) 
 	sendToDataChan(c.hub, rt, sn)
 }
 
-// ==================== Data PV 消息 ====================
 func (c *Client) handleDataPVMessage(client mqtt.Client, msg mqtt.Message) {
 	payload := remapLegacyPV(msg.Payload())
 
@@ -369,7 +420,6 @@ func (c *Client) handleDataPVMessage(client mqtt.Client, msg mqtt.Message) {
 	sendToDataChan(c.hub, rt, sn)
 }
 
-// ==================== Data Status 消息 ====================
 func (c *Client) handleDataStatusMessage(client mqtt.Client, msg mqtt.Message) {
 	var data model.SystemStatus
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
@@ -392,7 +442,6 @@ func (c *Client) handleDataStatusMessage(client mqtt.Client, msg mqtt.Message) {
 	sendToDataChan(c.hub, rt, sn)
 }
 
-// ==================== Data Energy 消息 ====================
 func (c *Client) handleDataEnergyMessage(client mqtt.Client, msg mqtt.Message) {
 	payload := remapLegacyEnergy(msg.Payload())
 
@@ -417,7 +466,6 @@ func (c *Client) handleDataEnergyMessage(client mqtt.Client, msg mqtt.Message) {
 	sendToDataChan(c.hub, rt, sn)
 }
 
-// ==================== Data Cells 消息 ====================
 func (c *Client) handleDataCellsMessage(client mqtt.Client, msg mqtt.Message) {
 	var data model.CellsData
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
@@ -440,7 +488,6 @@ func (c *Client) handleDataCellsMessage(client mqtt.Client, msg mqtt.Message) {
 	sendToDataChan(c.hub, rt, sn)
 }
 
-// ==================== Alarm 消息 ====================
 func (c *Client) handleAlarmMessage(client mqtt.Client, msg mqtt.Message) {
 	var alarm model.AlarmData
 	if err := json.Unmarshal(msg.Payload(), &alarm); err != nil {
@@ -461,7 +508,6 @@ func (c *Client) handleAlarmMessage(client mqtt.Client, msg mqtt.Message) {
 	}
 }
 
-// ==================== Cmd Response 消息 ====================
 func (c *Client) handleCmdResponseMessage(client mqtt.Client, msg mqtt.Message) {
 	var resp model.CommandResponse
 	if err := json.Unmarshal(msg.Payload(), &resp); err != nil {
@@ -482,7 +528,6 @@ func (c *Client) handleCmdResponseMessage(client mqtt.Client, msg mqtt.Message) 
 	}
 }
 
-// ==================== 命令下发 ====================
 func (c *Client) handleCommands(ctx context.Context) {
 	for {
 		select {
@@ -500,7 +545,7 @@ func (c *Client) sendCommand(cmd *model.DeviceCommand) {
 	topic := fmt.Sprintf("cs_inv/%s/cmd", cmd.DeviceSN)
 
 	payload := map[string]string{
-		"topic":   cmd.CmdType,
+		"topic": cmd.CmdType,
 	}
 	if v, ok := cmd.Params["value"]; ok {
 		payload["payload"] = fmt.Sprintf(`{"value":%v}`, v)
@@ -537,7 +582,6 @@ func (c *Client) Disconnect() {
 	logger.Info("MQTT client disconnected")
 }
 
-// ==================== Hub 辅助 ====================
 func (h *Hub) getOrCreateRealtimeLocked(sn string) *model.DeviceRealtime {
 	rt, ok := h.realtimeStore[sn]
 	if !ok {

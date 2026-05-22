@@ -117,7 +117,7 @@ type EnergyData struct {
 	TotalDischarge  float64 `json:"total_discharge"`
 	DailyLoad       float64 `json:"daily_load"`
 	TotalLoad       float64 `json:"total_load"`
-	RuntimeHours    int     `json:"runtime_hours"`
+	RuntimeHours    float64 `json:"runtime_hours"`
 
 	SN         string    `json:"-"`
 	ReceivedAt time.Time `json:"-"`

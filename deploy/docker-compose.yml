@@ -1,0 +1,127 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: inv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inv_mqtt
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-inv_mqtt_2024}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inv_mqtt"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - inv-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: inv-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+    networks:
+      - inv-net
+
+  inv-api-server:
+    image: inv-api-server:latest
+    build:
+      context: ./inv_api_server
+      dockerfile: Dockerfile
+    container_name: inv-api-server
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-inv_mqtt_2024}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      JWT_SECRET: ${JWT_SECRET:-CSKJ_INV_APP_SERVER_APP_MQTT_KEY}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - inv-net
+
+  inv-device-server-1:
+    image: inv-device-server:latest
+    build:
+      context: ./inv_device_server
+      dockerfile: Dockerfile
+    container_name: inv-device-server-1
+    restart: unless-stopped
+    environment:
+      CLIENT_ID: CSKJ-INV-SERVER-DEVICE-1
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-inv_mqtt_2024}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      MQTT_BROKER: ${MQTT_BROKER:-jiuxiaoyw.online}
+      MQTT_PORT: ${MQTT_PORT:-8883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-CSKJ-INV-SERVER-DEVICE}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - inv-net
+
+  inv-device-server-2:
+    image: inv-device-server:latest
+    container_name: inv-device-server-2
+    restart: unless-stopped
+    environment:
+      CLIENT_ID: CSKJ-INV-SERVER-DEVICE-2
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD:-inv_mqtt_2024}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      MQTT_BROKER: ${MQTT_BROKER:-jiuxiaoyw.online}
+      MQTT_PORT: ${MQTT_PORT:-8883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-CSKJ-INV-SERVER-DEVICE}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+    ports:
+      - "8082:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - inv-net
+
+networks:
+  inv-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:

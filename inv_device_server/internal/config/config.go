@@ -65,6 +65,8 @@ func Load(configPath string) (*Config, error) {
 
 	viper.SetDefault("timezone", "Asia/Shanghai")
 
+	viper.BindEnv("mqtt.password", "MQTT_PASSWORD")
+
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {

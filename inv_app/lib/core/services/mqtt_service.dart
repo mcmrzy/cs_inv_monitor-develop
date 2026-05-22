@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:inv_app/core/config/app_config.dart';
@@ -40,7 +41,9 @@ class MQTTServiceImpl implements MQTTService {
     _connectionCompleter = Completer<void>();
     _client = MqttServerClient.withPort(AppConfig.mqttBrokerHost, clientId, AppConfig.mqttBrokerPort);
     _client!.secure = true;
-    _client!.onBadCertificate = (Object _) => true;
+    if (kDebugMode) {
+      _client!.onBadCertificate = (Object _) => true;
+    }
     _client!.keepAlivePeriod = 120;
     _client!.connectTimeoutPeriod = 30000;
     _client!.autoReconnect = true;

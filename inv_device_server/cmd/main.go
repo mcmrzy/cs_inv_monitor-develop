@@ -67,7 +67,7 @@ func main() {
 	}
 	defer rdb.Close()
 
-	hub := mqtt.NewHub()
+	hub := mqtt.NewHub(rdb)
 
 	mqttClient := mqtt.NewClient(&cfg.MQTT, hub)
 	if err := mqttClient.Connect(ctx); err != nil {
@@ -177,6 +177,21 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
+	router.GET("/metrics", func(c *gin.Context) {
+		stats := dataService.GetMQTTStats()
+		statsMap := map[string]interface{}{
+			"mqtt_data_received":     stats.DataReceived,
+			"mqtt_data_dropped":      stats.DataDropped,
+			"mqtt_alarm_received":    stats.AlarmReceived,
+			"mqtt_alarm_dropped":     stats.AlarmDropped,
+			"mqtt_cmd_sent":          stats.CmdSent,
+			"mqtt_cmd_resp_received": stats.CmdRespReceived,
+			"mqtt_online_clients":    stats.OnlineClients,
+			"mqtt_last_data_at":      stats.LastDataAt.Unix(),
+		}
+		c.JSON(http.StatusOK, statsMap)
 	})
 
 	api := router.Group("/api/v1")

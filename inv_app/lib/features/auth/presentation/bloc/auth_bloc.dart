@@ -359,12 +359,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _connectMQTT(String clientId) async {
     try {
+      final token = await storageService.getToken();
+      if (token == null) {
+        print('[MQTT] No JWT token, skipping MQTT connect');
+        return;
+      }
       await mqttService.connect(
         clientId,
-        username: 'CSKJ-INV-SERVER-APP',
-        password: 'CSKJINVSERVERAPP',
+        username: clientId,
+        password: token,
       );
-      print('[MQTT] Connected as $clientId');
+      print('[MQTT] Connected as $clientId with JWT auth');
     } catch (e) {
       print('[MQTT] Connect failed: $e');
     }

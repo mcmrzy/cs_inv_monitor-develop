@@ -22,7 +22,7 @@ redis:
   db: 0
 
 jwt:
-  secret: ${JWT_SECRET:-inv-mqtt-jwt-secret-2024-change-me}
+  secret: ${JWT_SECRET:-CSKJ_INV_APP_SERVER_APP_MQTT_KEY}
   expire_time: 168h
   issuer: inv-api-server
 
