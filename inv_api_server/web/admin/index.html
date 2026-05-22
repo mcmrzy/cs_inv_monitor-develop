@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>光伏逆变器 - 管理后台</title>
+<style>
+:root {
+  --bg: #f8f9fb;
+  --surface: #ffffff;
+  --border: #e8ecf1;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --sidebar-bg: #111827;
+  --sidebar-text: #9ca3af;
+  --sidebar-active: #ffffff;
+  --sidebar-hover: #1f2937;
+  --sidebar-active-bg: #1f2937;
+  --accent: #111827;
+  --accent-hover: #1f2937;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
+  --success: #10b981;
+  --success-hover: #059669;
+  --success-bg: #ecfdf5;
+  --success-border: #a7f3d0;
+  --warn: #f59e0b;
+  --warn-hover: #d97706;
+  --warn-bg: #fffbeb;
+  --warn-border: #fde68a;
+  --info: #6366f1;
+  --info-bg: #eef2ff;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.04);
+  --transition: 0.2s ease;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;line-height:1.5;}
+
+.sidebar{width:230px;background:var(--sidebar-bg);color:var(--sidebar-text);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:transform .3s ease;}
+.sidebar-header{padding:22px 20px;display:flex;align-items:center;gap:12px;}
+.sidebar-header .logo{width:38px;height:38px;background:linear-gradient(135deg,#10b981,#059669);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(16,185,129,0.3);}
+.sidebar-header .title{font-size:16px;font-weight:700;color:#fff;letter-spacing:-0.3px;}
+.sidebar-header .sub{font-size:10px;color:var(--sidebar-text);font-weight:400;letter-spacing:0.5px;text-transform:uppercase;margin-top:-2px;}
+.sidebar-nav{flex:1;overflow-y:auto;padding:4px 10px;}
+.sidebar-nav .nav-section{font-size:10px;color:#4b5563;text-transform:uppercase;letter-spacing:1px;padding:16px 12px 6px;font-weight:600;}
+.sidebar-nav .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;font-size:13px;color:var(--sidebar-text);transition:all var(--transition);border-radius:8px;margin-bottom:2px;white-space:nowrap;font-weight:500;}
+.sidebar-nav .nav-item:hover{background:var(--sidebar-hover);color:#e5e7eb;}
+.sidebar-nav .nav-item.active{background:var(--sidebar-active-bg);color:var(--sidebar-active);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.3);}
+.sidebar-nav .nav-item .icon{font-size:15px;width:22px;text-align:center;flex-shrink:0;}
+.sidebar-nav .nav-item .badge-dot{width:7px;height:7px;border-radius:50%;background:var(--success);margin-left:auto;}
+.sidebar-footer{padding:14px 20px;border-top:1px solid #1f2937;font-size:11px;color:#4b5563;display:flex;align-items:center;gap:6px;}
+.sidebar-footer .dot{width:6px;height:6px;border-radius:50%;background:var(--success);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+
+.main{flex:1;margin-left:230px;display:flex;flex-direction:column;min-height:100vh;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;backdrop-filter:blur(8px);}
+.topbar .breadcrumb{font-size:14px;color:var(--text);font-weight:600;}
+.topbar .breadcrumb .sep{color:var(--text-muted);margin:0 6px;font-weight:400;}
+.topbar .info-row{display:flex;gap:20px;align-items:center;font-size:12px;color:var(--text-secondary);}
+.topbar .info-row .sys-dot{width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;margin-right:4px;}
+.hamburger{display:none;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text);padding:4px 8px;border-radius:6px;}
+.hamburger:hover{background:#f1f5f9;}
+
+.content{padding:24px 28px;flex:1;}
+.panel{display:none;}
+.panel.active{display:block;animation:fadeIn .25s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:16px;margin-bottom:24px;}
+.card{background:var(--surface);border-radius:var(--radius);padding:20px 18px;box-shadow:var(--shadow);border:1px solid var(--border);transition:box-shadow var(--transition);position:relative;overflow:hidden;}
+.card:hover{box-shadow:var(--shadow-md);}
+.card .card-icon{position:absolute;right:14px;top:14px;font-size:28px;opacity:0.8;}
+.card .card-label{font-size:11px;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.6px;font-weight:500;}
+.card .card-value{font-size:28px;font-weight:700;color:var(--text);letter-spacing:-0.5px;}
+.card .card-value.green{color:var(--success);}
+.card .card-value.red{color:var(--danger);}
+.card .card-value.amber{color:var(--warn);}
+.card .card-sub{font-size:11px;color:var(--text-muted);margin-top:4px;}
+
+.card-service{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;}
+.card-service .svc-info{display:flex;flex-direction:column;}
+.card-service .svc-name{font-size:13px;font-weight:600;}
+.card-service .svc-port{font-size:11px;color:var(--text-muted);margin-top:2px;}
+
+.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;}
+.status-dot.ok{background:var(--success);box-shadow:0 0 6px rgba(16,185,129,0.4);}
+.status-dot.err{background:var(--danger);box-shadow:0 0 6px rgba(239,68,68,0.4);}
+
+.table-wrap{background:var(--surface);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--border);}
+.table-scroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead{background:#f9fafb;}
+th{padding:11px 16px;text-align:left;font-weight:600;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;border-bottom:1px solid var(--border);}
+td{padding:10px 16px;font-size:13px;border-bottom:1px solid #f3f4f6;color:var(--text-secondary);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#f9fafb;}
+
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:600;letter-spacing:0.2px;}
+.badge .bdot{width:5px;height:5px;border-radius:50%;}
+.badge.online{background:var(--success-bg);color:var(--success);border:1px solid var(--success-border);}
+.badge.online .bdot{background:var(--success);}
+.badge.offline{background:#f3f4f6;color:#9ca3af;border:1px solid #e5e7eb;}
+.badge.offline .bdot{background:#9ca3af;}
+.badge.fault{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-border);}
+.badge.fault .bdot{background:var(--danger);}
+.badge.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-border);}
+.badge.warn .bdot{background:var(--warn);}
+.badge.info{background:var(--info-bg);color:var(--info);border:1px solid #c7d2fe;}
+.badge.info .bdot{background:var(--info);}
+
+.toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+.toolbar input,.toolbar select{flex:1;min-width:160px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;outline:none;background:var(--surface);transition:border var(--transition);}
+.toolbar input:focus,.toolbar select:focus{border-color:var(--text-secondary);box-shadow:0 0 0 3px rgba(100,116,139,0.08);}
+
+.btn{padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;cursor:pointer;font-weight:500;transition:all var(--transition);white-space:nowrap;background:var(--surface);color:var(--text);display:inline-flex;align-items:center;gap:5px;line-height:1;}
+.btn:hover{background:#f3f4f6;border-color:#d1d5db;}
+.btn-dark{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn-dark:hover{background:var(--accent-hover);}
+.btn-danger{background:var(--danger);color:#fff;border-color:var(--danger);}
+.btn-danger:hover{background:var(--danger-hover);border-color:var(--danger-hover);}
+.btn-success{background:var(--success);color:#fff;border-color:var(--success);}
+.btn-success:hover{background:var(--success-hover);border-color:var(--success-hover);}
+.btn-warn{background:var(--warn);color:#fff;border-color:var(--warn);}
+.btn-warn:hover{background:var(--warn-hover);border-color:var(--warn-hover);}
+.btn-sm{padding:5px 10px;font-size:11px;border-radius:5px;}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--text-secondary);}
+.btn-ghost:hover{background:#f3f4f6;}
+
+.form-panel{display:none;background:var(--surface);border-radius:var(--radius);padding:18px;margin-bottom:16px;border:1px solid var(--border);box-shadow:var(--shadow);}
+.form-panel.show{display:block;animation:fadeIn .2s ease;}
+.form-panel .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:12px;}
+.form-panel .form-grid .fg{display:flex;flex-direction:column;gap:3px;}
+.form-panel .form-grid label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;}
+.form-panel .form-grid input,.form-panel .form-grid select{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:#fafbfc;transition:border var(--transition);}
+.form-panel .form-grid input:focus,.form-panel .form-grid select:focus{outline:none;border-color:var(--text-secondary);box-shadow:0 0 0 3px rgba(100,116,139,0.06);}
+.form-panel .form-actions{display:flex;gap:6px;}
+.form-panel .form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.form-panel .form-grid-2>div{display:flex;flex-direction:column;gap:3px;}
+.form-panel .form-grid-2 label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;}
+.form-panel .form-grid-2 input,.form-panel .form-grid-2 select{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;background:#fafbfc;}
+
+.clickable{color:var(--text);cursor:pointer;font-weight:600;transition:color var(--transition);}
+.clickable:hover{color:var(--danger);}
+
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:200;justify-content:center;align-items:center;backdrop-filter:blur(2px);}
+.modal-overlay.show{display:flex;}
+.modal{background:var(--surface);border-radius:14px;width:92%;max-width:920px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);animation:slideUp .25s ease;}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;border-radius:14px 14px 0 0;}
+.modal-header h2{font-size:17px;font-weight:700;}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);padding:4px 8px;border-radius:6px;transition:all var(--transition);}
+.modal-close:hover{color:var(--text);background:#f3f4f6;}
+.modal-body{padding:20px 24px 24px;}
+
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:20px;}
+.info-item{background:#f9fafb;border-radius:8px;padding:12px 14px;border:1px solid #f3f4f6;}
+.info-item .ilbl{font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.4px;font-weight:500;}
+.info-item .ival{font-size:14px;font-weight:600;}
+
+.data-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
+.data-item{background:#fafbfc;border-radius:8px;padding:10px 12px;border:1px solid #f3f4f6;border-left:3px solid var(--text);transition:all var(--transition);}
+.data-item:hover{border-left-color:var(--danger);}
+.data-item .dlbl{font-size:10px;color:var(--text-muted);margin-bottom:3px;font-weight:500;}
+.data-item .dval{font-size:14px;font-weight:600;color:var(--text);}
+.data-item.warn{border-left-color:var(--warn);background:var(--warn-bg);}
+.data-item.warn .dval{color:var(--warn);}
+.data-item.danger{border-left-color:var(--danger);background:var(--danger-bg);}
+.data-item.danger .dval{color:var(--danger);}
+
+.section-title{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text);padding-bottom:8px;border-bottom:2px solid var(--border);display:flex;align-items:center;gap:8px;}
+
+.api-layout{display:grid;grid-template-columns:320px 1fr;gap:16px;}
+.api-config{background:var(--surface);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);border:1px solid var(--border);}
+.api-config label{display:block;font-size:10px;color:var(--text-muted);margin-bottom:4px;margin-top:10px;text-transform:uppercase;letter-spacing:0.4px;font-weight:600;}
+.api-config label:first-child{margin-top:0;}
+.api-config select,.api-config input,.api-config textarea{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;margin-bottom:6px;background:#fafbfc;}
+.api-config textarea{height:100px;font-family:"JetBrains Mono","Fira Code",monospace;resize:vertical;font-size:11px;}
+.api-response{background:#1e293b;border-radius:var(--radius);padding:16px;color:#e2e8f0;font-family:"JetBrains Mono","Fira Code",monospace;font-size:12px;white-space:pre-wrap;min-height:300px;max-height:600px;overflow:auto;line-height:1.6;}
+.api-response .json-key{color:#93c5fd;}
+.api-response .json-str{color:#86efac;}
+.api-response .json-num{color:#fde68a;}
+
+.log-viewer{background:#1e293b;border-radius:var(--radius);padding:16px;color:#cbd5e1;font-family:"JetBrains Mono","Fira Code",monospace;font-size:11px;white-space:pre-wrap;max-height:500px;overflow:auto;line-height:1.6;}
+
+.service-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;margin-bottom:18px;}
+
+.mqtt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px;margin-top:12px;}
+.mqtt-stat{background:var(--surface);border-radius:var(--radius);padding:14px 12px;box-shadow:var(--shadow);border:1px solid var(--border);text-align:center;transition:all var(--transition);}
+.mqtt-stat:hover{box-shadow:var(--shadow-md);}
+.mqtt-stat .mval{font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.5px;}
+.mqtt-stat .mlbl{font-size:10px;color:var(--text-muted);margin-top:4px;font-weight:500;}
+.mqtt-stat.warn{border-color:var(--warn-border);}
+.mqtt-stat.warn .mval{color:var(--warn);}
+.mqtt-stat.danger{border-color:var(--danger-border);}
+.mqtt-stat.danger .mval{color:var(--danger);}
+
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:10px;z-index:300;display:none;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,0.2);font-weight:500;backdrop-filter:blur(8px);}
+.toast.show{display:block;animation:slideIn .25s ease;}
+@keyframes slideIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+.toast.ok{background:var(--success);color:#fff;}
+.toast.err{background:var(--danger);color:#fff;}
+
+.history-list{max-height:280px;overflow-y:auto;margin-top:8px;}
+.history-item{background:#f9fafb;border-radius:6px;padding:8px 12px;margin-bottom:4px;cursor:pointer;font-size:11px;display:flex;gap:8px;align-items:center;border:1px solid var(--border);transition:all var(--transition);}
+.history-item:hover{background:#f3f4f6;border-color:#d1d5db;}
+.history-item .method{font-weight:700;min-width:50px;font-size:10px;color:var(--info);}
+.history-item .path{flex:1;font-family:"JetBrains Mono","Fira Code",monospace;}
+.history-item .meta{color:var(--text-muted);font-size:10px;white-space:nowrap;}
+
+.empty-state{text-align:center;padding:60px 20px;color:var(--text-muted);}
+.empty-state .empty-icon{font-size:56px;margin-bottom:12px;opacity:0.6;}
+.empty-state .empty-text{font-size:14px;font-weight:500;}
+
+.auto-refresh{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);margin-top:12px;}
+.auto-refresh input[type="checkbox"]{accent-color:var(--text);}
+
+.tag-row{display:flex;gap:6px;flex-wrap:wrap;}
+.tag-row .btn-sm{padding:4px 10px;font-size:10px;}
+
+@media(max-width:900px){
+  .sidebar{transform:translateX(-100%);}
+  .sidebar.open{transform:translateX(0);box-shadow:4px 0 20px rgba(0,0,0,0.3);}
+  .main{margin-left:0;}
+  .hamburger{display:block;}
+  .api-layout{grid-template-columns:1fr;}
+  .cards{grid-template-columns:repeat(2,1fr);}
+  .service-grid{grid-template-columns:1fr;}
+  .content{padding:16px;}
+  .topbar{padding:12px 16px;}
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">☀</div>
+    <div>
+      <div class="title">管理后台</div>
+      <div class="sub">Inverter Manager</div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">系统概览</div>
+    <div class="nav-item active" data-panel="dashboard"><span class="icon">📊</span> 仪表盘</div>
+    <div class="nav-section">业务管理</div>
+    <div class="nav-item" data-panel="devices"><span class="icon">📡</span> 设备管理</div>
+    <div class="nav-item" data-panel="stations"><span class="icon">🏭</span> 电站管理</div>
+    <div class="nav-item" data-panel="users"><span class="icon">👤</span> 用户管理</div>
+    <div class="nav-item" data-panel="alarms"><span class="icon">🔔</span> 告警记录</div>
+    <div class="nav-item" data-panel="models"><span class="icon">📋</span> 设备型号</div>
+    <div class="nav-section">运维工具</div>
+    <div class="nav-item" data-panel="services"><span class="icon">⚙️</span> 服务管理</div>
+    <div class="nav-item" data-panel="apitest"><span class="icon">🧪</span> API 调试</div>
+  </nav>
+  <div class="sidebar-footer"><span class="dot"></span> <span id="sidebar-footer">系统运行中</span></div>
+</div>
+
+<div class="main">
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="breadcrumb"><span id="breadcrumb">仪表盘</span></div>
+  </div>
+  <div class="info-row">
+    <span><span class="sys-dot"></span> <span id="sys-uptime">--</span></span>
+    <span id="sys-mem">--</span>
+    <span id="clock" style="font-weight:700;color:var(--text);font-size:13px;">--</span>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- ==================== Dashboard ==================== -->
+<div class="panel active" id="panel-dashboard">
+  <div class="cards" id="dashboard-cards"></div>
+  <div class="service-grid" style="margin-bottom:20px;">
+    <div class="card card-service">
+      <div class="svc-info"><div class="svc-name">数据库</div><div class="svc-port">PostgreSQL</div></div>
+      <div id="db-status"><span class="status-dot"></span>检测中</div>
+    </div>
+    <div class="card card-service">
+      <div class="svc-info"><div class="svc-name">Redis</div><div class="svc-port">缓存服务</div></div>
+      <div id="redis-status"><span class="status-dot"></span>检测中</div>
+    </div>
+  </div>
+  <div class="auto-refresh"><input type="checkbox" id="auto-refresh-dash" onchange="toggleAutoRefresh()"> 每 10 秒自动刷新</div>
+</div>
+
+<!-- ==================== Devices ==================== -->
+<div class="panel" id="panel-devices">
+  <div class="toolbar">
+    <input type="text" id="device-search" placeholder="搜索 SN / 型号 / 手机号...">
+    <button class="btn btn-dark" onclick="loadDevices()">刷新</button>
+    <button class="btn btn-success" onclick="showAddDevice()">添加设备</button>
+    <button class="btn btn-warn" onclick="showBatchDialog()">批量生成</button>
+  </div>
+  <div id="add-device-form" class="form-panel">
+    <div class="form-grid">
+      <div class="fg"><label>SN *</label><input id="new-sn" placeholder="如 T0515001"></div>
+      <div class="fg"><label>型号</label><input id="new-model" value="INV-5000-TL"></div>
+      <div class="fg"><label>额定功率 (kW)</label><input id="new-power" type="number" value="5.0" step="0.1"></div>
+      <div class="fg"><label>固件版本</label><input id="new-fw" value="v1.0.0"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-dark" onclick="submitAddDevice()">创建</button>
+      <button class="btn btn-ghost" onclick="closeForm('add-device-form')">取消</button>
+    </div>
+  </div>
+  <div id="batch-form" class="form-panel">
+    <div class="form-grid">
+      <div class="fg"><label>数量</label><input id="batch-count" type="number" value="100" min="1" max="100000"></div>
+      <div class="fg"><label>起始序号</label><input id="batch-start" type="number" value="1" min="1"></div>
+      <div class="fg"><label>型号</label><input id="batch-model" value="INV-5000-TL"></div>
+      <div class="fg"><label>功率 (kW)</label><input id="batch-power" type="number" value="5.0" step="0.1"></div>
+      <div class="fg"><label>厂商码</label><select id="batch-mfr">
+        <option value="H1">H1 - 总部第1工厂</option>
+        <option value="H2">H2 - 总部第2工厂</option>
+        <option value="OA">OA - A代工厂</option>
+        <option value="OB">OB - B代工厂</option>
+        <option value="S1">S1 - 海外子工厂</option>
+      </select></div>
+      <div class="fg"><label>国家/地区</label><select id="batch-country">
+        <option value="CN">CN - 中国大陆</option>
+        <option value="DE">DE - 德国</option>
+        <option value="NL">NL - 荷兰</option>
+        <option value="AU">AU - 澳大利亚</option>
+        <option value="BR">BR - 巴西</option>
+        <option value="JP">JP - 日本</option>
+        <option value="US">US - 美国</option>
+        <option value="ZA">ZA - 南非</option>
+        <option value="GB">GB - 英国</option>
+        <option value="FR">FR - 法国</option>
+        <option value="IT">IT - 意大利</option>
+        <option value="ES">ES - 西班牙</option>
+        <option value="TR">TR - 土耳其</option>
+        <option value="IN">IN - 印度</option>
+        <option value="TH">TH - 泰国</option>
+        <option value="VN">VN - 越南</option>
+        <option value="PL">PL - 波兰</option>
+        <option value="MX">MX - 墨西哥</option>
+        <option value="KR">KR - 韩国</option>
+        <option value="99">99 - 未指定区域</option>
+      </select></div>
+      <div class="fg"><label>客户等级</label><select id="batch-cust-grade">
+        <option value="A">A - 海外战略大客户</option>
+        <option value="B">B - 区域核心分销商</option>
+        <option value="C" selected>C - 安装商/经销商</option>
+        <option value="X">X - 零售客户</option>
+        <option value="P">P - 项目代码</option>
+      </select></div>
+      <div class="fg"><label>客户编号</label><input id="batch-cust-num" type="number" value="1" min="1" max="999"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-warn" onclick="submitBatch(event)">按参数批量生成</button>
+      <button class="btn btn-danger btn-sm" onclick="submitBatchDelete(event)" style="margin-left:8px;">按前缀批量删除</button>
+      <button class="btn btn-danger btn-sm" onclick="cleanupOldDevices(event)" style="margin-left:8px;">清除所有旧格式设备</button>
+      <button class="btn btn-ghost" onclick="closeForm('batch-form')">取消</button>
+    </div>
+    <div id="batch-result" style="margin-top:8px;font-size:12px;"></div>
+  </div>
+  <div id="edit-device-form" class="form-panel">
+    <div class="form-grid">
+      <div class="fg"><label>SN</label><input id="edit-dev-sn" readonly></div>
+      <div class="fg"><label>型号</label><input id="edit-dev-model"></div>
+      <div class="fg"><label>额定功率 (kW)</label><input id="edit-dev-power" type="number" step="0.1"></div>
+      <div class="fg"><label>固件版本</label><input id="edit-dev-fw"></div>
+      <div class="fg"><label>硬件版本</label><input id="edit-dev-hw"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-dark" onclick="submitEditDevice()">保存</button>
+      <button class="btn btn-ghost" onclick="closeForm('edit-device-form')">取消</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+    <table><thead><tr><th>ID</th><th>SN</th><th>型号</th><th>功率</th><th>固件</th><th>用户</th><th>电站</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody id="devices-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Stations ==================== -->
+<div class="panel" id="panel-stations">
+  <div class="toolbar">
+    <input type="text" id="station-search" placeholder="搜索名称 / 城市 / 手机号...">
+    <button class="btn btn-dark" onclick="loadStations()">刷新</button>
+    <button class="btn btn-success" onclick="showAddStation()">添加电站</button>
+  </div>
+  <div id="add-station-form" class="form-panel">
+    <div class="form-grid">
+      <div class="fg"><label>名称 *</label><input id="new-sta-name"></div>
+      <div class="fg"><label>所属用户 ID</label><input id="new-sta-user" type="number" value="1"></div>
+      <div class="fg"><label>省份</label><input id="new-sta-prov"></div>
+      <div class="fg"><label>城市</label><input id="new-sta-city"></div>
+      <div class="fg"><label>区县</label><input id="new-sta-dist"></div>
+      <div class="fg"><label>地址</label><input id="new-sta-addr"></div>
+      <div class="fg"><label>容量 (kW)</label><input id="new-sta-cap" type="number" value="10" step="0.1"></div>
+      <div class="fg"><label>组件数量</label><input id="new-sta-panels" type="number" value="20"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-dark" onclick="submitAddStation()">创建</button>
+      <button class="btn btn-ghost" onclick="closeForm('add-station-form')">取消</button>
+    </div>
+  </div>
+  <div id="edit-station-form" class="form-panel">
+    <div class="form-grid">
+      <div class="fg"><label>名称</label><input id="edit-sta-name"></div>
+      <div class="fg"><label>省份</label><input id="edit-sta-prov"></div>
+      <div class="fg"><label>城市</label><input id="edit-sta-city"></div>
+      <div class="fg"><label>区县</label><input id="edit-sta-dist"></div>
+      <div class="fg"><label>地址</label><input id="edit-sta-addr"></div>
+      <div class="fg"><label>容量 (kW)</label><input id="edit-sta-cap" type="number" step="0.1"></div>
+      <div class="fg"><label>组件数量</label><input id="edit-sta-panels" type="number"></div>
+    </div>
+    <input type="hidden" id="edit-sta-id">
+    <div class="form-actions">
+      <button class="btn btn-dark" onclick="submitEditStation()">保存</button>
+      <button class="btn btn-ghost" onclick="closeForm('edit-station-form')">取消</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+    <table><thead><tr><th>ID</th><th>名称</th><th>省份</th><th>城市</th><th>容量</th><th>所属用户</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody id="stations-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Users ==================== -->
+<div class="panel" id="panel-users">
+  <div class="toolbar">
+    <input type="text" id="user-search" placeholder="搜索手机号 / 邮箱 / 昵称...">
+    <button class="btn btn-dark" onclick="loadUsers()">刷新</button>
+    <button class="btn btn-success" onclick="showAddUser()">添加用户</button>
+  </div>
+  <div id="add-user-form" class="form-panel">
+    <div class="form-grid">
+      <div class="fg"><label>手机号</label><input id="new-user-phone" placeholder="手机号或邮箱至少填一项"></div>
+      <div class="fg"><label>邮箱</label><input id="new-user-email" type="email" placeholder="手机号或邮箱至少填一项"></div>
+      <div class="fg"><label>密码 *</label><input id="new-user-pwd" type="password" placeholder="至少 6 位"></div>
+      <div class="fg"><label>昵称</label><input id="new-user-nick"></div>
+      <div class="fg"><label>角色</label><select id="new-user-role">
+        <option value="5">用户</option><option value="4">安装商</option><option value="3">经销商</option><option value="2">总代理</option><option value="1">原厂</option>
+      </select></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-dark" onclick="submitAddUser()">创建</button>
+      <button class="btn btn-ghost" onclick="closeForm('add-user-form')">取消</button>
+    </div>
+  </div>
+  <div id="edit-user-form" class="form-panel">
+    <div class="form-grid">
+      <div class="fg"><label>昵称</label><input id="edit-user-nick"></div>
+      <div class="fg"><label>手机号</label><input id="edit-user-phone"></div>
+      <div class="fg"><label>邮箱</label><input id="edit-user-email" type="email"></div>
+      <div class="fg"><label>角色</label><select id="edit-user-role">
+        <option value="5">用户</option><option value="4">安装商</option><option value="3">经销商</option><option value="2">总代理</option><option value="1">原厂</option>
+      </select></div>
+    </div>
+    <input type="hidden" id="edit-user-id">
+    <div class="form-actions">
+      <button class="btn btn-dark" onclick="submitEditUser()">保存</button>
+      <button class="btn btn-ghost" onclick="closeForm('edit-user-form')">取消</button>
+    </div>
+  </div>
+  <div id="reset-pwd-form" class="form-panel">
+    <div class="form-grid">
+      <div class="fg"><label>用户</label><input id="reset-pwd-phone" readonly></div>
+      <div class="fg"><label>新密码 *</label><input id="reset-pwd-new" type="password" placeholder="至少 6 位"></div>
+    </div>
+    <input type="hidden" id="reset-pwd-user-id">
+    <div class="form-actions">
+      <button class="btn btn-dark" onclick="submitResetPwd()">重置密码</button>
+      <button class="btn btn-ghost" onclick="closeForm('reset-pwd-form')">取消</button>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+    <table><thead><tr><th>ID</th><th>手机号</th><th>邮箱</th><th>昵称</th><th>角色</th><th>状态</th><th>最后登录</th><th>注册时间</th><th>操作</th></tr></thead>
+    <tbody id="users-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Alarms ==================== -->
+<div class="panel" id="panel-alarms">
+  <div class="toolbar">
+    <button class="btn btn-dark" onclick="loadAlarms()">刷新</button>
+  </div>
+  <div class="table-wrap">
+    <div class="table-scroll">
+    <table><thead><tr><th>ID</th><th>SN</th><th>级别</th><th>故障码</th><th>故障信息</th><th>状态</th><th>发生时间</th><th>操作</th></tr></thead>
+    <tbody id="alarms-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Services ==================== -->
+<div class="panel" id="panel-services">
+  <div class="service-grid" id="service-grid"></div>
+  <div class="tag-row" style="margin-bottom:18px;">
+    <button class="btn btn-dark btn-sm" onclick="checkServices()">刷新服务状态</button>
+    <button class="btn btn-danger btn-sm" onclick="restartAll()" id="btn-restart">重启所有服务</button>
+    <button class="btn btn-sm" onclick="loadConnections()">端口连接</button>
+  </div>
+  <div style="margin-bottom:18px;">
+    <div class="section-title">MQTT 消息统计</div>
+    <div class="mqtt-grid" id="mqtt-stats"><div class="empty-state" style="padding:30px;"><div class="empty-text">加载中...</div></div></div>
+  </div>
+  <div id="restart-result" style="margin-bottom:14px;"></div>
+  <div>
+    <div class="tag-row" style="margin-bottom:10px;align-items:center;">
+      <button class="btn btn-sm" onclick="switchLog('api')" id="log-tab-api" style="background:var(--accent);color:#fff;">API 日志</button>
+      <button class="btn btn-sm" onclick="switchLog('device')" id="log-tab-device">设备日志</button>
+      <button class="btn btn-sm" onclick="switchLog('mqtt')" id="log-tab-mqtt">MQTT 日志</button>
+      <button class="btn btn-sm" onclick="switchLog('conn')" id="log-tab-conn">端口连接</button>
+      <div class="auto-refresh" style="margin-left:auto;"><input type="checkbox" id="log-auto-refresh" onchange="toggleLogAutoRefresh()"> 自动刷新 (5s)</div>
+    </div>
+    <div class="log-viewer" id="log-viewer">点击上方标签加载日志</div>
+  </div>
+</div>
+
+<!-- ==================== API Tester ==================== -->
+<div class="panel" id="panel-apitest">
+<div class="api-layout">
+  <div class="api-config">
+    <label>请求方法</label>
+    <select id="api-method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+    <label>请求路径</label>
+    <input type="text" id="api-path" value="/api/v1/stations/summary" placeholder="/api/v1/...">
+    <label>Token（可选）</label>
+    <input type="text" id="api-token" placeholder="Bearer eyJ...">
+    <label>请求体 JSON</label>
+    <textarea id="api-body" placeholder='{"name":"test"}'></textarea>
+    <button class="btn btn-dark" onclick="sendAPI()" style="width:100%;margin-top:10px;">发送请求</button>
+    <div style="margin-top:12px;font-size:11px;color:var(--text-muted);line-height:1.8;">
+      常用接口：<br>
+      GET /api/v1/stations/summary<br>
+      GET /api/v1/devices<br>
+      GET /api/v1/alarms<br>
+      <button class="btn btn-sm btn-ghost" onclick="clearApiHistory()" style="margin-top:6px;">清空历史</button>
+    </div>
+  </div>
+  <div>
+    <div class="api-response" id="api-response">就绪...</div>
+    <div class="history-list" id="api-history-list"></div>
+  </div>
+</div>
+</div>
+
+<!-- 设备型号管理面板 -->
+<div class="panel" id="panel-models">
+  <div class="panel-header-row">
+    <h3>📋 设备型号注册</h3>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-sm btn-dark" onclick="showAddModel()">+ 新增型号</button>
+      <button class="btn btn-sm" onclick="loadModels()">刷新</button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table><thead><tr><th>型号编码</th><th>名称</th><th>制造商</th><th>类型</th><th>功率(kW)</th><th>状态</th><th>字段数</th><th>操作</th></tr></thead>
+    <tbody id="models-tbody"></tbody></table>
+  </div>
+</div>
+
+<!-- 添加/编辑型号弹窗 -->
+<div class="modal-overlay" id="model-form-modal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header"><h2 id="model-form-title">新增设备型号</h2><button class="modal-close" onclick="closeModelForm()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-model-id">
+      <div class="form-grid-2">
+        <div><label>型号编码 *</label><input type="text" id="m-code" placeholder="如 INV-5000-TL"></div>
+        <div><label>显示名称 *</label><input type="text" id="m-name" placeholder="如 INVT 5000TL 逆变器"></div>
+        <div><label>制造商</label><input type="text" id="m-manufacturer" placeholder="如 INVT"></div>
+        <div><label>设备类型</label>
+          <select id="m-category"><option value="inverter">逆变器</option><option value="battery">储能电池</option><option value="meter">电表</option><option value="hybrid">混合系统</option><option value="evcharger">充电桩</option></select>
+        </div>
+        <div><label>额定功率 (kW)</label><input type="number" id="m-power" step="0.1" placeholder="5.0"></div>
+        <div><label>状态</label>
+          <select id="m-active"><option value="true">启用</option><option value="false">禁用</option></select>
+        </div>
+      </div>
+      <label>字段定义 (JSON)</label>
+      <textarea id="m-fields" rows="4" placeholder='{"total_active_power":{"type":"float","unit":"W","label":"总有功功率"},"work_state_1":{"type":"string","label":"工作状态"}}' style="font-family:monospace;font-size:12px;width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:#fafbfc;"></textarea>
+      <label>字段映射 (MQTT→标准字段)</label>
+      <textarea id="m-mapping" rows="4" placeholder='{"data/status":{"work_state":"work_state_1","temp":"internal_temperature"}}' style="font-family:monospace;font-size:12px;width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:#fafbfc;"></textarea>
+      <label>描述</label>
+      <input type="text" id="m-desc" placeholder="可选描述信息">
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn btn-dark" onclick="submitModel()" style="flex:1;">保存</button>
+        <button class="btn" onclick="closeModelForm()" style="flex:1;background:var(--bg);">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- end content -->
+</div><!-- end main -->
+
+<div class="toast" id="toast"></div>
+
+<!-- Device Detail Modal -->
+<div class="modal-overlay" id="device-detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="detail-title">设备详情</h2>
+      <button class="modal-close" onclick="closeDeviceDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="detail-body">加载中...</div>
+  </div>
+</div>
+
+<script>
+var $ = function(id) { return document.getElementById(id); };
+var apiHistory = [], logTimer = null, dashTimer = null, logType = 'api';
+
+function showToast(msg, isError) {
+  var t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (isError ? 'err' : 'ok');
+  setTimeout(function() { t.className = 'toast'; }, 3000);
+}
+
+function closeForm(id) { $(id).classList.remove('show'); }
+
+function toggleSidebar() { $('sidebar').classList.toggle('open'); }
+
+function fmtTime(t) {
+  if (!t) return '-';
+  var d = new Date(t);
+  var off = d.getTimezoneOffset() * 60000;
+  var shanghai = new Date(d.getTime() + off + 28800000);
+  var y = shanghai.getUTCFullYear(), m = String(shanghai.getUTCMonth() + 1).padStart(2, '0'), day = String(shanghai.getUTCDate()).padStart(2, '0');
+  var h = String(shanghai.getUTCHours()).padStart(2, '0'), mi = String(shanghai.getUTCMinutes()).padStart(2, '0'), s = String(shanghai.getUTCSeconds()).padStart(2, '0');
+  return y + '/' + m + '/' + day + ' ' + h + ':' + mi + ':' + s;
+}
+
+function fmtRole(r) {
+  switch (r) { case 1: return '原厂'; case 2: return '总代理'; case 3: return '经销商'; case 4: return '安装商'; default: return '用户'; }
+}
+
+function statusBadge(s) {
+  if (s === 1) return '<span class="badge online"><span class="bdot"></span>在线</span>';
+  if (s === 2) return '<span class="badge fault"><span class="bdot"></span>故障</span>';
+  return '<span class="badge offline"><span class="bdot"></span>离线</span>';
+}
+
+function alarmStatusBadge(s) {
+  return s === 1 ? '<span class="badge info"><span class="bdot"></span>已处理</span>' : '<span class="badge fault"><span class="bdot"></span>未处理</span>';
+}
+
+function levelBadge(l) {
+  if (l === 1) return '<span class="badge fault"><span class="bdot"></span>严重</span>';
+  if (l === 2) return '<span class="badge warn"><span class="bdot"></span>重要</span>';
+  return '<span class="badge info"><span class="bdot"></span>一般</span>';
+}
+
+function loadSystemInfo() {
+  fetch('/admin/api/system').then(function(r) { return r.json(); }).then(function(d) {
+    $('sys-uptime').textContent = '运行 ' + d.uptime;
+    $('sys-mem').textContent = '内存 ' + d.alloc_mb + 'MB';
+    $('sidebar-footer').textContent = 'v' + d.version + ' | Go ' + d.go_version;
+  }).catch(function() {});
+}
+
+async function loadDashboard() {
+  try {
+    var r = await fetch('/admin/api/dashboard'), d = await r.json(), h = '';
+    if (d.devices) {
+      h += '<div class="card"><div class="card-icon">📟</div><div class="card-label">设备总数</div><div class="card-value">' + d.devices.total + '</div></div>';
+      h += '<div class="card"><div class="card-icon">✅</div><div class="card-label">在线</div><div class="card-value green">' + d.devices.online + '</div></div>';
+      h += '<div class="card"><div class="card-icon">⚠️</div><div class="card-label">故障</div><div class="card-value red">' + d.devices.fault + '</div></div>';
+    }
+    if (d.stations !== undefined) h += '<div class="card"><div class="card-icon">🏭</div><div class="card-label">电站总数</div><div class="card-value">' + d.stations + '</div></div>';
+    if (d.users !== undefined) h += '<div class="card"><div class="card-icon">👤</div><div class="card-label">用户总数</div><div class="card-value">' + d.users + '</div></div>';
+    if (d.alarms_active !== undefined) h += '<div class="card"><div class="card-icon">🔔</div><div class="card-label">活跃告警</div><div class="card-value amber">' + d.alarms_active + '</div></div>';
+    $('dashboard-cards').innerHTML = h;
+    $('db-status').innerHTML = '<span class="status-dot ' + (d.database === 'ok' ? 'ok' : 'err') + '"></span>' + (d.database === 'ok' ? '正常运行' : d.database);
+    $('redis-status').innerHTML = '<span class="status-dot ' + (d.redis === 'ok' ? 'ok' : 'err') + '"></span>' + (d.redis === 'ok' ? '正常运行' : d.redis);
+  } catch (e) { console.error(e); }
+}
+
+function toggleAutoRefresh() {
+  if ($('auto-refresh-dash').checked) {
+    if (!dashTimer) dashTimer = setInterval(function() { loadDashboard(); loadSystemInfo(); }, 10000);
+  } else {
+    clearInterval(dashTimer); dashTimer = null;
+  }
+}
+
+function toggleLogAutoRefresh() {
+  if ($('log-auto-refresh').checked) {
+    if (!logTimer) logTimer = setInterval(function() { loadLogs(); }, 5000);
+  } else {
+    clearInterval(logTimer); logTimer = null;
+  }
+}
+
+// ==================== Devices ====================
+async function loadDevices() {
+  try {
+    var rows = await fetch('/admin/api/devices').then(function(r) { return r.json(); });
+    var q = ($('device-search').value || '').toLowerCase();
+    var f = rows.filter(function(r) {
+      return (r.sn || '').toLowerCase().includes(q) || (r.model || '').toLowerCase().includes(q) || (r.owner_phone || '').includes(q);
+    });
+    var h = f.map(function(d) {
+      return '<tr><td>' + d.id + '</td><td><span class="clickable" onclick="showDeviceDetail(\'' + d.sn + '\')">' + d.sn + '</span></td>' +
+        '<td>' + (d.model || '-') + '</td><td>' + d.rated_power + '</td><td>' + (d.firmware_version || '-') + '</td>' +
+        '<td>' + (d.owner_phone || (d.user_id ? 'ID:' + d.user_id : '-')) + '</td><td>' + (d.station_id || '-') + '</td>' +
+        '<td>' + statusBadge(d.status) + '</td>' +
+        '<td class="tag-row">' +
+        '<button class="btn btn-sm" onclick="showEditDevice(\'' + d.sn + '\',\'' + (d.model || '') + '\',' + d.rated_power + ',\'' + (d.firmware_version || '') + '\')">编辑</button>' +
+        '<button class="btn btn-sm btn-warn" onclick="unbindDevice(\'' + d.sn + '\')">解绑</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteDevice(\'' + d.sn + '\')">删除</button>' +
+        '</td></tr>';
+    }).join('');
+    $('devices-tbody').innerHTML = h || '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📡</div><div class="empty-text">暂无设备</div></div></td></tr>';
+  } catch (e) { showToast('加载设备失败', true); }
+}
+
+function showAddDevice() { $('add-device-form').classList.add('show'); closeForm('batch-form'); closeForm('edit-device-form'); }
+function showBatchDialog() { $('batch-form').classList.add('show'); closeForm('add-device-form'); closeForm('edit-device-form'); }
+function showEditDevice(sn, model, pwr, fw) {
+  $('edit-dev-sn').value = sn; $('edit-dev-model').value = model; $('edit-dev-power').value = pwr; $('edit-dev-fw').value = fw;
+  $('edit-device-form').classList.add('show'); closeForm('add-device-form'); closeForm('batch-form');
+}
+
+async function submitAddDevice() {
+  var sn = $('new-sn').value.trim();
+  if (!sn) { showToast('请输入 SN', true); return; }
+  try {
+    var r = await fetch('/admin/api/devices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sn: sn, model: $('new-model').value, rated_power: parseFloat($('new-power').value) || 0, firmware_version: $('new-fw').value })
+    });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); closeForm('add-device-form'); loadDevices(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function submitEditDevice() {
+  var sn = $('edit-dev-sn').value;
+  try {
+    var r = await fetch('/admin/api/devices/' + sn, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: $('edit-dev-model').value, rated_power: parseFloat($('edit-dev-power').value) || 0, firmware_version: $('edit-dev-fw').value, hardware_version: $('edit-dev-hw').value })
+    });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); closeForm('edit-device-form'); loadDevices(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function unbindDevice(sn) {
+  if (!confirm('确定解绑设备 ' + sn + ' ？')) return;
+  try {
+    var r = await fetch('/admin/api/devices/' + sn + '/unbind', { method: 'POST' });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); loadDevices(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function deleteDevice(sn) {
+  if (!confirm('确定删除设备 ' + sn + ' ？此操作不可恢复！')) return;
+  try {
+    var r = await fetch('/admin/api/devices/' + sn, { method: 'DELETE' });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); loadDevices(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function submitBatch(e) {
+  var btn = e.target;
+  btn.disabled = true; btn.textContent = '生成中...';
+  $('batch-result').innerHTML = '<span style="color:var(--info);">处理中...</span>';
+  try {
+    var r = await fetch('/admin/api/devices/batch', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        count: parseInt($('batch-count').value) || 0,
+        start_seq: parseInt($('batch-start').value) || 1,
+        model: $('batch-model').value,
+        rated_power: parseFloat($('batch-power').value) || 0,
+        sn_format: 'chenshuo_std',
+        manufacturer: $('batch-mfr').value,
+        country: $('batch-country').value,
+        customer_grade: $('batch-cust-grade').value,
+        customer_num: parseInt($('batch-cust-num').value) || 1
+      })
+    });
+    var d = await r.json();
+    if (d.status === 'ok') {
+      $('batch-result').innerHTML = '<span style="color:var(--success);">成功创建 ' + d.created + ' 个设备。</span>';
+      loadDevices();
+    } else $('batch-result').innerHTML = '<span style="color:var(--danger);">' + JSON.stringify(d) + '</span>';
+  } catch (e) { $('batch-result').innerHTML = '<span style="color:var(--danger);">请求失败</span>'; }
+  btn.disabled = false; btn.textContent = '开始批量生成';
+}
+
+async function submitBatchDelete(e) {
+  var mfr = $('batch-mfr').value;
+  var cty = $('batch-country').value;
+  var custGrade = $('batch-cust-grade').value;
+  var custNum = parseInt($('batch-cust-num').value) || 1;
+  var prefix = mfr + cty + custGrade + String(custNum).padStart(3, '0');
+  if (!confirm('确定删除 SN 前缀为 ' + prefix + ' 的所有设备？\n\n此操作不可恢复！')) return;
+  var btn = e.target;
+  btn.disabled = true; btn.textContent = '删除中...';
+  $('batch-result').innerHTML = '<span style="color:var(--info);">处理中...</span>';
+  try {
+    var r = await fetch('/admin/api/devices/batch-delete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        manufacturer: mfr, country: cty,
+        customer_grade: custGrade, customer_num: custNum
+      })
+    });
+    var d = await r.json();
+    if (d.status === 'ok') {
+      $('batch-result').innerHTML = '<span style="color:var(--success);">已删除 ' + d.deleted + ' 个设备。</span>';
+      loadDevices();
+    } else $('batch-result').innerHTML = '<span style="color:var(--danger);">' + (d.message || JSON.stringify(d)) + '</span>';
+  } catch (err) { $('batch-result').innerHTML = '<span style="color:var(--danger);">请求失败</span>'; }
+  btn.disabled = false; btn.textContent = '按前缀批量删除';
+}
+
+async function cleanupOldDevices(e) {
+  if (!confirm('确定删除所有不符合辰烁16位标准格式的旧设备？\n（如 T2605001、CS-T2605004 等）\n\n此操作不可恢复！')) return;
+  var btn = e.target;
+  btn.disabled = true; btn.textContent = '删除中...';
+  $('batch-result').innerHTML = '<span style="color:var(--info);">处理中...</span>';
+  try {
+    var r = await fetch('/admin/api/devices/cleanup-old', { method: 'POST' });
+    var d = await r.json();
+    if (d.status === 'ok') {
+      $('batch-result').innerHTML = '<span style="color:var(--success);">已清除 ' + d.deleted + ' 个旧格式设备。</span>';
+      loadDevices();
+    } else $('batch-result').innerHTML = '<span style="color:var(--danger);">' + (d.message || JSON.stringify(d)) + '</span>';
+  } catch (err) { $('batch-result').innerHTML = '<span style="color:var(--danger);">请求失败</span>'; }
+  btn.disabled = false; btn.textContent = '清除所有旧格式设备';
+}
+
+// ==================== Stations ====================
+async function loadStations() {
+  try {
+    var rows = await fetch('/admin/api/stations').then(function(r) { return r.json(); });
+    var q = ($('station-search').value || '').toLowerCase();
+    var f = rows.filter(function(r) { return (r.name || '').toLowerCase().includes(q) || (r.city || '').toLowerCase().includes(q) || (r.owner_phone || '').includes(q); });
+    var h = f.map(function(s) {
+      return '<tr><td>' + s.id + '</td><td>' + s.name + '</td><td>' + (s.province || '-') + '</td><td>' + (s.city || '-') + '</td>' +
+        '<td>' + s.capacity + '</td><td>' + (s.owner_phone || 'ID:' + s.user_id) + '</td><td>' + statusBadge(s.status) + '</td>' +
+        '<td class="tag-row">' +
+        '<button class="btn btn-sm" onclick="showEditStation(' + s.id + ',\'' + (s.name || '') + '\',\'' + (s.province || '') + '\',\'' + (s.city || '') + '\',\'' + (s.district || '') + '\',\'' + (s.address || '') + '\',' + s.capacity + ',' + (s.panel_count || 0) + ')">编辑</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteStation(' + s.id + ')">删除</button>' +
+        '</td></tr>';
+    }).join('');
+    $('stations-tbody').innerHTML = h || '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🏭</div><div class="empty-text">暂无电站</div></div></td></tr>';
+  } catch (e) { showToast('加载电站失败', true); }
+}
+
+function showAddStation() { $('add-station-form').classList.add('show'); closeForm('edit-station-form'); }
+function showEditStation(id, name, prov, city, dist, addr, cap, panels) {
+  $('edit-sta-id').value = id; $('edit-sta-name').value = name; $('edit-sta-prov').value = prov;
+  $('edit-sta-city').value = city; $('edit-sta-dist').value = dist; $('edit-sta-addr').value = addr;
+  $('edit-sta-cap').value = cap; $('edit-sta-panels').value = panels;
+  $('edit-station-form').classList.add('show'); closeForm('add-station-form');
+}
+
+async function submitAddStation() {
+  var n = $('new-sta-name').value.trim();
+  if (!n) { showToast('请输入名称', true); return; }
+  try {
+    var r = await fetch('/admin/api/stations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      name: n, user_id: parseInt($('new-sta-user').value) || 0, province: $('new-sta-prov').value, city: $('new-sta-city').value,
+      district: $('new-sta-dist').value, address: $('new-sta-addr').value, capacity: parseFloat($('new-sta-cap').value) || 0,
+      panel_count: parseInt($('new-sta-panels').value) || 0
+    }) });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); closeForm('add-station-form'); loadStations(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function submitEditStation() {
+  var id = $('edit-sta-id').value;
+  try {
+    var r = await fetch('/admin/api/stations/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      name: $('edit-sta-name').value, province: $('edit-sta-prov').value, city: $('edit-sta-city').value,
+      district: $('edit-sta-dist').value, address: $('edit-sta-addr').value, capacity: parseFloat($('edit-sta-cap').value) || 0,
+      panel_count: parseInt($('edit-sta-panels').value) || 0
+    }) });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); closeForm('edit-station-form'); loadStations(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function deleteStation(id) {
+  if (!confirm('确定删除电站 #' + id + ' ？')) return;
+  try {
+    var r = await fetch('/admin/api/stations/' + id, { method: 'DELETE' });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); loadStations(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+// ==================== Users ====================
+async function loadUsers() {
+  try {
+    var rows = await fetch('/admin/api/users').then(function(r) { return r.json(); });
+    var q = ($('user-search').value || '').toLowerCase();
+    var f = rows.filter(function(r) { return (r.phone || '').includes(q) || (r.email || '').includes(q) || (r.nickname || '').toLowerCase().includes(q); });
+    var h = f.map(function(u) {
+      return '<tr><td>' + u.id + '</td><td>' + (u.phone || '-') + '</td><td>' + (u.email || '-') + '</td><td>' + (u.nickname || '-') + '</td>' +
+        '<td>' + fmtRole(u.role) + '</td><td>' + (u.status === 1 ? '<span class="badge online"><span class="bdot"></span>正常</span>' : '<span class="badge fault"><span class="bdot"></span>禁用</span>') + '</td>' +
+        '<td>' + fmtTime(u.last_login_at) + '</td><td>' + fmtTime(u.created_at) + '</td>' +
+        '<td class="tag-row">' +
+        '<button class="btn btn-sm" onclick="showEditUser(' + u.id + ',\'' + (u.nickname || '') + '\',\'' + (u.phone || '') + '\',\'' + (u.email || '') + '\',' + u.role + ')">编辑</button>' +
+        '<button class="btn btn-sm btn-warn" onclick="toggleUser(' + u.id + ')">' + (u.status === 1 ? '禁用' : '启用') + '</button>' +
+        '<button class="btn btn-sm" style="background:var(--info);color:#fff;" onclick="showResetPwd(' + u.id + ',\'' + (u.phone || u.email || '') + '\')">改密</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteUser(' + u.id + ',\'' + (u.phone || u.email || '') + '\')">删除</button>' +
+        '</td></tr>';
+    }).join('');
+    $('users-tbody').innerHTML = h || '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">暂无用户</div></div></td></tr>';
+  } catch (e) { showToast('加载用户失败', true); }
+}
+
+function showAddUser() { $('add-user-form').classList.add('show'); closeForm('edit-user-form'); closeForm('reset-pwd-form'); }
+function showEditUser(id, nick, phone, email, role) {
+  $('edit-user-id').value = id; $('edit-user-nick').value = nick; $('edit-user-phone').value = phone;
+  $('edit-user-email').value = email; $('edit-user-role').value = role;
+  $('edit-user-form').classList.add('show'); closeForm('add-user-form'); closeForm('reset-pwd-form');
+}
+function showResetPwd(id, phone) {
+  $('reset-pwd-user-id').value = id; $('reset-pwd-phone').value = phone; $('reset-pwd-new').value = '';
+  $('reset-pwd-form').classList.add('show'); closeForm('edit-user-form'); closeForm('add-user-form');
+}
+
+async function submitAddUser() {
+  var phone = $('new-user-phone').value.trim(), email = $('new-user-email').value.trim(), pwd = $('new-user-pwd').value.trim();
+  if (!phone && !email) { showToast('手机号和邮箱至少填写一项', true); return; }
+  if (!pwd) { showToast('请输入密码', true); return; }
+  try {
+    var r = await fetch('/admin/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      phone: phone, email: email, password: pwd, nickname: $('new-user-nick').value, role: parseInt($('new-user-role').value)
+    }) });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); closeForm('add-user-form'); loadUsers(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function submitEditUser() {
+  var id = $('edit-user-id').value;
+  try {
+    var r = await fetch('/admin/api/users/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      nickname: $('edit-user-nick').value, phone: $('edit-user-phone').value, email: $('edit-user-email').value, role: parseInt($('edit-user-role').value)
+    }) });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); closeForm('edit-user-form'); loadUsers(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function toggleUser(id) {
+  try {
+    var r = await fetch('/admin/api/users/' + id + '/toggle', { method: 'POST' });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); loadUsers(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function deleteUser(id, phone) {
+  if (!confirm('确定删除用户 ' + phone + ' ？此操作不可恢复！')) return;
+  try {
+    var r = await fetch('/admin/api/users/' + id, { method: 'DELETE' });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); loadUsers(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function submitResetPwd() {
+  var id = $('reset-pwd-user-id').value, pwd = $('reset-pwd-new').value.trim();
+  if (!pwd || pwd.length < 6) { showToast('密码长度不能少于 6 位', true); return; }
+  if (!confirm('确定要重置该用户密码吗？')) return;
+  try {
+    var r = await fetch('/admin/api/users/' + id + '/password', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ new_password: pwd }) });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); closeForm('reset-pwd-form'); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+// ==================== Alarms ====================
+async function loadAlarms() {
+  try {
+    var rows = await fetch('/admin/api/alarms').then(function(r) { return r.json(); });
+    var h = rows.map(function(a) {
+      return '<tr><td>' + a.id + '</td><td>' + a.device_sn + '</td><td>' + levelBadge(a.alarm_level) + '</td><td>' + (a.fault_code || '-') + '</td>' +
+        '<td>' + (a.fault_message || '-') + '</td><td>' + alarmStatusBadge(a.status) + '</td><td>' + fmtTime(a.occurred_at) + '</td>' +
+        '<td>' + (a.status === 0 ? '<button class="btn btn-sm btn-success" onclick="handleAlarm(' + a.id + ')">处理</button>' : '-') + '</td></tr>';
+    }).join('');
+    $('alarms-tbody').innerHTML = h || '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🔔</div><div class="empty-text">暂无告警</div></div></td></tr>';
+  } catch (e) { showToast('加载告警失败', true); }
+}
+
+async function handleAlarm(id) {
+  try {
+    var r = await fetch('/admin/api/alarms/' + id + '/handle', { method: 'POST' });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message); loadAlarms(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+// ==================== Services ====================
+async function checkServices() {
+  try {
+    var r = await fetch('/admin/api/services'), d = await r.json();
+    var labels = {
+      'api_server': '主 API 服务器', 'device_server': '设备服务器', 'mqtt_broker': 'MQTT Broker',
+      'mqtt_websocket': 'MQTT WebSocket', 'postgresql': 'PostgreSQL', 'redis': 'Redis'
+    };
+    var ports = { 'api_server': '8080', 'device_server': '8081', 'mqtt_broker': '1883', 'mqtt_websocket': '8083', 'postgresql': '5432', 'redis': '6379' };
+    var h = '';
+    for (var k in labels) {
+      var s = d[k] || 'offline';
+      var ok = s === 'online';
+      h += '<div class="card card-service">' +
+        '<div class="svc-info"><div class="svc-name">' + labels[k] + '</div><div class="svc-port">端口 ' + ports[k] + '</div></div>' +
+        '<div><span class="status-dot ' + (ok ? 'ok' : 'err') + '"></span>' + (ok ? '运行中' : '已停止') + '</div></div>';
+    }
+    $('service-grid').innerHTML = h + '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;grid-column:1/-1;">检查时间: ' + (d.checked_at || '') + '</div>';
+    var allOk = Object.keys(labels).every(function(k) { return d[k] === 'online'; });
+    if (allOk) showToast('所有服务运行中'); else showToast('部分服务已停止', true);
+  } catch (e) { showToast('检查失败', true); }
+}
+
+async function restartAll() {
+  var btn = $('btn-restart');
+  btn.disabled = true; btn.textContent = '重启中...';
+  showToast('正在重启，请等待 10 秒...');
+  try {
+    var r = await fetch('/admin/api/restart', { method: 'POST' }), d = await r.json();
+    $('restart-result').innerHTML = '<pre style="background:#f9fafb;padding:14px;border-radius:8px;font-size:11px;max-height:150px;overflow:auto;border:1px solid var(--border);">' + d.message + '</pre>';
+    if (d.status === 'ok') { showToast('重启命令已执行，10秒后刷新'); setTimeout(function() { checkServices(); }, 10000); } else showToast('重启失败', true);
+  } catch (e) { showToast('重启失败', true); }
+  btn.disabled = false; btn.textContent = '重启所有服务';
+}
+
+function switchLog(type) {
+  logType = type;
+  ['api', 'device', 'mqtt', 'conn'].forEach(function(t) {
+    var b = $('log-tab-' + t);
+    if (t === type) { b.style.background = 'var(--accent)'; b.style.color = '#fff'; } else { b.style.background = ''; b.style.color = ''; }
+  });
+  if (type === 'conn') loadConnections(); else loadLogs();
+}
+
+async function loadLogs() {
+  $('log-viewer').textContent = '加载中...';
+  var u = '/admin/api/logs';
+  if (logType === 'device') u = '/admin/api/logs?service=device';
+  if (logType === 'mqtt') u = '/admin/api/logs?service=mqtt';
+  try {
+    var r = await fetch(u), d = await r.json();
+    $('log-viewer').textContent = d.log || d.error || '(空)';
+    $('log-viewer').scrollTop = $('log-viewer').scrollHeight;
+  } catch (e) { $('log-viewer').textContent = '加载失败: ' + e.message; }
+}
+
+async function loadConnections() {
+  $('log-viewer').textContent = '加载中...';
+  try {
+    var r = await fetch('/admin/api/connections'), d = await r.json(), lines = [];
+    lines.push('=== 端口连接状态 ===');
+    var connText = d.connections || '';
+    lines.push(connText);
+    lines.push('');
+    lines.push('8080=API主服务  8081=设备服务  1883=MQTT  8083=WebSocket  5432=PG  6379=Redis');
+    $('log-viewer').textContent = lines.join('\n') || JSON.stringify(d);
+    $('log-viewer').scrollTop = 0;
+  } catch (e) { $('log-viewer').textContent = '加载失败: ' + e.message; }
+}
+
+// ==================== API Tester ====================
+async function sendAPI() {
+  var method = $('api-method').value, path = $('api-path').value, headers = {}, token = $('api-token').value.trim();
+  if (token) headers['Authorization'] = token;
+  var bodyStr = $('api-body').value.trim(), body = {};
+  if (bodyStr) try { body = JSON.parse(bodyStr); } catch (e) { $('api-response').textContent = 'JSON 格式错误: ' + e.message; return; }
+  var start = Date.now();
+  try {
+    var r = await fetch('/admin/api/proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ method: method, path: path, body: body, headers: headers }) });
+    var d = await r.json();
+    var elapsed = Date.now() - start;
+    $('api-response').textContent = JSON.stringify(d, null, 2);
+    apiHistory.unshift({ method: method, path: path, time: elapsed, status: d.status_code || '-', at: new Date().toLocaleTimeString() });
+    if (apiHistory.length > 20) apiHistory.pop();
+    renderApiHistory();
+  } catch (e) { $('api-response').textContent = '请求失败: ' + e.message; }
+}
+
+function renderApiHistory() {
+  var h = apiHistory.map(function(e) {
+    return '<div class="history-item"><span class="method" style="color:' + (e.method === 'GET' ? '#10b981' : e.method === 'POST' ? '#6366f1' : e.method === 'PUT' ? '#f59e0b' : '#ef4444') + ';">' + e.method + '</span><span class="path">' + e.path + '</span><span class="meta">' + e.status + ' ' + e.time + 'ms ' + e.at + '</span></div>';
+  }).join('');
+  $('api-history-list').innerHTML = h || '<div style="font-size:11px;color:var(--text-muted);padding:8px;">暂无历史记录</div>';
+}
+
+function clearApiHistory() { apiHistory = []; renderApiHistory(); }
+
+// ==================== Device Detail Modal ====================
+async function showDeviceDetail(sn) {
+  $('detail-title').textContent = '设备 ' + sn + ' 详情';
+  $('detail-body').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">加载中...</div>';
+  $('device-detail-modal').classList.add('show');
+  try {
+    var r = await fetch('/admin/api/devices/' + sn + '/realtime'), d = await r.json();
+    if (d.status === 'error') { $('detail-body').innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">' + d.message + '</div>'; return; }
+    var dev = d.device, rawRt = d.realtime || {};
+    var st = dev.status === 1 ? '<span class="badge online"><span class="bdot"></span>在线</span>' : dev.status === 2 ? '<span class="badge fault"><span class="bdot"></span>故障</span>' : '<span class="badge offline"><span class="bdot"></span>离线</span>';
+    var hasRealtime = rawRt && Object.keys(rawRt).length > 0;
+    var rt = hasRealtime ? rawRt : {};
+    var ac = rt.ac || {}, batt = rt.battery || {}, pv = rt.pv || {};
+    var sys = rt.sys_status || {}, energy = rt.energy || {};
+    var online = rt.online_status || {};
+
+    var h = '<div class="info-grid">';
+    h += '<div class="info-item"><div class="ilbl">SN</div><div class="ival">' + dev.sn + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">型号</div><div class="ival">' + (dev.model || 'CS-I10-6K2') + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">额定功率</div><div class="ival">' + (dev.rated_power || 6.2) + ' kW</div></div>';
+    h += '<div class="info-item"><div class="ilbl">状态</div><div class="ival">' + st + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">ARM固件</div><div class="ival">' + (dev.firmware_arm || '-') + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">ESP固件</div><div class="ival">' + (dev.firmware_esp || '-') + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">WiFi RSSI</div><div class="ival">' + (online.rssi != null ? online.rssi + ' dBm' : '-') + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">IP/City</div><div class="ival">' + (online.location ? (online.location.ip||'-') + ' / ' + (online.location.city||'-') : '-') + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">用户 ID</div><div class="ival">' + (dev.user_id || '-') + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">电站 ID</div><div class="ival">' + (dev.station_id || '-') + '</div></div>';
+    h += '<div class="info-item"><div class="ilbl">最后在线</div><div class="ival">' + fmtTime(dev.last_online_at) + '</div></div>';
+    h += '</div>';
+
+    if (hasRealtime) {
+      var timeLabel = rt.data_time ? fmtTime(rt.data_time) : fmtTime(dev.last_online_at);
+      h += '<div class="section-title" style="margin-top:20px;">实时数据 <span style="font-weight:400;color:var(--text-muted);font-size:11px;">(' + timeLabel + ')</span></div>';
+      h += '<div class="data-grid">';
+      var items = [
+        { label: 'AC电压', value: ac.voltage != null ? ac.voltage.toFixed(1) : '0', unit: 'V', cls: '' },
+        { label: 'AC电流', value: ac.current != null ? ac.current.toFixed(2) : '0', unit: 'A', cls: '' },
+        { label: '有功功率', value: ac.power != null ? (ac.power/1000).toFixed(2) : '0', unit: 'kW', cls: '' },
+        { label: '负载率', value: ac.load_percent != null ? ac.load_percent.toFixed(1) : '0', unit: '%', cls: '' },
+        { label: '频率', value: ac.frequency != null ? ac.frequency.toFixed(2) : '0', unit: 'Hz', cls: '' },
+        { label: '功率因数', value: ac.pf != null ? ac.pf.toFixed(2) : '0', unit: '', cls: '' },
+        { label: 'THDv', value: ac.thd_v != null ? ac.thd_v.toFixed(1) : '0', unit: '%', cls: '' },
+        { label: 'THDi', value: ac.thd_i != null ? ac.thd_i.toFixed(1) : '0', unit: '%', cls: '' },
+        { label: '电池SOC', value: batt.soc != null ? batt.soc.toFixed(1) : '-', unit: '%', cls: '' },
+        { label: '电池电压', value: batt.voltage != null ? batt.voltage.toFixed(1) : '-', unit: 'V', cls: '' },
+        { label: '电池电流', value: batt.current != null ? batt.current.toFixed(2) : '-', unit: 'A', cls: '' },
+        { label: '电池功率', value: batt.power != null ? (batt.power/1000).toFixed(2) : '-', unit: 'kW', cls: '' },
+        { label: '电池温度', value: batt.temp_max != null ? batt.temp_max.toFixed(1) : '-', unit: '°C', cls: '' },
+        { label: '充放状态', value: batt.charge_state || '-', unit: '', cls: '' },
+        { label: 'PV电压', value: pv.pv_voltage != null ? pv.pv_voltage.toFixed(1) : '-', unit: 'V', cls: '' },
+        { label: 'PV电流', value: pv.pv_current != null ? pv.pv_current.toFixed(2) : '-', unit: 'A', cls: '' },
+        { label: 'PV功率', value: pv.pv_power != null ? pv.pv_power.toFixed(0) : '-', unit: 'W', cls: '' },
+        { label: 'MPPT状态', value: pv.mppt_state || '-', unit: '', cls: '' },
+        { label: '系统状态', value: sys.state || '-', unit: '', cls: '' },
+        { label: '故障码', value: sys.fault_code != null ? sys.fault_code : '-', unit: '', cls: sys.fault_code ? 'warn' : '' },
+        { label: '逆变温度', value: sys.temp_inv != null ? sys.temp_inv.toFixed(1) : '-', unit: '°C', cls: '' },
+        { label: 'MOS温度', value: sys.temp_mos != null ? sys.temp_mos.toFixed(1) : '-', unit: '°C', cls: '' },
+        { label: '环境温度', value: sys.temp_ambient != null ? sys.temp_ambient.toFixed(1) : '-', unit: '°C', cls: '' },
+        { label: 'DC母线', value: sys.dc_bus_voltage != null ? sys.dc_bus_voltage.toFixed(1) : '-', unit: 'V', cls: '' },
+        { label: '效率', value: sys.efficiency != null ? sys.efficiency.toFixed(1) : '-', unit: '%', cls: '' },
+        { label: '日PV发电', value: energy.daily_pv != null ? energy.daily_pv.toFixed(2) : '-', unit: 'kWh', cls: '' },
+        { label: '总PV发电', value: energy.total_pv != null ? energy.total_pv.toFixed(1) : '-', unit: 'kWh', cls: '' },
+        { label: '日充电', value: energy.daily_charge != null ? energy.daily_charge.toFixed(2) : '-', unit: 'kWh', cls: '' },
+        { label: '日放电', value: energy.daily_discharge != null ? energy.daily_discharge.toFixed(2) : '-', unit: 'kWh', cls: '' },
+        { label: '运行时', value: energy.runtime_hours != null ? energy.runtime_hours : '-', unit: 'h', cls: '' }
+      ];
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i], cls = item.cls || '';
+        h += '<div class="data-item' + (cls ? ' ' + cls : '') + '"><div class="dlbl">' + item.label + '</div><div class="dval">' + item.value + ' ' + (item.unit ? '<span style="font-size:10px;font-weight:400;color:var(--text-muted);">' + item.unit + '</span>' : '') + '</div></div>';
+      }
+      h += '</div>';
+    } else {
+      h += '<div style="text-align:center;padding:30px;color:var(--text-muted);">暂无实时数据</div>';
+    }
+
+    h += '<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px;">';
+    h += '<div class="section-title">设备控制</div>';
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+    h += '<input type="number" id="cmd-power-val" value="80" min="0" max="100" style="width:70px;padding:7px;border:1px solid var(--border);border-radius:5px;font-size:12px;"><span style="font-size:12px;color:var(--text-muted);">%</span>';
+    h += '<button class="btn btn-sm btn-dark" onclick="sendDeviceCmdV2(\'' + dev.sn + '\',\'set_power_limit\',{value:parseInt(($(\'cmd-power-val\').value||80))})">设置功率</button>';
+    h += '<button class="btn btn-sm btn-warn" onclick="sendDeviceCmdV2(\'' + dev.sn + '\',\'restart\')">重启设备</button>';
+    h += '<button class="btn btn-sm" onclick="sendDeviceCmdV2(\'' + dev.sn + '\',\'query\')">查询状态</button>';
+    h += '</div>';
+    h += '<div id="cmd-result" style="margin-top:8px;font-size:12px;"></div></div>';
+    $('detail-body').innerHTML = h;
+  } catch (e) { $('detail-body').innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">加载失败: ' + e.message + '</div>'; }
+}
+
+function closeDeviceDetail() { $('device-detail-modal').classList.remove('show'); }
+$('device-detail-modal').onclick = function(e) { if (e.target === this) closeDeviceDetail(); };
+
+async function sendDeviceCmdV2(sn, command, value) {
+  $('cmd-result').innerHTML = '<span style="color:var(--info);">发送中...</span>';
+  try {
+    var body = { command: command };
+    if (value != null) body.params = value;
+    var r = await fetch('/admin/api/devices/' + sn + '/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    var d = await r.json();
+    if (d.status === 'sent' || d.error === undefined) { $('cmd-result').innerHTML = '<span style="color:var(--success);">命令已发送 (' + command + ')</span>'; }
+    else { $('cmd-result').innerHTML = '<span style="color:var(--danger);">' + JSON.stringify(d) + '</span>'; }
+    setTimeout(function() { if ($('cmd-result')) $('cmd-result').innerHTML = ''; }, 5000);
+  } catch (e) { $('cmd-result').innerHTML = '<span style="color:var(--danger);">发送失败: ' + e.message + '</span>'; }
+}
+
+// ==================== MQTT Stats ====================
+async function loadMQTTStats() {
+  try {
+    var r = await fetch('/admin/api/mqtt-stats'), d = await r.json();
+    if (d.status === 'error') { $('mqtt-stats').innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">MQTT 统计不可用: ' + d.message + '</div>'; return; }
+    var h = '';
+    var items = [
+      { label: '数据消息', value: d.data_received || 0, cls: '' },
+      { label: '状态消息', value: d.status_received || 0, cls: '' },
+      { label: '告警消息', value: d.alarm_received || 0, cls: '' },
+      { label: '命令已发送', value: d.cmd_sent || 0, cls: '' },
+      { label: '命令回复', value: d.cmd_reply_received || 0, cls: '' },
+      { label: '数据丢弃', value: d.data_dropped || 0, cls: d.data_dropped > 0 ? 'warn' : '' },
+      { label: '状态丢弃', value: d.status_dropped || 0, cls: d.status_dropped > 0 ? 'warn' : '' },
+      { label: '告警丢弃', value: d.alarm_dropped || 0, cls: d.alarm_dropped > 0 ? 'warn' : '' },
+      { label: '在线设备', value: d.online_clients || 0, cls: '' },
+      { label: '最后数据', value: d.last_data_at ? fmtTime(d.last_data_at).slice(-8) : '-', cls: '' },
+      { label: '最后状态', value: d.last_status_at ? fmtTime(d.last_status_at).slice(-8) : '-', cls: '' }
+    ];
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      h += '<div class="mqtt-stat' + (item.cls ? ' ' + item.cls : '') + '"><div class="mval">' + item.value + '</div><div class="mlbl">' + item.label + '</div></div>';
+    }
+    $('mqtt-stats').innerHTML = h;
+  } catch (e) { $('mqtt-stats').innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">MQTT 统计加载失败</div>'; }
+}
+
+// ==================== Tabs ====================
+$$ = function(sel) { return document.querySelectorAll(sel); };
+
+$$('.nav-item').forEach(function(t) {
+  t.onclick = function() {
+    $$('.nav-item').forEach(function(x) { x.classList.remove('active'); });
+    this.classList.add('active');
+    $$('.panel').forEach(function(p) { p.classList.remove('active'); });
+    var panel = $('panel-' + this.dataset.panel);
+    panel.classList.add('active');
+
+    var names = { 'dashboard': '仪表盘', 'devices': '设备管理', 'stations': '电站管理', 'users': '用户管理', 'alarms': '告警记录', 'models': '设备型号', 'services': '服务管理', 'apitest': 'API 调试' };
+    $('breadcrumb').textContent = names[this.dataset.panel] || this.dataset.panel;
+
+    if (this.dataset.panel === 'dashboard') { loadDashboard(); loadSystemInfo(); }
+    if (this.dataset.panel === 'devices') loadDevices();
+    if (this.dataset.panel === 'stations') loadStations();
+    if (this.dataset.panel === 'users') loadUsers();
+    if (this.dataset.panel === 'alarms') loadAlarms();
+    if (this.dataset.panel === 'models') loadModels();
+    if (this.dataset.panel === 'services') { checkServices(); loadMQTTStats(); }
+
+    if (window.innerWidth <= 900) toggleSidebar();
+  };
+});
+
+$('device-search').oninput = loadDevices;
+$('station-search').oninput = loadStations;
+$('user-search').oninput = loadUsers;
+
+// ==================== Init ====================
+setInterval(function() {
+  var d = new Date();
+  var off = d.getTimezoneOffset() * 60000;
+  var sh = new Date(d.getTime() + off + 28800000);
+  var y = sh.getUTCFullYear(), m = String(sh.getUTCMonth() + 1).padStart(2, '0'), day = String(sh.getUTCDate()).padStart(2, '0');
+  var h = String(sh.getUTCHours()).padStart(2, '0'), mi = String(sh.getUTCMinutes()).padStart(2, '0'), s = String(sh.getUTCSeconds()).padStart(2, '0');
+  $('clock').textContent = y + '/' + m + '/' + day + ' ' + h + ':' + mi + ':' + s;
+}, 1000);
+loadDashboard();
+loadSystemInfo();
+
+// ==================== Device Models ====================
+var catNames = { inverter: '逆变器', battery: '储能电池', meter: '电表', hybrid: '混合系统', evcharger: '充电桩' };
+
+async function loadModels() {
+  try {
+    var rows = await fetch('/admin/api/models').then(function(r) { return r.json(); });
+    var h = rows.map(function(m) {
+      var fields = m.data_fields ? Object.keys(m.data_fields).length : 0;
+      var cat = catNames[m.category] || m.category;
+      return '<tr><td><code>' + m.model_code + '</code></td><td>' + (m.model_name || '-') + '</td><td>' + (m.manufacturer || '-') + '</td>' +
+        '<td><span class="badge info"><span class="bdot"></span>' + cat + '</span></td>' +
+        '<td>' + m.rated_power_kw + '</td>' +
+        '<td>' + (m.is_active ? '<span class="badge online"><span class="bdot"></span>启用</span>' : '<span class="badge offline"><span class="bdot"></span>禁用</span>') + '</td>' +
+        '<td>' + fields + '</td>' +
+        '<td class="tag-row">' +
+        '<button class="btn btn-sm" onclick="showEditModel(' + m.id + ',\'' + (m.model_code || '') + '\',\'' + (m.model_name || '') + '\',\'' + (m.manufacturer || '') + '\',\'' + (m.category || '') + '\',' + m.rated_power_kw + ',' + m.is_active + ')">编辑</button>' +
+        '<button class="btn btn-sm btn-danger" onclick="deleteModel(' + m.id + ',\'' + (m.model_code || '') + '\')">删除</button>' +
+        '</td></tr>';
+    }).join('');
+    $('models-tbody').innerHTML = h || '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">暂无型号配置</div><div style="font-size:11px;color:var(--text-muted);margin-top:6px;">点击"新增型号"添加设备型号，新设备接入时自动匹配</div></div></td></tr>';
+  } catch (e) { showToast('加载型号失败', true); }
+}
+
+function showAddModel() {
+  $('model-form-title').textContent = '新增设备型号';
+  $('edit-model-id').value = '';
+  $('m-code').value = ''; $('m-name').value = ''; $('m-manufacturer').value = '';
+  $('m-category').value = 'inverter'; $('m-power').value = '';
+  $('m-active').value = 'true'; $('m-fields').value = '';
+  $('m-mapping').value = '{}'; $('m-desc').value = '';
+  $('m-code').disabled = false;
+  $('model-form-modal').classList.add('show');
+}
+
+function showEditModel(id, code, name, man, cat, power, active) {
+  $('model-form-title').textContent = '编辑设备型号';
+  $('edit-model-id').value = id;
+  $('m-code').value = code; $('m-name').value = name; $('m-manufacturer').value = man;
+  $('m-category').value = cat; $('m-power').value = power;
+  $('m-active').value = String(active); $('m-code').disabled = true;
+  $('model-form-modal').classList.add('show');
+}
+
+function closeModelForm() { $('model-form-modal').classList.remove('show'); }
+$('model-form-modal').onclick = function(e) { if (e.target === this) closeModelForm(); };
+
+async function submitModel() {
+  var code = $('m-code').value.trim(), name = $('m-name').value.trim();
+  if (!code || !name) { showToast('请填写编码和名称', true); return; }
+  var fieldsStr = $('m-fields').value.trim() || '{}';
+  var mappingStr = $('m-mapping').value.trim() || '{}';
+  try { JSON.parse(fieldsStr); } catch(e) { showToast('字段定义 JSON 格式错误', true); return; }
+  try { JSON.parse(mappingStr); } catch(e) { showToast('字段映射 JSON 格式错误', true); return; }
+  var body = {
+    model_code: code, model_name: name, manufacturer: $('m-manufacturer').value,
+    category: $('m-category').value, rated_power_kw: parseFloat($('m-power').value) || 0,
+    is_active: $('m-active').value === 'true',
+    data_fields: JSON.parse(fieldsStr), field_mapping: JSON.parse(mappingStr),
+    description: $('m-desc').value
+  };
+  var id = $('edit-model-id').value;
+  try {
+    var r;
+    if (id) { r = await fetch('/admin/api/models/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }); }
+    else { r = await fetch('/admin/api/models', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }); }
+    var d = await r.json();
+    if (d.status === 'ok') { showToast(d.message || '保存成功'); closeModelForm(); loadModels(); } else showToast((d.message || '操作失败'), true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+async function deleteModel(id, code) {
+  if (!confirm('确定删除型号 ' + code + ' ？')) return;
+  try {
+    var r = await fetch('/admin/api/models/' + id, { method: 'DELETE' });
+    var d = await r.json();
+    if (d.status === 'ok') { showToast('删除成功'); loadModels(); } else showToast(d.message, true);
+  } catch (e) { showToast('请求失败', true); }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+*.exe
+*.log
+*.db
+logs/
+.git/
+.idea/
+.vscode/
+*.md
+start_all.bat
+deploy/
+inv_app/
+go.mod
+go.sum
+internal/
+pkg/
+cmd/

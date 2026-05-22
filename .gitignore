@@ -1,0 +1,61 @@
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code (keep launch configs, ignore workspace settings)
+.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter
+**/build/
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/app.*.symbols
+**/app.*.map.json
+
+# Go
+*.exe
+*.exe~
+*.test
+*.out
+vendor/
+
+# Android
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+**/android/.gradle/
+**/android/local.properties
+**/android/**/*.iml
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+
+# Logs
+*.log
+**/logs/*.log
+
+# Config with secrets
+**/config.yaml
+!**/config.docker.yaml
+
+# Python
+*.pyc
+__pycache__/
+
+# Misc
+*.swp
+*.swo
+.migrate_working_dir/

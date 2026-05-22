@@ -1,0 +1,92 @@
+class User {
+  final int id;
+  final String phone;
+  final String? email;
+  final String? nickname;
+  final String? avatar;
+  final int role;
+  final int status;
+  final DateTime? lastLoginAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const User({
+    required this.id,
+    required this.phone,
+    this.email,
+    this.nickname,
+    this.avatar,
+    required this.role,
+    required this.status,
+    this.lastLoginAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory User.fromJson(Map<String, dynamic> json) {
+    return User(
+      id: json['id'] as int,
+      phone: json['phone'] as String? ?? '',
+      email: json['email'] as String?,
+      nickname: json['nickname'] as String?,
+      avatar: json['avatar'] as String?,
+      role: json['role'] as int,
+      status: json['status'] as int,
+      lastLoginAt: json['last_login_at'] != null
+          ? DateTime.parse(json['last_login_at'] as String)
+          : null,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'phone': phone,
+      'email': email,
+      'nickname': nickname,
+      'avatar': avatar,
+      'role': role,
+      'status': status,
+      'last_login_at': lastLoginAt?.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+    };
+  }
+
+  String get roleName {
+    switch (role) {
+      case 1:
+        return '原厂';
+      case 2:
+        return '总代理';
+      case 3:
+        return '经销商';
+      case 4:
+        return '安装商';
+      default:
+        return '用户';
+    }
+  }
+}
+
+class LoginResponse {
+  final String token;
+  final User user;
+  final DateTime expireAt;
+
+  const LoginResponse({
+    required this.token,
+    required this.user,
+    required this.expireAt,
+  });
+
+  factory LoginResponse.fromJson(Map<String, dynamic> json) {
+    return LoginResponse(
+      token: json['token'] as String,
+      user: User.fromJson(json['user'] as Map<String, dynamic>),
+      expireAt: DateTime.parse(json['expire_at'] as String),
+    );
+  }
+}

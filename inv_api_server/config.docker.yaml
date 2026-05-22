@@ -1,0 +1,52 @@
+server:
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  mode: release
+
+database:
+  host: ${DB_HOST:-postgres}
+  port: ${DB_PORT:-5432}
+  user: ${DB_USER:-postgres}
+  password: ${DB_PASSWORD:-inv_mqtt_2024}
+  database: inv_mqtt
+  ssl_mode: disable
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: 1h
+
+redis:
+  host: ${REDIS_HOST:-redis}
+  port: ${REDIS_PORT:-6379}
+  password: ""
+  db: 0
+
+jwt:
+  secret: ${JWT_SECRET:-inv-mqtt-jwt-secret-2024-change-me}
+  expire_time: 168h
+  issuer: inv-api-server
+
+sms:
+  provider: aliyun
+  access_key: ""
+  secret_key: ""
+  sign_name: ""
+  template: ""
+
+email:
+  host: smtp.qq.com
+  port: 465
+  username: "${EMAIL_USER:-}"
+  password: "${EMAIL_PASS:-}"
+  from: "${EMAIL_FROM:-}"
+  use_ssl: true
+
+log:
+  level: info
+  filename: logs/api-server.log
+  max_size: 100
+  max_backups: 10
+  max_age: 30
+  compress: true
+
+timezone: Asia/Shanghai
