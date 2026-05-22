@@ -208,12 +208,19 @@ flutter run
                    → App MQTT 直连（JWT 认证，订阅 cs_inv/{sn}/#）
 ```
 
+App 设备详情页实时数据**完全走 MQTT 推送**，不再通过 HTTP API 轮询。进入页面后 MQTT 订阅即开始推送，下拉刷新不触发额外网络请求。
+
 ### 历史/统计数据链路
 
 ```
 App → HTTP REST → inv_api_server → PostgreSQL 查询返回
-App → WebSocket → inv_api_server → Redis Pub/Sub 实时推送
 ```
+
+电站统计 `today_energy` 从 `device_day_data` 实时聚合，确保即使 `device_realtime_data` 或 `station_day_data` 数据不完整也能返回正确值。
+
+### SN 编号校验
+
+设备 SN 为 16 位编码（例 `H1CNA00135000014`），包含制造商、国家、客户等级、生产年月、序列号、CRC16-Modbus 校验位。**所有设备入库入口均强制校验**（`device_repository.UpsertDeviceInfo`、`InternalDeviceStatus`、`InternalDeviceData`），无效 SN 自动拒绝写入数据库。
 
 ### 高可用设计
 
