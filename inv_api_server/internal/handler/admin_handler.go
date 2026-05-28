@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -508,6 +509,7 @@ func InternalDeviceStatus(c *gin.Context) {
 	var req struct {
 		SN     string `json:"sn"`
 		Status int    `json:"status"`
+		IP     string `json:"ip"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.SN == "" {
 		c.JSON(http.StatusOK, map[string]interface{}{"status": "error", "message": "invalid request"})
@@ -535,14 +537,20 @@ func InternalDeviceStatus(c *gin.Context) {
 	}
 	if req.Status == 1 {
 		db.Exec(ctx, `UPDATE devices SET last_online_at=NOW() WHERE sn=$1 AND deleted_at IS NULL`, req.SN)
+		if req.IP != "" {
+			db.Exec(ctx, `UPDATE devices SET ip_address=$1 WHERE sn=$2`, req.IP, req.SN)
+			go syncStationCoordsFromIP(db, req.SN, req.IP)
+		}
 	}
 	if result.RowsAffected() == 0 {
-		_, err = db.Exec(ctx,
-			`INSERT INTO devices (sn, status, last_online_at, user_id, deleted_at, created_at, updated_at) VALUES ($1,$2,NOW(),0,NULL,NOW(),NOW()) ON CONFLICT (sn) DO UPDATE SET status=$2, last_online_at=NOW(), deleted_at=NULL, updated_at=NOW()`,
-			req.SN, req.Status)
+		insertSQL := `INSERT INTO devices (sn, status, last_online_at, ip_address, user_id, deleted_at, created_at, updated_at) VALUES ($1,$2,NOW(),$3,0,NULL,NOW(),NOW()) ON CONFLICT (sn) DO UPDATE SET status=$2, last_online_at=NOW(), ip_address=$3, deleted_at=NULL, updated_at=NOW()`
+		_, err = db.Exec(ctx, insertSQL, req.SN, req.Status, req.IP)
 		if err != nil {
 			c.JSON(http.StatusOK, map[string]interface{}{"status": "error", "message": err.Error()})
 			return
+		}
+		if req.IP != "" {
+			go syncStationCoordsFromIP(db, req.SN, req.IP)
 		}
 	}
 
@@ -557,6 +565,90 @@ func InternalDeviceStatus(c *gin.Context) {
 	`)
 
 	c.JSON(http.StatusOK, map[string]interface{}{"status": "ok"})
+}
+
+type ipGeoResponse struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+}
+
+func outOfChina(lon, lat float64) bool {
+	return lon < 72.004 || lon > 137.8347 || lat < 0.8293 || lat > 55.8271
+}
+
+func transformLat(x, y float64) float64 {
+	ret := -100.0 + 2.0*x + 3.0*y + 0.2*y*y + 0.1*x*y + 0.2*math.Sqrt(math.Abs(x))
+	ret += (20.0*math.Sin(6.0*x*math.Pi) + 20.0*math.Sin(2.0*x*math.Pi)) * 2.0 / 3.0
+	ret += (20.0*math.Sin(y*math.Pi) + 40.0*math.Sin(y/3.0*math.Pi)) * 2.0 / 3.0
+	ret += (160.0*math.Sin(y/12.0*math.Pi) + 320.0*math.Sin(y*math.Pi/30.0)) * 2.0 / 3.0
+	return ret
+}
+
+func transformLon(x, y float64) float64 {
+	ret := 300.0 + x + 2.0*y + 0.1*x*x + 0.1*x*y + 0.1*math.Sqrt(math.Abs(x))
+	ret += (20.0*math.Sin(6.0*x*math.Pi) + 20.0*math.Sin(2.0*x*math.Pi)) * 2.0 / 3.0
+	ret += (20.0*math.Sin(x*math.Pi) + 40.0*math.Sin(x/3.0*math.Pi)) * 2.0 / 3.0
+	ret += (150.0*math.Sin(x/12.0*math.Pi) + 300.0*math.Sin(x/30.0*math.Pi)) * 2.0 / 3.0
+	return ret
+}
+
+func wgs84ToGcj02(lon, lat float64) (float64, float64) {
+	if outOfChina(lon, lat) {
+		return lon, lat
+	}
+	const a = 6378245.0
+	const ee = 0.00669342162296594323
+
+	dLat := transformLat(lon-105.0, lat-35.0)
+	dLon := transformLon(lon-105.0, lat-35.0)
+	radLat := lat * math.Pi / 180.0
+	magic := math.Sin(radLat)
+	magic = 1 - ee*magic*magic
+	sqrtMagic := math.Sqrt(magic)
+	dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sqrtMagic) * math.Pi)
+	dLon = (dLon * 180.0) / (a / sqrtMagic * math.Cos(radLat) * math.Pi)
+	return lon + dLon, lat + dLat
+}
+
+func syncStationCoordsFromIP(db *pgxpool.Pool, deviceSN, ipAddr string) {
+	if ipAddr == "" || ipAddr == "127.0.0.1" || strings.HasPrefix(ipAddr, "192.168.") || strings.HasPrefix(ipAddr, "10.") || strings.HasPrefix(ipAddr, "172.16.") {
+		return
+	}
+
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Get(fmt.Sprintf("https://ipapi.com/ip_api.php?ip=%s", ipAddr))
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	var geo ipGeoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&geo); err != nil {
+		return
+	}
+	if geo.Latitude == 0 && geo.Longitude == 0 {
+		return
+	}
+
+	// ipapi.com returns WGS-84, convert to GCJ-02 for Chinese maps
+	gcjLng, gcjLat := wgs84ToGcj02(geo.Longitude, geo.Latitude)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	_, err = db.Exec(ctx, `
+		UPDATE stations SET
+			latitude = $1,
+			longitude = $2,
+			updated_at = NOW()
+		WHERE id = (
+			SELECT station_id FROM devices WHERE sn = $3 AND station_id IS NOT NULL AND deleted_at IS NULL
+		)
+		AND (latitude = 0 OR latitude IS NULL)
+	`, gcjLat, gcjLng, deviceSN)
+	if err != nil {
+		return
+	}
 }
 
 func InternalDeviceData(c *gin.Context) {
@@ -1085,7 +1177,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		c.JSON(http.StatusOK, map[string]interface{}{"status": "error", "message": "密码长度不能少于6位"})
 		return
 	}
-	if req.Role <= 0 { req.Role = 5 }
+	if req.Role <= 0 { req.Role = 3 }
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {

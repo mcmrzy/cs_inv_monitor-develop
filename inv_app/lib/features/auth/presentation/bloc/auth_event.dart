@@ -141,3 +141,34 @@ class AuthSendEmailCodeRequested extends AuthEvent {
   @override
   List<Object?> get props => [email, type];
 }
+
+class AuthTokenRefreshed extends AuthEvent {
+  final String token;
+  final String? refreshToken;
+
+  const AuthTokenRefreshed({
+    required this.token,
+    this.refreshToken,
+  });
+
+  @override
+  List<Object?> get props => [token, refreshToken];
+}
+
+class AuthWechatLoginRequested extends AuthEvent {
+  final String code;
+
+  const AuthWechatLoginRequested({required this.code});
+
+  @override
+  List<Object?> get props => [code];
+}
+
+class AuthGoogleLoginRequested extends AuthEvent {
+  final String idToken;
+
+  const AuthGoogleLoginRequested({required this.idToken});
+
+  @override
+  List<Object?> get props => [idToken];
+}

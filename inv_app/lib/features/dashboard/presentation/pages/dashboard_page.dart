@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/widgets/power_gauge.dart';
-import 'package:inv_app/core/widgets/data_card.dart';
 import 'package:inv_app/core/widgets/status_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/animated_value.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 
 class DashboardPage extends StatefulWidget {
   final InverterRealtime? data;
@@ -36,9 +37,7 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void didUpdateWidget(DashboardPage old) {
     super.didUpdateWidget(old);
-    if (widget.data != old.data) {
-      _updateTime();
-    }
+    if (widget.data != old.data) _updateTime();
   }
 
   @override
@@ -53,24 +52,18 @@ class _DashboardPageState extends State<DashboardPage> {
     final isRunning = data?.sysStatus?.state == 'inverting';
     final hasFault = data?.sysStatus?.faultCode != 0;
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        widget.onRefresh?.call();
-      },
+    return StyledRefreshIndicator(
+      onRefresh: () async => widget.onRefresh?.call(),
       child: ListView(
         padding: EdgeInsets.all(16.w),
         children: [
           _buildHeader(context, data),
           SizedBox(height: 16.h),
-          _buildPowerSection(context, data),
+          _buildPowerHero(context, data),
           SizedBox(height: 16.h),
-          _buildBatterySection(context, data),
+          _buildQuickStats(context, data),
           SizedBox(height: 16.h),
-          _buildPVSection(context, data),
-          SizedBox(height: 16.h),
-          _buildEnergyCards(context, data),
-          SizedBox(height: 16.h),
-          _buildStatusSection(context, data, isRunning, hasFault),
+          _buildDataSection(context, data),
           SizedBox(height: 24.h),
         ],
       ),
@@ -89,7 +82,7 @@ class _DashboardPageState extends State<DashboardPage> {
               style: TextStyle(
                 fontSize: 22.sp,
                 fontWeight: FontWeight.w700,
-                color: Theme.of(context).colorScheme.onSurface,
+                color: AppColor.onSurface(context),
               ),
             ),
             SizedBox(height: 4.h),
@@ -104,7 +97,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   widget.isOnline ? (data?.sysStatus?.state ?? '在线') : '离线',
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: AppColor.onSurfaceVariant(context),
                   ),
                 ),
               ],
@@ -116,18 +109,12 @@ class _DashboardPageState extends State<DashboardPage> {
           children: [
             Text(
               '更新 $_lastUpdate',
-              style: TextStyle(
-                fontSize: 11.sp,
-                color: Theme.of(context).colorScheme.outline,
-              ),
+              style: TextStyle(fontSize: 11.sp, color: AppColor.outline(context)),
             ),
             SizedBox(height: 4.h),
             Text(
               data?.deviceSN ?? '',
-              style: TextStyle(
-                fontSize: 12.sp,
-                color: Theme.of(context).colorScheme.outline,
-              ),
+              style: TextStyle(fontSize: 12.sp, color: AppColor.outline(context)),
             ),
           ],
         ),
@@ -135,296 +122,305 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildPowerSection(BuildContext context, InverterRealtime? data) {
+  /// Hero section with power gauge and gradient background.
+  Widget _buildPowerHero(BuildContext context, InverterRealtime? data) {
     final activePower = (data?.ac?.power ?? 0) / 1000.0;
-    final loadPercent = data?.ac?.loadPercent ?? 0;
-    final frequency = data?.ac?.frequency ?? 0;
-    final pf = data?.ac?.pf ?? 0;
 
     return Container(
-      padding: EdgeInsets.all(20.w),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(20.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      padding: EdgeInsets.symmetric(vertical: 24.w, horizontal: 20.w),
+      decoration: AppColor.heroCard(context),
       child: Column(
         children: [
           Text(
             '交流输出功率',
             style: TextStyle(
-              fontSize: 15.sp,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w500,
+              color: Colors.white70,
             ),
           ),
           SizedBox(height: 12.h),
           PowerGauge(
             power: activePower,
             maxPower: 6.2,
-            size: 200.w,
+            size: 180.w,
+            textColor: Colors.white,
+            subtextColor: Colors.white70,
           ),
-          SizedBox(height: 16.h),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildQuickStat('负载率', '${loadPercent.toStringAsFixed(1)}', '%', Icons.speed, AppColors.success),
-              _buildQuickStat('频率', '${frequency.toStringAsFixed(1)}', 'Hz', Icons.electrical_services, AppColors.warning),
-              _buildQuickStat('功率因数', '${pf.toStringAsFixed(2)}', '', Icons.tune, Colors.blue),
-            ],
-          ),
+          SizedBox(height: 8.h),
         ],
       ),
     );
   }
 
-  Widget _buildBatterySection(BuildContext context, InverterRealtime? data) {
-    final batt = data?.battery;
-    if (batt == null) return const SizedBox.shrink();
-
-    return Container(
-      padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('电池 BMS', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
-          SizedBox(height: 12.h),
-          Row(
-            children: [
-              Expanded(child: DataCard(title: 'SOC', value: batt.soc.toStringAsFixed(1), unit: '%', icon: Icons.battery_charging_full, color: AppColors.success)),
-              SizedBox(width: 10.w),
-              Expanded(child: DataCard(title: '电压', value: batt.voltage.toStringAsFixed(1), unit: 'V', icon: Icons.electrical_services, color: Colors.blue)),
-              SizedBox(width: 10.w),
-              Expanded(child: DataCard(title: '电流', value: batt.current.toStringAsFixed(2), unit: 'A', icon: Icons.flash_on, color: AppColors.warning)),
-            ],
-          ),
-          SizedBox(height: 10.h),
-          Row(
-            children: [
-              Expanded(child: DataCard(title: '电池温度', value: batt.tempMax.toStringAsFixed(1), unit: '°C', icon: Icons.thermostat, color: Colors.orange)),
-              SizedBox(width: 10.w),
-              Expanded(child: DataCard(title: '循环次数', value: batt.cycleCount.toString(), unit: '', icon: Icons.loop, color: Colors.purple)),
-              SizedBox(width: 10.w),
-              Expanded(child: DataCard(title: 'SOH', value: batt.soh.toStringAsFixed(1), unit: '%', icon: Icons.health_and_safety, color: Colors.teal)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPVSection(BuildContext context, InverterRealtime? data) {
-    final pv = data?.pv;
-    if (pv == null) return const SizedBox.shrink();
-
-    return Container(
-      padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('光伏 MPPT', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
-              Text(pv.mpptState, style: TextStyle(fontSize: 12.sp, color: Theme.of(context).colorScheme.outline)),
-            ],
-          ),
-          SizedBox(height: 12.h),
-          Row(
-            children: [
-              Expanded(child: DataCard(title: 'PV电压', value: pv.pvVoltage.toStringAsFixed(1), unit: 'V', icon: Icons.wb_sunny, color: Colors.orange)),
-              SizedBox(width: 10.w),
-              Expanded(child: DataCard(title: 'PV电流', value: pv.pvCurrent.toStringAsFixed(2), unit: 'A', icon: Icons.electric_bolt, color: Colors.amber)),
-              SizedBox(width: 10.w),
-              Expanded(child: DataCard(title: 'PV功率', value: (pv.pvPower / 1000).toStringAsFixed(2), unit: 'kW', icon: Icons.solar_power, color: AppColors.success)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEnergyCards(BuildContext context, InverterRealtime? data) {
-    final energy = data?.energy;
-    if (energy == null) return const SizedBox.shrink();
+  /// Compact quick stats below the hero card.
+  Widget _buildQuickStats(BuildContext context, InverterRealtime? data) {
+    final loadPercent = data?.ac?.loadPercent ?? 0;
+    final frequency = data?.ac?.frequency ?? 0;
+    final pf = data?.ac?.pf ?? 0;
 
     return Row(
       children: [
-        Expanded(
-          child: DataCard(
-            title: '日PV发电',
-            value: energy.dailyPV.toStringAsFixed(2),
-            unit: 'kWh',
-            icon: Icons.wb_sunny_outlined,
-            color: AppColors.success,
-          ),
-        ),
-        SizedBox(width: 12.w),
-        Expanded(
-          child: DataCard(
-            title: '总PV发电',
-            value: energy.totalPV.toStringAsFixed(1),
-            unit: 'kWh',
-            icon: Icons.summarize,
-            color: Colors.blue,
-          ),
-        ),
+        _quickStatChip(context, '负载率', '${loadPercent.toStringAsFixed(1)}%', Icons.speed, AppColors.success),
+        SizedBox(width: 8.w),
+        _quickStatChip(context, '频率', '${frequency.toStringAsFixed(1)}Hz', Icons.electrical_services, AppColors.warning),
+        SizedBox(width: 8.w),
+        _quickStatChip(context, 'PF', pf.toStringAsFixed(2), Icons.tune, AppColors.blue),
       ],
     );
   }
 
-  Widget _buildQuickStat(String label, String value, String unit, IconData icon, Color color) {
-    return Column(
-      children: [
-        Icon(icon, size: 20.sp, color: color),
-        SizedBox(height: 4.h),
-        RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: value,
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              if (unit.isNotEmpty)
-                TextSpan(
-                  text: ' $unit',
-                  style: TextStyle(
-                    fontSize: 11.sp,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.sp,
-            color: Theme.of(context).colorScheme.outline,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusSection(BuildContext context, InverterRealtime? data, bool isRunning, bool hasFault) {
-    final sysStatus = data?.sysStatus;
-    final energy = data?.energy;
-
-    return Container(
-      padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '运行状态',
-            style: TextStyle(
-              fontSize: 15.sp,
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-          SizedBox(height: 12.h),
-          Row(
-            children: [
-              _buildStatusItem('工作状态', sysStatus?.state ?? '--', isRunning ? AppColors.success : AppColors.warning),
-              SizedBox(width: 8.w),
-              _buildStatusItem('故障码', sysStatus != null ? '${sysStatus.faultCode}' : '--', hasFault ? AppColors.error : AppColors.success),
-              SizedBox(width: 8.w),
-              _buildStatusItem('逆变温度', sysStatus != null ? '${sysStatus.tempInv.toStringAsFixed(1)}°C' : '--', AppColors.warning),
-            ],
-          ),
-          SizedBox(height: 12.h),
-          const Divider(height: 1),
-          SizedBox(height: 12.h),
-          Row(
-            children: [
-              _buildStatusItem('效率', sysStatus != null ? '${sysStatus.efficiency.toStringAsFixed(1)}%' : '--', Colors.blue),
-              SizedBox(width: 8.w),
-              _buildStatusItem('风扇转速', sysStatus != null ? '${sysStatus.fanSpeed}%' : '--', Colors.blue),
-              SizedBox(width: 8.w),
-              _buildStatusItem('运行时长', energy != null ? '${energy.runtimeHours}h' : '--', Colors.teal),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusItem(String label, String value, Color color) {
+  Widget _quickStatChip(BuildContext context, String label, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
-        padding: EdgeInsets.all(10.w),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10.r),
-        ),
+        padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 10.w),
+        decoration: AppColor.card(context),
         child: Column(
           children: [
+            Icon(icon, size: 18.sp, color: color),
+            SizedBox(height: 6.h),
             Text(
               value,
               style: TextStyle(
-                fontSize: 15.sp,
+                fontSize: 14.sp,
                 fontWeight: FontWeight.w700,
-                color: color,
+                color: AppColor.onSurface(context),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
             SizedBox(height: 2.h),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 10.sp,
-                color: Theme.of(context).colorScheme.outline,
-              ),
+              style: TextStyle(fontSize: 10.sp, color: AppColor.outline(context)),
             ),
           ],
         ),
       ),
     );
   }
+
+  /// All data sections in a single unified card.
+  Widget _buildDataSection(BuildContext context, InverterRealtime? data) {
+    final batt = data?.battery;
+    final pv = data?.pv;
+    final ac = data?.ac;
+    final energy = data?.energy;
+    final sysStatus = data?.sysStatus;
+
+    return Container(
+      decoration: AppColor.card(context),
+      child: Column(
+        children: [
+          // Battery BMS
+          if (batt != null) ...[
+            _sectionHeader(context, '电池 BMS', Icons.battery_charging_full, AppColors.success),
+            _dataGrid(context, [
+              _dataItem('SOC', '${batt.soc.toStringAsFixed(1)}%', AppColors.success),
+              _dataItem('电压', '${batt.voltage.toStringAsFixed(1)}V', AppColors.blue),
+              _dataItem('电流', '${batt.current.toStringAsFixed(2)}A', AppColors.warning),
+              _dataItem('SOH', '${batt.soh.toStringAsFixed(1)}%', AppColors.teal),
+              _dataItem('充放状态', batt.chargeState, AppColors.teal),
+            ]),
+          ],
+
+          // PV MPPT
+          if (pv != null) ...[
+            _divider(context),
+            _sectionHeader(context, '光伏 MPPT', Icons.wb_sunny, AppColors.orange, trailing: pv.mpptState),
+            _dataGrid(context, [
+              _dataItem('PV电压', '${pv.pvVoltage.toStringAsFixed(1)}V', AppColors.orange),
+              _dataItem('PV电流', '${pv.pvCurrent.toStringAsFixed(2)}A', AppColors.warning),
+              _dataItem('PV功率', '${(pv.pvPower / 1000).toStringAsFixed(2)}kW', AppColors.success),
+            ]),
+          ],
+
+          // AC Output
+          if (ac != null) ...[
+            _divider(context),
+            _sectionHeader(context, '交流输出', Icons.power, AppColors.success),
+            _dataGrid(context, [
+              _dataItem('电压', '${ac.voltage.toStringAsFixed(1)}V', AppColors.success),
+              _dataItem('电流', '${ac.current.toStringAsFixed(2)}A', AppColors.warning),
+              _dataItem('有功功率', '${ac.power.toStringAsFixed(0)}W', AppColors.success),
+              _dataItem('频率', '${ac.frequency.toStringAsFixed(2)}Hz', AppColors.orange),
+              _dataItem('负载率', '${ac.loadPercent.toStringAsFixed(1)}%', AppColors.blue),
+            ]),
+          ],
+
+          // Energy
+          if (energy != null) ...[
+            _divider(context),
+            _sectionHeader(context, '能量统计', Icons.battery_charging_full, AppColors.primary),
+            _dataGrid(context, [
+              _dataItem('日PV发电', '${energy.dailyPV.toStringAsFixed(2)}kWh', AppColors.success),
+              _dataItem('总PV发电', '${energy.totalPV.toStringAsFixed(1)}kWh', AppColors.blue),
+              _dataItem('运行时', '${energy.runtimeHours}h', AppColors.teal),
+            ]),
+          ],
+
+          // System Status
+          if (sysStatus != null) ...[
+            _divider(context),
+            _sectionHeader(context, '系统状态', Icons.info_outline, AppColors.primary),
+            _statusGrid(context, sysStatus),
+          ],
+
+          SizedBox(height: 4.h),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(BuildContext context, String title, IconData icon, Color color, {String? trailing}) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16.w, 14.h, 16.w, 8.h),
+      child: Row(
+        children: [
+          Container(
+            width: 28.w,
+            height: 28.w,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8.r),
+            ),
+            child: Icon(icon, size: 16.sp, color: color),
+          ),
+          SizedBox(width: 10.w),
+          Text(title, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColor.onSurface(context))),
+          if (trailing != null) ...[
+            const Spacer(),
+            Text(trailing, style: TextStyle(fontSize: 12.sp, color: AppColor.outline(context))),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _divider(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16.w),
+      child: Divider(height: 1, color: AppColor.outline(context).withValues(alpha: 0.15)),
+    );
+  }
+
+  /// Grid of data items - 3 per row.
+  Widget _dataGrid(BuildContext context, List<_DataItem> items) {
+    final rows = <List<_DataItem>>[];
+    for (var i = 0; i < items.length; i += 3) {
+      rows.add(items.sublist(i, i + 3 > items.length ? items.length : i + 3));
+    }
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 12.h),
+      child: Column(
+        children: rows.map((row) {
+          return Padding(
+            padding: EdgeInsets.only(bottom: 6.h),
+            child: Row(
+              children: [
+                for (var i = 0; i < 3; i++) ...[
+                  if (i > 0) SizedBox(width: 8.w),
+                  Expanded(
+                    child: i < row.length
+                        ? _dataCell(context, row[i])
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _dataCell(BuildContext context, _DataItem item) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 8.w),
+      decoration: BoxDecoration(
+        color: item.color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8.r),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedValue(
+            value: item.value,
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w700,
+              color: AppColor.onSurface(context),
+            ),
+          ),
+          SizedBox(height: 1.h),
+          Text(
+            item.label,
+            style: TextStyle(fontSize: 10.sp, color: AppColor.outline(context)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Status grid with colored indicators.
+  Widget _statusGrid(BuildContext context, SysStatus sysStatus) {
+    final isRunning = sysStatus.state == 'inverting';
+    final hasFault = sysStatus.faultCode != 0;
+    final hasAlarm = sysStatus.alarmCode != 0;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 12.h),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _statusCell(context, '工作状态', sysStatus.state, isRunning ? AppColors.success : AppColors.warning)),
+              SizedBox(width: 8.w),
+              Expanded(child: _statusCell(context, '故障码', '${sysStatus.faultCode}', hasFault ? AppColors.error : AppColors.success)),
+              SizedBox(width: 8.w),
+              Expanded(child: _statusCell(context, '告警码', '${sysStatus.alarmCode}', hasAlarm ? AppColors.warning : AppColors.success)),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          Row(
+            children: [
+              Expanded(child: _statusCell(context, '效率', '${sysStatus.efficiency.toStringAsFixed(1)}%', AppColors.blue)),
+              SizedBox(width: 8.w),
+              Expanded(child: _statusCell(context, '逆变温度', '${sysStatus.tempInv.toStringAsFixed(1)}°C', AppColors.warning)),
+              SizedBox(width: 8.w),
+              Expanded(child: _statusCell(context, 'MOS温度', '${sysStatus.tempMos.toStringAsFixed(1)}°C', AppColors.errorLight)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusCell(BuildContext context, String label, String value, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 8.w),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8.r),
+      ),
+      child: Column(
+        children: [
+          AnimatedValue(
+            value: value,
+            style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700, color: color),
+          ),
+          SizedBox(height: 2.h),
+          Text(label, style: TextStyle(fontSize: 10.sp, color: AppColor.outline(context))),
+        ],
+      ),
+    );
+  }
+
+  _DataItem _dataItem(String label, String value, Color color) => _DataItem(label, value, color);
+}
+
+class _DataItem {
+  final String label;
+  final String value;
+  final Color color;
+  _DataItem(this.label, this.value, this.color);
 }

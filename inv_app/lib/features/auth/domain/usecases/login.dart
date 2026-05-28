@@ -144,3 +144,39 @@ class SendEmailCodeUseCase {
     return repository.sendEmailCode(email: email, type: type);
   }
 }
+
+class RefreshTokenUseCase {
+  final AuthRepository repository;
+
+  RefreshTokenUseCase(this.repository);
+
+  Future<Either<Failure, LoginResponse>> call({
+    required String refreshToken,
+  }) {
+    return repository.refreshToken(refreshToken: refreshToken);
+  }
+}
+
+class WechatLoginUseCase {
+  final AuthRepository repository;
+
+  WechatLoginUseCase(this.repository);
+
+  Future<Either<Failure, LoginResponse>> call({
+    required String code,
+  }) {
+    return repository.wechatLogin(code: code);
+  }
+}
+
+class GoogleLoginUseCase {
+  final AuthRepository repository;
+
+  GoogleLoginUseCase(this.repository);
+
+  Future<Either<Failure, LoginResponse>> call({
+    required String idToken,
+  }) {
+    return repository.googleLogin(idToken: idToken);
+  }
+}

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/data/china_regions.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 
 class CreateStationPage extends StatefulWidget {
@@ -78,7 +79,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
 
   void _showErr(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: const Color(0xFFEF4444), behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r))),
+      SnackBar(content: Text(msg), backgroundColor: AppColors.errorLight, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r))),
     );
   }
 
@@ -109,14 +110,14 @@ class _CreateStationPageState extends State<CreateStationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('新建电站', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
         backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1F2937),
+        foregroundColor: AppColors.textPrimary,
       ),
       body: BlocConsumer<StationBloc, StationState>(
         listener: (context, state) {
@@ -165,19 +166,19 @@ class _CreateStationPageState extends State<CreateStationPage> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.location_on_outlined, size: 20.sp, color: const Color(0xFF5B9BD5)),
+                                Icon(Icons.location_on_outlined, size: 20.sp, color: AppColors.primary),
                                 SizedBox(width: 10.w),
                                 Expanded(
                                   child: Text(
                                     _province != null ? _addressText : '请选择省市区',
                                     style: TextStyle(
                                       fontSize: 14.sp,
-                                      color: _province != null ? const Color(0xFF1F2937) : const Color(0xFFD1D5DB),
+                                      color: _province != null ? AppColors.textPrimary : AppColors.textHint,
                                       fontWeight: _province != null ? FontWeight.w500 : FontWeight.normal,
                                     ),
                                   ),
                                 ),
-                                Icon(Icons.chevron_right_rounded, size: 20.sp, color: const Color(0xFFD1D5DB)),
+                                Icon(Icons.chevron_right_rounded, size: 20.sp, color: AppColors.textHint),
                               ],
                             ),
                           ),
@@ -194,7 +195,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                     child: FilledButton(
                       onPressed: _submitting ? null : _submit,
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF5B9BD5),
+                        backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
                         elevation: 0,
@@ -207,7 +208,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                   SizedBox(height: 16.h),
                   TextButton(
                     onPressed: () => context.pop(),
-                    child: Text('取消', style: TextStyle(fontSize: 14.sp, color: const Color(0xFF9CA3AF))),
+                    child: Text('取消', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
                   ),
                 ],
               ),
@@ -231,15 +232,15 @@ class _CreateStationPageState extends State<CreateStationPage> {
               Container(
                 width: 36.w, height: 36.w,
                 decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r)),
-                child: Icon(icon, size: 18.sp, color: const Color(0xFF5B9BD5)),
+                child: Icon(icon, size: 18.sp, color: AppColors.primary),
               ),
               SizedBox(width: 10.w),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1F2937))),
+                  Text(title, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                   SizedBox(height: 1.h),
-                  Text(subtitle, style: TextStyle(fontSize: 11.sp, color: const Color(0xFF9CA3AF))),
+                  Text(subtitle, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
                 ],
               ),
             ],
@@ -257,26 +258,26 @@ class _CreateStationPageState extends State<CreateStationPage> {
       children: [
         Row(
           children: [
-            Text(label, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500, color: const Color(0xFF374151))),
-            if (required) Text(' *', style: TextStyle(fontSize: 13.sp, color: const Color(0xFFEF4444))),
+            Text(label, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+            if (required) Text(' *', style: TextStyle(fontSize: 13.sp, color: AppColors.errorLight)),
           ],
         ),
         SizedBox(height: 8.h),
         TextFormField(
           controller: ctl,
           keyboardType: keyboard,
-          cursorColor: const Color(0xFF5B9BD5),
-          style: TextStyle(fontSize: 14.sp, color: const Color(0xFF1F2937)),
+          cursorColor: AppColors.primary,
+          style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(fontSize: 14.sp, color: const Color(0xFFD1D5DB)),
+            hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
             filled: true,
             fillColor: const Color(0xFFF8FAFB),
             contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 13.h),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFF5B9BD5), width: 1.5)),
-            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFFEF4444))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: AppColors.errorLight)),
           ),
           validator: required ? (v) => (v == null || v.trim().isEmpty) ? '请输入$label' : null : null,
         ),
@@ -419,18 +420,18 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
               children: [
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))),
+                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.surfaceHover))),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Text('取消', style: TextStyle(fontSize: 15.sp, color: const Color(0xFF9CA3AF))),
+                        child: Text('取消', style: TextStyle(fontSize: 15.sp, color: AppColors.textHint)),
                       ),
-                      Text('选择地区', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1F2937))),
+                      Text('选择地区', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                       TextButton(
                         onPressed: _confirm,
-                        child: Text('确定', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: const Color(0xFF5B9BD5))),
+                        child: Text('确定', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.primary)),
                       ),
                     ],
                   ),
@@ -440,9 +441,9 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                   child: Row(
                     children: [
                       Expanded(flex: 3, child: _buildColumn(widget.provinces, _provCtrl, _provIdx, _onProvChanged, colLabel: '省')),
-                      Container(width: 1, color: const Color(0xFFF3F4F6)),
+                      Container(width: 1, color: AppColors.surfaceHover),
                       Expanded(flex: 3, child: _buildColumn(_cities, _cityCtrl, _cityIdx, _onCityChanged, colLabel: '市')),
-                      Container(width: 1, color: const Color(0xFFF3F4F6)),
+                      Container(width: 1, color: AppColors.surfaceHover),
                       Expanded(flex: 3, child: _buildColumn(_districts, _distCtrl, _distIdx, _onDistChanged, colLabel: '区')),
                     ],
                   ),
@@ -462,7 +463,7 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
           height: _itemH,
           color: const Color(0xFFF8FAFB),
           alignment: Alignment.center,
-          child: Text(colLabel, style: TextStyle(fontSize: 12.sp, color: const Color(0xFF9CA3AF), fontWeight: FontWeight.w500)),
+          child: Text(colLabel, style: TextStyle(fontSize: 12.sp, color: AppColors.textHint, fontWeight: FontWeight.w500)),
         ),
         Expanded(
           child: Stack(
@@ -474,7 +475,7 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                     Container(
                       height: _itemH,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF5B9BD5).withValues(alpha: 0.06),
+                        color: AppColors.primary.withValues(alpha: 0.06),
                         border: Border.symmetric(horizontal: BorderSide(color: const Color(0xFFE5E7EB))),
                       ),
                     ),
@@ -498,7 +499,7 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                         style: TextStyle(
                           fontSize: 15.sp,
                           fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                          color: selected ? const Color(0xFF1F2937) : const Color(0xFF9CA3AF),
+                          color: selected ? AppColors.textPrimary : AppColors.textHint,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

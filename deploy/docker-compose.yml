@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: timescaledb/timescaledb:latest-pg16
     container_name: inv-postgres
     restart: unless-stopped
     environment:
@@ -14,6 +14,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/02_migration.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d inv_mqtt"]
       interval: 5s
@@ -41,7 +42,7 @@ services:
   inv-api-server:
     image: inv-api-server:latest
     build:
-      context: ./inv_api_server
+      context: ../inv_api_server
       dockerfile: Dockerfile
     container_name: inv-api-server
     restart: unless-stopped
@@ -66,7 +67,7 @@ services:
   inv-device-server-1:
     image: inv-device-server:latest
     build:
-      context: ./inv_device_server
+      context: ../inv_device_server
       dockerfile: Dockerfile
     container_name: inv-device-server-1
     restart: unless-stopped
@@ -118,6 +119,68 @@ services:
     networks:
       - inv-net
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: inv-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus_alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - inv-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: inv-grafana
+    restart: unless-stopped
+    environment:
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)d/grafana"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/inv-mqtt.json:ro
+    networks:
+      - inv-net
+
+  inv-admin-backend:
+    build:
+      context: ../inv-admin-backend
+      dockerfile: Dockerfile
+    container_name: inv-admin-backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASS: ${DB_PASSWORD:-inv_mqtt_2024}
+      DB_NAME: inv_mqtt
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      JWT_SECRET: ${JWT_SECRET:-CSKJ_INV_APP_SERVER_APP_MQTT_KEY}
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - inv-net
+
 networks:
   inv-net:
     driver: bridge
@@ -125,3 +188,5 @@ networks:
 volumes:
   pg_data:
   redis_data:
+  prometheus_data:
+  grafana_data:

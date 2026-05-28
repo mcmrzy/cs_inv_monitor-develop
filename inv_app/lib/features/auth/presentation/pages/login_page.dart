@@ -92,6 +92,10 @@ class _LoginPageState extends State<LoginPage> {
                     SizedBox(height: 32.h),
                     _buildLoginButton(state),
                     SizedBox(height: 24.h),
+                    _buildSocialLoginDivider(),
+                    SizedBox(height: 20.h),
+                    _buildSocialLoginButtons(),
+                    SizedBox(height: 24.h),
                     _buildRegisterRow(),
                   ],
                 ),
@@ -238,6 +242,72 @@ class _LoginPageState extends State<LoginPage> {
           child: Text('立即注册', style: TextStyle(fontSize: 14.sp)),
         ),
       ],
+    );
+  }
+
+  Widget _buildSocialLoginDivider() {
+    return Row(
+      children: [
+        Expanded(child: Divider(color: const Color(0xFFE5E7EB), thickness: 1.h)),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16.w),
+          child: Text('其他登录方式', style: TextStyle(fontSize: 12.sp, color: const Color(0xFF9CA3AF))),
+        ),
+        Expanded(child: Divider(color: const Color(0xFFE5E7EB), thickness: 1.h)),
+      ],
+    );
+  }
+
+  Widget _buildSocialLoginButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildSocialButton(
+          icon: Icons.chat_bubble_outline,
+          label: '微信',
+          color: const Color(0xFF07C160),
+          onTap: () {
+            context.read<AuthBloc>().add(const AuthWechatLoginRequested(code: ''));
+          },
+        ),
+        SizedBox(width: 40.w),
+        _buildSocialButton(
+          icon: Icons.g_mobiledata,
+          label: 'Google',
+          color: const Color(0xFF4285F4),
+          onTap: () {
+            context.read<AuthBloc>().add(const AuthGoogleLoginRequested(idToken: ''));
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSocialButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 48.w,
+            height: 48.w,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+              color: Colors.white,
+            ),
+            child: Icon(icon, size: 24.sp, color: color),
+          ),
+          SizedBox(height: 6.h),
+          Text(label, style: TextStyle(fontSize: 12.sp, color: const Color(0xFF6B7280))),
+        ],
+      ),
     );
   }
 }

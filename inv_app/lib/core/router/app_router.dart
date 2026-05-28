@@ -5,7 +5,9 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/command_result.dart';
+import 'package:inv_app/core/services/role_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/auth/presentation/pages/splash_page.dart';
 import 'package:inv_app/features/auth/presentation/pages/login_page.dart';
 import 'package:inv_app/features/auth/presentation/pages/register_page.dart';
@@ -28,8 +30,15 @@ import 'package:inv_app/features/profile/presentation/pages/about_page.dart';
 import 'package:inv_app/features/profile/presentation/pages/notify_settings_page.dart';
 import 'package:inv_app/features/profile/presentation/pages/device_share_page.dart';
 import 'package:inv_app/features/device/presentation/pages/device_control_page.dart';
+import 'package:inv_app/features/device/presentation/pages/history_chart_page.dart';
+import 'package:inv_app/features/device/presentation/pages/local_mode_page.dart';
+import 'package:inv_app/features/ota/presentation/pages/ota_page.dart';
+import 'package:inv_app/features/ota/presentation/pages/ota_detail_page.dart';
+import 'package:inv_app/features/ota/presentation/pages/local_ota_page.dart';
+import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/core/router/guards/auth_guard.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -83,6 +92,11 @@ class AppRouter {
             name: 'profile',
             builder: (context, state) => const ProfilePage(),
           ),
+          GoRoute(
+            path: '/ota',
+            name: 'otaTab',
+            builder: (context, state) => const OtaTabPage(),
+          ),
         ],
       ),
       GoRoute(
@@ -131,9 +145,22 @@ class AppRouter {
         },
       ),
       GoRoute(
+        path: '/device/:sn/history',
+        name: 'deviceHistory',
+        builder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+          return HistoryChartPage(deviceSN: sn);
+        },
+      ),
+      GoRoute(
         path: '/wifi-config',
         name: 'wifiConfig',
         builder: (context, state) => const WifiConfigPage(),
+      ),
+      GoRoute(
+        path: '/local-mode',
+        name: 'localMode',
+        builder: (context, state) => const LocalModePage(),
       ),
       GoRoute(
         path: '/add-device',
@@ -179,6 +206,49 @@ class AppRouter {
           return DeviceSharePage(deviceSN: sn);
         },
       ),
+      GoRoute(
+        path: '/ota/:sn',
+        name: 'ota',
+        builder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+          return BlocProvider(
+            create: (_) => getIt<OtaBloc>(),
+            child: OTAPage(deviceSN: sn),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/ota/:sn/detail',
+        name: 'otaDetail',
+        builder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+          final taskId = int.parse(state.uri.queryParameters['task_id'] ?? '0');
+          return BlocProvider(
+            create: (_) => getIt<OtaBloc>(),
+            child: OTADetailPage(deviceSN: sn, taskId: taskId),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/ota/:sn/local',
+        name: 'otaLocal',
+        builder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+          final deviceIP = state.uri.queryParameters['ip'] ?? '192.168.4.1';
+          final firmwareId = state.uri.queryParameters['firmware_id'] != null
+              ? int.tryParse(state.uri.queryParameters['firmware_id']!)
+              : null;
+          final firmwareUrl = state.uri.queryParameters['firmware_url'];
+          final firmwareFileName = state.uri.queryParameters['firmware_file_name'];
+          return LocalOTAPage(
+            deviceSN: sn,
+            deviceIP: deviceIP,
+            firmwareId: firmwareId,
+            firmwareUrl: firmwareUrl,
+            firmwareFileName: firmwareFileName,
+          );
+        },
+      ),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(
@@ -200,7 +270,7 @@ class MainShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: child,
-      bottomNavigationBar: const BottomNavBar(),
+      bottomNavigationBar: BottomNavBar(child: child),
     );
   }
 }
@@ -213,74 +283,70 @@ String _dash(dynamic val) {
 }
 
 class BottomNavBar extends StatelessWidget {
-  const BottomNavBar({super.key});
+  final Widget child;
+
+  const BottomNavBar({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.watch<AuthBloc>().state;
+    final role = authState is AuthAuthenticated ? authState.role : RoleService.roleEndUser;
+    final navItems = RoleService.getNavItems(role);
     final currentPath = GoRouterState.of(context).matchedLocation;
 
     int currentIndex = 0;
-    if (currentPath == '/home') {
-      currentIndex = 0;
-    } else if (currentPath == '/statistics') {
-      currentIndex = 1;
-    } else if (currentPath == '/alarms') {
-      currentIndex = 2;
-    } else if (currentPath == '/devices') {
-      currentIndex = 3;
-    } else if (currentPath == '/profile') {
-      currentIndex = 4;
+    for (int i = 0; i < navItems.length; i++) {
+      if (currentPath == navItems[i].path) {
+        currentIndex = i;
+        break;
+      }
     }
 
     return BottomNavigationBar(
       currentIndex: currentIndex,
       onTap: (index) {
-        switch (index) {
-          case 0:
-            context.go('/home');
-            break;
-          case 1:
-            context.go('/statistics');
-            break;
-          case 2:
-            context.go('/alarms');
-            break;
-          case 3:
-            context.go('/devices');
-            break;
-          case 4:
-            context.go('/profile');
-            break;
+        if (index < navItems.length) {
+          context.go(navItems[index].path);
         }
       },
       type: BottomNavigationBarType.fixed,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
-          label: '首页',
+      items: navItems.map((item) => BottomNavigationBarItem(
+        icon: Icon(item.icon),
+        activeIcon: Icon(item.activeIcon),
+        label: item.label,
+      )).toList(),
+    );
+  }
+}
+
+class OtaTabPage extends StatelessWidget {
+  const OtaTabPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(50.h),
+        child: AppBar(
+          title: const Text('OTA升级', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          centerTitle: true,
+          elevation: 0,
+          scrolledUnderElevation: 0.5,
+          backgroundColor: Colors.white,
+          foregroundColor: AppColors.textPrimary,
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.bar_chart_outlined),
-          activeIcon: Icon(Icons.bar_chart),
-          label: '统计',
+      ),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.system_update_outlined, size: 64.sp, color: AppColors.textHint),
+            SizedBox(height: 16.h),
+            Text('OTA升级功能开发中', style: TextStyle(fontSize: 16.sp, color: AppColors.textSecondary)),
+          ],
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_outlined),
-          activeIcon: Icon(Icons.notifications),
-          label: '告警',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.devices_outlined),
-          activeIcon: Icon(Icons.devices),
-          label: '设备',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: '我的',
-        ),
-      ],
+      ),
     );
   }
 }
@@ -330,7 +396,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
+      backgroundColor: AppColors.background,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
@@ -339,7 +405,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
           elevation: 0,
           scrolledUnderElevation: 0.5,
           backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF1F2937),
+          foregroundColor: AppColors.textPrimary,
         ),
       ),
       body: BlocBuilder<DeviceBloc, DeviceState>(
@@ -355,6 +421,8 @@ class _DeviceListPageState extends State<DeviceListPage> {
                   Container(padding: EdgeInsets.all(20.w), decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), shape: BoxShape.circle), child: Icon(Icons.error_outline_rounded, size: 40.sp, color: AppColors.error)),
                   SizedBox(height: 12.h),
                   Text(state.message, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+                  SizedBox(height: 16.h),
+                  OutlinedButton(onPressed: () => context.read<DeviceBloc>().add(const DeviceListRequested()), child: const Text('重试')),
                 ],
               ),
             );
@@ -372,16 +440,16 @@ class _DeviceListPageState extends State<DeviceListPage> {
                     style: TextStyle(fontSize: 15.sp),
                     decoration: InputDecoration(
                         hintText: '搜索序列号或型号',
-                        hintStyle: TextStyle(fontSize: 14.sp, color: const Color(0xFFD1D5DB)),
-                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF9CA3AF)),
+                        hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+                        prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textHint),
                         suffixIcon: _searchController.text.isNotEmpty
-                            ? IconButton(icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF9CA3AF)), onPressed: () { _searchController.clear(); setState(() {}); })
+                            ? IconButton(icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textHint), onPressed: () { _searchController.clear(); setState(() {}); })
                             : null,
-                        filled: true, fillColor: const Color(0xFFF3F4F6),
+                        filled: true, fillColor: AppColors.surfaceHover,
                         contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
                         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: BorderSide.none),
-                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: Color(0xFF5B9BD5), width: 1)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: AppColors.primary, width: 1)),
                       ),
                   ),
                 ),
@@ -389,13 +457,13 @@ class _DeviceListPageState extends State<DeviceListPage> {
                   padding: EdgeInsets.symmetric(horizontal: 16.w),
                   child: Row(
                     children: [
-                      _buildChip('全部', -1, const Color(0xFF5B9BD5)),
+                      _buildChip('全部', -1, AppColors.primary),
                       SizedBox(width: 8.w),
-                      _buildChip('在线', 1, const Color(0xFF10B981)),
+                      _buildChip('在线', 1, AppColors.successLight),
                       SizedBox(width: 8.w),
-                      _buildChip('离线', 0, const Color(0xFF9CA3AF)),
+                      _buildChip('离线', 0, AppColors.textHint),
                       SizedBox(width: 8.w),
-                      _buildChip('故障', 2, const Color(0xFFEF4444)),
+                      _buildChip('故障', 2, AppColors.errorLight),
                     ],
                   ),
                 ),
@@ -431,7 +499,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
                             final status = device['status'] ?? 0;
                             final isOnline = status == 1;
                             final isFault = status == 2;
-                            final accentColor = isOnline ? const Color(0xFF5B9BD5) : (isFault ? const Color(0xFFEF4444) : const Color(0xFF9CA3AF));
+                            final accentColor = isOnline ? AppColors.primary : (isFault ? AppColors.errorLight : AppColors.textHint);
 
                             return Padding(
                               padding: EdgeInsets.only(bottom: 8.h),
@@ -449,7 +517,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
                                         Container(
                                           width: 40.w, height: 40.w,
                                           decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r)),
-                                          child: Icon(Icons.solar_power_rounded, size: 20.sp, color: const Color(0xFF5B9BD5)),
+                                          child: Icon(Icons.solar_power_rounded, size: 20.sp, color: AppColors.primary),
                                         ),
                                         SizedBox(width: 12.w),
                                         Expanded(
@@ -457,22 +525,22 @@ class _DeviceListPageState extends State<DeviceListPage> {
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              Text(sn, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: const Color(0xFF1F2937))),
+                                              Text(sn, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                                               SizedBox(height: 2.h),
-                                              Text(model.isNotEmpty ? model : '未知型号', style: TextStyle(fontSize: 11.sp, color: const Color(0xFF9CA3AF)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                              Text(model.isNotEmpty ? model : '未知型号', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint), maxLines: 1, overflow: TextOverflow.ellipsis),
                                             ],
                                           ),
                                         ),
                                         Container(
                                           padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
                                           decoration: BoxDecoration(
-                                            color: isOnline ? const Color(0xFFECFDF5) : (isFault ? const Color(0xFFFEF2F2) : const Color(0xFFF3F4F6)),
+                                            color: isOnline ? const Color(0xFFECFDF5) : (isFault ? const Color(0xFFFEF2F2) : AppColors.surfaceHover),
                                             borderRadius: BorderRadius.circular(6.r),
                                           ),
-                                          child: Text(isOnline ? '在线' : (isFault ? '故障' : '离线'), style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: isOnline ? const Color(0xFF10B981) : (isFault ? const Color(0xFFEF4444) : const Color(0xFF9CA3AF)))),
+                                          child: Text(isOnline ? '在线' : (isFault ? '故障' : '离线'), style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: isOnline ? AppColors.successLight : (isFault ? AppColors.errorLight : AppColors.textHint))),
                                         ),
                                         SizedBox(width: 4.w),
-                                        Icon(Icons.chevron_right_rounded, size: 16.sp, color: const Color(0xFFD1D5DB)),
+                                        Icon(Icons.chevron_right_rounded, size: 16.sp, color: AppColors.textHint),
                                       ],
                                     ),
                                   ),
@@ -485,7 +553,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
               ],
             );
           }
-          return const Center(child: Text('加载中...'));
+          return const Center(child: CircularProgressIndicator(strokeWidth: 3));
         },
       ),
     );
@@ -500,11 +568,11 @@ class _DeviceListPageState extends State<DeviceListPage> {
         curve: Curves.easeOutCubic,
         padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 7.h),
         decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.1) : const Color(0xFFF3F4F6),
+          color: selected ? color.withValues(alpha: 0.1) : AppColors.surfaceHover,
           borderRadius: BorderRadius.circular(19.r),
           border: Border.all(color: selected ? color.withValues(alpha: 0.3) : const Color(0xFFE5E7EB), width: 1),
         ),
-        child: Text(label, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: selected ? color : const Color(0xFF6B7280))),
+        child: Text(label, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: selected ? color : AppColors.textSecondary)),
       ),
     );
   }
@@ -520,6 +588,9 @@ class DeviceControlPageWrapper extends StatefulWidget {
 }
 
 class _DeviceControlPageWrapperState extends State<DeviceControlPageWrapper> {
+  InverterRealtime? _cachedData;
+  bool _cachedOnline = false;
+
   @override
   void initState() {
     super.initState();
@@ -552,16 +623,15 @@ class _DeviceControlPageWrapperState extends State<DeviceControlPageWrapper> {
           }
         },
         builder: (context, state) {
-          InverterRealtime? data;
-          bool online = false;
           if (state is DeviceDetailLoaded) {
-            data = state.realtimeData;
+            _cachedData = state.realtimeData;
             final device = state.device;
-            online = device?['status'] == 1;
+            final mqttOnline = state.realtimeData?.onlineStatus?.online;
+            _cachedOnline = mqttOnline ?? (device?['status'] == 1);
           }
           return DeviceControlPage(
-            data: data,
-            isOnline: online,
+            data: _cachedData,
+            isOnline: _cachedOnline,
             onSendCommand: _sendCommand,
           );
         },
@@ -580,22 +650,17 @@ class _DeviceDetailWrapper extends StatefulWidget {
 }
 
 class _DeviceDetailWrapperState extends State<_DeviceDetailWrapper> {
-  Timer? _refreshTimer;
+  Map<String, dynamic>? _cachedDevice;
+  InverterRealtime? _cachedRealtime;
 
   @override
   void initState() {
     super.initState();
     context.read<DeviceBloc>().add(DeviceDetailRequested(sn: widget.deviceSN));
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (mounted) {
-        context.read<DeviceBloc>().add(DeviceRealtimeRefresh(sn: widget.deviceSN));
-      }
-    });
   }
 
   @override
   void dispose() {
-    _refreshTimer?.cancel();
     try {
       context.read<DeviceBloc>().add(const DeviceUnsubscribeRealtime());
     } catch (_) {}
@@ -613,6 +678,33 @@ class _DeviceDetailWrapperState extends State<_DeviceDetailWrapper> {
             tooltip: '设备控制',
             onPressed: () => context.push('/device/${widget.deviceSN}/control'),
           ),
+          IconButton(
+            icon: const Icon(Icons.link_off),
+            tooltip: '解绑设备',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('解绑设备'),
+                  content: Text('确定要解绑设备 ${widget.deviceSN} 吗？解绑后将无法查看该设备数据。'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        context.read<DeviceBloc>().add(DeviceUnbindRequested(sn: widget.deviceSN));
+                      },
+                      style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                      child: const Text('解绑'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
       body: BlocConsumer<DeviceBloc, DeviceState>(
@@ -622,22 +714,61 @@ class _DeviceDetailWrapperState extends State<_DeviceDetailWrapper> {
               SnackBar(content: Text(state.message), backgroundColor: AppColors.error),
             );
           }
+          if (state is DeviceUnbindSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('设备已解绑'), backgroundColor: AppColors.success),
+            );
+            context.pop();
+          }
+          if (state is DeviceControlSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(state.message ?? '命令已发送'), backgroundColor: AppColors.success),
+            );
+          }
         },
         builder: (context, state) {
           if (state is DeviceDetailLoaded) {
-            final device = state.device;
-            final online = device?['status'] == 1;
+            _cachedDevice = state.device;
+            _cachedRealtime = state.realtimeData;
+          }
+          if (_cachedDevice != null) {
+            final mqttOnline = _cachedRealtime?.onlineStatus?.online;
+            final online = mqttOnline ?? (_cachedDevice?['status'] == 1);
             return DeviceDetailPage(
-              data: state.realtimeData,
+              data: _cachedRealtime,
+              device: _cachedDevice,
               isOnline: online,
-              onRefresh: () => context.read<DeviceBloc>().add(DeviceRealtimeRefresh(sn: widget.deviceSN)),
+              onRefresh: () => context.read<DeviceBloc>().add(DeviceDetailRequested(sn: widget.deviceSN)),
               onNavigateControl: () => context.push('/device/${widget.deviceSN}/control'),
+              onUnbind: () {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('解绑设备'),
+                    content: Text('确定要解绑设备 ${widget.deviceSN} 吗？解绑后将无法查看该设备数据。'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        child: const Text('取消'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          context.read<DeviceBloc>().add(DeviceUnbindRequested(sn: widget.deviceSN));
+                        },
+                        style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                        child: const Text('解绑'),
+                      ),
+                    ],
+                  ),
+                );
+              },
             );
           }
           if (state is DeviceLoading) {
             return const Center(child: CircularProgressIndicator());
           }
-          return const Center(child: Text('加载中...'));
+          return const Center(child: CircularProgressIndicator());
         },
       ),
     );

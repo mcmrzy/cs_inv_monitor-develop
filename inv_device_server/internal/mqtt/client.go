@@ -273,10 +273,6 @@ func (c *Client) subscribeTopics() error {
 		{"$share/inv-group/cs_inv/+/data/cells", 0, c.handleDataCellsMessage},
 		{"$share/inv-group/cs_inv/+/data/alarm", 1, c.handleAlarmMessage},
 		{"$share/inv-group/cs_inv/+/cmd/response", 1, c.handleCmdResponseMessage},
-		{"$share/inv-group/cs_inv/+/ac", 0, c.handleDataACMessage},
-		{"$share/inv-group/cs_inv/+/dc", 0, c.handleDataPVMessage},
-		{"$share/inv-group/cs_inv/+/energy", 0, c.handleDataEnergyMessage},
-		{"$share/inv-group/cs_inv/+/alarm", 1, c.handleAlarmMessage},
 	}
 
 	for _, t := range topics {

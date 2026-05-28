@@ -48,3 +48,12 @@ class AuthCodeSent extends AuthState {}
 class AuthPasswordResetSuccess extends AuthState {}
 
 class AuthPasswordChangedSuccess extends AuthState {}
+
+class AuthTokenRefreshFailed extends AuthState {
+  final String message;
+
+  const AuthTokenRefreshFailed({required this.message});
+
+  @override
+  List<Object?> get props => [message];
+}

@@ -40,6 +40,14 @@ abstract class StorageService {
   Future<bool> getIsLocalMode();
   Future<void> saveIsLocalMode(bool value);
   
+  Future<String?> getLocale();
+  Future<void> saveLocale(String locale);
+  String? getLocaleSync();
+
+  Future<String?> getStationCache();
+  Future<void> saveStationCache(String json);
+  Future<void> deleteStationCache();
+
   Future<void> clearAll();
 }
 
@@ -60,6 +68,8 @@ class StorageServiceImpl implements StorageService {
   static const String _keyIsDarkMode = 'is_dark_mode';
   static const String _keyServerUrl = 'server_url';
   static const String _keyIsLocalMode = 'is_local_mode';
+  static const String _keyLocale = 'app_locale';
+  static const String _keyStationCache = 'station_cache';
 
   @override
   Future<String?> getToken() async {
@@ -195,6 +205,36 @@ class StorageServiceImpl implements StorageService {
   @override
   Future<void> saveIsLocalMode(bool value) async {
     await _sharedPreferences.setBool(_keyIsLocalMode, value);
+  }
+
+  @override
+  Future<String?> getLocale() async {
+    return _sharedPreferences.getString(_keyLocale);
+  }
+
+  @override
+  Future<void> saveLocale(String locale) async {
+    await _sharedPreferences.setString(_keyLocale, locale);
+  }
+
+  @override
+  String? getLocaleSync() {
+    return _sharedPreferences.getString(_keyLocale);
+  }
+
+  @override
+  Future<String?> getStationCache() async {
+    return _sharedPreferences.getString(_keyStationCache);
+  }
+
+  @override
+  Future<void> saveStationCache(String json) async {
+    await _sharedPreferences.setString(_keyStationCache, json);
+  }
+
+  @override
+  Future<void> deleteStationCache() async {
+    await _sharedPreferences.remove(_keyStationCache);
   }
 
   @override

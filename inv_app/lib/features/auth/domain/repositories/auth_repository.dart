@@ -56,4 +56,16 @@ abstract class AuthRepository {
     required String email,
     required String type,
   });
+
+  Future<Either<Failure, LoginResponse>> refreshToken({
+    required String refreshToken,
+  });
+
+  Future<Either<Failure, LoginResponse>> wechatLogin({
+    required String code,
+  });
+
+  Future<Either<Failure, LoginResponse>> googleLogin({
+    required String idToken,
+  });
 }

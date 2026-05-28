@@ -1,14 +1,13 @@
 import 'package:dio/dio.dart';
-import 'package:inv_app/core/services/api_service.dart';
 
 class AuthRemoteDataSource {
   final Dio dio;
 
   AuthRemoteDataSource(this.dio);
 
-  Future<Response> login(String phone, String password) async {
+  Future<Response> login(String account, String password) async {
     return await dio.post('/auth/login', data: {
-      'phone': phone,
+      'account': account,
       'password': password,
     });
   }
@@ -73,6 +72,24 @@ class AuthRemoteDataSource {
     return await dio.post('/auth/send-email-code', data: {
       'email': email,
       'type': type,
+    });
+  }
+
+  Future<Response> refreshToken(String refreshToken) async {
+    return await dio.post('/auth/refresh', data: {
+      'refresh_token': refreshToken,
+    });
+  }
+
+  Future<Response> wechatLogin(String code) async {
+    return await dio.post('/auth/wechat-login', data: {
+      'code': code,
+    });
+  }
+
+  Future<Response> googleLogin(String idToken) async {
+    return await dio.post('/auth/google-login', data: {
+      'id_token': idToken,
     });
   }
 }

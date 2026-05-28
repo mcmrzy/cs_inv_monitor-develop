@@ -192,7 +192,7 @@ class DeviceRepositoryImpl implements DeviceRepository {
   @override
   Future<Either<Failure, Map<String, dynamic>>> getStatistics(String sn, String startDate, String endDate, String period) async {
     try {
-      final response = await remoteDataSource.getAlarms(sn);
+      final response = await remoteDataSource.getStatistics(sn, startDate, endDate, period);
       return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));

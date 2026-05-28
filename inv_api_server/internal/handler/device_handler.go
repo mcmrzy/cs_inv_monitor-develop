@@ -73,6 +73,9 @@ func (h *DeviceHandler) GetDetail(c *gin.Context) {
 	result := map[string]interface{}{
 		"device":        device,
 		"realtime_data": realtimeData,
+		"online_status": map[string]interface{}{
+			"online": device.Status == 1,
+		},
 	}
 
 	response.Success(c, result)
@@ -98,7 +101,17 @@ func (h *DeviceHandler) GetRealtimeData(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, data)
+	deviceSN := data["device_sn"]
+	if deviceSN == nil {
+		deviceSN = sn
+	}
+
+	response.Success(c, map[string]interface{}{
+		"device_sn":  deviceSN,
+		"data_time":  data["updated_at"],
+		"online":     data["online"],
+		"realtime":   data,
+	})
 }
 
 type BindDeviceRequest struct {

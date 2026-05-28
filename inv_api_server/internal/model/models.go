@@ -57,6 +57,7 @@ type Device struct {
 type DeviceRealtimeData struct {
 	DeviceSN             string                 `json:"device_sn"`
 	DataTime             time.Time              `json:"data_time"`
+	Online               bool                   `json:"online"`
 	Manufacturer         string                 `json:"manufacturer"`
 	Model                string                 `json:"model"`
 	DeviceTypeCode       int                    `json:"device_type_code"`

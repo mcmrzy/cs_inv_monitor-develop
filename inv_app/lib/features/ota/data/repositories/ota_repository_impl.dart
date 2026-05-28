@@ -1,0 +1,150 @@
+import 'package:dartz/dartz.dart';
+import 'package:dio/dio.dart';
+import 'package:inv_app/core/errors/failures.dart';
+import 'package:inv_app/features/ota/data/datasources/ota_remote_data_source.dart';
+import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+
+class OtaRepositoryImpl implements OtaRepository {
+  final OtaRemoteDataSource remoteDataSource;
+
+  OtaRepositoryImpl(this.remoteDataSource);
+
+  Failure _mapError(DioException e) {
+    final statusCode = e.response?.statusCode;
+    final message = e.message ?? e.toString();
+    switch (statusCode) {
+      case 401:
+        return UnauthorizedFailure('未授权，请重新登录');
+      case 403:
+        return ForbiddenFailure('无权限访问');
+      case 404:
+        return NotFoundFailure('资源不存在');
+      case 422:
+        return ValidationFailure(message);
+      case null:
+        return NetworkFailure('网络连接失败');
+      default:
+        return ServerFailure('服务器错误: $statusCode');
+    }
+  }
+
+  Either<Failure, Map<String, dynamic>> _parseData(Response response) {
+    final data = response.data;
+    if (data is Map<String, dynamic>) {
+      if (data['code'] == 0) {
+        final inner = data['data'];
+        if (inner is Map<String, dynamic>) {
+          return Right(inner);
+        }
+        return Right(<String, dynamic>{});
+      }
+      return Left(ServerFailure(data['message'] ?? '请求失败'));
+    }
+    return Left(ServerFailure('响应格式错误'));
+  }
+
+  Either<Failure, List<dynamic>> _parseListData(Response response) {
+    final data = response.data;
+    if (data is Map<String, dynamic>) {
+      if (data['code'] == 0) {
+        final inner = data['data'];
+        if (inner is List) {
+          return Right(inner);
+        }
+        if (inner is Map<String, dynamic>) {
+          final list = inner['list'];
+          if (list is List) {
+            return Right(list);
+          }
+        }
+        return Right([]);
+      }
+      return Left(ServerFailure(data['message'] ?? '请求失败'));
+    }
+    return Left(ServerFailure('响应格式错误'));
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> checkUpdate(String sn) async {
+    try {
+      final response = await remoteDataSource.checkUpdate(sn);
+      return _parseData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<dynamic>>> getFirmwareList({int page = 1, int pageSize = 20}) async {
+    try {
+      final response = await remoteDataSource.getFirmwareList(page: page, pageSize: pageSize);
+      return _parseListData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> getFirmwareDetail(int id) async {
+    try {
+      final response = await remoteDataSource.getFirmwareDetail(id);
+      return _parseData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> triggerOTA(String sn, int firmwareId) async {
+    try {
+      final response = await remoteDataSource.triggerOTA(sn, firmwareId);
+      return _parseData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> getOTATaskProgress(int taskId) async {
+    try {
+      final response = await remoteDataSource.getOTATaskProgress(taskId);
+      return _parseData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> getDeviceOTAStatus(String sn) async {
+    try {
+      final response = await remoteDataSource.getDeviceOTAStatus(sn);
+      return _parseData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<dynamic>>> getOTAHistory(String sn, {int page = 1}) async {
+    try {
+      final response = await remoteDataSource.getOTAHistory(sn, page: page);
+      return _parseListData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+}

@@ -129,7 +129,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	user := &model.User{
 		Phone:        req.Phone,
 		PasswordHash: string(hashedPassword),
-		Role:         5,
+		Role:         3,
 		Status:       1,
 	}
 
@@ -380,7 +380,7 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
 		Nickname:     req.Nickname,
-		Role:         5,
+		Role:         3,
 		Status:       1,
 	}
 

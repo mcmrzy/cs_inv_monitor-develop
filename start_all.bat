@@ -1,39 +1,141 @@
 @echo off
-echo Starting all backend services...
+setlocal enabledelayedexpansion
+
+call :main
+echo.
+pause
+exit /b
+
+:main
+echo ============================================
+echo   CS-INV-MQTT Service Launcher
+echo ============================================
 echo.
 
-echo [1/4] Stopping old services...
-taskkill /F /IM mosquitto.exe >nul 2>&1
+REM --- Get local IP ---
+set LOCAL_IP=localhost
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
+    set LOCAL_IP=%%a
+    set LOCAL_IP=!LOCAL_IP: =!
+    goto :ip_found
+)
+:ip_found
+echo Local IP: %LOCAL_IP%
+echo.
+
+REM ========== [1] Stop old services ==========
+echo [1/7] Stopping old services...
 taskkill /F /IM inv_device_server.exe >nul 2>&1
 taskkill /F /IM inv-device-server.exe >nul 2>&1
 taskkill /F /IM inv_api_server.exe >nul 2>&1
 taskkill /F /IM inv-api-server.exe >nul 2>&1
-net stop mosquitto >nul 2>&1
+taskkill /F /IM main.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
+echo Done.
+echo.
 
-echo [2/4] Starting Mosquitto MQTT Broker (1883 + 8083)...
-start "MQTT-Broker" /min "C:\Program Files\mosquitto\mosquitto.exe" -c "d:\INV-MQTT\mosquitto_custom.conf" -v
-timeout /t 3 /nobreak >nul
+REM ========== [2] Check PostgreSQL ==========
+echo [2/7] Checking PostgreSQL (5432)...
+netstat -ano | findstr ":5432.*LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo   [WARN] PostgreSQL is NOT running!
+) else (
+    echo   PostgreSQL is running.
+)
+echo.
 
-echo [3/4] Starting inv_device_server (8081)...
-start "Device-Server" /min /d "d:\INV-MQTT\inv_device_server" cmd /c "inv_device_server.exe"
+REM ========== [3] Check Redis ==========
+echo [3/7] Checking Redis (6379)...
+netstat -ano | findstr ":6379.*LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo   [WARN] Redis is NOT running!
+) else (
+    echo   Redis is running.
+)
+echo.
 
-echo [4/4] Starting inv_api_server (8080)...
-start "API-Server" /min /d "d:\INV-MQTT\inv_api_server" cmd /c "inv_api_server.exe"
+REM ========== [4] Start inv_device_server ==========
+echo [4/7] Starting inv_device_server (8081)...
+if exist "d:\INV-MQTT\inv_device_server\inv_device_server.exe" (
+    start "Device-Server" /min /d "d:\INV-MQTT\inv_device_server" cmd /c "inv_device_server.exe -config config.yaml"
+    echo   Device Server started.
+) else (
+    echo   [ERROR] inv_device_server.exe not found!
+)
+echo.
 
-timeout /t 3 /nobreak >nul
+REM ========== [5] Start inv_api_server ==========
+echo [5/7] Starting inv_api_server (8080)...
+if exist "d:\INV-MQTT\inv_api_server\inv-api-server.exe" (
+    start "API-Server" /min /d "d:\INV-MQTT\inv_api_server" cmd /c "inv-api-server.exe -config config.yaml"
+    echo   API Server started.
+) else if exist "d:\INV-MQTT\inv_api_server\inv_api_server.exe" (
+    start "API-Server" /min /d "d:\INV-MQTT\inv_api_server" cmd /c "inv_api_server.exe -config config.yaml"
+    echo   API Server started.
+) else (
+    echo   [ERROR] API Server exe not found!
+)
+echo.
+
+REM ========== [6] Start NestJS Admin Backend ==========
+echo [6/7] Starting NestJS Admin Backend (3000)...
+if exist "d:\INV-MQTT\inv-admin-backend\package.json" (
+    start "NestJS-Admin" /min cmd /c "cd /d d:\INV-MQTT\inv-admin-backend && npm run start:dev"
+    echo   NestJS Admin Backend starting...
+) else (
+    echo   [WARN] inv-admin-backend not found.
+)
+echo.
+
+REM ========== [7] Start Admin Frontend ==========
+echo [7/7] Starting Admin Frontend (5173)...
+if exist "d:\INV-MQTT\inv-admin-frontend\package.json" (
+    start "Admin-Frontend" /min cmd /c "cd /d d:\INV-MQTT\inv-admin-frontend && npm run dev"
+    echo   Admin Frontend starting...
+) else (
+    echo   [WARN] inv-admin-frontend not found.
+)
+echo.
+
+timeout /t 5 /nobreak >nul
+
+echo ============================================
+echo   Status Check
+echo ============================================
+
+netstat -ano | findstr ":8080.*LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo   [!!] API Server  (8080) - NOT running!
+) else (
+    echo   [OK] API Server  (8080) - running
+)
+
+netstat -ano | findstr ":8081.*LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo   [!!] Device Server (8081) - NOT running!
+) else (
+    echo   [OK] Device Server (8081) - running
+)
+
+netstat -ano | findstr ":3000.*LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo   [--] Admin API  (3000) - starting...
+) else (
+    echo   [OK] Admin API  (3000) - running
+)
+
+netstat -ano | findstr ":5173.*LISTENING" >nul 2>&1
+if errorlevel 1 (
+    echo   [--] Admin UI   (5173) - starting...
+) else (
+    echo   [OK] Admin UI   (5173) - running
+)
 
 echo.
-echo All services started!
+echo   API Server:    http://%LOCAL_IP%:8080
+echo   Device Server: http://%LOCAL_IP%:8081
+echo   Admin API:     http://%LOCAL_IP%:3000
+echo   Admin UI:      http://localhost:5173
 echo.
-echo API Server:  http://192.168.8.115:8080
-echo Admin Panel: http://192.168.8.115:8080/admin
-echo MQTT TCP:    192.168.8.115:1883
-echo MQTT WS:     192.168.8.115:8083
-echo Device Srv:  192.168.8.115:8081
-echo.
-echo To simulate a device:
-echo   cd C:\Program Files\mosquitto
-echo   mosquitto_pub -h localhost -p 1883 -t cs_inv/H1CNC0013500001F/status -m "{\"device_sn\":\"H1CNC0013500001F\",\"online\":true}"
-echo.
-pause
+
+goto :eof

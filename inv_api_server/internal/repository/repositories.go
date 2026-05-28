@@ -241,14 +241,14 @@ func NewStationRepository(db *pgxpool.Pool) *StationRepository {
 func (r *StationRepository) Create(ctx context.Context, station *model.Station) error {
 	query := `
 		INSERT INTO stations (user_id, name, province, city, district, address, capacity,
-							  panel_count, peak_price, valley_price, latitude, longitude, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+							  panel_count, latitude, longitude, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 
 	return r.db.QueryRow(ctx, query,
 		station.UserID, station.Name, station.Province, station.City, station.District,
-		station.Address, station.Capacity, station.PanelCount, station.PeakPrice, station.ValleyPrice,
+		station.Address, station.Capacity, station.PanelCount,
 		station.Latitude, station.Longitude, station.Status,
 	).Scan(&station.ID, &station.CreatedAt, &station.UpdatedAt)
 }
@@ -256,14 +256,14 @@ func (r *StationRepository) Create(ctx context.Context, station *model.Station) 
 func (r *StationRepository) Update(ctx context.Context, station *model.Station) error {
 	query := `
 		UPDATE stations SET name = $1, province = $2, city = $3, district = $4, address = $5,
-							 capacity = $6, panel_count = $7, peak_price = $8, valley_price = $9,
-							 latitude = $10, longitude = $11, updated_at = NOW()
-		WHERE id = $12
+							 capacity = $6, panel_count = $7,
+							 latitude = $8, longitude = $9, updated_at = NOW()
+		WHERE id = $10
 	`
 
 	_, err := r.db.Exec(ctx, query,
 		station.Name, station.Province, station.City, station.District, station.Address,
-		station.Capacity, station.PanelCount, station.PeakPrice, station.ValleyPrice,
+		station.Capacity, station.PanelCount,
 		station.Latitude, station.Longitude, station.ID,
 	)
 	return err
@@ -278,7 +278,7 @@ func (r *StationRepository) Delete(ctx context.Context, id int64) error {
 func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Station, error) {
 	query := `
 		SELECT id, user_id, name, province, city, district, address, capacity,
-			   panel_count, peak_price, valley_price, latitude, longitude, status, created_at, updated_at
+			   panel_count, latitude, longitude, status, created_at, updated_at
 		FROM stations WHERE id = $1 AND deleted_at IS NULL
 	`
 
@@ -286,7 +286,7 @@ func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Stati
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&station.ID, &station.UserID, &station.Name, &station.Province, &station.City,
 		&station.District, &station.Address, &station.Capacity, &station.PanelCount,
-		&station.PeakPrice, &station.ValleyPrice, &station.Latitude, &station.Longitude,
+		&station.Latitude, &station.Longitude,
 		&station.Status, &station.CreatedAt, &station.UpdatedAt,
 	)
 
@@ -311,7 +311,7 @@ func (r *StationRepository) GetByUserID(ctx context.Context, userID int64, page,
 
 	query := `
 		SELECT id, user_id, name, province, city, district, address, capacity,
-			   panel_count, peak_price, valley_price, latitude, longitude, status, created_at, updated_at
+			   panel_count, latitude, longitude, status, created_at, updated_at
 		FROM stations WHERE user_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
@@ -329,7 +329,7 @@ func (r *StationRepository) GetByUserID(ctx context.Context, userID int64, page,
 		if err := rows.Scan(
 			&station.ID, &station.UserID, &station.Name, &station.Province, &station.City,
 			&station.District, &station.Address, &station.Capacity, &station.PanelCount,
-			&station.PeakPrice, &station.ValleyPrice, &station.Latitude, &station.Longitude,
+			&station.Latitude, &station.Longitude,
 			&station.Status, &station.CreatedAt, &station.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
@@ -365,58 +365,109 @@ func (r *StationRepository) GetDayData(ctx context.Context, stationID int64, dat
 }
 
 func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, startDate, endDate, period string) ([]map[string]interface{}, error) {
-	var query string
-	switch period {
-	case "hour":
-		query = `
-			SELECT data_time, SUM(energy_produce) as energy_produce, SUM(energy_consume) as energy_consume,
-				   SUM(energy_sell) as energy_sell, SUM(energy_buy) as energy_buy
-			FROM device_hour_data d
-			JOIN devices dev ON dev.sn = d.device_sn
-			WHERE dev.station_id = $1 AND data_time >= $2 AND data_time <= $3
-			GROUP BY data_time ORDER BY data_time
-		`
-	case "month":
-		query = `
-			SELECT DATE_TRUNC('month', data_date) as data_time,
-				   SUM(energy_produce) as energy_produce, SUM(energy_consume) as energy_consume,
-				   SUM(energy_sell) as energy_sell, SUM(energy_buy) as energy_buy
-			FROM device_day_data d
-			JOIN devices dev ON dev.sn = d.device_sn
-			WHERE dev.station_id = $1 AND data_date >= $2 AND data_date <= $3
-			GROUP BY DATE_TRUNC('month', data_date) ORDER BY data_time
-		`
-	default:
-		query = `
-			SELECT data_date as data_time, SUM(energy_produce) as energy_produce, SUM(energy_consume) as energy_consume,
-				   SUM(energy_sell) as energy_sell, SUM(energy_buy) as energy_buy
-			FROM device_day_data d
-			JOIN devices dev ON dev.sn = d.device_sn
-			WHERE dev.station_id = $1 AND data_date >= $2 AND data_date <= $3
-			GROUP BY data_date ORDER BY data_date
-		`
-	}
-
-	rows, err := r.db.Query(ctx, query, stationID, startDate, endDate)
+	// 获取该电站下所有设备的SN
+	devicesQuery := `SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL`
+	deviceRows, err := r.db.Query(ctx, devicesQuery, stationID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer deviceRows.Close()
 
-	results := make([]map[string]interface{}, 0)
-	for rows.Next() {
-		var dataTime time.Time
-		var energyProduce, energyConsume, energySell, energyBuy float64
-		if err := rows.Scan(&dataTime, &energyProduce, &energyConsume, &energySell, &energyBuy); err != nil {
+	var deviceSns []string
+	for deviceRows.Next() {
+		var sn string
+		if err := deviceRows.Scan(&sn); err != nil {
 			return nil, err
 		}
-		results = append(results, map[string]interface{}{
-			"time":           dataTime,
-			"energy_produce": energyProduce,
-			"energy_consume": energyConsume,
-			"energy_sell":    energySell,
-			"energy_buy":     energyBuy,
-		})
+		deviceSns = append(deviceSns, sn)
+	}
+
+	if len(deviceSns) == 0 {
+		return []map[string]interface{}{}, nil
+	}
+
+	results := make([]map[string]interface{}, 0)
+
+	switch period {
+	case "hour":
+		// 按日视图：查询当天24小时每个小时的平均功率
+		query := `
+			SELECT 
+				DATE_TRUNC('hour', telem.time) as hour_time,
+				AVG((telem.data->'pv'->>'pv_power')::float) as avg_pv_power,
+				AVG((telem.data->'ac'->>'power')::float) as avg_ac_power,
+				MAX((telem.data->'energy'->>'daily_pv')::float) as max_daily_pv,
+				COUNT(DISTINCT telem.device_sn) as device_count
+			FROM device_telemetry telem
+			WHERE telem.device_sn = ANY($1)
+				AND telem.time >= $2::timestamp
+				AND telem.time <= $3::timestamp
+				AND telem.data->'pv'->>'pv_power' IS NOT NULL
+			GROUP BY DATE_TRUNC('hour', telem.time)
+			ORDER BY hour_time
+		`
+		startTs := startDate + " 00:00:00"
+		endTs := endDate + " 23:59:59"
+		
+		rows, err := r.db.Query(ctx, query, deviceSns, startTs, endTs)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var hourTime time.Time
+			var avgPvPower, avgAcPower, maxDailyPv float64
+			var deviceCount int
+			if err := rows.Scan(&hourTime, &avgPvPower, &avgAcPower, &maxDailyPv, &deviceCount); err != nil {
+				return nil, err
+			}
+			results = append(results, map[string]interface{}{
+				"time":            hourTime,
+				"energy_produce":  avgPvPower,
+				"energy_consume":  avgAcPower,
+				"daily_pv":        maxDailyPv,
+			})
+		}
+
+	default:
+		// 按月/年视图：查询每天的累计发电量
+		query := `
+			SELECT 
+				DATE(telem.time) as day_date,
+				MAX((telem.data->'energy'->>'daily_pv')::float) as max_daily_pv,
+				MAX((telem.data->'ac'->>'power')::float) as max_ac_power,
+				COUNT(DISTINCT telem.device_sn) as device_count
+			FROM device_telemetry telem
+			WHERE telem.device_sn = ANY($1)
+				AND telem.time >= $2::timestamp
+				AND telem.time <= $3::timestamp
+				AND telem.data->'energy'->>'daily_pv' IS NOT NULL
+			GROUP BY DATE(telem.time)
+			ORDER BY day_date
+		`
+		endTs := endDate + " 23:59:59"
+		
+		rows, err := r.db.Query(ctx, query, deviceSns, startDate, endTs)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var dayDate time.Time
+			var maxDailyPv, maxAcPower float64
+			var deviceCount int
+			if err := rows.Scan(&dayDate, &maxDailyPv, &maxAcPower, &deviceCount); err != nil {
+				return nil, err
+			}
+			results = append(results, map[string]interface{}{
+				"time":            dayDate,
+				"energy_produce":  maxDailyPv,
+				"energy_consume":  maxAcPower,
+				"daily_pv":        maxDailyPv,
+			})
+		}
 	}
 
 	return results, nil
@@ -628,27 +679,150 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 }
 
 func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, stationID int64) (float64, float64, error) {
+	var dailyEnergy float64
 	query := `
-		SELECT COALESCE(SUM(COALESCE(daily_power_yields, 0)), 0),
-			   COALESCE(SUM(COALESCE(total_active_power, 0)), 0)
+		SELECT COALESCE(SUM(energy_produce), 0)
+		FROM device_day_data
+		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status = 1)
+		AND data_date = CURRENT_DATE
+	`
+	r.db.QueryRow(ctx, query, stationID).Scan(&dailyEnergy)
+
+	var totalPower float64
+	sns, err := r.getStationDeviceSNs(ctx, stationID, true)
+	if err == nil && r.cache != nil {
+		for _, sn := range sns {
+			raw, err := r.cache.Get(ctx, "realtime:latest:"+sn).Result()
+			if err != nil || raw == "" {
+				continue
+			}
+			var m map[string]interface{}
+			if json.Unmarshal([]byte(raw), &m) != nil {
+				continue
+			}
+			if ac, ok := m["ac"].(map[string]interface{}); ok {
+				if p, ok := ac["power"].(float64); ok {
+					totalPower += p
+				}
+			}
+		}
+	}
+
+	return dailyEnergy, totalPower, nil
+}
+
+func (r *DeviceRepository) getStationDeviceSNs(ctx context.Context, stationID int64, onlineOnly bool) ([]string, error) {
+	baseQuery := `SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL`
+	if onlineOnly {
+		baseQuery += ` AND status = 1`
+	}
+	rows, err := r.db.Query(ctx, baseQuery, stationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sns []string
+	for rows.Next() {
+		var sn string
+		if err := rows.Scan(&sn); err != nil {
+			continue
+		}
+		sns = append(sns, sn)
+	}
+	return sns, nil
+}
+
+func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, stationID int64) (pvPower float64, loadPower float64, gridPower float64, battPower float64, battSoc float64) {
+	sns, err := r.getStationDeviceSNs(ctx, stationID, true)
+	if err != nil {
+		return
+	}
+
+	var socSum float64
+	var socCount int
+	redisHit := false
+
+	if r.cache != nil {
+		for _, sn := range sns {
+			raw, err := r.cache.Get(ctx, "realtime:latest:"+sn).Result()
+			if err != nil || raw == "" {
+				continue
+			}
+			var m map[string]interface{}
+			if json.Unmarshal([]byte(raw), &m) != nil {
+				continue
+			}
+
+			if pv, ok := m["pv"].(map[string]interface{}); ok {
+				if p, ok := pv["pv_power"].(float64); ok {
+					pvPower += p
+					redisHit = true
+				}
+			}
+			if ac, ok := m["ac"].(map[string]interface{}); ok {
+				if p, ok := ac["power"].(float64); ok {
+					loadPower += p
+					redisHit = true
+				}
+			}
+			if batt, ok := m["battery"].(map[string]interface{}); ok {
+				v, _ := batt["voltage"].(float64)
+				c, _ := batt["current"].(float64)
+				battPower += v * c
+				redisHit = true
+				if s, ok := batt["soc"].(float64); ok {
+					socSum += s
+					socCount++
+				}
+			}
+		}
+	}
+
+	if redisHit {
+		if socCount > 0 {
+			battSoc = socSum / float64(socCount)
+		}
+		gridPower = 0
+		return
+	}
+
+	query := `
+		SELECT COALESCE(SUM(COALESCE(pv1_power, 0)), 0),
+			   COALESCE(SUM(COALESCE(output_power, COALESCE(total_active_power, 0))), 0),
+			   COALESCE(SUM(COALESCE(battery_voltage, 0) * COALESCE(battery_current, 0)), 0),
+			   COALESCE(AVG(NULLIF(battery_soc, 0)), 0)
 		FROM device_realtime_data
 		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status = 1)
 	`
-	var dailyEnergy, totalPower float64
-	err := r.db.QueryRow(ctx, query, stationID).Scan(&dailyEnergy, &totalPower)
-	return dailyEnergy, totalPower, err
+	if err := r.db.QueryRow(ctx, query, stationID).Scan(&pvPower, &loadPower, &battPower, &battSoc); err != nil {
+		return
+	}
+	gridPower = 0
+	return
 }
 
 func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationID int64) (float64, float64) {
 	query := `
-		SELECT COALESCE(SUM(CASE WHEN data_date >= DATE_TRUNC('month', CURRENT_DATE) THEN energy_produce ELSE 0 END), 0),
-			   COALESCE(SUM(energy_produce), 0)
+		SELECT COALESCE(SUM(energy_produce), 0),
+			   COALESCE(SUM(CASE WHEN data_date >= DATE_TRUNC('month', CURRENT_DATE) THEN energy_produce ELSE 0 END), 0)
 		FROM device_day_data
 		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
 	`
-	var monthEnergy, totalEnergy float64
-	r.db.QueryRow(ctx, query, stationID).Scan(&monthEnergy, &totalEnergy)
+	var totalEnergy, monthEnergy float64
+	r.db.QueryRow(ctx, query, stationID).Scan(&totalEnergy, &monthEnergy)
 	return totalEnergy, monthEnergy
+}
+
+func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID int64) float64 {
+	query := `
+		SELECT COALESCE(SUM(energy_produce), 0)
+		FROM device_day_data
+		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
+		AND data_date >= DATE_TRUNC('year', CURRENT_DATE)
+	`
+	var yearEnergy float64
+	r.db.QueryRow(ctx, query, stationID).Scan(&yearEnergy)
+	return yearEnergy
 }
 
 func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID int64) (float64, error) {
@@ -663,7 +837,14 @@ func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID 
 	return energy, err
 }
 
-func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (*model.DeviceRealtimeData, error) {
+func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[string]interface{}, error) {
+	online := false
+	var deviceStatus int
+	err := r.db.QueryRow(ctx, `SELECT status FROM devices WHERE sn=$1 AND deleted_at IS NULL`, sn).Scan(&deviceStatus)
+	if err == nil && deviceStatus == 1 {
+		online = true
+	}
+
 	if r.cache != nil {
 		for _, cacheKey := range []string{"realtime:latest:" + sn, "telemetry:latest:" + sn} {
 			cached, err := r.cache.Get(ctx, cacheKey).Result()
@@ -672,19 +853,19 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (*mod
 			}
 			var m map[string]interface{}
 			if json.Unmarshal([]byte(cached), &m) == nil {
-				if _, ok := m["ac"]; ok {
-					flattenDeviceRealtime(m)
-				}
-				return mapToRealtimeData(sn, m), nil
+				fmt.Printf("[DEBUG] GetRealtimeData - Redis cache hit for key: %s, has ac field: %v\n", cacheKey, m["ac"] != nil)
+				m["online"] = online
+				m["data_source"] = "redis"
+				return m, nil
 			}
 		}
 	}
 
 	var rawJSON []byte
-	err := r.db.QueryRow(ctx, `SELECT data FROM device_telemetry WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`, sn).Scan(&rawJSON)
+	err = r.db.QueryRow(ctx, `SELECT data FROM device_telemetry WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`, sn).Scan(&rawJSON)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, nil
+			return map[string]interface{}{"device_sn": sn, "online": online}, nil
 		}
 		return nil, err
 	}
@@ -694,9 +875,23 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (*mod
 		return nil, err
 	}
 
-	return mapToRealtimeData(sn, m), nil
+	fmt.Printf("[DEBUG] GetRealtimeData - DB query result, has ac field: %v, top-level keys: ", m["ac"] != nil)
+	for k := range m {
+		fmt.Printf("%s ", k)
+	}
+	fmt.Println()
+
+	m["online"] = online
+	m["data_source"] = "database"
+	return m, nil
 }
 
+// DEPRECATED: flattenDeviceRealtime is no longer used.
+// The API now returns the original nested MQTT JSON structure directly.
+// This function was used to flatten the nested structure to a flat format,
+// but it caused data mismatch issues with off-grid inverters.
+// Kept here for reference only.
+/*
 func flattenDeviceRealtime(m map[string]interface{}) {
 	copyNested := func(key string, fields map[string]string) {
 		nested, ok := m[key]
@@ -715,13 +910,13 @@ func flattenDeviceRealtime(m map[string]interface{}) {
 	}
 
 	copyNested("ac", map[string]string{
-		"voltage": "phase_a_voltage", "current": "phase_a_current",
-		"power": "total_active_power", "frequency": "grid_frequency", "pf": "power_factor",
+		"voltage": "ac_voltage", "current": "ac_current",
+		"power": "ac_power", "frequency": "ac_frequency", "load_percent": "load_percent",
 	})
 
 	copyNested("battery", map[string]string{
 		"voltage": "battery_voltage", "current": "battery_current",
-		"soc": "battery_soc", "temp": "battery_temp", "status": "battery_status",
+		"soc": "battery_soc", "soh": "battery_soh", "charge_state": "charge_state",
 	})
 
 	copyNested("pv", map[string]string{
@@ -729,7 +924,8 @@ func flattenDeviceRealtime(m map[string]interface{}) {
 	})
 
 	copyNested("sys_status", map[string]string{
-		"work_state": "work_state_1", "fault_code": "fault_code",
+		"state": "work_state", "fault_code": "fault_code",
+		"temp_inv": "internal_temperature", "efficiency": "efficiency",
 	})
 
 	copyNested("energy", map[string]string{
@@ -749,6 +945,11 @@ func flattenDeviceRealtime(m map[string]interface{}) {
 	}
 }
 
+// DEPRECATED: mapToRealtimeData is no longer used.
+// The API now returns the original nested MQTT JSON structure directly.
+// This function was used to map flattened data to DeviceRealtimeData struct,
+// which was designed for grid-tied inverters with 60+ flat fields.
+// Kept here for reference only.
 func mapToRealtimeData(sn string, m map[string]interface{}) *model.DeviceRealtimeData {
 	getFloat := func(k string) float64 {
 		if v, ok := m[k]; ok {
@@ -841,6 +1042,7 @@ func mapToRealtimeData(sn string, m map[string]interface{}) *model.DeviceRealtim
 		ESP32Timestamp:         getInt("esp32_timestamp"),
 	}
 }
+*/
 
 func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
 	query := `INSERT INTO devices (sn, model, rated_power, firmware_version, user_id, status, created_at, updated_at)

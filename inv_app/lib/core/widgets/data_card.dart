@@ -26,34 +26,23 @@ class DataCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(16.r),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8.r,
-              offset: Offset(0, 2.h),
-            ),
-          ],
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12.r),
         ),
-        padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
         child: Row(
           children: [
             Container(
-              width: 48.w,
-              height: 48.w,
+              width: 36.w,
+              height: 36.w,
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(10.r),
               ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 22.sp,
-              ),
+              child: Icon(icon, color: color, size: 18.sp),
             ),
-            SizedBox(width: 12.w),
+            SizedBox(width: 10.w),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,8 +51,9 @@ class DataCard extends StatelessWidget {
                   Text(
                     title,
                     style: TextStyle(
-                      fontSize: 13.sp,
+                      fontSize: 11.sp,
                       color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -79,8 +69,8 @@ class DataCard extends StatelessWidget {
                           child: Text(
                             value,
                             style: TextStyle(
-                              fontSize: 20.sp,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 18.sp,
+                              fontWeight: FontWeight.w700,
                               color: theme.colorScheme.onSurface,
                             ),
                             maxLines: 1,
@@ -88,13 +78,13 @@ class DataCard extends StatelessWidget {
                         ),
                       ),
                       if (unit.isNotEmpty) ...[
-                        SizedBox(width: 4.w),
+                        SizedBox(width: 3.w),
                         Padding(
-                          padding: EdgeInsets.only(bottom: 2.h),
+                          padding: EdgeInsets.only(bottom: 1.h),
                           child: Text(
                             unit,
                             style: TextStyle(
-                              fontSize: 12.sp,
+                              fontSize: 11.sp,
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
@@ -109,7 +99,7 @@ class DataCard extends StatelessWidget {
               Icon(
                 Icons.chevron_right,
                 color: theme.colorScheme.onSurfaceVariant,
-                size: 20.sp,
+                size: 18.sp,
               ),
           ],
         ),

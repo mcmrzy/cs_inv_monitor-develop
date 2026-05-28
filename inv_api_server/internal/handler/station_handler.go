@@ -216,8 +216,40 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 
 	devices, _ := h.deviceService.GetByStationID(c.Request.Context(), stationID)
 
+	_, totalPower, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), stationID)
+	dailyEnergy, _ := h.deviceService.GetStationTodayEnergy(c.Request.Context(), stationID)
+	totalEnergy, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), stationID)
+	yearEnergy := h.deviceService.GetStationYearEnergy(c.Request.Context(), stationID)
+
+	pvPower, loadPower, gridPower, battPower, battSoc := h.deviceService.GetStationPowerBreakdown(c.Request.Context(), stationID)
+
+	stationMap := map[string]interface{}{
+		"id":           station.ID,
+		"station_name": station.Name,
+		"name":         station.Name,
+		"province":     station.Province,
+		"city":         station.City,
+		"district":     station.District,
+		"address":      station.Address,
+		"capacity":     station.Capacity,
+		"panel_count":  station.PanelCount,
+		"latitude":     station.Latitude,
+		"longitude":    station.Longitude,
+		"status":       station.Status,
+		"today_energy": dailyEnergy,
+		"total_energy": totalEnergy,
+		"month_energy": monthEnergy,
+		"year_energy":  yearEnergy,
+		"total_power":  totalPower,
+		"pv_power":     pvPower,
+		"load_power":   loadPower,
+		"grid_power":   gridPower,
+		"batt_power":   battPower,
+		"batt_soc":     battSoc,
+	}
+
 	result := map[string]interface{}{
-		"station": station,
+		"station": stationMap,
 		"devices": devices,
 	}
 
@@ -246,16 +278,19 @@ func (h *StationHandler) List(c *gin.Context) {
 }
 
 type StationSummary struct {
-	StationID     int64     `json:"station_id"`
-	StationName   string    `json:"station_name"`
-	Capacity      float64   `json:"capacity"`
-	DeviceCount   int       `json:"device_count"`
-	OnlineCount   int       `json:"online_count"`
-	FaultCount    int       `json:"fault_count"`
-	TotalPower    float64   `json:"total_power"`
-	TodayEnergy   float64   `json:"today_energy"`
-	TodayIncome   float64   `json:"today_income"`
-	Status        int       `json:"status"`
+	StationID     int64   `json:"station_id"`
+	StationName   string  `json:"station_name"`
+	Province      string  `json:"province"`
+	City          string  `json:"city"`
+	District      string  `json:"district"`
+	Capacity      float64 `json:"capacity"`
+	DeviceCount   int     `json:"device_count"`
+	OnlineCount   int     `json:"online_count"`
+	FaultCount    int     `json:"fault_count"`
+	TotalPower    float64 `json:"total_power"`
+	TodayEnergy   float64 `json:"today_energy"`
+	TodayIncome   float64 `json:"today_income"`
+	Status        int     `json:"status"`
 }
 
 func (h *StationHandler) GetSummary(c *gin.Context) {
@@ -288,19 +323,14 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 			}
 		}
 
-		dailyEnergy, totalPower, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), station.ID)
+		_, tp, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), station.ID)
+		totalPower = tp
 
+		dailyEnergy, _ := h.deviceService.GetStationTodayEnergy(c.Request.Context(), station.ID)
 		todayData, _ := h.stationService.GetDayData(c.Request.Context(), station.ID, time.Now().Format("2006-01-02"))
 		todayIncome := 0.0
 		if todayData != nil {
-			if todayData.EnergyProduce > dailyEnergy {
-				dailyEnergy = todayData.EnergyProduce
-			}
 			todayIncome = todayData.Income
-		}
-
-		if dailyEnergy == 0 {
-			dailyEnergy, _ = h.deviceService.GetStationTodayEnergy(c.Request.Context(), station.ID)
 		}
 
 		stationTotal, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), station.ID)
@@ -308,6 +338,9 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 		summaries = append(summaries, StationSummary{
 			StationID:   station.ID,
 			StationName: station.Name,
+			Province:    station.Province,
+			City:        station.City,
+			District:    station.District,
 			Capacity:    station.Capacity,
 			DeviceCount: deviceCount,
 			OnlineCount: onlineCount,

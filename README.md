@@ -21,11 +21,11 @@
     │                                  │    │
     │                                  ▼    ▼
     │                        PostgreSQL + Redis + Redis Streams
-    │                                  │
+    │
     └── HTTP REST ───────────→ inv_api_server (Go :8080)
                                        │
                                        ▼
-                                 Admin Panel + WebSocket 实时推送
+                                 Admin Panel + WebSocket（管理后台推送）
 ```
 
 **原则**：实时走 MQTT 直连 EMQX（低延迟），历史/统计走 HTTP API（按需查询），安全靠 EMQX 内置 JWT 认证。
@@ -77,11 +77,11 @@ INV-MQTT/
 │   ├── internal/
 │   │   ├── config/                   # 配置管理（MQTT_PASSWORD 支持环境变量注入）
 │   │   ├── mqtt/                     # MQTT 客户端 + 共享订阅 + Redis Streams 消费者
-│   │   │   ├── client.go            # EMQX 连接 + $share/inv-group/ 共享订阅 + remap
+│   │   │   ├── client.go            # EMQX 连接 + $share/inv-group/ 共享订阅
 │   │   │   └── stream_consumer.go  # Redis Streams 消费（消费组/ACK/死信）
 │   │   ├── model/                    # 设备实时数据模型
 │   │   ├── repository/               # 数据持久化（SN 校验门禁）
-│   │   └── service/                  # 数据处理 + Redis Pub/Sub + Streams 发布
+│   │   └── service/                  # 数据处理 + remap兼容 + Redis Pub/Sub + Streams 发布
 │   └── pkg/
 │       ├── logger/                   # 日志
 │       └── sn/                       # SN 编号生成与校验
@@ -123,8 +123,8 @@ INV-MQTT/
 | 共享订阅 | **EMQX $share 共享订阅** | inv_device_server 多实例自动负载均衡 |
 | 后端 API | Go 1.22 + Gin | REST API + Admin Panel |
 | 后端设备 | Go 1.21 + Gin | 设备通讯服务 + Redis Streams 消费 |
-| 数据库 | PostgreSQL 15+ | 关系型数据 + 元数据 + JSONB 超表 |
-| 时序数据库 | TimescaleDB（按需） | PG 插件，自动压缩 + 连续聚合 |
+| 数据库 | PostgreSQL 15+ | 关系型数据 + 元数据 + JSONB |
+| 时序数据库 | TimescaleDB（按需） | PG 插件，超表 + 自动压缩 + 连续聚合 |
 | 缓存 | Redis 7 | 设备影子 + Pub/Sub 实时推送 + Streams 缓冲 |
 | 消息缓冲 | **Redis Streams** | 消费组 + ACK + 死信队列 |
 | 认证 | JWT（HS256） | API Server 签发，EMQX 验签 |
@@ -147,7 +147,8 @@ INV-MQTT/
 psql -U postgres -c "CREATE DATABASE inv_mqtt;"
 psql -U postgres -d inv_mqtt -f database/schema.sql
 
-# 可选：启用 TimescaleDB 时序优化
+# 可选：启用 TimescaleDB 时序优化（需先安装 timescaledb 扩展）
+psql -U postgres -d inv_mqtt -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
 psql -U postgres -d inv_mqtt -f database/migration_timescaledb.sql
 ```
 
@@ -167,8 +168,9 @@ psql -U postgres -d inv_mqtt -f database/migration_timescaledb.sql
 ### 3. 启动后端服务
 
 ```bash
-# Device Server（端口 8081，需设 MQTT 密码环境变量）
-export MQTT_PASSWORD="your_mqtt_password"
+# Device Server（端口 8081）
+# MQTT_PASSWORD 需设为有效的 JWT token（由 API Server 签发，Secret 与 EMQX 一致）
+export MQTT_PASSWORD="your_jwt_token"
 cd inv_device_server && go run cmd/main.go
 
 # API Server（端口 8080）
@@ -197,6 +199,9 @@ flutter run
 | API Server | 8080 | REST API + Admin Panel (`/admin`) |
 | Device Server | 8081 | 设备 MQTT 数据桥接 + `/metrics` 端点 |
 | EMQX MQTT | 8883 | MQTT SSL 端口（`jiuxiaoyw.online`） |
+| EMQX Dashboard | 18083 | EMQX 管理后台 |
+| PostgreSQL | 5432 | 数据库 |
+| Redis | 6379 | 缓存 + Pub/Sub + Streams |
 
 ## 核心设计
 
@@ -220,20 +225,16 @@ App → HTTP REST → inv_api_server → PostgreSQL 查询返回
 
 ### SN 编号校验
 
-设备 SN 为 16 位编码（例 `H1CNA00135000014`），包含制造商、国家、客户等级、生产年月、序列号、CRC16-Modbus 校验位。**所有设备入库入口均强制校验**（`device_repository.UpsertDeviceInfo`、`InternalDeviceStatus`、`InternalDeviceData`），无效 SN 自动拒绝写入数据库。
+设备 SN 为 16 位编码（例 `H1CNA00135000014`），**所有设备入库入口均强制校验**，无效 SN 自动拒绝写入数据库。
 
-### 高可用设计
+校验入口：
+- `device_repository.UpsertDeviceInfo`（设备信息入库）
+- `InternalDeviceStatus`（设备状态上报）
+- `InternalDeviceData`（设备数据上报）
 
-- **共享订阅**：`$share/inv-group/` 前缀，EMQX 轮询分发消息给多个 inv_device_server 实例
-- **Redis 共享状态**：多实例通过 Redis HSET 共享设备在线状态
-- **Session 清理**：`SetCleanSession(true)` 断开即清理
-- **K8s HPA**：基于 CPU/内存自动扩缩 2~10 副本
+SN 编码结构：
 
-### SN 编号校验
-
-设备 SN 为 16 位编码（例 `H1CNA00135000014`），包含制造商、国家、客户等级、生产年月、序列号、CRC16-Modbus 校验位。所有设备入库入口均强制校验，无效 SN 自动拒绝。
-
-| 位置 | 进制 |
+| 位置 | 含义 |
 |------|------|
 | 0-1 | 制造商（H/O/S + 0-9/A-Z） |
 | 2-3 | 国家代码 |
@@ -241,6 +242,13 @@ App → HTTP REST → inv_api_server → PostgreSQL 查询返回
 | 8-9 | 年月（自定义编码） |
 | 10-14 | 5 位序列号 |
 | 15 | CRC16-Modbus 校验位 |
+
+### 高可用设计
+
+- **共享订阅**：`$share/inv-group/` 前缀，EMQX 轮询分发消息给多个 inv_device_server 实例
+- **Redis 共享状态**：多实例通过 Redis HSET 共享设备在线状态
+- **Session 清理**：`SetCleanSession(true)` 断开即清理
+- **K8s HPA**：基于 CPU/内存自动扩缩 2~10 副本
 
 ## 主要功能
 
@@ -258,7 +266,7 @@ App → HTTP REST → inv_api_server → PostgreSQL 查询返回
 - 用户认证与授权（JWT HS256）
 - 电站与设备 CRUD
 - 告警记录查询与处理
-- WebSocket 实时推送
+- WebSocket 实时推送（管理后台用）
 - Admin Panel 管理后台（设备/用户/电站/告警/型号/日志）
 
 ### Device Server

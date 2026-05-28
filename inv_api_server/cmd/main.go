@@ -103,6 +103,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService)
 	stationHandler := handler.NewStationHandler(stationService, deviceService)
+	weatherHandler := handler.NewWeatherHandler(stationService)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
 	adminHandler := handler.NewAdminHandler(db, rdb, "web/admin/index.html", deviceRepo, stationRepo, userRepo, alarmRepo, notifyRepo)
@@ -110,7 +111,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	go runHeartbeatCheck(deviceRepo)
 
-	router := setupRouter(cfg, jwtInstance, authHandler, stationHandler, deviceHandler, alarmHandler, adminHandler)
+	router := setupRouter(cfg, jwtInstance, authHandler, stationHandler, deviceHandler, alarmHandler, adminHandler, weatherHandler)
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
 	serve(cfg, router)
 }
@@ -119,7 +120,7 @@ func runHeartbeatCheck(deviceRepo *repository.DeviceRepository) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 90)
+		sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 180)
 		if err != nil {
 			logger.Error("Heartbeat check failed", zap.Error(err))
 		} else if len(sns) > 0 {
@@ -238,7 +239,7 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 	return rdb, nil
 }
 
-func setupRouter(cfg *config.Config, jwtInstance *jwt.JWT, authHandler *handler.AuthHandler, stationHandler *handler.StationHandler, deviceHandler *handler.DeviceHandler, alarmHandler *handler.AlarmHandler, adminHandler *handler.AdminHandler) *gin.Engine {
+func setupRouter(cfg *config.Config, jwtInstance *jwt.JWT, authHandler *handler.AuthHandler, stationHandler *handler.StationHandler, deviceHandler *handler.DeviceHandler, alarmHandler *handler.AlarmHandler, adminHandler *handler.AdminHandler, weatherHandler *handler.WeatherHandler) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -318,6 +319,7 @@ func setupRouter(cfg *config.Config, jwtInstance *jwt.JWT, authHandler *handler.
 			auth.GET("/stations", stationHandler.List)
 			auth.GET("/stations/summary", stationHandler.GetSummary)
 			auth.GET("/stations/:id", stationHandler.GetByID)
+			auth.GET("/stations/:id/weather", weatherHandler.GetStationWeather)
 			auth.PUT("/stations/:id", stationHandler.Update)
 			auth.DELETE("/stations/:id", stationHandler.Delete)
 			auth.GET("/stations/:id/statistics", stationHandler.GetStatistics)

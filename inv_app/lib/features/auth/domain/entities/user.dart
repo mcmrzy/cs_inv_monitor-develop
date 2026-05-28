@@ -8,7 +8,7 @@ class User {
   final int status;
   final DateTime? lastLoginAt;
   final DateTime createdAt;
-  final DateTime updatedAt;
+  final DateTime? updatedAt;
 
   const User({
     required this.id,
@@ -20,7 +20,7 @@ class User {
     required this.status,
     this.lastLoginAt,
     required this.createdAt,
-    required this.updatedAt,
+    this.updatedAt,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -36,7 +36,9 @@ class User {
           ? DateTime.parse(json['last_login_at'] as String)
           : null,
       createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String)
+          : null,
     );
   }
 
@@ -51,19 +53,17 @@ class User {
       'status': status,
       'last_login_at': lastLoginAt?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
     };
   }
 
   String get roleName {
     switch (role) {
+      case 0:
+        return '超级管理员';
       case 1:
-        return '原厂';
+        return '代理商';
       case 2:
-        return '总代理';
-      case 3:
-        return '经销商';
-      case 4:
         return '安装商';
       default:
         return '用户';
@@ -73,20 +73,25 @@ class User {
 
 class LoginResponse {
   final String token;
+  final String? refreshToken;
   final User user;
   final DateTime expireAt;
 
   const LoginResponse({
     required this.token,
+    this.refreshToken,
     required this.user,
     required this.expireAt,
   });
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
     return LoginResponse(
-      token: json['token'] as String,
+      token: (json['token'] ?? json['accessToken']) as String,
+      refreshToken: (json['refresh_token'] ?? json['refreshToken']) as String?,
       user: User.fromJson(json['user'] as Map<String, dynamic>),
-      expireAt: DateTime.parse(json['expire_at'] as String),
+      expireAt: json['expire_at'] != null
+          ? DateTime.parse(json['expire_at'] as String)
+          : DateTime.now().add(const Duration(hours: 24)),
     );
   }
 }

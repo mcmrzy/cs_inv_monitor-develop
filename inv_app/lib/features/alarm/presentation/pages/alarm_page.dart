@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 
 class AlarmPage extends StatefulWidget {
   const AlarmPage({super.key});
@@ -34,10 +35,14 @@ class _AlarmPageState extends State<AlarmPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(state.message),
-                  TextButton(
+                  Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
+                  SizedBox(height: 12.h),
+                  Text(state.message, style: TextStyle(color: AppColors.textSecondary)),
+                  SizedBox(height: 12.h),
+                  FilledButton.icon(
                     onPressed: () => context.read<AlarmBloc>().add(const AlarmListRequested()),
-                    child: const Text('重试'),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('重试'),
                   ),
                 ],
               ),
@@ -49,12 +54,12 @@ class _AlarmPageState extends State<AlarmPage> {
               return ListView(
                 children: [
                   SizedBox(height: 120.h),
-                  const Center(
+                  Center(
                     child: Column(
                       children: [
-                        Icon(Icons.notifications_none, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text('暂无告警', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                        Icon(Icons.notifications_none, size: 64.sp, color: AppColors.textHint),
+                        SizedBox(height: 16.h),
+                        Text('暂无告警', style: TextStyle(color: AppColors.textHint, fontSize: 16.sp)),
                       ],
                     ),
                   ),
@@ -62,59 +67,65 @@ class _AlarmPageState extends State<AlarmPage> {
               );
             }
 
-            return RefreshIndicator(
-              onRefresh: () async {
-                context.read<AlarmBloc>().add(const AlarmListRequested());
-              },
+            return StyledRefreshIndicator(
+              onRefresh: () async => context.read<AlarmBloc>().add(const AlarmListRequested()),
               child: ListView.builder(
                 padding: EdgeInsets.all(12.w),
                 itemCount: state.alarms.length,
-                itemBuilder: (context, index) {
-                  final alarm = state.alarms[index];
-                  return _buildAlarmCard(alarm);
-                },
+                itemBuilder: (context, index) => _buildAlarmCard(context, state.alarms[index]),
               ),
             );
           }
 
-          return const Center(child: Text('加载中...'));
+          return Center(child: Text('加载中...', style: TextStyle(color: AppColors.textHint)));
         },
       ),
     );
   }
 
-  Widget _buildAlarmCard(dynamic alarm) {
+  Widget _buildAlarmCard(BuildContext context, dynamic alarm) {
     Color levelColor;
     String levelText;
     switch (alarm['alarm_level']) {
       case 1:
-        levelColor = Colors.red;
+        levelColor = AppColors.errorLight;
         levelText = '严重';
         break;
       case 2:
-        levelColor = Colors.orange;
+        levelColor = AppColors.warning;
         levelText = '重要';
         break;
       default:
-        levelColor = Colors.yellow;
+        levelColor = AppColors.orange;
         levelText = '一般';
     }
 
-    return Card(
+    final isRead = alarm['status'] == 1;
+
+    return Container(
       margin: EdgeInsets.only(bottom: 8.h),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14.r),
+      ),
       child: InkWell(
         onTap: () => context.push('/alarm/${alarm['id']}'),
-        borderRadius: BorderRadius.circular(12.r),
+        borderRadius: BorderRadius.circular(14.r),
         child: Padding(
-          padding: EdgeInsets.all(12.w),
+          padding: EdgeInsets.all(14.w),
           child: Row(
             children: [
               Container(
-                width: 8.w,
-                height: 8.w,
+                width: 32.w,
+                height: 32.w,
                 decoration: BoxDecoration(
-                  color: alarm['status'] == 1 ? Colors.grey : levelColor,
-                  shape: BoxShape.circle,
+                  color: (isRead ? AppColors.textHint : levelColor).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Icon(
+                  isRead ? Icons.notifications_none : Icons.warning_amber_rounded,
+                  size: 18.sp,
+                  color: isRead ? AppColors.textHint : levelColor,
                 ),
               ),
               SizedBox(width: 12.w),
@@ -124,9 +135,17 @@ class _AlarmPageState extends State<AlarmPage> {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          alarm['fault_message'] ?? '告警',
-                          style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
+                        Expanded(
+                          child: Text(
+                            alarm['fault_message'] ?? '告警',
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              fontWeight: isRead ? FontWeight.w500 : FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         SizedBox(width: 8.w),
                         Container(
@@ -135,7 +154,7 @@ class _AlarmPageState extends State<AlarmPage> {
                             color: levelColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4.r),
                           ),
-                          child: Text(levelText, style: TextStyle(fontSize: 11.sp, color: levelColor)),
+                          child: Text(levelText, style: TextStyle(fontSize: 10.sp, fontWeight: FontWeight.w600, color: levelColor)),
                         ),
                       ],
                     ),
@@ -147,7 +166,7 @@ class _AlarmPageState extends State<AlarmPage> {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
+              Icon(Icons.chevron_right, color: AppColors.textHint, size: 20.sp),
             ],
           ),
         ),

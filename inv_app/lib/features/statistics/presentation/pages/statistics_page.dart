@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/statistics/presentation/bloc/statistics_bloc.dart';
+import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 
 class StatisticsPage extends StatefulWidget {
   const StatisticsPage({super.key});
@@ -34,7 +35,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 children: [
                   Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
                   SizedBox(height: 12.h),
-                  Text(state.message),
+                  Text(state.message, style: TextStyle(color: AppColors.textSecondary)),
                   SizedBox(height: 12.h),
                   FilledButton.icon(
                     onPressed: () => context.read<StatisticsBloc>().add(StatisticsOverviewRequested()),
@@ -47,34 +48,34 @@ class _StatisticsPageState extends State<StatisticsPage> {
           }
           if (state is StatisticsOverviewLoaded) {
             final overview = state.overview;
-            return RefreshIndicator(
+            return StyledRefreshIndicator(
               onRefresh: () async => context.read<StatisticsBloc>().add(StatisticsOverviewRequested()),
               child: ListView(
                 padding: EdgeInsets.all(16.w),
                 children: [
-                  _buildHeaderBanner(overview),
-                  SizedBox(height: 20.h),
-                  _buildGenerationChart(overview),
-                  SizedBox(height: 20.h),
-                  _buildDeviceStatusRing(overview),
-                  SizedBox(height: 20.h),
+                  _buildHeaderBanner(context, overview),
+                  SizedBox(height: 16.h),
+                  _buildGenerationChart(context, overview),
+                  SizedBox(height: 16.h),
+                  _buildDeviceStatusRing(context, overview),
+                  SizedBox(height: 16.h),
                   if (overview['stations'] != null) ...[
-                    Text('各电站统计', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w700)),
+                    Text('各电站统计', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                     SizedBox(height: 12.h),
-                    ...(overview['stations'] as List).map((s) => _buildStationStatsCard(s)),
+                    ...(overview['stations'] as List).map((s) => _buildStationStatsCard(context, s)),
                   ],
                   SizedBox(height: 80.h),
                 ],
               ),
             );
           }
-          return const Center(child: Text('加载中...'));
+          return Center(child: Text('加载中...', style: TextStyle(color: AppColors.textHint)));
         },
       ),
     );
   }
 
-  Widget _buildHeaderBanner(dynamic overview) {
+  Widget _buildHeaderBanner(BuildContext context, dynamic overview) {
     final summary = overview['summary'] as Map<String, dynamic>? ?? {};
     final totalEnergy = (summary['total_energy'] ?? 0.0);
     final totalIncome = (summary['total_income'] ?? 0.0);
@@ -82,17 +83,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
     return Container(
       padding: EdgeInsets.all(20.w),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20.r),
-        boxShadow: [
-          BoxShadow(color: const Color(0xFF1565C0).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 8)),
-        ],
-      ),
+      decoration: AppColor.heroCard(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -101,11 +92,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildBannerItem('${totalEnergy.toStringAsFixed(0)}', 'kWh', '总发电量'),
+              _bannerItem('${totalEnergy.toStringAsFixed(0)}', 'kWh', '总发电量'),
               Container(width: 1, height: 40.h, color: Colors.white24),
-              _buildBannerItem('¥${totalIncome.toStringAsFixed(0)}', '', '总收益'),
+              _bannerItem('¥${totalIncome.toStringAsFixed(0)}', '', '总收益'),
               Container(width: 1, height: 40.h, color: Colors.white24),
-              _buildBannerItem('$deviceCount', '台', '设备总数'),
+              _bannerItem('$deviceCount', '台', '设备总数'),
             ],
           ),
         ],
@@ -113,7 +104,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
-  Widget _buildBannerItem(String value, String unit, String label) {
+  Widget _bannerItem(String value, String unit, String label) {
     return Column(
       children: [
         RichText(
@@ -131,7 +122,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
-  Widget _buildGenerationChart(dynamic overview) {
+  Widget _buildGenerationChart(BuildContext context, dynamic overview) {
     final summary = overview['summary'] as Map<String, dynamic>? ?? {};
     final totalEnergy = (summary['total_energy'] ?? 0).toDouble();
     final todayEnergy = (summary['today_energy'] ?? 0).toDouble();
@@ -140,22 +131,18 @@ class _StatisticsPageState extends State<StatisticsPage> {
     final items = [
       {'label': '今日', 'value': todayEnergy, 'color': AppColors.primary},
       {'label': '本月', 'value': monthEnergy, 'color': AppColors.info},
-      {'label': '累计', 'value': totalEnergy, 'color': const Color(0xFF6C5CE7)},
+      {'label': '累计', 'value': totalEnergy, 'color': AppColors.purple},
     ];
 
     final maxValue = items.map((e) => (e['value'] as double)).reduce((a, b) => a > b ? a : b);
 
     return Container(
       padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
+      decoration: AppColor.card(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('发电量统计', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+          Text('发电量统计', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           SizedBox(height: 16.h),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -167,7 +154,8 @@ class _StatisticsPageState extends State<StatisticsPage> {
               final height = maxValue > 0 ? (value / maxValue * 120.h) : 10.h;
               return Column(
                 children: [
-                  Text('${value.toStringAsFixed(1)}', style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
+                  Text('${value.toStringAsFixed(1)}',
+                      style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                   Text('kWh', style: TextStyle(fontSize: 9.sp, color: AppColors.textHint)),
                   SizedBox(height: 6.h),
                   AnimatedContainer(
@@ -195,7 +183,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
-  Widget _buildDeviceStatusRing(dynamic overview) {
+  Widget _buildDeviceStatusRing(BuildContext context, dynamic overview) {
     final summary = overview['summary'] as Map<String, dynamic>? ?? {};
     final onlineCount = (summary['online_count'] ?? 0) as int;
     final faultCount = (summary['fault_count'] ?? 0) as int;
@@ -204,15 +192,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
 
     return Container(
       padding: EdgeInsets.all(16.w),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16.r),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
-      ),
+      decoration: AppColor.card(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('设备状态分布', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+          Text('设备状态分布', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           SizedBox(height: 16.h),
           Row(
             children: [
@@ -223,8 +207,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                   alignment: Alignment.center,
                   children: [
                     SizedBox(
-                      width: 100.w,
-                      height: 100.w,
+                      width: 100.w, height: 100.w,
                       child: CircularProgressIndicator(
                         value: totalCount > 0 ? (onlineCount + faultCount) / totalCount : 0,
                         strokeWidth: 10.w,
@@ -233,8 +216,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                       ),
                     ),
                     SizedBox(
-                      width: 78.w,
-                      height: 78.w,
+                      width: 78.w, height: 78.w,
                       child: faultCount > 0
                           ? CircularProgressIndicator(
                               value: totalCount > 0 ? faultCount / totalCount : 0,
@@ -244,10 +226,8 @@ class _StatisticsPageState extends State<StatisticsPage> {
                             )
                           : null,
                     ),
-                    Text(
-                      '$totalCount',
-                      style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700),
-                    ),
+                    Text('$totalCount',
+                        style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   ],
                 ),
               ),
@@ -255,11 +235,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
               Expanded(
                 child: Column(
                   children: [
-                    _buildLegendRow(AppColors.online, '在线', '$onlineCount 台', onlineCount),
+                    _legendRow(AppColors.online, '在线', '$onlineCount 台'),
                     SizedBox(height: 10.h),
-                    _buildLegendRow(AppColors.offline, '离线', '$offlineCount 台', offlineCount),
+                    _legendRow(AppColors.offline, '离线', '$offlineCount 台'),
                     SizedBox(height: 10.h),
-                    _buildLegendRow(AppColors.fault, '故障', '$faultCount 台', faultCount),
+                    _legendRow(AppColors.fault, '故障', '$faultCount 台'),
                   ],
                 ),
               ),
@@ -270,19 +250,19 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
-  Widget _buildLegendRow(Color color, String label, String count, int value) {
+  Widget _legendRow(Color color, String label, String count) {
     return Row(
       children: [
         Container(width: 10.w, height: 10.w, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         SizedBox(width: 8.w),
-        Text(label, style: TextStyle(fontSize: 13.sp)),
+        Text(label, style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
         const Spacer(),
-        Text(count, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600)),
+        Text(count, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
       ],
     );
   }
 
-  Widget _buildStationStatsCard(dynamic station) {
+  Widget _buildStationStatsCard(BuildContext context, dynamic station) {
     final name = station['station_name'] ?? '-';
     final todayEnergy = station['today_energy'] ?? 0;
     final todayIncome = station['today_income'] ?? 0;
@@ -291,16 +271,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
     return Container(
       margin: EdgeInsets.only(bottom: 10.h),
       padding: EdgeInsets.all(14.w),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14.r),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))],
-      ),
+      decoration: AppColor.card(context),
       child: Row(
         children: [
           Container(
-            width: 38.w,
-            height: 38.w,
+            width: 38.w, height: 38.w,
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10.r),
@@ -312,7 +287,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                Text(name, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                 SizedBox(height: 2.h),
                 Text('$deviceCount 台设备', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
               ],
@@ -321,9 +296,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('${todayEnergy.toStringAsFixed(1)} kWh', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.primary)),
+              Text('${todayEnergy.toStringAsFixed(1)} kWh',
+                  style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.primary)),
               SizedBox(height: 2.h),
-              Text('¥${todayIncome.toStringAsFixed(2)}', style: TextStyle(fontSize: 12.sp, color: AppColors.warning)),
+              Text('¥${todayIncome.toStringAsFixed(2)}',
+                  style: TextStyle(fontSize: 12.sp, color: AppColors.warning)),
             ],
           ),
         ],

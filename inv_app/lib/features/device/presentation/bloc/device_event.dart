@@ -33,15 +33,6 @@ class DeviceDetailRequested extends DeviceEvent {
   List<Object?> get props => [sn];
 }
 
-class DeviceRealtimeRefresh extends DeviceEvent {
-  final String sn;
-
-  const DeviceRealtimeRefresh({required this.sn});
-
-  @override
-  List<Object?> get props => [sn];
-}
-
 class DeviceControlRequested extends DeviceEvent {
   final String sn;
   final String cmdType;
@@ -115,4 +106,83 @@ class DeviceUnsubscribeRealtime extends DeviceEvent {
 
   @override
   List<Object?> get props => [];
+}
+
+class DeviceParamWriteAndReadbackRequested extends DeviceEvent {
+  final String sn;
+  final Map<String, dynamic> params;
+
+  const DeviceParamWriteAndReadbackRequested({
+    required this.sn,
+    required this.params,
+  });
+
+  @override
+  List<Object?> get props => [sn, params];
+}
+
+class DeviceHistoryRequested extends DeviceEvent {
+  final String sn;
+  final String period;
+  final String startDate;
+  final String endDate;
+  final String metric;
+
+  const DeviceHistoryRequested({
+    required this.sn,
+    required this.period,
+    required this.startDate,
+    required this.endDate,
+    required this.metric,
+  });
+
+  @override
+  List<Object?> get props => [sn, period, startDate, endDate, metric];
+}
+
+class DeviceStartLocalPoll extends DeviceEvent {
+  final String deviceIP;
+
+  const DeviceStartLocalPoll({required this.deviceIP});
+
+  @override
+  List<Object?> get props => [deviceIP];
+}
+
+class DeviceStopLocalPoll extends DeviceEvent {
+  const DeviceStopLocalPoll();
+
+  @override
+  List<Object?> get props => [];
+}
+
+class DeviceLocalRealtimeUpdate extends DeviceEvent {
+  final InverterRealtime data;
+
+  const DeviceLocalRealtimeUpdate(this.data);
+
+  @override
+  List<Object?> get props => [data];
+}
+
+class DeviceLocalParamsRequested extends DeviceEvent {
+  final String deviceIP;
+
+  const DeviceLocalParamsRequested({required this.deviceIP});
+
+  @override
+  List<Object?> get props => [deviceIP];
+}
+
+class DeviceLocalParamsUpdateRequested extends DeviceEvent {
+  final String deviceIP;
+  final Map<String, dynamic> params;
+
+  const DeviceLocalParamsUpdateRequested({
+    required this.deviceIP,
+    required this.params,
+  });
+
+  @override
+  List<Object?> get props => [deviceIP, params];
 }

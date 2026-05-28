@@ -7,12 +7,16 @@ class PowerGauge extends StatefulWidget {
   final double power;
   final double maxPower;
   final double size;
+  final Color? textColor;
+  final Color? subtextColor;
 
   const PowerGauge({
     super.key,
     required this.power,
     this.maxPower = 50,
     this.size = 220,
+    this.textColor,
+    this.subtextColor,
   });
 
   @override
@@ -125,7 +129,7 @@ class _PowerGaugeState extends State<PowerGauge>
                     style: TextStyle(
                       fontSize: 36.sp,
                       fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
+                      color: widget.textColor ?? theme.colorScheme.onSurface,
                       height: 1.0,
                     ),
                   ),
@@ -134,7 +138,7 @@ class _PowerGaugeState extends State<PowerGauge>
                     'kW',
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: theme.colorScheme.onSurfaceVariant,
+                      color: widget.subtextColor ?? theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -145,7 +149,7 @@ class _PowerGaugeState extends State<PowerGauge>
                   '额定 ${widget.maxPower.toStringAsFixed(0)}kW',
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: widget.subtextColor ?? theme.colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w500,
                   ),
                 ),

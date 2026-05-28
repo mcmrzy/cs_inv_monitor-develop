@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,12 @@ import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/api_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/notification_service.dart';
+import 'package:inv_app/core/services/local_communication_service.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
+import 'package:inv_app/core/services/offline_cache_service.dart';
+import 'package:inv_app/core/services/offline_sync_service.dart';
+import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:inv_app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:inv_app/features/auth/domain/repositories/auth_repository.dart';
@@ -27,7 +34,12 @@ import 'package:inv_app/features/statistics/data/datasources/statistics_remote_d
 import 'package:inv_app/features/statistics/data/repositories/statistics_repository_impl.dart';
 import 'package:inv_app/features/statistics/domain/repositories/statistics_repository.dart';
 import 'package:inv_app/features/statistics/presentation/bloc/statistics_bloc.dart';
+import 'package:inv_app/features/ota/data/datasources/ota_remote_data_source.dart';
+import 'package:inv_app/features/ota/data/repositories/ota_repository_impl.dart';
+import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
+import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 final getIt = GetIt.instance;
 
@@ -67,7 +79,100 @@ class ServiceLocator {
       },
       onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
-          getIt<AuthBloc>().add(AuthLogoutRequested());
+          if (error.requestOptions.path == '/auth/refresh') {
+            getIt<AuthBloc>().add(AuthLogoutRequested());
+            return handler.next(error);
+          }
+
+          if (_tokenRefreshLock) {
+            return _waitForRefresh(error, handler);
+          }
+
+          _tokenRefreshLock = true;
+          try {
+            final storageService = getIt<StorageService>();
+            final refreshToken = await storageService.getRefreshToken();
+
+            if (refreshToken == null) {
+              _tokenRefreshLock = false;
+              _refreshCompleter?.complete(false);
+              _refreshCompleter = null;
+              getIt<AuthBloc>().add(AuthLogoutRequested());
+              return handler.next(error);
+            }
+
+            final refreshDio = Dio(BaseOptions(
+              baseUrl: AppConfig.apiBaseUrl,
+              connectTimeout: const Duration(milliseconds: AppConfig.connectTimeout),
+              receiveTimeout: const Duration(milliseconds: AppConfig.receiveTimeout),
+            ));
+
+            final refreshResponse = await refreshDio.post(
+              '/auth/refresh',
+              data: {'refresh_token': refreshToken},
+            );
+
+            final responseData = refreshResponse.data;
+            String? newToken;
+            String? newRefreshToken;
+
+            if (responseData is Map<String, dynamic>) {
+              if (responseData['code'] == 0 && responseData['data'] != null) {
+                final data = responseData['data'] as Map<String, dynamic>;
+                newToken = (data['token'] ?? data['accessToken']) as String?;
+                newRefreshToken = (data['refresh_token'] ?? data['refreshToken']) as String?;
+              } else if (responseData['token'] != null) {
+                newToken = (responseData['token'] ?? responseData['accessToken']) as String?;
+                newRefreshToken = (responseData['refresh_token'] ?? responseData['refreshToken']) as String?;
+              }
+            }
+
+            if (newToken != null) {
+              await storageService.saveToken(newToken);
+              if (newRefreshToken != null) {
+                await storageService.saveRefreshToken(newRefreshToken);
+              }
+
+              _tokenRefreshLock = false;
+              _refreshCompleter?.complete(true);
+              _refreshCompleter = null;
+
+              final opts = Options(
+                method: error.requestOptions.method,
+                headers: {
+                  ...error.requestOptions.headers,
+                  'Authorization': 'Bearer $newToken',
+                },
+              );
+
+              final retryResponse = await dio.fetch(
+                RequestOptions(
+                  path: error.requestOptions.path,
+                  data: error.requestOptions.data,
+                  queryParameters: error.requestOptions.queryParameters,
+                  headers: opts.headers,
+                  method: opts.method,
+                  baseUrl: error.requestOptions.baseUrl,
+                  connectTimeout: error.requestOptions.connectTimeout,
+                  receiveTimeout: error.requestOptions.receiveTimeout,
+                  sendTimeout: error.requestOptions.sendTimeout,
+                ),
+              );
+              return handler.resolve(retryResponse);
+            } else {
+              _tokenRefreshLock = false;
+              _refreshCompleter?.complete(false);
+              _refreshCompleter = null;
+              getIt<AuthBloc>().add(AuthLogoutRequested());
+              return handler.next(error);
+            }
+          } catch (e) {
+            _tokenRefreshLock = false;
+            _refreshCompleter?.complete(false);
+            _refreshCompleter = null;
+            getIt<AuthBloc>().add(AuthLogoutRequested());
+            return handler.next(error);
+          }
         }
         return handler.next(error);
       },
@@ -85,6 +190,45 @@ class ServiceLocator {
     getIt.registerLazySingleton<Dio>(() => dio);
   }
 
+  static bool _tokenRefreshLock = false;
+  static Completer<bool>? _refreshCompleter;
+
+  static Future<void> _waitForRefresh(DioException error, ErrorInterceptorHandler handler) async {
+    _refreshCompleter ??= Completer<bool>();
+    final success = await _refreshCompleter!.future;
+    if (success) {
+      final storageService = getIt<StorageService>();
+      final newToken = await storageService.getToken();
+      final opts = Options(
+        method: error.requestOptions.method,
+        headers: {
+          ...error.requestOptions.headers,
+          'Authorization': 'Bearer $newToken',
+        },
+      );
+      try {
+        final retryResponse = await getIt<Dio>().fetch(
+          RequestOptions(
+            path: error.requestOptions.path,
+            data: error.requestOptions.data,
+            queryParameters: error.requestOptions.queryParameters,
+            headers: opts.headers,
+            method: opts.method,
+            baseUrl: error.requestOptions.baseUrl,
+            connectTimeout: error.requestOptions.connectTimeout,
+            receiveTimeout: error.requestOptions.receiveTimeout,
+            sendTimeout: error.requestOptions.sendTimeout,
+          ),
+        );
+        return handler.resolve(retryResponse);
+      } catch (e) {
+        return handler.next(error);
+      }
+    } else {
+      return handler.next(error);
+    }
+  }
+
   static void _initCoreServices() {
     getIt.registerLazySingleton<StorageService>(
       () => StorageServiceImpl(getIt(), getIt()),
@@ -97,6 +241,36 @@ class ServiceLocator {
     getIt.registerLazySingleton<MQTTService>(
       () => MQTTServiceImpl(),
       dispose: (service) => (service as MQTTServiceImpl).dispose(),
+    );
+
+    getIt.registerLazySingleton<NotificationService>(
+      () => NotificationService(),
+    );
+
+    getIt.registerLazySingleton<LocalCommunicationService>(
+      () => LocalCommunicationService(),
+    );
+
+    getIt.registerLazySingleton<ConnectionModeService>(
+      () => ConnectionModeService(getIt()),
+    );
+
+    getIt.registerLazySingleton<OfflineCacheService>(
+      () => OfflineCacheService(getIt()),
+    );
+
+    getIt.registerLazySingleton<OfflineSyncService>(
+      () => OfflineSyncService(
+        cacheService: getIt(),
+        apiService: getIt(),
+        connectivity: Connectivity(),
+      ),
+      dispose: (service) => service.dispose(),
+    );
+
+    getIt.registerLazySingleton<LocaleService>(
+      () => LocaleService(getIt()),
+      dispose: (service) => service.dispose(),
     );
   }
 
@@ -120,6 +294,10 @@ class ServiceLocator {
     getIt.registerLazySingleton<StatisticsRemoteDataSource>(
       () => StatisticsRemoteDataSourceImpl(getIt()),
     );
+
+    getIt.registerLazySingleton<OtaRemoteDataSource>(
+      () => OtaRemoteDataSourceImpl(getIt()),
+    );
   }
 
   static void _initRepositories() {
@@ -142,6 +320,10 @@ class ServiceLocator {
     getIt.registerLazySingleton<StatisticsRepository>(
       () => StatisticsRepositoryImpl(getIt()),
     );
+
+    getIt.registerLazySingleton<OtaRepository>(
+      () => OtaRepositoryImpl(getIt()),
+    );
   }
 
   static void _initUseCases() {
@@ -156,6 +338,9 @@ class ServiceLocator {
     getIt.registerLazySingleton(() => EmailLoginUseCase(getIt()));
     getIt.registerLazySingleton(() => EmailRegisterUseCase(getIt()));
     getIt.registerLazySingleton(() => SendEmailCodeUseCase(getIt()));
+    getIt.registerLazySingleton(() => RefreshTokenUseCase(getIt()));
+    getIt.registerLazySingleton(() => WechatLoginUseCase(getIt()));
+    getIt.registerLazySingleton(() => GoogleLoginUseCase(getIt()));
   }
 
   static void _initBloc() {
@@ -172,17 +357,26 @@ class ServiceLocator {
         emailLoginUseCase: getIt(),
         emailRegisterUseCase: getIt(),
         sendEmailCodeUseCase: getIt(),
+        refreshTokenUseCase: getIt(),
+        wechatLoginUseCase: getIt(),
+        googleLoginUseCase: getIt(),
         storageService: getIt(),
         mqttService: getIt(),
       ),
     );
 
     getIt.registerFactory(
-      () => StationBloc(repository: getIt()),
+      () => StationBloc(repository: getIt(), storageService: getIt()),
     );
 
     getIt.registerFactory(
-      () => DeviceBloc(repository: getIt(), mqttService: getIt()),
+      () => DeviceBloc(
+        repository: getIt(),
+        mqttService: getIt(),
+        localCommunicationService: getIt(),
+        connectionModeService: getIt(),
+        offlineCacheService: getIt(),
+      ),
     );
 
     getIt.registerFactory(
@@ -191,6 +385,10 @@ class ServiceLocator {
 
     getIt.registerFactory(
       () => StatisticsBloc(repository: getIt()),
+    );
+
+    getIt.registerFactory(
+      () => OtaBloc(repository: getIt()),
     );
   }
 }

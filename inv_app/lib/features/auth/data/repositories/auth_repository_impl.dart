@@ -139,4 +139,37 @@ class AuthRepositoryImpl implements AuthRepository {
       fromJson: (_) {},
     );
   }
+
+  @override
+  Future<Either<Failure, LoginResponse>> refreshToken({
+    required String refreshToken,
+  }) async {
+    return apiService.post(
+      '/auth/refresh',
+      data: {'refresh_token': refreshToken},
+      fromJson: (json) => LoginResponse.fromJson(json),
+    );
+  }
+
+  @override
+  Future<Either<Failure, LoginResponse>> wechatLogin({
+    required String code,
+  }) async {
+    return apiService.post(
+      '/auth/wechat-login',
+      data: {'code': code},
+      fromJson: (json) => LoginResponse.fromJson(json),
+    );
+  }
+
+  @override
+  Future<Either<Failure, LoginResponse>> googleLogin({
+    required String idToken,
+  }) async {
+    return apiService.post(
+      '/auth/google-login',
+      data: {'id_token': idToken},
+      fromJson: (json) => LoginResponse.fromJson(json),
+    );
+  }
 }

@@ -20,8 +20,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final EmailLoginUseCase emailLoginUseCase;
   final EmailRegisterUseCase emailRegisterUseCase;
   final SendEmailCodeUseCase sendEmailCodeUseCase;
+  final RefreshTokenUseCase refreshTokenUseCase;
+  final WechatLoginUseCase wechatLoginUseCase;
+  final GoogleLoginUseCase googleLoginUseCase;
   final StorageService storageService;
   final MQTTService mqttService;
+  bool _mqttConnecting = false;
 
   AuthBloc({
     required this.loginUseCase,
@@ -35,6 +39,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.emailLoginUseCase,
     required this.emailRegisterUseCase,
     required this.sendEmailCodeUseCase,
+    required this.refreshTokenUseCase,
+    required this.wechatLoginUseCase,
+    required this.googleLoginUseCase,
     required this.storageService,
     required this.mqttService,
   }) : super(AuthInitial()) {
@@ -49,6 +56,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthEmailLoginRequested>(_onEmailLoginRequested);
     on<AuthEmailRegisterRequested>(_onEmailRegisterRequested);
     on<AuthSendEmailCodeRequested>(_onSendEmailCodeRequested);
+    on<AuthTokenRefreshed>(_onTokenRefreshed);
+    on<AuthWechatLoginRequested>(_onWechatLoginRequested);
+    on<AuthGoogleLoginRequested>(_onGoogleLoginRequested);
   }
 
   Future<void> _onAuthCheckRequested(
@@ -62,7 +72,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     if (token != null && userId != null) {
       String phone = await storageService.getUserPhone() ?? '';
-      int role = await storageService.getUserRole() ?? 5;
+      int role = await storageService.getUserRole() ?? 3;
       User? user;
 
       try {
@@ -107,6 +117,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       },
       (response) async {
         await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveUserRole(response.user.role);
@@ -151,6 +164,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       },
       (response) async {
         await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveUserRole(response.user.role);
@@ -174,6 +190,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } catch (_) {}
 
     await storageService.deleteToken();
+    await storageService.deleteRefreshToken();
     await storageService.deleteUserId();
     await storageService.deleteUserPhone();
     await storageService.deleteUserRole();
@@ -279,6 +296,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       },
       (response) async {
         await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveUserRole(response.user.role);
@@ -325,6 +345,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       },
       (response) async {
         await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserRole(response.user.role);
 
@@ -357,7 +380,85 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
   }
 
+  Future<void> _onTokenRefreshed(
+    AuthTokenRefreshed event,
+    Emitter<AuthState> emit,
+  ) async {
+    await storageService.saveToken(event.token);
+    if (event.refreshToken != null) {
+      await storageService.saveRefreshToken(event.refreshToken!);
+    }
+  }
+
+  Future<void> _onWechatLoginRequested(
+    AuthWechatLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+
+    final result = await wechatLoginUseCase(code: event.code);
+
+    await result.fold<Future<void>>(
+      (failure) async {
+        emit(AuthError(message: failure.message));
+      },
+      (response) async {
+        await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
+        await storageService.saveUserId(response.user.id);
+        await storageService.saveUserPhone(response.user.phone);
+        await storageService.saveUserRole(response.user.role);
+
+        emit(AuthAuthenticated(
+          userId: response.user.id,
+          phone: response.user.phone,
+          role: response.user.role,
+          user: response.user,
+        ));
+
+        _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
+      },
+    );
+  }
+
+  Future<void> _onGoogleLoginRequested(
+    AuthGoogleLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+
+    final result = await googleLoginUseCase(idToken: event.idToken);
+
+    await result.fold<Future<void>>(
+      (failure) async {
+        emit(AuthError(message: failure.message));
+      },
+      (response) async {
+        await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
+        await storageService.saveUserId(response.user.id);
+        await storageService.saveUserPhone(response.user.phone);
+        await storageService.saveUserRole(response.user.role);
+
+        emit(AuthAuthenticated(
+          userId: response.user.id,
+          phone: response.user.phone,
+          role: response.user.role,
+          user: response.user,
+        ));
+
+        _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
+      },
+    );
+  }
+
   void _connectMQTT(String clientId) async {
+    if (_mqttConnecting) return;
+    _mqttConnecting = true;
     try {
       final token = await storageService.getToken();
       if (token == null) {
@@ -372,6 +473,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       print('[MQTT] Connected as $clientId with JWT auth');
     } catch (e) {
       print('[MQTT] Connect failed: $e');
+    } finally {
+      _mqttConnecting = false;
     }
   }
 }

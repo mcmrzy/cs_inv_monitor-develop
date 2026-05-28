@@ -29,12 +29,62 @@ func (r *DeviceRepository) UpsertRealtime(ctx context.Context, rt *model.DeviceR
 	rawJSON := string(rawBytes)
 
 	sn := rt.DeviceSN
-	topic := "data/realtime"
 
-	query := `INSERT INTO device_telemetry (device_sn, topic, data, time, created_at) VALUES ($1, $2, $3::jsonb, NOW(), NOW())`
-	_, err := r.db.Exec(ctx, query, sn, topic, rawJSON)
+	var totalPower float64 = 0
+	var dailyEnergy float64 = 0
+	var workState string
+	var faultCode string
+	var internalTemp float64 = 0
+	var pvPower float64 = 0
+	var battVoltage float64 = 0
+	var battCurrent float64 = 0
+	var battSoc float64 = 0
+
+	if rt.AC != nil {
+		totalPower = rt.AC.Power
+	}
+	if rt.PV != nil {
+		pvPower = rt.PV.PVPower
+	}
+	if rt.Battery != nil {
+		battVoltage = rt.Battery.Voltage
+		battCurrent = rt.Battery.Current
+		battSoc = rt.Battery.SOC
+	}
+	if rt.Energy != nil {
+		dailyEnergy = rt.Energy.DailyPV
+	}
+	if rt.SysStatus != nil {
+		workState = rt.SysStatus.State
+		faultCode = fmt.Sprintf("%d", rt.SysStatus.FaultCode)
+		internalTemp = rt.SysStatus.TempInv
+	}
+
+	telemetryQuery := `INSERT INTO device_telemetry (device_sn, topic, data, total_active_power, daily_energy, work_state, fault_code, internal_temperature, time, created_at) VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, NOW(), NOW())`
+	_, err := r.db.Exec(ctx, telemetryQuery, sn, "data/realtime", rawJSON, totalPower, dailyEnergy, workState, faultCode, internalTemp)
 	if err != nil {
 		return fmt.Errorf("insert telemetry: %w", err)
+	}
+
+	rtQuery := `
+		INSERT INTO device_realtime_data (device_sn, daily_power_yields, total_active_power, total_power,
+			pv1_power, output_power, battery_voltage, battery_current, battery_soc, data_time, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+		ON CONFLICT (device_sn) DO UPDATE SET
+			daily_power_yields = EXCLUDED.daily_power_yields,
+			total_active_power = EXCLUDED.total_active_power,
+			total_power = EXCLUDED.total_power,
+			pv1_power = EXCLUDED.pv1_power,
+			output_power = EXCLUDED.output_power,
+			battery_voltage = EXCLUDED.battery_voltage,
+			battery_current = EXCLUDED.battery_current,
+			battery_soc = EXCLUDED.battery_soc,
+			data_time = NOW(),
+			updated_at = NOW()
+	`
+	_, err = r.db.Exec(ctx, rtQuery, sn, dailyEnergy, totalPower, totalPower, pvPower, totalPower, battVoltage, battCurrent, battSoc)
+	if err != nil {
+		return fmt.Errorf("upsert realtime: %w", err)
 	}
 	return nil
 }
@@ -54,41 +104,31 @@ func (r *DeviceRepository) UpsertDeviceInfo(ctx context.Context, info *model.Dev
 	}
 
 	upsertQuery := `
-		INSERT INTO devices (sn, model, manufacturer, firmware_arm, firmware_esp, device_type, phase,
-			rated_power, rated_voltage, rated_freq, battery_voltage, battery_types,
-			mppt_count, pv_max_voltage, pv_max_power, bms_count, cell_count,
+		INSERT INTO devices (sn, model, manufacturer, firmware_arm, firmware_esp, device_type,
+			rated_power, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count,
 			user_id, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17, 0, 1, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, 1, NOW(), NOW())
 		ON CONFLICT (sn) DO UPDATE SET
 			model = EXCLUDED.model,
 			manufacturer = EXCLUDED.manufacturer,
 			firmware_arm = EXCLUDED.firmware_arm,
 			firmware_esp = EXCLUDED.firmware_esp,
 			device_type = EXCLUDED.device_type,
-			phase = EXCLUDED.phase,
 			rated_power = EXCLUDED.rated_power,
 			rated_voltage = EXCLUDED.rated_voltage,
 			rated_freq = EXCLUDED.rated_freq,
 			battery_voltage = EXCLUDED.battery_voltage,
-			battery_types = EXCLUDED.battery_types,
-			mppt_count = EXCLUDED.mppt_count,
-			pv_max_voltage = EXCLUDED.pv_max_voltage,
-			pv_max_power = EXCLUDED.pv_max_power,
-			bms_count = EXCLUDED.bms_count,
+			battery_type = EXCLUDED.battery_type,
 			cell_count = EXCLUDED.cell_count,
 			updated_at = NOW()
 	`
 
-	batteryTypesJSON, _ := json.Marshal(info.BatteryTypes)
-
 	_, err = r.db.Exec(ctx, upsertQuery,
 		info.SN, info.Model, info.Manufacturer,
 		info.FirmwareARM, info.FirmwareESP,
-		info.Type, info.Phase,
+		info.Type,
 		info.RatedPower, info.RatedVoltage, info.RatedFreq,
-		info.BatteryVoltage, string(batteryTypesJSON),
-		info.MPPTCount, info.PVMaxVoltage, info.PVMaxPower,
-		info.BMSCount, info.CellCount,
+		info.BatteryVoltage, info.BatteryType, info.CellCount,
 	)
 
 	if err != nil {
@@ -118,36 +158,17 @@ func (r *DeviceRepository) InsertAlarm(ctx context.Context, alarm *model.AlarmDa
 }
 
 func (r *DeviceRepository) UpsertDayData(ctx context.Context, sn string, energy *model.EnergyData) error {
+	runMinutes := int(energy.RuntimeHours * 60)
 	query := `
-		INSERT INTO device_day_data (device_sn, data_date, energy_produce, energy_consume, run_minutes, created_at)
-		VALUES ($1, CURRENT_DATE, $2, $3, $4, NOW())
+		INSERT INTO device_day_data (device_sn, data_date, energy_produce, run_minutes, created_at)
+		VALUES ($1, CURRENT_DATE, $2, $3, NOW())
 		ON CONFLICT (device_sn, data_date) DO UPDATE SET
 			energy_produce = EXCLUDED.energy_produce,
-			energy_consume = EXCLUDED.energy_consume,
 			run_minutes = EXCLUDED.run_minutes
 	`
-	_, err := r.db.Exec(ctx, query, sn, energy.DailyPV, energy.DailyLoad, int(energy.RuntimeHours*60))
+	_, err := r.db.Exec(ctx, query, sn, energy.DailyPV, runMinutes)
 	if err != nil {
 		return fmt.Errorf("upsert day data: %w", err)
-	}
-	return nil
-}
-
-func (r *DeviceRepository) UpsertRealtimeStructured(ctx context.Context, sn string, energy *model.EnergyData, totalPower float64) error {
-	query := `
-		INSERT INTO device_realtime_data (device_sn, daily_power_yields, total_power_yields, total_active_power, total_power, data_time, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		ON CONFLICT (device_sn) DO UPDATE SET
-			daily_power_yields = EXCLUDED.daily_power_yields,
-			total_power_yields = EXCLUDED.total_power_yields,
-			total_active_power = EXCLUDED.total_active_power,
-			total_power = EXCLUDED.total_power,
-			data_time = NOW(),
-			updated_at = NOW()
-	`
-	_, err := r.db.Exec(ctx, query, sn, energy.DailyPV, energy.TotalPV, totalPower, totalPower)
-	if err != nil {
-		return fmt.Errorf("upsert realtime structured: %w", err)
 	}
 	return nil
 }
@@ -183,12 +204,12 @@ func (r *DeviceRepository) GetStationIDBySN(ctx context.Context, sn string) (int
 	return stationID, nil
 }
 
-func (r *DeviceRepository) InsertCmdLog(ctx context.Context, sn string, cmd string, status string, message string) error {
+func (r *DeviceRepository) InsertCmdLog(ctx context.Context, sn string, cmd string, result string, message string) error {
 	query := `
-		INSERT INTO command_logs (device_sn, cmd, result, message, sent_at)
+		INSERT INTO device_cmd_logs (device_sn, cmd, result, message, sent_at)
 		VALUES ($1, $2, $3, $4, NOW())
 	`
-	_, err := r.db.Exec(ctx, query, sn, cmd, status, message)
+	_, err := r.db.Exec(ctx, query, sn, cmd, result, message)
 	return err
 }
 

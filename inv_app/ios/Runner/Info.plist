@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>用于扫描设备二维码</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>需要使用本地网络以发现和连接局域网内的逆变器设备</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>用于发现局域网内的逆变器设备</string>
 </dict>
 </plist>

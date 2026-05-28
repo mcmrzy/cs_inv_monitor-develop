@@ -77,7 +77,6 @@ func (s *DataService) handleRealtime(ctx context.Context, rt *model.DeviceRealti
 		logger.Info("Writing energy data to DB",
 			zap.String("sn", rt.DeviceSN),
 			zap.Float64("daily_pv", rt.Energy.DailyPV),
-			zap.Float64("daily_load", rt.Energy.DailyLoad),
 			zap.Float64("runtime_hours", rt.Energy.RuntimeHours))
 
 		if err := s.repo.UpsertDayData(ctx, rt.DeviceSN, rt.Energy); err != nil {
@@ -137,14 +136,30 @@ func (s *DataService) syncDeviceStatus(sn string) {
 		newStatus = 2
 	}
 
+	if err := s.repo.UpdateDeviceStatus(context.Background(), sn, newStatus); err != nil {
+		logger.Error("Failed to update device status in DB",
+			zap.String("sn", sn),
+			zap.Error(err))
+	} else {
+		logger.Info("Device status updated in DB",
+			zap.String("sn", sn),
+			zap.Int("status", newStatus))
+	}
+
 	s.notifyAPIServerStatus(sn, newStatus, rt)
 }
 
 func (s *DataService) notifyAPIServerStatus(sn string, status int, rt *model.DeviceRealtime) {
-	body, _ := json.Marshal(map[string]interface{}{
+	bodyData := map[string]interface{}{
 		"sn":     sn,
 		"status": status,
-	})
+	}
+	if rt != nil && rt.OnlineStatus != nil {
+		if rt.OnlineStatus.IP != "" {
+			bodyData["ip"] = rt.OnlineStatus.IP
+		}
+	}
+	body, _ := json.Marshal(bodyData)
 	req, _ := http.NewRequest("POST", "http://localhost:8080/api/v1/internal/device-status", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 5 * time.Second}

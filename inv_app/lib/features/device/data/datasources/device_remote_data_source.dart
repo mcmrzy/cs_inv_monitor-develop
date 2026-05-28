@@ -51,6 +51,14 @@ class DeviceRemoteDataSource {
     });
   }
 
+  Future<Response> getStatistics(String sn, String startDate, String endDate, String period) async {
+    return await dio.get('/devices/$sn/statistics', queryParameters: {
+      'start_date': startDate,
+      'end_date': endDate,
+      'period': period,
+    });
+  }
+
   Future<Response> getHistory(String sn, String startDate, String endDate, String period) async {
     return await dio.get('/devices/$sn/history', queryParameters: {
       'start_date': startDate,

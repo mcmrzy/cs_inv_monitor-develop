@@ -12,6 +12,7 @@ abstract class MQTTService {
   Future<void> disconnect();
   bool get isConnected;
   Future<void> waitForConnection({Duration? timeout});
+  Future<void> reconnect();
 
   void subscribeDeviceTopics(String deviceSN);
   void unsubscribeDeviceTopics(String deviceSN);
@@ -19,6 +20,9 @@ abstract class MQTTService {
   Stream<InverterRealtime> get realtimeDataStream;
   Stream<OnlineStatus> get statusStream;
   Stream<AlarmData> get alarmStream;
+  Stream<OTANotification> get otaNotificationStream;
+
+  InverterRealtime? getLatestData(String deviceSN);
 
   Future<void> sendCommand(String deviceSN, String cmdType, {Map<String, dynamic>? value});
 }
@@ -26,10 +30,18 @@ abstract class MQTTService {
 class MQTTServiceImpl implements MQTTService {
   MqttServerClient? _client;
   Completer<void>? _connectionCompleter;
+  String? _lastClientId;
+  String? _lastUsername;
+  String? _lastPassword;
+  final Set<String> _subscribedTopics = {};
+  StreamSubscription? _updateSubscription;
+  bool _isConnecting = false;
+  bool _intentionalDisconnect = false;
 
   final StreamController<InverterRealtime> _realtimeController = StreamController.broadcast();
   final StreamController<OnlineStatus> _statusController = StreamController.broadcast();
   final StreamController<AlarmData> _alarmController = StreamController.broadcast();
+  final StreamController<OTANotification> _otaNotificationController = StreamController.broadcast();
 
   final Map<String, InverterRealtime> _latestData = {};
 
@@ -38,7 +50,28 @@ class MQTTServiceImpl implements MQTTService {
 
   @override
   Future<void> connect(String clientId, {String? username, String? password}) async {
+    if (_isConnecting) {
+      await waitForConnection(timeout: const Duration(seconds: 15));
+      return;
+    }
+
+    if (isConnected && _lastClientId == clientId) {
+      return;
+    }
+
+    _isConnecting = true;
+    _intentionalDisconnect = false;
     _connectionCompleter = Completer<void>();
+
+    _updateSubscription?.cancel();
+    _updateSubscription = null;
+
+    if (_client != null) {
+      _client!.autoReconnect = false;
+      _client!.disconnect();
+      _client = null;
+    }
+
     _client = MqttServerClient.withPort(AppConfig.mqttBrokerHost, clientId, AppConfig.mqttBrokerPort);
     _client!.secure = true;
     if (kDebugMode) {
@@ -58,24 +91,31 @@ class MQTTServiceImpl implements MQTTService {
 
     _client!.connectionMessage = connMessage;
 
-    _client!.logging(on: true);
+    _client!.logging(on: kDebugMode);
+
+    _lastClientId = clientId;
+    _lastUsername = username;
+    _lastPassword = password;
 
     print('[MQTT] Connecting to ${AppConfig.mqttBrokerHost}:${AppConfig.mqttBrokerPort} as $clientId');
 
     try {
       await _client!.connect(username, password);
       print('[MQTT] Connected to broker');
-      _client!.updates!.listen(_onMessage);
+      _updateSubscription = _client!.updates!.listen(_onMessage);
       if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
         _connectionCompleter!.complete();
       }
     } catch (e) {
       print('[MQTT] Connection failed: $e');
       _client!.disconnect();
+      _client = null;
       if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
         _connectionCompleter!.completeError(e);
       }
       rethrow;
+    } finally {
+      _isConnecting = false;
     }
   }
 
@@ -92,9 +132,27 @@ class MQTTServiceImpl implements MQTTService {
   }
 
   @override
+  Future<void> reconnect() async {
+    if (_lastClientId == null) {
+      throw Exception('No previous connection to reconnect to.');
+    }
+    await connect(_lastClientId!, username: _lastUsername, password: _lastPassword);
+  }
+
+  @override
   Future<void> disconnect() async {
-    _client?.disconnect();
-    _client = null;
+    _intentionalDisconnect = true;
+    _updateSubscription?.cancel();
+    _updateSubscription = null;
+    _subscribedTopics.clear();
+    _lastClientId = null;
+    _lastUsername = null;
+    _lastPassword = null;
+    if (_client != null) {
+      _client!.autoReconnect = false;
+      _client!.disconnect();
+      _client = null;
+    }
   }
 
   void _onConnected() {
@@ -104,12 +162,26 @@ class MQTTServiceImpl implements MQTTService {
     } else {
       _connectionCompleter = Completer<void>()..complete();
     }
+    _resubscribeAll();
   }
 
   void _onDisconnected() {
     print('MQTT Disconnected');
+    if (_intentionalDisconnect) return;
     if (_connectionCompleter != null && _connectionCompleter!.isCompleted) {
       _connectionCompleter = Completer<void>();
+    }
+  }
+
+  void _resubscribeAll() {
+    if (_subscribedTopics.isEmpty) return;
+    print('[MQTT] Resubscribing ${_subscribedTopics.length} topics');
+    for (final topic in _subscribedTopics.toList()) {
+      final qos = topic.contains('/alarm') || topic.contains('/status') && !topic.contains('/data/status')
+          || topic.contains('/info')
+          ? MqttQos.atLeastOnce
+          : MqttQos.atMostOnce;
+      _client?.subscribe(topic, qos);
     }
   }
 
@@ -147,6 +219,10 @@ class MQTTServiceImpl implements MQTTService {
           _handleCellsMessage(sn, data);
         } else if (topic.contains('/data/alarm')) {
           _handleAlarmMessage(sn, data);
+        } else if (topic.contains('/info')) {
+          _handleInfoMessage(sn, data);
+        } else if (topic.contains('/ota/notify')) {
+          _handleOTANotifyMessage(sn, data);
         }
       } catch (e) {
         print('Failed to parse MQTT message: $e');
@@ -175,6 +251,7 @@ class MQTTServiceImpl implements MQTTService {
       energy: rt.energy,
       cells: rt.cells,
       onlineStatus: status,
+      deviceInfo: rt.deviceInfo,
       updatedAt: DateTime.now(),
     );
     _latestData[sn] = updated;
@@ -194,6 +271,7 @@ class MQTTServiceImpl implements MQTTService {
       energy: rt.energy,
       cells: rt.cells,
       onlineStatus: rt.onlineStatus,
+      deviceInfo: rt.deviceInfo,
       updatedAt: DateTime.now(),
     );
     _latestData[sn] = updated;
@@ -212,6 +290,7 @@ class MQTTServiceImpl implements MQTTService {
       energy: rt.energy,
       cells: rt.cells,
       onlineStatus: rt.onlineStatus,
+      deviceInfo: rt.deviceInfo,
       updatedAt: DateTime.now(),
     );
     _latestData[sn] = updated;
@@ -230,6 +309,7 @@ class MQTTServiceImpl implements MQTTService {
       energy: rt.energy,
       cells: rt.cells,
       onlineStatus: rt.onlineStatus,
+      deviceInfo: rt.deviceInfo,
       updatedAt: DateTime.now(),
     );
     _latestData[sn] = updated;
@@ -248,6 +328,7 @@ class MQTTServiceImpl implements MQTTService {
       energy: rt.energy,
       cells: rt.cells,
       onlineStatus: rt.onlineStatus,
+      deviceInfo: rt.deviceInfo,
       updatedAt: DateTime.now(),
     );
     _latestData[sn] = updated;
@@ -266,6 +347,7 @@ class MQTTServiceImpl implements MQTTService {
       energy: energy,
       cells: rt.cells,
       onlineStatus: rt.onlineStatus,
+      deviceInfo: rt.deviceInfo,
       updatedAt: DateTime.now(),
     );
     _latestData[sn] = updated;
@@ -284,6 +366,7 @@ class MQTTServiceImpl implements MQTTService {
       energy: rt.energy,
       cells: cells,
       onlineStatus: rt.onlineStatus,
+      deviceInfo: rt.deviceInfo,
       updatedAt: DateTime.now(),
     );
     _latestData[sn] = updated;
@@ -295,29 +378,44 @@ class MQTTServiceImpl implements MQTTService {
     _alarmController.add(alarm);
   }
 
+  void _handleInfoMessage(String sn, Map<String, dynamic> data) {
+    final info = DeviceInfo.fromJson(data);
+    final rt = _getOrCreate(sn);
+    final updated = InverterRealtime(
+      deviceSN: sn,
+      ac: rt.ac,
+      battery: rt.battery,
+      pv: rt.pv,
+      sysStatus: rt.sysStatus,
+      energy: rt.energy,
+      cells: rt.cells,
+      onlineStatus: rt.onlineStatus,
+      deviceInfo: info,
+      updatedAt: DateTime.now(),
+    );
+    _latestData[sn] = updated;
+    _realtimeController.add(updated);
+    print('[MQTT] Device info received for $sn: model=${info.model}, rated=${info.ratedPower}W');
+  }
+
+  void _handleOTANotifyMessage(String sn, Map<String, dynamic> data) {
+    final notification = OTANotification.fromJson(data, sn);
+    _otaNotificationController.add(notification);
+  }
+
   @override
   void subscribeDeviceTopics(String deviceSN) {
-    _client?.subscribe('cs_inv/$deviceSN/status', MqttQos.atLeastOnce);
-    _client?.subscribe('cs_inv/$deviceSN/data/ac', MqttQos.atMostOnce);
-    _client?.subscribe('cs_inv/$deviceSN/data/battery', MqttQos.atMostOnce);
-    _client?.subscribe('cs_inv/$deviceSN/data/pv', MqttQos.atMostOnce);
-    _client?.subscribe('cs_inv/$deviceSN/data/status', MqttQos.atMostOnce);
-    _client?.subscribe('cs_inv/$deviceSN/data/energy', MqttQos.atMostOnce);
-    _client?.subscribe('cs_inv/$deviceSN/data/cells', MqttQos.atMostOnce);
-    _client?.subscribe('cs_inv/$deviceSN/data/alarm', MqttQos.atLeastOnce);
+    final topic = 'cs_inv/$deviceSN/#';
+    _client?.subscribe(topic, MqttQos.atLeastOnce);
+    _subscribedTopics.add(topic);
   }
 
   @override
   void unsubscribeDeviceTopics(String deviceSN) {
     if (_client == null || !isConnected) return;
-    _client?.unsubscribe('cs_inv/$deviceSN/status');
-    _client?.unsubscribe('cs_inv/$deviceSN/data/ac');
-    _client?.unsubscribe('cs_inv/$deviceSN/data/battery');
-    _client?.unsubscribe('cs_inv/$deviceSN/data/pv');
-    _client?.unsubscribe('cs_inv/$deviceSN/data/status');
-    _client?.unsubscribe('cs_inv/$deviceSN/data/energy');
-    _client?.unsubscribe('cs_inv/$deviceSN/data/cells');
-    _client?.unsubscribe('cs_inv/$deviceSN/data/alarm');
+    final topic = 'cs_inv/$deviceSN/#';
+    _client?.unsubscribe(topic);
+    _subscribedTopics.remove(topic);
   }
 
   @override
@@ -328,6 +426,9 @@ class MQTTServiceImpl implements MQTTService {
 
   @override
   Stream<AlarmData> get alarmStream => _alarmController.stream;
+
+  @override
+  Stream<OTANotification> get otaNotificationStream => _otaNotificationController.stream;
 
   @override
   Future<void> sendCommand(String deviceSN, String cmdType, {Map<String, dynamic>? value}) async {
@@ -356,5 +457,32 @@ class MQTTServiceImpl implements MQTTService {
     _realtimeController.close();
     _statusController.close();
     _alarmController.close();
+    _otaNotificationController.close();
+  }
+}
+
+class OTANotification {
+  final String deviceSN;
+  final String version;
+  final String description;
+  final int firmwareId;
+  final int timestamp;
+
+  const OTANotification({
+    required this.deviceSN,
+    this.version = '',
+    this.description = '',
+    this.firmwareId = 0,
+    this.timestamp = 0,
+  });
+
+  factory OTANotification.fromJson(Map<String, dynamic> json, String sn) {
+    return OTANotification(
+      deviceSN: sn,
+      version: json['version'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      firmwareId: (json['firmware_id'] as num?)?.toInt() ?? 0,
+      timestamp: (json['timestamp'] as num?)?.toInt() ?? 0,
+    );
   }
 }

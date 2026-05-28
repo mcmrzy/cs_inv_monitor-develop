@@ -5,16 +5,13 @@ import "go.uber.org/zap"
 var log *zap.Logger
 
 func init() {
-	cfg := zap.NewDevelopmentConfig()
-	cfg.EncoderConfig.TimeKey = ""
-	var err error
-	log, err = cfg.Build()
-	if err != nil {
-		panic(err)
-	}
+	log = zap.NewNop()
 }
 
 func Init(cfg zap.Config) error {
+	if log != nil {
+		_ = log.Sync()
+	}
 	var err error
 	log, err = cfg.Build()
 	return err

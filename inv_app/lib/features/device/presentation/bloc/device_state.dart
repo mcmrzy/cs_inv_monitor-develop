@@ -57,6 +57,21 @@ class DeviceParamsLoaded extends DeviceState {
 
 class DeviceParamsUpdateSuccess extends DeviceState {}
 
+class DeviceParamReadbackResult extends DeviceState {
+  final Map<String, dynamic> writtenParams;
+  final Map<String, dynamic> readbackParams;
+  final List<String> mismatches;
+
+  const DeviceParamReadbackResult({
+    required this.writtenParams,
+    required this.readbackParams,
+    required this.mismatches,
+  });
+
+  @override
+  List<Object?> get props => [writtenParams, readbackParams, mismatches];
+}
+
 class DeviceBindSuccess extends DeviceState {}
 
 class DeviceUnbindSuccess extends DeviceState {}
@@ -68,4 +83,19 @@ class DeviceError extends DeviceState {
 
   @override
   List<Object?> get props => [message];
+}
+
+class DeviceHistoryLoaded extends DeviceState {
+  final List<Map<String, dynamic>> data;
+  final String period;
+  final String metric;
+
+  const DeviceHistoryLoaded({
+    required this.data,
+    required this.period,
+    required this.metric,
+  });
+
+  @override
+  List<Object?> get props => [data, period, metric];
 }
