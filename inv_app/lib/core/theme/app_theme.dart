@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static ThemeData get light {
+    final textTheme = GoogleFonts.notoSansScTextTheme();
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
@@ -10,6 +12,7 @@ class AppTheme {
         seedColor: const Color(0xFF1565C0),
         brightness: Brightness.light,
       ),
+      textTheme: textTheme,
       scaffoldBackgroundColor: const Color(0xFFF5F5F5),
       appBarTheme: AppBarTheme(
         elevation: 0,
@@ -94,6 +97,9 @@ class AppTheme {
   }
 
   static ThemeData get dark {
+    final textTheme = GoogleFonts.notoSansScTextTheme(
+      ThemeData(brightness: Brightness.dark).textTheme,
+    );
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
@@ -101,6 +107,7 @@ class AppTheme {
         seedColor: const Color(0xFF2196F3),
         brightness: Brightness.dark,
       ),
+      textTheme: textTheme,
       scaffoldBackgroundColor: const Color(0xFF0F1115),
       appBarTheme: AppBarTheme(
         elevation: 0,

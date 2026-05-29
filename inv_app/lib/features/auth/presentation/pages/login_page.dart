@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
@@ -59,6 +60,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -110,12 +112,6 @@ class _LoginPageState extends State<LoginPage> {
   Widget _buildLogo() {
     return Column(
       children: [
-        Icon(
-          Icons.solar_power,
-          size: 80.sp,
-          color: AppColors.primary,
-        ),
-        SizedBox(height: 16.h),
         Text(
           '光伏逆变器',
           style: TextStyle(
@@ -263,18 +259,16 @@ class _LoginPageState extends State<LoginPage> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _buildSocialButton(
-          icon: Icons.chat_bubble_outline,
+          iconPath: 'assets/icons/wechat.svg',
           label: '微信',
-          color: const Color(0xFF07C160),
           onTap: () {
             context.read<AuthBloc>().add(const AuthWechatLoginRequested(code: ''));
           },
         ),
         SizedBox(width: 40.w),
         _buildSocialButton(
-          icon: Icons.g_mobiledata,
+          iconPath: 'assets/icons/google.svg',
           label: 'Google',
-          color: const Color(0xFF4285F4),
           onTap: () {
             context.read<AuthBloc>().add(const AuthGoogleLoginRequested(idToken: ''));
           },
@@ -284,9 +278,8 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildSocialButton({
-    required IconData icon,
+    required String iconPath,
     required String label,
-    required Color color,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
@@ -295,16 +288,21 @@ class _LoginPageState extends State<LoginPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 48.w,
-            height: 48.w,
+            width: 52.w,
+            height: 52.w,
+            padding: EdgeInsets.all(10.w),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
               color: Colors.white,
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
             ),
-            child: Icon(icon, size: 24.sp, color: color),
+            child: SvgPicture.asset(
+              iconPath,
+              width: 32.w,
+              height: 32.w,
+            ),
           ),
-          SizedBox(height: 6.h),
+          SizedBox(height: 8.h),
           Text(label, style: TextStyle(fontSize: 12.sp, color: const Color(0xFF6B7280))),
         ],
       ),
