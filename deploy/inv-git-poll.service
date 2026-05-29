@@ -1,0 +1,37 @@
+# Git Polling 自动部署服务单元文件
+
+# 1. 创建服务单元: /etc/systemd/system/inv-git-poll.service
+[Unit]
+Description=INV-MQTT Git Polling Service
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/inv-mqtt/deploy/git-poll-deploy.sh
+User=root
+StandardOutput=append:/var/log/inv-mqtt/git-poll.log
+StandardError=append:/var/log/inv-mqtt/git-poll_error.log
+
+[Install]
+WantedBy=multi-user.target
+
+# 2. 创建定时器单元: /etc/systemd/system/inv-git-poll.timer
+[Unit]
+Description=INV-MQTT Git Polling Timer
+Requires=inv-git-poll.service
+
+[Timer]
+# 每 5 分钟检查一次
+OnCalendar=*:0/5
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
+# 3. 启用定时器
+# systemctl enable inv-git-poll.timer
+# systemctl start inv-git-poll.timer
+
+# 4. 查看状态
+# systemctl list-timers inv-git-poll.timer
+# journalctl -u inv-git-poll.service -f
