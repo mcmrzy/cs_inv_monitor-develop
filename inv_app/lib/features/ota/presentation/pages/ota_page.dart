@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,6 +28,8 @@ class _OTAPageState extends State<OTAPage> {
   final Map<int, bool> _downloadedCache = {};
   final Map<int, double> _downloadingProgress = {};
   final Set<int> _downloadingIds = {};
+
+  OtaState? _cachedState;
 
   @override
   void initState() {
@@ -96,21 +99,32 @@ class _OTAPageState extends State<OTAPage> {
       ),
       body: BlocBuilder<OtaBloc, OtaState>(
         builder: (context, state) {
-          if (state is OTALoading) {
-            return const Center(child: CircularProgressIndicator());
+          final hasContent = state is OTAUpdateAvailable ||
+              state is OTAUpToDate ||
+              state is OTAFirmwareListLoaded;
+          if (hasContent) {
+            _cachedState = state;
           }
-          if (state is OTAUpdateAvailable) {
-            return _buildUpdateAvailable(state);
+          if (state is OTAError && _cachedState != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(state.message), duration: const Duration(seconds: 2)),
+                );
+              }
+            });
           }
-          if (state is OTAUpToDate) {
+
+          if (_cachedState is OTAUpdateAvailable) {
+            return _buildUpdateAvailable(_cachedState as OTAUpdateAvailable);
+          }
+          if (_cachedState is OTAUpToDate) {
             return _buildUpToDate();
           }
-          if (state is OTATriggered) {
-            return const Center(child: CircularProgressIndicator());
+          if (_cachedState is OTAFirmwareListLoaded) {
+            return _buildFirmwareList(_cachedState as OTAFirmwareListLoaded);
           }
-          if (state is OTAFirmwareListLoaded) {
-            return _buildFirmwareList(state);
-          }
+
           if (state is OTAError) {
             return Center(
               child: Column(
@@ -134,17 +148,32 @@ class _OTAPageState extends State<OTAPage> {
               ),
             );
           }
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.system_update_outlined, size: 64.sp, color: AppColors.textHint),
-                SizedBox(height: 16.h),
-                Text('OTA升级功能开发中', style: TextStyle(fontSize: 16.sp, color: AppColors.textSecondary)),
-              ],
-            ),
-          );
+
+          return _buildSkeletonBody();
         },
+      ),
+    );
+  }
+
+  Widget _buildSkeletonBody() {
+    return Padding(
+      padding: EdgeInsets.all(16.w),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SkeletonCard(height: 72),
+          SizedBox(height: 16.h),
+          const SkeletonCard(height: 120),
+          SizedBox(height: 16.h),
+          SkeletonBox(width: 80.w, height: 14.h),
+          SizedBox(height: 8.h),
+          Expanded(
+            child: ListView.builder(
+              itemCount: 3,
+              itemBuilder: (context, index) => const SkeletonCard(height: 80),
+            ),
+          ),
+        ],
       ),
     );
   }

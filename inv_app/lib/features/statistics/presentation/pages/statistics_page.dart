@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/statistics/presentation/bloc/statistics_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 
@@ -13,6 +14,8 @@ class StatisticsPage extends StatefulWidget {
 }
 
 class _StatisticsPageState extends State<StatisticsPage> {
+  StatisticsState? _cachedState;
+
   @override
   void initState() {
     super.initState();
@@ -25,29 +28,21 @@ class _StatisticsPageState extends State<StatisticsPage> {
       appBar: AppBar(title: const Text('数据统计')),
       body: BlocBuilder<StatisticsBloc, StatisticsState>(
         builder: (context, state) {
-          if (state is StatisticsLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (state is StatisticsError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
-                  SizedBox(height: 12.h),
-                  Text(state.message, style: TextStyle(color: AppColors.textSecondary)),
-                  SizedBox(height: 12.h),
-                  FilledButton.icon(
-                    onPressed: () => context.read<StatisticsBloc>().add(StatisticsOverviewRequested()),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('重试'),
-                  ),
-                ],
-              ),
-            );
-          }
           if (state is StatisticsOverviewLoaded) {
-            final overview = state.overview;
+            _cachedState = state;
+          }
+          if (state is StatisticsError && _cachedState != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(state.message), duration: const Duration(seconds: 2)),
+                );
+              }
+            });
+          }
+
+          if (_cachedState is StatisticsOverviewLoaded) {
+            final overview = (_cachedState as StatisticsOverviewLoaded).overview;
             return StyledRefreshIndicator(
               onRefresh: () async => context.read<StatisticsBloc>().add(StatisticsOverviewRequested()),
               child: ListView(
@@ -69,9 +64,49 @@ class _StatisticsPageState extends State<StatisticsPage> {
               ),
             );
           }
-          return Center(child: Text('加载中...', style: TextStyle(color: AppColors.textHint)));
+
+          if (state is StatisticsError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
+                  SizedBox(height: 12.h),
+                  Text(state.message, style: const TextStyle(color: AppColors.textSecondary)),
+                  SizedBox(height: 12.h),
+                  FilledButton.icon(
+                    onPressed: () => context.read<StatisticsBloc>().add(StatisticsOverviewRequested()),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('重试'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return _buildSkeletonBody();
         },
       ),
+    );
+  }
+
+  Widget _buildSkeletonBody() {
+    return ListView(
+      padding: EdgeInsets.all(16.w),
+      children: [
+        const SkeletonStatisticsHeader(),
+        SizedBox(height: 16.h),
+        const SkeletonCard(height: 160),
+        SizedBox(height: 16.h),
+        const SkeletonCard(height: 150),
+        SizedBox(height: 16.h),
+        Text('各电站统计', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+        SizedBox(height: 12.h),
+        const SkeletonCard(height: 70),
+        SizedBox(height: 10.h),
+        const SkeletonCard(height: 70),
+        SizedBox(height: 80.h),
+      ],
     );
   }
 

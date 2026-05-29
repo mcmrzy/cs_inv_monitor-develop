@@ -80,11 +80,11 @@ class _EnergyFlowDiagramState extends State<EnergyFlowDiagram>
               builder: (context, _) {
                 return CustomPaint(
                   painter: _EnergyFlowPainter(
-                    pvPower: widget.pvPower,
-                    batteryPower: widget.batteryPower,
-                    loadPower: widget.loadPower,
-                    gridPower: widget.gridPower,
-                    batterySoc: widget.batterySoc,
+                    pvPower: widget.pvPower.isNaN ? 0 : widget.pvPower,
+                    batteryPower: widget.batteryPower.isNaN ? 0 : widget.batteryPower,
+                    loadPower: widget.loadPower.isNaN ? 0 : widget.loadPower,
+                    gridPower: widget.gridPower.isNaN ? 0 : widget.gridPower,
+                    batterySoc: widget.batterySoc.isNaN ? 0 : widget.batterySoc,
                     progress: _particleController.value,
                     pulseProgress: _pulseController.value,
                     pvColor: Colors.orange,
@@ -129,7 +129,7 @@ class _PathDef {
     final d1 = (corner - start).distance;
     final d2 = (end - corner).distance;
     final total = d1 + d2;
-    if (total == 0) return start;
+    if (total == 0 || total.isNaN) return start;
     final dist = t * total;
     if (dist <= d1) {
       return d1 > 0 ? start + (corner - start) * (dist / d1) : corner;
@@ -142,7 +142,7 @@ class _PathDef {
     final d1 = (corner - start).distance;
     final d2 = (end - corner).distance;
     final total = d1 + d2;
-    if (total == 0) return const Offset(1, 0);
+    if (total == 0 || total.isNaN) return const Offset(1, 0);
     final dist = t * total;
     if (dist < d1) {
       return d1 > 0 ? (corner - start) / d1 : (end - corner) / d2;
@@ -278,6 +278,7 @@ class _EnergyFlowPainter extends CustomPainter {
   // ── Active flow: dashed line + particles + label ──
 
   void _drawActiveFlow(Canvas canvas, _PathDef path, Color color, double power, String tag) {
+    if (path.length <= 0) return;
     _drawDashedPath(canvas, path, color);
     _drawParticles(canvas, path, color, power);
     _drawPowerLabel(canvas, path, '${power.toStringAsFixed(0)}W', color);
@@ -287,7 +288,7 @@ class _EnergyFlowPainter extends CustomPainter {
 
   void _drawDashedPath(Canvas canvas, _PathDef path, Color color) {
     final totalLen = path.length;
-    if (totalLen == 0) return;
+    if (totalLen == 0 || totalLen.isNaN) return;
 
     const dashW = 8.0;
     const dashGap = 4.0;
@@ -320,7 +321,7 @@ class _EnergyFlowPainter extends CustomPainter {
 
   void _drawInactivePath(Canvas canvas, _PathDef path) {
     final totalLen = path.length;
-    if (totalLen == 0) return;
+    if (totalLen == 0 || totalLen.isNaN) return;
 
     const dashW = 6.0;
     const dashGap = 6.0;
@@ -348,6 +349,7 @@ class _EnergyFlowPainter extends CustomPainter {
   // ── Animated particles ──
 
   void _drawParticles(Canvas canvas, _PathDef path, Color color, double power) {
+    if (path.length <= 0) return;
     final totalLen = path.length;
     if (totalLen == 0) return;
 
@@ -377,13 +379,13 @@ class _EnergyFlowPainter extends CustomPainter {
   // ── Power label perpendicular to path at midpoint ──
 
   void _drawPowerLabel(Canvas canvas, _PathDef path, String text, Color color) {
+    if (path.length <= 0) return;
     final mid = path.pointAt(0.5);
+    if (mid.dx.isNaN || mid.dy.isNaN) return;
     final dir = path.directionAt(0.5);
-    // Perpendicular direction (rotate 90°)
     final perp = Offset(-dir.dy, dir.dx);
-
-    // Always offset to the left side of the direction of travel
     final labelPos = mid + perp * 18;
+    if (labelPos.dx.isNaN || labelPos.dy.isNaN) return;
 
     final paragraph = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 10))
           ..pushStyle(ui.TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600))

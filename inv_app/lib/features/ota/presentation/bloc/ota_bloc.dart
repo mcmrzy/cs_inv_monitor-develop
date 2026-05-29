@@ -24,10 +24,12 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     OTACheckRequested event,
     Emitter<OtaState> emit,
   ) async {
-    emit(OTALoading());
     final result = await repository.checkUpdate(event.sn);
     result.fold(
-      (failure) => emit(OTAError(message: failure.message)),
+      (failure) {
+        if (state is OTAUpdateAvailable || state is OTAUpToDate || state is OTAFirmwareListLoaded) return;
+        emit(OTAError(message: failure.message));
+      },
       (data) {
         final hasUpdate = data['has_update'] == true;
         if (hasUpdate) {
@@ -43,10 +45,12 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     OTATriggerRequested event,
     Emitter<OtaState> emit,
   ) async {
-    emit(OTALoading());
     final result = await repository.triggerOTA(event.sn, event.firmwareId);
     result.fold(
-      (failure) => emit(OTAError(message: failure.message)),
+      (failure) {
+        if (state is OTAUpdateAvailable || state is OTAUpToDate || state is OTAFirmwareListLoaded || state is OTATriggered) return;
+        emit(OTAError(message: failure.message));
+      },
       (data) {
         final taskId = data['task_id'] as int? ?? 0;
         emit(OTATriggered(taskId: taskId));
@@ -112,10 +116,12 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     OTAFirmwareListRequested event,
     Emitter<OtaState> emit,
   ) async {
-    emit(OTALoading());
     final result = await repository.getFirmwareList(page: event.page, pageSize: event.pageSize);
     result.fold(
-      (failure) => emit(OTAError(message: failure.message)),
+      (failure) {
+        if (state is OTAUpdateAvailable || state is OTAUpToDate || state is OTAFirmwareListLoaded) return;
+        emit(OTAError(message: failure.message));
+      },
       (data) => emit(OTAFirmwareListLoaded(firmwares: data)),
     );
   }

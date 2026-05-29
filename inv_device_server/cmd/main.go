@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -76,8 +77,35 @@ func main() {
 	defer mqttClient.Disconnect()
 
 	deviceRepo := repository.NewDeviceRepository(db)
-	dataService := service.NewDataService(deviceRepo, hub, rdb)
-	dataService.Start(ctx)
+	metaRepo := repository.NewMetadataRepository(deviceRepo)
+	dataService := service.NewDataService(deviceRepo, metaRepo, hub, rdb)
+	dataService.StartMetadataRefresh(ctx)
+
+	if cfg.Kafka.Enabled {
+		protocolParser := service.NewProtocolParser(
+			cfg.Kafka.Brokers, cfg.Kafka.TelemetryTopic, "inv-device-server-parser",
+			deviceRepo, metaRepo, rdb, hub)
+		protocolParser.Start(ctx)
+
+		alertConsumer := service.NewAlertConsumer(
+			cfg.Kafka.Brokers, cfg.Kafka.AlarmTopic, "inv-device-server-alerts", deviceRepo)
+		alertConsumer.Start(ctx)
+
+		logger.Info("Kafka consumers started (protocol parser + alert consumer)",
+			zap.Strings("brokers", cfg.Kafka.Brokers),
+			zap.String("telemetry_topic", cfg.Kafka.TelemetryTopic),
+			zap.String("alarm_topic", cfg.Kafka.AlarmTopic))
+	} else {
+		logger.Warn("Kafka is disabled! No data will be processed. Enable Kafka to use EMQX Bridge mode.")
+	}
+
+	if metaRepo != nil {
+		if err := metaRepo.LoadAllModels(ctx); err != nil {
+			logger.Error("Failed to load model metadata", zap.Error(err))
+		} else {
+			logger.Info("Model metadata loaded successfully")
+		}
+	}
 
 	router := setupRouter(cfg, dataService, rdb)
 
@@ -182,14 +210,8 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 	router.GET("/metrics", func(c *gin.Context) {
 		stats := dataService.GetMQTTStats()
 		statsMap := map[string]interface{}{
-			"mqtt_data_received":     stats.DataReceived,
-			"mqtt_data_dropped":      stats.DataDropped,
-			"mqtt_alarm_received":    stats.AlarmReceived,
-			"mqtt_alarm_dropped":     stats.AlarmDropped,
-			"mqtt_cmd_sent":          stats.CmdSent,
-			"mqtt_cmd_resp_received": stats.CmdRespReceived,
-			"mqtt_online_clients":    stats.OnlineClients,
-			"mqtt_last_data_at":      stats.LastDataAt.Unix(),
+			"mqtt_online_clients": stats.OnlineClients,
+			"mqtt_cmd_sent":       stats.CmdSent,
 		}
 		c.JSON(http.StatusOK, statsMap)
 	})
@@ -206,9 +228,14 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 		})
 
 		api.GET("/device/:sn/data", func(c *gin.Context) {
+			ctx := c.Request.Context()
 			sn := c.Param("sn")
-			data := dataService.GetRealtime(sn)
-			if data == nil {
+
+			data, err := dataService.GetRealtimeFromRedis(ctx, sn)
+			if err != nil {
+				data, err = dataService.GetRealtimeFromDB(ctx, sn)
+			}
+			if err != nil || data == nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "device not found or no data"})
 				return
 			}
@@ -279,20 +306,6 @@ func initSchema(db *pgxpool.Pool, cfg *config.Config) {
 			station_id BIGINT DEFAULT 0,
 			last_online_at TIMESTAMP,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE TABLE IF NOT EXISTS device_realtime_data (
-			device_sn VARCHAR(50) NOT NULL UNIQUE,
-			daily_power_yields DECIMAL(12,2),
-			total_active_power DECIMAL(10,2),
-			total_power DECIMAL(10,2),
-			pv1_power DECIMAL(10,2),
-			output_power DECIMAL(10,2),
-			battery_voltage DECIMAL(6,1),
-			battery_current DECIMAL(6,2),
-			battery_soc DECIMAL(5,1),
-			data_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 
@@ -375,4 +388,8 @@ func setTimezone(tz string) error {
 	time.Local = loc
 	os.Setenv("TZ", tz)
 	return nil
+}
+
+func strconvParseInt(s string, base int, bitSize int) (int64, error) {
+	return strconv.ParseInt(s, base, bitSize)
 }

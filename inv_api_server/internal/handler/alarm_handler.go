@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"strconv"
 
 	"inv-api-server/internal/middleware"
@@ -45,7 +44,6 @@ func (h *AlarmHandler) List(c *gin.Context) {
 
 	alarms, total, err := h.alarmService.List(c.Request.Context(), userID, stationID, status, page, pageSize)
 	if err != nil {
-		fmt.Printf("[Alarm List Error] %v\n", err)
 		response.InternalError(c, "system error")
 		return
 	}

@@ -4,29 +4,22 @@
 *.iws
 *.ipr
 
-# VS Code (keep launch configs, ignore workspace settings)
-.vscode/settings.json
+# VS Code
+.vscode/
+!.vscode/launch.json
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Flutter
-**/build/
-**/.dart_tool/
-**/.flutter-plugins-dependencies
-**/.pub-cache/
-**/.pub/
-**/doc/api/
-**/ios/Flutter/.last_build_id
-**/app.*.symbols
-**/app.*.map.json
-
-# Go
+# Compiled binaries
+*_linux
 *.exe
 *.exe~
 *.test
 *.out
+
+# Go
 vendor/
 
 # Android

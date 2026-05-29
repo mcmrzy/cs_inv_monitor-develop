@@ -230,6 +230,114 @@ func (r *UserRepository) Delete(ctx context.Context, userID int64) error {
 	return err
 }
 
+func (r *UserRepository) ListAll(ctx context.Context) ([]model.User, error) {
+	query := `
+		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, region_id, status,
+		       last_login_at, last_login_ip, created_at, updated_at
+		FROM users WHERE deleted_at IS NULL ORDER BY id DESC
+	`
+	return r.queryUsers(ctx, query)
+}
+
+func (r *UserRepository) UpdateRole(ctx context.Context, userID int64, role int) error {
+	_, err := r.db.Exec(ctx, "UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2", role, userID)
+	return err
+}
+
+func (r *UserRepository) UpdateStatus(ctx context.Context, userID int64, status int) error {
+	_, err := r.db.Exec(ctx, "UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2", status, userID)
+	return err
+}
+
+func (r *UserRepository) UpsertPermission(ctx context.Context, role int, resource string, action string, isAllowed bool) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO role_permissions (role, resource, action, is_allowed, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (role, resource, action) DO UPDATE SET is_allowed = $4, updated_at = NOW()
+	`, role, resource, action, isAllowed)
+	return err
+}
+
+func (r *UserRepository) queryUsers(ctx context.Context, query string) ([]model.User, error) {
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []model.User
+	for rows.Next() {
+		var user model.User
+		var regionID sql.NullInt64
+		var lastLoginAt sql.NullTime
+		err := rows.Scan(&user.ID, &user.Phone, &user.Email, &user.PasswordHash,
+			&user.Nickname, &user.Avatar, &user.Role, &regionID, &user.Status,
+			&lastLoginAt, &user.LastLoginIP, &user.CreatedAt, &user.UpdatedAt)
+		if err != nil {
+			continue
+		}
+		if regionID.Valid {
+			user.RegionID = &regionID.Int64
+		}
+		if lastLoginAt.Valid {
+			user.LastLoginAt = &lastLoginAt.Time
+		}
+		users = append(users, user)
+	}
+	return users, nil
+}
+
+func (r *UserRepository) GetUserRoleIDs(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := r.db.Query(ctx,
+		"SELECT role_id FROM sys_user_role WHERE user_id = $1", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var roleIDs []int64
+	for rows.Next() {
+		var roleID int64
+		if err := rows.Scan(&roleID); err != nil {
+			continue
+		}
+		roleIDs = append(roleIDs, roleID)
+	}
+
+	if len(roleIDs) == 0 {
+		return []int64{}, nil
+	}
+	return roleIDs, nil
+}
+
+type PermissionEntry struct {
+	Resource string `json:"resource"`
+	Action   string `json:"action"`
+}
+
+func (r *UserRepository) GetRolePermissions(ctx context.Context, roleID int64) ([]PermissionEntry, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT p.resource, p.action
+		FROM sys_role_permission rp
+		JOIN sys_permission p ON p.id = rp.permission_id
+		WHERE rp.role_id = $1
+	`, roleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var perms []PermissionEntry
+	for rows.Next() {
+		var p PermissionEntry
+		if err := rows.Scan(&p.Resource, &p.Action); err != nil {
+			continue
+		}
+		perms = append(perms, p)
+	}
+	return perms, nil
+}
+
 type StationRepository struct {
 	db *pgxpool.Pool
 }
@@ -482,26 +590,76 @@ func NewDeviceRepository(db *pgxpool.Pool, cache *redis.Client) *DeviceRepositor
 	return &DeviceRepository{db: db, cache: cache}
 }
 
+func (r *DeviceRepository) HasDataPermission(ctx context.Context, userID int64, sn string) bool {
+	var deviceUserID int64
+	err := r.db.QueryRow(ctx, `SELECT COALESCE(user_id, 0) FROM devices WHERE sn = $1 AND deleted_at IS NULL`, sn).Scan(&deviceUserID)
+	if err != nil {
+		return false
+	}
+
+	if deviceUserID == userID {
+		return true
+	}
+
+	var count int
+	err = r.db.QueryRow(ctx, `SELECT COUNT(*) FROM user_device_rel WHERE user_id = $1 AND device_sn = $2`, userID, sn).Scan(&count)
+	if err != nil {
+		return false
+	}
+
+	return count > 0
+}
+
+func (r *DeviceRepository) GetAllowedDeviceSNs(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT sn FROM (
+			SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL
+			UNION
+			SELECT d.sn FROM user_device_rel udr
+			JOIN devices d ON d.sn = udr.device_sn AND d.deleted_at IS NULL
+			WHERE udr.user_id = $1
+		) allowed ORDER BY sn`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sns []string
+	for rows.Next() {
+		var sn string
+		if err := rows.Scan(&sn); err != nil {
+			continue
+		}
+		sns = append(sns, sn)
+	}
+	return sns, nil
+}
+
 func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Device, error) {
 	query := `
-		SELECT id, sn, model, rated_power, firmware_version, hardware_version,
-			   mac_address, station_id, user_id, status, last_online_at, created_at, updated_at
-		FROM devices WHERE sn = $1 AND deleted_at IS NULL
+		SELECT d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
+			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
+			   d.station_id, d.user_id, d.status,
+			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
+			   d.last_online_at, d.created_at, d.updated_at
+		FROM devices d
+		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
+		WHERE d.sn = $1 AND d.deleted_at IS NULL
 	`
 
 	var device model.Device
-	var model sql.NullString
-	var ratedPower sql.NullFloat64
-	var firmwareVersion sql.NullString
-	var hardwareVersion sql.NullString
-	var macAddress sql.NullString
 	var stationID sql.NullInt64
 	var lastOnlineAt sql.NullTime
 
 	err := r.db.QueryRow(ctx, query, sn).Scan(
-		&device.ID, &device.SN, &model, &ratedPower,
-		&firmwareVersion, &hardwareVersion, &macAddress,
-		&stationID, &device.UserID, &device.Status, &lastOnlineAt,
+		&device.ID, &device.SN, &device.Model, &device.Manufacturer,
+		&device.FirmwareArm, &device.FirmwareEsp, &device.DeviceType,
+		&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
+		&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
+		&stationID, &device.UserID, &device.Status,
+		&device.CurrentPower, &device.DailyEnergy,
+		&lastOnlineAt,
 		&device.CreatedAt, &device.UpdatedAt,
 	)
 
@@ -512,21 +670,6 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 		return nil, err
 	}
 
-	if model.Valid {
-		device.Model = model.String
-	}
-	if ratedPower.Valid {
-		device.RatedPower = ratedPower.Float64
-	}
-	if firmwareVersion.Valid {
-		device.FirmwareVersion = firmwareVersion.String
-	}
-	if hardwareVersion.Valid {
-		device.HardwareVersion = hardwareVersion.String
-	}
-	if macAddress.Valid {
-		device.MACAddress = macAddress.String
-	}
 	if stationID.Valid {
 		device.StationID = &stationID.Int64
 	}
@@ -540,32 +683,50 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error) {
 	offset := (page - 1) * pageSize
 
-	baseQuery := `FROM devices WHERE user_id = $1 AND deleted_at IS NULL`
+	selectCols := `d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+		COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
+		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
+		d.station_id, d.user_id, d.status,
+		COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
+		d.last_online_at, d.created_at, d.updated_at`
+
+	allowedSNsSubquery := `(SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)`
+
+	baseQuery := fmt.Sprintf(` FROM devices d LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
 	args := []interface{}{userID}
 	argIdx := 2
 
 	if stationID > 0 {
-		baseQuery += fmt.Sprintf(" AND station_id = $%d", argIdx)
+		baseQuery += fmt.Sprintf(" AND d.station_id = $%d", argIdx)
 		args = append(args, stationID)
 		argIdx++
 	}
 
 	if status >= 0 {
-		baseQuery += fmt.Sprintf(" AND status = $%d", argIdx)
+		baseQuery += fmt.Sprintf(" AND d.status = $%d", argIdx)
 		args = append(args, status)
 		argIdx++
 	}
 
-	countQuery := `SELECT COUNT(*) ` + baseQuery
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM devices d WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
+	countArgs := []interface{}{userID}
+	countIdx := 2
+	if stationID > 0 {
+		countQuery += fmt.Sprintf(" AND d.station_id = $%d", countIdx)
+		countArgs = append(countArgs, stationID)
+		countIdx++
+	}
+	if status >= 0 {
+		countQuery += fmt.Sprintf(" AND d.status = $%d", countIdx)
+		countArgs = append(countArgs, status)
+		countIdx++
+	}
 	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	query := `
-		SELECT id, sn, model, rated_power, firmware_version, hardware_version,
-			   mac_address, station_id, user_id, status, last_online_at, created_at, updated_at
-	` + baseQuery + ` ORDER BY created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+	query := `SELECT ` + selectCols + baseQuery + ` ORDER BY d.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
 	args = append(args, pageSize, offset)
 
@@ -578,35 +739,19 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 	devices := make([]*model.Device, 0)
 	for rows.Next() {
 		var device model.Device
-		var model sql.NullString
-		var ratedPower sql.NullFloat64
-		var firmwareVersion sql.NullString
-		var hardwareVersion sql.NullString
-		var macAddress sql.NullString
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
-			&device.ID, &device.SN, &model, &ratedPower,
-			&firmwareVersion, &hardwareVersion, &macAddress,
-			&stationID, &device.UserID, &device.Status, &lastOnlineAt,
+			&device.ID, &device.SN, &device.Model, &device.Manufacturer,
+			&device.FirmwareArm, &device.FirmwareEsp, &device.DeviceType,
+			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
+			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
+			&stationID, &device.UserID, &device.Status,
+			&device.CurrentPower, &device.DailyEnergy,
+			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
-		}
-		if model.Valid {
-			device.Model = model.String
-		}
-		if ratedPower.Valid {
-			device.RatedPower = ratedPower.Float64
-		}
-		if firmwareVersion.Valid {
-			device.FirmwareVersion = firmwareVersion.String
-		}
-		if hardwareVersion.Valid {
-			device.HardwareVersion = hardwareVersion.String
-		}
-		if macAddress.Valid {
-			device.MACAddress = macAddress.String
 		}
 		if stationID.Valid {
 			device.StationID = &stationID.Int64
@@ -622,9 +767,15 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 
 func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) ([]*model.Device, error) {
 	query := `
-		SELECT id, sn, model, rated_power, firmware_version, hardware_version,
-			   mac_address, station_id, user_id, status, last_online_at, created_at, updated_at
-		FROM devices WHERE station_id = $1 AND deleted_at IS NULL
+		SELECT d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
+			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
+			   d.station_id, d.user_id, d.status,
+			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
+			   d.last_online_at, d.created_at, d.updated_at
+		FROM devices d
+		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
+		WHERE d.station_id = $1 AND d.deleted_at IS NULL
 	`
 
 	rows, err := r.db.Query(ctx, query, stationID)
@@ -636,35 +787,19 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 	devices := make([]*model.Device, 0)
 	for rows.Next() {
 		var device model.Device
-		var model sql.NullString
-		var ratedPower sql.NullFloat64
-		var firmwareVersion sql.NullString
-		var hardwareVersion sql.NullString
-		var macAddress sql.NullString
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
-			&device.ID, &device.SN, &model, &ratedPower,
-			&firmwareVersion, &hardwareVersion, &macAddress,
-			&stationID, &device.UserID, &device.Status, &lastOnlineAt,
+			&device.ID, &device.SN, &device.Model, &device.Manufacturer,
+			&device.FirmwareArm, &device.FirmwareEsp, &device.DeviceType,
+			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
+			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
+			&stationID, &device.UserID, &device.Status,
+			&device.CurrentPower, &device.DailyEnergy,
+			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
 		); err != nil {
 			return nil, err
-		}
-		if model.Valid {
-			device.Model = model.String
-		}
-		if ratedPower.Valid {
-			device.RatedPower = ratedPower.Float64
-		}
-		if firmwareVersion.Valid {
-			device.FirmwareVersion = firmwareVersion.String
-		}
-		if hardwareVersion.Valid {
-			device.HardwareVersion = hardwareVersion.String
-		}
-		if macAddress.Valid {
-			device.MACAddress = macAddress.String
 		}
 		if stationID.Valid {
 			device.StationID = &stationID.Int64
@@ -679,12 +814,13 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 }
 
 func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, stationID int64) (float64, float64, error) {
+	// 从 device_telemetry 获取今日能量
 	var dailyEnergy float64
 	query := `
-		SELECT COALESCE(SUM(energy_produce), 0)
-		FROM device_day_data
+		SELECT COALESCE(MAX(daily_energy) - MIN(daily_energy), 0)
+		FROM device_telemetry
 		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status = 1)
-		AND data_date = CURRENT_DATE
+		AND time::date = CURRENT_DATE
 	`
 	r.db.QueryRow(ctx, query, stationID).Scan(&dailyEnergy)
 
@@ -786,13 +922,19 @@ func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, station
 		return
 	}
 
+	// 从 device_telemetry 获取最新数据
 	query := `
-		SELECT COALESCE(SUM(COALESCE(pv1_power, 0)), 0),
-			   COALESCE(SUM(COALESCE(output_power, COALESCE(total_active_power, 0))), 0),
-			   COALESCE(SUM(COALESCE(battery_voltage, 0) * COALESCE(battery_current, 0)), 0),
-			   COALESCE(AVG(NULLIF(battery_soc, 0)), 0)
-		FROM device_realtime_data
-		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status = 1)
+		SELECT 
+			COALESCE(SUM((data->'pv'->>'pv_power')::float), 0),
+			COALESCE(SUM((data->'ac'->>'power')::float), 0),
+			COALESCE(SUM(((data->'battery'->>'voltage')::float * (data->'battery'->>'current')::float)), 0),
+			COALESCE(AVG(NULLIF((data->'battery'->>'soc')::float, 0)), 0)
+		FROM (
+			SELECT DISTINCT ON (device_sn) data
+			FROM device_telemetry
+			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status = 1)
+			ORDER BY device_sn, time DESC
+		) latest
 	`
 	if err := r.db.QueryRow(ctx, query, stationID).Scan(&pvPower, &loadPower, &battPower, &battSoc); err != nil {
 		return
@@ -802,23 +944,52 @@ func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, station
 }
 
 func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationID int64) (float64, float64) {
-	query := `
-		SELECT COALESCE(SUM(energy_produce), 0),
-			   COALESCE(SUM(CASE WHEN data_date >= DATE_TRUNC('month', CURRENT_DATE) THEN energy_produce ELSE 0 END), 0)
-		FROM device_day_data
-		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
+	// 从 device_telemetry 计算累计发电和月能量
+
+	// 累计发电：所有有记录的设备每天 daily_energy 最大值之和（从数据库第一条记录开始）
+	totalQuery := `
+		SELECT COALESCE(SUM(daily_max), 0)
+		FROM (
+			SELECT DATE(time) as day, device_sn, MAX(daily_energy) as daily_max
+			FROM device_telemetry
+			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
+			AND daily_energy > 0
+			GROUP BY DATE(time), device_sn
+		) per_device_daily
 	`
-	var totalEnergy, monthEnergy float64
-	r.db.QueryRow(ctx, query, stationID).Scan(&totalEnergy, &monthEnergy)
+	var totalEnergy float64
+	r.db.QueryRow(ctx, totalQuery, stationID).Scan(&totalEnergy)
+
+	// 当月发电：当月每个设备每天的 daily_energy 最大值之和
+	monthQuery := `
+		SELECT COALESCE(SUM(daily_max), 0)
+		FROM (
+			SELECT DATE(time) as day, device_sn, MAX(daily_energy) as daily_max
+			FROM device_telemetry
+			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
+			AND time >= DATE_TRUNC('month', CURRENT_DATE)
+			AND daily_energy > 0
+			GROUP BY DATE(time), device_sn
+		) per_device_daily
+	`
+	var monthEnergy float64
+	r.db.QueryRow(ctx, monthQuery, stationID).Scan(&monthEnergy)
+
 	return totalEnergy, monthEnergy
 }
 
 func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID int64) float64 {
+	// 当年发电：当年每个设备每天的 daily_energy 最大值之和
 	query := `
-		SELECT COALESCE(SUM(energy_produce), 0)
-		FROM device_day_data
-		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
-		AND data_date >= DATE_TRUNC('year', CURRENT_DATE)
+		SELECT COALESCE(SUM(daily_max), 0)
+		FROM (
+			SELECT DATE(time) as day, device_sn, MAX(daily_energy) as daily_max
+			FROM device_telemetry
+			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
+			AND time >= DATE_TRUNC('year', CURRENT_DATE)
+			AND daily_energy > 0
+			GROUP BY DATE(time), device_sn
+		) per_device_daily
 	`
 	var yearEnergy float64
 	r.db.QueryRow(ctx, query, stationID).Scan(&yearEnergy)
@@ -827,10 +998,10 @@ func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID i
 
 func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID int64) (float64, error) {
 	query := `
-		SELECT COALESCE(SUM(energy_produce), 0)
-		FROM device_day_data
+		SELECT COALESCE(MAX(daily_energy) - MIN(daily_energy), 0)
+		FROM device_telemetry
 		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
-		AND data_date = CURRENT_DATE
+		AND time::date = CURRENT_DATE
 	`
 	var energy float64
 	err := r.db.QueryRow(ctx, query, stationID).Scan(&energy)
@@ -853,7 +1024,6 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 			}
 			var m map[string]interface{}
 			if json.Unmarshal([]byte(cached), &m) == nil {
-				fmt.Printf("[DEBUG] GetRealtimeData - Redis cache hit for key: %s, has ac field: %v\n", cacheKey, m["ac"] != nil)
 				m["online"] = online
 				m["data_source"] = "redis"
 				return m, nil
@@ -875,178 +1045,14 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 		return nil, err
 	}
 
-	fmt.Printf("[DEBUG] GetRealtimeData - DB query result, has ac field: %v, top-level keys: ", m["ac"] != nil)
-	for k := range m {
-		fmt.Printf("%s ", k)
-	}
-	fmt.Println()
-
 	m["online"] = online
 	m["data_source"] = "database"
 	return m, nil
 }
 
-// DEPRECATED: flattenDeviceRealtime is no longer used.
-// The API now returns the original nested MQTT JSON structure directly.
-// This function was used to flatten the nested structure to a flat format,
-// but it caused data mismatch issues with off-grid inverters.
-// Kept here for reference only.
-/*
-func flattenDeviceRealtime(m map[string]interface{}) {
-	copyNested := func(key string, fields map[string]string) {
-		nested, ok := m[key]
-		if !ok {
-			return
-		}
-		nm, ok2 := nested.(map[string]interface{})
-		if !ok2 {
-			return
-		}
-		for from, to := range fields {
-			if v, exists := nm[from]; exists {
-				m[to] = v
-			}
-		}
-	}
-
-	copyNested("ac", map[string]string{
-		"voltage": "ac_voltage", "current": "ac_current",
-		"power": "ac_power", "frequency": "ac_frequency", "load_percent": "load_percent",
-	})
-
-	copyNested("battery", map[string]string{
-		"voltage": "battery_voltage", "current": "battery_current",
-		"soc": "battery_soc", "soh": "battery_soh", "charge_state": "charge_state",
-	})
-
-	copyNested("pv", map[string]string{
-		"pv_voltage": "pv_voltage", "pv_current": "pv_current", "pv_power": "pv_power",
-	})
-
-	copyNested("sys_status", map[string]string{
-		"state": "work_state", "fault_code": "fault_code",
-		"temp_inv": "internal_temperature", "efficiency": "efficiency",
-	})
-
-	copyNested("energy", map[string]string{
-		"daily_pv": "daily_power_yields", "total_pv": "total_power_yields",
-		"runtime_hours": "total_running_time",
-	})
-
-	if v, ok := m["device_sn"]; ok {
-		if _, exists := m["serial_number"]; !exists {
-			m["serial_number"] = v
-		}
-	}
-	if v, ok := m["updated_at"]; ok {
-		if _, exists := m["data_time"]; !exists {
-			m["data_time"] = v
-		}
-	}
-}
-
-// DEPRECATED: mapToRealtimeData is no longer used.
-// The API now returns the original nested MQTT JSON structure directly.
-// This function was used to map flattened data to DeviceRealtimeData struct,
-// which was designed for grid-tied inverters with 60+ flat fields.
-// Kept here for reference only.
-func mapToRealtimeData(sn string, m map[string]interface{}) *model.DeviceRealtimeData {
-	getFloat := func(k string) float64 {
-		if v, ok := m[k]; ok {
-			switch vv := v.(type) {
-			case float64: return vv
-			case string: var f float64; fmt.Sscanf(vv, "%f", &f); return f
-			case json.Number: f, _ := vv.Float64(); return f
-			}
-		}
-		return 0
-	}
-	getInt := func(k string) int {
-		if v, ok := m[k]; ok {
-			switch vv := v.(type) {
-			case float64: return int(vv)
-			case string: var n int; fmt.Sscanf(vv, "%d", &n); return n
-			case json.Number: n, _ := vv.Int64(); return int(n)
-			}
-		}
-		return 0
-	}
-	getStr := func(k string) string {
-		if v, ok := m[k]; ok { return fmt.Sprint(v) }
-		return ""
-	}
-	getFloatOr := func(fn func(string) float64, k1, k2 string) float64 {
-		if v := fn(k1); v != 0 { return v }
-		return fn(k2)
-	}
-	getStrOr := func(fn func(string) string, k1, k2 string) string {
-		if v := fn(k1); v != "" { return v }
-		return fn(k2)
-	}
-
-	return &model.DeviceRealtimeData{
-		DeviceSN:             sn,
-		DataTime:             time.Now(),
-		Manufacturer:         getStr("manufacturer"),
-		Model:                getStr("model"),
-		DeviceTypeCode:       getInt("device_type_code"),
-		ArmVersion:           getStr("arm_version"),
-		DSPVersion:           getStr("dsp_version"),
-		ProtocolNumber:       getInt("protocol_number"),
-		ProtocolVersion:      getInt("protocol_version"),
-		NominalActivePower:   getFloat("nominal_active_power"),
-		NominalReactivePower: getFloat("nominal_reactive_power"),
-		OutputType:           getInt("output_type"),
-		DailyPowerYields:     getFloat("daily_power_yields"),
-		TotalPowerYields:     getFloat("total_power_yields"),
-		TotalPowerYields01:   getFloat("total_power_yields_01"),
-		MonthlyPowerYields:   getFloat("monthly_power_yields"),
-		TotalRunningTime:     getInt("total_running_time"),
-		DailyRunningTime:     getInt("daily_running_time"),
-		InternalTemperature:  getFloat("internal_temperature"),
-		TotalDCPower:         getFloat("total_dc_power"),
-		PhaseAVoltage:        getFloat("phase_a_voltage"),
-		PhaseBVoltage:        getFloat("phase_b_voltage"),
-		PhaseCVoltage:        getFloat("phase_c_voltage"),
-		PhaseACurrent:        getFloat("phase_a_current"),
-		PhaseBCurrent:        getFloat("phase_b_current"),
-		PhaseCCurrent:        getFloat("phase_c_current"),
-		TotalActivePower:     getFloat("total_active_power"),
-		TotalReactivePower:   getFloat("total_reactive_power"),
-		TotalApparentPower:   getFloat("total_apparent_power"),
-		PowerFactor:          getFloat("power_factor"),
-		GridFrequency:        getFloatOr(getFloat, "grid_frequency", "frequency"),
-		WorkState1:           getStrOr(getStr, "work_state_1", "work_state"),
-		WorkState1Code:       getInt("work_state_1_code"),
-		WorkState2:           getInt("work_state_2"),
-		InverterState1:       getInt("inverter_state_1"),
-		InverterState2:       getInt("inverter_state_2"),
-		InsulationResistance: getInt("insulation_resistance"),
-		BusVoltage:           getFloat("bus_voltage"),
-		NegativeGroundVoltage: getFloat("negative_ground_voltage"),
-		PIDWorkState:         getInt("pid_work_state"),
-		PIDAlarmCode:          getInt("pid_alarm_code"),
-		CountryCode:           getInt("country_code"),
-		MeterTotalPower:       getFloat("meter_total_power"),
-		MeterPhaseAPower:      getFloat("meter_phase_a_power"),
-		MeterPhaseBPower:      getFloat("meter_phase_b_power"),
-		MeterPhaseCPower:      getFloat("meter_phase_c_power"),
-		LoadPower:             getFloat("load_power"),
-		DailyFeedEnergy:       getFloat("daily_feed_energy"),
-		TotalFeedEnergy:        getFloat("total_feed_energy"),
-		DailyGridImport:       getFloat("daily_grid_import"),
-		TotalGridImport:        getFloat("total_grid_import"),
-		ActivePowerSetting:    getFloat("active_power_setting"),
-		ReactivePowerSetting:   getFloat("reactive_power_setting"),
-		PowerFactorSetting:     getFloat("power_factor_setting"),
-		ESP32Timestamp:         getInt("esp32_timestamp"),
-	}
-}
-*/
-
 func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
-	query := `INSERT INTO devices (sn, model, rated_power, firmware_version, user_id, status, created_at, updated_at)
-		VALUES ($1, 'INV-5000-TL', 0, '', 0, 0, NOW(), NOW())
+	query := `INSERT INTO devices (sn, model, rated_power, user_id, status, created_at, updated_at)
+		VALUES ($1, '', 0, 0, 0, NOW(), NOW())
 		ON CONFLICT (sn) DO NOTHING`
 	_, err := r.db.Exec(ctx, query, sn)
 	return err
@@ -1106,68 +1112,23 @@ func (r *DeviceRepository) SyncStationStatus(ctx context.Context) error {
 	return err
 }
 
-func (r *DeviceRepository) GetShare(ctx context.Context, sn string, userID int64) (*model.DeviceShare, error) {
-	query := `
-		SELECT id, device_sn, owner_id, share_to_user_id, permission, created_at
-		FROM device_shares WHERE device_sn = $1 AND share_to_user_id = $2
-	`
+// DEPRECATED: Device sharing feature removed.
+// func (r *DeviceRepository) GetShare(ctx context.Context, sn string, userID int64) (*model.DeviceShare, error) {
+// 	// Device sharing feature has been removed.
+// 	return nil, nil
+// }
 
-	var share model.DeviceShare
-	err := r.db.QueryRow(ctx, query, sn, userID).Scan(
-		&share.ID, &share.DeviceSN, &share.OwnerID, &share.ShareToUserID, &share.Permission, &share.CreatedAt,
-	)
+// DEPRECATED: Device params table removed. Use MQTT direct configuration.
+// func (r *DeviceRepository) GetParams(ctx context.Context, sn string) (map[string]interface{}, error) {
+// 	// Device params table has been removed.
+// 	return make(map[string]interface{}), nil
+// }
 
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return &share, nil
-}
-
-func (r *DeviceRepository) GetParams(ctx context.Context, sn string) (map[string]interface{}, error) {
-	query := `SELECT * FROM device_params WHERE device_sn = $1`
-
-	rows, err := r.db.Query(ctx, query, sn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return make(map[string]interface{}), nil
-	}
-
-	fields := rows.FieldDescriptions()
-	values := make([]interface{}, len(fields))
-	valuePtrs := make([]interface{}, len(fields))
-	for i := range values {
-		valuePtrs[i] = &values[i]
-	}
-
-	if err := rows.Scan(valuePtrs...); err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]interface{})
-	for i, field := range fields {
-		result[string(field.Name)] = values[i]
-	}
-
-	return result, nil
-}
-
-func (r *DeviceRepository) UpdateParams(ctx context.Context, sn string, params map[string]interface{}) error {
-	query := `
-		INSERT INTO device_params (device_sn, updated_at)
-		VALUES ($1, NOW())
-		ON CONFLICT (device_sn) DO UPDATE SET updated_at = NOW()
-	`
-	_, err := r.db.Exec(ctx, query, sn)
-	return err
-}
+// DEPRECATED: Device params table removed. Use MQTT direct configuration.
+// func (r *DeviceRepository) UpdateParams(ctx context.Context, sn string, params map[string]interface{}) error {
+// 	// Device params table has been removed.
+// 	return nil
+// }
 
 func (r *DeviceRepository) SendCommand(ctx context.Context, sn, cmdType string, params map[string]interface{}) error {
 	cmdData, _ := json.Marshal(map[string]interface{}{
@@ -1183,16 +1144,20 @@ func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, en
 	var query string
 	switch period {
 	case "hour":
+		// 使用 TimescaleDB 1 小时连续聚合视图
 		query = `
-			SELECT data_time, avg_power, max_power, energy_produce, energy_consume, energy_sell, energy_buy, avg_soc
-			FROM device_hour_data WHERE device_sn = $1 AND data_time >= $2 AND data_time <= $3
-			ORDER BY data_time
+			SELECT bucket, avg_active_power, max_active_power, energy_delta, avg_temperature
+			FROM device_telemetry_1hour 
+			WHERE device_sn = $1 AND bucket >= $2 AND bucket <= $3
+			ORDER BY bucket
 		`
 	default:
+		// 使用 TimescaleDB 1 天连续聚合视图
 		query = `
-			SELECT data_date, max_power, energy_produce, energy_consume, energy_sell, energy_buy, avg_soc, income
-			FROM device_day_data WHERE device_sn = $1 AND data_date >= $2 AND data_date <= $3
-			ORDER BY data_date
+			SELECT bucket, avg_active_power, max_active_power, daily_energy, run_minutes
+			FROM device_telemetry_1day 
+			WHERE device_sn = $1 AND bucket >= $2 AND bucket <= $3
+			ORDER BY bucket
 		`
 	}
 
@@ -1206,28 +1171,24 @@ func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, en
 	for rows.Next() {
 		result := make(map[string]interface{})
 		var dataTime time.Time
-		var avgPower, maxPower, energyProduce, energyConsume, energySell, energyBuy, income float64
-		var avgSOC int
+		var avgPower, maxPower, energy, tempOrMinutes float64
 
 		if period == "hour" {
-			if err := rows.Scan(&dataTime, &avgPower, &maxPower, &energyProduce, &energyConsume, &energySell, &energyBuy, &avgSOC); err != nil {
+			if err := rows.Scan(&dataTime, &avgPower, &maxPower, &energy, &tempOrMinutes); err != nil {
 				return nil, err
 			}
-			result["avg_power"] = avgPower
+			result["avg_temperature"] = tempOrMinutes
 		} else {
-			if err := rows.Scan(&dataTime, &maxPower, &energyProduce, &energyConsume, &energySell, &energyBuy, &avgSOC, &income); err != nil {
+			if err := rows.Scan(&dataTime, &avgPower, &maxPower, &energy, &tempOrMinutes); err != nil {
 				return nil, err
 			}
-			result["income"] = income
+			result["run_minutes"] = tempOrMinutes
 		}
 
 		result["time"] = dataTime
+		result["avg_power"] = avgPower
 		result["max_power"] = maxPower
-		result["energy_produce"] = energyProduce
-		result["energy_consume"] = energyConsume
-		result["energy_sell"] = energySell
-		result["energy_buy"] = energyBuy
-		result["avg_soc"] = avgSOC
+		result["energy_produce"] = energy
 
 		results = append(results, result)
 	}
@@ -1236,16 +1197,16 @@ func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, en
 }
 
 func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, endDate, period string) (map[string]interface{}, error) {
+	// 从 device_telemetry 计算统计数据
 	query := `
-		SELECT COALESCE(SUM(energy_produce), 0), COALESCE(SUM(energy_consume), 0),
-			   COALESCE(SUM(energy_sell), 0), COALESCE(SUM(energy_buy), 0), COALESCE(SUM(income), 0)
-		FROM device_day_data WHERE device_sn = $1 AND data_date >= $2 AND data_date <= $3
+		SELECT 
+			COALESCE(MAX(daily_energy) - MIN(daily_energy), 0) as total_energy
+		FROM device_telemetry 
+		WHERE device_sn = $1 AND time >= $2 AND time <= $3
 	`
 
-	var energyProduce, energyConsume, energySell, energyBuy, income float64
-	err := r.db.QueryRow(ctx, query, sn, startDate, endDate).Scan(
-		&energyProduce, &energyConsume, &energySell, &energyBuy, &income,
-	)
+	var energyProduce float64
+	err := r.db.QueryRow(ctx, query, sn, startDate, endDate).Scan(&energyProduce)
 
 	if err != nil {
 		return nil, err
@@ -1253,100 +1214,63 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 
 	return map[string]interface{}{
 		"energy_produce": energyProduce,
-		"energy_consume": energyConsume,
-		"energy_sell":    energySell,
-		"energy_buy":     energyBuy,
-		"income":         income,
+		"energy_consume": 0.0,
+		"energy_sell":    0.0,
+		"energy_buy":     0.0,
+		"income":         0.0,
 	}, nil
-}
-
-func (r *DeviceRepository) Share(ctx context.Context, sn string, ownerID int64, phone, permission string) error {
-	var shareToUserID int64
-	err := r.db.QueryRow(ctx, `SELECT id FROM users WHERE phone = $1`, phone).Scan(&shareToUserID)
-	if err != nil {
-		return fmt.Errorf("user not found")
-	}
-
-	query := `
-		INSERT INTO device_shares (device_sn, owner_id, share_to_user_id, permission, created_at)
-		VALUES ($1, $2, $3, $4, NOW())
-		ON CONFLICT (device_sn, share_to_user_id) DO UPDATE SET permission = $4
-	`
-
-	_, err = r.db.Exec(ctx, query, sn, ownerID, shareToUserID, permission)
-	return err
-}
-
-func (r *DeviceRepository) CancelShare(ctx context.Context, shareID, ownerID int64) error {
-	query := `DELETE FROM device_shares WHERE id = $1 AND owner_id = $2`
-	_, err := r.db.Exec(ctx, query, shareID, ownerID)
-	return err
-}
-
-func (r *DeviceRepository) GetShares(ctx context.Context, sn string) ([]*model.DeviceShare, error) {
-	query := `
-		SELECT ds.id, ds.device_sn, ds.owner_id, ds.share_to_user_id, ds.permission, ds.created_at
-		FROM device_shares ds WHERE ds.device_sn = $1
-	`
-
-	rows, err := r.db.Query(ctx, query, sn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	shares := make([]*model.DeviceShare, 0)
-	for rows.Next() {
-		var share model.DeviceShare
-		if err := rows.Scan(
-			&share.ID, &share.DeviceSN, &share.OwnerID, &share.ShareToUserID, &share.Permission, &share.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		shares = append(shares, &share)
-	}
-
-	return shares, nil
 }
 
 func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64) (map[string]interface{}, error) {
 	query := `
 		SELECT COUNT(DISTINCT d.id) as device_count,
 			   COUNT(DISTINCT CASE WHEN d.status = 1 THEN d.id END) as online_count,
-			   COUNT(DISTINCT CASE WHEN d.status = 2 THEN d.id END) as fault_count,
-			   COALESCE(SUM(dd.energy_produce), 0) as today_energy,
-			   COALESCE(SUM(dd.income), 0) as today_income
+			   COUNT(DISTINCT CASE WHEN d.status = 2 THEN d.id END) as fault_count
 		FROM devices d
-		LEFT JOIN device_day_data dd ON dd.device_sn = d.sn AND dd.data_date = CURRENT_DATE
-		WHERE d.user_id = $1 AND d.deleted_at IS NULL
+		WHERE d.deleted_at IS NULL
+		AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)
 	`
 
 	result := make(map[string]interface{})
 	var deviceCount, onlineCount, faultCount int
-	var todayEnergy, todayIncome float64
 
-	err := r.db.QueryRow(ctx, query, userID).Scan(&deviceCount, &onlineCount, &faultCount, &todayEnergy, &todayIncome)
+	err := r.db.QueryRow(ctx, query, userID).Scan(&deviceCount, &onlineCount, &faultCount)
 	if err != nil {
 		return nil, err
 	}
+
+	var todayEnergy float64
+	energyQuery := `
+		SELECT COALESCE(SUM(today_energy), 0)
+		FROM (
+			SELECT DISTINCT ON (d.sn) (dt.data->>'daily_energy')::float as today_energy
+			FROM devices d
+			LEFT JOIN device_telemetry dt ON dt.device_sn = d.sn AND dt.time::date = CURRENT_DATE
+			WHERE d.deleted_at IS NULL
+			AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)
+			ORDER BY d.sn, dt.time DESC
+		) latest
+	`
+	r.db.QueryRow(ctx, energyQuery, userID).Scan(&todayEnergy)
 
 	result["device_count"] = deviceCount
 	result["online_count"] = onlineCount
 	result["fault_count"] = faultCount
 	result["today_energy"] = todayEnergy
-	result["today_income"] = todayIncome
+	result["today_income"] = 0.0
 
 	return result, nil
 }
 
 func (r *DeviceRepository) GetTrend(ctx context.Context, userID int64, period string) ([]map[string]interface{}, error) {
 	query := `
-		SELECT dd.data_date, SUM(dd.energy_produce) as energy_produce, SUM(dd.income) as income
-		FROM device_day_data dd
+		SELECT bucket, SUM(daily_energy) as energy_produce
+		FROM device_telemetry_1day dd
 		JOIN devices d ON d.sn = dd.device_sn
-		WHERE d.user_id = $1 AND d.deleted_at IS NULL
-		AND dd.data_date >= CURRENT_DATE - INTERVAL '30 days'
-		GROUP BY dd.data_date ORDER BY dd.data_date
+		WHERE d.deleted_at IS NULL
+		AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)
+		AND bucket >= CURRENT_DATE - INTERVAL '30 days'
+		GROUP BY bucket ORDER BY bucket
 	`
 
 	rows, err := r.db.Query(ctx, query, userID)
@@ -1358,67 +1282,18 @@ func (r *DeviceRepository) GetTrend(ctx context.Context, userID int64, period st
 	results := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var dataDate time.Time
-		var energyProduce, income float64
-		if err := rows.Scan(&dataDate, &energyProduce, &income); err != nil {
+		var energyProduce float64
+		if err := rows.Scan(&dataDate, &energyProduce); err != nil {
 			return nil, err
 		}
 		results = append(results, map[string]interface{}{
 			"date":           dataDate,
 			"energy_produce": energyProduce,
-			"income":         income,
+			"income":         0.0,
 		})
 	}
 
 	return results, nil
-}
-
-func (r *DeviceRepository) StartOTA(ctx context.Context, sn string, firmwareID int64) error {
-	query := `
-		INSERT INTO ota_records (device_sn, firmware_id, status, created_at)
-		VALUES ($1, $2, 'pending', NOW())
-	`
-	_, err := r.db.Exec(ctx, query, sn, firmwareID)
-	return err
-}
-
-func (r *DeviceRepository) GetOTAStatus(ctx context.Context, sn string) (map[string]interface{}, error) {
-	query := `
-		SELECT id, firmware_id, status, progress, error_message, started_at, completed_at
-		FROM ota_records WHERE device_sn = $1 ORDER BY created_at DESC LIMIT 1
-	`
-
-	var id, firmwareID int64
-	var status string
-	var progress int
-	var errorMsg sql.NullString
-	var startedAt, completedAt sql.NullTime
-
-	err := r.db.QueryRow(ctx, query, sn).Scan(&id, &firmwareID, &status, &progress, &errorMsg, &startedAt, &completedAt)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return map[string]interface{}{"status": "none"}, nil
-		}
-		return nil, err
-	}
-
-	result := map[string]interface{}{
-		"id":          id,
-		"firmware_id": firmwareID,
-		"status":      status,
-		"progress":    progress,
-	}
-
-	if errorMsg.Valid {
-		result["error_message"] = errorMsg.String
-	}
-	if startedAt.Valid {
-		result["started_at"] = startedAt.Time
-	}
-	if completedAt.Valid {
-		result["completed_at"] = completedAt.Time
-	}
-
-	return result, nil
 }
 
 type AlarmRepository struct {
@@ -1616,125 +1491,4 @@ func (r *AlarmRepository) MarkRead(ctx context.Context, ids []int64, userID int6
 	query := `UPDATE alarms SET status = 1, handled_at = NOW(), handled_by = $1 WHERE id = ANY($2)`
 	_, err := r.db.Exec(ctx, query, userID, ids)
 	return err
-}
-
-type NotifyRepository struct {
-	db *pgxpool.Pool
-}
-
-func NewNotifyRepository(db *pgxpool.Pool) *NotifyRepository {
-	return &NotifyRepository{db: db}
-}
-
-func (r *NotifyRepository) GetSettings(ctx context.Context, userID int64) (*model.UserNotifySetting, error) {
-	query := `
-		SELECT id, user_id, push_enabled, alarm_push, offline_push, system_push,
-			   quiet_hours_start, quiet_hours_end, created_at, updated_at
-		FROM user_notify_settings WHERE user_id = $1
-	`
-
-	var settings model.UserNotifySetting
-	var quietStart, quietEnd sql.NullString
-
-	err := r.db.QueryRow(ctx, query, userID).Scan(
-		&settings.ID, &settings.UserID, &settings.PushEnabled, &settings.AlarmPush,
-		&settings.OfflinePush, &settings.SystemPush, &quietStart, &quietEnd,
-		&settings.CreatedAt, &settings.UpdatedAt,
-	)
-
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return &model.UserNotifySetting{
-				UserID:      userID,
-				PushEnabled: true,
-				AlarmPush:   true,
-				OfflinePush: true,
-				SystemPush:  true,
-			}, nil
-		}
-		return nil, err
-	}
-
-	if quietStart.Valid {
-		settings.QuietHoursStart = quietStart.String
-	}
-	if quietEnd.Valid {
-		settings.QuietHoursEnd = quietEnd.String
-	}
-
-	return &settings, nil
-}
-
-func (r *NotifyRepository) UpdateSettings(ctx context.Context, userID int64, settings map[string]interface{}) error {
-	query := `
-		INSERT INTO user_notify_settings (user_id, push_enabled, alarm_push, offline_push, system_push, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		ON CONFLICT (user_id) DO UPDATE SET
-			push_enabled = $2, alarm_push = $3, offline_push = $4, system_push = $5, updated_at = NOW()
-	`
-
-	pushEnabled := settings["push_enabled"].(bool)
-	alarmPush := settings["alarm_push"].(bool)
-	offlinePush := settings["offline_push"].(bool)
-	systemPush := settings["system_push"].(bool)
-
-	_, err := r.db.Exec(ctx, query, userID, pushEnabled, alarmPush, offlinePush, systemPush)
-	return err
-}
-
-func (r *NotifyRepository) GetMessages(ctx context.Context, userID int64, msgType string, page, pageSize int) ([]*model.Message, int64, error) {
-	offset := (page - 1) * pageSize
-
-	baseQuery := `FROM messages WHERE user_id = $1`
-	args := []interface{}{userID}
-
-	if msgType != "" {
-		baseQuery += " AND type = $2"
-		args = append(args, msgType)
-	}
-
-	countQuery := `SELECT COUNT(*) ` + baseQuery
-	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
-		return nil, 0, err
-	}
-
-	query := `SELECT id, user_id, title, content, type, is_read, extra_data, created_at ` + baseQuery + ` ORDER BY created_at DESC LIMIT $` + fmt.Sprintf("%d", len(args)+1) + ` OFFSET $` + fmt.Sprintf("%d", len(args)+2)
-	args = append(args, pageSize, offset)
-
-	rows, err := r.db.Query(ctx, query, args...)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	messages := make([]*model.Message, 0)
-	for rows.Next() {
-		var msg model.Message
-		var extraData sql.NullString
-		if err := rows.Scan(
-			&msg.ID, &msg.UserID, &msg.Title, &msg.Content, &msg.Type, &msg.IsRead, &extraData, &msg.CreatedAt,
-		); err != nil {
-			return nil, 0, err
-		}
-		if extraData.Valid {
-			msg.ExtraData = extraData.String
-		}
-		messages = append(messages, &msg)
-	}
-
-	return messages, total, nil
-}
-
-func (r *NotifyRepository) MarkMessageRead(ctx context.Context, ids []int64, userID int64) error {
-	query := `UPDATE messages SET is_read = true WHERE id = ANY($1) AND user_id = $2`
-	_, err := r.db.Exec(ctx, query, ids, userID)
-	return err
-}
-
-func (r *NotifyRepository) GetUnreadCount(ctx context.Context, userID int64) (int64, error) {
-	query := `SELECT COUNT(*) FROM messages WHERE user_id = $1 AND is_read = false`
-	var count int64
-	err := r.db.QueryRow(ctx, query, userID).Scan(&count)
-	return count, err
 }

@@ -4,6 +4,7 @@ class ACData {
   final double power;
   final double frequency;
   final double loadPercent;
+  final double pf;
 
   const ACData({
     this.voltage = 0,
@@ -11,6 +12,7 @@ class ACData {
     this.power = 0,
     this.frequency = 0,
     this.loadPercent = 0,
+    this.pf = 0,
   });
 
   factory ACData.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class ACData {
       power: (json['power'] as num?)?.toDouble() ?? 0,
       frequency: (json['frequency'] as num?)?.toDouble() ?? 0,
       loadPercent: (json['load_percent'] as num?)?.toDouble() ?? 0,
+      pf: (json['pf'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -29,6 +32,7 @@ class ACData {
     'power': power,
     'frequency': frequency,
     'load_percent': loadPercent,
+    'pf': pf,
   };
 }
 
@@ -140,11 +144,19 @@ class EnergyData {
   final double dailyPV;
   final double totalPV;
   final int runtimeHours;
+  final double dailyFeedEnergy;
+  final double totalFeedEnergy;
+  final double dailyGridImport;
+  final double totalGridImport;
 
   const EnergyData({
     this.dailyPV = 0,
     this.totalPV = 0,
     this.runtimeHours = 0,
+    this.dailyFeedEnergy = 0,
+    this.totalFeedEnergy = 0,
+    this.dailyGridImport = 0,
+    this.totalGridImport = 0,
   });
 
   factory EnergyData.fromJson(Map<String, dynamic> json) {
@@ -152,6 +164,10 @@ class EnergyData {
       dailyPV: (json['daily_pv'] as num?)?.toDouble() ?? 0,
       totalPV: (json['total_pv'] as num?)?.toDouble() ?? 0,
       runtimeHours: (json['runtime_hours'] as num?)?.toInt() ?? 0,
+      dailyFeedEnergy: (json['daily_feed_energy'] as num?)?.toDouble() ?? 0,
+      totalFeedEnergy: (json['total_feed_energy'] as num?)?.toDouble() ?? 0,
+      dailyGridImport: (json['daily_grid_import'] as num?)?.toDouble() ?? 0,
+      totalGridImport: (json['total_grid_import'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -159,6 +175,10 @@ class EnergyData {
     'daily_pv': dailyPV,
     'total_pv': totalPV,
     'runtime_hours': runtimeHours,
+    'daily_feed_energy': dailyFeedEnergy,
+    'total_feed_energy': totalFeedEnergy,
+    'daily_grid_import': dailyGridImport,
+    'total_grid_import': totalGridImport,
   };
 }
 
@@ -189,6 +209,36 @@ class CellsData {
     'cell_count': cellCount,
     'voltages': voltages,
     'temps': temps,
+  };
+}
+
+class MeterData {
+  final double totalPower;
+  final double phaseAPower;
+  final double phaseBPower;
+  final double phaseCPower;
+
+  const MeterData({
+    this.totalPower = 0,
+    this.phaseAPower = 0,
+    this.phaseBPower = 0,
+    this.phaseCPower = 0,
+  });
+
+  factory MeterData.fromJson(Map<String, dynamic> json) {
+    return MeterData(
+      totalPower: (json['total_power'] as num?)?.toDouble() ?? 0,
+      phaseAPower: (json['phase_a_power'] as num?)?.toDouble() ?? 0,
+      phaseBPower: (json['phase_b_power'] as num?)?.toDouble() ?? 0,
+      phaseCPower: (json['phase_c_power'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'total_power': totalPower,
+    'phase_a_power': phaseAPower,
+    'phase_b_power': phaseBPower,
+    'phase_c_power': phaseCPower,
   };
 }
 
@@ -324,6 +374,8 @@ class InverterRealtime {
   final CellsData? cells;
   final OnlineStatus? onlineStatus;
   final DeviceInfo? deviceInfo;
+  final MeterData? meter;
+  final double loadPower;
   final DateTime updatedAt;
 
   const InverterRealtime({
@@ -336,6 +388,8 @@ class InverterRealtime {
     this.cells,
     this.onlineStatus,
     this.deviceInfo,
+    this.meter,
+    this.loadPower = 0,
     required this.updatedAt,
   });
 
@@ -350,6 +404,8 @@ class InverterRealtime {
       cells: json['cells'] != null ? CellsData.fromJson(json['cells'] as Map<String, dynamic>) : null,
       onlineStatus: json['online_status'] != null ? OnlineStatus.fromJson(json['online_status'] as Map<String, dynamic>) : null,
       deviceInfo: json['device_info'] != null ? DeviceInfo.fromJson(json['device_info'] as Map<String, dynamic>) : null,
+      meter: json['meter'] != null ? MeterData.fromJson(json['meter'] as Map<String, dynamic>) : null,
+      loadPower: (json['load_power'] as num?)?.toDouble() ?? 0,
       updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ?? DateTime.now(),
     );
   }
@@ -364,6 +420,8 @@ class InverterRealtime {
     'cells': cells?.toJson(),
     'online_status': onlineStatus?.toJson(),
     'device_info': deviceInfo?.toJson(),
+    'meter': meter?.toJson(),
+    'load_power': loadPower,
     'updated_at': updatedAt.toIso8601String(),
   };
 }

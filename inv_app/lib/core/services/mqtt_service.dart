@@ -97,17 +97,13 @@ class MQTTServiceImpl implements MQTTService {
     _lastUsername = username;
     _lastPassword = password;
 
-    print('[MQTT] Connecting to ${AppConfig.mqttBrokerHost}:${AppConfig.mqttBrokerPort} as $clientId');
-
     try {
       await _client!.connect(username, password);
-      print('[MQTT] Connected to broker');
       _updateSubscription = _client!.updates!.listen(_onMessage);
       if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
         _connectionCompleter!.complete();
       }
     } catch (e) {
-      print('[MQTT] Connection failed: $e');
       _client!.disconnect();
       _client = null;
       if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
@@ -156,7 +152,6 @@ class MQTTServiceImpl implements MQTTService {
   }
 
   void _onConnected() {
-    print('MQTT Connected');
     if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
       _connectionCompleter!.complete();
     } else {
@@ -166,7 +161,6 @@ class MQTTServiceImpl implements MQTTService {
   }
 
   void _onDisconnected() {
-    print('MQTT Disconnected');
     if (_intentionalDisconnect) return;
     if (_connectionCompleter != null && _connectionCompleter!.isCompleted) {
       _connectionCompleter = Completer<void>();
@@ -175,7 +169,6 @@ class MQTTServiceImpl implements MQTTService {
 
   void _resubscribeAll() {
     if (_subscribedTopics.isEmpty) return;
-    print('[MQTT] Resubscribing ${_subscribedTopics.length} topics');
     for (final topic in _subscribedTopics.toList()) {
       final qos = topic.contains('/alarm') || topic.contains('/status') && !topic.contains('/data/status')
           || topic.contains('/info')
@@ -186,7 +179,6 @@ class MQTTServiceImpl implements MQTTService {
   }
 
   void _onSubscribed(String topic) {
-    print('MQTT Subscribed: $topic');
   }
 
   void _onMessage(List<MqttReceivedMessage<MqttMessage?>>? messages) {
@@ -196,8 +188,6 @@ class MQTTServiceImpl implements MQTTService {
       final topic = message.topic;
       final payload = message.payload as MqttPublishMessage;
       final jsonString = MqttPublishPayload.bytesToStringAsString(payload.payload.message);
-
-      print('[MQTT] Received on $topic: $jsonString');
 
       try {
         final data = json.decode(jsonString) as Map<String, dynamic>;
@@ -225,7 +215,6 @@ class MQTTServiceImpl implements MQTTService {
           _handleOTANotifyMessage(sn, data);
         }
       } catch (e) {
-        print('Failed to parse MQTT message: $e');
       }
     }
   }
@@ -395,7 +384,6 @@ class MQTTServiceImpl implements MQTTService {
     );
     _latestData[sn] = updated;
     _realtimeController.add(updated);
-    print('[MQTT] Device info received for $sn: model=${info.model}, rated=${info.ratedPower}W');
   }
 
   void _handleOTANotifyMessage(String sn, Map<String, dynamic> data) {

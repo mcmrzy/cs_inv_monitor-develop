@@ -299,6 +299,8 @@ class _HomePageState extends State<HomePage> {
     final todayEnergy = station['today_energy'] ?? 0;
     final totalEnergy = station['total_energy'] ?? 0;
     final status = station['status'] ?? 1;
+    final deviceCount = station['device_count'] ?? 0;
+    final onlineCount = station['online_count'] ?? 0;
 
     final ok = status == 1 && faultCount == 0;
     final hasFault = faultCount > 0;

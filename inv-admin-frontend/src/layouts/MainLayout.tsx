@@ -32,6 +32,7 @@ const adminMenuItems: MenuItem[] = [
   { key: '/work-orders', icon: <ToolOutlined />, label: '工单管理', permission: 'work_orders:view' },
   { key: '/parallel', icon: <ClusterOutlined />, label: '并机管理', permission: 'parallel:view' },
   { key: '/stations', icon: <EnvironmentOutlined />, label: '电站管理', permission: 'stations:view' },
+  { key: '/models', icon: <SettingOutlined />, label: '型号管理', permission: 'models:view' },
   { key: '/users', icon: <TeamOutlined />, label: '用户管理', permission: 'users:view' },
   { key: '/admin', icon: <SettingOutlined />, label: '系统管理', permission: 'admin:view' },
   { key: '/big-screen', icon: <FundViewOutlined />, label: '大屏监控', permission: 'dashboard:view' },

@@ -10,15 +10,9 @@ abstract class DeviceRepository {
   Future<Either<Failure, void>> unbind(String sn);
   Future<Either<Failure, void>> control(String sn, String cmdType, Map<String, dynamic> params);
   Future<Either<Failure, void>> sendCommand({required String sn, required String command, required Map<String, dynamic> params});
-  Future<Either<Failure, Map<String, dynamic>>> getParams(String sn);
-  Future<Either<Failure, void>> updateParams(String sn, Map<String, dynamic> params);
   Future<Either<Failure, List<dynamic>>> getHistory(String sn, String startDate, String endDate, String period);
   Future<Either<Failure, Map<String, dynamic>>> getStatistics(String sn, String startDate, String endDate, String period);
-  Future<Either<Failure, void>> share(String sn, String phone, String permission);
-  Future<Either<Failure, void>> cancelShare(String sn, int shareId);
-  Future<Either<Failure, List<dynamic>>> getShares(String sn);
   Future<Either<Failure, List<dynamic>>> scanLocal();
-  Future<Either<Failure, void>> startOTA(String sn, int firmwareId);
-  Future<Either<Failure, Map<String, dynamic>>> getOTAStatus(String sn);
+  Future<Either<Failure, List<Map<String, dynamic>>>> getModelFieldsByCode(String modelCode);
   InverterRealtime? parseRealtimeData(dynamic raw);
 }

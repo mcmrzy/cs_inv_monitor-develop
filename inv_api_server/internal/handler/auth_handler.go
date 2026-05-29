@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"regexp"
 	"time"
 
@@ -19,14 +18,16 @@ type AuthHandler struct {
 	jwtService   *service.JWTService
 	smsService   *service.SMSService
 	emailService *service.EmailService
+	rbacCache    *service.RBACCacheService
 }
 
-func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService) *AuthHandler {
+func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService, rbacCache *service.RBACCacheService) *AuthHandler {
 	return &AuthHandler{
 		userService:  userService,
 		jwtService:   jwtService,
 		smsService:   smsService,
 		emailService: emailService,
+		rbacCache:    rbacCache,
 	}
 }
 
@@ -81,7 +82,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	go h.userService.UpdateLoginInfo(context.Background(), user.ID, c.ClientIP())
+	go h.userService.UpdateLoginInfo(bgCtx(), user.ID, c.ClientIP())
+	go h.rbacCache.CacheUserPermissions(bgCtx(), user.ID)
 
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
@@ -144,7 +146,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	go h.userService.UpdateLoginInfo(context.Background(), user.ID, c.ClientIP())
+	go h.userService.UpdateLoginInfo(bgCtx(), user.ID, c.ClientIP())
+	go h.rbacCache.CacheUserPermissions(bgCtx(), user.ID)
 
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
@@ -395,7 +398,8 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		return
 	}
 
-	go h.userService.UpdateLoginInfo(context.Background(), user.ID, c.ClientIP())
+	go h.userService.UpdateLoginInfo(bgCtx(), user.ID, c.ClientIP())
+	go h.rbacCache.CacheUserPermissions(bgCtx(), user.ID)
 
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
@@ -448,7 +452,8 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 		return
 	}
 
-	go h.userService.UpdateLoginInfo(context.Background(), user.ID, c.ClientIP())
+	go h.userService.UpdateLoginInfo(bgCtx(), user.ID, c.ClientIP())
+	go h.rbacCache.CacheUserPermissions(bgCtx(), user.ID)
 
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{

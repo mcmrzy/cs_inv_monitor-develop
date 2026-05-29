@@ -48,15 +48,6 @@ class DeviceControlRequested extends DeviceEvent {
   List<Object?> get props => [sn, cmdType, params];
 }
 
-class DeviceParamsRequested extends DeviceEvent {
-  final String sn;
-
-  const DeviceParamsRequested({required this.sn});
-
-  @override
-  List<Object?> get props => [sn];
-}
-
 class DeviceParamsUpdateRequested extends DeviceEvent {
   final String sn;
   final Map<String, dynamic> params;
@@ -106,19 +97,6 @@ class DeviceUnsubscribeRealtime extends DeviceEvent {
 
   @override
   List<Object?> get props => [];
-}
-
-class DeviceParamWriteAndReadbackRequested extends DeviceEvent {
-  final String sn;
-  final Map<String, dynamic> params;
-
-  const DeviceParamWriteAndReadbackRequested({
-    required this.sn,
-    required this.params,
-  });
-
-  @override
-  List<Object?> get props => [sn, params];
 }
 
 class DeviceHistoryRequested extends DeviceEvent {

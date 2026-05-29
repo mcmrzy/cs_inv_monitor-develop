@@ -14,6 +14,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/device_list_view.dart';
 
 class StationDetailPage extends StatefulWidget {
   final int stationId;
@@ -26,7 +27,7 @@ class StationDetailPage extends StatefulWidget {
 
 class _StationDetailPageState extends State<StationDetailPage> with TickerProviderStateMixin {
   StationDetailLoaded? _cachedState;
-  String _activeTab = 'overview';
+  int _activeTabIndex = 0;
   late AnimationController _anim;
   String _weatherIcon = '\u2600';
   String? _weatherTemp;
@@ -39,9 +40,6 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   double _statsConsume = 0;
   bool _statsInitialized = false;
 
-  int _deviceFilter = 0;
-  static const _deviceFilters = ['全部', '逆变器', '采集器', '储能'];
-
   final Set<String> _mqttSubscribed = {};
   StreamSubscription<InverterRealtime>? _mqttSub;
   double _mqttPvW = 0;
@@ -53,8 +51,15 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   @override
   void initState() {
     super.initState();
-    _anim = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
-    debugPrint('[StationDetail] initState, stationId=${widget.stationId}, dispatching StationDetailRequested');
+    _anim = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
+    _cachedState = null;
+    _activeTabIndex = 0;
+    _weatherIcon = '\u2600';
+    _weatherTemp = null;
+    _mqttSub?.cancel();
+    _mqttSub = null;
+    _mqttSubscribed.clear();
+    _mqttActive = false;
     context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
     _fetchWeather();
   }
@@ -211,97 +216,106 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: BlocBuilder<StationBloc, StationState>(
-        builder: (context, state) {
-          if (state is StationDetailLoaded) {
-            debugPrint('[StationDetail] StationDetailLoaded received, pv=${state.station?['pv_power']}, load=${state.station?['load_power']}');
+    return BlocBuilder<StationBloc, StationState>(
+      builder: (context, state) {
+        if (state is StationDetailLoaded) {
+          if (state.stationId == widget.stationId) {
             _cachedState = state;
             _initMQTTRealtime(state);
           }
-          if (state is StationError) {
-            debugPrint('[StationDetail] StationError: ${state.message}');
-          }
-          final ds = _cachedState;
-          if (ds == null) return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary));
-
-          final station = ds.station;
-          if (station == null) return const Center(child: Text('电站不存在'));
-
-          if (_activeTab == 'statistics') {
-            return _buildStatisticsBody(station);
-          }
-          if (_activeTab == 'devices') {
-            return _buildDevicesBody(ds);
-          }
-
-          final name = station['station_name'] ?? station['name'] ?? '';
-          final status = station['status'] ?? 1;
-          final online = status == 1;
-
-          final pvW = (station['pv_power'] as num?)?.toDouble() ?? 0;
-          final loadW = (station['load_power'] as num?)?.toDouble() ?? 0;
-          final battW = (station['batt_power'] as num?)?.toDouble() ?? 0;
-          final soc = (station['batt_soc'] as num?)?.toDouble() ?? 0;
-
-          final displayPvW = _mqttActive ? _mqttPvW : pvW;
-          final displayLoadW = _mqttActive ? _mqttLoadW : loadW;
-          final displayBattW = _mqttActive ? _mqttBattW : battW;
-          final displaySoc = _mqttActive ? _mqttSoc : soc;
-          final displayGridW = 0.0;
-          final todayKwh = (station['today_energy'] ?? 0.0).toDouble();
-          final totalKwh = (station['total_energy'] ?? 0.0).toDouble();
-          final monthKwh = (station['month_energy'] ?? 0.0).toDouble();
-          final yearKwh = (station['year_energy'] ?? 0.0).toDouble();
-          final totalPowerW = (station['total_power'] as num?)?.toDouble() ?? 0;
-          final coal = (totalKwh * 0.33).toStringAsFixed(1);
-          final co2 = (totalKwh * 0.997).toStringAsFixed(1);
-          final trees = (totalKwh * 0.05).toStringAsFixed(0);
-          final flows = _computeFlows(displayPvW, displayBattW, displayGridW, displayLoadW);
-
-          return Stack(
-            children: [
-              Positioned.fill(
-                top: 0,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF87CEEB), Colors.white],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: [0.0, 0.5],
-                    ),
-                  ),
-                ),
-              ),
-              StyledRefreshIndicator(
-                color: AppColors.primary,
-                onRefresh: () async {
-                  context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
-                  _fetchWeather();
-                },
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    SizedBox(height: MediaQuery.of(context).padding.top + 6.h),
-                    _topBar(name, online),
-                    SizedBox(height: 8.h),
-                    _flowArea(displayPvW, displayLoadW, displayBattW, displayGridW, displaySoc, flows),
-                    SizedBox(height: 10.h),
-                    _twoCards(displayPvW, totalPowerW, todayKwh),
-                    SizedBox(height: 10.h),
-                    _statsRow(monthKwh, yearKwh, totalKwh),
-                    SizedBox(height: 10.h),
-                    _ecoRow(coal, co2, trees),
-                    SizedBox(height: 100.h),
-                  ],
-                ),
-              ),
-            ],
+        }
+        final ds = _cachedState;
+        if (ds == null) {
+          return Scaffold(
+            body: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+            bottomNavigationBar: _bottomBar(),
           );
-        },
-      ),
-      bottomNavigationBar: _bottomBar(),
+        }
+
+        final station = ds.station;
+        if (station == null) {
+          return const Scaffold(body: Center(child: Text('电站不存在')));
+        }
+
+        return Scaffold(
+          body: IndexedStack(
+            index: _activeTabIndex,
+            children: [
+              _buildOverviewBody(station),
+              _buildStatisticsBody(station),
+              _buildDevicesBody(ds),
+            ],
+          ),
+          bottomNavigationBar: _bottomBar(),
+        );
+      },
+    );
+  }
+
+  Widget _buildOverviewBody(dynamic station) {
+    final name = station['station_name'] ?? station['name'] ?? '';
+    final status = station['status'] ?? 1;
+    final online = status == 1;
+
+    final pvW = (station['pv_power'] as num?)?.toDouble() ?? 0;
+    final loadW = (station['load_power'] as num?)?.toDouble() ?? 0;
+    final battW = (station['batt_power'] as num?)?.toDouble() ?? 0;
+    final soc = (station['batt_soc'] as num?)?.toDouble() ?? 0;
+
+    final displayPvW = _mqttActive ? _mqttPvW : pvW;
+    final displayLoadW = _mqttActive ? _mqttLoadW : loadW;
+    final displayBattW = _mqttActive ? _mqttBattW : battW;
+    final displaySoc = _mqttActive ? _mqttSoc : soc;
+    final displayGridW = 0.0;
+    final todayKwh = (station['today_energy'] ?? 0.0).toDouble();
+    final totalKwh = (station['total_energy'] ?? 0.0).toDouble();
+    final monthKwh = (station['month_energy'] ?? 0.0).toDouble();
+    final yearKwh = (station['year_energy'] ?? 0.0).toDouble();
+    final totalPowerW = (station['total_power'] as num?)?.toDouble() ?? 0;
+    final coal = (totalKwh * 0.33).toStringAsFixed(1);
+    final co2 = (totalKwh * 0.997).toStringAsFixed(1);
+    final trees = (totalKwh * 0.05).toStringAsFixed(0);
+    final flows = _computeFlows(displayPvW, displayBattW, displayGridW, displayLoadW);
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          top: 0,
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF87CEEB), Colors.white],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0.0, 0.5],
+              ),
+            ),
+          ),
+        ),
+        StyledRefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async {
+            context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+            _fetchWeather();
+          },
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              SizedBox(height: MediaQuery.of(context).padding.top + 6.h),
+              _topBar(name, online),
+              SizedBox(height: 8.h),
+              _flowArea(displayPvW, displayLoadW, displayBattW, displayGridW, displaySoc, flows),
+              SizedBox(height: 10.h),
+              _twoCards(displayPvW, totalPowerW, todayKwh),
+              SizedBox(height: 10.h),
+              _statsRow(monthKwh, yearKwh, totalKwh),
+              SizedBox(height: 10.h),
+              _ecoRow(coal, co2, trees),
+              SizedBox(height: 100.h),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -313,11 +327,15 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         children: [
           Row(
             children: [
-              GestureDetector(
-                onTap: () => context.pop(),
-                child: const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => context.pop(),
+                  borderRadius: BorderRadius.circular(8.r),
+                  child: Padding(
+                    padding: EdgeInsets.all(8.w),
+                    child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+                  ),
                 ),
               ),
               Expanded(
@@ -342,14 +360,13 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
             ],
           ),
           SizedBox(height: 4.h),
-          if (_weatherTemp != null)
-            Row(
-              children: [
-                Text(_weatherIcon, style: TextStyle(fontSize: 16.sp)),
-                SizedBox(width: 6.w),
-                Text(_weatherTemp!, style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary)),
-              ],
-            ),
+          Row(
+            children: [
+              Text(_weatherIcon, style: TextStyle(fontSize: 16.sp)),
+              SizedBox(width: 6.w),
+              Text(_weatherTemp ?? '--~--℃', style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary)),
+            ],
+          ),
         ],
       ),
     );
@@ -363,27 +380,99 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
 
     return SizedBox(
       height: 400.h,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _anim,
-              builder: (_, child) => CustomPaint(
+      child: AnimatedBuilder(
+        animation: _anim,
+        builder: (_, child) => Stack(
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
                 painter: _EnergyFlowPainter(flows: flows, animValue: _anim.value),
               ),
             ),
-          ),
-          _energyNode('光伏', pvW, Icons.wb_sunny, const Color(0xFFF59E0B), Alignment.topCenter, true),
-          _energyNode('负载', loadW, Icons.home_rounded, const Color(0xFF3B82F6), Alignment.bottomCenter, false),
-          _energyNodeBatt('储能', battW, soc, Icons.battery_charging_full, AppColors.successLight, const Alignment(-0.75, 0)),
-          _energyNode('电网', gridW, Icons.electrical_services, AppColors.textSecondary, const Alignment(0.75, 0), true),
-        ],
+            _energyNode('光伏', pvW, Icons.wb_sunny, const Color(0xFFF59E0B), const Alignment(0, -0.75), true, active: pv > 0),
+            _energyNode('负载', loadW, Icons.home_rounded, const Color(0xFF3B82F6), const Alignment(0, 0.75), false, active: load > 0),
+            _energyNodeBatt('储能', battW, soc, Icons.battery_charging_full, AppColors.successLight, const Alignment(-0.75, 0), active: batt.abs() > 0),
+            _energyNode('电网', gridW, Icons.electrical_services, AppColors.textSecondary, const Alignment(0.75, 0), true, active: grid.abs() > 0),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _energyNode(String label, String val, IconData icon, Color color, Alignment align, bool labelAbove) {
+  Widget _buildGlow(Color color) {
+    final t = _anim.value;
+    final pulse1 = sin(t * 2 * pi);
+    final pulse2 = sin(t * 2 * pi + pi);
+    final op1 = 0.14 + 0.14 * (pulse1 * 0.5 + 0.5);
+    final op2 = 0.06 + 0.06 * (pulse2 * 0.5 + 0.5);
+    return IgnorePointer(
+      child: SizedBox(
+        width: 110.w,
+        height: 110.w,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 100.w,
+              height: 100.w,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [color.withOpacity(op1), color.withOpacity(op1 * 0.2), color.withOpacity(0)],
+                  stops: const [0.5, 0.8, 1.0],
+                ),
+              ),
+            ),
+            Container(
+              width: 90.w,
+              height: 90.w,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [color.withOpacity(op2), color.withOpacity(0)],
+                  stops: const [0.4, 1.0],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _energyNode(String label, String val, IconData icon, Color color, Alignment align, bool labelAbove, {bool active = false}) {
     final labelWidget = Text(label, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary));
+    final circle = Container(
+      width: 80.w, height: 80.w,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.45), width: 2.5),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: 1),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: 62.w, height: 62.w,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6, offset: const Offset(0, 1)),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16.sp, color: color),
+              SizedBox(height: 1.h),
+              Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(val, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: color, height: 1)))),
+              Text('W', style: TextStyle(fontSize: 8.sp, fontWeight: FontWeight.w600, color: color)),
+            ],
+          ),
+        ),
+      ),
+    );
     return Align(
       alignment: align,
       child: Column(
@@ -391,37 +480,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         children: [
           if (labelAbove) labelWidget,
           if (labelAbove) SizedBox(height: 4.h),
-          Container(
-            width: 80.w, height: 80.w,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: color.withValues(alpha: 0.45), width: 2.5),
-              boxShadow: [
-                BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: 1),
-              ],
-            ),
-            child: Center(
-              child: Container(
-                width: 62.w, height: 62.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6, offset: const Offset(0, 1)),
-                  ],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(icon, size: 16.sp, color: color),
-                    SizedBox(height: 1.h),
-                    Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(val, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: color, height: 1)))),
-                    Text('W', style: TextStyle(fontSize: 8.sp, fontWeight: FontWeight.w600, color: color)),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          if (active) Stack(alignment: Alignment.center, children: [_buildGlow(color), circle]) else circle,
           if (!labelAbove) SizedBox(height: 4.h),
           if (!labelAbove) labelWidget,
         ],
@@ -429,7 +488,46 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     );
   }
 
-  Widget _energyNodeBatt(String label, String val, double soc, IconData icon, Color color, Alignment align) {
+  Widget _energyNodeBatt(String label, String val, double soc, IconData icon, Color color, Alignment align, {bool active = false}) {
+    final circle = Container(
+      width: 80.w, height: 80.w,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: color.withValues(alpha: 0.45), width: 2.5),
+        boxShadow: [
+          BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: 1),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: 62.w, height: 62.w,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6, offset: const Offset(0, 1)),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 15.sp, color: color),
+                  SizedBox(width: 2.w),
+                  Text('${soc.toStringAsFixed(0)}%', style: TextStyle(fontSize: 9.sp, fontWeight: FontWeight.w700, color: color)),
+                ],
+              ),
+              SizedBox(height: 1.h),
+              Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(val, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: color, height: 1)))),
+              Text('W', style: TextStyle(fontSize: 8.sp, fontWeight: FontWeight.w600, color: color)),
+            ],
+          ),
+        ),
+      ),
+    );
     return Align(
       alignment: align,
       child: Column(
@@ -437,45 +535,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         children: [
           Text(label, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           SizedBox(height: 4.h),
-          Container(
-            width: 80.w, height: 80.w,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: color.withValues(alpha: 0.45), width: 2.5),
-              boxShadow: [
-                BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: 1),
-              ],
-            ),
-            child: Center(
-              child: Container(
-                width: 62.w, height: 62.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6, offset: const Offset(0, 1)),
-                  ],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(icon, size: 15.sp, color: color),
-                        SizedBox(width: 2.w),
-                        Text('${soc.toStringAsFixed(0)}%', style: TextStyle(fontSize: 9.sp, fontWeight: FontWeight.w700, color: color)),
-                      ],
-                    ),
-                    SizedBox(height: 1.h),
-                    Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(val, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: color, height: 1)))),
-                    Text('W', style: TextStyle(fontSize: 8.sp, fontWeight: FontWeight.w600, color: color)),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          if (active) Stack(alignment: Alignment.center, children: [_buildGlow(color), circle]) else circle,
         ],
       ),
     );
@@ -485,39 +545,59 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     final flows = <FlowEdge>[];
     const threshold = 0.0;
 
-    if (pv > threshold) {
-      if (load > threshold) {
-        flows.add(FlowEdge(
-          from: NodePosition.top, to: NodePosition.bottom,
-          fromColor: const Color(0xFFF59E0B), toColor: const Color(0xFF3B82F6),
-        ));
-      }
-      if (batt > threshold) {
-        flows.add(FlowEdge(
-          from: NodePosition.top, to: NodePosition.left,
-          fromColor: const Color(0xFFF59E0B), toColor: AppColors.successLight,
-        ));
-      }
+    // PV → Load (main trunk)
+    if (pv > threshold && load > threshold) {
+      flows.add(FlowEdge(
+        from: NodePosition.top, to: NodePosition.bottom,
+        fromColor: const Color(0xFFF59E0B), toColor: const Color(0xFF3B82F6),
+      ));
     }
+
+    // PV → Battery (left branch)
+    if (pv > threshold && batt > threshold) {
+      flows.add(FlowEdge(
+        from: NodePosition.top, to: NodePosition.left,
+        fromColor: const Color(0xFFF59E0B), toColor: AppColors.successLight,
+      ));
+    }
+
+    // Battery → Load (left branch, discharging)
     if (batt < -threshold) {
       flows.add(FlowEdge(
         from: NodePosition.left, to: NodePosition.bottom,
         fromColor: AppColors.successLight, toColor: const Color(0xFF3B82F6),
       ));
     }
+
+    // Grid → Load (right branch, importing)
+    if (grid > threshold) {
+      flows.add(FlowEdge(
+        from: NodePosition.right, to: NodePosition.bottom,
+        fromColor: AppColors.textSecondary, toColor: const Color(0xFF3B82F6),
+      ));
+    }
+
+    // Load → Grid (right branch, exporting to grid)
+    if (grid < -threshold) {
+      flows.add(FlowEdge(
+        from: NodePosition.bottom, to: NodePosition.right,
+        fromColor: const Color(0xFF3B82F6), toColor: AppColors.textSecondary,
+      ));
+    }
+
     return flows;
   }
 
   Widget _twoCards(double pvW, double totalPowerW, double todayKwh) {
-    final w = totalPowerW > 0 ? totalPowerW.toStringAsFixed(0) : pvW.toStringAsFixed(0);
+    final w = pvW.toStringAsFixed(0);
     final kwh = todayKwh.toStringAsFixed(1);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Row(
         children: [
-          Expanded(child: _crd(Icons.bolt_rounded, w, 'W', '当前功率', const Color(0xFFF59E0B))),
+          Expanded(child: _crd(Icons.wb_sunny_outlined, w, 'W', '当前功率', const Color(0xFFF59E0B))),
           SizedBox(width: 10.w),
-          Expanded(child: _crd(Icons.wb_sunny_outlined, kwh, 'kWh', '今日发电', AppColors.successLight)),
+          Expanded(child: _crd(Icons.bolt_rounded, kwh, 'kWh', '今日发电', AppColors.successLight)),
         ],
       ),
     );
@@ -1275,27 +1355,32 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   }
 
   Widget _tab(int i, IconData icon, String label) {
-    final active = (i == 0 && _activeTab == 'overview') || (i == 1 && _activeTab == 'statistics') || (i == 2 && _activeTab == 'devices');
+    final active = i == _activeTabIndex;
     return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _activeTab = i == 0 ? 'overview' : i == 1 ? 'statistics' : 'devices'),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20.sp, color: active ? AppColors.primary : AppColors.textHint),
-            SizedBox(height: 2.h),
-            Text(label, style: TextStyle(fontSize: 10.sp, fontWeight: active ? FontWeight.w600 : FontWeight.w400, color: active ? AppColors.primary : AppColors.textHint)),
-          ],
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            if (i != _activeTabIndex) {
+              setState(() => _activeTabIndex = i);
+            }
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20.sp, color: active ? AppColors.primary : AppColors.textHint),
+              SizedBox(height: 2.h),
+              Text(label, style: TextStyle(fontSize: 10.sp, fontWeight: active ? FontWeight.w600 : FontWeight.w400, color: active ? AppColors.primary : AppColors.textHint)),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildDevicesBody(dynamic ds) {
-    final devices = (ds.devices as List?) ?? [];
-    final filtered = _filterDevices(devices);
-
-    final name = ds.station['station_name'] ?? ds.station['name'] ?? '';
+    final station = ds.station;
+    final name = station != null ? (station['station_name'] ?? station['name'] ?? '') : '';
 
     return Stack(
       children: [
@@ -1305,18 +1390,15 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         Column(
           children: [
             SizedBox(height: MediaQuery.of(context).padding.top + 6.h),
-            _statsTopBar(name),
-            _buildDeviceFilterBar(),
+            _devicesTopBar(name),
+            SizedBox(height: 0.h),
             Expanded(
-              child: filtered.isEmpty
-                  ? Center(
-                      child: Text('暂无设备', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
-                    )
-                  : ListView.builder(
-                      padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 100.h),
-                      itemCount: filtered.length,
-                      itemBuilder: (_, i) => _buildDeviceCard(filtered[i]),
-                    ),
+              child: DeviceListView(
+                devices: (ds.devices as List?) ?? [],
+                showSearch: false,
+                whiteHeader: true,
+                bottomPadding: 100,
+              ),
             ),
           ],
         ),
@@ -1324,196 +1406,27 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     );
   }
 
-  List<dynamic> _filterDevices(List<dynamic> devices) {
-    if (_deviceFilter == 0) return devices;
-    return devices.where((d) {
-      final t = _deviceType(d);
-      switch (_deviceFilter) {
-        case 1: return t == 'inv';
-        case 2: return t == 'collector';
-        case 3: return t == 'battery';
-        default: return true;
-      }
-    }).toList();
-  }
-
-  String _deviceType(dynamic d) {
-    final model = (d['model'] ?? '').toString().toLowerCase();
-    final sn = (d['sn'] ?? '').toString().toLowerCase();
-    if (model.contains('battery') || model.contains('bms') || model.contains('储能') || sn.contains('batt')) return 'battery';
-    if (model.contains('collect') || model.contains('采集') || model.contains('daq') || sn.contains('col')) return 'collector';
-    return 'inv';
-  }
-
-  Widget _buildDeviceFilterBar() {
-    return Container(
-      color: Colors.white,
-      padding: EdgeInsets.fromLTRB(12.w, 8.h, 12.w, 10.h),
-      child: Row(
-        children: List.generate(4, (i) {
-          final active = _deviceFilter == i;
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 3.w),
-              child: GestureDetector(
-                onTap: () => setState(() => _deviceFilter = i),
-                child: Container(
-                  padding: EdgeInsets.symmetric(vertical: 8.h),
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.primary.withValues(alpha: 0.1) : const Color(0xFFF8FAFB),
-                    borderRadius: BorderRadius.circular(10.r),
-                    border: Border.all(
-                      color: active ? AppColors.primary.withValues(alpha: 0.4) : AppColors.surfaceHover,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(_deviceFilters[i],
-                      style: TextStyle(
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w600,
-                        color: active ? AppColors.primary : AppColors.textHint,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildDeviceCard(dynamic device) {
-    final sn = device['sn'] ?? '';
-    final model = device['model'] ?? '--';
-    final firmware = device['firmware_version'] ?? '--';
-    final hardware = device['hardware_version'] ?? '--';
-    final ratedPower = (device['rated_power'] as num?)?.toDouble() ?? 0;
-    final type = _deviceType(device);
-    final status = device['status'] ?? 0;
-    final isOnline = status == 1;
-
-    return GestureDetector(
-      onTap: () {
-        _showDeviceDetail(device);
-      },
-      child: Container(
-        margin: EdgeInsets.only(bottom: 12.h),
-        padding: EdgeInsets.all(16.w),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16.r),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 8.w, height: 8.w,
-                  decoration: BoxDecoration(
-                    color: isOnline ? AppColors.successLight : AppColors.textHint,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                SizedBox(width: 6.w),
-                Text(sn, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                const Spacer(),
-                Text(_deviceTypeLabel(type), style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
-              ],
-            ),
-            SizedBox(height: 10.h),
-            _deviceInfoRow('SN 号', sn),
-            _deviceInfoRow('设备类型', _deviceTypeLabel(type)),
-            _deviceInfoRow('型号名称', model),
-            Row(
-              children: [
-                Expanded(child: _deviceInfoCell('固件版本', firmware)),
-                GestureDetector(
-                  onTap: () => context.push('/firmware-history/$sn'),
-                  child: Padding(
-                    padding: EdgeInsets.only(left: 4.w),
-                    child: const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.textHint),
-                  ),
-                ),
-              ],
-            ),
-            if (ratedPower > 0) _deviceInfoRow('额定功率', '${ratedPower.toStringAsFixed(0)} W'),
-            if (hardware.isNotEmpty && hardware != '--') _deviceInfoRow('硬件版本', hardware),
-            if (type == 'battery') ..._buildBatteryExtras(device),
-            if (type == 'inv') ..._buildInverterExtras(device),
-          ],
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildBatteryExtras(dynamic device) {
-    return [
-      const Divider(height: 20, color: AppColors.surfaceHover),
-      _deviceInfoRow('电池 SOC', '--%'),
-      _deviceInfoRow('电池健康度', '--%'),
-      _deviceInfoRow('当日充电量', '-- kWh'),
-      _deviceInfoRow('当日放电量', '-- kWh'),
-    ];
-  }
-
-  List<Widget> _buildInverterExtras(dynamic device) {
-    return [
-      const Divider(height: 20, color: AppColors.surfaceHover),
-      _deviceInfoRow('运行模式', '--'),
-      _deviceInfoRow('当前功率', '-- kW'),
-      _deviceInfoRow('当日发电量', '-- kWh'),
-    ];
-  }
-
-  Widget _deviceInfoRow(String label, String value) {
+  Widget _devicesTopBar(String name) {
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: 3.h),
+      padding: EdgeInsets.symmetric(horizontal: 20.w),
       child: Row(
         children: [
-          Text(label, style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
-          SizedBox(width: 8.w),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => context.pop(),
+              borderRadius: BorderRadius.circular(8.r),
+              child: Padding(
+                padding: EdgeInsets.all(8.w),
+                child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+              ),
+            ),
+          ),
           Expanded(
-            child: Text(value, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+            child: Text(name, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _deviceInfoCell(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 3.h),
-      child: Row(
-        children: [
-          Text(label, style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
-          SizedBox(width: 8.w),
-          Text(value, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
-        ],
-      ),
-    );
-  }
-
-  String _deviceTypeLabel(String type) {
-    switch (type) {
-      case 'inv': return '逆变器';
-      case 'collector': return '采集器';
-      case 'battery': return '储能设备';
-      default: return '未知';
-    }
-  }
-
-  void _showDeviceDetail(dynamic device) {
-    final sn = device['sn'] ?? '';
-    final type = _deviceType(device);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _DeviceDetailSheet(sn: sn, type: type),
     );
   }
 }
@@ -1547,508 +1460,370 @@ class _EnergyFlowPainter extends CustomPainter {
       (f.from == a && f.to == b) || (f.from == b && f.to == a);
 
   @override
-  void paint(Canvas canvas, Size size) {
-    if (flows.isEmpty) return;
+void paint(Canvas canvas, Size size) {
+  final cx = size.width / 2;
+  final cy = size.height / 2;
 
-    final margin = 70.0;
-    final cx = size.width / 2;
-    final cy = size.height / 2;
+  // 动态计算：80.w / 2 = 40 * size.width / 375
+  final nodeR = 40.0 * size.width / 375.0;
+  // 标签12.sp + 间距4.h 导致圆心偏移 = (12.w/375 + 4.h/812) / 2
+  // gapH = 4 * size.height / 400 = size.height / 100 (因为 400.h = size.height)
+  // labelH ≈ 12 * size.width / 375
+  final labelOff = (12.0 * size.width / 375.0 + size.height / 100.0) / 2.0;
 
-    Offset centerOf(NodePosition pos) {
-      switch (pos) {
-        case NodePosition.top:    return Offset(cx, margin + nodeR + 16);
-        case NodePosition.bottom: return Offset(cx, size.height - margin - nodeR);
-        case NodePosition.left:   return Offset(size.width * 0.18, cy);
-        case NodePosition.right:  return Offset(size.width * 0.82, cy);
-      }
+  // Align 坐标 → 圆的实际中心（含标签偏移）
+  // labelAbove=true 的节点（光伏、电网、储能）：圆心下移 labelOff
+  // labelAbove=false 的节点（负载）：圆心在 Align 锚点上方 labelOff
+  final pvC = Offset(cx, size.height * 0.125 + labelOff);
+  final loadC = Offset(cx, size.height * 0.875 - labelOff);
+  final battC = Offset(size.width * 0.125, cy + labelOff);
+  final gridC = Offset(size.width * 0.875, cy + labelOff);
+
+  const pvColor = Color(0xFFF59E0B);
+  const loadColor = Color(0xFF3B82F6);
+  const battColor = AppColors.successLight;
+  const gridColor = AppColors.textSecondary;
+  const r = 16.0;
+  const offset = 8.0;
+
+  bool hasEdge(NodePosition a, NodePosition b) =>
+      flows.any((f) => (f.from == a && f.to == b) || (f.from == b && f.to == a));
+
+  // ── 光伏 ↔ 负载：中心竖直线（完全保留，走cx） ──
+  if (hasEdge(NodePosition.top, NodePosition.bottom)) {
+    final a = Offset(pvC.dx, pvC.dy + nodeR);
+    final b = Offset(loadC.dx, loadC.dy - nodeR);
+    _line(canvas, a, b, pvColor, loadColor);
+    _particles(canvas, a, b, pvColor, loadColor);
+    _drawArrow(canvas, b.dx, b.dy + 12, loadColor);
+  }
+
+  // ── 储能 ↔ 光伏：向右 → 拐弯 → 走 cx-offset 竖线 → 到光伏中心左侧 ──
+  if (hasEdge(NodePosition.left, NodePosition.top)) {
+    final battRight = Offset(battC.dx + nodeR, battC.dy);
+    final pvTarget = Offset(pvC.dx - offset, pvC.dy + nodeR);
+    final bY = battC.dy;
+    final pvToBatt = flows.any((f) => f.from == NodePosition.top && f.to == NodePosition.left);
+
+    // pvToBatt=true：PV→储能，粒子reverse=true，从pv到batt移动 → 颜色顺序也要反过来
+    final lineStartColor = pvToBatt ? pvColor : battColor;
+    final lineEndColor = pvToBatt ? battColor : pvColor;
+    
+    _solidLine(canvas, battRight, Offset(cx - offset - r, bY), lineEndColor);
+    
+    _curvedArcOnly(canvas, 
+      Offset(cx - offset - r, bY), 
+      Offset(cx - offset, bY), 
+      Offset(cx - offset, bY - r), 
+      lineEndColor, lineStartColor,
+      reverse: !pvToBatt);
+    
+    _solidLine(canvas, Offset(cx - offset, bY - r), pvTarget, lineStartColor);
+
+    _curvedParticlesV(canvas, battRight, Offset(cx - offset - r, bY), Offset(cx - offset, bY), Offset(cx - offset, bY - r), pvTarget, battColor, pvColor,
+      reverse: pvToBatt);
+    if (pvToBatt) {
+      _drawArrow(canvas, battRight.dx - 12, bY, battColor, pointingLeft: true);
+    } else {
+      _drawArrow(canvas, pvTarget.dx, pvTarget.dy - 12, pvColor, pointingUp: true);
     }
+  }
 
-    for (final flow in flows) {
-      final src = centerOf(flow.from);
-      final dst = centerOf(flow.to);
+  // ── 储能 ↔ 负载：向右 → 拐弯 → 走 cx-offset 竖线 → 到负载中心左侧 ──
+  if (hasEdge(NodePosition.left, NodePosition.bottom)) {
+    final battRight = Offset(battC.dx + nodeR, battC.dy);
+    final loadTarget = Offset(loadC.dx - offset, loadC.dy - nodeR);
+    final bY = battC.dy;
 
-      if (_match(flow, NodePosition.top, NodePosition.bottom)) {
-        _drawStraight(canvas, src, dst, flow.fromColor, flow.toColor);
-      } else if (_match(flow, NodePosition.top, NodePosition.left)) {
-        _drawArcTL(canvas, src, dst, cx, cy, flow.fromColor, flow.toColor);
-      } else if (_match(flow, NodePosition.left, NodePosition.bottom)) {
-        _drawArcLB(canvas, src, dst, cx, cy, flow.fromColor, flow.toColor);
-      }
+    _solidLine(canvas, battRight, Offset(cx - offset - r, bY), battColor);
+    
+    _curvedArcOnly(canvas,
+      Offset(cx - offset - r, bY),
+      Offset(cx - offset, bY),
+      Offset(cx - offset, bY + r),
+      battColor, loadColor);
+    
+    _solidLine(canvas, Offset(cx - offset, bY + r), loadTarget, loadColor);
+
+    _curvedParticlesV(canvas, battRight, Offset(cx - offset - r, bY), Offset(cx - offset, bY), Offset(cx - offset, bY + r), loadTarget, battColor, loadColor);
+    _drawArrow(canvas, loadTarget.dx, loadTarget.dy - 12, loadColor);
+  }
+
+  // ── 电网 ↔ 光伏：向左 → 拐弯 → 走 cx+offset 竖线 → 到光伏中心右侧 ──
+  if (hasEdge(NodePosition.right, NodePosition.top)) {
+    final gridLeft = Offset(gridC.dx - nodeR, gridC.dy);
+    final pvTarget = Offset(pvC.dx + offset, pvC.dy + nodeR);
+    final gY = gridC.dy;
+    final pvToGrid = flows.any((f) => f.from == NodePosition.top && f.to == NodePosition.right);
+
+    final lineStartColor = pvToGrid ? pvColor : gridColor;
+    final lineEndColor = pvToGrid ? gridColor : pvColor;
+    
+    _solidLine(canvas, gridLeft, Offset(cx + offset + r, gY), lineEndColor);
+    
+    _curvedArcOnly(canvas,
+      Offset(cx + offset + r, gY),
+      Offset(cx + offset, gY),
+      Offset(cx + offset, gY - r),
+      lineEndColor, lineStartColor,
+      reverse: !pvToGrid);
+    
+    _solidLine(canvas, Offset(cx + offset, gY - r), pvTarget, lineStartColor);
+
+    _curvedParticlesV(canvas, gridLeft, Offset(cx + offset + r, gY), Offset(cx + offset, gY), Offset(cx + offset, gY - r), pvTarget, gridColor, pvColor,
+      reverse: pvToGrid);
+    if (pvToGrid) {
+      _drawArrow(canvas, gridLeft.dx + 12, gY, gridColor, pointingLeft: false);
+    } else {
+      _drawArrow(canvas, pvTarget.dx, pvTarget.dy - 12, pvColor, pointingUp: true);
     }
   }
 
-  void _drawStraight(Canvas canvas, Offset a, Offset b, Color ca, Color cb) {
-    final shader = ui.Gradient.linear(a, b, [ca, cb]);
-    canvas.drawLine(a, b, Paint()..style = PaintingStyle.stroke..strokeWidth = 2.8..strokeCap = StrokeCap.round..shader = shader);
-    _particles(canvas, a, b, ca);
-  }
+  // ── 电网 ↔ 负载：向左 → 拐弯 → 走 cx+offset 竖线 → 到负载中心右侧 ──
+  if (hasEdge(NodePosition.right, NodePosition.bottom)) {
+    final gridLeft = Offset(gridC.dx - nodeR, gridC.dy);
+    final loadTarget = Offset(loadC.dx + offset, loadC.dy - nodeR);
+    final gY = gridC.dy;
+    final loadToGrid = flows.any((f) => f.from == NodePosition.bottom && f.to == NodePosition.right);
 
-  void _drawArcTL(Canvas canvas, Offset src, Offset dst, double cx, double cy, Color ca, Color cb) {
-    // PV → Battery: vertical down from PV center, horizontal left at cornerY, arc to battery right edge center
-    // Corner at (dst.dx + nodeR, dst.dy) - battery's right edge center
-    // Arc center at corner, arc sweeps from top(270°) to left(180°)
-    final cornerX = dst.dx + nodeR;
-    final cornerY = dst.dy;
-    // Arc center at corner
-    final arcCx = cornerX;
-    final arcCy = cornerY;
-    // Arc: from top (arcCx, arcCy - arcR) to left (arcCx - arcR, arcCy) = horizontal line end
-    final pArcStart = Offset(arcCx, arcCy - arcR);
-    final pArcEnd = Offset(arcCx - arcR, arcCy);
-    // Vertical line: from PV bottom center down to cornerY
-    final pTop = Offset(cx, src.dy + nodeR);
-    final pCorner = Offset(cx, cornerY);
-    final mid = Color.lerp(ca, cb, 0.5)!;
-    _line(canvas, pTop, pCorner, ca, mid);
-    // Horizontal line: from corner left to arc top
-    _line(canvas, pCorner, pArcStart, mid, mid);
-    _arc(canvas, arcCx, arcCy, arcR, pArcStart, pArcEnd, mid);
-    final total = (pTop - pCorner).distance + (pCorner - pArcStart).distance + pi * arcR / 2;
-    final a1 = atan2(pArcStart.dy - arcCy, pArcStart.dx - arcCx);
-    final a2 = atan2(pArcEnd.dy - arcCy, pArcEnd.dx - arcCx);
-    double sweep = a2 - a1;
-    while (sweep > pi) sweep -= 2 * pi;
-    while (sweep < -pi) sweep += 2 * pi;
-    _arcParticles(canvas, pTop, pCorner, pArcEnd, pArcEnd, arcCx, arcCy, arcR, a1, sweep, total, ca);
-  }
+    final lineStartColor = loadToGrid ? loadColor : gridColor;
+    final lineEndColor = loadToGrid ? gridColor : loadColor;
+    
+    _solidLine(canvas, gridLeft, Offset(cx + offset + r, gY), lineEndColor);
+    
+    _curvedArcOnly(canvas,
+      Offset(cx + offset + r, gY),
+      Offset(cx + offset, gY),
+      Offset(cx + offset, gY + r),
+      lineEndColor, lineStartColor,
+      reverse: !loadToGrid);
+    
+    _solidLine(canvas, Offset(cx + offset, gY + r), loadTarget, lineStartColor);
 
-  void _drawArcLB(Canvas canvas, Offset src, Offset dst, double cx, double cy, Color ca, Color cb) {
-    // Battery → Load: horizontal right from battery right edge, arc down to load center
-    // Corner at (load center X, battery center Y)
-    // Arc center at corner, arc sweeps from left(180°) to bottom(270°)
-    final cornerX = cx; // Load center X
-    final cornerY = src.dy; // Battery center Y
-    // Arc center at corner
-    final arcCx = cornerX;
-    final arcCy = cornerY;
-    // Arc: from left (arcCx - arcR, arcCy) to bottom (arcCx, arcCy + arcR)
-    final pArcStart = Offset(arcCx - arcR, arcCy);
-    final pArcEnd = Offset(arcCx, arcCy + arcR);
-    // Horizontal line: from battery right edge to arc left
-    final battEdge = Offset(src.dx + nodeR, cornerY);
-    final mid = Color.lerp(ca, cb, 0.5)!;
-    _line(canvas, battEdge, pArcStart, ca, mid);
-    _arc(canvas, arcCx, arcCy, arcR, pArcStart, pArcEnd, mid);
-    _line(canvas, pArcEnd, dst, mid, cb);
-    final total = (battEdge - pArcStart).distance + pi * arcR / 2 + (pArcEnd - dst).distance;
-    final a1 = atan2(pArcStart.dy - arcCy, pArcStart.dx - arcCx);
-    final a2 = atan2(pArcEnd.dy - arcCy, pArcEnd.dx - arcCx);
-    double sweep = a2 - a1;
-    while (sweep > pi) sweep -= 2 * pi;
-    while (sweep < -pi) sweep += 2 * pi;
-    _arcParticles(canvas, battEdge, pArcStart, pArcEnd, dst, arcCx, arcCy, arcR, a1, sweep, total, ca);
+    _curvedParticlesV(canvas, gridLeft, Offset(cx + offset + r, gY), Offset(cx + offset, gY), Offset(cx + offset, gY + r), loadTarget, gridColor, loadColor,
+      reverse: loadToGrid);
+    if (loadToGrid) {
+      _drawArrow(canvas, gridLeft.dx + 12, gY, gridColor, pointingLeft: false);
+    } else {
+      _drawArrow(canvas, loadTarget.dx, loadTarget.dy - 12, loadColor);
+    }
+  }
+}
+
+  void _drawArrow(Canvas canvas, double x, double y, Color c, {bool pointingLeft = false, bool pointingUp = false}) {
+    final s = 6.0;
+    final path = Path();
+    if (pointingUp) {
+      path.moveTo(x, y - s);
+      path.lineTo(x - s, y + s);
+      path.lineTo(x + s, y + s);
+    } else if (pointingLeft) {
+      path.moveTo(x - s, y);
+      path.lineTo(x + s, y - s);
+      path.lineTo(x + s, y + s);
+    } else {
+      path.moveTo(x, y + s);
+      path.lineTo(x - s, y - s);
+      path.lineTo(x + s, y - s);
+    }
+    path.close();
+    canvas.drawPath(path, Paint()..color = c..style = PaintingStyle.fill);
   }
 
   void _line(Canvas canvas, Offset a, Offset b, Color ca, Color cb) {
-    final shader = ui.Gradient.linear(a, b, [ca, cb]);
-    canvas.drawLine(a, b, Paint()..style = PaintingStyle.stroke..strokeWidth = 2.8..strokeCap = StrokeCap.round..shader = shader);
-  }
-
-  void _arc(Canvas canvas, double cx, double cy, double r, Offset from, Offset to, Color c) {
-    final a1 = atan2(from.dy - cy, from.dx - cx);
-    final a2 = atan2(to.dy - cy, to.dx - cx);
-    double sweep = a2 - a1;
-    while (sweep > pi) sweep -= 2 * pi;
-    while (sweep < -pi) sweep += 2 * pi;
-    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r), a1, sweep, false,
-      Paint()..color = c..style = PaintingStyle.stroke..strokeWidth = 2.8..strokeCap = StrokeCap.round);
-  }
-
-  void _particles(Canvas canvas, Offset a, Offset b, Color c) {
     final dx = b.dx - a.dx, dy = b.dy - a.dy;
     final len = sqrt(dx * dx + dy * dy);
     if (len < 1) return;
-    final angle = atan2(dy, dx);
-    for (int i = 0; i < 8; i++) {
-      final t = (i / 8.0 + animValue * 0.45) % 1.0;
-      final px = a.dx + dx * t, py = a.dy + dy * t;
-      final alpha = 0.3 + 0.5 * (1.0 - (t - animValue * 0.45).abs() * 3.0).clamp(0.0, 1.0);
-      _dot(canvas, px, py, angle, alpha, c);
+    
+    const segments = 20;
+    
+    for (int i = 0; i < segments; i++) {
+      final t1 = i / segments;
+      final t2 = (i + 1) / segments;
+      
+      final x1 = a.dx + dx * t1;
+      final y1 = a.dy + dy * t1;
+      final x2 = a.dx + dx * t2;
+      final y2 = a.dy + dy * t2;
+      
+      final color1 = _lerp3(ca, cb, t1);
+      final color2 = _lerp3(ca, cb, t2);
+      
+      final shader = ui.Gradient.linear(
+        Offset(x1, y1), 
+        Offset(x2, y2), 
+        [color1, color2], 
+        [0.0, 1.0]
+      );
+      
+      canvas.drawLine(
+        Offset(x1, y1), 
+        Offset(x2, y2), 
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.8
+          ..strokeCap = StrokeCap.round
+          ..shader = shader
+      );
     }
   }
 
-  void _arcParticles(Canvas canvas, Offset src, Offset p1, Offset p4, Offset dst,
-      double cx, double cy, double r, double a1, double sweep, double total, Color c) {
-    final s1 = (src - p1).distance, aLen = pi * r / 2, s2 = (p4 - dst).distance;
-    final aDir1 = atan2(p1.dy - src.dy, p1.dx - src.dx);
-    final aDir2 = atan2(dst.dy - p4.dy, dst.dx - p4.dx);
-    for (int i = 0; i < 8; i++) {
-      final t = (i / 8.0 + animValue * 0.45) % 1.0;
-      final alpha = 0.3 + 0.5 * (1.0 - (t - animValue * 0.45).abs() * 3.0).clamp(0.0, 1.0);
-      final d = t * total;
-      double px, py, angle;
+  void _solidLine(Canvas canvas, Offset a, Offset b, Color color) {
+    canvas.drawLine(a, b, Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.8
+      ..strokeCap = StrokeCap.round
+      ..color = color);
+  }
+
+  void _curvedArcOnly(Canvas canvas, Offset cornerStart, Offset control, Offset cornerEnd, Color ca, Color cb, {bool reverse = false}) {
+    final path = Path();
+    path.moveTo(cornerStart.dx, cornerStart.dy);
+    path.quadraticBezierTo(control.dx, control.dy, cornerEnd.dx, cornerEnd.dy);
+    
+    final shader = ui.Gradient.linear(cornerStart, cornerEnd, [reverse ? cb : ca, reverse ? ca : cb], [0.0, 1.0]);
+    canvas.drawPath(path, Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.8
+      ..strokeCap = StrokeCap.round
+      ..shader = shader);
+  }
+
+  void _curvedLine(Canvas canvas, Offset cornerStart, Offset control, Offset cornerEnd, Offset end, Color ca, Color cb) {
+    final s1 = (cornerStart - cornerStart).distance;
+    final bChord = (cornerEnd - cornerStart).distance;
+    final bCtrl1 = (control - cornerStart).distance;
+    final bCtrl2 = (cornerEnd - control).distance;
+    final s2 = (bChord + bCtrl1 + bCtrl2) / 2;
+    final s3 = (end - cornerEnd).distance;
+    final total = s1 + s2 + s3;
+    if (total < 1) return;
+
+    const segments = 40;
+    for (int i = 0; i < segments; i++) {
+      final t1 = i / segments;
+      final t2 = (i + 1) / segments;
+      
+      final d1 = t1 * total;
+      final d2 = t2 * total;
+      
+      double x1, y1, x2, y2;
+      
+      if (d1 < s1) {
+        x1 = cornerStart.dx;
+        y1 = cornerStart.dy;
+      } else if (d1 < s1 + s2) {
+        final bt = (d1 - s1) / s2;
+        final tInv = 1 - bt;
+        x1 = tInv * tInv * cornerStart.dx + 2 * tInv * bt * control.dx + bt * bt * cornerEnd.dx;
+        y1 = tInv * tInv * cornerStart.dy + 2 * tInv * bt * control.dy + bt * bt * cornerEnd.dy;
+      } else {
+        final lt = (d1 - s1 - s2) / s3;
+        x1 = cornerEnd.dx + (end.dx - cornerEnd.dx) * lt;
+        y1 = cornerEnd.dy + (end.dy - cornerEnd.dy) * lt;
+      }
+      
+      if (d2 < s1) {
+        x2 = cornerStart.dx;
+        y2 = cornerStart.dy;
+      } else if (d2 < s1 + s2) {
+        final bt = (d2 - s1) / s2;
+        final tInv = 1 - bt;
+        x2 = tInv * tInv * cornerStart.dx + 2 * tInv * bt * control.dx + bt * bt * cornerEnd.dx;
+        y2 = tInv * tInv * cornerStart.dy + 2 * tInv * bt * control.dy + bt * bt * cornerEnd.dy;
+      } else {
+        final lt = (d2 - s1 - s2) / s3;
+        x2 = cornerEnd.dx + (end.dx - cornerEnd.dx) * lt;
+        y2 = cornerEnd.dy + (end.dy - cornerEnd.dy) * lt;
+      }
+      
+      final color1 = _lerp3(ca, cb, t1);
+      final color2 = _lerp3(ca, cb, t2);
+      
+      final shader = ui.Gradient.linear(
+        Offset(x1, y1), 
+        Offset(x2, y2), 
+        [color1, color2], 
+        [0.0, 1.0]
+      );
+      
+      canvas.drawLine(
+        Offset(x1, y1), 
+        Offset(x2, y2), 
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.8
+          ..strokeCap = StrokeCap.round
+          ..shader = shader
+      );
+    }
+  }
+
+  void _particles(Canvas canvas, Offset a, Offset b, Color ca, Color cb) {
+    final dx = b.dx - a.dx, dy = b.dy - a.dy;
+    final len = sqrt(dx * dx + dy * dy);
+    if (len < 1) return;
+    const n = 8;
+    for (int i = 0; i < n; i++) {
+      final t = ((i / n) + animValue) % 1.0;
+      final px = a.dx + dx * t, py = a.dy + dy * t;
+      final alpha = (sin(t * pi) * 0.7).clamp(0.0, 0.8);
+      _dot(canvas, px, py, 0, alpha, _lerp3(ca, cb, t));
+    }
+  }
+
+  void _curvedParticlesV(Canvas canvas, Offset start, Offset cornerStart, Offset control, Offset cornerEnd, Offset end, Color ca, Color cb, {bool reverse = false}) {
+    final s1 = (cornerStart - start).distance;
+    final bChord = (cornerEnd - cornerStart).distance;
+    final bCtrl1 = (control - cornerStart).distance;
+    final bCtrl2 = (cornerEnd - control).distance;
+    final s2 = (bChord + bCtrl1 + bCtrl2) / 2;
+    final s3 = (end - cornerEnd).distance;
+    final total = s1 + s2 + s3;
+    if (total < 1) return;
+
+    const n = 8;
+    for (int i = 0; i < n; i++) {
+      final t = ((i / n) + animValue) % 1.0;
+      final tp = reverse ? 1.0 - t : t;
+      final alpha = (sin(tp * pi) * 0.7).clamp(0.0, 0.8);
+      final d = tp * total;
+      double px, py;
       if (d < s1) {
         final lt = d / s1;
-        px = src.dx + (p1.dx - src.dx) * lt;
-        py = src.dy + (p1.dy - src.dy) * lt;
-        angle = aDir1;
-      } else if (d < s1 + aLen) {
-        final a = a1 + sweep * (d - s1) / aLen;
-        px = cx + r * cos(a);
-        py = cy + r * sin(a);
-        angle = a + pi / 2 * sweep.sign;
+        px = start.dx + (cornerStart.dx - start.dx) * lt;
+        py = start.dy + (cornerStart.dy - start.dy) * lt;
+      } else if (d < s1 + s2) {
+        final bt = (d - s1) / s2;
+        final tInv = 1 - bt;
+        px = tInv * tInv * cornerStart.dx + 2 * tInv * bt * control.dx + bt * bt * cornerEnd.dx;
+        py = tInv * tInv * cornerStart.dy + 2 * tInv * bt * control.dy + bt * bt * cornerEnd.dy;
       } else {
-        final lt = (d - s1 - aLen) / s2;
-        px = p4.dx + (dst.dx - p4.dx) * lt;
-        py = p4.dy + (dst.dy - p4.dy) * lt;
-        angle = aDir2;
+        final lt = (d - s1 - s2) / s3;
+        px = cornerEnd.dx + (end.dx - cornerEnd.dx) * lt;
+        py = cornerEnd.dy + (end.dy - cornerEnd.dy) * lt;
       }
-      _dot(canvas, px, py, angle, alpha, c);
+      _dot(canvas, px, py, 0, alpha, _lerp3(ca, cb, tp));
     }
+  }
+
+  Color _lerp3(Color ca, Color cb, double t) {
+    if (t < 0.33) return ca;
+    if (t < 0.67) return Color.lerp(ca, cb, (t - 0.33) / 0.34)!;
+    return cb;
   }
 
   void _dot(Canvas canvas, double x, double y, double angle, double alpha, Color c) {
     canvas.drawCircle(Offset(x, y), 5.0, Paint()
-      ..color = c.withValues(alpha: alpha * 0.5)..style = PaintingStyle.fill
+      ..color = c.withOpacity(alpha * 0.5)
+      ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
     canvas.drawCircle(Offset(x, y), 3.0, Paint()
-      ..color = c.withValues(alpha: alpha)..style = PaintingStyle.fill);
-    final s = 7.0;
-    canvas.drawLine(Offset(x - cos(angle)*s, y - sin(angle)*s),
-                    Offset(x + cos(angle)*s, y + sin(angle)*s),
-      Paint()..color = c.withValues(alpha: alpha*0.7)..style = PaintingStyle.stroke..strokeWidth = 2.0..strokeCap = StrokeCap.round);
+      ..color = c.withOpacity(alpha)
+      ..style = PaintingStyle.fill);
   }
 
   @override
   bool shouldRepaint(covariant _EnergyFlowPainter old) =>
       flows.length != old.flows.length || animValue != old.animValue;
-}
-
-class _DeviceDetailSheet extends StatefulWidget {
-  final String sn;
-  final String type;
-
-  const _DeviceDetailSheet({required this.sn, required this.type});
-
-  @override
-  State<_DeviceDetailSheet> createState() => _DeviceDetailSheetState();
-}
-
-class _DeviceDetailSheetState extends State<_DeviceDetailSheet> with TickerProviderStateMixin {
-  Map<String, dynamic>? _realtime;
-  bool _loading = true;
-  late AnimationController _pulseAnim;
-
-  static const _topicGroups = [
-    {
-      'title': '交流输出',
-      'icon': Icons.bolt_rounded,
-      'color': Color(0xFF8B5CF6),
-      'keys': {
-        '电压 (V)': 'ac_voltage',
-        '电流 (A)': 'ac_current',
-        '功率 (W)': 'ac_power',
-        '频率 (Hz)': 'ac_frequency',
-        '负载率 (%)': 'ac_load_percent',
-      },
-    },
-    {
-      'title': '电池状态',
-      'icon': Icons.battery_charging_full,
-      'color': AppColors.successLight,
-      'keys': {
-        'SOC (%)': 'batt_soc',
-        'SOH (%)': 'batt_soh',
-        '电压 (V)': 'batt_voltage',
-        '电流 (A)': 'batt_current',
-        '充电状态': 'batt_charge_state',
-      },
-    },
-    {
-      'title': '光伏 MPPT',
-      'icon': Icons.wb_sunny_outlined,
-      'color': Color(0xFFF59E0B),
-      'keys': {
-        'PV 电压 (V)': 'pv_voltage',
-        'PV 电流 (A)': 'pv_current',
-        'PV 功率 (W)': 'pv_power',
-        'MPPT 状态': 'mppt_state',
-      },
-    },
-    {
-      'title': '系统状态',
-      'icon': Icons.info_outline_rounded,
-      'color': Color(0xFF06B6D4),
-      'keys': {
-        '工作状态': 'state',
-        '故障码': 'fault_code',
-        '告警码': 'alarm_code',
-        '逆变器温度 (℃)': 'temp_inv',
-        'MOS温度 (℃)': 'temp_mos',
-        '效率 (%)': 'efficiency',
-      },
-    },
-    {
-      'title': '能量统计',
-      'icon': Icons.show_chart_rounded,
-      'color': AppColors.primary,
-      'keys': {
-        '当日发电量 (kWh)': 'daily_pv',
-        '累计发电量 (kWh)': 'total_pv',
-        '运行时间 (h)': 'runtime_hours',
-      },
-    },
-    {
-      'title': '设备信息',
-      'icon': Icons.devices_rounded,
-      'color': Color(0xFF8B5CF6),
-      'keys': {
-        'SN': 'sn',
-        '型号': 'model',
-        '厂商': 'manufacturer',
-        'ARM固件': 'firmware_arm',
-        'ESP固件': 'firmware_esp',
-        '类型': 'type',
-        '额定功率 (W)': 'rated_power',
-        '额定电压 (V)': 'rated_voltage',
-        '额定频率 (Hz)': 'rated_freq',
-        '电池电压 (V)': 'battery_voltage',
-        '电池类型': 'battery_type',
-        '电池串数': 'cell_count',
-      },
-    },
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseAnim = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
-    _fetchRealtime();
-  }
-
-  @override
-  void dispose() {
-    _pulseAnim.dispose();
-    super.dispose();
-  }
-
-  Future<void> _fetchRealtime() async {
-    try {
-      final dio = getIt<Dio>();
-      final res = await dio.get('/devices/${widget.sn}/realtime');
-      if (res.statusCode == 200) {
-        final outer = (res.data is Map) ? res.data as Map<String, dynamic> : {};
-        final wrapper = (outer['data'] as Map<String, dynamic>?) ?? {};
-        final realtime = (wrapper['realtime'] as Map<String, dynamic>?) ?? wrapper;
-        
-        final merged = <String, dynamic>{};
-        
-        final info = realtime['info'] as Map<String, dynamic>?;
-        if (info != null) merged.addAll(info);
-        
-        final ac = realtime['ac'] as Map<String, dynamic>?;
-        if (ac != null) merged.addAll({
-          'ac_voltage': ac['voltage'],
-          'ac_current': ac['current'],
-          'ac_power': ac['power'],
-          'ac_frequency': ac['frequency'],
-          'ac_load_percent': ac['load_percent'],
-        });
-        
-        final battery = realtime['battery'] as Map<String, dynamic>?;
-        if (battery != null) merged.addAll({
-          'batt_soc': battery['soc'],
-          'batt_soh': battery['soh'],
-          'batt_voltage': battery['voltage'],
-          'batt_current': battery['current'],
-          'batt_charge_state': battery['charge_state'],
-        });
-        
-        final pv = realtime['pv'] as Map<String, dynamic>?;
-        if (pv != null) merged.addAll({
-          'pv_voltage': pv['pv_voltage'],
-          'pv_current': pv['pv_current'],
-          'pv_power': pv['pv_power'],
-          'mppt_state': pv['mppt_state'],
-        });
-        
-        final status = realtime['status'] as Map<String, dynamic>?;
-        if (status != null) merged.addAll({
-          'state': status['state'],
-          'fault_code': status['fault_code'],
-          'alarm_code': status['alarm_code'],
-          'temp_inv': status['temp_inv'],
-          'temp_mos': status['temp_mos'],
-          'efficiency': status['efficiency'],
-        });
-        
-        final energy = realtime['energy'] as Map<String, dynamic>?;
-        if (energy != null) merged.addAll({
-          'daily_pv': energy['daily_pv'],
-          'total_pv': energy['total_pv'],
-          'runtime_hours': energy['runtime_hours'],
-        });
-        
-        debugPrint('[DeviceDetail] realtime loaded, merged keys: ${merged.keys.length}');
-        if (mounted) setState(() { _realtime = merged; _loading = false; });
-      } else {
-        if (mounted) setState(() => _loading = false);
-      }
-    } catch (e) {
-      debugPrint('[DeviceDetail] _fetchRealtime error: $e');
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  String _fmt(dynamic val, [String unit = '']) {
-    if (val == null) return '--';
-    if (val is List) {
-      if (val.isEmpty) return '--';
-      final n = val.first;
-      if (n is num) return n.toStringAsFixed(1);
-      return n.toString();
-    }
-    if (val is double) {
-      final s = val % 1 == 0 ? val.toStringAsFixed(0) : val.toStringAsFixed(1);
-      return unit.isEmpty ? s : '$s $unit';
-    }
-    if (val is int) return unit.isEmpty ? '$val' : '$val $unit';
-    return unit.isEmpty ? '$val' : '$val $unit';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.85,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF5F7FA),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                margin: EdgeInsets.symmetric(vertical: 10.h),
-                width: 40.w, height: 4.h,
-                decoration: BoxDecoration(color: AppColors.textHint, borderRadius: BorderRadius.circular(2)),
-              ),
-              Row(
-                children: [
-                  SizedBox(width: 16.w),
-                  Text('设备实时数据', style: TextStyle(fontSize: 17.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                  const Spacer(),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(6.r),
-                    ),
-                    child: Text(widget.sn, style: TextStyle(fontSize: 11.sp, color: AppColors.primary, fontWeight: FontWeight.w600)),
-                  ),
-                  SizedBox(width: 16.w),
-                ],
-              ),
-              SizedBox(height: 8.h),
-              Expanded(
-                child: _loading
-                    ? Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                    : _realtime == null
-                        ? Center(child: Text('暂无实时数据', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)))
-                        : RefreshIndicator(
-                            color: AppColors.primary,
-                            onRefresh: _fetchRealtime,
-                            child: ListView.builder(
-                              controller: scrollController,
-                              padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 60.h),
-                              itemCount: _topicGroups.length,
-                              itemBuilder: (_, i) => _buildTopicCard(_topicGroups[i]),
-                            ),
-                          ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTopicCard(Map<String, dynamic> group) {
-    final title = group['title'] as String;
-    final icon = group['icon'] as IconData;
-    final color = group['color'] as Color;
-    final keysRaw = group['keys'] as Map;
-    final keys = keysRaw.map((k, v) => MapEntry(k.toString(), v.toString()));
-
-    final items = <Widget>[];
-    var first = true;
-    keys.forEach((label, key) {
-      if (!first) {
-        items.add(const Divider(height: 1, color: AppColors.surfaceHover));
-      }
-      first = false;
-      items.add(_dataItem(label, _realtime?[key]));
-    });
-
-    return Container(
-      margin: EdgeInsets.only(bottom: 12.h),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14.r),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 4, offset: const Offset(0, 1))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildCardHeader(title, icon, color),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
-            child: Column(children: items),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardHeader(String title, IconData icon, Color color) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14.r)),
-      ),
-      child: Row(
-        children: [
-          AnimatedBuilder(
-            animation: _pulseAnim,
-            builder: (_, child) => Container(
-              width: 6.w, height: 6.w,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.3 + _pulseAnim.value * 0.5),
-                shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 4)],
-              ),
-            ),
-          ),
-          SizedBox(width: 8.w),
-          Icon(icon, size: 18.sp, color: color),
-          SizedBox(width: 6.w),
-          Text(title, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        ],
-      ),
-    );
-  }
-
-  Widget _dataItem(String label, dynamic value) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8.h),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(label, style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
-          ),
-          Text(
-            _fmt(value),
-            style: TextStyle(
-              fontSize: 13.sp,
-              fontWeight: FontWeight.w600,
-              color: value != null ? AppColors.textPrimary : AppColors.textHint,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

@@ -5,10 +5,10 @@ server:
   mode: release
 
 database:
-  host: ${DB_HOST:-postgres}
-  port: ${DB_PORT:-5432}
-  user: ${DB_USER:-postgres}
-  password: ${DB_PASSWORD:-inv_mqtt_2024}
+  host: postgres
+  port: 5432
+  user: postgres
+  password: "cs_inv_admin_2026_test"
   database: inv_mqtt
   ssl_mode: disable
   max_open_conns: 50
@@ -16,18 +16,26 @@ database:
   conn_max_lifetime: 1h
 
 redis:
-  host: ${REDIS_HOST:-redis}
-  port: ${REDIS_PORT:-6379}
+  host: redis
+  port: 6379
   password: ""
   db: 0
 
 mqtt:
-  broker: ${MQTT_BROKER:-jiuxiaoyw.online}
-  port: ${MQTT_PORT:-8883}
+  broker: jiuxiaoyw.online
+  port: 8883
   client_id: CSKJ-INV-SERVER-DEVICE
-  username: ${MQTT_USERNAME:-CSKJ-INV-SERVER-DEVICE}
-  password: ${MQTT_PASSWORD:-CSKJINVSERVERDEVICE}
+  username: "CSKJ-INV-SERVER-DEVICE"
+  password: "CSKJINVSERVERDEVICE"
   qos: 1
+
+kafka:
+  enabled: true
+  brokers:
+    - kafka:29092
+  telemetry_topic: inv-telemetry
+  alarm_topic: inv-alerts
+  command_topic: inv-commands
 
 log:
   level: info

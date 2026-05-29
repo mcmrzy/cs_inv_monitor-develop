@@ -1,0 +1,38 @@
+server:
+  port: 8080
+  mode: release
+
+jwt:
+  secret: "CSKJ_INV_APP_SERVER_APP_MQTT_KEY"
+
+rate_limit:
+  rate: 100
+  burst: 200
+
+route_rate_limits:
+  - path_prefix: "/api/v1/devices"
+    rate: 50
+    burst: 100
+  - path_prefix: "/api/v1/auth/login"
+    rate: 10
+    burst: 20
+  - path_prefix: "/api/v1/auth/register"
+    rate: 5
+    burst: 10
+  - path_prefix: "/api/v1/auth/send-code"
+    rate: 2
+    burst: 5
+
+backends:
+  device_server: "http://inv-device-server:8081"
+  admin_backend: "http://inv-device-server:8081"
+
+redis:
+  host: "inv-redis"
+  port: 6379
+  password: ""
+  db: 0
+
+rbac:
+  enabled: true
+  cache_ttl_sec: 300

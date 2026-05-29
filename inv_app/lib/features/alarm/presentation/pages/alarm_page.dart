@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 
@@ -14,6 +15,8 @@ class AlarmPage extends StatefulWidget {
 }
 
 class _AlarmPageState extends State<AlarmPage> {
+  AlarmState? _cachedState;
+
   @override
   void initState() {
     super.initState();
@@ -26,8 +29,45 @@ class _AlarmPageState extends State<AlarmPage> {
       appBar: AppBar(title: const Text('消息告警')),
       body: BlocBuilder<AlarmBloc, AlarmState>(
         builder: (context, state) {
-          if (state is AlarmLoading) {
-            return const Center(child: CircularProgressIndicator());
+          if (state is AlarmListLoaded) {
+            _cachedState = state;
+          }
+          if (state is AlarmError && _cachedState != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(state.message), duration: const Duration(seconds: 2)),
+                );
+              }
+            });
+          }
+
+          if (_cachedState is AlarmListLoaded) {
+            final ds = _cachedState as AlarmListLoaded;
+            if (ds.alarms.isEmpty) {
+              return ListView(
+                children: [
+                  SizedBox(height: 120.h),
+                  Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.notifications_none, size: 64.sp, color: AppColors.textHint),
+                        SizedBox(height: 16.h),
+                        Text('暂无告警', style: TextStyle(color: AppColors.textHint, fontSize: 16.sp)),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }
+            return StyledRefreshIndicator(
+              onRefresh: () async => context.read<AlarmBloc>().add(const AlarmListRequested()),
+              child: ListView.builder(
+                padding: EdgeInsets.all(12.w),
+                itemCount: ds.alarms.length,
+                itemBuilder: (context, index) => _buildAlarmCard(context, ds.alarms[index]),
+              ),
+            );
           }
 
           if (state is AlarmError) {
@@ -49,37 +89,17 @@ class _AlarmPageState extends State<AlarmPage> {
             );
           }
 
-          if (state is AlarmListLoaded) {
-            if (state.alarms.isEmpty) {
-              return ListView(
-                children: [
-                  SizedBox(height: 120.h),
-                  Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.notifications_none, size: 64.sp, color: AppColors.textHint),
-                        SizedBox(height: 16.h),
-                        Text('暂无告警', style: TextStyle(color: AppColors.textHint, fontSize: 16.sp)),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            }
-
-            return StyledRefreshIndicator(
-              onRefresh: () async => context.read<AlarmBloc>().add(const AlarmListRequested()),
-              child: ListView.builder(
-                padding: EdgeInsets.all(12.w),
-                itemCount: state.alarms.length,
-                itemBuilder: (context, index) => _buildAlarmCard(context, state.alarms[index]),
-              ),
-            );
-          }
-
-          return Center(child: Text('加载中...', style: TextStyle(color: AppColors.textHint)));
+          return _buildSkeletonList();
         },
       ),
+    );
+  }
+
+  Widget _buildSkeletonList() {
+    return ListView.builder(
+      padding: EdgeInsets.all(12.w),
+      itemCount: 8,
+      itemBuilder: (context, index) => const SkeletonListItem(),
     );
   }
 

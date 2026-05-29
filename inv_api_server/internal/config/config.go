@@ -15,6 +15,11 @@ type Config struct {
 	Email    EmailConfig    `mapstructure:"email"`
 	Log      LogConfig      `mapstructure:"log"`
 	Timezone string         `mapstructure:"timezone"`
+	Backends BackendsConfig `mapstructure:"backends"`
+}
+
+type BackendsConfig struct {
+	DeviceServer string `mapstructure:"device_server"`
 }
 
 type ServerConfig struct {
@@ -58,12 +63,13 @@ type SMSConfig struct {
 }
 
 type EmailConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-	From     string `mapstructure:"from"`
-	UseSSL   bool   `mapstructure:"use_ssl"`
+	Host        string `mapstructure:"host"`
+	Port        int    `mapstructure:"port"`
+	Username    string `mapstructure:"username"`
+	Password    string `mapstructure:"password"`
+	From        string `mapstructure:"from"`
+	UseSSL      bool   `mapstructure:"use_ssl"`
+	TLSInsecure bool   `mapstructure:"tls_insecure"`
 }
 
 type LogConfig struct {

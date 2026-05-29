@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"inv-api-server/internal/config"
+	"inv-api-server/pkg/logger"
 
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 	"gopkg.in/gomail.v2"
 )
 
@@ -43,7 +45,7 @@ func (s *EmailService) SendCode(ctx context.Context, email, codeType string) err
 			return fmt.Errorf("邮件发送失败: %v", err)
 		}
 	} else {
-		fmt.Printf("[Email] Sending code %s to %s for %s (dev mode)\n", code, email, codeType)
+		logger.Debug("Email code generated (dev mode)", zap.String("email", maskEmail(email)), zap.String("type", codeType))
 	}
 
 	pipe := s.cache.Pipeline()
@@ -172,7 +174,7 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
 
 	d := gomail.NewDialer(s.cfg.Host, s.cfg.Port, s.cfg.Username, s.cfg.Password)
 	if s.cfg.UseSSL {
-		d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+		d.TLSConfig = &tls.Config{InsecureSkipVerify: s.cfg.TLSInsecure}
 	}
 
 	return d.DialAndSend(m)

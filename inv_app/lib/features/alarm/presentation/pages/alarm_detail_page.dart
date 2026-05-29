@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
 import 'package:inv_app/core/services/contact_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 
 class AlarmDetailPage extends StatefulWidget {
@@ -17,6 +18,7 @@ class AlarmDetailPage extends StatefulWidget {
 
 class _AlarmDetailPageState extends State<AlarmDetailPage> {
   final ContactService _contactService = ContactService();
+  AlarmState? _cachedState;
 
   @override
   void initState() {
@@ -77,16 +79,21 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
       appBar: AppBar(title: const Text('故障诊断')),
       body: BlocBuilder<AlarmBloc, AlarmState>(
         builder: (context, state) {
-          if (state is AlarmLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (state is AlarmError) {
-            return Center(child: Text(state.message));
-          }
-
           if (state is AlarmDetailLoaded) {
-            final alarm = state.alarm;
+            _cachedState = state;
+          }
+          if (state is AlarmError && _cachedState != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(state.message), duration: const Duration(seconds: 2)),
+                );
+              }
+            });
+          }
+
+          if (_cachedState is AlarmDetailLoaded) {
+            final alarm = (_cachedState as AlarmDetailLoaded).alarm;
             if (alarm == null) {
               return const Center(child: Text('告警不存在'));
             }
@@ -97,62 +104,84 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             final severityColor = _severityColor(severity);
             final isHandled = alarm['status'] == 1;
 
-            return Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.all(16.w),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSeverityTag(severity, severityColor),
-                        SizedBox(height: 12.h),
-                        _buildAlarmCodeCard(alarm, faultCode, alarmEntry),
-                        SizedBox(height: 12.h),
-                        _buildDescriptionCard(alarmEntry),
-                        SizedBox(height: 12.h),
-                        _buildPossibleCauseCard(alarmEntry),
-                        SizedBox(height: 12.h),
-                        _buildSuggestionCard(alarmEntry),
-                        SizedBox(height: 12.h),
-                        _buildDeviceInfoCard(alarm),
-                        SizedBox(height: 12.h),
-                        _buildTimeInfoCard(alarm, isHandled),
-                        if (!isHandled) ...[
-                          SizedBox(height: 20.h),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                context.read<AlarmBloc>().add(
-                                      AlarmMarkReadRequested(alarmIds: [widget.alarmId]),
-                                    );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.symmetric(vertical: 14.h),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10.r),
-                                ),
-                              ),
-                              child: Text('标记已处理', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
-                            ),
-                          ),
-                        ],
-                        SizedBox(height: 16.h),
-                      ],
-                    ),
-                  ),
-                ),
-                _buildContactButtons(alarm),
-              ],
-            );
+            return _buildDetailContent(alarm, faultCode, alarmEntry, severity, severityColor, isHandled);
           }
 
-          return const Center(child: Text('加载中...'));
+          if (state is AlarmError) {
+            return Center(child: Text(state.message));
+          }
+
+          return _buildSkeletonBody();
         },
       ),
+    );
+  }
+
+  Widget _buildSkeletonBody() {
+    return ListView(
+      padding: EdgeInsets.all(16.w),
+      children: const [
+        SkeletonDetailSection(),
+        SkeletonDetailSection(),
+        SkeletonDetailSection(),
+        SkeletonDetailSection(),
+        SkeletonDetailSection(),
+        SkeletonDetailSection(),
+      ],
+    );
+  }
+
+  Widget _buildDetailContent(dynamic alarm, int faultCode, dynamic alarmEntry, String severity, Color severityColor, bool isHandled) {
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(16.w),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSeverityTag(severity, severityColor),
+                SizedBox(height: 12.h),
+                _buildAlarmCodeCard(alarm, faultCode, alarmEntry),
+                SizedBox(height: 12.h),
+                _buildDescriptionCard(alarmEntry),
+                SizedBox(height: 12.h),
+                _buildPossibleCauseCard(alarmEntry),
+                SizedBox(height: 12.h),
+                _buildSuggestionCard(alarmEntry),
+                SizedBox(height: 12.h),
+                _buildDeviceInfoCard(alarm),
+                SizedBox(height: 12.h),
+                _buildTimeInfoCard(alarm, isHandled),
+                if (!isHandled) ...[
+                  SizedBox(height: 20.h),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        context.read<AlarmBloc>().add(
+                              AlarmMarkReadRequested(alarmIds: [widget.alarmId]),
+                            );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 14.h),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10.r),
+                        ),
+                      ),
+                      child: Text('标记已处理', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+                SizedBox(height: 16.h),
+              ],
+            ),
+          ),
+        ),
+        _buildContactButtons(alarm),
+      ],
     );
   }
 

@@ -17,10 +17,12 @@ class StatisticsBloc extends Bloc<StatisticsEvent, StatisticsState> {
     StatisticsOverviewRequested event,
     Emitter<StatisticsState> emit,
   ) async {
-    emit(StatisticsLoading());
     final result = await repository.getOverview();
     result.fold(
-      (failure) => emit(StatisticsError(message: failure.message)),
+      (failure) {
+        if (state is StatisticsOverviewLoaded) return;
+        emit(StatisticsError(message: failure.message));
+      },
       (data) => emit(StatisticsOverviewLoaded(overview: data)),
     );
   }

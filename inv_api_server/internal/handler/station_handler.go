@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -289,6 +288,8 @@ type StationSummary struct {
 	FaultCount    int     `json:"fault_count"`
 	TotalPower    float64 `json:"total_power"`
 	TodayEnergy   float64 `json:"today_energy"`
+	TotalEnergy   float64 `json:"total_energy"`
+	MonthEnergy   float64 `json:"month_energy"`
 	TodayIncome   float64 `json:"today_income"`
 	Status        int     `json:"status"`
 }
@@ -298,7 +299,6 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 
 	stations, _, err := h.stationService.GetByUserID(c.Request.Context(), userID, 1, 100)
 	if err != nil {
-		fmt.Printf("[GetSummary Error] GetByUserID failed: %v\n", err)
 		response.InternalError(c, "system error")
 		return
 	}
@@ -309,12 +309,14 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 
 	summaries := make([]StationSummary, 0, len(stations))
 	for _, station := range stations {
+		// 直接使用电站的状态而不是计算设备状态
 		devices, _ := h.deviceService.GetByStationID(c.Request.Context(), station.ID)
 		deviceCount := len(devices)
 		onlineCount := 0
 		faultCount := 0
 		totalPower := 0.0
 
+		// 统计设备状态
 		for _, device := range devices {
 			if device.Status == 1 {
 				onlineCount++
@@ -347,8 +349,10 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 			FaultCount:  faultCount,
 			TotalPower:  totalPower,
 			TodayEnergy: dailyEnergy,
+			TotalEnergy: stationTotal,
+			MonthEnergy: monthEnergy,
 			TodayIncome: todayIncome,
-			Status:      func() int { if onlineCount > 0 { return 1 }; return 0 }(),
+			Status:      station.Status,
 		})
 
 		totalEnergy += dailyEnergy

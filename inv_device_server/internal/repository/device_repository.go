@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"inv-device-server/internal/model"
-	"inv-device-server/pkg/sn"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,21 +34,9 @@ func (r *DeviceRepository) UpsertRealtime(ctx context.Context, rt *model.DeviceR
 	var workState string
 	var faultCode string
 	var internalTemp float64 = 0
-	var pvPower float64 = 0
-	var battVoltage float64 = 0
-	var battCurrent float64 = 0
-	var battSoc float64 = 0
 
 	if rt.AC != nil {
 		totalPower = rt.AC.Power
-	}
-	if rt.PV != nil {
-		pvPower = rt.PV.PVPower
-	}
-	if rt.Battery != nil {
-		battVoltage = rt.Battery.Voltage
-		battCurrent = rt.Battery.Current
-		battSoc = rt.Battery.SOC
 	}
 	if rt.Energy != nil {
 		dailyEnergy = rt.Energy.DailyPV
@@ -66,39 +53,28 @@ func (r *DeviceRepository) UpsertRealtime(ctx context.Context, rt *model.DeviceR
 		return fmt.Errorf("insert telemetry: %w", err)
 	}
 
-	rtQuery := `
-		INSERT INTO device_realtime_data (device_sn, daily_power_yields, total_active_power, total_power,
-			pv1_power, output_power, battery_voltage, battery_current, battery_soc, data_time, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
-		ON CONFLICT (device_sn) DO UPDATE SET
-			daily_power_yields = EXCLUDED.daily_power_yields,
-			total_active_power = EXCLUDED.total_active_power,
-			total_power = EXCLUDED.total_power,
-			pv1_power = EXCLUDED.pv1_power,
-			output_power = EXCLUDED.output_power,
-			battery_voltage = EXCLUDED.battery_voltage,
-			battery_current = EXCLUDED.battery_current,
-			battery_soc = EXCLUDED.battery_soc,
-			data_time = NOW(),
-			updated_at = NOW()
+	// 更新设备状态为在线
+	statusQuery := `
+		UPDATE devices SET status = 1, last_online_at = NOW(), updated_at = NOW() 
+		WHERE sn = $1
 	`
-	_, err = r.db.Exec(ctx, rtQuery, sn, dailyEnergy, totalPower, totalPower, pvPower, totalPower, battVoltage, battCurrent, battSoc)
+	_, err = r.db.Exec(ctx, statusQuery, sn)
 	if err != nil {
-		return fmt.Errorf("upsert realtime: %w", err)
+		return fmt.Errorf("update device status: %w", err)
 	}
+
 	return nil
 }
 
 func (r *DeviceRepository) UpsertDeviceInfo(ctx context.Context, info *model.DeviceInfo) error {
-	if !sn.ValidateSN(info.SN) {
-		return fmt.Errorf("invalid SN format: %s", info.SN)
-	}
-
 	rawBytes, _ := json.Marshal(info)
 	rawJSON := string(rawBytes)
 
-	query := `INSERT INTO device_telemetry (device_sn, topic, data, time, created_at) VALUES ($1, $2, $3::jsonb, NOW(), NOW())`
-	_, err := r.db.Exec(ctx, query, info.SN, "info", rawJSON)
+	query := `
+		INSERT INTO device_telemetry (device_sn, model_code, topic, data, time, created_at)
+		VALUES ($1, $2, $3, $4::jsonb, NOW(), NOW())
+	`
+	_, err := r.db.Exec(ctx, query, info.SN, info.Model, "info", rawJSON)
 	if err != nil {
 		return fmt.Errorf("insert device info telemetry: %w", err)
 	}
@@ -134,7 +110,20 @@ func (r *DeviceRepository) UpsertDeviceInfo(ctx context.Context, info *model.Dev
 	if err != nil {
 		return fmt.Errorf("upsert device info: %w", err)
 	}
+
+	r.syncDeviceModelID(ctx, info.SN, info.Model)
+
 	return nil
+}
+
+func (r *DeviceRepository) syncDeviceModelID(ctx context.Context, sn, modelCode string) {
+	_, err := r.db.Exec(ctx, `
+		UPDATE devices SET model_id = dm.id
+		FROM device_models dm
+		WHERE devices.sn = $1 AND dm.model_code = $2 AND devices.model_id IS NULL
+	`, sn, modelCode)
+	if err != nil {
+	}
 }
 
 func (r *DeviceRepository) InsertAlarm(ctx context.Context, alarm *model.AlarmData) error {
@@ -262,4 +251,153 @@ func (r *DeviceRepository) UpdateDeviceStatus(ctx context.Context, sn string, st
 	}
 
 	return nil
+}
+
+// ==================== 新增：型号元数据查询 ====================
+
+func (r *DeviceRepository) GetAllActiveModels(ctx context.Context) ([]model.DeviceModel, error) {
+	query := `SELECT id, model_code, model_name, manufacturer, category, rated_power_kw,
+		data_fields, field_mapping, mqtt_topics, description, is_active, created_at, updated_at
+		FROM device_models WHERE is_active = true ORDER BY id`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var models []model.DeviceModel
+	for rows.Next() {
+		var m model.DeviceModel
+		err := rows.Scan(&m.ID, &m.ModelCode, &m.ModelName, &m.Manufacturer, &m.Category,
+			&m.RatedPowerKW, &m.DataFields, &m.FieldMapping, &m.MQTTTopics,
+			&m.Description, &m.IsActive, &m.CreatedAt, &m.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		models = append(models, m)
+	}
+	return models, nil
+}
+
+func (r *DeviceRepository) GetModelFields(ctx context.Context, modelID int32) ([]model.DeviceModelField, error) {
+	query := `SELECT id, model_id, field_key, field_name, field_type, unit, sort,
+		is_show, is_control, parse_rule, created_at, updated_at
+		FROM device_model_field WHERE model_id = $1 ORDER BY sort, field_key`
+
+	rows, err := r.db.Query(ctx, query, modelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var fields []model.DeviceModelField
+	for rows.Next() {
+		var f model.DeviceModelField
+		err := rows.Scan(&f.ID, &f.ModelID, &f.FieldKey, &f.FieldName, &f.FieldType,
+			&f.Unit, &f.Sort, &f.IsShow, &f.IsControl, &f.ParseRule,
+			&f.CreatedAt, &f.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		fields = append(fields, f)
+	}
+	return fields, nil
+}
+
+func (r *DeviceRepository) GetModelByCode(ctx context.Context, modelCode string) (*model.DeviceModel, error) {
+	query := `SELECT id, model_code, model_name, manufacturer, category, rated_power_kw,
+		data_fields, field_mapping, mqtt_topics, description, is_active, created_at, updated_at
+		FROM device_models WHERE model_code = $1`
+
+	var m model.DeviceModel
+	err := r.db.QueryRow(ctx, query, modelCode).Scan(
+		&m.ID, &m.ModelCode, &m.ModelName, &m.Manufacturer, &m.Category,
+		&m.RatedPowerKW, &m.DataFields, &m.FieldMapping, &m.MQTTTopics,
+		&m.Description, &m.IsActive, &m.CreatedAt, &m.UpdatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &m, nil
+}
+
+func (r *DeviceRepository) GetDeviceModelID(ctx context.Context, sn string) (int32, error) {
+	var modelID int32
+	err := r.db.QueryRow(ctx, `SELECT COALESCE(model_id, 0) FROM devices WHERE sn = $1`, sn).Scan(&modelID)
+	if err != nil {
+		return 0, nil
+	}
+	return modelID, nil
+}
+
+func (r *DeviceRepository) GetLatestRealtimeData(ctx context.Context, sn string) (*model.DeviceRealtime, error) {
+	query := `SELECT data FROM device_telemetry WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`
+	var rawJSON string
+	err := r.db.QueryRow(ctx, query, sn).Scan(&rawJSON)
+	if err != nil {
+		return nil, err
+	}
+	var rt model.DeviceRealtime
+	if err := json.Unmarshal([]byte(rawJSON), &rt); err != nil {
+		return nil, err
+	}
+	return &rt, nil
+}
+
+type DeviceSummary struct {
+	SN       string `json:"sn"`
+	ModelID  int32  `json:"model_id"`
+	Model    string `json:"model"`
+}
+
+func (r *DeviceRepository) GetAllDevices(ctx context.Context) ([]DeviceSummary, error) {
+	rows, err := r.db.Query(ctx, `SELECT sn, COALESCE(model_id, 0) FROM devices WHERE sn != ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var devices []DeviceSummary
+	for rows.Next() {
+		var d DeviceSummary
+		if err := rows.Scan(&d.SN, &d.ModelID); err != nil {
+			continue
+		}
+		devices = append(devices, d)
+	}
+	return devices, nil
+}
+
+func (r *DeviceRepository) InsertTelemetry(ctx context.Context, sn string, topic string, data []byte) error {
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO device_telemetry (device_sn, topic, data, time)
+		VALUES ($1, $2, $3::jsonb, NOW())
+	`, sn, topic, string(data))
+	return err
+}
+
+func (r *DeviceRepository) GetModelProtocols(ctx context.Context, modelID int32) ([]model.DeviceModelProtocol, error) {
+	query := `SELECT id, model_id, topic_pattern, parse_type, parse_config, is_active, created_at
+		FROM device_model_protocol WHERE model_id = $1 AND is_active = true ORDER BY id`
+
+	rows, err := r.db.Query(ctx, query, modelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var protocols []model.DeviceModelProtocol
+	for rows.Next() {
+		var p model.DeviceModelProtocol
+		err := rows.Scan(&p.ID, &p.ModelID, &p.TopicPattern, &p.ParseType,
+			&p.ParseConfig, &p.IsActive, &p.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		protocols = append(protocols, p)
+	}
+	return protocols, nil
 }

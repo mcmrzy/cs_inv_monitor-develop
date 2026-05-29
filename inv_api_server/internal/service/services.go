@@ -2,17 +2,17 @@ package service
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/pkg/jwt"
+	"inv-api-server/pkg/logger"
 
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/crypto/bcrypt"
+	"go.uber.org/zap"
 )
 
 type UserService struct {
@@ -100,7 +100,7 @@ func (s *SMSService) SendCode(ctx context.Context, phone, codeType string) error
 
 	code := generateCode(6)
 
-	fmt.Printf("[SMS] Sending code %s to %s for %s\n", code, phone, codeType)
+	logger.Debug("SMS code generated", zap.String("phone", maskPhone(phone)), zap.String("type", codeType))
 
 	pipe := s.cache.Pipeline()
 	pipe.Set(ctx, key, code, 5*time.Minute)
@@ -124,7 +124,32 @@ func (s *SMSService) VerifyCode(ctx context.Context, phone, code, codeType strin
 }
 
 func generateCode(length int) string {
-	return "123456"
+	code := make([]byte, length)
+	for i := range code {
+		code[i] = byte('0' + rand.Intn(10))
+	}
+	return string(code)
+}
+
+func maskPhone(phone string) string {
+	if len(phone) < 7 {
+		return "***"
+	}
+	return phone[:3] + "****" + phone[len(phone)-4:]
+}
+
+func maskEmail(email string) string {
+	at := -1
+	for i := 0; i < len(email); i++ {
+		if email[i] == '@' {
+			at = i
+			break
+		}
+	}
+	if at <= 1 {
+		return "***"
+	}
+	return email[:1] + "***" + email[at:]
 }
 
 type StationService struct {
@@ -166,13 +191,15 @@ func (s *StationService) GetStatistics(ctx context.Context, stationID int64, sta
 type DeviceService struct {
 	repo        *repository.DeviceRepository
 	cache       *redis.Client
+	modelRepo   *repository.ModelRepository
 	deviceSrvURL string
 }
 
-func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, deviceSrvURL string) *DeviceService {
+func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, modelRepo *repository.ModelRepository, deviceSrvURL string) *DeviceService {
 	return &DeviceService{
 		repo:        repo,
 		cache:       cache,
+		modelRepo:   modelRepo,
 		deviceSrvURL: deviceSrvURL,
 	}
 }
@@ -230,51 +257,62 @@ func (s *DeviceService) AddToStation(ctx context.Context, sn string, stationID i
 }
 
 func (s *DeviceService) HasPermission(ctx context.Context, userID int64, sn string) bool {
-	device, err := s.repo.GetBySN(ctx, sn)
-	if err != nil || device == nil {
-		return false
-	}
-
-	if device.UserID == userID {
-		return true
-	}
-
-	share, err := s.repo.GetShare(ctx, sn, userID)
-	if err != nil || share == nil {
-		return false
-	}
-
-	return true
+	return s.repo.HasDataPermission(ctx, userID, sn)
 }
 
 func (s *DeviceService) HasControlPermission(ctx context.Context, userID int64, sn string) bool {
-	device, err := s.repo.GetBySN(ctx, sn)
-	if err != nil || device == nil {
-		return false
-	}
-
-	if device.UserID == userID {
-		return true
-	}
-
-	share, err := s.repo.GetShare(ctx, sn, userID)
-	if err != nil || share == nil {
-		return false
-	}
-
-	return share.Permission == "control"
+	return s.repo.HasDataPermission(ctx, userID, sn)
 }
 
-func (s *DeviceService) GetParams(ctx context.Context, sn string) (map[string]interface{}, error) {
-	return s.repo.GetParams(ctx, sn)
-}
-
-func (s *DeviceService) UpdateParams(ctx context.Context, sn string, params map[string]interface{}) error {
-	if err := s.repo.UpdateParams(ctx, sn, params); err != nil {
-		return err
+func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, command string) error {
+	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
+	if err != nil || modelID == 0 {
+		return nil
 	}
 
-	return s.SendCommand(ctx, sn, "set_params", params)
+	controlFields, err := s.modelRepo.GetControlFieldsByModelID(ctx, modelID)
+	if err != nil {
+		return nil
+	}
+
+	if len(controlFields) == 0 {
+		return nil
+	}
+
+	allowed := make(map[string]bool)
+	for _, f := range controlFields {
+		allowed[f.FieldKey] = true
+	}
+
+	if !allowed[command] {
+		return fmt.Errorf("命令 %s 不在设备型号允许的控制字段中", command)
+	}
+
+	return nil
+}
+
+func (s *DeviceService) FilterByDataPermission(ctx context.Context, userID int64, sns []string) ([]string, error) {
+	allowedSNs, err := s.modelRepo.GetUserAllowedSNs(ctx, userID)
+	if err != nil {
+		return sns, nil
+	}
+
+	if len(allowedSNs) == 0 {
+		return sns, nil
+	}
+
+	allowedSet := make(map[string]bool)
+	for _, sn := range allowedSNs {
+		allowedSet[sn] = true
+	}
+
+	var filtered []string
+	for _, sn := range sns {
+		if allowedSet[sn] {
+			filtered = append(filtered, sn)
+		}
+	}
+	return filtered, nil
 }
 
 func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, params map[string]interface{}) error {
@@ -289,28 +327,8 @@ func (s *DeviceService) GetStatistics(ctx context.Context, sn, startDate, endDat
 	return s.repo.GetStatistics(ctx, sn, startDate, endDate, period)
 }
 
-func (s *DeviceService) Share(ctx context.Context, sn string, ownerID int64, phone, permission string) error {
-	return s.repo.Share(ctx, sn, ownerID, phone, permission)
-}
-
-func (s *DeviceService) CancelShare(ctx context.Context, shareID, ownerID int64) error {
-	return s.repo.CancelShare(ctx, shareID, ownerID)
-}
-
-func (s *DeviceService) GetShares(ctx context.Context, sn string) ([]*model.DeviceShare, error) {
-	return s.repo.GetShares(ctx, sn)
-}
-
 func (s *DeviceService) ScanLocalNetwork(ctx context.Context, userID int64) ([]*model.Device, error) {
 	return []*model.Device{}, nil
-}
-
-func (s *DeviceService) StartOTA(ctx context.Context, sn string, firmwareID int64) error {
-	return s.repo.StartOTA(ctx, sn, firmwareID)
-}
-
-func (s *DeviceService) GetOTAStatus(ctx context.Context, sn string) (map[string]interface{}, error) {
-	return s.repo.GetOTAStatus(ctx, sn)
 }
 
 type AlarmService struct {
@@ -359,64 +377,4 @@ func (s *StatisticsService) GetOverview(ctx context.Context, userID int64) (map[
 
 func (s *StatisticsService) GetTrend(ctx context.Context, userID int64, period string) ([]map[string]interface{}, error) {
 	return s.deviceRepo.GetTrend(ctx, userID, period)
-}
-
-type NotifyService struct {
-	repo  *repository.NotifyRepository
-	cache *redis.Client
-}
-
-func NewNotifyService(repo *repository.NotifyRepository, cache *redis.Client) *NotifyService {
-	return &NotifyService{repo: repo, cache: cache}
-}
-
-func (s *NotifyService) GetSettings(ctx context.Context, userID int64) (*model.UserNotifySetting, error) {
-	return s.repo.GetSettings(ctx, userID)
-}
-
-func (s *NotifyService) UpdateSettings(ctx context.Context, userID int64, settings map[string]interface{}) error {
-	return s.repo.UpdateSettings(ctx, userID, settings)
-}
-
-func (s *NotifyService) GetMessages(ctx context.Context, userID int64, msgType string, page, pageSize int) ([]*model.Message, int64, error) {
-	return s.repo.GetMessages(ctx, userID, msgType, page, pageSize)
-}
-
-func (s *NotifyService) MarkMessageRead(ctx context.Context, ids []int64, userID int64) error {
-	return s.repo.MarkMessageRead(ctx, ids, userID)
-}
-
-func (s *NotifyService) GetUnreadCount(ctx context.Context, userID int64) (int64, error) {
-	return s.repo.GetUnreadCount(ctx, userID)
-}
-
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
-}
-
-func CheckPassword(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
-}
-
-func ValidatePassword(password string) error {
-	if len(password) < 6 || len(password) > 20 {
-		return errors.New("password must be 6-20 characters")
-	}
-	return nil
-}
-
-func ValidatePhone(phone string) error {
-	if len(phone) != 11 {
-		return errors.New("invalid phone number")
-	}
-	return nil
-}
-
-func ValidateRole(role int) error {
-	if role < 1 || role > 5 {
-		return sql.ErrNoRows
-	}
-	return nil
 }

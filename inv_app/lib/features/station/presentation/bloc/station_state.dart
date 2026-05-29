@@ -38,16 +38,18 @@ class StationListLoaded extends StationState {
 }
 
 class StationDetailLoaded extends StationState {
+  final int stationId;
   final dynamic station;
   final List<dynamic> devices;
 
   const StationDetailLoaded({
+    required this.stationId,
     required this.station,
     required this.devices,
   });
 
   @override
-  List<Object?> get props => [station, devices];
+  List<Object?> get props => [stationId, station, devices];
 }
 
 class StationCreateSuccess extends StationState {}

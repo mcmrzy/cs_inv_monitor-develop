@@ -18,7 +18,6 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
     AlarmListRequested event,
     Emitter<AlarmState> emit,
   ) async {
-    emit(AlarmLoading());
     final result = await repository.getList(
       stationId: event.stationId,
       status: event.status,
@@ -26,7 +25,10 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
       pageSize: event.pageSize,
     );
     result.fold(
-      (failure) => emit(AlarmError(message: failure.message)),
+      (failure) {
+        if (state is AlarmListLoaded) return;
+        emit(AlarmError(message: failure.message));
+      },
       (data) {
         final alarms = (data['list'] as List?) ?? [];
         final total = (data['total'] as int?) ?? 0;
@@ -39,10 +41,12 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
     AlarmDetailRequested event,
     Emitter<AlarmState> emit,
   ) async {
-    emit(AlarmLoading());
     final result = await repository.getDetail(event.alarmId);
     result.fold(
-      (failure) => emit(AlarmError(message: failure.message)),
+      (failure) {
+        if (state is AlarmDetailLoaded) return;
+        emit(AlarmError(message: failure.message));
+      },
       (alarm) => emit(AlarmDetailLoaded(alarm: alarm)),
     );
   }

@@ -20,6 +20,7 @@ import PortalOverview from '@/pages/portal/OverviewPage'
 import PortalDevices from '@/pages/portal/DeviceMonitorPage'
 import PortalAlerts from '@/pages/portal/AlertsPage'
 import StationsPage from '@/pages/stations'
+import ModelsPage from '@/pages/models'
 import useAuthStore from '@/stores/authStore'
 import { Role } from '@/types'
 
@@ -84,6 +85,7 @@ const App: React.FC = () => {
               <Route path="/portal/devices" element={<PortalDevices />} />
               <Route path="/portal/alerts" element={<PortalAlerts />} />
               <Route path="/stations" element={<StationsPage />} />
+              <Route path="/models" element={<ModelsPage />} />
             </Route>
           </Routes>
         </BrowserRouter>

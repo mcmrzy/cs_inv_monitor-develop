@@ -26,7 +26,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
   @override
   void initState() {
     super.initState();
-    context.read<DeviceBloc>().add(DeviceParamsRequested(sn: widget.deviceSN));
+    context.read<DeviceBloc>().add(DeviceLocalParamsRequested(sn: widget.deviceSN));
   }
 
   List<DeviceParam> _parseParams(Map<String, dynamic> raw) {
@@ -134,7 +134,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
 
     if (!mounted) return;
     context.read<DeviceBloc>().add(
-          DeviceParamWriteAndReadbackRequested(sn: widget.deviceSN, params: paramsToWrite),
+          DeviceLocalParamsUpdateRequested(sn: widget.deviceSN, params: paramsToWrite),
         );
   }
 
@@ -223,90 +223,6 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     );
   }
 
-  void _showReadbackResult(DeviceParamReadbackResult state) {
-    if (state.mismatches.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('参数设置成功'),
-          backgroundColor: AppColors.success,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      setState(() {
-        _originalValues = Map.from(_modifiedValues);
-        _modifiedValues = Map.from(_modifiedValues);
-        _isApplying = false;
-      });
-    } else {
-      setState(() => _isApplying = false);
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-          title: Row(
-            children: [
-              Icon(Icons.warning_amber, color: AppColors.warning, size: 24.sp),
-              SizedBox(width: 8.w),
-              const Text('回读不一致'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '以下参数写入值与回读值不一致，请确认设备是否正确执行：',
-                style: TextStyle(fontSize: 13.sp),
-              ),
-              SizedBox(height: 12.h),
-              ...state.mismatches.map((key) {
-                final written = state.writtenParams[key];
-                final readback = state.readbackParams[key];
-                return Container(
-                  margin: EdgeInsets.only(bottom: 6.h),
-                  padding: EdgeInsets.all(8.w),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6.r),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(key, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600)),
-                            SizedBox(height: 2.h),
-                            Row(
-                              children: [
-                                Text('写入: $written', style: TextStyle(fontSize: 11.sp, color: AppColors.primary)),
-                                Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 4.w),
-                                  child: Icon(Icons.arrow_forward, size: 12.sp),
-                                ),
-                                Text('回读: $readback', style: TextStyle(fontSize: 11.sp, color: AppColors.warning)),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('知道了'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -315,8 +231,19 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
       appBar: AppBar(title: const Text('参数设置')),
       body: BlocConsumer<DeviceBloc, DeviceState>(
         listener: (context, state) {
-          if (state is DeviceParamReadbackResult) {
-            _showReadbackResult(state);
+          if (state is DeviceParamsUpdateSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('参数设置成功'),
+                backgroundColor: AppColors.success,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+            setState(() {
+              _originalValues = Map.from(_modifiedValues);
+              _modifiedValues = Map.from(_modifiedValues);
+              _isApplying = false;
+            });
           }
           if (state is DeviceError) {
             setState(() => _isApplying = false);
@@ -369,7 +296,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
               Expanded(
                 child: StyledRefreshIndicator(
                   onRefresh: () async {
-                    context.read<DeviceBloc>().add(DeviceParamsRequested(sn: widget.deviceSN));
+                    context.read<DeviceBloc>().add(DeviceLocalParamsRequested(sn: widget.deviceSN));
                   },
                   child: ListView.builder(
                     padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),

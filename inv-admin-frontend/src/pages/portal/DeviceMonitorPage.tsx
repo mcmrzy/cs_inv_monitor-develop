@@ -11,6 +11,8 @@ import { LineChart } from 'echarts/charts'
 import { TooltipComponent, GridComponent, LegendComponent, DataZoomComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { deviceApi } from '@/services/deviceApi'
+import { modelApi } from '@/services/modelApi'
+import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 
 echarts.use([LineChart, TooltipComponent, GridComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
 
@@ -26,6 +28,9 @@ const DeviceMonitorPage: React.FC = () => {
   const [realtime, setRealtime] = useState<any>(null)
   const [telemetry, setTelemetry] = useState<any[]>([])
   const [detailOpen, setDetailOpen] = useState(false)
+
+  const selectedDevice = devices.find((d: any) => d.sn === selectedSn)
+  const modelFields = useModelFields(selectedDevice?.model)
 
   const fetchDevices = useCallback(async () => {
     try {
@@ -208,35 +213,52 @@ const DeviceMonitorPage: React.FC = () => {
       >
         {realtime ? (
           <>
-            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-              <Col span={8}>
-                <Card size="small">
-                  <Statistic title="有功功率" value={ac?.power ?? 0} suffix="W" valueStyle={{ color: '#1677ff', fontSize: 20 }} />
-                </Card>
-              </Col>
-              <Col span={8}>
-                <Card size="small">
-                  <Statistic title="光伏功率" value={pv?.power ?? pv?.pvPower ?? 0} suffix="W" valueStyle={{ color: '#fa8c16', fontSize: 20 }} />
-                </Card>
-              </Col>
-              <Col span={8}>
-                <Card size="small">
-                  <Statistic title="电池 SOC" value={battery?.soc ?? battery?.batterySoc ?? 0} suffix="%" valueStyle={{ color: '#52c41a', fontSize: 20 }} />
-                </Card>
-              </Col>
-            </Row>
-            <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="交流电压">{ac?.voltage ?? '-'} V</Descriptions.Item>
-              <Descriptions.Item label="交流电流">{ac?.current ?? '-'} A</Descriptions.Item>
-              <Descriptions.Item label="电网频率">{ac?.frequency ?? '-'} Hz</Descriptions.Item>
-              <Descriptions.Item label="功率因数">{ac?.powerFactor ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="当日发电">{energy?.daily_pv ?? realtime?.daily_energy ?? '-'} kWh</Descriptions.Item>
-              <Descriptions.Item label="累计发电">{energy?.total_pv ?? '-'} kWh</Descriptions.Item>
-              <Descriptions.Item label="电池电压">{battery?.voltage ?? '-'} V</Descriptions.Item>
-              <Descriptions.Item label="电池电流">{battery?.current ?? '-'} A</Descriptions.Item>
-              <Descriptions.Item label="逆变器温度">{sys?.temp_inv ?? realtime?.internal_temperature ?? '-'} °C</Descriptions.Item>
-              <Descriptions.Item label="工作状态">{sys?.state ?? realtime?.work_state ?? '-'}</Descriptions.Item>
-            </Descriptions>
+            {modelFields?.cache && modelFields.cache.showFields.length > 0 ? (
+              <>
+                <DynamicStatCards
+                  fields={modelFields.cache.showFields.slice(0, 6)}
+                  data={rt}
+                />
+                <DynamicFieldRenderer
+                  fields={modelFields.cache.showFields}
+                  data={rt}
+                  column={2}
+                  size="small"
+                />
+              </>
+            ) : (
+              <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+                <Col span={8}>
+                  <Card size="small">
+                    <Statistic title="有功功率" value={ac?.power ?? 0} suffix="W" valueStyle={{ color: '#1677ff', fontSize: 20 }} />
+                  </Card>
+                </Col>
+                <Col span={8}>
+                  <Card size="small">
+                    <Statistic title="光伏功率" value={pv?.power ?? pv?.pvPower ?? 0} suffix="W" valueStyle={{ color: '#fa8c16', fontSize: 20 }} />
+                  </Card>
+                </Col>
+                <Col span={8}>
+                  <Card size="small">
+                    <Statistic title="电池 SOC" value={battery?.soc ?? battery?.batterySoc ?? 0} suffix="%" valueStyle={{ color: '#52c41a', fontSize: 20 }} />
+                  </Card>
+                </Col>
+              </Row>
+            )}
+            {!modelFields?.cache && (
+              <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
+                <Descriptions.Item label="交流电压">{ac?.voltage ?? '-'} V</Descriptions.Item>
+                <Descriptions.Item label="交流电流">{ac?.current ?? '-'} A</Descriptions.Item>
+                <Descriptions.Item label="电网频率">{ac?.frequency ?? '-'} Hz</Descriptions.Item>
+                <Descriptions.Item label="功率因数">{ac?.powerFactor ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label="当日发电">{energy?.daily_pv ?? realtime?.daily_energy ?? '-'} kWh</Descriptions.Item>
+                <Descriptions.Item label="累计发电">{energy?.total_pv ?? '-'} kWh</Descriptions.Item>
+                <Descriptions.Item label="电池电压">{battery?.voltage ?? '-'} V</Descriptions.Item>
+                <Descriptions.Item label="电池电流">{battery?.current ?? '-'} A</Descriptions.Item>
+                <Descriptions.Item label="逆变器温度">{sys?.temp_inv ?? realtime?.internal_temperature ?? '-'} °C</Descriptions.Item>
+                <Descriptions.Item label="工作状态">{sys?.state ?? realtime?.work_state ?? '-'}</Descriptions.Item>
+              </Descriptions>
+            )}
             <Card title="功率趋势" size="small">
               {telemetry.length > 0 ? (
                 <ReactEChartsCore option={telemetryChartOption} style={{ height: 250 }} echarts={echarts} />

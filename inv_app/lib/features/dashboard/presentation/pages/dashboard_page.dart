@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:dio/dio.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
+import 'package:inv_app/core/entities/device_model_field.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/widgets/power_gauge.dart';
 import 'package:inv_app/core/widgets/status_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -11,12 +14,14 @@ class DashboardPage extends StatefulWidget {
   final InverterRealtime? data;
   final bool isOnline;
   final VoidCallback? onRefresh;
+  final List<DeviceModelField>? fields;
 
   const DashboardPage({
     super.key,
     this.data,
     this.isOnline = false,
     this.onRefresh,
+    this.fields,
   });
 
   @override
@@ -25,6 +30,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   String _lastUpdate = '';
+  List<DeviceModelField>? _autoFields;
 
   void _updateTime() {
     final now = DateTime.now();
@@ -44,7 +50,37 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _updateTime();
+    _fetchFieldsIfNeeded();
   }
+
+  void _fetchFieldsIfNeeded() {
+    if (widget.fields != null) return;
+    final model = widget.data?.deviceInfo?.model;
+    if (model == null || model.isEmpty) return;
+    _fetchModelFields(model);
+  }
+
+  Future<void> _fetchModelFields(String modelCode) async {
+    try {
+      final dio = getIt<Dio>();
+      final res = await dio.get('/models/by-code/$modelCode/fields');
+      if (res.statusCode == 200 && mounted) {
+        final data = res.data;
+        List? list;
+        if (data is Map) list = data['data'] ?? data['items'];
+        if (list is List && list.isNotEmpty) {
+          final fields = list.map((e) => DeviceModelField.fromJson(e as Map<String, dynamic>)).toList();
+          if (mounted) {
+            setState(() {
+              _autoFields = fields;
+            });
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  List<DeviceModelField>? get _effectiveFields => widget.fields ?? _autoFields;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +114,7 @@ class _DashboardPageState extends State<DashboardPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'CS-I10-6K2',
+              data?.deviceInfo?.model ?? data?.deviceSN ?? '--',
               style: TextStyle(
                 fontSize: 22.sp,
                 fontWeight: FontWeight.w700,
@@ -198,8 +234,98 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  /// All data sections in a single unified card.
+  /// All data sections - uses dynamic fields if available, otherwise hardcoded.
   Widget _buildDataSection(BuildContext context, InverterRealtime? data) {
+    if (widget.fields != null && widget.fields!.isNotEmpty) {
+      return _buildDynamicSections(context, data);
+    }
+    return _buildStaticSections(context, data);
+  }
+
+  static const _dynamicSectionDefs = [
+    {'title': '交流输出', 'icon': Icons.power, 'color': AppColors.success, 'prefix': 'ac_'},
+    {'title': '电池 BMS', 'icon': Icons.battery_charging_full, 'color': AppColors.success, 'prefix': 'batt_'},
+    {'title': '光伏 MPPT', 'icon': Icons.wb_sunny, 'color': AppColors.orange, 'prefix': 'pv_'},
+    {'title': '负载', 'icon': Icons.home, 'color': AppColors.blue, 'prefix': 'load_'},
+    {'title': '电表', 'icon': Icons.electric_meter, 'color': AppColors.warning, 'prefix': 'meter_'},
+    {'title': '能量统计', 'icon': Icons.battery_charging_full, 'color': AppColors.primary, 'prefix': 'energy_'},
+    {'title': '系统状态', 'icon': Icons.info_outline, 'color': AppColors.primary, 'prefix': 'sys_'},
+  ];
+
+  Widget _buildDynamicSections(BuildContext context, InverterRealtime? data) {
+    final fields = widget.fields!;
+    final realtimeMap = _buildRealtimeMapForFields(data);
+
+    final widgets = <Widget>[];
+
+    for (final def in _dynamicSectionDefs) {
+      final prefix = def['prefix'] as String;
+      final sectionFields = fields
+          .where((f) => f.isShow && f.fieldKey.startsWith(prefix))
+          .toList()
+        ..sort((a, b) => a.sort.compareTo(b.sort));
+
+      if (sectionFields.isNotEmpty) {
+        if (widgets.isNotEmpty) widgets.add(_divider(context));
+        widgets.add(_sectionHeader(
+          context, def['title'] as String, def['icon'] as IconData, def['color'] as Color,
+        ));
+        final items = sectionFields.map((f) {
+          final val = realtimeMap[f.fieldKey];
+          return _dataItem(f.fieldName, _fmtValue(val, f.fieldType, f.unit), def['color'] as Color);
+        }).toList();
+        widgets.add(_dataGrid(context, items));
+      }
+    }
+
+    return Container(
+      decoration: AppColor.card(context),
+      child: Column(children: widgets),
+    );
+  }
+
+  Map<String, dynamic> _buildRealtimeMapForFields(InverterRealtime? data) {
+    final map = <String, dynamic>{};
+    if (data == null) return map;
+
+    map['load_power'] = data.loadPower;
+
+    if (data.ac != null) {
+      map.addAll({'ac_voltage': data.ac!.voltage, 'ac_current': data.ac!.current, 'ac_power': data.ac!.power, 'ac_frequency': data.ac!.frequency, 'ac_load_percent': data.ac!.loadPercent, 'ac_pf': data.ac!.pf});
+    }
+    if (data.battery != null) {
+      map.addAll({'batt_soc': data.battery!.soc, 'batt_soh': data.battery!.soh, 'batt_voltage': data.battery!.voltage, 'batt_current': data.battery!.current, 'batt_charge_state': data.battery!.chargeState});
+    }
+    if (data.pv != null) {
+      map.addAll({'pv_voltage': data.pv!.pvVoltage, 'pv_current': data.pv!.pvCurrent, 'pv_power': data.pv!.pvPower, 'mppt_state': data.pv!.mpptState});
+    }
+    if (data.sysStatus != null) {
+      map.addAll({'state': data.sysStatus!.state, 'fault_code': data.sysStatus!.faultCode, 'alarm_code': data.sysStatus!.alarmCode, 'temp_inv': data.sysStatus!.tempInv, 'temp_mos': data.sysStatus!.tempMos, 'efficiency': data.sysStatus!.efficiency});
+    }
+    if (data.energy != null) {
+      map.addAll({'daily_pv': data.energy!.dailyPV, 'total_pv': data.energy!.totalPV, 'runtime_hours': data.energy!.runtimeHours, 'daily_feed_energy': data.energy!.dailyFeedEnergy, 'total_feed_energy': data.energy!.totalFeedEnergy, 'daily_grid_import': data.energy!.dailyGridImport, 'total_grid_import': data.energy!.totalGridImport});
+    }
+    if (data.meter != null) {
+      map.addAll({'meter_total_power': data.meter!.totalPower, 'meter_phase_a_power': data.meter!.phaseAPower, 'meter_phase_b_power': data.meter!.phaseBPower, 'meter_phase_c_power': data.meter!.phaseCPower});
+    }
+    return map;
+  }
+
+  String _fmtValue(dynamic val, String fieldType, String unit) {
+    if (val == null) return '--';
+    if (fieldType == 'float' && val is num) {
+      final s = val % 1 == 0 ? val.toStringAsFixed(0) : val.toStringAsFixed(1);
+      return unit.isNotEmpty ? '$s $unit' : s;
+    }
+    if (val is double) {
+      final s = val % 1 == 0 ? val.toStringAsFixed(0) : val.toStringAsFixed(1);
+      return unit.isNotEmpty ? '$s $unit' : s;
+    }
+    return unit.isNotEmpty ? '$val $unit' : '$val';
+  }
+
+  /// Original hardcoded sections - used as fallback.
+  Widget _buildStaticSections(BuildContext context, InverterRealtime? data) {
     final batt = data?.battery;
     final pv = data?.pv;
     final ac = data?.ac;
@@ -362,7 +488,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   /// Status grid with colored indicators.
-  Widget _statusGrid(BuildContext context, SysStatus sysStatus) {
+  Widget _statusGrid(BuildContext context, SystemStatus sysStatus) {
     final isRunning = sysStatus.state == 'inverting';
     final hasFault = sysStatus.faultCode != 0;
     final hasAlarm = sysStatus.alarmCode != 0;

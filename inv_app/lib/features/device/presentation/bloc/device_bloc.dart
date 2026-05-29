@@ -34,9 +34,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     on<DeviceDetailRequested>(_onDetailRequested);
     on<DeviceRealtimeWSUpdate>(_onMQTTUpdate);
     on<DeviceControlRequested>(_onControlRequested);
-    on<DeviceParamsRequested>(_onParamsRequested);
     on<DeviceParamsUpdateRequested>(_onParamsUpdateRequested);
-    on<DeviceParamWriteAndReadbackRequested>(_onParamWriteAndReadbackRequested);
     on<DeviceBindRequested>(_onBindRequested);
     on<DeviceUnbindRequested>(_onUnbindRequested);
     on<DeviceUnsubscribeRealtime>(_onUnsubscribeRealtime);
@@ -114,7 +112,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       try {
         await mqttService.waitForConnection(timeout: const Duration(seconds: 10));
       } catch (e) {
-        print('[MQTT] Failed to wait for connection: $e');
         return;
       }
     }
@@ -175,95 +172,41 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     );
   }
 
-  Future<void> _onParamsRequested(
-    DeviceParamsRequested event,
-    Emitter<DeviceState> emit,
-  ) async {
-    emit(DeviceLoading());
-    final result = await repository.getParams(event.sn);
-    result.fold(
-      (failure) => emit(DeviceError(message: failure.message)),
-      (params) => emit(DeviceParamsLoaded(params: params)),
-    );
-  }
-
   Future<void> _onParamsUpdateRequested(
     DeviceParamsUpdateRequested event,
     Emitter<DeviceState> emit,
   ) async {
-    final isLocal = connectionModeService != null && await connectionModeService!.isLocalMode();
-
-    if (isLocal && localCommunicationService != null && _localPollIP != null) {
-      try {
+    if (localCommunicationService == null) {
+      emit(const DeviceError(message: '本地通信服务不可用'));
+      return;
+    }
+    try {
+      if (_localPollIP != null) {
         await localCommunicationService!.connect(_localPollIP!);
-        await localCommunicationService!.updateParams(event.params);
-        if (offlineCacheService != null) {
-          await offlineCacheService!.saveAction(OfflineAction(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            type: 'param_update',
-            sn: event.sn,
-            data: event.params,
-            timestamp: DateTime.now(),
-          ));
-        }
-        emit(DeviceParamsUpdateSuccess());
-      } catch (e) {
-        if (offlineCacheService != null) {
-          await offlineCacheService!.saveAction(OfflineAction(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            type: 'param_update',
-            sn: event.sn,
-            data: event.params,
-            timestamp: DateTime.now(),
-          ));
-        }
-        emit(DeviceError(message: e.toString()));
       }
-      return;
-    }
-
-    emit(DeviceLoading());
-    final result = await repository.updateParams(event.sn, event.params);
-    result.fold(
-      (failure) => emit(DeviceError(message: failure.message)),
-      (_) => emit(DeviceParamsUpdateSuccess()),
-    );
-  }
-
-  Future<void> _onParamWriteAndReadbackRequested(
-    DeviceParamWriteAndReadbackRequested event,
-    Emitter<DeviceState> emit,
-  ) async {
-    emit(DeviceLoading());
-    final writeResult = await repository.updateParams(event.sn, event.params);
-    if (writeResult.isLeft()) {
-      writeResult.fold(
-        (failure) => emit(DeviceError(message: failure.message)),
-        (_) {},
-      );
-      return;
-    }
-
-    await Future.delayed(const Duration(seconds: 2));
-
-    final readResult = await repository.getParams(event.sn);
-    readResult.fold(
-      (failure) => emit(DeviceError(message: failure.message)),
-      (readbackParams) {
-        final mismatches = <String>[];
-        for (final entry in event.params.entries) {
-          final readbackValue = readbackParams[entry.key];
-          if (readbackValue == null || readbackValue.toString() != entry.value.toString()) {
-            mismatches.add(entry.key);
-          }
-        }
-        emit(DeviceParamReadbackResult(
-          writtenParams: event.params,
-          readbackParams: readbackParams,
-          mismatches: mismatches,
+      await localCommunicationService!.updateParams(event.params);
+      if (offlineCacheService != null) {
+        await offlineCacheService!.saveAction(OfflineAction(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: 'param_update',
+          sn: event.sn,
+          data: event.params,
+          timestamp: DateTime.now(),
         ));
-      },
-    );
+      }
+      emit(DeviceParamsUpdateSuccess());
+    } catch (e) {
+      if (offlineCacheService != null) {
+        await offlineCacheService!.saveAction(OfflineAction(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: 'param_update',
+          sn: event.sn,
+          data: event.params,
+          timestamp: DateTime.now(),
+        ));
+      }
+      emit(DeviceError(message: e.toString()));
+    }
   }
 
   Future<void> _onBindRequested(

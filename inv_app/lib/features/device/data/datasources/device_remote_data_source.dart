@@ -41,16 +41,6 @@ class DeviceRemoteDataSource {
     });
   }
 
-  Future<Response> getParams(String sn) async {
-    return await dio.get('/devices/$sn/params');
-  }
-
-  Future<Response> updateParams(String sn, Map<String, dynamic> params) async {
-    return await dio.put('/devices/$sn/params', data: {
-      'params': params,
-    });
-  }
-
   Future<Response> getStatistics(String sn, String startDate, String endDate, String period) async {
     return await dio.get('/devices/$sn/statistics', queryParameters: {
       'start_date': startDate,
@@ -74,33 +64,16 @@ class DeviceRemoteDataSource {
     });
   }
 
-  Future<Response> share(String sn, String phone, String permission) async {
-    return await dio.post('/devices/$sn/share', data: {
-      'phone': phone,
-      'permission': permission,
-    });
-  }
-
-  Future<Response> cancelShare(String sn, int shareId) async {
-    return await dio.delete('/devices/$sn/share/$shareId');
-  }
-
-  Future<Response> getShares(String sn) async {
-    return await dio.get('/devices/$sn/shares');
-  }
-
   Future<Response> scanLocal() async {
     return await dio.get('/devices/scan/local');
   }
 
-  Future<Response> startOTA(String sn, int firmwareId) async {
-    return await dio.post('/devices/$sn/ota', data: {
-      'firmware_id': firmwareId,
-    });
+  Future<Response> getModelFields(int modelId) async {
+    return await dio.get('/models/$modelId/fields');
   }
 
-  Future<Response> getOTAStatus(String sn) async {
-    return await dio.get('/devices/$sn/ota/status');
+  Future<Response> getModelFieldsByCode(String modelCode) async {
+    return await dio.get('/models/by-code/$modelCode/fields');
   }
 }
 

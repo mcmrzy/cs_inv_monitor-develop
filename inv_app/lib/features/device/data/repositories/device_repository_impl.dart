@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
+import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/features/device/data/datasources/device_remote_data_source.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
@@ -153,31 +154,6 @@ class DeviceRepositoryImpl implements DeviceRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> getParams(String sn) async {
-    try {
-      final response = await remoteDataSource.getParams(sn);
-      return _parseData(response);
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Failure, void>> updateParams(String sn, Map<String, dynamic> params) async {
-    try {
-      final response = await remoteDataSource.updateParams(sn, params);
-      final parsed = _parseData(response);
-      return parsed.fold((failure) => Left(failure), (_) => const Right(null));
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
   Future<Either<Failure, List<dynamic>>> getHistory(String sn, String startDate, String endDate, String period) async {
     try {
       final response = await remoteDataSource.getHistory(sn, startDate, endDate, period);
@@ -202,44 +178,6 @@ class DeviceRepositoryImpl implements DeviceRepository {
   }
 
   @override
-  Future<Either<Failure, void>> share(String sn, String phone, String permission) async {
-    try {
-      final response = await remoteDataSource.share(sn, phone, permission);
-      final parsed = _parseData(response);
-      return parsed.fold((failure) => Left(failure), (_) => const Right(null));
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Failure, void>> cancelShare(String sn, int shareId) async {
-    try {
-      final response = await remoteDataSource.cancelShare(sn, shareId);
-      final parsed = _parseData(response);
-      return parsed.fold((failure) => Left(failure), (_) => const Right(null));
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Failure, List<dynamic>>> getShares(String sn) async {
-    try {
-      final response = await remoteDataSource.getShares(sn);
-      return _parseList(response);
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
   Future<Either<Failure, List<dynamic>>> scanLocal() async {
     try {
       final response = await remoteDataSource.scanLocal();
@@ -252,23 +190,16 @@ class DeviceRepositoryImpl implements DeviceRepository {
   }
 
   @override
-  Future<Either<Failure, void>> startOTA(String sn, int firmwareId) async {
+  Future<Either<Failure, List<Map<String, dynamic>>>> getModelFieldsByCode(String modelCode) async {
     try {
-      final response = await remoteDataSource.startOTA(sn, firmwareId);
-      final parsed = _parseData(response);
-      return parsed.fold((failure) => Left(failure), (_) => const Right(null));
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Failure, Map<String, dynamic>>> getOTAStatus(String sn) async {
-    try {
-      final response = await remoteDataSource.getOTAStatus(sn);
-      return _parseData(response);
+      final response = await remoteDataSource.getModelFieldsByCode(modelCode);
+      final data = response.data;
+      if (data is Map<String, dynamic> && data['code'] == 0) {
+        final inner = data['data'];
+        if (inner is List) return Right(inner.cast<Map<String, dynamic>>());
+        return const Right([]);
+      }
+      return Left(ServerFailure('获取字段元数据失败'));
     } on DioException catch (e) {
       return Left(_mapError(e));
     } catch (e) {

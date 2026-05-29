@@ -17,6 +17,7 @@ import (
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/jwt"
 	"inv-api-server/pkg/logger"
+	"inv-api-server/pkg/telemetry"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -77,6 +78,9 @@ func main() {
 }
 
 func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
+	_ = telemetry.Init("inv-api-server")
+	defer telemetry.Shutdown()
+
 	jwtInstance := jwt.NewJWT(&jwt.JWTConfig{
 		Secret:     cfg.JWT.Secret,
 		ExpireTime: cfg.JWT.ExpireTime,
@@ -87,31 +91,39 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	stationRepo := repository.NewStationRepository(db)
 	deviceRepo := repository.NewDeviceRepository(db, rdb)
 	alarmRepo := repository.NewAlarmRepository(db)
-	notifyRepo := repository.NewNotifyRepository(db)
+	modelRepo := repository.NewModelRepository(db)
 
 	userService := service.NewUserService(userRepo, rdb)
 	jwtService := service.NewJWTService(jwtInstance)
 	smsService := service.NewSMSService(rdb)
 	emailService := service.NewEmailService(rdb, cfg.Email)
 	stationService := service.NewStationService(stationRepo)
-	deviceService := service.NewDeviceService(deviceRepo, rdb, "http://localhost:8081")
+	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer)
 	alarmService := service.NewAlarmService(alarmRepo)
-	_ = service.NewStatisticsService(deviceRepo, stationRepo)
-	_ = service.NewNotifyService(notifyRepo, rdb)
+	modelService := service.NewModelService(modelRepo)
+	rbacCache := service.NewRBACCacheService(rdb, userRepo)
+	permChecker := service.NewPermChecker(rdb, userRepo)
+	dataPerm := service.NewDataPermission(db)
+	_ = dataPerm
+
+	otaRepo := repository.NewOTARepository(db)
+	otaService := service.NewOTAService(otaRepo, cfg.Backends.DeviceServer)
 
 	handler.SetDB(db)
 
-	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService)
+	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache)
 	stationHandler := handler.NewStationHandler(stationService, deviceService)
 	weatherHandler := handler.NewWeatherHandler(stationService)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
-	adminHandler := handler.NewAdminHandler(db, rdb, "web/admin/index.html", deviceRepo, stationRepo, userRepo, alarmRepo, notifyRepo)
 	wsHandler := handler.NewWSHandler(rdb, jwtInstance)
+	modelHandler := handler.NewModelHandler(modelService)
+	adminHandler := handler.NewAdminHandler(userRepo, permChecker)
+	otaHandler := handler.NewOTAHandler(otaService)
 
 	go runHeartbeatCheck(deviceRepo)
 
-	router := setupRouter(cfg, jwtInstance, authHandler, stationHandler, deviceHandler, alarmHandler, adminHandler, weatherHandler)
+	router := setupRouter(cfg, jwtInstance, authHandler, stationHandler, deviceHandler, alarmHandler, weatherHandler, modelHandler, permChecker, adminHandler, otaHandler)
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
 	serve(cfg, router)
 }
@@ -186,7 +198,13 @@ func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
 		cfg.Database.Password, cfg.Database.Database, cfg.Database.SSLMode, tz,
 	)
 
-	logger.Info("Database DSN", zap.String("dsn", dsn))
+	logger.Info("Database connecting",
+		zap.String("host", cfg.Database.Host),
+		zap.Int("port", cfg.Database.Port),
+		zap.String("database", cfg.Database.Database),
+		zap.String("user", cfg.Database.User),
+		zap.String("sslmode", cfg.Database.SSLMode),
+	)
 
 	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -239,7 +257,7 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 	return rdb, nil
 }
 
-func setupRouter(cfg *config.Config, jwtInstance *jwt.JWT, authHandler *handler.AuthHandler, stationHandler *handler.StationHandler, deviceHandler *handler.DeviceHandler, alarmHandler *handler.AlarmHandler, adminHandler *handler.AdminHandler, weatherHandler *handler.WeatherHandler) *gin.Engine {
+func setupRouter(cfg *config.Config, jwtInstance *jwt.JWT, authHandler *handler.AuthHandler, stationHandler *handler.StationHandler, deviceHandler *handler.DeviceHandler, alarmHandler *handler.AlarmHandler, weatherHandler *handler.WeatherHandler, modelHandler *handler.ModelHandler, permChecker *service.PermChecker, adminHandler *handler.AdminHandler, otaHandler *handler.OTAHandler) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -247,58 +265,62 @@ func setupRouter(cfg *config.Config, jwtInstance *jwt.JWT, authHandler *handler.
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.CORS())
+	router.Use(tracingMiddleware())
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	internal := router.Group("/api/v1/internal")
-	{
-		internal.POST("/device-status", handler.InternalDeviceStatus)
-		internal.POST("/device-data", handler.InternalDeviceData)
-		internal.POST("/device-cmd-status", handler.InternalDeviceCmdStatus)
-	}
+	// DEPRECATED: Admin APIs migrated to NestJS backend (inv-admin-backend)
+	// Only keeping internal APIs for device server communication
+	// admin := router.Group("/admin")
+	// {
+	// 	admin.GET("", adminHandler.Index)
+	// 	admin.GET("/api/dashboard", adminHandler.Dashboard)
+	// 	admin.GET("/api/system", adminHandler.SystemInfo)
+	// 	admin.GET("/api/devices", adminHandler.Devices)
+	// 	admin.POST("/api/devices", adminHandler.CreateDevice)
+	// 	admin.DELETE("/api/devices/:sn", adminHandler.DeleteDevice)
+	// 	admin.PUT("/api/devices/:sn", adminHandler.UpdateDevice)
+	// 	admin.GET("/api/devices/:sn/realtime", adminHandler.DeviceRealtimeData)
+	// 	admin.POST("/api/devices/:sn/command", adminHandler.DeviceCommand)
+	// 	admin.POST("/api/devices/:sn/unbind", adminHandler.UnbindDevice)
+	// 	admin.POST("/api/devices/batch", adminHandler.BatchCreateDevices)
+	// 	admin.POST("/api/devices/batch-delete", adminHandler.BatchDeleteDevices)
+	// 	admin.POST("/api/devices/cleanup-old", adminHandler.CleanupOldDevices)
+	// 	admin.GET("/api/stations", adminHandler.Stations)
+	// 	admin.POST("/api/stations", adminHandler.CreateStation)
+	// 	admin.PUT("/api/stations/:id", adminHandler.UpdateStation)
+	// 	admin.DELETE("/api/stations/:id", adminHandler.DeleteStation)
+	// 	admin.GET("/api/users", adminHandler.Users)
+	// 	admin.POST("/api/users", adminHandler.CreateUser)
+	// 	admin.PUT("/api/users/:id", adminHandler.UpdateUser)
+	// 	admin.DELETE("/api/users/:id", adminHandler.DeleteUser)
+	// 	admin.POST("/api/users/:id/toggle", adminHandler.ToggleUserStatus)
+	// 	admin.PUT("/api/users/:id/password", adminHandler.ResetUserPassword)
+	// 	admin.GET("/api/alarms", adminHandler.Alarms)
+	// 	admin.POST("/api/alarms/:id/handle", adminHandler.HandleAlarm)
+	// 	admin.GET("/api/models", adminHandler.Models)
+	// 	admin.POST("/api/models", adminHandler.CreateModel)
+	// 	admin.PUT("/api/models/:id", adminHandler.UpdateModel)
+	// 	admin.DELETE("/api/models/:id", adminHandler.DeleteModel)
+	// 	admin.POST("/api/proxy", adminHandler.ProxyAPI)
+	// 	admin.GET("/api/services", adminHandler.Services)
+	// 	admin.POST("/api/restart", adminHandler.RestartServices)
+	// 	admin.GET("/api/logs", adminHandler.Logs)
+	// 	admin.GET("/api/connections", adminHandler.Connections)
+	// 	admin.GET("/api/mqtt-stats", adminHandler.MQTTStats)
+ 	// }
 
-	admin := router.Group("/admin")
-	{
-		admin.GET("", adminHandler.Index)
-		admin.GET("/api/dashboard", adminHandler.Dashboard)
-		admin.GET("/api/system", adminHandler.SystemInfo)
-		admin.GET("/api/devices", adminHandler.Devices)
-		admin.POST("/api/devices", adminHandler.CreateDevice)
-		admin.DELETE("/api/devices/:sn", adminHandler.DeleteDevice)
-		admin.PUT("/api/devices/:sn", adminHandler.UpdateDevice)
-		admin.GET("/api/devices/:sn/realtime", adminHandler.DeviceRealtimeData)
-		admin.POST("/api/devices/:sn/command", adminHandler.DeviceCommand)
-		admin.POST("/api/devices/:sn/unbind", adminHandler.UnbindDevice)
-		admin.POST("/api/devices/batch", adminHandler.BatchCreateDevices)
-		admin.POST("/api/devices/batch-delete", adminHandler.BatchDeleteDevices)
-		admin.POST("/api/devices/cleanup-old", adminHandler.CleanupOldDevices)
-		admin.GET("/api/stations", adminHandler.Stations)
-		admin.POST("/api/stations", adminHandler.CreateStation)
-		admin.PUT("/api/stations/:id", adminHandler.UpdateStation)
-		admin.DELETE("/api/stations/:id", adminHandler.DeleteStation)
-		admin.GET("/api/users", adminHandler.Users)
-		admin.POST("/api/users", adminHandler.CreateUser)
-		admin.PUT("/api/users/:id", adminHandler.UpdateUser)
-		admin.DELETE("/api/users/:id", adminHandler.DeleteUser)
-		admin.POST("/api/users/:id/toggle", adminHandler.ToggleUserStatus)
-		admin.PUT("/api/users/:id/password", adminHandler.ResetUserPassword)
-		admin.GET("/api/alarms", adminHandler.Alarms)
-		admin.POST("/api/alarms/:id/handle", adminHandler.HandleAlarm)
-		admin.GET("/api/models", adminHandler.Models)
-		admin.POST("/api/models", adminHandler.CreateModel)
-		admin.PUT("/api/models/:id", adminHandler.UpdateModel)
-		admin.DELETE("/api/models/:id", adminHandler.DeleteModel)
-		admin.POST("/api/proxy", adminHandler.ProxyAPI)
-		admin.GET("/api/services", adminHandler.Services)
-		admin.POST("/api/restart", adminHandler.RestartServices)
-		admin.GET("/api/logs", adminHandler.Logs)
-		admin.GET("/api/connections", adminHandler.Connections)
-		admin.GET("/api/mqtt-stats", adminHandler.MQTTStats)
-	}
+ 	internal := router.Group("/api/v1/internal")
+ 	{
+ 		internal.POST("/device-status", handler.InternalDeviceStatus)
+ 		internal.POST("/device-info", handler.InternalDeviceInfo)
+ 		internal.POST("/device-data", handler.InternalDeviceData)
+ 		internal.POST("/device-cmd-status", handler.InternalDeviceCmdStatus)
+ 	}
 
-	api := router.Group("/api/v1")
+ 	api := router.Group("/api/v1")
 	{
 		api.POST("/auth/login", authHandler.Login)
 		api.POST("/auth/register", authHandler.Register)
@@ -330,23 +352,60 @@ func setupRouter(cfg *config.Config, jwtInstance *jwt.JWT, authHandler *handler.
 			auth.POST("/devices/bind", deviceHandler.Bind)
 			auth.DELETE("/devices/:sn/unbind", deviceHandler.Unbind)
 			auth.POST("/devices/:sn/control", deviceHandler.Control)
-			auth.GET("/devices/:sn/params", deviceHandler.GetParams)
-			auth.PUT("/devices/:sn/params", deviceHandler.UpdateParams)
-			auth.GET("/devices/:sn/history", deviceHandler.GetHistory)
-			auth.GET("/devices/:sn/alarms", deviceHandler.GetAlarms)
-			auth.GET("/devices/:sn/statistics", deviceHandler.GetStatistics)
-			auth.POST("/devices/:sn/share", deviceHandler.Share)
-			auth.DELETE("/devices/:sn/share/:share_id", deviceHandler.CancelShare)
-			auth.GET("/devices/:sn/shares", deviceHandler.GetShares)
-			auth.POST("/devices/add-to-station", deviceHandler.AddToStation)
-			auth.GET("/devices/scan/local", deviceHandler.ScanLocal)
-			auth.POST("/devices/:sn/ota", deviceHandler.OTAUpgrade)
-			auth.GET("/devices/:sn/ota/status", deviceHandler.GetOTAStatus)
+ 		auth.GET("/devices/:sn/history", deviceHandler.GetHistory)
+ 		auth.GET("/devices/:sn/alarms", deviceHandler.GetAlarms)
+ 		auth.GET("/devices/:sn/statistics", deviceHandler.GetStatistics)
+ 		auth.POST("/devices/add-to-station", deviceHandler.AddToStation)
+ 		auth.GET("/devices/scan/local", deviceHandler.ScanLocal)
 
 			auth.GET("/alarms", alarmHandler.List)
 			auth.GET("/alarms/:id", alarmHandler.GetByID)
 			auth.PUT("/alarms/:id/handle", alarmHandler.MarkHandled)
 			auth.PUT("/alarms/read", alarmHandler.MarkRead)
+
+			auth.GET("/models", modelHandler.ListModels)
+			auth.POST("/models", modelHandler.CreateModel)
+			auth.GET("/models/:id", modelHandler.GetModel)
+			auth.PUT("/models/:id", modelHandler.UpdateModel)
+			auth.DELETE("/models/:id", modelHandler.DeleteModel)
+			auth.GET("/models/:id/fields", modelHandler.GetModelFields)
+			auth.GET("/models/by-code/:code/fields", modelHandler.GetFieldsByModelCode)
+			auth.POST("/models/:id/fields", modelHandler.CreateField)
+			auth.PUT("/models/:id/fields/:fieldId", modelHandler.UpdateField)
+			auth.DELETE("/models/:id/fields/:fieldId", modelHandler.DeleteField)
+			auth.PUT("/models/:id/fields/batch", modelHandler.BatchUpdateFields)
+		}
+
+		requireAdmin := middleware.RequirePermission(permChecker, "admin", "manage")
+		adminGroup := api.Group("/admin").Use(middleware.Auth(jwtInstance), requireAdmin)
+		{
+			adminGroup.GET("/users", adminHandler.ListUsers)
+			adminGroup.GET("/users/:id", adminHandler.GetUser)
+			adminGroup.PUT("/users/:id/role", adminHandler.UpdateUserRole)
+			adminGroup.PUT("/users/:id/toggle", adminHandler.ToggleUserStatus)
+			adminGroup.GET("/permissions", adminHandler.ListRolePermissions)
+			adminGroup.PUT("/permissions", adminHandler.UpdatePermission)
+			adminGroup.GET("/models", adminHandler.ListAllModels)
+		}
+
+		usersGroup := api.Group("/users").Use(middleware.Auth(jwtInstance))
+		{
+			usersGroup.GET("", adminHandler.ListUsers)
+			usersGroup.GET("/:id", adminHandler.GetUser)
+			usersGroup.PUT("/:id/role", middleware.RequirePermission(permChecker, "users", "edit"), adminHandler.UpdateUserRole)
+			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(permChecker, "users", "edit"), adminHandler.ToggleUserStatus)
+		}
+
+		otaGroup := api.Group("/ota").Use(middleware.Auth(jwtInstance), middleware.RequirePermission(permChecker, "ota", "view"))
+		{
+			otaGroup.GET("/firmware", otaHandler.ListFirmware)
+			otaGroup.GET("/firmware/:id", otaHandler.GetFirmware)
+			otaGroup.POST("/firmware", middleware.RequirePermission(permChecker, "ota", "create"), otaHandler.CreateFirmware)
+			otaGroup.DELETE("/firmware/:id", middleware.RequirePermission(permChecker, "ota", "delete"), otaHandler.DeleteFirmware)
+			otaGroup.GET("/tasks", otaHandler.ListTasks)
+			otaGroup.GET("/tasks/:id", otaHandler.GetTask)
+			otaGroup.POST("/tasks", middleware.RequirePermission(permChecker, "ota", "create"), otaHandler.CreateTask)
+			otaGroup.POST("/tasks/:id/dispatch", middleware.RequirePermission(permChecker, "ota", "control"), otaHandler.DispatchTask)
 		}
 	}
 
@@ -364,6 +423,16 @@ func setTimezone(tz string) error {
 	time.Local = loc
 	os.Setenv("TZ", tz)
 	return nil
+}
+
+func tracingMiddleware() gin.HandlerFunc {
+	spanFn := telemetry.GinMiddleware("inv-api-server")
+	return func(c *gin.Context) {
+		ctx, end := spanFn(c.Request.Context(), c.Request.Method, c.FullPath())
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+		end(c.Writer.Status())
+	}
 }
 
 func setupRouterMinimal(cfg *config.Config) *gin.Engine {

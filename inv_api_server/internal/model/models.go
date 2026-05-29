@@ -39,19 +39,27 @@ type Station struct {
 }
 
 type Device struct {
-	ID              int64      `json:"id"`
-	SN              string     `json:"sn"`
-	Model           string     `json:"model"`
-	RatedPower      float64    `json:"rated_power"`
-	FirmwareVersion string     `json:"firmware_version"`
-	HardwareVersion string     `json:"hardware_version"`
-	MACAddress      string     `json:"mac_address"`
-	StationID       *int64     `json:"station_id"`
-	UserID          int64      `json:"user_id"`
-	Status          int        `json:"status"`
-	LastOnlineAt    *time.Time `json:"last_online_at"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID             int64      `json:"id"`
+	SN             string     `json:"sn"`
+	Model          string     `json:"model"`
+	Manufacturer   string     `json:"manufacturer"`
+	FirmwareArm    string     `json:"firmware_arm"`
+	FirmwareEsp    string     `json:"firmware_esp"`
+	DeviceType     string     `json:"device_type"`
+	RatedPower     float64    `json:"rated_power"`
+	RatedVoltage   float64    `json:"rated_voltage"`
+	RatedFreq      float64    `json:"rated_freq"`
+	BatteryVoltage float64    `json:"battery_voltage"`
+	BatteryType    string     `json:"battery_type"`
+	CellCount      int        `json:"cell_count"`
+	StationID      *int64     `json:"station_id"`
+	UserID         int64      `json:"user_id"`
+	Status         int        `json:"status"`
+	CurrentPower   float64    `json:"current_power"`
+	DailyEnergy    float64    `json:"daily_energy"`
+	LastOnlineAt   *time.Time `json:"last_online_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 type DeviceRealtimeData struct {
@@ -213,4 +221,136 @@ type OperationLog struct {
 	ErrorMessage    string    `json:"error_message"`
 	IPAddress       string    `json:"ip_address"`
 	CreatedAt       time.Time `json:"created_at"`
+}
+
+type DeviceModel struct {
+	ID           int64      `json:"id"`
+	ModelCode    string     `json:"model_code"`
+	ModelName    string     `json:"model_name"`
+	ProtocolType string     `json:"protocol_type"`
+	DeviceCount  int        `json:"device_count"`
+	CreateTime   time.Time  `json:"create_time"`
+	UpdateTime   time.Time  `json:"update_time"`
+}
+
+type DeviceModelField struct {
+	ID        int64   `json:"id"`
+	ModelID   int32   `json:"model_id"`
+	FieldKey  string  `json:"field_key"`
+	FieldName string  `json:"field_name"`
+	FieldType string  `json:"field_type"`
+	Unit      string  `json:"unit"`
+	Sort      int     `json:"sort"`
+	IsShow    bool    `json:"is_show"`
+	IsControl bool    `json:"is_control"`
+	ParseRule *string `json:"parse_rule"`
+}
+
+type AuditLog struct {
+	ID              int64     `json:"id"`
+	UserID          int64     `json:"user_id"`
+	DeviceSN        string    `json:"device_sn"`
+	OperationType   string    `json:"operation_type"`
+	OperationDetail string    `json:"operation_detail"`
+	Result          string    `json:"result"`
+	ErrorMessage    string    `json:"error_message"`
+	IPAddress       string    `json:"ip_address"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type RolePermission struct {
+	ID        int64     `json:"id"`
+	Role      int       `json:"role"`
+	Resource  string    `json:"resource"`
+	Action    string    `json:"action"`
+	IsAllowed bool      `json:"is_allowed"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Firmware struct {
+	ID         int64      `json:"id"`
+	Model      string     `json:"model"`
+	Version    string     `json:"version"`
+	FileURL    string     `json:"file_url"`
+	FileSize   int64      `json:"file_size"`
+	FileMD5    string     `json:"file_md5"`
+	FileSHA256 string     `json:"file_sha256"`
+	Changelog  string     `json:"changelog"`
+	IsForce    bool       `json:"is_force"`
+	UploadedBy int64      `json:"uploaded_by"`
+	Status     int        `json:"status"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
+type OtaTask struct {
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	FirmwareID      int64      `json:"firmware_id"`
+	FirmwareVersion string     `json:"firmware_version"`
+	Model           string     `json:"model"`
+	TargetType      string     `json:"target_type"`
+	TargetValue     string     `json:"target_value"`
+	TotalCount      int        `json:"total_count"`
+	SuccessCount    int        `json:"success_count"`
+	FailCount       int        `json:"fail_count"`
+	Status          string     `json:"status"`
+	Description     string     `json:"description"`
+	CreatedBy       int64      `json:"created_by"`
+	PushStrategy    string     `json:"push_strategy"`
+	PushPercentage  int        `json:"push_percentage"`
+	BatchSize       int        `json:"batch_size"`
+	CreatedAt       time.Time  `json:"created_at"`
+	StartedAt       *time.Time `json:"started_at"`
+	CompletedAt     *time.Time `json:"completed_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+type OtaTaskDevice struct {
+	ID           int64      `json:"id"`
+	TaskID       string     `json:"task_id"`
+	DeviceSN     string     `json:"device_sn"`
+	OldVersion   string     `json:"old_version"`
+	NewVersion   string     `json:"new_version"`
+	Status       string     `json:"status"`
+	Progress     int        `json:"progress"`
+	ErrorMessage string     `json:"error_message"`
+	MQTTMessage  string     `json:"mqtt_message"`
+	StartedAt    *time.Time `json:"started_at"`
+	CompletedAt  *time.Time `json:"completed_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+}
+
+type ParallelConfig struct {
+	ID                        int64     `json:"id"`
+	GroupName                 string    `json:"group_name"`
+	PhaseConfig               string    `json:"phase_config"`
+	MasterSN                  string    `json:"master_sn"`
+	SlaveSNs                  string    `json:"slave_sns"`
+	CirculatingCurrentThreshold float64  `json:"circulating_current_threshold"`
+	LoadBalanceDeviation      float64   `json:"load_balance_deviation"`
+	CreatedBy                 int64     `json:"created_by"`
+	Status                    int       `json:"status"`
+	CreatedAt                 time.Time `json:"created_at"`
+	UpdatedAt                 time.Time `json:"updated_at"`
+}
+
+type ParallelStatus struct {
+	ID                int64     `json:"id"`
+	ParallelID        int64     `json:"parallel_id"`
+	DeviceSN          string    `json:"device_sn"`
+	Role              string    `json:"role"`
+	SyncStatus        string    `json:"sync_status"`
+	OutputPower       float64   `json:"output_power"`
+	CirculatingCurrent float64  `json:"circulating_current"`
+	DataTime          time.Time `json:"data_time"`
+}
+
+type SystemConfig struct {
+	ID          int64     `json:"id"`
+	ConfigKey   string    `json:"config_key"`
+	ConfigValue string    `json:"config_value"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }

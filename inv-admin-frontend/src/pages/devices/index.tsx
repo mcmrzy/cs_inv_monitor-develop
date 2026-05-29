@@ -18,10 +18,12 @@ import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import { deviceApi } from '@/services/deviceApi'
 import { commandApi } from '@/services/commandApi'
+import { modelApi } from '@/services/modelApi'
 import useAuthStore from '@/stores/authStore'
 import { Role } from '@/types'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
 import StatusBadge from '@/components/StatusBadge'
+import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -219,6 +221,9 @@ const DevicesPage: React.FC = () => {
   const [unbindReqPage, setUnbindReqPage] = useState(1)
   const [unbindReqPageSize, setUnbindReqPageSize] = useState(10)
 
+  const [modelOptions, setModelOptions] = useState<{ label: string; value: string }[]>([])
+  const modelFields = useModelFields(detailDevice?.model)
+
   const buildQueryParams = useCallback(() => {
     const params: any = {
       page,
@@ -299,6 +304,18 @@ const DevicesPage: React.FC = () => {
       fetchTelemetry(detailSn, telemetryRange);
     }
   }, [detailDrawerOpen, detailSn, telemetryRange, telemetryVersion, fetchTelemetry]);
+
+  useEffect(() => {
+    modelApi.listModels().then((res) => {
+      const models = res.data?.data ?? res.data ?? []
+      setModelOptions(
+        models.map((m: any) => ({
+          label: `${m.model_name} (${m.model_code})`,
+          value: m.model_code,
+        })),
+      )
+    }).catch(() => {})
+  }, [])
 
   const { data: lifecycleRes } = useQuery({
     queryKey: ['deviceLifecycle', detailSn],
@@ -1197,9 +1214,29 @@ const DevicesPage: React.FC = () => {
             </Descriptions>
           </Card>
 
+          {modelFields?.cache && modelFields.cache.showFields.length > 0 && (
+            <Card size="small" title={`${detailDevice?.model ?? ''} 状态概览`} style={{ marginBottom: 16 }}>
+              <DynamicStatCards
+                fields={modelFields.cache.showFields.slice(0, 6)}
+                data={realtimeData ?? {}}
+              />
+            </Card>
+          )}
+
           <Card size="small" title="实时遥测数据" style={{ marginBottom: 16 }}>
             {renderRealtimePanel()}
           </Card>
+
+          {modelFields?.cache && modelFields.cache.showFields.length > 0 && (
+            <Card size="small" title={`${detailDevice?.model ?? ''} 动态字段`} style={{ marginBottom: 16 }}>
+              <DynamicFieldRenderer
+                fields={modelFields.cache.showFields}
+                data={realtimeData ?? {}}
+                column={2}
+                size="small"
+              />
+            </Card>
+          )}
 
           <Card size="small" title="历史遥测数据" style={{ marginBottom: 16 }}>
             <Space style={{ marginBottom: 12 }}>
@@ -1233,6 +1270,48 @@ const DevicesPage: React.FC = () => {
               </div>
             )}
           </Card>
+
+          {modelFields?.cache && modelFields.cache.controlFields.length > 0 && (
+            <Card size="small" title="型号控制指令" style={{ marginBottom: 16 }}>
+              <Alert
+                type="info"
+                message="以下为当前型号支持的控制字段，由型号配置自动生成"
+                style={{ marginBottom: 12 }}
+                showIcon
+              />
+              <List
+                size="small"
+                dataSource={modelFields.cache.controlFields}
+                renderItem={(field) => (
+                  <List.Item
+                    actions={[
+                      <Button
+                        key="control"
+                        type="primary"
+                        size="small"
+                        icon={<ThunderboltOutlined />}
+                        onClick={() => {
+                          message.info(`下发控制指令: ${field.field_name}`)
+                        }}
+                      >
+                        下发
+                      </Button>,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      title={`${field.field_name} (${field.field_key})`}
+                      description={`类型: ${field.field_type} | 单位: ${field.unit || '无'}`}
+                    />
+                    <InputNumber
+                      style={{ width: 180 }}
+                      placeholder={`输入${field.field_name}`}
+                      size="small"
+                    />
+                  </List.Item>
+                )}
+              />
+            </Card>
+          )}
 
           <Card size="small" title="设备控制">
             <div style={{ marginBottom: 12 }}>
@@ -1497,7 +1576,9 @@ const DevicesPage: React.FC = () => {
                   style={{ width: '100%' }}
                   value={filters.model}
                   onChange={(v) => setFilters((f) => ({ ...f, model: v }))}
-                  options={[]}
+                  options={modelOptions}
+                  showSearch
+                  optionFilterProp="label"
                 />
               </Col>
               <Col xs={24} sm={12} md={6}>

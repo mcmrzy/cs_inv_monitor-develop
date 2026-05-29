@@ -138,146 +138,20 @@ CREATE INDEX idx_devices_station ON devices(station_id);
 CREATE INDEX idx_devices_user ON devices(user_id);
 CREATE INDEX idx_devices_status ON devices(status);
 
--- 设备实时数据表
-CREATE TABLE device_realtime_data (
-    id BIGSERIAL PRIMARY KEY,
-    device_sn VARCHAR(50) NOT NULL UNIQUE,
-    -- 光伏参数
-    pv1_voltage DECIMAL(10,2),
-    pv1_current DECIMAL(10,2),
-    pv1_power DECIMAL(10,2),
-    pv1_temp DECIMAL(10,2),
-    pv2_voltage DECIMAL(10,2),
-    pv2_current DECIMAL(10,2),
-    pv2_power DECIMAL(10,2),
-    pv2_temp DECIMAL(10,2),
-    -- 电池参数
-    battery_voltage DECIMAL(10,2),
-    battery_current DECIMAL(10,2),
-    battery_soc INTEGER,
-    battery_temp DECIMAL(10,2),
-    battery_status VARCHAR(50),
-    -- 电网参数
-    grid_voltage DECIMAL(10,2),
-    grid_frequency DECIMAL(10,2),
-    grid_power DECIMAL(10,2),
-    grid_power_direction VARCHAR(20), -- buy/sell
-    -- 输出参数
-    output_voltage DECIMAL(10,2),
-    output_current DECIMAL(10,2),
-    output_frequency DECIMAL(10,2),
-    output_power DECIMAL(10,2),
-    power_factor DECIMAL(5,3),
-    -- 温度故障
-    board_temp DECIMAL(10,2),
-    tube_temp DECIMAL(10,2),
-    fault_code VARCHAR(20),
-    fault_message VARCHAR(200),
-    -- 运行状态
-    run_mode VARCHAR(20), -- grid_tied/off_grid/standby/fault
-    total_power DECIMAL(10,2), -- 当前总功率
-    wifi_signal INTEGER,
-    -- 时间戳
-    data_time TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- [已废弃] 设备实时数据表 - 已由 device_telemetry 超表替代
+-- CREATE TABLE device_realtime_data (...);
 
-CREATE INDEX idx_realtime_data_sn ON device_realtime_data(device_sn);
+-- [已废弃] 设备历史数据表(分钟级) - 已由 TimescaleDB device_telemetry_1min 连续聚合替代
+-- CREATE TABLE device_minute_data (...);
 
--- 设备历史数据表(分钟级)
-CREATE TABLE device_minute_data (
-    id BIGSERIAL PRIMARY KEY,
-    device_sn VARCHAR(50) NOT NULL,
-    data_time TIMESTAMP NOT NULL,
-    -- 汇总数据
-    avg_power DECIMAL(10,2),
-    max_power DECIMAL(10,2),
-    min_power DECIMAL(10,2),
-    energy_produce DECIMAL(10,4), -- 发电量(kWh)
-    energy_consume DECIMAL(10,4), -- 用电量(kWh)
-    energy_sell DECIMAL(10,4), -- 上网电量(kWh)
-    energy_buy DECIMAL(10,4), -- 购电量(kWh)
-    avg_soc INTEGER,
-    run_minutes INTEGER, -- 运行分钟数
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+-- [已废弃] 设备历史数据表(小时级) - 已由 TimescaleDB device_telemetry_1hour 连续聚合替代
+-- CREATE TABLE device_hour_data (...);
 
-CREATE INDEX idx_minute_data_sn_time ON device_minute_data(device_sn, data_time);
+-- [已废弃] 设备历史数据表(日级) - 已由 TimescaleDB device_telemetry_1day 连续聚合替代
+-- CREATE TABLE device_day_data (...);
 
--- 设备历史数据表(小时级)
-CREATE TABLE device_hour_data (
-    id BIGSERIAL PRIMARY KEY,
-    device_sn VARCHAR(50) NOT NULL,
-    data_time TIMESTAMP NOT NULL,
-    energy_produce DECIMAL(10,4),
-    energy_consume DECIMAL(10,4),
-    energy_sell DECIMAL(10,4),
-    energy_buy DECIMAL(10,4),
-    avg_power DECIMAL(10,2),
-    max_power DECIMAL(10,2),
-    avg_soc INTEGER,
-    run_minutes INTEGER,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_hour_data_sn_time ON device_hour_data(device_sn, data_time);
-
--- 设备历史数据表(日级)
-CREATE TABLE device_day_data (
-    id BIGSERIAL PRIMARY KEY,
-    device_sn VARCHAR(50) NOT NULL,
-    data_date DATE NOT NULL,
-    energy_produce DECIMAL(10,4),
-    energy_consume DECIMAL(10,4),
-    energy_sell DECIMAL(10,4),
-    energy_buy DECIMAL(10,4),
-    max_power DECIMAL(10,2),
-    avg_soc INTEGER,
-    run_minutes INTEGER,
-    income DECIMAL(10,2), -- 收益(元)
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(device_sn, data_date)
-);
-
-CREATE INDEX idx_day_data_sn_date ON device_day_data(device_sn, data_date);
-
--- 设备参数设置表
-CREATE TABLE device_params (
-    id BIGSERIAL PRIMARY KEY,
-    device_sn VARCHAR(50) NOT NULL UNIQUE,
-    -- 基础运行设置
-    power_switch BOOLEAN DEFAULT TRUE,
-    run_mode VARCHAR(20) DEFAULT 'grid_tied', -- grid_tied/off_grid
-    power_strategy VARCHAR(20) DEFAULT 'self_use', -- self_use/sell_first
-    output_power_limit DECIMAL(10,2),
-    device_time TIMESTAMP,
-    -- 电池充放电设置
-    charge_voltage_limit DECIMAL(10,2),
-    discharge_voltage_limit DECIMAL(10,2),
-    max_charge_current DECIMAL(10,2),
-    max_discharge_current DECIMAL(10,2),
-    peak_valley_schedule JSONB,
-    -- 电网保护设置
-    over_voltage_threshold DECIMAL(10,2),
-    under_voltage_threshold DECIMAL(10,2),
-    over_freq_threshold DECIMAL(10,2),
-    under_freq_threshold DECIMAL(10,2),
-    island_protection BOOLEAN DEFAULT TRUE,
-    grid_delay INTEGER DEFAULT 60,
-    -- 硬件保护设置
-    over_current_threshold DECIMAL(10,2),
-    over_temp_threshold DECIMAL(10,2),
-    dc_threshold DECIMAL(10,2),
-    -- 工厂高级参数
-    voltage_calibration DECIMAL(10,4),
-    current_calibration DECIMAL(10,4),
-    power_calibration DECIMAL(10,4),
-    inner_loop_params JSONB,
-    -- 时间戳
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_params_sn ON device_params(device_sn);
+-- [已废弃] 设备参数设置表 - 改用 MQTT 直接配置
+-- CREATE TABLE device_params (...);
 
 -- ============================================
 -- 4. 告警相关表
@@ -322,80 +196,16 @@ CREATE INDEX idx_alarm_notify_alarm ON alarm_notifications(alarm_id);
 CREATE INDEX idx_alarm_notify_user ON alarm_notifications(user_id);
 
 -- ============================================
--- 5. 设备分享相关表
+-- 5. [已废弃] 设备分享表 - 功能已移除
 -- ============================================
 
--- 设备分享表
-CREATE TABLE device_shares (
-    id BIGSERIAL PRIMARY KEY,
-    device_sn VARCHAR(50) NOT NULL,
-    owner_id BIGINT NOT NULL,
-    share_to_user_id BIGINT NOT NULL,
-    permission VARCHAR(20) NOT NULL DEFAULT 'view', -- view/control
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(device_sn, share_to_user_id)
-);
-
-CREATE INDEX idx_shares_device ON device_shares(device_sn);
-CREATE INDEX idx_shares_owner ON device_shares(owner_id);
-CREATE INDEX idx_shares_to_user ON device_shares(share_to_user_id);
-
 -- ============================================
--- 6. 电站汇总数据表
+-- 6. [已废弃] station_day_data - 已由 TimescaleDB 连续聚合替代
 -- ============================================
 
--- 电站日汇总表
-CREATE TABLE station_day_data (
-    id BIGSERIAL PRIMARY KEY,
-    station_id BIGINT NOT NULL,
-    data_date DATE NOT NULL,
-    energy_produce DECIMAL(10,4),
-    energy_consume DECIMAL(10,4),
-    energy_sell DECIMAL(10,4),
-    energy_buy DECIMAL(10,4),
-    max_power DECIMAL(10,2),
-    device_count INTEGER,
-    online_count INTEGER,
-    fault_count INTEGER,
-    income DECIMAL(10,2),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(station_id, data_date)
-);
-
-CREATE INDEX idx_station_day_station_date ON station_day_data(station_id, data_date);
-
 -- ============================================
--- 7. 消息推送相关表
+-- 7. [已废弃] 消息推送表 - user_notify_settings / messages 已移除
 -- ============================================
-
--- 用户消息设置表
-CREATE TABLE user_notify_settings (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL UNIQUE,
-    push_enabled BOOLEAN DEFAULT TRUE,
-    alarm_push BOOLEAN DEFAULT TRUE,
-    offline_push BOOLEAN DEFAULT TRUE,
-    system_push BOOLEAN DEFAULT TRUE,
-    quiet_hours_start TIME, -- 免打扰开始时间
-    quiet_hours_end TIME, -- 免打扰结束时间
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- 消息表
-CREATE TABLE messages (
-    id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    title VARCHAR(200) NOT NULL,
-    content TEXT NOT NULL,
-    type VARCHAR(20) NOT NULL, -- alarm/system/promotion
-    is_read BOOLEAN DEFAULT FALSE,
-    extra_data JSONB,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_messages_user ON messages(user_id);
-CREATE INDEX idx_messages_read ON messages(user_id, is_read);
 
 -- ============================================
 -- 8. OTA升级相关表
@@ -464,38 +274,8 @@ INSERT INTO system_configs (config_key, config_value, description) VALUES
 -- 10. 视图
 -- ============================================
 
--- 电站实时数据视图
-CREATE VIEW v_station_realtime AS
-SELECT 
-    s.id AS station_id,
-    s.user_id,
-    s.name AS station_name,
-    s.capacity,
-    COUNT(d.id) AS device_count,
-    SUM(CASE WHEN d.status = 1 THEN 1 ELSE 0 END) AS online_count,
-    SUM(CASE WHEN d.status = 2 THEN 1 ELSE 0 END) AS fault_count,
-    COALESCE(SUM(r.total_power), 0) AS total_power,
-    COALESCE(AVG(r.battery_soc), 0) AS avg_soc
-FROM stations s
-LEFT JOIN devices d ON d.station_id = s.id AND d.deleted_at IS NULL
-LEFT JOIN device_realtime_data r ON r.device_sn = d.sn
-WHERE s.deleted_at IS NULL
-GROUP BY s.id, s.user_id, s.name, s.capacity;
-
--- 用户设备权限视图
-CREATE VIEW v_user_devices AS
-SELECT 
-    u.id AS user_id,
-    d.sn AS device_sn,
-    d.station_id,
-    CASE 
-        WHEN d.user_id = u.id THEN 'owner'
-        WHEN ds.permission IS NOT NULL THEN ds.permission
-        ELSE NULL
-    END AS permission
-FROM users u
-LEFT JOIN devices d ON d.user_id = u.id AND d.deleted_at IS NULL
-LEFT JOIN device_shares ds ON ds.device_sn = d.sn AND ds.share_to_user_id = u.id;
+-- [已废弃] v_station_realtime - 引用了已删除的 device_realtime_data 表
+-- [已废弃] v_user_devices - 引用了已删除的 device_shares 表
 
 -- ============================================
 -- 11. 函数
@@ -510,12 +290,10 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- 为需要的表创建触发器
+-- 为需要的表创建触发器（已移除 device_params 和 user_notify_settings 的触发器）
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_stations_updated_at BEFORE UPDATE ON stations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_devices_updated_at BEFORE UPDATE ON devices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_device_params_updated_at BEFORE UPDATE ON device_params FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_user_notify_settings_updated_at BEFORE UPDATE ON user_notify_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_system_configs_updated_at BEFORE UPDATE ON system_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================
@@ -528,14 +306,8 @@ BEGIN
     -- 清理过期验证码
     DELETE FROM verification_codes WHERE expires_at < CURRENT_TIMESTAMP;
     
-    -- 清理过期会话
-    DELETE FROM user_sessions WHERE expires_at < CURRENT_TIMESTAMP;
-    
-    -- 清理30天前的分钟级数据
-    DELETE FROM device_minute_data WHERE data_time < CURRENT_TIMESTAMP - INTERVAL '30 days';
-    
-    -- 清理1年前的小时级数据
-    DELETE FROM device_hour_data WHERE data_time < CURRENT_TIMESTAMP - INTERVAL '1 year';
+    -- 注意：分钟级/小时级数据已由 TimescaleDB 自动管理
+    -- user_sessions 已删除（改用 JWT）
 END;
 $$ LANGUAGE plpgsql;
 

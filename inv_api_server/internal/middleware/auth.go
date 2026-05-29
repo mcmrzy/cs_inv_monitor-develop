@@ -3,6 +3,8 @@ package middleware
 import (
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"inv-api-server/pkg/jwt"
 	"inv-api-server/pkg/response"
@@ -109,7 +111,44 @@ func CORS() gin.HandlerFunc {
 }
 
 func RateLimit() gin.HandlerFunc {
+	limiter := &tokenBucketRateLimiter{
+		rate:       100,
+		burst:      200,
+		tokens:     200,
+		lastRefill: time.Now(),
+	}
 	return func(c *gin.Context) {
+		if !limiter.allow() {
+			response.Error(c, 429, "请求过于频繁，请稍后再试")
+			c.Abort()
+			return
+		}
 		c.Next()
 	}
+}
+
+type tokenBucketRateLimiter struct {
+	rate       float64
+	burst      int
+	tokens     float64
+	lastRefill time.Time
+	mu         sync.Mutex
+}
+
+func (l *tokenBucketRateLimiter) allow() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	elapsed := now.Sub(l.lastRefill).Seconds()
+	l.tokens += elapsed * l.rate
+	if l.tokens > float64(l.burst) {
+		l.tokens = float64(l.burst)
+	}
+	l.lastRefill = now
+
+	if l.tokens < 1 {
+		return false
+	}
+	l.tokens--
+	return true
 }

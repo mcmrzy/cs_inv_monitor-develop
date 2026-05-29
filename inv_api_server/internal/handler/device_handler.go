@@ -207,6 +207,11 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 		return
 	}
 
+	if err := h.deviceService.ValidateControlCommand(c.Request.Context(), sn, req.Command); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
 	if err := h.deviceService.SendCommand(c.Request.Context(), sn, req.Command, req.Params); err != nil {
 		response.Error(c, 5003, "send command failed: "+err.Error())
 		return
@@ -215,50 +220,9 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 	response.SuccessWithMessage(c, "command sent", nil)
 }
 
-func (h *DeviceHandler) GetParams(c *gin.Context) {
-	sn := c.Param("sn")
-	userID := middleware.GetUserID(c)
-
-	if !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.Forbidden(c, "permission denied")
-		return
-	}
-
-	params, err := h.deviceService.GetParams(c.Request.Context(), sn)
-	if err != nil {
-		response.InternalError(c, "system error")
-		return
-	}
-
-	response.Success(c, params)
-}
-
-type UpdateParamsRequest struct {
-	Params map[string]interface{} `json:"params" binding:"required"`
-}
-
-func (h *DeviceHandler) UpdateParams(c *gin.Context) {
-	sn := c.Param("sn")
-	userID := middleware.GetUserID(c)
-
-	if !h.deviceService.HasControlPermission(c.Request.Context(), userID, sn) {
-		response.Forbidden(c, "permission denied")
-		return
-	}
-
-	var req UpdateParamsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
-		return
-	}
-
-	if err := h.deviceService.UpdateParams(c.Request.Context(), sn, req.Params); err != nil {
-		response.InternalError(c, "update params failed")
-		return
-	}
-
-	response.SuccessWithMessage(c, "params updated", nil)
-}
+// DEPRECATED: Device params removed. Use MQTT direct configuration.
+// func (h *DeviceHandler) GetParams(c *gin.Context) {}
+// func (h *DeviceHandler) UpdateParams(c *gin.Context) {}
 
 func (h *DeviceHandler) GetHistory(c *gin.Context) {
 	sn := c.Param("sn")
@@ -303,81 +267,10 @@ func (h *DeviceHandler) GetAlarms(c *gin.Context) {
 	response.Page(c, alarms, total, page, pageSize)
 }
 
-type ShareDeviceRequest struct {
-	Phone      string `json:"phone" binding:"required"`
-	Permission string `json:"permission" binding:"required"`
-}
-
-func (h *DeviceHandler) Share(c *gin.Context) {
-	sn := c.Param("sn")
-	userID := middleware.GetUserID(c)
-
-	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
-	if err != nil {
-		response.InternalError(c, "system error")
-		return
-	}
-
-	if device == nil || device.UserID != userID {
-		response.Forbidden(c, "permission denied")
-		return
-	}
-
-	var req ShareDeviceRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
-		return
-	}
-
-	if err := h.deviceService.Share(c.Request.Context(), sn, userID, req.Phone, req.Permission); err != nil {
-		response.InternalError(c, "share device failed: "+err.Error())
-		return
-	}
-
-	response.SuccessWithMessage(c, "device shared", nil)
-}
-
-func (h *DeviceHandler) CancelShare(c *gin.Context) {
-	_ = c.Param("sn")
-	shareID, err := strconv.ParseInt(c.Param("share_id"), 10, 64)
-	if err != nil {
-		response.BadRequest(c, "invalid share id")
-		return
-	}
-
-	userID := middleware.GetUserID(c)
-
-	if err := h.deviceService.CancelShare(c.Request.Context(), shareID, userID); err != nil {
-		response.InternalError(c, "cancel share failed: "+err.Error())
-		return
-	}
-
-	response.SuccessWithMessage(c, "share canceled", nil)
-}
-
-func (h *DeviceHandler) GetShares(c *gin.Context) {
-	sn := c.Param("sn")
-	userID := middleware.GetUserID(c)
-
-	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
-	if err != nil {
-		response.InternalError(c, "system error")
-		return
-	}
-
-	if device == nil || device.UserID != userID {
-		response.Forbidden(c, "permission denied")
-		return
-	}
-
-	shares, err := h.deviceService.GetShares(c.Request.Context(), sn)
-	if err != nil {
-		response.InternalError(c, "system error")
-		return
-	}
-
-	response.Success(c, shares)
-}
+// DEPRECATED: Device sharing feature removed.
+// func (h *DeviceHandler) Share(c *gin.Context) {}
+// func (h *DeviceHandler) CancelShare(c *gin.Context) {}
+// func (h *DeviceHandler) GetShares(c *gin.Context) {}
 
 type AddDeviceRequest struct {
 	SN        string `json:"sn" binding:"required"`
@@ -451,53 +344,6 @@ func (h *DeviceHandler) GetStatistics(c *gin.Context) {
 	response.Success(c, data)
 }
 
-type OTAUpgradeRequest struct {
-	FirmwareID int64 `json:"firmware_id" binding:"required"`
-}
-
-func (h *DeviceHandler) OTAUpgrade(c *gin.Context) {
-	sn := c.Param("sn")
-	userID := middleware.GetUserID(c)
-
-	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
-	if err != nil {
-		response.InternalError(c, "system error")
-		return
-	}
-
-	if device == nil || device.UserID != userID {
-		response.Forbidden(c, "permission denied")
-		return
-	}
-
-	var req OTAUpgradeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
-		return
-	}
-
-	if err := h.deviceService.StartOTA(c.Request.Context(), sn, req.FirmwareID); err != nil {
-		response.InternalError(c, "start OTA failed: "+err.Error())
-		return
-	}
-
-	response.SuccessWithMessage(c, "OTA upgrade started", nil)
-}
-
-func (h *DeviceHandler) GetOTAStatus(c *gin.Context) {
-	sn := c.Param("sn")
-	userID := middleware.GetUserID(c)
-
-	if !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.Forbidden(c, "permission denied")
-		return
-	}
-
-	status, err := h.deviceService.GetOTAStatus(c.Request.Context(), sn)
-	if err != nil {
-		response.InternalError(c, "system error")
-		return
-	}
-
-	response.Success(c, status)
-}
+// DEPRECATED: OTA management migrated to NestJS backend (inv-admin-backend).
+// func (h *DeviceHandler) OTAUpgrade(c *gin.Context) {}
+// func (h *DeviceHandler) GetOTAStatus(c *gin.Context) {}

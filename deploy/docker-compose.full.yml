@@ -1,0 +1,141 @@
+services:
+  api-gateway:
+    build: ../api-gateway
+    container_name: inv-api-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../api-gateway/config.docker.yaml:/app/config.yaml:ro
+    networks:
+      - inv-network
+    restart: unless-stopped
+    depends_on:
+      - device-server
+      - postgres
+      - redis
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: inv-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: cs_inv_admin_2026_test
+      POSTGRES_DB: inv_mqtt
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ../database/00-init.sql:/docker-entrypoint-initdb.d/00-init.sql
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ../database/migration_architecture_upgrade_20260529.sql:/docker-entrypoint-initdb.d/02-upgrade.sql
+    networks:
+      - inv-network
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: inv-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    networks:
+      - inv-network
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: inv-kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://jiuxiaoyw.online:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: -Xmx1G -Xms1G
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - inv-network
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  mqtt-kafka-bridge:
+    build: ../mqtt-kafka-bridge
+    container_name: mqtt-kafka-bridge
+    ports:
+      - "18088:18088"
+    volumes:
+      - ../mqtt-kafka-bridge/config.docker.yaml:/app/config.yaml:ro
+    networks:
+      - inv-network
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  device-server:
+    build: ../inv_device_server
+    container_name: inv-device-server
+    ports:
+      - "8081:8081"
+    volumes:
+      - ../inv_device_server/config.docker.yaml:/app/config.yaml:ro
+      - device-logs:/app/logs
+    networks:
+      - inv-network
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  inv-network:
+    driver: bridge
+
+volumes:
+  pg-data:
+  redis-data:
+  kafka-data:
+  device-logs:

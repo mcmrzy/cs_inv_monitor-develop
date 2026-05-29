@@ -11,6 +11,7 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	MQTT     MQTTConfig     `mapstructure:"mqtt"`
+	Kafka    KafkaConfig    `mapstructure:"kafka"`
 	Log      LogConfig      `mapstructure:"log"`
 	Timezone string         `mapstructure:"timezone"`
 }
@@ -42,12 +43,21 @@ type RedisConfig struct {
 }
 
 type MQTTConfig struct {
-	Broker   string `mapstructure:"broker"`
-	Port     int    `mapstructure:"port"`
-	ClientID string `mapstructure:"client_id"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-	QoS      byte   `mapstructure:"qos"`
+	Broker      string `mapstructure:"broker"`
+	Port        int    `mapstructure:"port"`
+	ClientID    string `mapstructure:"client_id"`
+	Username    string `mapstructure:"username"`
+	Password    string `mapstructure:"password"`
+	QoS         byte   `mapstructure:"qos"`
+	TLSInsecure bool   `mapstructure:"tls_insecure"`
+}
+
+type KafkaConfig struct {
+	Brokers   []string `mapstructure:"brokers"`
+	Enabled   bool     `mapstructure:"enabled"`
+	TelemetryTopic string `mapstructure:"telemetry_topic"`
+	AlarmTopic  string `mapstructure:"alarm_topic"`
+	CommandTopic string `mapstructure:"command_topic"`
 }
 
 type LogConfig struct {

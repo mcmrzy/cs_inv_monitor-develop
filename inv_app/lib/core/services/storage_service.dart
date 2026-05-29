@@ -48,6 +48,21 @@ abstract class StorageService {
   Future<void> saveStationCache(String json);
   Future<void> deleteStationCache();
 
+  Future<bool> getNotifyPush();
+  Future<void> saveNotifyPush(bool value);
+  Future<bool> getNotifyAlert();
+  Future<void> saveNotifyAlert(bool value);
+  Future<bool> getNotifyOffline();
+  Future<void> saveNotifyOffline(bool value);
+  Future<bool> getNotifySystem();
+  Future<void> saveNotifySystem(bool value);
+  Future<String?> getNotifyDndStart();
+  Future<void> saveNotifyDndStart(String value);
+  Future<String?> getNotifyDndEnd();
+  Future<void> saveNotifyDndEnd(String value);
+  Future<bool> getNotifyDndEnabled();
+  Future<void> saveNotifyDndEnabled(bool value);
+
   Future<void> clearAll();
 }
 
@@ -70,6 +85,13 @@ class StorageServiceImpl implements StorageService {
   static const String _keyIsLocalMode = 'is_local_mode';
   static const String _keyLocale = 'app_locale';
   static const String _keyStationCache = 'station_cache';
+  static const String _keyNotifyPush = 'notify_push';
+  static const String _keyNotifyAlert = 'notify_alert';
+  static const String _keyNotifyOffline = 'notify_offline';
+  static const String _keyNotifySystem = 'notify_system';
+  static const String _keyNotifyDndStart = 'notify_dnd_start';
+  static const String _keyNotifyDndEnd = 'notify_dnd_end';
+  static const String _keyNotifyDndEnabled = 'notify_dnd_enabled';
 
   @override
   Future<String?> getToken() async {
@@ -235,6 +257,76 @@ class StorageServiceImpl implements StorageService {
   @override
   Future<void> deleteStationCache() async {
     await _sharedPreferences.remove(_keyStationCache);
+  }
+
+  @override
+  Future<bool> getNotifyPush() async {
+    return _sharedPreferences.getBool(_keyNotifyPush) ?? true;
+  }
+
+  @override
+  Future<void> saveNotifyPush(bool value) async {
+    await _sharedPreferences.setBool(_keyNotifyPush, value);
+  }
+
+  @override
+  Future<bool> getNotifyAlert() async {
+    return _sharedPreferences.getBool(_keyNotifyAlert) ?? true;
+  }
+
+  @override
+  Future<void> saveNotifyAlert(bool value) async {
+    await _sharedPreferences.setBool(_keyNotifyAlert, value);
+  }
+
+  @override
+  Future<bool> getNotifyOffline() async {
+    return _sharedPreferences.getBool(_keyNotifyOffline) ?? true;
+  }
+
+  @override
+  Future<void> saveNotifyOffline(bool value) async {
+    await _sharedPreferences.setBool(_keyNotifyOffline, value);
+  }
+
+  @override
+  Future<bool> getNotifySystem() async {
+    return _sharedPreferences.getBool(_keyNotifySystem) ?? true;
+  }
+
+  @override
+  Future<void> saveNotifySystem(bool value) async {
+    await _sharedPreferences.setBool(_keyNotifySystem, value);
+  }
+
+  @override
+  Future<String?> getNotifyDndStart() async {
+    return _sharedPreferences.getString(_keyNotifyDndStart);
+  }
+
+  @override
+  Future<void> saveNotifyDndStart(String value) async {
+    await _sharedPreferences.setString(_keyNotifyDndStart, value);
+  }
+
+  @override
+  Future<String?> getNotifyDndEnd() async {
+    return _sharedPreferences.getString(_keyNotifyDndEnd);
+  }
+
+  @override
+  Future<void> saveNotifyDndEnd(String value) async {
+    await _sharedPreferences.setString(_keyNotifyDndEnd, value);
+  }
+
+  @override
+  Future<bool> getNotifyDndEnabled() async {
+    return _sharedPreferences.getBool(_keyNotifyDndEnabled) ?? false;
+  }
+
+  @override
+  Future<void> saveNotifyDndEnabled(bool value) async {
+    await _sharedPreferences.setBool(_keyNotifyDndEnabled, value);
   }
 
   @override

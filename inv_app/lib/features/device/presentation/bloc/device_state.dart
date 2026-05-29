@@ -57,21 +57,6 @@ class DeviceParamsLoaded extends DeviceState {
 
 class DeviceParamsUpdateSuccess extends DeviceState {}
 
-class DeviceParamReadbackResult extends DeviceState {
-  final Map<String, dynamic> writtenParams;
-  final Map<String, dynamic> readbackParams;
-  final List<String> mismatches;
-
-  const DeviceParamReadbackResult({
-    required this.writtenParams,
-    required this.readbackParams,
-    required this.mismatches,
-  });
-
-  @override
-  List<Object?> get props => [writtenParams, readbackParams, mismatches];
-}
-
 class DeviceBindSuccess extends DeviceState {}
 
 class DeviceUnbindSuccess extends DeviceState {}
