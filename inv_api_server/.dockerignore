@@ -1,0 +1,10 @@
+*.exe
+*.log
+*.db
+logs/
+.git/
+.idea/
+.vscode/
+*.md
+deploy/
+inv_app/

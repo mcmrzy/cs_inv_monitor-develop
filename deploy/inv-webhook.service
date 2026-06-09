@@ -1,0 +1,25 @@
+# Webhook 服务器 systemd 单元文件
+
+# /etc/systemd/system/inv-webhook.service
+[Unit]
+Description=INV-MQTT Git Webhook Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/inv-mqtt/deploy
+ExecStart=/usr/bin/python3 /opt/inv-mqtt/deploy/webhook_server.py --port 5000 --secret YOUR_WEBHOOK_SECRET
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/inv-mqtt/webhook.log
+StandardError=append:/var/log/inv-mqtt/webhook_error.log
+
+[Install]
+WantedBy=multi-user.target
+
+# 常用命令:
+# systemctl enable inv-webhook
+# systemctl start inv-webhook
+# systemctl status inv-webhook
+# journalctl -u inv-webhook -f

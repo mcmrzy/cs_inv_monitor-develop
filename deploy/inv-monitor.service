@@ -1,0 +1,29 @@
+# 服务监控 systemd 单元
+
+# /etc/systemd/system/inv-monitor.service
+[Unit]
+Description=INV-MQTT Service Monitor
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/inv-mqtt/deploy/monitor.sh
+User=root
+StandardOutput=append:/var/log/inv-mqtt/monitor.log
+StandardError=append:/var/log/inv-mqtt/monitor_error.log
+
+[Install]
+WantedBy=multi-user.target
+
+# /etc/systemd/system/inv-monitor.timer
+[Unit]
+Description=INV-MQTT Monitor Timer (every minute)
+Requires=inv-monitor.service
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
