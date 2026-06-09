@@ -1,0 +1,54 @@
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+!.vscode/launch.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiled binaries
+*_linux
+*.exe
+*.exe~
+*.test
+*.out
+
+# Go
+vendor/
+
+# Android
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+**/android/.gradle/
+**/android/local.properties
+**/android/**/*.iml
+
+# iOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+
+# Logs
+*.log
+**/logs/*.log
+
+# Config with secrets
+**/config.yaml
+!**/config.docker.yaml
+
+# Python
+*.pyc
+__pycache__/
+
+# Misc
+*.swp
+*.swo
+.migrate_working_dir/

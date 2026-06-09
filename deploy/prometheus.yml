@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: 'inv-admin-backend'
+    metrics_path: '/api/admin/metrics'
+    bearer_token: '${PROMETHEUS_TOKEN}'
+    static_configs:
+      - targets: ['inv-admin-backend:3000']
+
+  - job_name: 'inv-device-server'
+    static_configs:
+      - targets:
+        - 'inv-device-server-1:8081'
+        - 'inv-device-server-2:8081'
+
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['postgres:5432']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']

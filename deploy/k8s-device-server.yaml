@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inv-device-server
+  namespace: inv-mqtt
+  labels:
+    app: inv-device-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inv-device-server
+  template:
+    metadata:
+      labels:
+        app: inv-device-server
+    spec:
+      containers:
+        - name: inv-device-server
+          image: inv-device-server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+              name: http
+          env:
+            - name: CLIENT_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: DB_HOST
+              value: postgres.inv-mqtt.svc.cluster.local
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: inv-db-secret
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: inv-db-secret
+                  key: password
+            - name: REDIS_HOST
+              value: redis.inv-mqtt.svc.cluster.local
+            - name: REDIS_PORT
+              value: "6379"
+            - name: MQTT_BROKER
+              valueFrom:
+                configMapKeyRef:
+                  name: inv-mqtt-config
+                  key: mqtt_broker
+            - name: MQTT_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: inv-mqtt-config
+                  key: mqtt_port
+            - name: MQTT_USERNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: inv-mqtt-config
+                  key: mqtt_username
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: inv-mqtt-secret
+                  key: mqtt_password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inv-device-server
+  namespace: inv-mqtt
+spec:
+  selector:
+    app: inv-device-server
+  ports:
+    - port: 8081
+      targetPort: 8081
+      name: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: inv-device-server-hpa
+  namespace: inv-mqtt
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: inv-device-server
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

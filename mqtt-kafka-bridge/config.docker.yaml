@@ -1,0 +1,15 @@
+server:
+  port: 18088
+  workers: 4
+  timeout: 30
+
+kafka:
+  brokers:
+    - kafka:29092
+  telemetry_topic: inv-telemetry
+  alarm_topic: inv-alerts
+  batch_size: 100
+  batch_timeout: 100
+
+emqx:
+  token: ""

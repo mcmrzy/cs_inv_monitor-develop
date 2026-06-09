@@ -1,0 +1,53 @@
+server:
+  port: 8081
+  read_timeout: 30s
+  write_timeout: 30s
+  mode: release
+
+database:
+  host: postgres
+  port: 5432
+  user: postgres
+  password: ""
+  database: inv_mqtt
+  ssl_mode: disable
+  max_open_conns: 150
+  max_idle_conns: 30
+  conn_max_lifetime: 30m
+  conn_max_idle_time: 10m
+
+redis:
+  host: redis
+  port: 6379
+  password: ""
+  db: 0
+
+mqtt:
+  port: 1883
+  client_id: CSKJ-INV-SERVER-DEVICE
+  username: ""
+  password: ""
+  qos: 1
+  tls_insecure: false
+
+kafka:
+  enabled: true
+  brokers:
+    - jiuxiaoyw.online:9092
+  telemetry_topic: inv-telemetry
+  alarm_topic: inv-alerts
+  command_topic: inv-commands
+
+backends:
+  api_server: http://inv-api-server:8080
+  internal_key: ""
+
+log:
+  level: info
+  filename: logs/device-server.log
+  max_size: 100
+  max_backups: 10
+  max_age: 30
+  compress: true
+
+timezone: Asia/Shanghai

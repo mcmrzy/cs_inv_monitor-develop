@@ -1,0 +1,57 @@
+services:
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: inv-kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: -Xmx512M -Xms512M
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - inv-network
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  mqtt-kafka-bridge:
+    build: ../mqtt-kafka-bridge
+    container_name: mqtt-kafka-bridge
+    ports:
+      - "18088:18088"
+    volumes:
+      - ../mqtt-kafka-bridge/config.docker.yaml:/app/config.yaml:ro
+    networks:
+      - inv-network
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  inv-network:
+    driver: bridge
+
+volumes:
+  kafka-data:
