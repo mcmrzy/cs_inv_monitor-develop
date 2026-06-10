@@ -12,6 +12,7 @@ import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/features/device/data/datasources/device_remote_data_source.dart';
 import 'package:inv_app/core/errors/failures.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class DeviceRealtimePage extends StatefulWidget {
   final String sn;
@@ -647,7 +648,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> with TickerProv
             ),
             Expanded(
               child: _loading
-                  ? Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                  ? const SkeletonDeviceRealtime()
                   : _realtime == null
                       ? Center(child: Text('暂无实时数据', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)))
                       : RefreshIndicator(

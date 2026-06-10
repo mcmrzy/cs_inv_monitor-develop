@@ -14,14 +14,16 @@ class DeviceLoading extends DeviceState {}
 class DeviceListLoaded extends DeviceState {
   final List<dynamic> devices;
   final int total;
+  final bool isFromCache;
 
   const DeviceListLoaded({
     required this.devices,
     required this.total,
+    this.isFromCache = false,
   });
 
   @override
-  List<Object?> get props => [devices, total];
+  List<Object?> get props => [devices, total, isFromCache];
 }
 
 class DeviceDetailLoaded extends DeviceState {

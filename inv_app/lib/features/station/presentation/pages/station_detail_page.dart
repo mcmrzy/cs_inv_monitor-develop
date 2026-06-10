@@ -15,6 +15,7 @@ import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/device_list_view.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class StationDetailPage extends StatefulWidget {
   final int stationId;
@@ -226,9 +227,9 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         }
         final ds = _cachedState;
         if (ds == null) {
-          return Scaffold(
-            body: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
-            bottomNavigationBar: _bottomBar(),
+          return const Scaffold(
+            body: SkeletonStationDetail(),
+            bottomNavigationBar: null,
           );
         }
 
@@ -238,12 +239,21 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         }
 
         return Scaffold(
-          body: IndexedStack(
-            index: _activeTabIndex,
+          body: Column(
             children: [
-              _buildOverviewBody(station),
-              _buildStatisticsBody(station),
-              _buildDevicesBody(ds),
+              if (ds.isFromCache) OfflineDataBanner(
+                onRetry: () => context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId)),
+              ),
+              Expanded(
+                child: IndexedStack(
+                  index: _activeTabIndex,
+                  children: [
+                    _buildOverviewBody(station),
+                    _buildStatisticsBody(station),
+                    _buildDevicesBody(ds),
+                  ],
+                ),
+              ),
             ],
           ),
           bottomNavigationBar: _bottomBar(),
@@ -1047,7 +1057,34 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     if (_statsLoading) {
       return Padding(
         padding: EdgeInsets.symmetric(vertical: 20.h),
-        child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))),
+        child: ShimmerSkeleton(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(width: 80.w, height: 12.h),
+                    SizedBox(height: 4.h),
+                    SkeletonBox(width: 120.w, height: 22.h),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 40.h, color: const Color(0xFFE5E7EB)),
+              SizedBox(width: 16.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(width: 80.w, height: 12.h),
+                    SizedBox(height: 4.h),
+                    SkeletonBox(width: 120.w, height: 22.h),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -1091,9 +1128,25 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
 
   Widget _buildChart() {
     if (_statsLoading) {
-      return SizedBox(
-        height: 260.h,
-        child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
+      return ShimmerSkeleton(
+        child: SizedBox(
+          height: 260.h,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SkeletonBox(width: 100.w, height: 14.h),
+              SizedBox(height: 8.h),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8.r),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -78,7 +79,7 @@ class _HomePageState extends State<HomePage> {
 
           if (ds == null) {
             if (state is StationError) return _buildError(state.message);
-            return Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary));
+            return const SkeletonHomePage();
           }
 
           if (state is StationError && ds.stations.isEmpty) {
@@ -86,45 +87,55 @@ class _HomePageState extends State<HomePage> {
           }
 
           final filtered = _filterStations(ds.stations);
+          final isFromCache = ds.isFromCache;
 
-          return StyledRefreshIndicator(
-            onRefresh: () async => context.read<StationBloc>().add(StationSummaryRequested()),
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                _buildHeader(),
-                if (_showSearch) _buildSearchBar(),
-                _buildFilterCards(ds),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
-                    child: Row(
-                      children: [
-                        Text('${filtered.length} 个电站',
-                            style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-                        const Spacer(),
-                        if (_filterIndex > 0)
-                          GestureDetector(
-                            onTap: () => setState(() => _filterIndex = 0),
-                            child: Text('清除筛选', style: TextStyle(fontSize: 12.sp, color: AppColors.primary)),
+          return Column(
+            children: [
+              if (isFromCache) OfflineDataBanner(
+                onRetry: () => context.read<StationBloc>().add(StationSummaryRequested()),
+              ),
+              Expanded(
+                child: StyledRefreshIndicator(
+                  onRefresh: () async => context.read<StationBloc>().add(StationSummaryRequested()),
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      _buildHeader(),
+                      if (_showSearch) _buildSearchBar(),
+                      _buildFilterCards(ds),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
+                          child: Row(
+                            children: [
+                              Text('${filtered.length} 个电站',
+                                  style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                              const Spacer(),
+                              if (_filterIndex > 0)
+                                GestureDetector(
+                                  onTap: () => setState(() => _filterIndex = 0),
+                                  child: Text('清除筛选', style: TextStyle(fontSize: 12.sp, color: AppColors.primary)),
+                                ),
+                            ],
                           ),
-                      ],
-                    ),
+                        ),
+                      ),
+                      if (filtered.isEmpty)
+                        SliverToBoxAdapter(child: _buildEmpty())
+                      else
+                        SliverPadding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.w),
+                          sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                  (_, i) => _buildCard(filtered[i]),
+                                  childCount: filtered.length)),
+                        ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                    ],
                   ),
                 ),
-                if (filtered.isEmpty)
-                  SliverToBoxAdapter(child: _buildEmpty())
-                else
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(horizontal: 16.w),
-                    sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                            (_, i) => _buildCard(filtered[i]),
-                            childCount: filtered.length)),
-                  ),
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),

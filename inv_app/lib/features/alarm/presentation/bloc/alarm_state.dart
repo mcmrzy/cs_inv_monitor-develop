@@ -14,14 +14,16 @@ class AlarmLoading extends AlarmState {}
 class AlarmListLoaded extends AlarmState {
   final List<dynamic> alarms;
   final int total;
+  final bool isFromCache;
 
   const AlarmListLoaded({
     required this.alarms,
     required this.total,
+    this.isFromCache = false,
   });
 
   @override
-  List<Object?> get props => [alarms, total];
+  List<Object?> get props => [alarms, total, isFromCache];
 }
 
 class AlarmDetailLoaded extends AlarmState {

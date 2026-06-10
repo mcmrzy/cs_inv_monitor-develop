@@ -1,14 +1,16 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/features/alarm/domain/repositories/alarm_repository.dart';
+import 'package:inv_app/core/services/data_cache_service.dart';
 
 part 'alarm_event.dart';
 part 'alarm_state.dart';
 
 class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
   final AlarmRepository repository;
+  final DataCacheService? dataCacheService;
 
-  AlarmBloc({required this.repository}) : super(AlarmInitial()) {
+  AlarmBloc({required this.repository, this.dataCacheService}) : super(AlarmInitial()) {
     on<AlarmListRequested>(_onListRequested);
     on<AlarmDetailRequested>(_onDetailRequested);
     on<AlarmMarkReadRequested>(_onMarkReadRequested);
@@ -27,11 +29,22 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
     result.fold(
       (failure) {
         if (state is AlarmListLoaded) return;
+        // 失败时尝试从缓存加载
+        if (dataCacheService != null) {
+          final cached = dataCacheService!.load(DataCacheService.alarmList);
+          if (cached != null && cached is Map<String, dynamic>) {
+            final alarms = (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
+            final total = (cached['total'] as int?) ?? 0;
+            emit(AlarmListLoaded(alarms: alarms, total: total, isFromCache: true));
+            return;
+          }
+        }
         emit(AlarmError(message: failure.message));
       },
       (data) {
         final alarms = (data['items'] as List?) ?? (data['list'] as List?) ?? [];
         final total = (data['total'] as int?) ?? 0;
+        dataCacheService?.save(DataCacheService.alarmList, data);
         emit(AlarmListLoaded(alarms: alarms, total: total));
       },
     );
