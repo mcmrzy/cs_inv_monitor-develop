@@ -13,6 +13,7 @@ import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
 import 'package:inv_app/core/services/offline_sync_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
+import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:inv_app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:inv_app/features/auth/domain/repositories/auth_repository.dart';
@@ -259,6 +260,10 @@ class ServiceLocator {
       () => OfflineCacheService(getIt()),
     );
 
+    getIt.registerLazySingleton<DataCacheService>(
+      () => DataCacheService(getIt()),
+    );
+
     getIt.registerLazySingleton<OfflineSyncService>(
       () => OfflineSyncService(
         cacheService: getIt(),
@@ -366,7 +371,7 @@ class ServiceLocator {
     );
 
     getIt.registerFactory(
-      () => StationBloc(repository: getIt(), storageService: getIt()),
+      () => StationBloc(repository: getIt(), storageService: getIt(), dataCacheService: getIt()),
     );
 
     getIt.registerFactory(
@@ -376,11 +381,12 @@ class ServiceLocator {
         localCommunicationService: getIt(),
         connectionModeService: getIt(),
         offlineCacheService: getIt(),
+        dataCacheService: getIt(),
       ),
     );
 
     getIt.registerFactory(
-      () => AlarmBloc(repository: getIt()),
+      () => AlarmBloc(repository: getIt(), dataCacheService: getIt()),
     );
 
     getIt.registerFactory(

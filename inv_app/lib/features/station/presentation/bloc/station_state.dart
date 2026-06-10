@@ -14,14 +14,16 @@ class StationLoading extends StationState {}
 class StationSummaryLoaded extends StationState {
   final List<dynamic> stations;
   final Map<String, dynamic> summary;
+  final bool isFromCache;
 
   const StationSummaryLoaded({
     required this.stations,
     required this.summary,
+    this.isFromCache = false,
   });
 
   @override
-  List<Object?> get props => [stations, summary];
+  List<Object?> get props => [stations, summary, isFromCache];
 }
 
 class StationListLoaded extends StationState {
@@ -41,15 +43,17 @@ class StationDetailLoaded extends StationState {
   final int stationId;
   final dynamic station;
   final List<dynamic> devices;
+  final bool isFromCache;
 
   const StationDetailLoaded({
     required this.stationId,
     required this.station,
     required this.devices,
+    this.isFromCache = false,
   });
 
   @override
-  List<Object?> get props => [stationId, station, devices];
+  List<Object?> get props => [stationId, station, devices, isFromCache];
 }
 
 class StationCreateSuccess extends StationState {}

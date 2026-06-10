@@ -5,6 +5,7 @@ import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
+import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/offline_action.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
@@ -18,6 +19,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final LocalCommunicationService? localCommunicationService;
   final ConnectionModeService? connectionModeService;
   final OfflineCacheService? offlineCacheService;
+  final DataCacheService? dataCacheService;
   StreamSubscription<InverterRealtime>? _mqttSub;
   String? _activeSN;
   Timer? _localPollTimer;
@@ -29,6 +31,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     this.localCommunicationService,
     this.connectionModeService,
     this.offlineCacheService,
+    this.dataCacheService,
   }) : super(DeviceInitial()) {
     on<DeviceListRequested>(_onListRequested);
     on<DeviceDetailRequested>(_onDetailRequested);
@@ -74,12 +77,32 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       (failure) {
         // 如果已有数据，忽略错误
         if (state is! DeviceListLoaded) {
+          // 尝试从缓存加载
+          if (dataCacheService != null) {
+            final cacheKey = event.stationId != null
+                ? '${DataCacheService.deviceList}_${event.stationId}'
+                : DataCacheService.deviceList;
+            final cached = dataCacheService!.load(cacheKey);
+            if (cached != null && cached is Map<String, dynamic>) {
+              final devices = (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
+              final total = (cached['total'] as int?) ?? 0;
+              emit(DeviceListLoaded(devices: devices, total: total, isFromCache: true));
+              return;
+            }
+          }
           emit(DeviceError(message: failure.message));
         }
       },
       (data) {
         final devices = (data['items'] as List?) ?? (data['list'] as List?) ?? [];
         final total = (data['total'] as int?) ?? 0;
+        // 保存到缓存
+        if (dataCacheService != null) {
+          final cacheKey = event.stationId != null
+              ? '${DataCacheService.deviceList}_${event.stationId}'
+              : DataCacheService.deviceList;
+          dataCacheService!.save(cacheKey, data);
+        }
         emit(DeviceListLoaded(devices: devices, total: total));
       },
     );

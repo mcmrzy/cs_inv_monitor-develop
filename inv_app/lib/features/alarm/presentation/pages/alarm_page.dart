@@ -60,13 +60,22 @@ class _AlarmPageState extends State<AlarmPage> {
                 ],
               );
             }
-            return StyledRefreshIndicator(
-              onRefresh: () async => context.read<AlarmBloc>().add(const AlarmListRequested()),
-              child: ListView.builder(
-                padding: EdgeInsets.all(12.w),
-                itemCount: ds.alarms.length,
-                itemBuilder: (context, index) => _buildAlarmCard(context, ds.alarms[index]),
-              ),
+            return Column(
+              children: [
+                if (ds.isFromCache) OfflineDataBanner(
+                  onRetry: () => context.read<AlarmBloc>().add(const AlarmListRequested()),
+                ),
+                Expanded(
+                  child: StyledRefreshIndicator(
+                    onRefresh: () async => context.read<AlarmBloc>().add(const AlarmListRequested()),
+                    child: ListView.builder(
+                      padding: EdgeInsets.all(12.w),
+                      itemCount: ds.alarms.length,
+                      itemBuilder: (context, index) => _buildAlarmCard(context, ds.alarms[index]),
+                    ),
+                  ),
+                ),
+              ],
             );
           }
 
