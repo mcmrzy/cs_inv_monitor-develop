@@ -1,8 +1,10 @@
 import { Result, Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
+import useTranslation from '@/hooks/useTranslation'
 
 const UnauthorizedPage: React.FC = () => {
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   return (
     <div
@@ -17,10 +19,10 @@ const UnauthorizedPage: React.FC = () => {
       <Result
         status="403"
         title="403"
-        subTitle="抱歉，您没有权限访问此页面"
+        subTitle={t('unauthorized.title')}
         extra={
           <Button type="primary" onClick={() => navigate('/dashboard')}>
-            返回首页
+            {t('unauthorized.backHome')}
           </Button>
         }
       />

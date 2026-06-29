@@ -9,6 +9,7 @@ import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/local_firmware_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wifi_iot/wifi_iot.dart';
@@ -125,12 +126,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     try {
       final status = await Permission.location.request();
       if (!status.isGranted && !status.isLimited) {
-        setState(() { _scanningWifi = false; _errorMessage = '需要位置权限才能扫描WiFi'; });
+        final l10n = AppLocalizations.of(context)!;
+        setState(() { _scanningWifi = false; _errorMessage = l10n.locationPermissionRequired; });
         return;
       }
       final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
       if (!serviceEnabled) {
-        setState(() { _scanningWifi = false; _errorMessage = '请先开启位置服务(GPS)'; });
+        final l10n = AppLocalizations.of(context)!;
+        setState(() { _scanningWifi = false; _errorMessage = l10n.enableLocationService; });
         return;
       }
       await WiFiForIoTPlugin.forceWifiUsage(true);
@@ -149,13 +152,15 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         setState(() { _csInvNetworks = target; _scanningWifi = false; });
         _connectToAp(target.first);
       } else {
+        final l10n = AppLocalizations.of(context)!;
         setState(() {
           _scanningWifi = false;
-          _errorMessage = '未找到设备 ${widget.deviceSN} 的热点 (CS_INV_${widget.deviceSN})，请确认设备已开启热点';
+          _errorMessage = l10n.str('device_hotspot_not_found', {'sn': widget.deviceSN});
         });
       }
     } catch (e) {
-      setState(() { _scanningWifi = false; _errorMessage = '扫描失败: $e'; });
+      final l10n = AppLocalizations.of(context)!;
+      setState(() { _scanningWifi = false; _errorMessage = l10n.str('scan_failed', {'error': '$e'}); });
     }
   }
 
@@ -189,7 +194,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         // 验证确实连上了设备热点
         final currentSsid = await WiFiForIoTPlugin.getSSID();
         if (currentSsid == null || !(currentSsid.toUpperCase().contains('CS_INV') || currentSsid.toUpperCase().contains('CS-INV'))) {
-          setState(() { _autoConnecting = false; _errorMessage = '连接失败：未检测到设备热点，请重试'; });
+          final l10n = AppLocalizations.of(context)!;
+          setState(() { _autoConnecting = false; _errorMessage = l10n.connectionFailedNoHotspot; });
           return;
         }
 
@@ -198,10 +204,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         // 自动测试连接
         _checkConnectionAndProceed();
       } else {
-        setState(() { _autoConnecting = false; _errorMessage = '连接 $ssid 失败，请重试'; });
+        final l10n = AppLocalizations.of(context)!;
+        setState(() { _autoConnecting = false; _errorMessage = l10n.str('connection_failed_retry', {'ssid': ssid}); });
       }
     } catch (e) {
-      setState(() { _autoConnecting = false; _errorMessage = '连接失败: $e'; });
+      final l10n = AppLocalizations.of(context)!;
+      setState(() { _autoConnecting = false; _errorMessage = l10n.str('connection_failed_retry', {'ssid': '$e'}); });
     }
   }
 
@@ -228,15 +236,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       }
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         setState(() {
           _isDownloading = false;
-          _errorMessage = '下载失败: $e';
+          _errorMessage = l10n.str('download_failed', {'error': '$e'});
         });
       }
     }
   }
 
   Future<void> _checkConnectionAndProceed() async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() {
       _isProcessing = true;
       _errorMessage = null;
@@ -252,7 +262,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       if (currentSsid == null || !currentSsid.startsWith('CS_INV')) {
         setState(() {
           _isProcessing = false;
-          _errorMessage = '请先连接设备热点 (当前WiFi: $currentSsid)';
+          _errorMessage = l10n.str('connect_wifi_first', {'wifi': currentSsid ?? ''});
         });
         return;
       }
@@ -286,34 +296,34 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         showDialog(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('连接失败'),
+            title: Text(l10n.connectionFailed),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('已连接设备热点，但无法访问设备。'),
+                Text(l10n.connectedHotspotCannotAccess),
                 const SizedBox(height: 12),
-                const Text('请尝试以下操作：', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(l10n.tryFollowing, style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                const Text('1. 在手机设置中关闭移动数据'),
-                const Text('2. 确保WiFi已连接到设备热点'),
-                const Text('3. 等待几秒后重试'),
+                Text(l10n.disableMobileData),
+                Text(l10n.ensureWifiConnected),
+                Text(l10n.waitAndRetry),
                 const SizedBox(height: 12),
-                Text('当前热点: $currentSsid', style: const TextStyle(color: Colors.grey)),
-                Text('设备IP: ${widget.deviceIP}', style: const TextStyle(color: Colors.grey)),
+                Text('${l10n.currentHotspot}: $currentSsid', style: const TextStyle(color: Colors.grey)),
+                Text('${l10n.deviceIpLabel}: ${widget.deviceIP}', style: const TextStyle(color: Colors.grey)),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('取消'),
+                child: Text(l10n.cancel),
               ),
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(ctx);
                   _checkConnectionAndProceed(); // 重试
                 },
-                child: const Text('重试'),
+                child: Text(l10n.retry),
               ),
             ],
           ),
@@ -323,11 +333,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Future<void> _startPushFirmware() async {
+    final l10n = AppLocalizations.of(context)!;
     if (_selectedFilePath == null) {
       setState(() {
         _isProcessing = false;
         _result = LocalOTAResult.failed;
-        _resultMessage = '固件文件不存在';
+        _resultMessage = l10n.firmwareFileNotFound;
         _currentStep = LocalOTAStep.result;
       });
       return;
@@ -361,7 +372,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       
       // 等待ESP32重启（OTA成功后ESP32会自动重启）
       setState(() {
-        _upgradeStatus = '上传完成，等待设备重启...';
+        _upgradeStatus = l10n.uploadCompleteWaitReboot;
       });
       await Future.delayed(const Duration(seconds: 5));
       
@@ -370,13 +381,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       setState(() {
         _isProcessing = false;
         _result = LocalOTAResult.failed;
-        _resultMessage = '上传固件失败: $e';
+        _resultMessage = l10n.str('upload_firmware_failed', {'error': '$e'});
         _currentStep = LocalOTAStep.result;
       });
     }
   }
 
   Future<void> _pollUpgradeProgress() async {
+    final l10n = AppLocalizations.of(context)!;
     bool progressEndpointWorking = false;
     
     for (int i = 0; i < 120; i++) {
@@ -433,7 +445,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           setState(() {
             _isProcessing = false;
             _result = LocalOTAResult.failed;
-            _resultMessage = message.isNotEmpty ? message : '升级失败';
+            _resultMessage = message.isNotEmpty ? message : l10n.upgradeFailed;
             _currentStep = LocalOTAStep.result;
           });
           return;
@@ -442,7 +454,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         // 设备可能还在重启中，继续等待
         if (i % 5 == 0) {
           setState(() {
-            _upgradeStatus = '等待设备响应... (${i * 2}s)';
+            _upgradeStatus = l10n.str('waiting_device_response', {'seconds': '${i * 2}'});
           });
         }
         continue;
@@ -453,26 +465,27 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       setState(() {
         _isProcessing = false;
         _result = LocalOTAResult.failed;
-        _resultMessage = '升级超时';
+        _resultMessage = l10n.upgradeTimeout;
         _currentStep = LocalOTAStep.result;
       });
     }
   }
 
   String _mapStatus(String status) {
+    final l10n = AppLocalizations.of(context)!;
     switch (status) {
       case 'idle':
-        return '空闲';
+        return l10n.idleStatus;
       case 'downloading':
-        return '下载中';
+        return l10n.downloading;
       case 'uploading':
-        return '上传中';
+        return l10n.uploadingStatus;
       case 'verifying':
-        return '校验中';
+        return l10n.verifying;
       case 'done':
-        return '完成';
+        return l10n.done;
       case 'error':
-        return '失败';
+        return l10n.failure;
       default:
         return status;
     }
@@ -480,12 +493,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: const Text('本地固件升级', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(l10n.localFirmwareUpgrade, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -508,6 +522,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildStepIndicator() {
+    final l10n = AppLocalizations.of(context)!;
     final steps = LocalOTAStep.values;
     final currentIndex = steps.indexOf(_currentStep);
 
@@ -583,17 +598,18 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   String _stepLabel(LocalOTAStep step) {
+    final l10n = AppLocalizations.of(context)!;
     switch (step) {
       case LocalOTAStep.selectFirmware:
-        return '选择固件';
+        return l10n.selectFirmware;
       case LocalOTAStep.connectDevice:
-        return '连接设备';
+        return l10n.connectDevice;
       case LocalOTAStep.pushFirmware:
-        return '推送固件';
+        return l10n.pushFirmware;
       case LocalOTAStep.triggerUpgrade:
-        return '升级中';
+        return l10n.upgrading;
       case LocalOTAStep.result:
-        return '结果';
+        return l10n.upgradeResult;
     }
   }
 
@@ -613,6 +629,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildSelectFirmwareStep() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -630,14 +647,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('选择固件', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              Text(l10n.selectFirmware, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               SizedBox(height: 12.h),
               if (_selectedFilePath != null)
                 _buildSelectedFirmwareInfo()
               else if (_isDownloading)
                 _buildDownloadingProgress()
               else
-                Text('请先在OTA页面预下载固件，或点击下方按钮下载', style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+                Text(l10n.firmwareDownloadHint, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
               if (_errorMessage != null) ...[
                 SizedBox(height: 8.h),
                 Text(_errorMessage!, style: TextStyle(fontSize: 12.sp, color: AppColors.error)),
@@ -658,7 +675,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                 elevation: 0,
               ),
-              child: Text('下载固件', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              child: Text(l10n.downloadFirmware, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
             ),
           ),
         if (_selectedFilePath != null)
@@ -673,7 +690,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                 elevation: 0,
               ),
-              child: Text('下一步', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              child: Text(l10n.next, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
             ),
           ),
       ],
@@ -681,6 +698,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildDownloadingProgress() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         SizedBox(height: 8.h),
@@ -695,7 +713,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         ),
         SizedBox(height: 8.h),
         Text(
-          _downloadProgress > 0 ? '${(_downloadProgress * 100).toStringAsFixed(1)}%' : '下载中...',
+          _downloadProgress > 0 ? '${(_downloadProgress * 100).toStringAsFixed(1)}%' : '${l10n.downloading}...',
           style: TextStyle(fontSize: 12.sp, color: AppColors.primary),
         ),
       ],
@@ -703,6 +721,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildSelectedFirmwareInfo() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
@@ -718,7 +737,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('固件已就绪', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.successLight)),
+                Text(l10n.firmwareReady, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.successLight)),
                 SizedBox(height: 2.h),
                 Text(
                   widget.firmwareFileName ?? _selectedFilePath!.split('/').last,
@@ -735,6 +754,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildConnectDeviceStep() {
+    final l10n = AppLocalizations.of(context)!;
     // 进入此步骤时自动扫描热点
     if (!_scanningWifi && _csInvNetworks.isEmpty && !_autoConnecting && _selectedAp == null && !_isProcessing) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scanForDeviceHotspot());
@@ -759,30 +779,30 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 if (_autoConnecting) ...[
                   SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
                   SizedBox(height: 12.h),
-                  Text('正在连接 ${_selectedAp?.ssid ?? ""}...', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+                  Text(l10n.str('connecting_to', {'ssid': _selectedAp?.ssid ?? ''}), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
                 ] else if (_scanningWifi) ...[
                   SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
                   SizedBox(height: 12.h),
-                  Text('正在扫描设备热点...', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+                  Text(l10n.scanningDeviceHotspot, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
                 ] else if (_selectedAp != null) ...[
                   Icon(Icons.wifi_rounded, size: 48.sp, color: AppColors.successLight),
                   SizedBox(height: 12.h),
-                  Text('已连接', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.successLight)),
+                  Text(l10n.connected, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.successLight)),
                   SizedBox(height: 4.h),
                   Text(_selectedAp!.ssid ?? '', style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
                 ] else ...[
                   Icon(Icons.wifi_find_rounded, size: 48.sp, color: AppColors.primary),
                   SizedBox(height: 12.h),
-                  Text('连接设备AP热点', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                  Text(l10n.connectDeviceAp, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                   SizedBox(height: 8.h),
                   Text(
-                    '自动扫描设备热点，或手动连接后点击下方按钮',
+                    l10n.autoScanHint,
                     style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: 4.h),
                   Text(
-                    '设备IP: ${widget.deviceIP}',
+                    '${l10n.deviceIpLabel}: ${widget.deviceIP}',
                     style: TextStyle(fontSize: 12.sp, color: AppColors.primary, fontWeight: FontWeight.w600),
                   ),
                   SizedBox(height: 12.h),
@@ -792,7 +812,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     child: OutlinedButton.icon(
                       onPressed: _scanningWifi ? null : _scanForDeviceHotspot,
                       icon: Icon(Icons.refresh_rounded, size: 18.sp),
-                      label: Text('重新扫描热点', style: TextStyle(fontSize: 13.sp)),
+                      label: Text(l10n.rescanHotspot, style: TextStyle(fontSize: 13.sp)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
                         side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
@@ -836,7 +856,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             ),
             child: _isProcessing
                 ? SizedBox(width: 20.w, height: 20.w, child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text('检测连接', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                : Text(l10n.checkConnection, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -844,6 +864,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildPushFirmwareStep() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -862,7 +883,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             children: [
               Icon(Icons.cloud_upload_rounded, size: 48.sp, color: AppColors.primary),
               SizedBox(height: 12.h),
-              Text('推送固件中', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              Text(l10n.pushingFirmware, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               SizedBox(height: 20.h),
               ClipRRect(
                 borderRadius: BorderRadius.circular(8.r),
@@ -886,6 +907,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildTriggerUpgradeStep() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -905,7 +927,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               Icon(Icons.system_update_rounded, size: 48.sp, color: AppColors.primary),
               SizedBox(height: 12.h),
               Text(
-                _upgradeStatus.isNotEmpty ? _upgradeStatus : '升级中',
+                _upgradeStatus.isNotEmpty ? _upgradeStatus : l10n.upgrading,
                 style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
               ),
               SizedBox(height: 20.h),
@@ -925,7 +947,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               ),
               SizedBox(height: 8.h),
               Text(
-                '请勿断开设备电源',
+                l10n.doNotDisconnect,
                 style: TextStyle(fontSize: 12.sp, color: AppColors.warning),
               ),
             ],
@@ -936,6 +958,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildResultStep() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         _buildDeviceInfoCard(),
@@ -954,10 +977,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               if (_result == LocalOTAResult.success) ...[
                 Icon(Icons.check_circle_rounded, size: 64.sp, color: AppColors.successLight),
                 SizedBox(height: 16.h),
-                Text('升级成功', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(l10n.upgradeSuccess, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                 if (_newVersion != null) ...[
                   SizedBox(height: 8.h),
-                  Text('新版本: $_newVersion', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+                  Text(l10n.str('new_version_label', {'version': _newVersion!}), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
                 ],
                 SizedBox(height: 24.h),
                 SizedBox(
@@ -971,16 +994,16 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                       elevation: 0,
                     ),
-                    child: Text('完成', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                    child: Text(l10n.done, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
               if (_result == LocalOTAResult.failed) ...[
                 Icon(Icons.cancel_rounded, size: 64.sp, color: AppColors.error),
                 SizedBox(height: 16.h),
-                Text('升级失败', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(l10n.upgradeFailed, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                 SizedBox(height: 8.h),
-                Text(_resultMessage ?? '未知错误', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
+                Text(_resultMessage ?? l10n.unknown, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
                 SizedBox(height: 24.h),
                 SizedBox(
                   width: double.infinity,
@@ -1000,16 +1023,16 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                       elevation: 0,
                     ),
-                    child: Text('重试', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                    child: Text(l10n.retry, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
               if (_result == LocalOTAResult.verifyFailed) ...[
                 Icon(Icons.warning_rounded, size: 64.sp, color: AppColors.warning),
                 SizedBox(height: 16.h),
-                Text('固件校验失败', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(l10n.firmwareVerifyFailed, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                 SizedBox(height: 8.h),
-                Text('固件文件可能已损坏，请重新下载', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
+                Text(l10n.firmwareCorruptedHint, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
                 SizedBox(height: 24.h),
                 SizedBox(
                   width: double.infinity,
@@ -1032,7 +1055,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                       elevation: 0,
                     ),
-                    child: Text('重新下载', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                    child: Text(l10n.redownload, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -1044,6 +1067,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildDeviceInfoCard() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
@@ -1069,7 +1093,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('当前设备', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.currentDevice, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                 SizedBox(height: 2.h),
                 Text(widget.deviceSN, style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
               ],

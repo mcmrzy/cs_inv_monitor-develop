@@ -146,7 +146,7 @@ class _PowerGaugeState extends State<PowerGauge>
               Positioned(
                 bottom: widget.size.h * 0.06,
                 child: Text(
-                  '额定 ${widget.maxPower.toStringAsFixed(0)}kW',
+                  'Rated ${widget.maxPower.toStringAsFixed(0)}kW',
                   style: TextStyle(
                     fontSize: 13.sp,
                     color: widget.subtextColor ?? theme.colorScheme.onSurfaceVariant,

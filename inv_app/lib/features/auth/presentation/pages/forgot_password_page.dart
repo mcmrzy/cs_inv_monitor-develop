@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -54,11 +55,12 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   void _handleSendCode() {
+    final l10n = AppLocalizations.of(context)!;
     final phone = _phoneController.text.trim();
     if (phone.isEmpty || phone.length != 11) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('请输入正确的手机号'),
+        SnackBar(
+          content: Text(l10n.pleaseInputCorrectPhone),
           backgroundColor: AppColors.error,
         ),
       );
@@ -88,22 +90,22 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(state.message),
+                content: Text(AppLocalizations.of(context)!.translateError(state.message)),
                 backgroundColor: AppColors.error,
               ),
             );
           } else if (state is AuthCodeSent) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('验证码已发送'),
+              SnackBar(
+                content: Text(AppLocalizations.of(context)!.verificationCodeSent),
                 backgroundColor: AppColors.success,
               ),
             );
             _startCountdown();
           } else if (state is AuthPasswordResetSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('密码重置成功，请登录'),
+              SnackBar(
+                content: Text(AppLocalizations.of(context)!.passwordResetSuccess),
                 backgroundColor: AppColors.success,
               ),
             );
@@ -144,6 +146,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   Widget _buildHeader() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         Icon(
@@ -153,7 +156,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         ),
         SizedBox(height: 16.h),
         Text(
-          '忘记密码',
+          l10n.forgotPassword,
           style: TextStyle(
             fontSize: 28.sp,
             fontWeight: FontWeight.bold,
@@ -162,7 +165,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         ),
         SizedBox(height: 8.h),
         Text(
-          '输入手机号获取验证码，重置密码',
+          l10n.pleaseInputRegisterPhone,
           style: TextStyle(
             fontSize: 14.sp,
             color: AppColors.textSecondary,
@@ -173,13 +176,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   Widget _buildPhoneField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _phoneController,
       keyboardType: TextInputType.phone,
       maxLength: 11,
       decoration: InputDecoration(
-        labelText: '手机号',
-        hintText: '请输入注册手机号',
+        labelText: l10n.phone,
+        hintText: l10n.pleaseInputRegisterPhone,
         prefixIcon: const Icon(Icons.phone_outlined),
         counterText: '',
         border: OutlineInputBorder(
@@ -188,10 +192,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return '请输入手机号';
+          return l10n.pleaseInputPhone;
         }
         if (value.length != 11) {
-          return '请输入正确的11位手机号';
+          return l10n.pleaseInputCorrect11digitPhone;
         }
         return null;
       },
@@ -199,6 +203,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   Widget _buildCodeField(AuthState state) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -208,8 +213,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             keyboardType: TextInputType.number,
             maxLength: 6,
             decoration: InputDecoration(
-              labelText: '验证码',
-              hintText: '请输入验证码',
+              labelText: l10n.verifyCode,
+              hintText: l10n.pleaseInputVerificationCode,
               prefixIcon: const Icon(Icons.security_outlined),
               counterText: '',
               border: OutlineInputBorder(
@@ -218,10 +223,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
-                return '请输入验证码';
+                return l10n.pleaseInputVerificationCode;
               }
               if (value.length != 6) {
-                return '请输入6位验证码';
+                return l10n.pleaseInput6digitCode;
               }
               return null;
             },
@@ -253,7 +258,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     ),
                   )
                 : Text(
-                    _isSendingCode ? '${_countdownSeconds}s' : '获取验证码',
+                    _isSendingCode ? '${_countdownSeconds}s' : l10n.send,
                     style: TextStyle(fontSize: 14.sp),
                   ),
           ),
@@ -263,12 +268,13 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   Widget _buildPasswordField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _passwordController,
       obscureText: _obscurePassword,
       decoration: InputDecoration(
-        labelText: '新密码',
-        hintText: '请输入新密码(6-20位)',
+        labelText: l10n.newPassword,
+        hintText: l10n.inputNewPasswordHint,
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
           icon: Icon(
@@ -286,10 +292,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return '请输入新密码';
+          return l10n.pleaseInputNewPassword;
         }
         if (value.length < 6 || value.length > 20) {
-          return '密码长度为6-20位';
+          return l10n.passwordLength;
         }
         return null;
       },
@@ -297,12 +303,13 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   Widget _buildConfirmPasswordField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _confirmPasswordController,
       obscureText: _obscureConfirmPassword,
       decoration: InputDecoration(
-        labelText: '确认新密码',
-        hintText: '请再次输入新密码',
+        labelText: l10n.confirmPassword,
+        hintText: l10n.pleaseConfirmPassword,
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
           icon: Icon(
@@ -320,10 +327,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return '请确认新密码';
+          return l10n.pleaseConfirmPassword;
         }
         if (value != _passwordController.text) {
-          return '两次输入的密码不一致';
+          return l10n.passwordNotMatch;
         }
         return null;
       },
@@ -331,6 +338,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   }
 
   Widget _buildResetButton(AuthState state) {
+    final l10n = AppLocalizations.of(context)!;
     return ElevatedButton(
       onPressed: state is AuthLoading ? null : _handleResetPassword,
       style: ElevatedButton.styleFrom(
@@ -350,21 +358,22 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
               ),
             )
-          : Text('重置密码', style: TextStyle(fontSize: 16.sp)),
+          : Text(l10n.reset, style: TextStyle(fontSize: 16.sp)),
     );
   }
 
   Widget _buildLoginRow() {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          '想起密码了?',
+          l10n.rememberPassword,
           style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
         ),
         TextButton(
           onPressed: () => context.go('/login'),
-          child: Text('返回登录', style: TextStyle(fontSize: 14.sp)),
+          child: Text(l10n.returnToLogin, style: TextStyle(fontSize: 14.sp)),
         ),
       ],
     );

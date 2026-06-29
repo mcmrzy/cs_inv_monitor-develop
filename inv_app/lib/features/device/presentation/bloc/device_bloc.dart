@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:async';
+import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
@@ -86,7 +87,9 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
             if (cached != null && cached is Map<String, dynamic>) {
               final devices = (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
               final total = (cached['total'] as int?) ?? 0;
-              emit(DeviceListLoaded(devices: devices, total: total, isFromCache: true));
+              // 只有网络连接失败时才标记为缓存数据
+              final isNetworkError = failure is NetworkFailure;
+              emit(DeviceListLoaded(devices: devices, total: total, isFromCache: isNetworkError));
               return;
             }
           }
@@ -179,7 +182,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
             timestamp: DateTime.now(),
           ));
         }
-        emit(const DeviceControlSuccess(message: '命令已发送'));
+        emit(const DeviceControlSuccess(message: 'Command sent'));
       } catch (e) {
         if (offlineCacheService != null) {
           await offlineCacheService!.saveAction(OfflineAction(
@@ -199,7 +202,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     final result = await repository.control(event.sn, event.cmdType, event.params);
     result.fold(
       (failure) => emit(DeviceError(message: failure.message)),
-      (_) => emit(const DeviceControlSuccess(message: '命令已发送')),
+      (_) => emit(const DeviceControlSuccess(message: 'Command sent')),
     );
   }
 
@@ -208,7 +211,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     Emitter<DeviceState> emit,
   ) async {
     if (localCommunicationService == null) {
-      emit(const DeviceError(message: '本地通信服务不可用'));
+      emit(const DeviceError(message: 'Local service unavailable'));
       return;
     }
     try {
@@ -348,7 +351,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     Emitter<DeviceState> emit,
   ) async {
     if (localCommunicationService == null) {
-      emit(const DeviceError(message: '本地通信服务不可用'));
+      emit(const DeviceError(message: 'Local service unavailable'));
       return;
     }
     emit(DeviceLoading());
@@ -366,7 +369,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     Emitter<DeviceState> emit,
   ) async {
     if (localCommunicationService == null) {
-      emit(const DeviceError(message: '本地通信服务不可用'));
+      emit(const DeviceError(message: 'Local service unavailable'));
       return;
     }
     try {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceSharePage extends StatefulWidget {
   final String deviceSN;
@@ -40,8 +41,9 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('设备分享')),
+      appBar: AppBar(title: Text(l10n.deviceShare)),
       body: BlocBuilder<DeviceBloc, DeviceState>(
         builder: (context, state) {
           return Padding(
@@ -49,31 +51,31 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('将设备 ${widget.deviceSN} 分享给其他用户', style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
+                Text(l10n.shareDeviceDesc(widget.deviceSN), style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
                 SizedBox(height: 16.h),
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    labelText: '对方手机号',
-                    hintText: '请输入对方手机号',
+                    labelText: l10n.otherPhone,
+                    hintText: l10n.inputOtherPhone,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
                     prefixIcon: const Icon(Icons.phone),
                   ),
                 ),
                 SizedBox(height: 16.h),
-                Text('分享权限', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500)),
+                Text(l10n.sharePermission, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500)),
                 SizedBox(height: 8.h),
                 Row(
                   children: [
                     ChoiceChip(
-                      label: const Text('仅查看'),
+                      label: Text(l10n.viewOnly),
                       selected: _permission == 'view',
                       onSelected: (v) => setState(() => _permission = 'view'),
                     ),
                     SizedBox(width: 12.w),
                     ChoiceChip(
-                      label: const Text('可控制'),
+                      label: Text(l10n.controllableLabel),
                       selected: _permission == 'control',
                       onSelected: (v) => setState(() => _permission = 'control'),
                     ),
@@ -85,7 +87,7 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
                   height: 48.h,
                   child: ElevatedButton(
                     onPressed: _submit,
-                    child: const Text('确认分享'),
+                    child: Text(l10n.confirmShare),
                   ),
                 ),
               ],

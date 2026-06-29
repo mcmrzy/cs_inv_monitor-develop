@@ -1,9 +1,11 @@
 import axios from 'axios'
 import type { ApiResponse } from '@/types'
+import useAuthStore from '@/stores/authStore'
 
 const api = axios.create({
   baseURL: '/api/v1',
   timeout: 15000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -11,17 +13,9 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    try {
-      const stored = localStorage.getItem('auth-storage')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        const token = parsed?.state?.token
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
-        }
-      }
-    } catch {
-      /* ignore parse errors */
+    const token = useAuthStore.getState().token
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },
@@ -31,8 +25,24 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401 && window.location.pathname !== '/login') {
-      localStorage.removeItem('auth-storage')
+    const originalRequest = error.config
+    if (error.response?.status === 401 && !originalRequest._retry && window.location.pathname !== '/login') {
+      originalRequest._retry = true
+      const refreshToken = useAuthStore.getState().refreshToken
+      if (refreshToken) {
+        try {
+          const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+          const data = res.data?.data ?? res.data
+          if (data?.access_token) {
+            useAuthStore.getState().refreshAuth(data.access_token, data.refresh_token)
+            originalRequest.headers.Authorization = `Bearer ${data.access_token}`
+            return api(originalRequest)
+          }
+        } catch {
+          // refresh failed, fall through to logout
+        }
+      }
+      useAuthStore.getState().logout()
       window.location.href = '/login'
     }
     return Promise.reject(error)

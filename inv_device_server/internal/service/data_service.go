@@ -99,6 +99,15 @@ func (s *DataService) notifyAPIServerStatus(sn string, status int) {
 		return
 	}
 
+	// 如果设备处于故障状态，不发送 status=1 覆盖故障
+	if status == 1 && s.rdb != nil {
+		ctx := context.Background()
+		faultKey := "fault_report:" + sn
+		if faultVal, err := s.rdb.Get(ctx, faultKey).Result(); err == nil && faultVal == "2" {
+			return
+		}
+	}
+
 	bodyData := map[string]interface{}{
 		"sn":     sn,
 		"status": status,
@@ -138,11 +147,11 @@ func (s *DataService) notifyAPIServerInfo(info *model.DeviceInfo) {
 	}
 
 	bodyData := map[string]interface{}{
-		"sn":               info.SN,
-		"model":            info.Model,
-		"firmware_version": info.FirmwareARM,
-		"hardware_version": info.FirmwareESP,
-		"rated_power":      info.RatedPower,
+		"sn":           info.SN,
+		"model":        info.Model,
+		"firmware_arm": info.FirmwareARM,
+		"firmware_esp": info.FirmwareESP,
+		"rated_power":  info.RatedPower,
 	}
 	body, err := json.Marshal(bodyData)
 	if err != nil {

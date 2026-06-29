@@ -13,10 +13,10 @@ import {
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { io, Socket } from 'socket.io-client'
 import { dashboardApi } from '@/services/dashboardApi'
-import { ALARM_LEVEL_MAP, TASK_STATUS_MAP } from '@/utils/constants'
+import { ALARM_LEVEL_MAP, TASK_STATUS_MAP, getAlarmLevelDisplay, parseFaultCode, FAULT_CODE_SEVERITY } from '@/utils/constants'
 import type { ColumnsType } from 'antd/es/table'
+import useTranslation from '@/hooks/useTranslation'
 
 const { Text } = Typography
 
@@ -62,7 +62,7 @@ interface BigScreenData {
   carbonReduction: { co2: number; trees: number }
   onlineRate: number
   stations: StationItem[]
-  recentAlerts: AlertItem[]
+  recentAlarms: AlertItem[]
   powerFlow: { pv: number; grid: number; battery: number; load: number }
   trend: TrendItem[]
   otaTasks: OtaItem[]
@@ -98,12 +98,9 @@ function MapFlyTo({ center }: { center: [number, number] }) {
 }
 
 const BigScreenPage: React.FC = () => {
+  const { t } = useTranslation()
   const [currentTime, setCurrentTime] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [wsAlert, setWsAlert] = useState<AlertItem | null>(null)
-  const [wsPower, setWsPower] = useState<{ pv: number; grid: number; battery: number; load: number } | null>(null)
-  const [wsOta, setWsOta] = useState<Record<string, { progress: number; status: string }>>({})
-  const socketRef = useRef<Socket | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const { data } = useQuery({
@@ -139,72 +136,20 @@ const BigScreenPage: React.FC = () => {
     }
   }, [])
 
-  useEffect(() => {
-    const token = (() => {
-      try {
-        const stored = localStorage.getItem('auth-storage')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          return parsed?.state?.token ?? ''
-        }
-      } catch { /* ignore */ }
-      return ''
-    })()
-
-    const socket = io({ path: '/ws/socket.io', auth: { token } })
-    socketRef.current = socket
-
-    socket.on('connect', () => console.log('[WS] big-screen connected'))
-    socket.on('alert:new', (alert: AlertItem) => setWsAlert(alert))
-    socket.on('telemetry:update', (payload: any) => {
-      const d = payload?.data ?? payload
-      setWsPower({
-        pv: Number(d?.pv_power ?? d?.pvPower ?? 0),
-        grid: Number(d?.grid_power ?? d?.gridPower ?? 0),
-        battery: Number(d?.battery_power ?? d?.batteryPower ?? 0),
-        load: Number(d?.load_power ?? d?.loadPower ?? 0),
-      })
-    })
-    socket.on('ota:progress', (p: { taskId: string; progress: number; status: string }) => {
-      setWsOta((prev) => ({ ...prev, [p.taskId]: { progress: p.progress, status: p.status } }))
-    })
-
-    return () => {
-      socket.disconnect()
-    }
-  }, [])
+  // 大屏数据通过 HTTP 轮询获取，每 10 秒刷新
+  // 注：后端使用原生 WebSocket (/ws/device/:sn)，不支持 Socket.IO 协议
 
   const alerts = useMemo(() => {
-    const base = data?.recentAlerts ?? []
-    if (wsAlert) {
-      const exists = base.some((a) => a.id === wsAlert.id)
-      if (!exists) return [wsAlert, ...base].slice(0, 10)
-    }
-    return base
-  }, [data?.recentAlerts, wsAlert])
+    return data?.recentAlarms ?? []
+  }, [data?.recentAlarms])
 
   const powerFlow = useMemo(() => {
-    const base = data?.powerFlow ?? { pv: 0, grid: 0, battery: 0, load: 0 }
-    if (wsPower) {
-      return {
-        pv: base.pv + wsPower.pv,
-        grid: base.grid + wsPower.grid,
-        battery: base.battery + wsPower.battery,
-        load: base.load + wsPower.load,
-      }
-    }
-    return base
-  }, [data?.powerFlow, wsPower])
+    return data?.powerFlow ?? { pv: 0, grid: 0, battery: 0, load: 0 }
+  }, [data?.powerFlow])
 
   const otaTasks = useMemo(() => {
-    return (data?.otaTasks ?? []).map((t) => {
-      const ws = wsOta[t.id]
-      if (ws) {
-        return { ...t, progress: ws.progress, status: ws.status }
-      }
-      return t
-    })
-  }, [data?.otaTasks, wsOta])
+    return data?.otaTasks ?? []
+  }, [data?.otaTasks])
 
   const trends = data?.trend ?? []
   const totals = data?.totals ?? { devices: 0, online: 0, offline: 0, fault: 0 }
@@ -216,7 +161,7 @@ const BigScreenPage: React.FC = () => {
   const trendOption = useMemo(() => ({
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis' as const },
-    legend: { data: ['发电量(kWh)'], textStyle: { color: '#aab' }, top: 0 },
+    legend: { data: [t('bigScreen.generation_kWh')], textStyle: { color: '#aab' }, top: 0 },
     grid: { left: 40, right: 20, top: 30, bottom: 30 },
     xAxis: {
       type: 'category' as const,
@@ -234,7 +179,7 @@ const BigScreenPage: React.FC = () => {
     },
     series: [
       {
-        name: '发电量(kWh)',
+        name: t('bigScreen.generation_kWh'),
         type: 'bar' as const,
         data: trends.map((t) => t.energy),
         itemStyle: {
@@ -258,7 +203,7 @@ const BigScreenPage: React.FC = () => {
     legend: {
       bottom: 0,
       textStyle: { color: '#aab', fontSize: 10 },
-      data: ['在线', '离线', '故障'],
+      data: [t('bigScreen.online'), t('bigScreen.offline'), t('bigScreen.fault')],
     },
     color: ['#52c41a', '#666', '#ff4d4f'],
     series: [{
@@ -268,9 +213,9 @@ const BigScreenPage: React.FC = () => {
       label: { show: false },
       emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold', color: '#fff' } },
       data: [
-        { value: totals.online, name: '在线' },
-        { value: totals.offline, name: '离线' },
-        { value: totals.fault, name: '故障' },
+        { value: totals.online, name: t('bigScreen.online') },
+        { value: totals.offline, name: t('bigScreen.offline') },
+        { value: totals.fault, name: t('bigScreen.fault') },
       ],
     }],
   }), [totals.online, totals.offline, totals.fault])
@@ -286,50 +231,46 @@ const BigScreenPage: React.FC = () => {
       lineStyle: { color: 'gradient', curveness: 0.5 },
       label: { color: '#aab', fontSize: 9 },
       data: [
-        { name: '光伏', itemStyle: { color: '#ffa726' } },
-        { name: '逆变器', itemStyle: { color: '#42a5f5' } },
-        { name: '电网', itemStyle: { color: '#66bb6a' } },
-        { name: '储能', itemStyle: { color: '#ab47bc' } },
-        { name: '负载', itemStyle: { color: '#ef5350' } },
+        { name: t('bigScreen.pv'), itemStyle: { color: '#ffa726' } },
+        { name: t('bigScreen.inverter'), itemStyle: { color: '#42a5f5' } },
+        { name: t('bigScreen.grid'), itemStyle: { color: '#66bb6a' } },
+        { name: t('bigScreen.storage'), itemStyle: { color: '#ab47bc' } },
+        { name: t('bigScreen.load'), itemStyle: { color: '#ef5350' } },
       ],
       links: [
-        { source: '光伏', target: '逆变器', value: powerFlow.pv || 1 },
-        { source: '逆变器', target: '电网', value: powerFlow.grid || 1 },
-        { source: '逆变器', target: '储能', value: powerFlow.battery || 1 },
-        { source: '逆变器', target: '负载', value: powerFlow.load || 1 },
+        { source: t('bigScreen.pv'), target: t('bigScreen.inverter'), value: powerFlow.pv || 1 },
+        { source: t('bigScreen.inverter'), target: t('bigScreen.grid'), value: powerFlow.grid || 1 },
+        { source: t('bigScreen.inverter'), target: t('bigScreen.storage'), value: powerFlow.battery || 1 },
+        { source: t('bigScreen.inverter'), target: t('bigScreen.load'), value: powerFlow.load || 1 },
       ],
     }],
   }), [powerFlow])
 
   const alertColumns: ColumnsType<AlertItem> = [
     {
-      title: '设备',
-      dataIndex: 'deviceSn',
+      title: t('bigScreen.device'),
       key: 'deviceSn',
       width: 100,
       ellipsis: true,
       render: (v: string) => <Text style={{ color: '#ccc', fontSize: 11 }}>{v}</Text>,
     },
     {
-      title: '级别',
-      dataIndex: 'alarmLevel',
+      title: t('bigScreen.level'),
       key: 'alarmLevel',
       width: 55,
-      render: (level: string) => {
-        const config = ALARM_LEVEL_MAP[level] ?? { label: level, color: '#d9d9d9' }
+      render: (_: any, record: any) => {
+        const config = getAlarmLevelDisplay(record.fault_code ?? record.faultCode, record.alarm_level ?? record.alarmLevel)
         return <Tag color={config.color} style={{ fontSize: 10, margin: 0 }}>{config.label}</Tag>
       },
     },
     {
-      title: '信息',
-      dataIndex: 'faultMessage',
+      title: t('bigScreen.info'),
       key: 'faultMessage',
       ellipsis: true,
       render: (v: string) => <Text style={{ color: '#bbb', fontSize: 11 }}>{v}</Text>,
     },
     {
-      title: '时间',
-      dataIndex: 'occurredAt',
+      title: t('logs.time'),
       key: 'occurredAt',
       width: 130,
       render: (v: string) => <Text style={{ color: '#999', fontSize: 11 }}>{v?.replace('T', ' ').substring(0, 19)}</Text>,
@@ -338,16 +279,14 @@ const BigScreenPage: React.FC = () => {
 
   const otaColumns: ColumnsType<OtaItem> = [
     {
-      title: '任务',
-      dataIndex: 'name',
+      title: t('bigScreen.task'),
       key: 'name',
       width: 90,
       ellipsis: true,
       render: (v: string) => <Text style={{ color: '#ccc', fontSize: 11 }}>{v}</Text>,
     },
     {
-      title: '进度',
-      dataIndex: 'progress',
+      title: t('bigScreen.progress'),
       key: 'progress',
       width: 80,
       render: (v: number, record: OtaItem) => (
@@ -361,17 +300,14 @@ const BigScreenPage: React.FC = () => {
       ),
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 55,
+      title: t('bigScreen.status'),
       render: (s: string) => {
         const config = TASK_STATUS_MAP[s] ?? { label: s, color: '#d9d9d9' }
         return <Tag color={config.color} style={{ fontSize: 10, margin: 0 }}>{config.label}</Tag>
       },
     },
     {
-      title: '进度数',
+      title: t('bigScreen.progressCount'),
       key: 'counts',
       width: 50,
       render: (_: any, record: OtaItem) => (
@@ -424,7 +360,7 @@ const BigScreenPage: React.FC = () => {
             boxShadow: '0 0 12px rgba(0,180,255,0.6)',
           }} />
           <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: 2, background: 'linear-gradient(90deg, #4fc3f7, #e0e0e0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            逆变器物联网监控平台
+            {t('bigScreen.title')}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
@@ -442,7 +378,7 @@ const BigScreenPage: React.FC = () => {
           }}>
             <WifiOutlined style={{ color: '#52c41a', fontSize: 14 }} />
             <span style={{ color: '#52c41a', fontSize: 14, fontWeight: 600 }}>
-              在线率 {(onlineRate ?? 0).toFixed(1)}%
+              {t('bigScreen.onlineRate')} {(onlineRate ?? 0).toFixed(1)}%
             </span>
           </div>
           <div
@@ -469,12 +405,12 @@ const BigScreenPage: React.FC = () => {
         {/* Stats Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
           {[
-            { label: '设备总数', val: totals.devices, icon: <DashboardOutlined />, color: '#4fc3f7' },
-            { label: '在线设备', val: totals.online, icon: <WifiOutlined />, color: '#52c41a' },
-            { label: '故障设备', val: totals.fault, icon: <ExclamationCircleOutlined />, color: '#ff4d4f' },
+            { label: t('bigScreen.deviceTotal'), val: totals.devices, icon: <DashboardOutlined />, color: '#4fc3f7' },
+            { label: t('bigScreen.deviceOnline'), val: totals.online, icon: <WifiOutlined />, color: '#52c41a' },
+            { label: t('bigScreen.deviceFault'), val: totals.fault, icon: <ExclamationCircleOutlined />, color: '#ff4d4f' },
             {
-              label: '碳减排', val: `${carbon.co2.toLocaleString()}kg`, icon: <EnvironmentOutlined />, color: '#66bb6a',
-              sub: `≈ ${carbon.trees.toLocaleString()} 棵树`,
+              label: t('bigScreen.carbonReduction'), val: `${carbon.co2.toLocaleString()}kg`, icon: <EnvironmentOutlined />, color: '#66bb6a',
+              sub: `≈ ${carbon.trees.toLocaleString()} ${t('bigScreen.trees')}`,
             },
           ].map((item, i) => (
             <div
@@ -509,7 +445,7 @@ const BigScreenPage: React.FC = () => {
           border: '1px solid rgba(255,255,255,0.06)', padding: 6,
           display: 'flex', flexDirection: 'column',
         }}>
-          <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>功率流向图 (W)</div>
+          <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{t('bigScreen.powerFlow')}</div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ReactECharts option={sankeyOption} style={{ height: '100%' }} />
           </div>
@@ -520,7 +456,7 @@ const BigScreenPage: React.FC = () => {
           background: 'rgba(255,255,255,0.03)', borderRadius: 4,
           border: '1px solid rgba(255,255,255,0.06)', padding: 6,
         }}>
-          <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>设备状态分布</div>
+          <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, marginBottom: 2 }}>{t('bigScreen.deviceStatus')}</div>
           <div style={{ height: 'calc(100% - 20px)' }}>
             <ReactECharts option={pieOption} style={{ height: '100%' }} />
           </div>
@@ -539,7 +475,7 @@ const BigScreenPage: React.FC = () => {
           color: '#aab', fontSize: 11, fontWeight: 600,
           background: 'rgba(10,15,30,0.8)', padding: '2px 8px', borderRadius: 3,
         }}>
-          电站分布图
+          {t('bigScreen.stationMap')}
         </div>
         <MapContainer
           center={center}
@@ -563,9 +499,9 @@ const BigScreenPage: React.FC = () => {
               <Popup>
                 <div style={{ fontSize: 12, color: '#333' }}>
                   <div style={{ fontWeight: 700, marginBottom: 4 }}>{station.name}</div>
-                  <div>设备: {station.deviceCount} 台</div>
-                  <div>在线: {station.onlineCount} 台</div>
-                  <div>功率: {station.power.toFixed(2)} W</div>
+                  <div>{t('bigScreen.deviceInfo', { count: station.deviceCount })}</div>
+                  <div>{t('bigScreen.onlineInfo', { count: station.onlineCount })}</div>
+                  <div>{t('bigScreen.powerInfo', { power: station.power.toFixed(2) })}</div>
                 </div>
               </Popup>
             </Marker>
@@ -581,9 +517,9 @@ const BigScreenPage: React.FC = () => {
         {/* Energy Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
           {[
-            { label: '今日发电量', val: `${energy.today.toLocaleString()} kWh`, color: '#ffa726' },
-            { label: '累计发电量', val: `${energy.total.toLocaleString()} kWh`, color: '#42a5f5' },
-            { label: '今日收益', val: `¥${energy.todayIncome.toLocaleString()}`, color: '#66bb6a' },
+            { label: t('bigScreen.todayGeneration'), val: `${energy.today.toLocaleString()} kWh`, color: '#ffa726' },
+            { label: t('bigScreen.totalGeneration'), val: `${energy.total.toLocaleString()} kWh`, color: '#42a5f5' },
+            { label: t('bigScreen.todayRevenue'), val: `¥${energy.todayIncome.toLocaleString()}`, color: '#66bb6a' },
           ].map((item, i) => (
             <div
               key={i}
@@ -605,7 +541,7 @@ const BigScreenPage: React.FC = () => {
           border: '1px solid rgba(255,255,255,0.06)', padding: 4,
           height: 160,
         }}>
-          <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, paddingLeft: 4 }}>今日发电趋势</div>
+          <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, paddingLeft: 4 }}>{t('bigScreen.todayTrend')}</div>
           <ReactECharts option={trendOption} style={{ height: 'calc(100% - 20px)' }} />
         </div>
 
@@ -616,9 +552,13 @@ const BigScreenPage: React.FC = () => {
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
           <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
-            <span>实时告警</span>
+            <span>{t('bigScreen.realtimeAlerts')}</span>
             <span style={{ color: '#ff4d4f', fontSize: 10 }}>
-              {alerts.filter((a) => a.alarmLevel === 'critical').length} 条严重
+              {alerts.filter((a) => {
+                const code = parseFaultCode(a.faultCode)
+                const severity = code >= 0 ? FAULT_CODE_SEVERITY[code] : undefined
+                return severity === 'critical' || (severity == null && a.alarmLevel === 'critical')
+              }).length} {t('bigScreen.criticalCount')}
             </span>
           </div>
           <Table<AlertItem>
@@ -630,9 +570,12 @@ const BigScreenPage: React.FC = () => {
             showHeader={false}
             scroll={{ y: '100%' }}
             style={{ flex: 1, minHeight: 0 }}
-            rowClassName={(record: AlertItem) =>
-              record.alarmLevel === 'critical' ? 'big-screen-alert-critical' : ''
-            }
+            rowClassName={(record: AlertItem) => {
+              const code = parseFaultCode(record.faultCode)
+              const severity = code >= 0 ? FAULT_CODE_SEVERITY[code] : undefined
+              const isCritical = severity === 'critical' || (severity == null && record.alarmLevel === 'critical')
+              return isCritical ? 'big-screen-alert-critical' : ''
+            }}
           />
         </div>
 
@@ -642,7 +585,7 @@ const BigScreenPage: React.FC = () => {
           border: '1px solid rgba(255,255,255,0.06)', padding: 6,
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
-          <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>OTA 任务</div>
+          <div style={{ color: '#aab', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>{t('bigScreen.otaTask')}</div>
           <Table<OtaItem>
             columns={otaColumns}
             dataSource={otaTasks}
@@ -664,34 +607,34 @@ const BigScreenPage: React.FC = () => {
         padding: '0 24px', fontSize: 11, color: '#889',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-          <span>系统运行: {systemHealth.uptime}</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span>{t('bigScreen.systemRun')}: {systemHealth.uptime}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{
               width: 6, height: 6, borderRadius: '50%',
               background: systemHealth.db ? '#52c41a' : '#ff4d4f',
               boxShadow: systemHealth.db ? '0 0 4px #52c41a' : '0 0 4px #ff4d4f',
             }} />
-            数据库
+            {t('bigScreen.database')}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{
               width: 6, height: 6, borderRadius: '50%',
               background: systemHealth.redis ? '#52c41a' : '#ff4d4f',
               boxShadow: systemHealth.redis ? '0 0 4px #52c41a' : '0 0 4px #ff4d4f',
             }} />
-            Redis
+            {t('bigScreen.redisLabel')}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{
               width: 6, height: 6, borderRadius: '50%',
               background: systemHealth.mqtt ? '#52c41a' : '#ff4d4f',
               boxShadow: systemHealth.mqtt ? '0 0 4px #52c41a' : '0 0 4px #ff4d4f',
             }} />
-            MQTT
+            {t('bigScreen.mqttLabel')}
           </span>
         </div>
         <div>
-          数据刷新间隔: 10s · 当前在线率: {(onlineRate ?? 0).toFixed(1)}%
+          {t('bigScreen.refreshInterval')}: 10s · {t('bigScreen.currentOnlineRate')}: {(onlineRate ?? 0).toFixed(1)}%
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -58,10 +59,11 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void _handleSendCode() {
+    final l10n = AppLocalizations.of(context)!;
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入正确的邮箱地址'), backgroundColor: AppColors.error),
+        SnackBar(content: Text(l10n.pleaseInputCorrectEmail), backgroundColor: AppColors.error),
       );
       return;
     }
@@ -87,11 +89,11 @@ class _RegisterPageState extends State<RegisterPage> {
         listener: (context, state) {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: AppColors.error),
+              SnackBar(content: Text(AppLocalizations.of(context)!.translateError(state.message)), backgroundColor: AppColors.error),
             );
           } else if (state is AuthCodeSent) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('验证码已发送'), backgroundColor: AppColors.success),
+              SnackBar(content: Text(AppLocalizations.of(context)!.verificationCodeSent), backgroundColor: AppColors.success),
             );
             _startCountdown();
           } else if (state is AuthAuthenticated) {
@@ -136,36 +138,39 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildHeader() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         Icon(Icons.person_add_outlined, size: 64.sp, color: AppColors.primary),
         SizedBox(height: 16.h),
-        Text('创建账号', style: TextStyle(fontSize: 28.sp, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        Text(l10n.createAccount, style: TextStyle(fontSize: 28.sp, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
         SizedBox(height: 8.h),
-        Text('注册后即可使用全部功能', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+        Text(l10n.registerToUseAll, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
       ],
     );
   }
 
   Widget _buildEmailField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _emailController,
       keyboardType: TextInputType.emailAddress,
       decoration: InputDecoration(
-        labelText: '邮箱',
-        hintText: '请输入邮箱地址',
+        labelText: l10n.email,
+        hintText: l10n.pleaseInputEmail,
         prefixIcon: const Icon(Icons.email_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
-        if (value == null || value.isEmpty) return '请输入邮箱';
-        if (!value.contains('@') || !value.contains('.')) return '请输入正确的邮箱地址';
+        if (value == null || value.isEmpty) return l10n.pleaseInputEmail;
+        if (!value.contains('@') || !value.contains('.')) return l10n.pleaseInputCorrectEmail;
         return null;
       },
     );
   }
 
   Widget _buildCodeField(AuthState state) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -175,15 +180,15 @@ class _RegisterPageState extends State<RegisterPage> {
             keyboardType: TextInputType.number,
             maxLength: 6,
             decoration: InputDecoration(
-              labelText: '邮箱验证码',
-              hintText: '请输入邮箱验证码',
+              labelText: l10n.emailVerificationCode,
+              hintText: l10n.pleaseInputVerificationCode,
               prefixIcon: const Icon(Icons.mark_email_read_outlined),
               counterText: '',
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
             ),
             validator: (value) {
-              if (value == null || value.isEmpty) return '请输入验证码';
-              if (value.length < 4) return '请输入正确的验证码';
+              if (value == null || value.isEmpty) return l10n.pleaseInputVerificationCode;
+              if (value.length < 4) return l10n.pleaseInputCorrectCode;
               return null;
             },
           ),
@@ -201,7 +206,7 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
             child: state is AuthCodeSending
                 ? SizedBox(height: 20.h, width: 20.w, child: const CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                : Text(_isSendingCode ? '${_countdownSeconds}s' : '获取验证码', style: TextStyle(fontSize: 14.sp)),
+                : Text(_isSendingCode ? '${_countdownSeconds}s' : l10n.send, style: TextStyle(fontSize: 14.sp)),
           ),
         ),
       ],
@@ -209,48 +214,51 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   Widget _buildPhoneField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _phoneController,
       keyboardType: TextInputType.phone,
       maxLength: 15,
       decoration: InputDecoration(
-        labelText: '手机号',
-        hintText: '请输入手机号（可用于登录）',
+        labelText: l10n.phone,
+        hintText: l10n.pleaseInputPhone,
         prefixIcon: const Icon(Icons.phone_outlined),
         counterText: '',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
-        if (value == null || value.trim().isEmpty) return '请输入手机号';
-        if (value.trim().length < 5) return '手机号太短';
+        if (value == null || value.trim().isEmpty) return l10n.pleaseInputPhone;
+        if (value.trim().length < 5) return l10n.phoneTooShort;
         return null;
       },
     );
   }
 
   Widget _buildNicknameField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _nicknameController,
       decoration: InputDecoration(
-        labelText: '用户名',
-        hintText: '请输入用户名（可用于登录）',
+        labelText: l10n.pleaseInputUsername,
+        hintText: l10n.pleaseInputUsername,
         prefixIcon: const Icon(Icons.person_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
-        if (value == null || value.trim().isEmpty) return '请输入用户名';
-        if (value.trim().length < 2) return '用户名至少2个字符';
+        if (value == null || value.trim().isEmpty) return l10n.pleaseInputUsername;
+        if (value.trim().length < 2) return l10n.usernameTooShort;
         return null;
       },
     );
   }
 
   Widget _buildPasswordField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _passwordController,
       obscureText: _obscurePassword,
       decoration: InputDecoration(
-        labelText: '密码', hintText: '请输入密码(6-20位)',
+        labelText: l10n.password, hintText: l10n.inputNewPasswordHint,
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
           icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
@@ -259,19 +267,20 @@ class _RegisterPageState extends State<RegisterPage> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
-        if (value == null || value.isEmpty) return '请输入密码';
-        if (value.length < 6 || value.length > 20) return '密码长度为6-20位';
+        if (value == null || value.isEmpty) return l10n.pleaseInputPassword;
+        if (value.length < 6 || value.length > 20) return l10n.passwordLength;
         return null;
       },
     );
   }
 
   Widget _buildConfirmPasswordField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _confirmPasswordController,
       obscureText: _obscureConfirmPassword,
       decoration: InputDecoration(
-        labelText: '确认密码', hintText: '请再次输入密码',
+        labelText: l10n.confirmPassword, hintText: l10n.pleaseConfirmPassword,
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
           icon: Icon(_obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
@@ -280,14 +289,15 @@ class _RegisterPageState extends State<RegisterPage> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
-        if (value == null || value.isEmpty) return '请确认密码';
-        if (value != _passwordController.text) return '两次输入的密码不一致';
+        if (value == null || value.isEmpty) return l10n.pleaseConfirmPassword;
+        if (value != _passwordController.text) return l10n.passwordNotMatch;
         return null;
       },
     );
   }
 
   Widget _buildRegisterButton(AuthState state) {
+    final l10n = AppLocalizations.of(context)!;
     return ElevatedButton(
       onPressed: state is AuthLoading ? null : _handleRegister,
       style: ElevatedButton.styleFrom(
@@ -297,16 +307,17 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
       child: state is AuthLoading
           ? SizedBox(height: 20.h, width: 20.w, child: const CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-          : Text('注册', style: TextStyle(fontSize: 16.sp)),
+          : Text(l10n.register, style: TextStyle(fontSize: 16.sp)),
     );
   }
 
   Widget _buildLoginRow() {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text('已有账号?', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
-        TextButton(onPressed: () => context.go('/login'), child: Text('立即登录', style: TextStyle(fontSize: 14.sp))),
+        Text(l10n.alreadyHaveAccount, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+        TextButton(onPressed: () => context.go('/login'), child: Text(l10n.loginNow, style: TextStyle(fontSize: 14.sp))),
       ],
     );
   }

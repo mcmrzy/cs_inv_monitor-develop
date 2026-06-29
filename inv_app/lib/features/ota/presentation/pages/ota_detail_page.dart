@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class OTADetailPage extends StatefulWidget {
   final String deviceSN;
@@ -21,20 +22,20 @@ class _OTADetailPageState extends State<OTADetailPage> {
     context.read<OtaBloc>().add(OTAProgressPollRequested(taskId: widget.taskId));
   }
 
-  String _statusText(String status) {
+  String _statusText(String status, AppLocalizations l10n) {
     switch (status) {
       case 'downloading':
-        return '下载中';
+        return l10n.downloading;
       case 'transferring':
-        return '传输中';
+        return l10n.transferring;
       case 'verifying':
-        return '校验中';
+        return l10n.verifying;
       case 'upgrading':
-        return '升级中';
+        return l10n.upgrading;
       case 'completed':
-        return '完成';
+        return l10n.done;
       case 'failed':
-        return '失败';
+        return l10n.failure;
       default:
         return status;
     }
@@ -81,12 +82,13 @@ class _OTADetailPageState extends State<OTADetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: const Text('升级详情', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(l10n.upgradeDetail, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -102,14 +104,14 @@ class _OTADetailPageState extends State<OTADetailPage> {
               padding: EdgeInsets.all(16.w),
               child: Column(
                 children: [
-                  _buildDeviceInfoCard(),
+                  _buildDeviceInfoCard(l10n),
                   SizedBox(height: 16.h),
-                  _buildProgressCard(state, color),
+                  _buildProgressCard(state, color, l10n),
                   SizedBox(height: 16.h),
-                  _buildStatusSteps(state.status),
+                  _buildStatusSteps(state.status, l10n),
                   if (_canCancel(state.status)) ...[
                     SizedBox(height: 24.h),
-                    _buildCancelButton(),
+                    _buildCancelButton(l10n),
                   ],
                 ],
               ),
@@ -121,9 +123,9 @@ class _OTADetailPageState extends State<OTADetailPage> {
               padding: EdgeInsets.all(16.w),
               child: Column(
                 children: [
-                  _buildDeviceInfoCard(),
+                  _buildDeviceInfoCard(l10n),
                   SizedBox(height: 16.h),
-                  _buildCompleteCard(),
+                  _buildCompleteCard(l10n),
                 ],
               ),
             );
@@ -134,9 +136,9 @@ class _OTADetailPageState extends State<OTADetailPage> {
               padding: EdgeInsets.all(16.w),
               child: Column(
                 children: [
-                  _buildDeviceInfoCard(),
-                  SizedBox(height: 16.h),
-                  _buildFailedCard(state),
+                  _buildDeviceInfoCard(l10n),
+                SizedBox(height: 16.h),
+                _buildFailedCard(state, l10n),
                 ],
               ),
             );
@@ -146,13 +148,13 @@ class _OTADetailPageState extends State<OTADetailPage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          return const Center(child: Text('加载中...'));
+          return Center(child: Text(l10n.loadingData));
         },
       ),
     );
   }
 
-  Widget _buildDeviceInfoCard() {
+  Widget _buildDeviceInfoCard(AppLocalizations l10n) {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
@@ -182,7 +184,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('设备', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.deviceLabel, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                 SizedBox(height: 2.h),
                 Text(widget.deviceSN, style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
               ],
@@ -193,7 +195,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     );
   }
 
-  Widget _buildProgressCard(OTAProgress state, Color color) {
+  Widget _buildProgressCard(OTAProgress state, Color color, AppLocalizations l10n) {
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
@@ -212,7 +214,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
           Icon(_statusIcon(state.status), size: 48.sp, color: color),
           SizedBox(height: 12.h),
           Text(
-            _statusText(state.status),
+            _statusText(state.status, l10n),
             style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: color),
           ),
           SizedBox(height: 20.h),
@@ -235,7 +237,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     );
   }
 
-  Widget _buildStatusSteps(String currentStatus) {
+  Widget _buildStatusSteps(String currentStatus, AppLocalizations l10n) {
     final steps = ['downloading', 'transferring', 'verifying', 'upgrading'];
     final currentIndex = steps.indexOf(currentStatus);
 
@@ -291,7 +293,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
               SizedBox(width: 10.w),
               Expanded(
                 child: Text(
-                  _statusText(step),
+                  _statusText(step, l10n),
                   style: TextStyle(
                     fontSize: 13.sp,
                     fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
@@ -312,7 +314,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     );
   }
 
-  Widget _buildCancelButton() {
+  Widget _buildCancelButton(AppLocalizations l10n) {
     return SizedBox(
       width: double.infinity,
       height: 48.h,
@@ -326,12 +328,12 @@ class _OTADetailPageState extends State<OTADetailPage> {
           side: const BorderSide(color: AppColors.error),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
         ),
-        child: Text('取消升级', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+        child: Text(l10n.cancelUpgrade, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
       ),
     );
   }
 
-  Widget _buildCompleteCard() {
+  Widget _buildCompleteCard(AppLocalizations l10n) {
     return Container(
       padding: EdgeInsets.all(24.w),
       decoration: BoxDecoration(
@@ -349,9 +351,9 @@ class _OTADetailPageState extends State<OTADetailPage> {
         children: [
           Icon(Icons.check_circle_rounded, size: 64.sp, color: AppColors.successLight),
           SizedBox(height: 16.h),
-          Text('升级完成', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          Text(l10n.upgradeCompleted, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           SizedBox(height: 8.h),
-          Text('固件已成功更新', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+          Text(l10n.firmwareUpdatedSuccess, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
           SizedBox(height: 24.h),
           SizedBox(
             width: double.infinity,
@@ -364,7 +366,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                 elevation: 0,
               ),
-              child: Text('完成', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              child: Text(l10n.done, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -372,7 +374,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     );
   }
 
-  Widget _buildFailedCard(OTAError state) {
+  Widget _buildFailedCard(OTAError state, AppLocalizations l10n) {
     return Container(
       padding: EdgeInsets.all(24.w),
       decoration: BoxDecoration(
@@ -390,9 +392,9 @@ class _OTADetailPageState extends State<OTADetailPage> {
         children: [
           Icon(Icons.error_rounded, size: 64.sp, color: AppColors.error),
           SizedBox(height: 16.h),
-          Text('升级失败', style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          Text(l10n.upgradeFailedTitle, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           SizedBox(height: 8.h),
-          Text(state.message, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
+          Text(l10n.translateError(state.message), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
           SizedBox(height: 24.h),
           SizedBox(
             width: double.infinity,
@@ -405,7 +407,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
                 elevation: 0,
               ),
-              child: Text('返回', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              child: Text(l10n.back, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
             ),
           ),
         ],

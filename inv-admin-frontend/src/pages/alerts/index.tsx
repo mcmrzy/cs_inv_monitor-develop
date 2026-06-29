@@ -1,183 +1,205 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Tabs,
-  Card,
-  Table,
-  Button,
-  Modal,
-  Form,
-  Input,
-  Select,
-  Tag,
-  Drawer,
-  Timeline,
-  Dropdown,
-  Space,
-  Row,
-  Col,
-  DatePicker,
-  Statistic,
-  Popconfirm,
-  message,
+  Card, Table, Button, Select, Tag, Space, Row, Col, DatePicker,
+  Statistic, Typography, App, Empty, Tabs,
 } from 'antd'
-import {
-  PlusOutlined,
-  ReloadOutlined,
-  EyeOutlined,
-  CheckOutlined,
-  StopOutlined,
-  DownOutlined,
-} from '@ant-design/icons'
+import { ReloadOutlined, CheckOutlined, StopOutlined, AlertOutlined, DeleteOutlined, ClearOutlined, BellOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import type { MenuProps } from 'antd'
 import dayjs from 'dayjs'
-import { alertApi } from '@/services/alertApi'
-import { workOrderApi, type WorkOrderDetail } from '@/services/workOrderApi'
-import { userApi } from '@/services/userApi'
-import { ALARM_LEVEL_MAP } from '@/utils/constants'
-import type { Alert, WorkOrder, User } from '@/types'
-import AlertRulesPage from '@/pages/alert-rules'
+import api from '@/services/api'
+import { alertApi, notificationApi } from '@/services/alertApi'
+import { deviceApi } from '@/services/deviceApi'
+import { ALARM_LEVEL_MAP, getAlarmLevelDisplay } from '@/utils/constants'
+import { queryKeys } from '@/utils/queryKeys'
+import type { Alert } from '@/types'
+import useTranslation from '@/hooks/useTranslation'
 
-const { TextArea } = Input
 const { RangePicker } = DatePicker
+const { Title } = Typography
 
-const ALERT_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  '0': { label: '未处理', color: '#ff4d4f' },
-  '1': { label: '已处理', color: '#52c41a' },
-  '2': { label: '已忽略', color: '#d9d9d9' },
-  unhandled: { label: '未处理', color: '#ff4d4f' },
-  handled: { label: '已处理', color: '#52c41a' },
-  ignored: { label: '已忽略', color: '#d9d9d9' },
+interface NotificationItem {
+  id: number
+  device_sn: string
+  notify_type: string
+  title: string
+  content: string
+  created_at: string
+  _type: 'notification'
 }
-
-const WO_PRIORITY_MAP: Record<string, { label: string; color: string }> = {
-  low: { label: '低', color: '#d9d9d9' },
-  medium: { label: '中', color: '#1677ff' },
-  high: { label: '高', color: '#fa8c16' },
-  urgent: { label: '紧急', color: '#ff4d4f' },
-}
-
-const WO_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  open: { label: '待处理', color: '#1677ff' },
-  in_progress: { label: '处理中', color: '#1677ff' },
-  resolved: { label: '已解决', color: '#52c41a' },
-  closed: { label: '已关闭', color: '#d9d9d9' },
-}
-
-const WO_STATUS_OPTIONS = Object.keys(WO_STATUS_MAP)
 
 const AlertsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('alerts')
-
-  return (
-    <div>
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={[
-          { key: 'alerts', label: '告警记录', children: <AlertTab /> },
-          { key: 'rules', label: '告警规则', children: <AlertRulesPage /> },
-          { key: 'workorders', label: '工单管理', children: <WorkOrderTab /> },
-        ]}
-      />
-    </div>
-  )
-}
-
-const AlertTab: React.FC = () => {
-  const [loading, setLoading] = useState(false)
-  const [data, setData] = useState<Alert[]>([])
-  const [total, setTotal] = useState(0)
+  const queryClient = useQueryClient()
+  const { message } = App.useApp()
+  const { t } = useTranslation()
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState<string>()
   const [levelFilter, setLevelFilter] = useState<string>()
+  const [stationId, setStationId] = useState<number>()
   const [keyword, setKeyword] = useState<string>()
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
-  const [stats, setStats] = useState({ total: 0, unhandled: 0, handled: 0, critical: 0 })
+  const [activeTab, setActiveTab] = useState<string>('all')
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await alertApi.list({
-        page,
-        pageSize,
-        status: statusFilter !== undefined ? Number(statusFilter) : undefined,
-        alarmLevel: levelFilter !== undefined ? Number(levelFilter) : undefined,
-        keyword: keyword || undefined,
-        startTime: dateRange?.[0]?.format('YYYY-MM-DD'),
-        endTime: dateRange?.[1]?.format('YYYY-MM-DD'),
-      })
-      const d = res.data
-      const inner = d?.data ?? d ?? {}
-      setData(Array.isArray(inner) ? inner as Alert[] : ((inner?.items ?? inner?.list ?? []) as Alert[]))
-      setTotal(inner?.total ?? 0)
-    } catch {
-      message.error('获取告警列表失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [page, pageSize, statusFilter, levelFilter, keyword, dateRange])
-
-  const fetchStats = async () => {
-    try {
-      const res = await alertApi.getStats()
-      setStats(res.data.data ?? { total: 0, unhandled: 0, handled: 0, critical: 0 })
-    } catch {}
+  const ALERT_STATUS_MAP: Record<string, { label: string; color: string }> = {
+    '0': { label: t('alert.unprocessed'), color: '#ff4d4f' },
+    '1': { label: t('alert.processed'), color: '#52c41a' },
+    '2': { label: t('alert.ignored'), color: '#d9d9d9' },
   }
 
-  useEffect(() => {
-    fetchData()
-    fetchStats()
-  }, [fetchData])
-
-  const handleHandle = async (id: string) => {
-    try {
-      await alertApi.handle(id)
-      message.success('已确认处理')
-      fetchData()
-      fetchStats()
-    } catch {
-      message.error('操作失败')
-    }
+  const NOTIFY_TYPE_MAP: Record<string, { label: string; color: string; icon: string }> = {
+    'device_online': { label: t('alert.deviceOnline') || '设备上线', color: '#52c41a', icon: '↑' },
+    'device_offline': { label: t('alert.deviceOffline') || '设备离线', color: '#ff4d4f', icon: '↓' },
+    'ota_available': { label: 'OTA更新', color: '#1890ff', icon: '↑' },
   }
 
-  const handleIgnore = async (id: string) => {
-    try {
-      await alertApi.ignore(Number(id))
-      message.success('已忽略')
-      fetchData()
-      fetchStats()
-    } catch {
-      message.error('操作失败')
-    }
+  // 获取设备列表（用于 SN 下拉）
+  const { data: devicesData } = useQuery({
+    queryKey: queryKeys.devices.allDevices(),
+    queryFn: () => deviceApi.getAll().then((r) => {
+      const d = r.data?.data ?? r.data ?? {}
+      return (Array.isArray(d) ? d : (d?.items ?? d?.list ?? [])) as any[]
+    }),
+    staleTime: 60_000,
+  })
+
+  // 获取电站列表（用于电站下拉）
+  const { data: stationsData } = useQuery({
+    queryKey: queryKeys.stations.list(),
+    queryFn: () => api.get('/stations', { params: { pageSize: 100 } }).then((r) => {
+      const d = r.data?.data ?? r.data ?? {}
+      return (Array.isArray(d) ? d : (d?.items ?? d?.list ?? [])) as any[]
+    }),
+    staleTime: 60_000,
+  })
+
+  const deviceOptions = useMemo(() => {
+    if (!Array.isArray(devicesData)) return []
+    const filtered = stationId
+      ? devicesData.filter((d: any) => d.station_id === stationId || d.stationId === stationId)
+      : devicesData
+    return filtered.map((d: any) => ({ label: d.sn, value: d.sn }))
+  }, [devicesData, stationId])
+
+  const stationOptions = useMemo(() => {
+    if (!Array.isArray(stationsData)) return []
+    return stationsData.map((s: any) => ({ label: s.name || `电站#${s.id}`, value: s.id }))
+  }, [stationsData])
+
+  const [notifyTypeFilter, setNotifyTypeFilter] = useState<string>()
+
+  const commonFilters = {
+    page, page_size: pageSize,
+    station_id: stationId,
+    keyword: keyword || undefined,
+    startTime: dateRange?.[0]?.format('YYYY-MM-DD'),
+    endTime: dateRange?.[1]?.format('YYYY-MM-DD'),
   }
 
-  const columns: ColumnsType<Alert> = [
-    { title: 'SN', dataIndex: 'device_sn', key: 'device_sn', width: 140 },
-    { title: '故障码', dataIndex: 'fault_code', key: 'fault_code', width: 100 },
+  const queryParams = {
+    ...commonFilters,
+    status: statusFilter !== undefined ? Number(statusFilter) : undefined,
+    alarmLevel: levelFilter !== undefined ? Number(levelFilter) : undefined,
+  }
+
+  const notifyQueryParams = {
+    ...commonFilters,
+    notify_type: notifyTypeFilter || undefined,
+  }
+
+  // 告警列表
+  const { data: listRes, isLoading, refetch } = useQuery({
+    queryKey: queryKeys.alerts.list(queryParams),
+    queryFn: () => alertApi.list(queryParams).then((r) => {
+      const d = r.data?.data ?? r.data ?? {}
+      return {
+        items: (Array.isArray(d) ? d : (d?.items ?? d?.list ?? [])) as Alert[],
+        total: d?.total ?? 0,
+      }
+    }),
+    enabled: activeTab !== 'notification',
+  })
+
+  // 通知列表
+  const { data: notifyRes, isLoading: notifyLoading, refetch: refetchNotify } = useQuery({
+    queryKey: ['notifications', 'list', notifyQueryParams],
+    queryFn: () => notificationApi.list(notifyQueryParams).then((r) => {
+      const d = r.data?.data ?? r.data ?? {}
+      return {
+        items: (Array.isArray(d) ? d : (d?.items ?? d?.list ?? [])) as NotificationItem[],
+        total: d?.total ?? 0,
+      }
+    }),
+    enabled: activeTab !== 'alarm',
+  })
+
+  // 告警统计
+  const { data: stats } = useQuery({
+    queryKey: queryKeys.alerts.stats(),
+    queryFn: () => alertApi.getStats().then((r) => r.data?.data ?? { total: 0, unhandled: 0, handled: 0, critical: 0 }),
+  })
+
+  // 通知统计
+  const { data: notifyStats } = useQuery({
+    queryKey: ['notifications', 'stats'],
+    queryFn: () => notificationApi.getStats().then((r) => r.data?.data ?? { total: 0, unread: 0 }),
+  })
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.alerts.all })
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
+  }
+
+  const handleMutation = useMutation({
+    mutationFn: (id: number) => alertApi.handle(id),
+    onSuccess: () => { message.success(t('alert.confirmSuccess')); invalidate() },
+    onError: () => { message.error(t('alert.operationFailed')) },
+  })
+
+  const ignoreMutation = useMutation({
+    mutationFn: (id: number) => alertApi.ignore(id),
+    onSuccess: () => { message.success(t('alert.ignoreSuccess')); invalidate() },
+    onError: () => { message.error(t('alert.operationFailed')) },
+  })
+
+  const deleteAlarmMutation = useMutation({
+    mutationFn: (id: number) => alertApi.delete(id),
+    onSuccess: () => { message.success(t('alert.deleteSuccess') || '已删除'); invalidate() },
+    onError: () => { message.error(t('alert.operationFailed')) },
+  })
+
+  const deleteNotifyMutation = useMutation({
+    mutationFn: (id: number) => notificationApi.delete(id),
+    onSuccess: () => { message.success(t('alert.deleteSuccess') || '已删除'); invalidate() },
+    onError: () => { message.error(t('alert.operationFailed')) },
+  })
+
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      await Promise.all([alertApi.clearAll(), notificationApi.clearAll()])
+    },
+    onSuccess: () => { message.success(t('alert.clearSuccess') || '已清除所有通知'); invalidate() },
+    onError: () => { message.error(t('alert.operationFailed')) },
+  })
+
+  // 告警表格列
+  const alarmColumns: ColumnsType<any> = [
     {
-      title: '告警级别',
-      dataIndex: 'alarm_level',
-      key: 'alarm_level',
-      width: 100,
-      render: (level: number | string) => {
-        const key = typeof level === 'number' ? String(level) : level
-        const cfg = ALARM_LEVEL_MAP[key] || { label: String(level), color: '#d9d9d9' }
+      title: t('alert.type') || '类型', key: '_type', width: 80,
+      render: () => <Tag color="red">{t('alert.alarmType') || '告警'}</Tag>,
+    },
+    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140 },
+    { title: t('alert.faultCode'), dataIndex: 'fault_code', key: 'fault_code', width: 80 },
+    {
+      title: t('alert.alertLevel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
+      render: (level: number | string, record: any) => {
+        const cfg = getAlarmLevelDisplay(record.fault_code, level)
         return <Tag color={cfg.color}>{cfg.label}</Tag>
       },
     },
+    { title: t('alert.faultInfo'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true },
     {
-      title: '故障信息',
-      dataIndex: 'fault_message',
-      key: 'fault_message',
-      ellipsis: true,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 90,
+      title: t('alert.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (status: number | string) => {
         const key = typeof status === 'number' ? String(status) : status
         const cfg = ALERT_STATUS_MAP[key] || { label: String(status), color: '#d9d9d9' }
@@ -185,432 +207,273 @@ const AlertTab: React.FC = () => {
       },
     },
     {
-      title: '发生时间',
-      dataIndex: 'occurred_at',
-      key: 'occurred_at',
-      width: 170,
+      title: t('alert.occurTime'), dataIndex: 'occurred_at', key: 'occurred_at', width: 170,
       render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
-      title: '操作',
-      key: 'action',
-      width: 160,
+      title: t('common.operation'), key: 'action', width: 200,
       render: (_: any, record: any) => (
         <Space>
           {String(record.status) === '0' && (
             <>
-              <Popconfirm title="确认处理该告警？" onConfirm={() => handleHandle(record.id)}>
-                <Button type="link" size="small" icon={<CheckOutlined />}>
-                  确认处理
-                </Button>
-              </Popconfirm>
-              <Popconfirm title="确认忽略该告警？" onConfirm={() => handleIgnore(record.id)}>
-                <Button type="link" size="small" icon={<StopOutlined />}>
-                  忽略
-                </Button>
-              </Popconfirm>
+              <Button type="link" size="small" icon={<CheckOutlined />}
+                onClick={() => handleMutation.mutate(record.id)}
+              >{t('alert.confirmProcess')}</Button>
+              <Button type="link" size="small" icon={<StopOutlined />}
+                onClick={() => ignoreMutation.mutate(record.id)}
+              >{t('alert.ignore')}</Button>
             </>
           )}
+          <Button type="link" size="small" danger icon={<DeleteOutlined />}
+            onClick={() => deleteAlarmMutation.mutate(record.id)}
+          >{t('alert.delete') || '删除'}</Button>
         </Space>
       ),
     },
   ]
 
+  // 通知表格列
+  const notifyColumns: ColumnsType<any> = [
+    {
+      title: t('alert.type') || '类型', key: '_type', width: 80,
+      render: () => <Tag color="blue">{t('alert.notifyType') || '通知'}</Tag>,
+    },
+    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140 },
+    {
+      title: t('alert.notifyType') || '通知类型', dataIndex: 'notify_type', key: 'notify_type', width: 100,
+      render: (val: string) => {
+        const cfg = NOTIFY_TYPE_MAP[val] || { label: val, color: '#d9d9d9', icon: '' }
+        return <Tag color={cfg.color}>{cfg.icon} {cfg.label}</Tag>
+      },
+    },
+    { title: t('alert.columnTitle') || '标题', dataIndex: 'title', key: 'title', width: 120 },
+    { title: t('alert.content') || '内容', dataIndex: 'content', key: 'content', ellipsis: true },
+    {
+      title: t('alert.occurTime'), dataIndex: 'created_at', key: 'created_at', width: 170,
+      render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('common.operation'), key: 'action', width: 80,
+      render: (_: any, record: any) => (
+        <Button type="link" size="small" danger icon={<DeleteOutlined />}
+          onClick={() => deleteNotifyMutation.mutate(record.id)}
+        >{t('alert.delete') || '删除'}</Button>
+      ),
+    },
+  ]
+
+  // 合并数据（全部tab）
+  const mergedData = useMemo(() => {
+    const alarmItems = Array.isArray(listRes?.items) ? listRes.items : []
+    const notifyItems = Array.isArray(notifyRes?.items) ? notifyRes.items : []
+    if (activeTab === 'alarm') {
+      return alarmItems.map((item: any) => ({ ...item, _type: 'alarm', _sortTime: item.occurred_at }))
+    }
+    if (activeTab === 'notification') {
+      return notifyItems.map((item: any) => ({ ...item, _type: 'notification', _sortTime: item.created_at }))
+    }
+    // 全部 - 合并排序
+    const alarms = alarmItems.map((item: any) => ({ ...item, _type: 'alarm', _sortTime: item.occurred_at }))
+    const notifications = notifyItems.map((item: any) => ({ ...item, _type: 'notification', _sortTime: item.created_at }))
+    return [...alarms, ...notifications].sort((a, b) =>
+      new Date(b._sortTime).getTime() - new Date(a._sortTime).getTime()
+    )
+  }, [listRes, notifyRes, activeTab])
+
+  // 合并列（全部tab）
+  const mergedColumns: ColumnsType<any> = [
+    {
+      title: t('alert.type') || '类型', key: '_type', width: 80,
+      render: (_: any, record: any) => {
+        if (record._type === 'notification') {
+          const cfg = NOTIFY_TYPE_MAP[record.notify_type] || { label: record.notify_type, color: '#d9d9d9', icon: '' }
+          return <Tag color={cfg.color}>{cfg.icon} {cfg.label}</Tag>
+        }
+        return <Tag color="red">{t('alert.alarmType') || '告警'}</Tag>
+      },
+    },
+    { title: t('alert.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140 },
+    {
+      title: t('alert.detail') || '详情', key: 'detail', ellipsis: true,
+      render: (_: any, record: any) => {
+        if (record._type === 'notification') {
+          return record.content || record.title
+        }
+        const cfg = getAlarmLevelDisplay(record.fault_code, record.alarm_level)
+        return <><Tag color={cfg.color} style={{ marginRight: 4 }}>{cfg.label}</Tag>{record.fault_message}</>
+      },
+    },
+    {
+      title: t('alert.status'), key: 'status', width: 80,
+      render: (_: any, record: any) => {
+        if (record._type === 'notification') {
+          return <Tag color="blue">{t('alert.notification') || '通知'}</Tag>
+        }
+        const key = typeof record.status === 'number' ? String(record.status) : record.status
+        const cfg = ALERT_STATUS_MAP[key] || { label: String(record.status), color: '#d9d9d9' }
+        return <Tag color={cfg.color}>{cfg.label}</Tag>
+      },
+    },
+    {
+      title: t('alert.occurTime'), key: 'time', width: 170,
+      render: (_: any, record: any) => {
+        const val = record._type === 'notification' ? record.created_at : record.occurred_at
+        return val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-'
+      },
+    },
+    {
+      title: t('common.operation'), key: 'action', width: 200,
+      render: (_: any, record: any) => (
+        <Space>
+          {record._type === 'alarm' && String(record.status) === '0' && (
+            <>
+              <Button type="link" size="small" icon={<CheckOutlined />}
+                onClick={() => handleMutation.mutate(record.id)}
+              >{t('alert.confirmProcess')}</Button>
+              <Button type="link" size="small" icon={<StopOutlined />}
+                onClick={() => ignoreMutation.mutate(record.id)}
+              >{t('alert.ignore')}</Button>
+            </>
+          )}
+          <Button type="link" size="small" danger icon={<DeleteOutlined />}
+            onClick={() => record._type === 'notification'
+              ? deleteNotifyMutation.mutate(record.id)
+              : deleteAlarmMutation.mutate(record.id)
+            }
+          >{t('alert.delete') || '删除'}</Button>
+        </Space>
+      ),
+    },
+  ]
+
+  const getColumns = () => {
+    if (activeTab === 'alarm') return alarmColumns
+    if (activeTab === 'notification') return notifyColumns
+    return mergedColumns
+  }
+
+  const isLoadingData = activeTab === 'notification' ? notifyLoading : isLoading
+  const total = activeTab === 'notification' ? (notifyRes?.total ?? 0) : (listRes?.total ?? 0)
+
   return (
     <div>
+      <Title level={4} style={{ marginBottom: 16 }}>
+        <AlertOutlined style={{ marginRight: 8 }} />{t('alert.title')}
+      </Title>
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic title="告警总数" value={stats.total} />
+        <Col span={4}>
+          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+            <Statistic title={t('alert.total')} value={(stats?.total ?? 0) + (notifyStats?.total ?? 0)} />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic title="未处理" value={stats.unhandled} valueStyle={{ color: '#ff4d4f' }} />
+        <Col span={4}>
+          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+            <Statistic title={t('alert.unprocessed')} value={stats?.unhandled ?? 0} valueStyle={{ color: '#ff4d4f' }} />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic title="已处理" value={stats.handled} valueStyle={{ color: '#52c41a' }} />
+        <Col span={4}>
+          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+            <Statistic title={t('alert.processed')} value={stats?.handled ?? 0} valueStyle={{ color: '#52c41a' }} />
           </Card>
         </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic title="严重告警" value={stats.critical} valueStyle={{ color: '#ff4d4f' }} />
+        <Col span={4}>
+          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+            <Statistic title={t('alert.criticalCount')} value={stats?.critical ?? 0} valueStyle={{ color: '#ff4d4f' }} />
+          </Card>
+        </Col>
+        <Col span={4}>
+          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+            <Statistic title={t('alert.notifyCount') || '通知数'} value={notifyStats?.total ?? 0} prefix={<BellOutlined />} />
+          </Card>
+        </Col>
+        <Col span={4}>
+          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
+            <Statistic title={t('alert.unreadNotify') || '未读通知'} value={notifyStats?.unread ?? 0} valueStyle={{ color: '#1890ff' }} />
           </Card>
         </Col>
       </Row>
 
-      <Card style={{ marginBottom: 16 }}>
+      <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
           <Col>
-            <Select
-              allowClear
-              placeholder="状态"
-              style={{ width: 120 }}
-              value={statusFilter}
-              onChange={(val) => { setStatusFilter(val); setPage(1) }}
-              options={[
-                { label: '未处理', value: '0' },
-                { label: '已处理', value: '1' },
-                { label: '已忽略', value: '2' },
-              ]}
+            <Select allowClear showSearch placeholder={t('alert.stationFilter') || '选择电站'} style={{ width: 160 }}
+              value={stationId} onChange={(val) => { setStationId(val); setKeyword(undefined); setPage(1) }}
+              options={stationOptions}
+              filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
             />
           </Col>
           <Col>
-            <Select
-              allowClear
-              placeholder="级别"
-              style={{ width: 120 }}
-              value={levelFilter}
-              onChange={(val) => { setLevelFilter(val); setPage(1) }}
-              options={[
-                { label: '严重', value: '1' },
-                { label: '警告', value: '2' },
-                { label: '提示', value: '3' },
-              ]}
+            <Select allowClear showSearch placeholder={t('alert.searchPlaceholder') || '搜索SN'} style={{ width: 200 }}
+              value={keyword} onChange={(val) => { setKeyword(val); setPage(1) }}
+              options={deviceOptions}
+              filterOption={(input, option) => (option?.label as string)?.toLowerCase().includes(input.toLowerCase())}
             />
           </Col>
-          <Col>
-            <Input.Search
-              allowClear
-              placeholder="搜索SN、故障信息"
-              style={{ width: 220 }}
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onSearch={() => { setPage(1); fetchData() }}
-            />
-          </Col>
-          <Col>
-            <RangePicker
-              value={dateRange as any}
-              onChange={(vals) => { setDateRange(vals as any); setPage(1) }}
-            />
-          </Col>
-          <Col>
-            <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
-          </Col>
-        </Row>
-      </Card>
-
-      <Table<Alert>
-        rowKey="id"
-        columns={columns}
-        dataSource={data}
-        loading={loading}
-        rowClassName={(record: any) => record.alarm_level === 1 ? 'alert-row-critical' : ''}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 条`,
-          onChange: (p, ps) => { setPage(p); setPageSize(ps) },
-        }}
-      />
-    </div>
-  )
-}
-
-const WorkOrderTab: React.FC = () => {
-  const [loading, setLoading] = useState(false)
-  const [data, setData] = useState<WorkOrder[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
-  const [statusFilter, setStatusFilter] = useState<string>()
-  const [priorityFilter, setPriorityFilter] = useState<string>()
-  const [createOpen, setCreateOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [installers, setInstallers] = useState<User[]>([])
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [detail, setDetail] = useState<WorkOrderDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [form] = Form.useForm()
-
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await workOrderApi.list({
-        page,
-        pageSize,
-        status: statusFilter || undefined,
-        priority: priorityFilter || undefined,
-      })
-      const d = res.data
-      setData((d?.list ?? d?.data?.list ?? d?.data?.items ?? []) as WorkOrder[])
-      setTotal((d?.total ?? d?.data?.total ?? 0) as number)
-    } catch {
-      message.error('获取工单列表失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [page, pageSize, statusFilter, priorityFilter])
-
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
-
-  const openCreate = async () => {
-    setCreateOpen(true)
-    try {
-      const res = await userApi.getInstallers()
-      const d = res.data
-      setInstallers((d?.data ?? d?.items ?? d ?? []) as User[])
-    } catch {}
-  }
-
-  const handleCreate = async () => {
-    try {
-      const values = await form.validateFields()
-      setCreating(true)
-      await workOrderApi.create(values)
-      message.success('工单创建成功')
-      setCreateOpen(false)
-      form.resetFields()
-      fetchData()
-    } catch {
-      message.error('创建失败')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const openDetail = async (id: string) => {
-    setDetailLoading(true)
-    setDetailOpen(true)
-    try {
-      const res = await workOrderApi.getDetail(id)
-      const d = res.data
-      setDetail((d?.data ?? d ?? null) as WorkOrderDetail | null)
-    } catch {
-      message.error('获取详情失败')
-    } finally {
-      setDetailLoading(false)
-    }
-  }
-
-  const handleStatusChange = async (id: string, newStatus: string, resolution?: string) => {
-    try {
-      await workOrderApi.updateStatus(id, newStatus)
-      message.success('状态更新成功')
-      fetchData()
-      if (detailOpen) openDetail(id)
-    } catch {
-      message.error('状态更新失败')
-    }
-  }
-
-  const statusMenuItems = (id: string): MenuProps['items'] =>
-    WO_STATUS_OPTIONS.map((s) => {
-      const cfg = WO_STATUS_MAP[s]
-      return { key: s, label: <Tag color={cfg.color}>{cfg.label}</Tag> }
-    })
-
-  const columns: ColumnsType<WorkOrder> = [
-    { title: '标题', dataIndex: 'title', key: 'title', width: 180, ellipsis: true },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      key: 'priority',
-      width: 80,
-      render: (val: string) => {
-        const cfg = WO_PRIORITY_MAP[val] || { label: val, color: '#d9d9d9' }
-        return <Tag color={cfg.color}>{cfg.label}</Tag>
-      },
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 90,
-      render: (val: string) => {
-        const cfg = WO_STATUS_MAP[val] || { label: val, color: '#d9d9d9' }
-        return <Tag color={cfg.color}>{cfg.label}</Tag>
-      },
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 170,
-      render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss'),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 180,
-      render: (_: any, record: WorkOrder) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record.id)}>
-            详情
-          </Button>
-          <Dropdown
-            menu={{
-              items: statusMenuItems(record.id),
-              onClick: ({ key }) => handleStatusChange(record.id, key),
-            }}
-          >
-            <Button type="link" size="small">
-              状态 <DownOutlined />
-            </Button>
-          </Dropdown>
-        </Space>
-      ),
-    },
-  ]
-
-  return (
-    <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={16} align="middle">
-          <Col>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              创建工单
-            </Button>
-          </Col>
-          <Col>
-            <Select
-              allowClear
-              placeholder="状态"
-              style={{ width: 120 }}
-              value={statusFilter}
-              onChange={(val) => { setStatusFilter(val); setPage(1) }}
-              options={Object.entries(WO_STATUS_MAP).map(([k, v]) => ({ label: v.label, value: k }))}
-            />
-          </Col>
-          <Col>
-            <Select
-              allowClear
-              placeholder="优先级"
-              style={{ width: 120 }}
-              value={priorityFilter}
-              onChange={(val) => { setPriorityFilter(val); setPage(1) }}
-              options={Object.entries(WO_PRIORITY_MAP).map(([k, v]) => ({ label: v.label, value: k }))}
-            />
-          </Col>
-          <Col>
-            <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
-          </Col>
-        </Row>
-      </Card>
-
-      <Table<WorkOrder>
-        rowKey="id"
-        columns={columns}
-        dataSource={data}
-        loading={loading}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          showTotal: (t) => `共 ${t} 条`,
-          onChange: (p, ps) => { setPage(p); setPageSize(ps) },
-        }}
-      />
-
-      <Modal
-        title="创建工单"
-        open={createOpen}
-        onCancel={() => { setCreateOpen(false); form.resetFields() }}
-        onOk={handleCreate}
-        confirmLoading={creating}
-        destroyOnClose
-      >
-        <Form form={form} layout="vertical">
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
-            <Input placeholder="工单标题" />
-          </Form.Item>
-          <Form.Item name="description" label="描述" rules={[{ required: true, message: '请输入描述' }]}>
-            <TextArea rows={3} placeholder="详细描述" />
-          </Form.Item>
-          <Form.Item name="deviceSn" label="关联设备SN">
-            <Input placeholder="可选" />
-          </Form.Item>
-          <Form.Item name="priority" label="优先级" rules={[{ required: true, message: '请选择优先级' }]}>
-            <Select
-              placeholder="选择优先级"
-              options={Object.entries(WO_PRIORITY_MAP).map(([k, v]) => ({ label: v.label, value: k }))}
-            />
-          </Form.Item>
-          <Form.Item name="assigneeId" label="指派人" rules={[{ required: true, message: '请选择指派人' }]}>
-            <Select
-              placeholder="选择安装商"
-              options={installers.map((u) => ({ label: u.nickname || u.phone, value: u.id }))}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Drawer
-        title="工单详情"
-        open={detailOpen}
-        onClose={() => { setDetailOpen(false); setDetail(null) }}
-        width={640}
-        destroyOnClose
-      >
-        {detail && (
-          <div>
-            <Card size="small" style={{ marginBottom: 16 }}>
-              <p><strong>标题：</strong>{detail.title}</p>
-              <p><strong>优先级：</strong>
-                <Tag color={WO_PRIORITY_MAP[detail.priority]?.color}>
-                  {WO_PRIORITY_MAP[detail.priority]?.label || detail.priority}
-                </Tag>
-              </p>
-              <p><strong>状态：</strong>
-                <Tag color={WO_STATUS_MAP[detail.status]?.color}>
-                  {WO_STATUS_MAP[detail.status]?.label || detail.status}
-                </Tag>
-              </p>
-              <p><strong>描述：</strong>{detail.description}</p>
-              <p><strong>创建人：</strong>{detail.creatorName || '-'}</p>
-              <p><strong>指派人：</strong>{detail.assigneeName || '-'}</p>
-              <p><strong>创建时间：</strong>{dayjs(detail.createdAt).format('YYYY-MM-DD HH:mm:ss')}</p>
-              {detail.resolution && <p><strong>解决方案：</strong>{detail.resolution}</p>}
-            </Card>
-
-            <Card title="状态时间线" size="small" style={{ marginBottom: 16 }}>
-              {detail.timeline && detail.timeline.length > 0 ? (
-                <Timeline
-                  items={detail.timeline.map((t: any) => ({
-                    children: (
-                      <div>
-                        <Tag color={WO_STATUS_MAP[t.status]?.color}>
-                          {WO_STATUS_MAP[t.status]?.label || t.status}
-                        </Tag>
-                        <span style={{ marginLeft: 8 }}>{t.operator}</span>
-                        <div style={{ color: '#999', fontSize: 12 }}>
-                          {dayjs(t.timestamp).format('YYYY-MM-DD HH:mm:ss')}
-                        </div>
-                        {t.remark && <div>{t.remark}</div>}
-                      </div>
-                    ),
-                  }))}
+          {activeTab !== 'notification' && (
+            <>
+              <Col>
+                <Select allowClear placeholder={t('alert.filterStatus')} style={{ width: 120 }}
+                  value={statusFilter} onChange={(val) => { setStatusFilter(val); setPage(1) }}
+                  options={[{ label: t('alert.unprocessed'), value: '0' }, { label: t('alert.processed'), value: '1' }, { label: t('alert.ignored'), value: '2' }]}
                 />
-              ) : (
-                <span style={{ color: '#999' }}>暂无记录</span>
-              )}
-            </Card>
+              </Col>
+              <Col>
+                <Select allowClear placeholder={t('alert.filterLevel')} style={{ width: 120 }}
+                  value={levelFilter} onChange={(val) => { setLevelFilter(val); setPage(1) }}
+                  options={[{ label: t('alert.critical'), value: '1' }, { label: t('alert.warningLevel'), value: '2' }, { label: t('alert.infoLevel'), value: '3' }]}
+                />
+              </Col>
+            </>
+          )}
+          {activeTab === 'notification' && (
+            <Col>
+              <Select allowClear placeholder={t('alert.notifyType') || '通知类型'} style={{ width: 120 }}
+                value={notifyTypeFilter} onChange={(val) => { setNotifyTypeFilter(val); setPage(1) }}
+                options={[
+                  { label: t('alert.deviceOnline') || '设备上线', value: 'device_online' },
+                  { label: t('alert.deviceOffline') || '设备离线', value: 'device_offline' },
+                  { label: 'OTA更新', value: 'ota_available' },
+                ]}
+              />
+            </Col>
+          )}
+          <Col>
+            <RangePicker value={dateRange as any} onChange={(vals) => { setDateRange(vals as any); setPage(1) }} />
+          </Col>
+          <Col>
+            <Button icon={<ReloadOutlined />} onClick={() => { refetch(); refetchNotify() }}>{t('common.refresh')}</Button>
+          </Col>
+          <Col>
+            <Button danger icon={<ClearOutlined />}
+              onClick={() => clearAllMutation.mutate()}
+              loading={clearAllMutation.isPending}
+            >{t('alert.clearAll') || '清除通知记录'}</Button>
+          </Col>
+        </Row>
+      </Card>
 
-            <Dropdown
-              menu={{
-                items: WO_STATUS_OPTIONS.map((s) => ({
-                  key: s,
-                  label: WO_STATUS_MAP[s]?.label || s,
-                })),
-                onClick: ({ key }) => handleStatusChange(detail.id, key),
-              }}
-            >
-              <Button>
-                更改状态 <DownOutlined />
-              </Button>
-            </Dropdown>
-          </div>
-        )}
-        {!detail && !detailLoading && <div style={{ textAlign: 'center', color: '#999' }}>加载中...</div>}
-      </Drawer>
+      <Card bordered={false} style={{ borderRadius: 12 }}>
+        <Tabs activeKey={activeTab} onChange={(key) => { setActiveTab(key); setPage(1) }}
+          items={[
+            { key: 'all', label: t('alert.tabAll') || '全部' },
+            { key: 'alarm', label: t('alert.tabAlarm') || '告警' },
+            { key: 'notification', label: t('alert.tabNotification') || '通知' },
+          ]}
+        />
+        <Table
+          rowKey={(record) => `${record._type || 'alarm'}-${record.id}`}
+          columns={getColumns()}
+          dataSource={mergedData}
+          loading={isLoadingData}
+          size="small"
+          locale={{ emptyText: <Empty description={t('common.noData')} /> }}
+          pagination={{
+            current: page, pageSize, total, showSizeChanger: true,
+            showTotal: (total) => t('common.total', { total }),
+            onChange: (p, ps) => { setPage(p); setPageSize(ps) },
+          }}
+        />
+      </Card>
     </div>
   )
 }

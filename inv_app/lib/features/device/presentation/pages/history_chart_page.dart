@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class HistoryChartPage extends StatefulWidget {
   final String deviceSN;
@@ -20,11 +21,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
   int _selectedMetricIndex = 0;
   DateTime _selectedDate = DateTime.now();
 
-  static const _metrics = [
-    ('发电量', 'pv', Colors.orange),
-    ('充电量', 'charge', AppColors.success),
-    ('放电量', 'discharge', Colors.blue),
-    ('负载电量', 'load', Colors.purple),
+  List<(String, String, Color)> _getMetrics(AppLocalizations l10n) => [
+    (l10n.powerGeneration, 'pv', Colors.orange),
+    (l10n.chargeAmount, 'charge', AppColors.success),
+    (l10n.dischargeAmount, 'discharge', Colors.blue),
+    (l10n.load, 'load', Colors.purple),
   ];
 
   static const _periods = ['day', 'month', 'year', 'total'];
@@ -52,7 +53,10 @@ class _HistoryChartPageState extends State<HistoryChartPage>
 
   String get _currentPeriod => _periods[_tabController.index];
 
-  String get _currentMetric => _metrics[_selectedMetricIndex].$2;
+  static const _metricKeys = ['pv', 'charge', 'discharge', 'load'];
+  static const _metricColors = [Colors.orange, AppColors.success, Colors.blue, Colors.purple];
+
+  String get _currentMetric => _metricKeys[_selectedMetricIndex];
 
   void _requestData() {
     final now = _selectedDate;
@@ -129,16 +133,16 @@ class _HistoryChartPageState extends State<HistoryChartPage>
     }
   }
 
-  String get _dateLabel {
+  String _getDateLabel(AppLocalizations l10n) {
     switch (_currentPeriod) {
       case 'day':
         return '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
       case 'month':
-        return '${_selectedDate.year}年${_selectedDate.month}月';
+        return '${_selectedDate.year}${l10n.year}${_selectedDate.month}${l10n.month}';
       case 'year':
-        return '${_selectedDate.year}年';
+        return '${_selectedDate.year}${l10n.year}';
       default:
-        return '全部';
+        return l10n.total;
     }
   }
 
@@ -158,9 +162,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final metrics = _getMetrics(l10n);
     return Scaffold(
       appBar: AppBar(
-        title: Text('历史曲线 - ${widget.deviceSN}'),
+        title: Text('${l10n.historyCurve} - ${widget.deviceSN}'),
       ),
       body: Column(
         children: [
@@ -171,11 +177,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.textHint,
               indicatorColor: AppColors.primary,
-              tabs: const [
-                Tab(text: '日'),
-                Tab(text: '月'),
-                Tab(text: '年'),
-                Tab(text: '总'),
+              tabs: [
+                Tab(text: l10n.day),
+                Tab(text: l10n.month),
+                Tab(text: l10n.year),
+                Tab(text: l10n.total),
               ],
             ),
           ),
@@ -198,7 +204,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                         Icon(Icons.calendar_today, size: 16.sp, color: AppColors.primary),
                         SizedBox(width: 6.w),
                         Text(
-                          _dateLabel,
+                          _getDateLabel(l10n),
                           style: TextStyle(fontSize: 13.sp, color: AppColors.primary, fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -213,8 +219,8 @@ class _HistoryChartPageState extends State<HistoryChartPage>
             padding: EdgeInsets.symmetric(horizontal: 16.w),
             child: Wrap(
               spacing: 8.w,
-              children: List.generate(_metrics.length, (index) {
-                final metric = _metrics[index];
+              children: List.generate(metrics.length, (index) {
+                final metric = metrics[index];
                 final selected = _selectedMetricIndex == index;
                 return FilterChip(
                   label: Text(metric.$1),
@@ -253,18 +259,18 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                       children: [
                         Icon(Icons.error_outline, size: 40.sp, color: AppColors.error),
                         SizedBox(height: 8.h),
-                        Text(state.message, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+                        Text(AppLocalizations.of(context)!.translateError(state.message), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
                       ],
                     ),
                   );
                 }
                 if (state is DeviceHistoryLoaded) {
                   final spots = _convertToFlSpots(state.data);
-                  final metricColor = _metrics[_selectedMetricIndex].$3;
+                  final metricColor = _metricColors[_selectedMetricIndex];
                   return _buildChart(spots, metricColor);
                 }
                 return Center(
-                  child: Text('暂无数据', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+                  child: Text(l10n.noData, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
                 );
               },
             ),
@@ -392,13 +398,14 @@ class _HistoryChartPageState extends State<HistoryChartPage>
 
   Widget _buildBottomTitle(double value, TitleMeta meta, List<FlSpot> spots) {
     final period = _currentPeriod;
+    final l10n = AppLocalizations.of(context)!;
     String text;
     if (period == 'day') {
       text = '${value.toInt()}h';
     } else if (period == 'month') {
-      text = '${value.toInt()}日';
+      text = '${value.toInt()}${l10n.day}';
     } else if (period == 'year') {
-      text = '${value.toInt()}月';
+      text = '${value.toInt()}${l10n.month}';
     } else {
       text = '${value.toInt()}';
     }

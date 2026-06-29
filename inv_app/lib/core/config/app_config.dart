@@ -1,6 +1,7 @@
 class AppConfig {
-  static const String appName = '光伏逆变器';
+  static const String appName = 'PV Inverter';
   static const String version = '1.0.0';
+  static const int versionCode = 1; // 与 pubspec.yaml 中的 build number 一致
   
   static const String apiBaseUrl = 'http://192.168.8.248:8080/api/v1';
   static const String mqttBrokerHost = 'jiuxiaoyw.online';

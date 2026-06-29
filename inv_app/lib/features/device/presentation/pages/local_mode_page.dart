@@ -9,6 +9,7 @@ import 'package:inv_app/core/services/mdns_discovery_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class LocalModePage extends StatefulWidget {
   const LocalModePage({super.key});
@@ -93,7 +94,7 @@ class _LocalModePageState extends State<LocalModePage> {
       if (!mounted) return;
       setState(() {
         _isScanning = false;
-        _errorMessage = '扫描失败: $e';
+        _errorMessage = '${AppLocalizations.of(context)!.scanFailed}: $e';
       });
     }
   }
@@ -128,8 +129,8 @@ class _LocalModePageState extends State<LocalModePage> {
           context.push('/device/${device.ssid}');
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('已连接AP，但设备通信测试失败'),
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.apCommTestFailed),
               backgroundColor: AppColors.warning,
             ),
           );
@@ -137,14 +138,14 @@ class _LocalModePageState extends State<LocalModePage> {
       } else {
         setState(() {
           _isConnecting = false;
-          _errorMessage = '连接失败，请重试';
+          _errorMessage = AppLocalizations.of(context)!.connectionFailed;
         });
       }
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isConnecting = false;
-        _errorMessage = '连接失败: $e';
+        _errorMessage = '${AppLocalizations.of(context)!.connectionFailed}: $e';
       });
     }
   }
@@ -165,8 +166,8 @@ class _LocalModePageState extends State<LocalModePage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: const Text(
-            '本地连接',
+          title: Text(
+            AppLocalizations.of(context)!.localConnection,
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
           ),
           centerTitle: true,
@@ -210,7 +211,7 @@ class _LocalModePageState extends State<LocalModePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isLocal ? '本地模式' : '远程模式',
+                  isLocal ? AppLocalizations.of(context)!.localMode : AppLocalizations.of(context)!.remoteMode,
                   style: TextStyle(
                     fontSize: 15.sp,
                     fontWeight: FontWeight.w600,
@@ -219,7 +220,7 @@ class _LocalModePageState extends State<LocalModePage> {
                 ),
                 SizedBox(height: 2.h),
                 Text(
-                  isLocal ? '直连设备AP，无需互联网' : '通过云端服务器连接',
+                  isLocal ? AppLocalizations.of(context)!.localModeDirectAp : AppLocalizations.of(context)!.remoteModeCloud,
                   style: TextStyle(
                     fontSize: 12.sp,
                     color: AppColors.textHint,
@@ -261,7 +262,7 @@ class _LocalModePageState extends State<LocalModePage> {
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
-              '连接设备AP后将断开互联网，仅可控制本地设备',
+              AppLocalizations.of(context)!.apDisconnectWarning,
               style: TextStyle(fontSize: 12.sp, color: const Color(0xFF9A3412)),
             ),
           ),
@@ -302,7 +303,7 @@ class _LocalModePageState extends State<LocalModePage> {
                     Icon(Icons.wifi_find_rounded, size: 20.sp),
                     SizedBox(width: 8.w),
                     Text(
-                      '扫描设备',
+                      AppLocalizations.of(context)!.scanDevices,
                       style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
                     ),
                   ],
@@ -344,12 +345,12 @@ class _LocalModePageState extends State<LocalModePage> {
             Icon(Icons.wifi_off_rounded, size: 56.sp, color: AppColors.textHint),
             SizedBox(height: 12.h),
             Text(
-              '未发现设备',
+              AppLocalizations.of(context)!.noDeviceFound,
               style: TextStyle(fontSize: 15.sp, color: AppColors.textHint),
             ),
             SizedBox(height: 4.h),
             Text(
-              '请确保设备已上电并开启AP模式',
+              AppLocalizations.of(context)!.ensureDeviceApMode,
               style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
             ),
           ],
@@ -364,7 +365,7 @@ class _LocalModePageState extends State<LocalModePage> {
           Padding(
             padding: EdgeInsets.only(bottom: 8.h),
             child: Text(
-              '设备AP (${_apDevices.length})',
+              AppLocalizations.of(context)!.deviceApCount('${_apDevices.length}'),
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
@@ -378,7 +379,7 @@ class _LocalModePageState extends State<LocalModePage> {
           Padding(
             padding: EdgeInsets.only(top: 12.h, bottom: 8.h),
             child: Text(
-              '局域网设备 (${_mdnsDevices.length})',
+              AppLocalizations.of(context)!.lanDeviceCount('${_mdnsDevices.length}'),
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
@@ -478,7 +479,7 @@ class _LocalModePageState extends State<LocalModePage> {
                       borderRadius: BorderRadius.circular(6.r),
                     ),
                     child: Text(
-                      '已连接',
+                      AppLocalizations.of(context)!.apConnected,
                       style: TextStyle(
                         fontSize: 11.sp,
                         fontWeight: FontWeight.w600,

@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -24,10 +25,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text('我的', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17, color: AppColors.textPrimary)),
+        title: Text(l10n.myProfile, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17, color: AppColors.textPrimary)),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -48,9 +50,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
           return ListView(
             children: [
-              _buildHeader(phone, role, isLoading),
+              _buildHeader(phone, role, isLoading, l10n),
               _buildMenuSection(context),
-              _buildLogoutButton(context),
+              _buildLogoutButton(context, l10n),
             ],
           );
         },
@@ -58,20 +60,20 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildHeader(String phone, int role, bool isLoading) {
+  Widget _buildHeader(String phone, int role, bool isLoading, AppLocalizations l10n) {
     String roleText;
     switch (role) {
       case 0:
-        roleText = '超级管理员';
+        roleText = l10n.roleAdmin;
       case 1:
-        roleText = '代理商';
+        roleText = l10n.roleAgent;
       case 2:
-        roleText = '安装商';
+        roleText = l10n.roleInstaller;
       default:
-        roleText = '用户';
+        roleText = l10n.roleUser;
     }
 
-    final displayName = phone.isNotEmpty ? phone : '已登录';
+    final displayName = phone.isNotEmpty ? phone : l10n.loggedIn;
 
     return Container(
       padding: EdgeInsets.all(20.w),
@@ -110,7 +112,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     decoration: BoxDecoration(color: AppColors.surfaceHover, borderRadius: BorderRadius.circular(4.r)),
                   )
                 else
-                  Text('角色: $roleText',
+                  Text(l10n.roleLabel(roleText),
                       style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
               ],
             ),
@@ -122,14 +124,15 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildMenuSection(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final items = [
-      (Icons.solar_power_rounded, '我的电站', () => context.go('/home')),
-      (Icons.devices_rounded, '我的设备', () => context.go('/devices')),
-      (Icons.system_update_alt_rounded, 'OTA升级', () => context.push('/ota')),
-      (Icons.notifications_outlined, '消息通知设置', () => context.push('/notify-settings')),
-      (Icons.settings_outlined, '系统设置', () => context.push('/settings')),
-      (Icons.lock_outlined, '修改密码', () => context.push('/change-password')),
-      (Icons.info_outline, '关于我们', () => context.push('/about')),
+      (Icons.solar_power_rounded, l10n.myStations, () => context.go('/home')),
+      (Icons.devices_rounded, l10n.myDevices, () => context.go('/devices')),
+      (Icons.system_update_alt_rounded, l10n.otaTitle, () => context.push('/ota')),
+      (Icons.notifications_outlined, l10n.messageNotifySettings, () => context.push('/notify-settings')),
+      (Icons.settings_outlined, l10n.systemSettings, () => context.push('/settings')),
+      (Icons.lock_outlined, l10n.changePassword, () => context.push('/change-password')),
+      (Icons.info_outline, l10n.aboutUs, () => context.push('/about')),
     ];
 
     return Container(
@@ -152,7 +155,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildLogoutButton(BuildContext context) {
+  Widget _buildLogoutButton(BuildContext context, AppLocalizations l10n) {
     return Padding(
       padding: EdgeInsets.all(16.w),
       child: OutlinedButton(
@@ -160,18 +163,18 @@ class _ProfilePageState extends State<ProfilePage> {
           showDialog(
             context: context,
             builder: (ctx) => AlertDialog(
-              title: const Text('退出登录'),
-              content: const Text('确定要退出登录吗？'),
+              title: Text(l10n.logout),
+              content: Text(l10n.logoutConfirm),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+                TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
                 FilledButton(
                   onPressed: () {
                     Navigator.pop(ctx);
                     context.read<AuthBloc>().add(AuthLogoutRequested());
                   },
                   style: FilledButton.styleFrom(backgroundColor: AppColors.errorLight),
-                  child: const Text('确定'),
+                  child: Text(l10n.confirm),
                 ),
               ],
             ),
@@ -183,7 +186,7 @@ class _ProfilePageState extends State<ProfilePage> {
           padding: EdgeInsets.symmetric(vertical: 14.h),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
         ),
-        child: const Text('退出登录'),
+        child: Text(l10n.logout),
       ),
     );
   }

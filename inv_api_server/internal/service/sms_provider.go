@@ -47,7 +47,7 @@ func NewAliyunSMSProvider(accessKey, secretKey, signName, template string) *Aliy
 		secretKey:  secretKey,
 		signName:   signName,
 		template:   template,
-		endpoint:   "https://dysmsapi.aliy大将doudian.com",
+		endpoint:   "https://dysmsapi.aliyuncs.com",
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }

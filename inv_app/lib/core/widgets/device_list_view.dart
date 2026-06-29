@@ -2,29 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceFilterBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
-  final List<String> filterLabels;
+  final List<String>? filterLabels;
   final Color? backgroundColor;
 
   const DeviceFilterBar({
     super.key,
     required this.selectedIndex,
     required this.onSelected,
-    this.filterLabels = const ['全部', '逆变器', '采集器', '储能'],
+    this.filterLabels,
     this.backgroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final labels = filterLabels ?? [l10n.allDevices, l10n.deviceTypeInverter, l10n.deviceTypeCollector, l10n.deviceTypeStorage];
     final bgColor = backgroundColor ?? AppColors.background;
     return Container(
       color: bgColor,
       padding: EdgeInsets.fromLTRB(12.w, 8.h, 12.w, 10.h),
       child: Row(
-        children: List.generate(filterLabels.length, (i) {
+        children: List.generate(labels.length, (i) {
           final active = selectedIndex == i;
           return Expanded(
             child: Padding(
@@ -41,7 +44,7 @@ class DeviceFilterBar extends StatelessWidget {
                     ),
                   ),
                   child: Center(
-                    child: Text(filterLabels[i],
+                    child: Text(labels[i],
                       style: TextStyle(
                         fontSize: 14.sp,
                         fontWeight: active ? FontWeight.w600 : FontWeight.w500,
@@ -61,12 +64,12 @@ class DeviceFilterBar extends StatelessWidget {
 
 class DeviceSearchBar extends StatefulWidget {
   final ValueChanged<String>? onSearchChanged;
-  final String hintText;
+  final String? hintText;
 
   const DeviceSearchBar({
     super.key,
     this.onSearchChanged,
-    this.hintText = '搜索序列号或型号',
+    this.hintText,
   });
 
   @override
@@ -84,6 +87,7 @@ class _DeviceSearchBarState extends State<DeviceSearchBar> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 8.h),
       child: TextField(
@@ -92,7 +96,7 @@ class _DeviceSearchBarState extends State<DeviceSearchBar> {
         cursorColor: AppColors.primary,
         style: TextStyle(fontSize: 15.sp),
         decoration: InputDecoration(
-          hintText: widget.hintText,
+          hintText: widget.hintText ?? l10n.searchDeviceHint,
           hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
           prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textHint),
           suffixIcon: _controller.text.isNotEmpty
@@ -123,12 +127,12 @@ class DeviceCard extends StatelessWidget {
     return 'inv';
   }
 
-  String _deviceTypeLabel(String type) {
+  String _deviceTypeLabel(String type, AppLocalizations l10n) {
     switch (type) {
-      case 'inv': return '逆变器';
-      case 'collector': return '采集器';
-      case 'battery': return '储能设备';
-      default: return '未知';
+      case 'inv': return l10n.inverter;
+      case 'collector': return l10n.collector;
+      case 'battery': return l10n.deviceTypeStorage;
+      default: return l10n.unknown;
     }
   }
 
@@ -158,20 +162,22 @@ class DeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final sn = device['sn'] ?? '';
     final type = _deviceType();
     final status = device['status'] ?? 0;
     final isOnline = status == 1;
+    final isFault = status == 2;
     final alarmCode = device['alarm_code'] ?? device['fault_code'] ?? 0;
-    final hasAlarm = isOnline && alarmCode != 0 && alarmCode != '0' && alarmCode != '';
+    final hasAlarm = (isOnline || isFault) && alarmCode != 0 && alarmCode != '0' && alarmCode != '';
 
     final model = _extractString(['model', 'model_name', 'device_model']);
     final firmwareArm = _extractString(['firmware_arm', 'firmware_version', 'firmware', 'fw_version']);
     final ratedPower = _extractNum('rated_power');
 
-    final badgeText = hasAlarm ? '告警' : (isOnline ? '正常' : '离线');
-    final badgeBg = hasAlarm ? AppColors.badgeAlarmBg : (isOnline ? AppColors.badgeNormalBg : AppColors.badgeOfflineBg);
-    final badgeColor = hasAlarm ? AppColors.badgeAlarmText : (isOnline ? AppColors.badgeNormalText : AppColors.badgeOfflineText);
+    final badgeText = isFault ? l10n.fault : (hasAlarm ? l10n.alarm : (isOnline ? l10n.normal : l10n.offline));
+    final badgeBg = isFault ? AppColors.badgeAlarmBg : (hasAlarm ? AppColors.badgeAlarmBg : (isOnline ? AppColors.badgeNormalBg : AppColors.badgeOfflineBg));
+    final badgeColor = isFault ? AppColors.badgeAlarmText : (hasAlarm ? AppColors.badgeAlarmText : (isOnline ? AppColors.badgeNormalText : AppColors.badgeOfflineText));
 
     return GestureDetector(
       onTap: () {
@@ -193,7 +199,7 @@ class DeviceCard extends StatelessWidget {
                 Container(
                   width: 8.w, height: 8.w,
                   decoration: BoxDecoration(
-                    color: isOnline ? AppColors.successLight : AppColors.textHint,
+                    color: isFault ? AppColors.errorLight : (isOnline ? AppColors.successLight : AppColors.textHint),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -218,17 +224,17 @@ class DeviceCard extends StatelessWidget {
               ),
             ],
             SizedBox(height: 12.h),
-            _deviceInfoRow('设备类型', _deviceTypeLabel(type)),
-            if (ratedPower > 0) _deviceInfoRow('额定功率', '${ratedPower.toStringAsFixed(0)} W'),
-            if (type == 'battery') ..._buildBatteryExtras(),
-            if (type == 'inv') ..._buildInverterExtras(),
+            _deviceInfoRow(l10n.deviceTypeLabelKey, _deviceTypeLabel(type, l10n)),
+            if (ratedPower > 0) _deviceInfoRow(l10n.ratedPowerLabel, '${ratedPower.toStringAsFixed(0)} W'),
+            if (type == 'battery') ..._buildBatteryExtras(l10n),
+            if (type == 'inv') ..._buildInverterExtras(l10n),
             if (firmwareArm != '--') ...[
               Padding(
                 padding: EdgeInsets.only(top: 8.h),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Text('ARM固件: $firmwareArm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                    Text('${AppLocalizations.of(context)!.armFirmware}: $firmwareArm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
                   ],
                 ),
               ),
@@ -260,20 +266,20 @@ class DeviceCard extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildBatteryExtras() {
+  List<Widget> _buildBatteryExtras(AppLocalizations l10n) {
     final soc = _extractNum('battery_soc');
     final soh = _extractNum('battery_soh');
     final chargeEnergy = _extractNum('daily_charge_energy');
     final dischargeEnergy = _extractNum('daily_discharge_energy');
     return [
-      _deviceInfoRow('电池 SOC', soc > 0 ? '${soc.toStringAsFixed(0)}%' : '--%'),
-      _deviceInfoRow('电池健康度', soh > 0 ? '${soh.toStringAsFixed(0)}%' : '--%'),
-      _deviceInfoRow('当日充电量', chargeEnergy > 0 ? '${chargeEnergy.toStringAsFixed(2)} kWh' : '-- kWh'),
-      _deviceInfoRow('当日放电量', dischargeEnergy > 0 ? '${dischargeEnergy.toStringAsFixed(2)} kWh' : '-- kWh'),
+      _deviceInfoRow(l10n.batterySocLabel, soc > 0 ? '${soc.toStringAsFixed(0)}%' : '--%'),
+      _deviceInfoRow(l10n.batteryHealthLabel, soh > 0 ? '${soh.toStringAsFixed(0)}%' : '--%'),
+      _deviceInfoRow(l10n.dailyChargeLabel, chargeEnergy > 0 ? '${chargeEnergy.toStringAsFixed(2)} kWh' : '-- kWh'),
+      _deviceInfoRow(l10n.dailyDischargeLabel, dischargeEnergy > 0 ? '${dischargeEnergy.toStringAsFixed(2)} kWh' : '-- kWh'),
     ];
   }
 
-  List<Widget> _buildInverterExtras() {
+  List<Widget> _buildInverterExtras(AppLocalizations l10n) {
     final currentPower = _extractNum('current_power');
     final dailyEnergy = _extractNum('daily_energy');
     final acPower = _extractNum('ac_power');
@@ -283,8 +289,8 @@ class DeviceCard extends StatelessWidget {
     final energyValue = dailyPV > 0 ? dailyPV : (dailyEnergy > 0 ? dailyEnergy : 0);
 
     return [
-      _deviceInfoRow('当前功率', powerValue > 0 ? '${powerValue.toStringAsFixed(1)} W' : '--'),
-      _deviceInfoRow('当日发电量', energyValue > 0 ? '${energyValue.toStringAsFixed(2)} kWh' : '--'),
+      _deviceInfoRow(l10n.currentPower, powerValue > 0 ? '${powerValue.toStringAsFixed(1)} W' : '--'),
+      _deviceInfoRow(l10n.dailyGenerationLabel, energyValue > 0 ? '${energyValue.toStringAsFixed(2)} kWh' : '--'),
     ];
   }
 }
@@ -293,8 +299,8 @@ class DeviceListView extends StatefulWidget {
   final List<dynamic> devices;
   final bool showSearch;
   final bool whiteHeader;
-  final List<String> filterLabels;
-  final String emptyText;
+  final List<String>? filterLabels;
+  final String? emptyText;
   final double? bottomPadding;
   final VoidCallback? onDeviceChanged;
 
@@ -303,8 +309,8 @@ class DeviceListView extends StatefulWidget {
     required this.devices,
     this.showSearch = true,
     this.whiteHeader = false,
-    this.filterLabels = const ['全部', '逆变器', '采集器', '储能'],
-    this.emptyText = '暂无设备',
+    this.filterLabels,
+    this.emptyText,
     this.bottomPadding = 100,
     this.onDeviceChanged,
   });
@@ -381,7 +387,7 @@ class _DeviceListViewState extends State<DeviceListView> {
         Expanded(
           child: filtered.isEmpty
               ? Center(
-                  child: Text(widget.emptyText, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+                  child: Text(widget.emptyText ?? AppLocalizations.of(context)!.noDevices, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
                 )
               : ListView.builder(
                   padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),

@@ -1,511 +1,445 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Card, Statistic, Table, Space, Tag, Typography, Select, DatePicker, Button } from 'antd'
 import {
-  DashboardOutlined,
-  WifiOutlined,
-  ExclamationCircleOutlined,
-  ThunderboltOutlined,
-  LineChartOutlined,
-  PercentageOutlined,
+  Row, Col, Card, Table, Space, Tag, Typography,
+  Segmented, Empty, Grid, Badge, Button, DatePicker, Spin,
+} from 'antd'
+import {
+  DashboardOutlined, WifiOutlined, ExclamationCircleOutlined, ThunderboltOutlined,
+  LineChartOutlined, PercentageOutlined, BarChartOutlined,
+  DesktopOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 import { dashboardApi } from '@/services/dashboardApi'
-import { deviceApi } from '@/services/deviceApi'
-import { ALARM_LEVEL_MAP } from '@/utils/constants'
+import { ALARM_LEVEL_MAP, HERO_GRADIENTS, getAlarmLevelDisplay } from '@/utils/constants'
+import { safeNum } from '@/utils/format'
+import useTranslation from '@/hooks/useTranslation'
+import useAuthStore from '@/stores/authStore'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 
-const { Title } = Typography
+const { Title, Text } = Typography
+
+/* ==================== 类型定义 ==================== */
 
 interface AlertItem {
   id: string | number
   device_sn: string
   alarm_level: number | string
+  fault_code?: string
   fault_message: string
   occurred_at: string
 }
 
+interface StationRankItem {
+  stationId: number
+  stationName: string
+  energy: number
+  deviceCount: number
+}
+
+/* ==================== 主组件 ==================== */
+
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
+  const screens = Grid.useBreakpoint()
+  const isMobile = !screens.md
+  const { t } = useTranslation()
 
+  /* ---------- 全局数据 ---------- */
   const { data: statsRes, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard', 'statistics'],
-    queryFn: () => dashboardApi.getStatistics().then((res) => res.data),
-    refetchInterval: 10000,
+    queryFn: () => dashboardApi.getStatistics().then((r) => r.data),
+    refetchInterval: 15000,
   })
 
   const { data: distRes, isLoading: distLoading } = useQuery({
     queryKey: ['dashboard', 'deviceDistribution'],
-    queryFn: () => dashboardApi.getDeviceDistribution().then((res) => res.data),
-    refetchInterval: 10000,
+    queryFn: () => dashboardApi.getDeviceDistribution().then((r) => r.data),
+    refetchInterval: 15000,
   })
 
   const { data: trendRes, isLoading: trendLoading } = useQuery({
     queryKey: ['dashboard', 'trend', 'day'],
-    queryFn: () => dashboardApi.getTrend('day').then((res) => res.data),
-    refetchInterval: 10000,
-  })
-
-  const { data: alertsRes, isLoading: alertsLoading } = useQuery({
-    queryKey: ['dashboard', 'recentAlerts'],
-    queryFn: () =>
-      dashboardApi.getStatistics().then((res) => {
-        return (res.data as any)?.data?.recentAlerts ?? []
-      }),
-    refetchInterval: 10000,
-  })
-
-  const [compareDeviceSns, setCompareDeviceSns] = useState<string[]>([])
-  const [compareMetric, setCompareMetric] = useState<string>('total_active_power')
-  const [compareRange, setCompareRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([
-    dayjs().subtract(1, 'day'),
-    dayjs(),
-  ])
-  const [compareEnabled, setCompareEnabled] = useState(false)
-
-  const { data: allDevicesRes } = useQuery({
-    queryKey: ['allDevices'],
-    queryFn: () =>
-      deviceApi.getAll().then((res) => {
-        const d = res.data
-        const inner = d?.data ?? d
-        return (inner?.items ?? []) as { sn: string; model: string }[]
-      }),
-  })
-
-  const { data: compareRes } = useQuery({
-    queryKey: ['dashboard', 'compare', compareDeviceSns, compareMetric, compareRange],
-    queryFn: () =>
-      dashboardApi
-        .compareDevices({
-          devices: compareDeviceSns.join(','),
-          metric: compareMetric,
-          startTime: compareRange[0].toISOString(),
-          endTime: compareRange[1].toISOString(),
-        })
-        .then((res) => res.data),
-    enabled: compareEnabled && compareDeviceSns.length > 0,
+    queryFn: () => dashboardApi.getTrend('day').then((r) => r.data),
+    refetchInterval: 15000,
   })
 
   const stats = (statsRes?.data ?? statsRes ?? {}) as any
   const distribution = (distRes?.data ?? distRes ?? {}) as any
-  const trendData = Array.isArray(trendRes?.data) ? trendRes.data : (Array.isArray(trendRes?.data?.data) ? trendRes.data.data : []) as any[]
-  const recentAlerts = (alertsRes ?? []) as AlertItem[]
+  const trendData = Array.isArray(trendRes?.data)
+    ? trendRes.data
+    : (Array.isArray(trendRes?.data?.data) ? trendRes.data.data : []) as any[]
+
+  /* ---------- 功率趋势 ---------- */
+  const user = useAuthStore((s) => s.user)
+  const userTimezone = user?.timezone || 'Asia/Shanghai'
+  const [flowDate, setFlowDate] = useState(dayjs().format('YYYY-MM-DD'))
+
+  const { data: flowRes, isLoading: flowLoading } = useQuery({
+    queryKey: ['dashboard', 'energyFlow', flowDate, userTimezone],
+    queryFn: () => dashboardApi.getEnergyFlow({ date: flowDate }).then((r) => r.data?.data ?? r.data ?? []),
+    staleTime: 0,
+    refetchOnMount: true,
+  })
+  const flowData = (Array.isArray(flowRes) ? flowRes : (flowRes?.data ?? [])) as any[]
+
+  /* ---------- 电量概览 ---------- */
+  const [energyOverviewPeriod, setEnergyOverviewPeriod] = useState('day')
+
+  const { data: energyStatsRes, isLoading: energyStatsLoading } = useQuery({
+    queryKey: ['dashboard', 'energyOverview', energyOverviewPeriod],
+    queryFn: () => dashboardApi.getEnergyStats({ type: energyOverviewPeriod }).then((r) => r.data),
+    refetchInterval: 15000,
+  })
+  const energyStatsRaw = (energyStatsRes?.data ?? energyStatsRes ?? {}) as any
+
+  const { data: energyTrendRes } = useQuery({
+    queryKey: ['dashboard', 'energyTrend', energyOverviewPeriod],
+    queryFn: () => dashboardApi.getTrend(energyOverviewPeriod).then((r) => r.data),
+    refetchInterval: 15000,
+  })
+  const energyTrendData = Array.isArray(energyTrendRes?.data)
+    ? energyTrendRes.data
+    : (Array.isArray(energyTrendRes?.data?.data) ? energyTrendRes.data.data : []) as any[]
+  const recentAlerts = ((stats?.recentAlarms ?? []) as AlertItem[])
 
   const ds = stats?.deviceStats ?? stats
-  const onlineCount = ds?.online ?? distribution?.online ?? stats?.onlineDevices ?? 0
-  const offlineCount = ds?.offline ?? distribution?.offline ?? 0
-  const faultCount = ds?.fault ?? distribution?.fault ?? stats?.faultDevices ?? 0
-  const totalDevices = ds?.total ?? stats?.totalDevices ?? (onlineCount + offlineCount + faultCount)
-
+  const onlineCount = safeNum(ds?.online ?? distribution?.online ?? stats?.onlineDevices)
+  const offlineCount = safeNum(ds?.offline ?? distribution?.offline)
+  const faultCount = safeNum(ds?.fault ?? distribution?.fault ?? stats?.faultDevices)
+  const totalDevices = safeNum(ds?.total ?? stats?.totalDevices ?? (onlineCount + offlineCount + faultCount))
   const onlineRate = totalDevices > 0 ? ((onlineCount / totalDevices) * 100).toFixed(1) : '0.0'
 
-  const pieOption = useMemo(
-    () => ({
-      tooltip: {
-        trigger: 'item' as const,
-        formatter: '{b}: {c} ({d}%)',
-      },
-      legend: {
-        bottom: 0,
-        data: ['在线', '离线', '故障'],
-      },
-      color: ['#52c41a', '#d9d9d9', '#ff4d4f'],
-      series: [
-        {
-          type: 'pie' as const,
-          radius: ['45%', '70%'],
-          center: ['50%', '45%'],
-          avoidLabelOverlap: false,
-          itemStyle: {
-            borderRadius: 4,
-            borderColor: '#fff',
-            borderWidth: 2,
-          },
-          label: {
-            show: false,
-          },
-          emphasis: {
-            label: {
-              show: true,
-              fontSize: 16,
-              fontWeight: 'bold',
-            },
-          },
-          data: [
-            { value: onlineCount, name: '在线' },
-            { value: offlineCount, name: '离线' },
-            { value: faultCount, name: '故障' },
-          ],
-        },
+  /* ============================================================
+   *  Tab 1: 总览
+   * ============================================================ */
+
+  const pieOption = useMemo(() => ({
+    tooltip: { trigger: 'item' as const, formatter: '{b}: {c} ({d}%)' },
+    legend: { bottom: 0, data: [t('common.online'), t('common.offline'), t('common.fault')] },
+    color: ['#52c41a', '#d9d9d9', '#ff4d4f'],
+    series: [{
+      type: 'pie' as const,
+      radius: ['48%', '72%'],
+      center: ['50%', '42%'],
+      avoidLabelOverlap: false,
+      itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 3 },
+      label: { show: false },
+      emphasis: { label: { show: true, fontSize: 15, fontWeight: 'bold' as const } },
+      data: [
+        { value: onlineCount, name: t('common.online') },
+        { value: offlineCount, name: t('common.offline') },
+        { value: faultCount, name: t('common.fault') },
       ],
-    }),
-    [onlineCount, offlineCount, faultCount],
-  )
+    }],
+  }), [onlineCount, offlineCount, faultCount])
 
-  const trendOption = useMemo(() => {
-    const dates = trendData.map((item: any) => item.date ?? item.label ?? '')
-    const energies = trendData.map((item: any) => item.energy ?? item.value ?? 0)
-    const cumulatives = trendData.map((item: any) => item.cumulative ?? item.cumulativeEnergy ?? 0)
-
+  /* 功率趋势图配置 */
+  const energyFlowOption = useMemo(() => {
+    if (!flowData || flowData.length === 0) return {}
+    const times = flowData.map((d: any) => d.time)
+    const pvData = flowData.map((d: any) => safeNum(d.pvPower))
+    const battChargeData = flowData.map((d: any) => safeNum(d.batteryCharge))
+    const battDischargeData = flowData.map((d: any) => -safeNum(d.batteryDischarge))
+    const loadData = flowData.map((d: any) => -safeNum(d.loadPower))
     return {
       tooltip: {
         trigger: 'axis' as const,
-        axisPointer: {
-          type: 'cross' as const,
-          crossStyle: { color: '#999' },
+        axisPointer: { type: 'cross' as const },
+        formatter: (params: any) => {
+          let html = `<div style="font-weight:600;margin-bottom:4px">${params[0].axisValue}</div>`
+          params.forEach((p: any) => {
+            const val = Math.abs(p.value)
+            html += `<div>${p.marker} ${p.seriesName}: ${val.toFixed(0)} W</div>`
+          })
+          return html
         },
       },
-      legend: {
-        data: ['日发电量(kWh)', '累计发电量(kWh)'],
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '3%',
-        top: '15%',
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'category' as const,
-        data: dates,
-        axisPointer: { type: 'line' as const },
-      },
-      yAxis: [
-        {
-          type: 'value' as const,
-          name: '日发电量(kWh)',
-          axisLabel: { formatter: '{value}' },
-        },
-        {
-          type: 'value' as const,
-          name: '累计(kWh)',
-          axisLabel: { formatter: '{value}' },
-        },
-      ],
-      series: [
-        {
-          name: '日发电量(kWh)',
-          type: 'line' as const,
-          data: energies,
-          smooth: true,
-          lineStyle: { color: '#1677ff', width: 2 },
-          itemStyle: { color: '#1677ff' },
-          symbol: 'circle',
-          symbolSize: 6,
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(22, 119, 255, 0.25)' },
-                { offset: 1, color: 'rgba(22, 119, 255, 0.02)' },
-              ],
-            },
-          },
-        },
-        {
-          name: '累计发电量(kWh)',
-          type: 'line' as const,
-          yAxisIndex: 1,
-          data: cumulatives,
-          smooth: true,
-          lineStyle: { color: '#fa8c16', width: 2 },
-          itemStyle: { color: '#fa8c16' },
-          symbol: 'circle',
-          symbolSize: 6,
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0, y: 0, x2: 0, y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(250, 140, 22, 0.25)' },
-                { offset: 1, color: 'rgba(250, 140, 22, 0.02)' },
-              ],
-            },
-          },
-        },
-      ],
-    }
-  }, [trendData])
-
-  const compareData = (compareRes?.data ?? compareRes ?? {}) as any
-  const compareSeriesData = (compareData?.series ?? []) as any[]
-  const compareDevices = (compareData?.devices ?? compareDeviceSns) as string[]
-
-  const compareOption = useMemo(() => {
-    if (!compareSeriesData || compareSeriesData.length === 0) return {}
-
-    const times = compareSeriesData.map((item: any) =>
-      dayjs(item.time).format('MM-DD HH:mm'),
-    )
-
-    const colors = ['#1677ff', '#52c41a', '#fa8c16', '#722ed1']
-    const seriesConfig = compareDevices.map((sn: string, idx: number) => ({
-      name: sn,
-      type: 'line' as const,
-      data: compareSeriesData.map((item: any) => item[sn] ?? 0),
-      smooth: true,
-      symbol: 'none' as const,
-      lineStyle: { color: colors[idx % colors.length], width: 2 },
-    }))
-
-    return {
-      tooltip: {
-        trigger: 'axis' as const,
-      },
-      legend: {
-        data: compareDevices,
-      },
-      grid: {
-        left: '3%',
-        right: '4%',
-        bottom: '3%',
-        containLabel: true,
-      },
-      xAxis: {
-        type: 'category' as const,
-        data: times,
-        boundaryGap: false,
-      },
+      legend: { data: ['光伏功率', '电池充电', '电池放电', '负载功率'], top: 0, itemGap: 16 },
+      grid: { left: '3%', right: '4%', bottom: '12%', top: '45', containLabel: true },
+      xAxis: { type: 'category' as const, data: times, axisLabel: { fontSize: 11 } },
       yAxis: {
-        type: 'value' as const,
+        type: 'value' as const, name: '功率 (W)',
+        axisLabel: { formatter: (v: number) => Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + 'k' : Math.abs(v).toString() },
       },
-      series: seriesConfig,
+      dataZoom: [
+        { type: 'inside', start: 0, end: 100 },
+        { type: 'slider', start: 0, end: 100, height: 20, bottom: 8 },
+      ],
+      series: [
+        {
+          name: '光伏功率', type: 'line' as const, data: pvData, smooth: true, symbol: 'none',
+          lineStyle: { color: '#f59e0b', width: 2 }, itemStyle: { color: '#f59e0b' },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.3)' }, { offset: 1, color: 'rgba(245,158,11,0.02)' }] } },
+        },
+        {
+          name: '电池充电', type: 'line' as const, data: battChargeData, smooth: true, symbol: 'none',
+          lineStyle: { color: '#22c55e', width: 2 }, itemStyle: { color: '#22c55e' },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(34,197,94,0.3)' }, { offset: 1, color: 'rgba(34,197,94,0.02)' }] } },
+        },
+        {
+          name: '电池放电', type: 'line' as const, data: battDischargeData, smooth: true, symbol: 'none',
+          lineStyle: { color: '#3b82f6', width: 2 }, itemStyle: { color: '#3b82f6' },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.02)' }, { offset: 1, color: 'rgba(59,130,246,0.2)' }] } },
+        },
+        {
+          name: '负载功率', type: 'line' as const, data: loadData, smooth: true, symbol: 'none',
+          lineStyle: { color: '#ef4444', width: 2 }, itemStyle: { color: '#ef4444' },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(239,68,68,0.02)' }, { offset: 1, color: 'rgba(239,68,68,0.2)' }] } },
+        },
+      ],
+      markLine: { silent: true, lineStyle: { color: '#94a3b8', type: 'solid' as const, width: 1 }, data: [{ yAxis: 0 }], label: { show: false } },
     }
-  }, [compareSeriesData, compareDevices])
+  }, [flowData])
 
-  const metricLabels: Record<string, string> = {
-    total_active_power: '有功功率(W)',
-    daily_energy: '日发电量(kWh)',
-    internal_temperature: '内部温度(°C)',
-    work_state: '工作状态',
-    fault_code: '故障码',
-  }
+  /* 电量概览柱状图配置 */
+  const energyOverviewOption = useMemo(() => {
+    const es = energyStatsRaw
+    const dates = es?.dates ?? []
+    if (dates.length === 0) return {}
+    const pvArr = es.pv ?? []
+    const chargeArr = es.batteryCharge ?? []
+    const dischargeArr = es.batteryDischarge ?? []
+    const loadMap: Record<string, number> = {}
+    for (const item of energyTrendData) {
+      loadMap[item.date] = safeNum(item.load)
+    }
+    const seriesConfig = [
+      { name: t('dash.pvEnergy'), color: '#f59e0b', data: pvArr },
+      { name: t('dash.battChargeEnergy'), color: '#22c55e', data: chargeArr },
+      { name: t('dash.battDischargeEnergy'), color: '#3b82f6', data: dischargeArr },
+      { name: t('dash.loadConsumption'), color: '#ef4444', data: dates.map((d: string) => loadMap[d] ?? 0) },
+    ]
+    return {
+      tooltip: { trigger: 'axis' as const, axisPointer: { type: 'shadow' as const } },
+      legend: { data: seriesConfig.map((s) => s.name), top: 0, itemGap: 16 },
+      grid: { left: '3%', right: '4%', bottom: '12%', top: '45', containLabel: true },
+      xAxis: { type: 'category' as const, data: dates, axisLabel: { fontSize: 11 } },
+      yAxis: { type: 'value' as const, name: 'kWh' },
+      dataZoom: [
+        { type: 'inside', start: 0, end: 100 },
+        { type: 'slider', start: 0, end: 100, height: 20, bottom: 8 },
+      ],
+      series: seriesConfig.map((s) => ({
+        name: s.name, type: 'bar' as const,
+        data: s.data.map((v: any) => parseFloat(safeNum(v).toFixed(2))),
+        itemStyle: { color: s.color, borderRadius: [3, 3, 0, 0] },
+        barMaxWidth: 20,
+      })),
+    }
+  }, [energyStatsRaw, energyTrendData, t])
+
+  /* 电站排行 */
+  const [rankingPeriod, setRankingPeriod] = useState('today')
+  const { data: rankingRes } = useQuery({
+    queryKey: ['dashboard', 'stationRanking', rankingPeriod],
+    queryFn: () => dashboardApi.getStationRanking({ period: rankingPeriod, limit: 8 }).then((r) => r.data),
+  })
+  const rankingData: StationRankItem[] = (() => {
+    const raw = rankingRes?.data ?? rankingRes
+    return Array.isArray(raw) ? raw : []
+  })()
+
+  const rankingOption = useMemo(() => {
+    if (!rankingData || rankingData.length === 0) return {}
+    const names = rankingData.map((i) => i.stationName || `${t('dash.stationName')}${i.stationId}`)
+    const values = rankingData.map((i) => safeNum(i.energy))
+    return {
+      tooltip: { trigger: 'axis' as const, axisPointer: { type: 'shadow' as const } },
+      grid: { left: '3%', right: '8%', bottom: '3%', top: '8%', containLabel: true },
+      xAxis: { type: 'value' as const, name: 'kWh' },
+      yAxis: { type: 'category' as const, data: names.reverse(), axisLabel: { width: 80, overflow: 'truncate' as const } },
+      series: [{
+        type: 'bar' as const,
+        data: values.reverse(),
+        barWidth: 18,
+        itemStyle: {
+          borderRadius: [0, 4, 4, 0],
+          color: { type: 'linear' as const, x: 0, y: 0, x2: 1, y2: 0,
+            colorStops: [{ offset: 0, color: '#1677ff' }, { offset: 1, color: '#4facfe' }] },
+        },
+        label: { show: true, position: 'right' as const, formatter: '{c}', fontSize: 11 },
+      }],
+    }
+  }, [rankingData])
 
   const alertColumns: ColumnsType<AlertItem> = [
+    { title: t('dash.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140, ellipsis: true },
     {
-      title: '设备序列号',
-      dataIndex: 'device_sn',
-      key: 'device_sn',
-      width: 160,
-      ellipsis: true,
-    },
-    {
-      title: '告警级别',
-      dataIndex: 'alarm_level',
-      key: 'alarm_level',
-      width: 100,
-      render: (level: number | string) => {
-        const key = typeof level === 'number' ? String(level) : level
-        const config = ALARM_LEVEL_MAP[key] ?? { label: String(level), color: '#d9d9d9' }
-        return <Tag color={config.color}>{config.label}</Tag>
+      title: t('dash.alertLevel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
+      render: (level: number | string, record: any) => {
+        const cfg = getAlarmLevelDisplay(record.fault_code, level)
+        return <Tag color={cfg.color}>{cfg.label}</Tag>
       },
     },
+    { title: t('dash.faultMessage'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true },
     {
-      title: '故障信息',
-      dataIndex: 'fault_message',
-      key: 'fault_message',
-      ellipsis: true,
-    },
-    {
-      title: '发生时间',
-      dataIndex: 'occurred_at',
-      key: 'occurred_at',
-      width: 170,
-      render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-',
+      title: t('common.time'), dataIndex: 'occurred_at', key: 'occurred_at', width: 150,
+      render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm:ss') : '-',
     },
   ]
 
-  return (
-    <div>
-      <Title level={4} style={{ marginBottom: 24 }}>
-        仪表盘
-      </Title>
-
+  const renderOverview = () => (
+    <>
+      {/* Hero 卡片 */}
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card hoverable>
-            <Statistic
-              title="设备总数"
-              value={totalDevices}
-              loading={statsLoading}
-              prefix={<DashboardOutlined />}
-              valueStyle={{ color: '#1677ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card hoverable>
-            <Statistic
-              title="在线设备"
-              value={onlineCount}
-              loading={statsLoading}
-              prefix={<WifiOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card hoverable>
-            <Statistic
-              title="故障设备"
-              value={faultCount}
-              loading={statsLoading}
-              prefix={<ExclamationCircleOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card hoverable>
-            <Statistic
-              title="今日发电量"
-              value={stats.todayEnergy ?? 0}
-              loading={statsLoading}
-              suffix="kWh"
-              prefix={<ThunderboltOutlined />}
-              valueStyle={{ color: '#1677ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card hoverable>
-            <Statistic
-              title="累计发电量"
-              value={stats.totalEnergy ?? 0}
-              loading={statsLoading}
-              suffix="kWh"
-              prefix={<LineChartOutlined />}
-              valueStyle={{ color: '#fa8c16' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card hoverable>
-            <Statistic
-              title="在线率"
-              value={onlineRate}
-              loading={statsLoading}
-              suffix="%"
-              prefix={<PercentageOutlined />}
-              valueStyle={{ color: '#722ed1' }}
-            />
-          </Card>
-        </Col>
+        {[
+          { title: t('dash.deviceTotal'), value: totalDevices, icon: <DashboardOutlined />, gradient: HERO_GRADIENTS[0] },
+          { title: t('dash.deviceOnline'), value: onlineCount, icon: <WifiOutlined />, gradient: HERO_GRADIENTS[2] },
+          { title: t('dash.deviceFault'), value: faultCount, icon: <ExclamationCircleOutlined />, gradient: HERO_GRADIENTS[1] },
+          { title: t('dash.todayGeneration'), value: safeNum(stats.todayEnergy), suffix: 'kWh', icon: <ThunderboltOutlined />, gradient: HERO_GRADIENTS[3] },
+          { title: t('dash.totalGeneration'), value: safeNum(stats.totalEnergy), suffix: 'kWh', icon: <LineChartOutlined />, gradient: HERO_GRADIENTS[4] },
+          { title: t('dash.onlineRate'), value: onlineRate, suffix: '%', icon: <PercentageOutlined />, gradient: HERO_GRADIENTS[5] },
+        ].map((item, idx) => (
+          <Col xs={12} sm={8} lg={4} key={idx}>
+            <Card
+              bordered={false}
+              style={{ background: item.gradient, borderRadius: 12 }}
+              styles={{ body: { padding: isMobile ? '12px 10px' : '20px 16px' } }}
+            >
+              <div style={{ color: '#fff', fontSize: 13, opacity: 0.9, marginBottom: 8 }}>
+                {item.icon} {item.title}
+              </div>
+              <div style={{ color: '#fff', fontSize: isMobile ? 22 : 28, fontWeight: 700, lineHeight: 1 }}>
+                {statsLoading ? '-' : safeNum(item.value).toLocaleString()}
+                {item.suffix && <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 4 }}>{item.suffix}</span>}
+              </div>
+            </Card>
+          </Col>
+        ))}
       </Row>
 
+      {/* 功率趋势 + 设备状态 */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={8}>
-          <Card title="设备状态分布" loading={distLoading} style={{ height: 400 }}>
-            <ReactECharts option={pieOption} style={{ height: 320 }} />
-          </Card>
-        </Col>
         <Col xs={24} lg={16}>
-          <Card
-            title="近期告警"
-            loading={alertsLoading}
+          <Card bordered={false} style={{ borderRadius: 12 }}
+            title={<Space><LineChartOutlined style={{ color: '#1677ff' }} /><span>{t('dash.powerTrend')}</span></Space>}
             extra={
-              <a onClick={() => navigate('/alerts')}>查看全部</a>
-            }
-            style={{ height: 400 }}
-          >
-            <Table
-              columns={alertColumns}
-              dataSource={recentAlerts.slice(0, 5)}
-              rowKey="id"
-              pagination={false}
-              size="small"
-              scroll={{ x: 500 }}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
-          <Card title="发电量趋势" loading={trendLoading}>
-            <ReactECharts option={trendOption} style={{ height: 360 }} />
-          </Card>
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
-          <Card
-            title="设备对比"
-            extra={
-              <Space wrap>
-                <Select
-                  mode="multiple"
-                  maxCount={4}
-                  placeholder="选择设备(最多4个)"
-                  style={{ minWidth: 200 }}
-                  value={compareDeviceSns}
-                  onChange={(vals) => {
-                    setCompareDeviceSns(vals)
-                    setCompareEnabled(false)
-                  }}
-                  options={(allDevicesRes ?? []).map((d: any) => ({
-                    label: `${d.sn} (${d.model || '-'})`,
-                    value: d.sn,
-                  }))}
-                  filterOption={(input, option) =>
-                    (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-                <Select
-                  style={{ minWidth: 130 }}
-                  value={compareMetric}
-                  onChange={(v) => {
-                    setCompareMetric(v)
-                    setCompareEnabled(false)
-                  }}
-                  options={Object.entries(metricLabels).map(([value, label]) => ({
-                    value,
-                    label,
-                  }))}
-                />
-                <DatePicker.RangePicker
-                  showTime
-                  value={compareRange}
-                  onChange={(dates) => {
-                    if (dates && dates[0] && dates[1]) {
-                      setCompareRange([dates[0], dates[1]])
-                      setCompareEnabled(false)
-                    }
-                  }}
-                />
-                <Button
-                  type="primary"
-                  disabled={compareDeviceSns.length === 0}
-                  onClick={() => setCompareEnabled(true)}
-                >
-                  对比
-                </Button>
+              <Space>
+                <DatePicker value={dayjs(flowDate)} onChange={(d) => d && setFlowDate(d.format('YYYY-MM-DD'))} allowClear={false} style={{ width: 150 }} />
+                <Button size="small" onClick={() => setFlowDate(dayjs().subtract(1, 'day').format('YYYY-MM-DD'))}>昨天</Button>
+                <Button size="small" onClick={() => setFlowDate(dayjs().format('YYYY-MM-DD'))}>今天</Button>
               </Space>
             }
           >
-            {compareEnabled && compareSeriesData.length > 0 ? (
-              <ReactECharts option={compareOption} style={{ height: 400 }} />
+            {flowLoading ? (
+              <div style={{ height: 340, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+            ) : flowData.length > 0 ? (
+              <ReactECharts option={energyFlowOption} style={{ height: 340 }} />
             ) : (
-              <div
-                style={{
-                  height: 200,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#999',
-                }}
-              >
-                请选择设备和指标后点击"对比"
-              </div>
+              <Empty description={t('dash.noEnergyData')} />
             )}
           </Card>
         </Col>
+        <Col xs={24} lg={8}>
+          <Card bordered={false} title={t('dash.deviceStatus')} loading={distLoading}
+            style={{ borderRadius: 12 }}
+            styles={{ body: { padding: '12px 16px' } }}
+          >
+            <ReactECharts option={pieOption} style={{ height: 260 }} />
+            <Row gutter={16} style={{ textAlign: 'center', marginTop: 4 }}>
+              {[
+                { label: t('common.online'), value: onlineCount, color: '#52c41a' },
+                { label: t('common.offline'), value: offlineCount, color: '#d9d9d9' },
+                { label: t('common.fault'), value: faultCount, color: '#ff4d4f' },
+              ].map((i) => (
+                <Col span={8} key={i.label}>
+                  <Badge color={i.color} text={<Text strong>{i.label} {i.value}</Text>} />
+                </Col>
+              ))}
+            </Row>
+          </Card>
+        </Col>
       </Row>
+
+      {/* 电量概览 */}
+      <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
+        title={<Space><BarChartOutlined style={{ color: '#722ed1' }} /><span>{t('dash.energyOverview')}</span></Space>}
+        extra={
+          <Segmented size="small" value={energyOverviewPeriod} onChange={(v) => setEnergyOverviewPeriod(v as string)}
+            options={[
+              { label: t('dash.last7Days'), value: 'day' },
+              { label: t('dash.last4Weeks'), value: 'week' },
+              { label: t('dash.last12Months'), value: 'month' },
+            ]}
+          />
+        }
+      >
+        {energyStatsLoading ? (
+          <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+        ) : (energyStatsRaw?.dates?.length ?? 0) > 0 ? (
+          <ReactECharts option={energyOverviewOption} style={{ height: 300 }} />
+        ) : (
+          <Empty description={t('dash.noEnergyData')} />
+        )}
+      </Card>
+
+      {/* 电站排行 + 近期告警 */}
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col xs={24} lg={10}>
+          <Card bordered={false} style={{ borderRadius: 12 }}
+            title={t('dash.stationRank')}
+            extra={
+              <Segmented size="small" value={rankingPeriod} onChange={(v) => setRankingPeriod(v as string)}
+                options={[
+                  { label: t('dash.today'), value: 'today' },
+                  { label: t('dash.thisWeek'), value: 'week' },
+                  { label: t('dash.thisMonth'), value: 'month' },
+                ]}
+              />
+            }
+          >
+            {rankingData && rankingData.length > 0 ? (
+              <ReactECharts option={rankingOption} style={{ height: 300 }} />
+            ) : (
+              <Empty description={t('dash.noStationData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} lg={14}>
+          <Card bordered={false} title={t('dash.recentAlerts')} style={{ borderRadius: 12 }}
+            extra={<a onClick={() => navigate('/alerts')}>{t('common.viewAll')}</a>}
+          >
+            <Table columns={alertColumns} dataSource={recentAlerts.slice(0, 6)} rowKey="id"
+              pagination={false} size="small" scroll={{ x: 500 }} />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 快捷入口 */}
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        {[
+          { title: t('dash.entryDevices'), desc: t('dash.entryDevicesDesc'), icon: <DesktopOutlined style={{ fontSize: 28 }} />, color: '#1677ff', path: '/devices' },
+          { title: t('dash.entryAnalytics'), desc: t('dash.entryAnalyticsDesc'), icon: <BarChartOutlined style={{ fontSize: 28 }} />, color: '#722ed1', path: '/monitoring' },
+          { title: t('dash.entryAlerts'), desc: t('dash.entryAlertsDesc'), icon: <ExclamationCircleOutlined style={{ fontSize: 28 }} />, color: '#fa541c', path: '/alerts' },
+        ].map((item) => (
+          <Col xs={24} sm={8} key={item.path}>
+            <Card hoverable bordered={false} style={{ borderRadius: 12, textAlign: 'center' }}
+              onClick={() => navigate(item.path)}
+            >
+              <div style={{ color: item.color, marginBottom: 8 }}>{item.icon}</div>
+              <Text strong style={{ fontSize: 15 }}>{item.title}</Text>
+              <br />
+              <Text type="secondary" style={{ fontSize: 12 }}>{item.desc}</Text>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+    </>
+  )
+
+  /* ============================================================
+   *  Tab 配置
+   * ============================================================ */
+
+  return (
+    <div>
+      <Title level={4} style={{ marginBottom: 16 }}>
+        {t('dash.title')}
+      </Title>
+      {renderOverview()}
     </div>
   )
 }

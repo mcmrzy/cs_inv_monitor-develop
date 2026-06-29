@@ -47,6 +47,6 @@ class DeviceParam {
 
   String get groupKey {
     final parts = key.split('_');
-    return parts.length > 1 ? parts.first : '其他';
+    return parts.length > 1 ? parts.first : 'other';
   }
 }

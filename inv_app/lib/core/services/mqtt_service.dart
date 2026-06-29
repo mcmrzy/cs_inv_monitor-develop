@@ -100,6 +100,9 @@ class MQTTServiceImpl implements MQTTService {
     try {
       await _client!.connect(username, password);
       _updateSubscription = _client!.updates!.listen(_onMessage);
+      // 全局通配符订阅：接收所有设备的告警和状态
+      _client!.subscribe('cs_inv/+/data/alarm', MqttQos.atLeastOnce);
+      _client!.subscribe('cs_inv/+/status', MqttQos.atLeastOnce);
       if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
         _connectionCompleter!.complete();
       }
@@ -308,6 +311,7 @@ class MQTTServiceImpl implements MQTTService {
   void _handleSysStatusMessage(String sn, Map<String, dynamic> data) {
     final sysStatus = SystemStatus.fromJson(data);
     final rt = _getOrCreate(sn);
+    final oldFaultCode = rt.sysStatus?.faultCode ?? 0;
     final updated = InverterRealtime(
       deviceSN: sn,
       ac: rt.ac,
@@ -322,6 +326,12 @@ class MQTTServiceImpl implements MQTTService {
     );
     _latestData[sn] = updated;
     _realtimeController.add(updated);
+
+    // 当故障状态发生变化时，也通过 statusStream 通知 UI 刷新
+    if (sysStatus.hasFault || oldFaultCode != sysStatus.faultCode) {
+      final fallbackStatus = rt.onlineStatus ?? OnlineStatus(online: true);
+      _statusController.add(fallbackStatus);
+    }
   }
 
   void _handleEnergyMessage(String sn, Map<String, dynamic> data) {
@@ -365,6 +375,35 @@ class MQTTServiceImpl implements MQTTService {
   void _handleAlarmMessage(String sn, Map<String, dynamic> data) {
     final alarm = AlarmData.fromJson(data);
     _alarmController.add(alarm);
+
+    // 当收到 fault 级别的告警时，立即更新 _latestData 中的 SystemStatus，
+    // 这样 realtimeDataStream 也能反映故障状态，不必等下一个 data/status 消息
+    if (alarm.faultCode != 0) {
+      final rt = _getOrCreate(sn);
+      final oldSys = rt.sysStatus;
+      final updatedSys = SystemStatus(
+        state: 'fault',
+        faultCode: alarm.faultCode,
+        alarmCode: oldSys?.alarmCode ?? 0,
+        tempInv: oldSys?.tempInv ?? 0,
+        tempMos: oldSys?.tempMos ?? 0,
+        efficiency: oldSys?.efficiency ?? 0,
+      );
+      final updated = InverterRealtime(
+        deviceSN: sn,
+        ac: rt.ac,
+        battery: rt.battery,
+        pv: rt.pv,
+        sysStatus: updatedSys,
+        energy: rt.energy,
+        cells: rt.cells,
+        onlineStatus: rt.onlineStatus,
+        deviceInfo: rt.deviceInfo,
+        updatedAt: DateTime.now(),
+      );
+      _latestData[sn] = updated;
+      _realtimeController.add(updated);
+    }
   }
 
   void _handleInfoMessage(String sn, Map<String, dynamic> data) {

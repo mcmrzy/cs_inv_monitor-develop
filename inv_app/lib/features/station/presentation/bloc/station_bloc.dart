@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/features/station/domain/repositories/station_repository.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
@@ -34,7 +35,9 @@ class StationBloc extends Bloc<StationEvent, StationState> {
           if (cached != null && cached is Map<String, dynamic>) {
             final stations = (cached['stations'] as List?) ?? [];
             final summary = (cached['summary'] as Map<String, dynamic>?) ?? {};
-            emit(StationSummaryLoaded(stations: stations, summary: summary, isFromCache: true));
+            // 只有网络连接失败时才标记为缓存数据，其他错误（服务器错误等）静默使用缓存
+            final isNetworkError = failure is NetworkFailure;
+            emit(StationSummaryLoaded(stations: stations, summary: summary, isFromCache: isNetworkError));
             return;
           }
         }
@@ -88,7 +91,8 @@ class StationBloc extends Bloc<StationEvent, StationState> {
           if (cached != null && cached is Map<String, dynamic>) {
             final station = cached['station'];
             final devices = (cached['devices'] as List?) ?? [];
-            emit(StationDetailLoaded(stationId: event.stationId, station: station, devices: devices, isFromCache: true));
+            final isNetworkError = failure is NetworkFailure;
+            emit(StationDetailLoaded(stationId: event.stationId, station: station, devices: devices, isFromCache: isNetworkError));
             return;
           }
         }

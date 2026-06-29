@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Button, Input, Select, Space, Modal, Form,
   Drawer, Descriptions, Tooltip, Popconfirm, message, Typography,
-  Tag, InputNumber, Tabs, List, Divider, Empty, Spin,
+  Tag, InputNumber, Tabs, List, Empty, Spin,
 } from 'antd'
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
 import {
@@ -15,6 +15,8 @@ import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import { parallelApi } from '@/services/parallelApi'
 import { deviceApi } from '@/services/deviceApi'
+import { ALARM_LEVEL_MAP } from '@/utils/constants'
+import useTranslation from '@/hooks/useTranslation'
 
 const { Text, Title } = Typography
 
@@ -54,19 +56,8 @@ interface ParallelGroup {
   members?: MemberStatus[]
 }
 
-const PHASE_CONFIG_MAP: Record<string, { label: string; color: string }> = {
-  single: { label: '单相', color: '#1677ff' },
-  three_phase: { label: '三相', color: '#52c41a' },
-}
-
-const SYNC_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  synced: { label: '已同步', color: '#52c41a' },
-  syncing: { label: '同步中', color: '#1677ff' },
-  desynced: { label: '失步', color: '#fa8c16' },
-  offline: { label: '离线', color: '#d9d9d9' },
-}
-
 const ParallelPage: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [filters, setFilters] = useState<{
     keyword?: string
@@ -81,6 +72,18 @@ const ParallelPage: React.FC = () => {
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
+
+  const PHASE_CONFIG_MAP: Record<string, { label: string; color: string }> = {
+    single: { label: t('parallel.singlePhase'), color: '#1677ff' },
+    three_phase: { label: t('parallel.threePhase'), color: '#52c41a' },
+  }
+
+  const SYNC_STATUS_MAP: Record<string, { label: string; color: string }> = {
+    synced: { label: t('parallel.synced'), color: '#52c41a' },
+    syncing: { label: t('parallel.syncing'), color: '#1677ff' },
+    desynced: { label: t('parallel.outOfSync'), color: '#fa8c16' },
+    offline: { label: '离线', color: '#d9d9d9' },
+  }
 
   const { data: groupsData, isLoading, refetch } = useQuery({
     queryKey: ['parallel-groups', filters, pagination],
@@ -118,13 +121,13 @@ const ParallelPage: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: (data: any) => parallelApi.createGroup(data),
     onSuccess: () => {
-      message.success('并机组创建成功')
+      message.success(t('parallel.createSuccess'))
       setModalOpen(false)
       form.resetFields()
       queryClient.invalidateQueries({ queryKey: ['parallel-groups'] })
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.message || '创建失败')
+      message.error(err.response?.data?.message || t('parallel.createFailed'))
     },
   })
 
@@ -132,36 +135,36 @@ const ParallelPage: React.FC = () => {
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       parallelApi.updateGroup(id, data),
     onSuccess: () => {
-      message.success('并机组更新成功')
+      message.success(t('parallel.updateSuccess'))
       setModalOpen(false)
       setEditingGroup(null)
       form.resetFields()
       queryClient.invalidateQueries({ queryKey: ['parallel-groups'] })
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.message || '更新失败')
+      message.error(err.response?.data?.message || t('parallel.updateFailed'))
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => parallelApi.deleteGroup(id),
     onSuccess: () => {
-      message.success('并机组已删除')
+      message.success(t('parallel.deleteSuccess'))
       queryClient.invalidateQueries({ queryKey: ['parallel-groups'] })
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.message || '删除失败')
+      message.error(err.response?.data?.message || t('parallel.deleteFailed'))
     },
   })
 
   const syncMutation = useMutation({
     mutationFn: (id: number) => parallelApi.syncParams(id),
     onSuccess: (res: any) => {
-      message.success(res.data?.message || '参数同步已发送')
+      message.success(res.data?.message || t('parallel.syncSuccess'))
       queryClient.invalidateQueries({ queryKey: ['parallel-group-detail'] })
     },
     onError: (err: any) => {
-      message.error(err.response?.data?.message || '同步失败')
+      message.error(err.response?.data?.message || t('parallel.syncFailed'))
     },
   })
 
@@ -240,7 +243,7 @@ const ParallelPage: React.FC = () => {
 
   const columns: ColumnsType<ParallelGroup> = [
     {
-      title: '组名',
+      title: t('parallel.groupName'),
       dataIndex: 'group_name',
       key: 'group_name',
       render: (text: string, record: ParallelGroup) => (
@@ -248,7 +251,7 @@ const ParallelPage: React.FC = () => {
       ),
     },
     {
-      title: '相配置',
+      title: t('parallel.phaseConfig'),
       dataIndex: 'phase_config',
       key: 'phase_config',
       render: (val: string) => {
@@ -257,48 +260,48 @@ const ParallelPage: React.FC = () => {
       },
     },
     {
-      title: '主机SN',
+      title: t('parallel.masterSN'),
       dataIndex: 'master_sn',
       key: 'master_sn',
     },
     {
-      title: '从机数量',
+      title: t('parallel.slaveCount'),
       dataIndex: 'slave_count',
       key: 'slave_count',
       align: 'center',
     },
     {
-      title: '总功率(W)',
+      title: t('parallel.totalPower_W'),
       dataIndex: 'total_power',
       key: 'total_power',
       render: (val: number) => (val ? val.toFixed(0) : 0),
       align: 'right',
     },
     {
-      title: '状态',
+      title: t('parallel.status'),
       dataIndex: 'status',
       key: 'status',
       align: 'center',
       render: (val: number) =>
         val === 1 ? (
-          <Tag color="#52c41a">启用</Tag>
+          <Tag color="#52c41a">{t('common.enabled')}</Tag>
         ) : (
-          <Tag color="#d9d9d9">停用</Tag>
+          <Tag color="#d9d9d9">{t('common.disabled')}</Tag>
         ),
     },
     {
-      title: '创建时间',
+      title: t('parallel.createTime'),
       dataIndex: 'created_at',
       key: 'created_at',
       render: (val: string) => (val ? dayjs(val).format('YYYY-MM-DD HH:mm') : '-'),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       align: 'center',
       render: (_: any, record: ParallelGroup) => (
         <Space size="small">
-          <Tooltip title="详情">
+          <Tooltip title={t('common.detail')}>
             <Button
               type="link"
               size="small"
@@ -306,7 +309,7 @@ const ParallelPage: React.FC = () => {
               onClick={() => handleDetail(record.id)}
             />
           </Tooltip>
-          <Tooltip title="编辑">
+          <Tooltip title={t('common.edit')}>
             <Button
               type="link"
               size="small"
@@ -314,7 +317,7 @@ const ParallelPage: React.FC = () => {
               onClick={() => handleEdit(record)}
             />
           </Tooltip>
-          <Tooltip title="同步参数">
+          <Tooltip title={t('parallel.syncStatus')}>
             <Button
               type="link"
               size="small"
@@ -324,10 +327,10 @@ const ParallelPage: React.FC = () => {
             />
           </Tooltip>
           <Popconfirm
-            title="确定要删除此并机组吗？"
+            title={t('parallel.confirmDelete')}
             onConfirm={() => deleteMutation.mutate(record.id)}
           >
-            <Tooltip title="删除">
+            <Tooltip title={t('common.delete')}>
               <Button
                 type="link"
                 size="small"
@@ -360,7 +363,7 @@ const ParallelPage: React.FC = () => {
         itemStyle: { color: '#52c41a' },
         label: {
           show: true,
-          formatter: `{b}\n主机 | ${Number(masterNode.output_power).toFixed(0)}W | ${Number(masterNode.load_percent).toFixed(1)}%`,
+          formatter: `{b}\n${t('parallel.master')} | ${Number(masterNode.output_power).toFixed(0)}W | ${Number(masterNode.load_percent).toFixed(1)}%`,
         },
       })
     }
@@ -372,7 +375,7 @@ const ParallelPage: React.FC = () => {
         itemStyle: { color: '#1677ff' },
         label: {
           show: true,
-          formatter: `{b}\n从机 | ${Number(m.output_power).toFixed(0)}W | ${Number(m.load_percent).toFixed(1)}%`,
+          formatter: `{b}\n${t('parallel.slave')} | ${Number(m.output_power).toFixed(0)}W | ${Number(m.load_percent).toFixed(1)}%`,
         },
       })
     })
@@ -401,7 +404,7 @@ const ParallelPage: React.FC = () => {
         },
       ],
     }
-  }, [group])
+  }, [group, t])
 
   const getPowerChartOption = useCallback(() => {
     const members: MemberStatus[] = group.members || []
@@ -414,10 +417,10 @@ const ParallelPage: React.FC = () => {
         data: members.map((m) => m.device_sn),
         axisLabel: { rotate: 30 },
       },
-      yAxis: { type: 'value', name: '功率 (W)' },
+      yAxis: { type: 'value', name: t('parallel.power_W') },
       series: [
         {
-          name: '输出功率',
+          name: t('parallel.outputPower'),
           type: 'bar',
           data: members.map((m) => ({
             value: Number(m.output_power),
@@ -433,7 +436,7 @@ const ParallelPage: React.FC = () => {
         },
       ],
     }
-  }, [group])
+  }, [group, t])
 
   const getCirculatingCurrentOption = useCallback(() => {
     const members: MemberStatus[] = group.members || []
@@ -446,10 +449,10 @@ const ParallelPage: React.FC = () => {
         data: members.map((m) => m.device_sn),
         axisLabel: { rotate: 30 },
       },
-      yAxis: { type: 'value', name: '环流 (A)' },
+      yAxis: { type: 'value', name: t('parallel.circulatingCurrent') },
       series: [
         {
-          name: '环流',
+          name: t('parallel.circulating'),
           type: 'bar',
           data: members.map((m) => ({
             value: Number(m.circulating_current),
@@ -472,51 +475,51 @@ const ParallelPage: React.FC = () => {
               {
                 yAxis: Number(group.circulating_current_threshold || 5),
                 lineStyle: { color: '#ff4d4f', type: 'dashed' },
-                label: { formatter: '阈值' },
+                label: { formatter: t('parallel.threshold') },
               },
             ],
           },
         },
       ],
     }
-  }, [group])
+  }, [group, t])
 
   const memberColumns: ColumnsType<MemberStatus> = [
     { title: 'SN', dataIndex: 'device_sn', key: 'device_sn' },
     {
-      title: '角色',
+      title: t('parallel.status'),
       dataIndex: 'role',
       key: 'role',
       render: (val: string) =>
         val === 'master' ? (
-          <Tag color="#52c41a">主机</Tag>
+          <Tag color="#52c41a">{t('parallel.master')}</Tag>
         ) : (
-          <Tag color="#1677ff">从机</Tag>
+          <Tag color="#1677ff">{t('parallel.slave')}</Tag>
         ),
     },
     {
-      title: '输出功率(W)',
+      title: t('parallel.outputPower_W'),
       dataIndex: 'output_power',
       key: 'output_power',
       render: (val: number) => Number(val).toFixed(0),
       align: 'right',
     },
     {
-      title: '负载(%)',
+      title: t('parallel.load'),
       dataIndex: 'load_percent',
       key: 'load_percent',
       render: (val: number) => `${Number(val).toFixed(1)}%`,
       align: 'right',
     },
     {
-      title: '相位偏移(°)',
+      title: t('parallel.phaseOffset'),
       dataIndex: 'phase_angle_offset',
       key: 'phase_angle_offset',
       render: (val: number) => Number(val).toFixed(4),
       align: 'right',
     },
     {
-      title: '环流(A)',
+      title: t('parallel.circulatingCurrent_A'),
       dataIndex: 'circulating_current',
       key: 'circulating_current',
       render: (val: number) => {
@@ -531,7 +534,7 @@ const ParallelPage: React.FC = () => {
       align: 'right',
     },
     {
-      title: '同步状态',
+      title: t('parallel.syncStatus'),
       dataIndex: 'sync_status',
       key: 'sync_status',
       render: (val: string) => {
@@ -542,39 +545,33 @@ const ParallelPage: React.FC = () => {
   ]
 
   const alertColumns: ColumnsType<any> = [
-    { title: '设备SN', dataIndex: 'device_sn', key: 'device_sn' },
+    { title: t('common.deviceSN'), dataIndex: 'device_sn', key: 'device_sn' },
     {
-      title: '告警级别',
+      title: t('parallel.alertLevel'),
       dataIndex: 'alarm_level',
       key: 'alarm_level',
       render: (val: number) => {
-        const levelMap: Record<number, { label: string; color: string }> = {
-          1: { label: '严重', color: '#ff4d4f' },
-          2: { label: '重要', color: '#fa8c16' },
-          3: { label: '次要', color: '#1677ff' },
-          4: { label: '警告', color: '#faad14' },
-        }
-        const m = levelMap[val] || { label: String(val), color: '#999' }
+        const m = ALARM_LEVEL_MAP[String(val)] || { label: String(val), color: '#999' }
         return <Tag color={m.color}>{m.label}</Tag>
       },
     },
-    { title: '故障码', dataIndex: 'fault_code', key: 'fault_code' },
-    { title: '故障描述', dataIndex: 'fault_message', key: 'fault_message' },
+    { title: t('parallel.faultCode'), dataIndex: 'fault_code', key: 'fault_code' },
+    { title: t('parallel.faultInfo'), dataIndex: 'fault_message', key: 'fault_message' },
     {
-      title: '发生时间',
+      title: t('parallel.occurTime'),
       dataIndex: 'occurred_at',
       key: 'occurred_at',
       render: (val: string) => (val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '状态',
+      title: t('parallel.status'),
       dataIndex: 'status',
       key: 'status',
       render: (val: number) => {
         const statusMap: Record<number, { label: string; color: string }> = {
-          0: { label: '未处理', color: '#ff4d4f' },
-          1: { label: '已确认', color: '#fa8c16' },
-          2: { label: '已恢复', color: '#52c41a' },
+          0: { label: t('parallel.unprocessed'), color: '#ff4d4f' },
+          1: { label: t('parallel.acknowledged'), color: '#fa8c16' },
+          2: { label: t('parallel.recovered'), color: '#52c41a' },
         }
         const m = statusMap[val] || { label: String(val), color: '#999' }
         return <Tag color={m.color}>{m.label}</Tag>
@@ -585,47 +582,49 @@ const ParallelPage: React.FC = () => {
   return (
     <div>
       <Card
+        bordered={false}
+        style={{ borderRadius: 12 }}
         title={
           <Space>
             <ClusterOutlined />
-            <span>并机管理</span>
+            <span>{t('parallel.title')}</span>
           </Space>
         }
         extra={
           <Space>
             <Input.Search
-              placeholder="搜索组名/主机SN"
+              placeholder={t('parallel.searchGroup')}
               allowClear
               style={{ width: 200 }}
               onSearch={(val) => setFilters({ ...filters, keyword: val })}
             />
             <Select
-              placeholder="相配置"
+              placeholder={t('parallel.filterPhase')}
               allowClear
               style={{ width: 120 }}
               value={filters.phaseConfig || undefined}
               onChange={(val) => setFilters({ ...filters, phaseConfig: val })}
               options={[
-                { value: 'single', label: '单相' },
-                { value: 'three_phase', label: '三相' },
+                { value: 'single', label: t('parallel.singlePhase') },
+                { value: 'three_phase', label: t('parallel.threePhase') },
               ]}
             />
             <Select
-              placeholder="状态"
+              placeholder={t('parallel.filterStatus')}
               allowClear
               style={{ width: 100 }}
               value={filters.status || undefined}
               onChange={(val) => setFilters({ ...filters, status: val })}
               options={[
-                { value: '1', label: '启用' },
-                { value: '0', label: '停用' },
+                { value: '1', label: t('common.enabled') },
+                { value: '0', label: t('common.disabled') },
               ]}
             />
             <Button icon={<ReloadOutlined />} onClick={() => refetch()}>
-              刷新
+              {t('common.refresh')}
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-              新建并机组
+              {t('parallel.createGroup')}
             </Button>
           </Space>
         }
@@ -635,19 +634,20 @@ const ParallelPage: React.FC = () => {
           columns={columns}
           dataSource={groupsData?.data?.data?.items || []}
           loading={isLoading}
+          size="small"
           pagination={{
             current: pagination.page,
             pageSize: pagination.pageSize,
             total: groupsData?.data?.data?.total || 0,
             showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 条`,
+            showTotal: (total) => t('common.total', { total }),
           }}
           onChange={handleTableChange}
         />
       </Card>
 
       <Modal
-        title={editingGroup ? '编辑并机组' : '新建并机组'}
+        title={editingGroup ? t('parallel.editGroup') : t('parallel.createGroup')}
         open={modalOpen}
         onOk={handleSubmit}
         onCancel={() => {
@@ -662,26 +662,26 @@ const ParallelPage: React.FC = () => {
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item
             name="groupName"
-            label="组名"
+            label={t('parallel.groupName')}
             rules={[{ required: true, message: '请输入组名' }]}
           >
             <Input placeholder="请输入并机组名" maxLength={100} />
           </Form.Item>
           <Form.Item
             name="phaseConfig"
-            label="相配置"
+            label={t('parallel.phaseConfig')}
             rules={[{ required: true, message: '请选择相配置' }]}
           >
             <Select
               options={[
-                { value: 'single', label: '单相' },
-                { value: 'three_phase', label: '三相' },
+                { value: 'single', label: t('parallel.singlePhase') },
+                { value: 'three_phase', label: t('parallel.threePhase') },
               ]}
             />
           </Form.Item>
           <Form.Item
             name="masterSn"
-            label="主机SN"
+            label={t('parallel.masterSN')}
             rules={[{ required: true, message: '请选择主机' }]}
           >
             <Select
@@ -698,7 +698,7 @@ const ParallelPage: React.FC = () => {
           </Form.Item>
           <Form.Item
             name="slaveSns"
-            label="从机SN（最多8台）"
+            label={`${t('parallel.slaveCount')}（最多8台）`}
             rules={[{ required: true, message: '请选择至少一台从机' }]}
           >
             <Select
@@ -712,7 +712,7 @@ const ParallelPage: React.FC = () => {
               maxTagCount={8}
               onChange={(values: string[]) => {
                 if (values.length > 8) {
-                  message.warning('最多选择8台从机')
+                  message.warning(t('parallel.maxSlaves'))
                   form.setFieldValue('slaveSns', values.slice(0, 8))
                 }
               }}
@@ -722,7 +722,7 @@ const ParallelPage: React.FC = () => {
             <Col span={12}>
               <Form.Item
                 name="circulatingCurrentThreshold"
-                label="环流告警阈值(A)"
+                label={`${t('parallel.circulatingCurrent_A')}${t('parallel.threshold')}`}
               >
                 <InputNumber
                   style={{ width: '100%' }}
@@ -754,7 +754,7 @@ const ParallelPage: React.FC = () => {
         title={
           <Space>
             <ClusterOutlined />
-            <span>并机组详情 - {group.group_name || ''}</span>
+            <span>{t('parallel.title')} - {group.group_name || ''}</span>
           </Space>
         }
         open={drawerOpen}
@@ -770,7 +770,7 @@ const ParallelPage: React.FC = () => {
               onClick={() => detailId && handleSync(detailId)}
               loading={syncMutation.isPending}
             >
-              同步参数
+              {t('parallel.syncStatus')}
             </Button>
             <Button
               icon={<ReloadOutlined />}
@@ -779,23 +779,23 @@ const ParallelPage: React.FC = () => {
                 queryClient.invalidateQueries({ queryKey: ['parallel-alerts', detailId] })
               }}
             >
-              刷新状态
+              {t('admin.refreshStatus')}
             </Button>
           </Space>
         }
       >
         <Descriptions bordered size="small" column={3} style={{ marginBottom: 16 }}>
-          <Descriptions.Item label="组名">{group.group_name}</Descriptions.Item>
-          <Descriptions.Item label="相配置">
+          <Descriptions.Item label={t('parallel.groupName')}>{group.group_name}</Descriptions.Item>
+          <Descriptions.Item label={t('parallel.phaseConfig')}>
             <Tag color={PHASE_CONFIG_MAP[group.phase_config]?.color}>
               {PHASE_CONFIG_MAP[group.phase_config]?.label || group.phase_config}
             </Tag>
           </Descriptions.Item>
-          <Descriptions.Item label="总功率">
+          <Descriptions.Item label={t('parallel.totalPower_W')}>
             <Text strong>{(group.total_power || 0).toFixed(0)} W</Text>
           </Descriptions.Item>
-          <Descriptions.Item label="主控SN">{group.master_sn}</Descriptions.Item>
-          <Descriptions.Item label="环流阈值">
+          <Descriptions.Item label={t('parallel.masterSN')}>{group.master_sn}</Descriptions.Item>
+          <Descriptions.Item label={`${t('parallel.circulatingCurrent_A')}${t('parallel.threshold')}`}>
             {group.circulating_current_threshold || 5.0} A
           </Descriptions.Item>
           <Descriptions.Item label="负载偏差">
@@ -877,7 +877,7 @@ const ParallelPage: React.FC = () => {
                   dataSource={alertData?.data?.data?.items || []}
                   pagination={{
                     pageSize: 10,
-                    showTotal: (total) => `共 ${total} 条`,
+                    showTotal: (total) => t('common.total', { total }),
                   }}
                   size="small"
                 />

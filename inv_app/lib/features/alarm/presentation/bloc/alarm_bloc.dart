@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:inv_app/features/alarm/domain/repositories/alarm_repository.dart';
+import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
+import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/features/alarm/domain/repositories/alarm_repository.dart';
 
 part 'alarm_event.dart';
 part 'alarm_state.dart';
@@ -9,11 +13,40 @@ part 'alarm_state.dart';
 class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
   final AlarmRepository repository;
   final DataCacheService? dataCacheService;
+  final MQTTService? mqttService;
+  StreamSubscription<dynamic>? _alarmSub;
 
-  AlarmBloc({required this.repository, this.dataCacheService}) : super(AlarmInitial()) {
+  AlarmBloc({
+    required this.repository,
+    this.dataCacheService,
+    this.mqttService,
+  }) : super(AlarmInitial()) {
     on<AlarmListRequested>(_onListRequested);
     on<AlarmDetailRequested>(_onDetailRequested);
     on<AlarmMarkReadRequested>(_onMarkReadRequested);
+    on<AlarmMqttReceived>(_onMqttAlarmReceived);
+    _subscribeToMqttAlarms();
+  }
+
+  void _subscribeToMqttAlarms() {
+    _alarmSub = mqttService?.alarmStream.listen((_) {
+      // MQTT 告警到达时，自动刷新告警列表
+      add(const AlarmListRequested());
+    });
+  }
+
+  void _onMqttAlarmReceived(
+    AlarmMqttReceived event,
+    Emitter<AlarmState> emit,
+  ) {
+    // 触发列表刷新
+    add(const AlarmListRequested());
+  }
+
+  @override
+  Future<void> close() {
+    _alarmSub?.cancel();
+    return super.close();
   }
 
   Future<void> _onListRequested(
@@ -35,7 +68,9 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
           if (cached != null && cached is Map<String, dynamic>) {
             final alarms = (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
             final total = (cached['total'] as int?) ?? 0;
-            emit(AlarmListLoaded(alarms: alarms, total: total, isFromCache: true));
+            // 只有网络连接失败时才标记为缓存数据
+            final isNetworkError = failure is NetworkFailure;
+            emit(AlarmListLoaded(alarms: alarms, total: total, isFromCache: isNetworkError));
             return;
           }
         }

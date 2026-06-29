@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 Future<bool> showWifiSwitchDialog(BuildContext context, {String? originalSsid}) {
   return showDialog<bool>(
@@ -29,10 +30,10 @@ class _WifiSwitchDialog extends StatelessWidget {
           child: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 24),
         ),
         SizedBox(width: 12.w),
-        Expanded(child: Text('配网成功', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700))),
+        Expanded(child: Text(AppLocalizations.of(context)?.configSuccess ?? 'Config Success', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700))),
       ]),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('设备配网成功，请切换回原WiFi以使用远程监控功能。',
+        Text(AppLocalizations.of(context)?.provisionSuccessWifi ?? 'Provisioning success, please switch back to your WiFi for remote monitoring.',
           style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary)),
         if (originalSsid != null) ...[
           SizedBox(height: 8.h),
@@ -53,7 +54,7 @@ class _WifiSwitchDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: Text('稍后', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+          child: Text(AppLocalizations.of(context)?.cancel ?? 'Later', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
         ),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(true),
@@ -63,7 +64,7 @@ class _WifiSwitchDialog extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
             padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
           ),
-          child: Text('切换WiFi', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+          child: Text(AppLocalizations.of(context)?.switchWifi ?? 'Switch WiFi', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
         ),
       ],
     );

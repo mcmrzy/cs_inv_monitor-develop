@@ -22,4 +22,12 @@ export const otaApi = {
   listTasks: (params?: any) => api.get('/ota/tasks', { params }),
   getTask: (id: string) => api.get(`/ota/tasks/${id}`),
   getAllFirmware: () => api.get('/firmwares', { params: { pageSize: 9999 } }),
+
+  // App版本管理
+  getAppVersions: (platform?: string) => api.get('/ota/app/versions', { params: platform ? { platform } : {} }),
+  createAppVersion: (data: any) => api.post('/ota/app/versions', data),
+  deleteAppVersion: (id: number) => api.delete(`/ota/app/versions/${id}`),
+  updateAppVersionRollout: (id: number, percentage: number) => api.put(`/ota/app/versions/${id}/rollout`, { percentage }),
+  rollbackAppVersion: (id: number) => api.post(`/ota/app/versions/${id}/rollback`),
+  restoreAppVersion: (id: number, percentage?: number) => api.post(`/ota/app/versions/${id}/restore`, { percentage: percentage || 100 }),
 }

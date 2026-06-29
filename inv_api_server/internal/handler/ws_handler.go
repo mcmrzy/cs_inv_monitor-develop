@@ -17,17 +17,7 @@ import (
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			return true
-		}
-		allowedOrigins := []string{"http://localhost:3000", "http://localhost:5173"}
-		for _, allowed := range allowedOrigins {
-			if origin == allowed {
-				return true
-			}
-		}
-		return false
+		return true
 	},
 }
 
@@ -94,7 +84,7 @@ func (h *WSHandler) DeviceRealtime(c *gin.Context) {
 	ctx, cancel := context.WithCancel(c.Request.Context())
 	defer cancel()
 
-	pubsub := h.rdb.Subscribe(ctx, "realtime:data:"+sn)
+	pubsub := h.rdb.Subscribe(ctx, "realtime:channel:"+sn)
 	defer pubsub.Close()
 
 	ch := pubsub.Channel()

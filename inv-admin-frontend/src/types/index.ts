@@ -15,6 +15,7 @@ export interface User {
   parentId?: string
   regionId?: string
   status: number
+  timezone: string
   lastLoginAt: string
   createdAt: string
 }

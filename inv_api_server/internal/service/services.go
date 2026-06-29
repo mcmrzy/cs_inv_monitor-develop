@@ -25,6 +25,10 @@ func NewUserService(repo *repository.UserRepository, cache *redis.Client) *UserS
 	return &UserService{repo: repo, cache: cache}
 }
 
+func (s *UserService) Cache() *redis.Client {
+	return s.cache
+}
+
 func (s *UserService) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	return s.repo.GetByID(ctx, id)
 }
@@ -49,12 +53,16 @@ func (s *UserService) UpdatePassword(ctx context.Context, userID int64, password
 	return s.repo.UpdatePassword(ctx, userID, passwordHash)
 }
 
-func (s *UserService) UpdateProfile(ctx context.Context, userID int64, nickname, avatar string) error {
-	return s.repo.UpdateProfile(ctx, userID, nickname, avatar)
+func (s *UserService) UpdateProfile(ctx context.Context, userID int64, nickname, avatar, timezone string) error {
+	return s.repo.UpdateProfile(ctx, userID, nickname, avatar, timezone)
 }
 
 func (s *UserService) UpdateLoginInfo(ctx context.Context, userID int64, ip string) error {
 	return s.repo.UpdateLoginInfo(ctx, userID, ip)
+}
+
+func (s *UserService) LogAudit(ctx context.Context, operatorID int64, operatorName, action, resourceType, resourceID, detail, ip string) {
+	s.repo.LogAudit(ctx, operatorID, operatorName, action, resourceType, resourceID, detail, ip)
 }
 
 func (s *UserService) Delete(ctx context.Context, userID int64) error {
@@ -92,6 +100,29 @@ func (s *JWTService) ValidateRefreshToken(ctx context.Context, userID int64, ref
 func (s *JWTService) RevokeRefreshToken(ctx context.Context, userID int64, refreshToken string) error {
 	key := fmt.Sprintf("refresh_token:%d:%s", userID, refreshToken)
 	return s.cache.Del(ctx, key).Err()
+}
+
+// SwapRefreshToken atomically validates the old refresh token and stores the new one using a Lua script.
+// Returns true if the swap succeeded, false if the old token was already used/revoked.
+func (s *JWTService) SwapRefreshToken(ctx context.Context, userID int64, oldToken, newToken string, expireTime time.Duration) (bool, error) {
+	oldKey := fmt.Sprintf("refresh_token:%d:%s", userID, oldToken)
+	newKey := fmt.Sprintf("refresh_token:%d:%s", userID, newToken)
+
+	script := redis.NewScript(`
+		if redis.call("EXISTS", KEYS[1]) == 1 then
+			redis.call("DEL", KEYS[1])
+			redis.call("SET", KEYS[2], "1", "PX", ARGV[1])
+			return 1
+		else
+			return 0
+		end
+	`)
+
+	result, err := script.Run(ctx, s.cache, []string{oldKey, newKey}, expireTime.Milliseconds()).Int()
+	if err != nil {
+		return false, err
+	}
+	return result == 1, nil
 }
 
 func (s *JWTService) RevokeAllUserTokens(ctx context.Context, userID int64) error {
@@ -163,15 +194,30 @@ func (s *SMSService) SendCode(ctx context.Context, phone, codeType string) error
 
 func (s *SMSService) VerifyCode(ctx context.Context, phone, code, codeType string) bool {
 	key := fmt.Sprintf("sms:%s:%s", phone, codeType)
+	failKey := fmt.Sprintf("sms:%s:%s:fail", phone, codeType)
+
 	storedCode, err := s.cache.Get(ctx, key).Result()
 	if err != nil {
 		return false
 	}
 
+	// 检查验证码尝试次数
+	failCount, _ := s.cache.Get(ctx, failKey).Int()
+	if failCount >= 5 {
+		return false
+	}
+
 	if storedCode == code {
+		pipe := s.cache.Pipeline()
+		pipe.Del(ctx, key)
+		pipe.Del(ctx, failKey)
+		pipe.Exec(ctx)
 		return true
 	}
 
+	// 记录失败次数
+	s.cache.Incr(ctx, failKey)
+	s.cache.Expire(ctx, failKey, 5*time.Minute)
 	return false
 }
 
@@ -250,17 +296,17 @@ func (s *StationService) GetStatistics(ctx context.Context, stationID int64, sta
 }
 
 type DeviceService struct {
-	repo        *repository.DeviceRepository
-	cache       *redis.Client
-	modelRepo   *repository.ModelRepository
+	repo         *repository.DeviceRepository
+	cache        *redis.Client
+	modelRepo    *repository.ModelRepository
 	deviceSrvURL string
 }
 
 func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, modelRepo *repository.ModelRepository, deviceSrvURL string) *DeviceService {
 	return &DeviceService{
-		repo:        repo,
-		cache:       cache,
-		modelRepo:   modelRepo,
+		repo:         repo,
+		cache:        cache,
+		modelRepo:    modelRepo,
 		deviceSrvURL: deviceSrvURL,
 	}
 }
@@ -329,18 +375,38 @@ func (s *DeviceService) HasControlPermission(ctx context.Context, userID int64, 
 	return s.repo.HasDataPermission(ctx, userID, sn)
 }
 
+// 系统级命令白名单，不受型号控制字段校验限制
+var systemCommands = map[string]bool{
+	"get_params":   true,
+	"set_params":   true,
+	"batch_config": true,
+	"reset":        true,
+	"restart":      true,
+	"ota":          true,
+}
+
 func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, command string) error {
+	// 系统级命令始终允许
+	if systemCommands[command] {
+		return nil
+	}
+
 	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
-	if err != nil || modelID == 0 {
+	if err != nil {
+		return fmt.Errorf("查询设备型号失败: %w", err)
+	}
+	if modelID == 0 {
+		// 设备未配置型号，允许所有命令（向后兼容）
 		return nil
 	}
 
 	controlFields, err := s.modelRepo.GetControlFieldsByModelID(ctx, modelID)
 	if err != nil {
-		return nil
+		return fmt.Errorf("查询控制字段失败: %w", err)
 	}
 
 	if len(controlFields) == 0 {
+		// 型号未配置控制字段，允许所有命令（向后兼容）
 		return nil
 	}
 
@@ -354,6 +420,22 @@ func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, c
 	}
 
 	return nil
+}
+
+func (s *DeviceService) GetControlFieldsBySN(ctx context.Context, sn string) ([]model.DeviceModelField, error) {
+	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
+	if err != nil || modelID == 0 {
+		return []model.DeviceModelField{}, nil
+	}
+	return s.modelRepo.GetControlFieldsByModelID(ctx, modelID)
+}
+
+func (s *DeviceService) GetModelFieldsBySN(ctx context.Context, sn string) ([]model.DeviceModelField, error) {
+	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
+	if err != nil || modelID == 0 {
+		return []model.DeviceModelField{}, nil
+	}
+	return s.modelRepo.GetFieldsByModelID(ctx, modelID)
 }
 
 func (s *DeviceService) FilterByDataPermission(ctx context.Context, userID int64, sns []string) ([]string, error) {
@@ -400,8 +482,8 @@ func (s *DeviceService) GetCommandHistory(ctx context.Context, sn string, page, 
 	return s.repo.GetCommandHistory(ctx, sn, page, pageSize)
 }
 
-func (s *DeviceService) GetTelemetryData(ctx context.Context, sn, startTime, endTime string) ([]map[string]interface{}, error) {
-	return s.repo.GetTelemetryData(ctx, sn, startTime, endTime)
+func (s *DeviceService) GetTelemetryData(ctx context.Context, sn, startTime, endTime, granularity string) ([]map[string]interface{}, error) {
+	return s.repo.GetTelemetryData(ctx, sn, startTime, endTime, granularity)
 }
 
 func (s *DeviceService) GetLifecycleHistory(ctx context.Context, sn string, page, pageSize int) ([]map[string]interface{}, int64, error) {
@@ -432,8 +514,8 @@ func NewAlarmService(repo *repository.AlarmRepository) *AlarmService {
 	return &AlarmService{repo: repo}
 }
 
-func (s *AlarmService) List(ctx context.Context, userID int64, stationID int64, status, page, pageSize int) ([]*model.Alarm, int64, error) {
-	return s.repo.List(ctx, userID, stationID, status, page, pageSize)
+func (s *AlarmService) List(ctx context.Context, params repository.AlarmListParams) ([]*model.Alarm, int64, error) {
+	return s.repo.List(ctx, params)
 }
 
 func (s *AlarmService) GetByDeviceSN(ctx context.Context, sn string, page, pageSize int) ([]*model.Alarm, int64, error) {
@@ -452,13 +534,25 @@ func (s *AlarmService) MarkRead(ctx context.Context, ids []int64, userID int64) 
 	return s.repo.MarkRead(ctx, ids, userID)
 }
 
-func (s *AlarmService) GetStats(ctx context.Context, userID int64) (map[string]interface{}, error) {
-	return s.repo.GetStats(ctx, userID)
+func (s *AlarmService) GetStats(ctx context.Context, userID int64, role ...int) (map[string]interface{}, error) {
+	return s.repo.GetStats(ctx, userID, role...)
+}
+
+func (s *AlarmService) MarkIgnored(ctx context.Context, id int64) error {
+	return s.repo.MarkIgnored(ctx, id)
+}
+
+func (s *AlarmService) Delete(ctx context.Context, id int64) error {
+	return s.repo.Delete(ctx, id)
+}
+
+func (s *AlarmService) ClearAll(ctx context.Context) error {
+	return s.repo.ClearAll(ctx)
 }
 
 type StatisticsService struct {
-	deviceRepo   *repository.DeviceRepository
-	stationRepo  *repository.StationRepository
+	deviceRepo  *repository.DeviceRepository
+	stationRepo *repository.StationRepository
 }
 
 func NewStatisticsService(deviceRepo *repository.DeviceRepository, stationRepo *repository.StationRepository) *StatisticsService {

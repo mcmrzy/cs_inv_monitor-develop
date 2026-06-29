@@ -41,3 +41,10 @@ class AlarmMarkReadRequested extends AlarmEvent {
   @override
   List<Object?> get props => [alarmIds];
 }
+
+class AlarmMqttReceived extends AlarmEvent {
+  const AlarmMqttReceived();
+
+  @override
+  List<Object?> get props => [];
+}

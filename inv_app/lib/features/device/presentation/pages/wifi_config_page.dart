@@ -11,6 +11,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/widgets/wifi_switch_dialog.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 enum _ProvisionMode { softap, smartconfig }
 
@@ -112,9 +113,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       if (!granted) {
         setState(() => _wifiScanning = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('需要位置权限才能扫描WiFi，请在设置中授权'),
-            duration: Duration(seconds: 4),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AppLocalizations.of(context)!.wifiPermissionHint),
+            duration: const Duration(seconds: 4),
           ));
         }
         return;
@@ -123,9 +124,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       // 请求打开位置服务（Android 11及以下必须开启定位才能扫描WiFi）
       final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
       if (!serviceEnabled && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('请先开启位置服务（GPS），否则无法扫描WiFi'),
-          duration: Duration(seconds: 4),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context)!.locationServiceHint),
+          duration: const Duration(seconds: 4),
         ));
         setState(() => _wifiScanning = false);
         return;
@@ -141,14 +142,14 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       setState(() { _csInvNetworks = filtered; _wifiScanning = false; });
     } catch (e) {
       setState(() => _wifiScanning = false);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('扫描失败: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppLocalizations.of(context)!.scanFailed}: $e')));
     }
   }
 
   Future<void> _connectToAp(WifiNetwork network) async {
     setState(() {
       _selectedDeviceAp = network;
-      _provisionStatus = '正在连接 ${network.ssid}...';
+      _provisionStatus = AppLocalizations.of(context)!.connectingSsid(network.ssid ?? '');
       _provisionStep = 1;
       _nearbyWifiList = [];
       _workingSsidController.clear();
@@ -164,7 +165,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       );
 
       if (connected) {
-        setState(() => _provisionStatus = '等待连接稳定...');
+        setState(() => _provisionStatus = AppLocalizations.of(context)!.waitingStableConnection);
 
         // 关键：强制HTTP请求走WiFi而不是移动数据
         await WiFiForIoTPlugin.forceWifiUsage(true);
@@ -175,25 +176,25 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         // 验证确实连上了设备热点
         final currentSsid = await WiFiForIoTPlugin.getSSID();
         if (currentSsid == null || !currentSsid.toUpperCase().contains('CS_INV')) {
-          setState(() => _provisionStatus = '连接失败：未检测到设备热点，请重试');
+          setState(() => _provisionStatus = AppLocalizations.of(context)!.noDeviceHotspotRetry);
           return;
         }
 
         setState(() {
-          _provisionStatus = '已连接到 $ssid，正在扫描...';
+          _provisionStatus = AppLocalizations.of(context)!.connectedScanning(ssid);
           _provisionStep = 2;
         });
         _scanDeviceWiFi();
       } else {
-        setState(() => _provisionStatus = '连接 $ssid 失败，请重试');
+        setState(() => _provisionStatus = AppLocalizations.of(context)!.connectionSsidFailed(ssid));
       }
     } catch (e) {
-      setState(() => _provisionStatus = '连接失败: $e');
+      setState(() => _provisionStatus = '${AppLocalizations.of(context)!.connectionFailed}: $e');
     }
   }
 
   Future<void> _scanDeviceWiFi() async {
-    setState(() { _scanningNearbyWifi = true; _provisionStatus = '正在通过设备扫描 WiFi...'; });
+    setState(() { _scanningNearbyWifi = true; _provisionStatus = AppLocalizations.of(context)!.scanningWifiViaDevice; });
     try {
       // 确保请求走WiFi
       await WiFiForIoTPlugin.forceWifiUsage(true);
@@ -202,13 +203,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       setState(() {
         _nearbyWifiList = list;
         _scanningNearbyWifi = false;
-        _provisionStatus = list.isEmpty ? '设备未扫描到 WiFi，请手动输入' : '发现 ${list.length} 个 WiFi';
+        _provisionStatus = list.isEmpty ? AppLocalizations.of(context)!.noWifiFoundInputManually : AppLocalizations.of(context)!.foundNWifi('${list.length}');
         _provisionStep = 2;
       });
     } catch (e) {
       setState(() {
         _scanningNearbyWifi = false;
-        _provisionStatus = 'WiFi 扫描失败: $e';
+        _provisionStatus = '${AppLocalizations.of(context)!.scanFailed}: $e';
       });
     }
   }
@@ -217,17 +218,17 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     _workingSsidController.text = wifi.ssid;
     _workingPasswordController.clear();
     _showPassword = false;
-    setState(() => _provisionStatus = '已选择 ${wifi.ssid}，请输入密码');
+    setState(() => _provisionStatus = AppLocalizations.of(context)!.selectedWifiInputPassword(wifi.ssid));
   }
 
   Future<void> _sendProvisionConfig() async {
     final ssid = _workingSsidController.text.trim();
     final password = _workingPasswordController.text.trim();
     if (ssid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入WiFi名称')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.pleaseInputWifiName)));
       return;
     }
-    setState(() { _provisioning = true; _provisionStatus = '正在发送配网信息...'; _provisionOk = false; });
+    setState(() { _provisioning = true; _provisionStatus = AppLocalizations.of(context)!.sendingProvisionInfo; _provisionOk = false; });
 
     // 确保请求走WiFi
     await WiFiForIoTPlugin.forceWifiUsage(true);
@@ -236,7 +237,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     if (!result.success) result = await _provisionService.configureCompat(ssid, password);
 
     if (result.success) {
-      setState(() { _provisionStatus = '✅ 配网成功！设备正在连接 WiFi...'; _provisionStep = 3; });
+      setState(() { _provisionStatus = AppLocalizations.of(context)!.provisionSuccessConnecting; _provisionStep = 3; });
       await Future.delayed(const Duration(seconds: 2));
       for (int i = 0; i < 15; i++) {
         await WiFiForIoTPlugin.forceWifiUsage(true);
@@ -244,15 +245,15 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         if (status.success) {
           setState(() {
             _provisioning = false; _provisionOk = true;
-            _provisionStatus = '✅ 配网完成！WiFi: ${status.ssid}  IP: ${status.ip}';
+            _provisionStatus = AppLocalizations.of(context)!.provisionCompleteWifiIp(status.ssid ?? '', status.ip ?? '');
           });
           _onSoftApProvisionSuccess();
           return;
         }
-        if (mounted) setState(() => _provisionStatus = '等待设备连接... (${i + 1}/15)');
+        if (mounted) setState(() => _provisionStatus = AppLocalizations.of(context)!.waitingDeviceConnectionN('${i + 1}'));
         await Future.delayed(const Duration(seconds: 2));
       }
-      setState(() { _provisioning = false; _provisionStatus = '✅ 配置已发送，设备即将重启连接'; _provisionOk = true; });
+      setState(() { _provisioning = false; _provisionStatus = AppLocalizations.of(context)!.configSentDeviceRestart; _provisionOk = true; });
       _onSoftApProvisionSuccess();
     } else {
       setState(() { _provisioning = false; _provisionStatus = '❌ ${result.message}'; });
@@ -276,10 +277,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     if (!mounted) return;
     if (deviceOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('✅ 设备已连接到WiFi并上线'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppLocalizations.of(context)!.deviceOnlineWifi),
         backgroundColor: AppColors.successLight,
-        duration: Duration(seconds: 3),
+        duration: const Duration(seconds: 3),
       ));
     }
 
@@ -298,8 +299,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       await _connectionModeService.switchToRemote();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('✅ 已切换回原WiFi，进入远程模式'),
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(AppLocalizations.of(context)!.switchedToRemoteMode),
           backgroundColor: AppColors.successLight,
         ));
       }
@@ -310,7 +311,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     final ssid = _scSsidController.text.trim();
     final password = _scPasswordController.text.trim();
     if (ssid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入WiFi名称')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.pleaseInputWifiName)));
       return;
     }
 
@@ -323,8 +324,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     if (!success && mounted && _scStatus != SmartConfigStatus.success) {
       setState(() => _scConfiguring = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('SmartConfig 配网超时或失败，请重试'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppLocalizations.of(context)!.smartConfigTimeoutHint),
         backgroundColor: AppColors.errorLight,
       ));
     }
@@ -340,8 +341,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   Future<void> _onSmartConfigSuccess() async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('✅ SmartConfig 配网成功！'),
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(AppLocalizations.of(context)!.configSuccess),
       backgroundColor: AppColors.successLight,
     ));
 
@@ -360,15 +361,15 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     if (!mounted) return;
     if (deviceOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('✅ 设备已上线'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppLocalizations.of(context)!.deviceOnline),
         backgroundColor: AppColors.successLight,
       ));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('配网成功，等待设备上线中...'),
-        backgroundColor: Color(0xFFF59E0B),
-        duration: Duration(seconds: 3),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppLocalizations.of(context)!.provisionSuccessWaiting),
+        backgroundColor: const Color(0xFFF59E0B),
+        duration: const Duration(seconds: 3),
       ));
     }
   }
@@ -389,7 +390,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('设备配网'),
+        title: Text(AppLocalizations.of(context)!.wifiConfig),
       ),
       body: ListView(
         padding: EdgeInsets.all(20.w),
@@ -426,7 +427,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 Icon(Icons.settings_input_antenna, size: 18.sp,
                   color: _provisionMode == _ProvisionMode.smartconfig ? Colors.white : AppColors.textSecondary),
                 SizedBox(width: 6.w),
-                Text('智能配网',
+                Text(AppLocalizations.of(context)!.smartProvision,
                   style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600,
                     color: _provisionMode == _ProvisionMode.smartconfig ? Colors.white : AppColors.textSecondary)),
               ]),
@@ -449,7 +450,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 Icon(Icons.router, size: 18.sp,
                   color: _provisionMode == _ProvisionMode.softap ? Colors.white : AppColors.textSecondary),
                 SizedBox(width: 6.w),
-                Text('热点配网',
+                Text(AppLocalizations.of(context)!.hotspotProvision,
                   style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600,
                     color: _provisionMode == _ProvisionMode.softap ? Colors.white : AppColors.textSecondary)),
               ]),
@@ -474,11 +475,11 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       ]),
       SizedBox(height: 8.h),
       Row(children: [
-        SizedBox(width: 30.w, child: Text('连接设备热点', textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionStep>=1?AppColors.successLight:AppColors.textHint))),
+        SizedBox(width: 30.w, child: Text(AppLocalizations.of(context)!.connectDeviceHotspot, textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionStep>=1?AppColors.successLight:AppColors.textHint))),
         Expanded(child: Container()),
-        SizedBox(width: 30.w, child: Text('选择WiFi', textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionStep>=2?AppColors.successLight:AppColors.textHint))),
+        SizedBox(width: 30.w, child: Text(AppLocalizations.of(context)!.selectWifi, textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionStep>=2?AppColors.successLight:AppColors.textHint))),
         Expanded(child: Container()),
-        SizedBox(width: 30.w, child: Text('完成', textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionOk?AppColors.successLight:AppColors.textHint))),
+        SizedBox(width: 30.w, child: Text(AppLocalizations.of(context)!.finish, textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionOk?AppColors.successLight:AppColors.textHint))),
       ]),
       SizedBox(height: 24.h),
 
@@ -489,7 +490,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             icon: _wifiScanning
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.wifi_find, size: 22),
-            label: Text(_wifiScanning ? '扫描中...' : ' 扫描附近逆变器', style: const TextStyle(fontSize: 15)),
+            label: Text(_wifiScanning ? AppLocalizations.of(context)!.scanning : ' ${AppLocalizations.of(context)!.scanNearInverters}', style: const TextStyle(fontSize: 15)),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
           ),
@@ -497,7 +498,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
         if (_csInvNetworks.isNotEmpty) ...[
           SizedBox(height: 10.h),
-          Text('发现 ${_csInvNetworks.length} 个逆变器设备', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+          Text(AppLocalizations.of(context)!.foundNInverters('${_csInvNetworks.length}'), style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
           SizedBox(height: 8.h),
           ..._csInvNetworks.map((net) {
             final ssid = net.ssid ?? '';
@@ -526,9 +527,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.wifi_off, size: 40.sp, color: AppColors.textHint),
               SizedBox(height: 10.h),
-              Text('未发现逆变器热点', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+              Text(AppLocalizations.of(context)!.noInverterFound, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
               SizedBox(height: 4.h),
-              Text('请确保设备已上电', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+              Text(AppLocalizations.of(context)!.ensureDevicePowered, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
             ]),
           ))),
       ],
@@ -549,8 +550,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           child: Row(children: [
             const Icon(Icons.check_circle, color: AppColors.successLight, size: 20),
             SizedBox(width: 8.w),
-            Expanded(child: Text('已连接 ${_selectedDeviceAp?.ssid ?? ''}', style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46)))),
-            GestureDetector(onTap: _resetProvision, child: Text('断开', style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
+            Expanded(child: Text(AppLocalizations.of(context)!.connectedTo(_selectedDeviceAp?.ssid ?? ''), style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46)))),
+            GestureDetector(onTap: _resetProvision, child: Text(AppLocalizations.of(context)!.disconnect, style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
           ])),
       ],
 
@@ -561,7 +562,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             icon: _scanningNearbyWifi
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.wifi_tethering, size: 20),
-            label: Text(_scanningNearbyWifi ? '扫描中...' : '📡 扫描附近可用 WiFi', style: const TextStyle(fontSize: 14)),
+            label: Text(_scanningNearbyWifi ? AppLocalizations.of(context)!.scanning : '📡 ${AppLocalizations.of(context)!.scanNearbyWifi}', style: const TextStyle(fontSize: 14)),
             style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
               side: const BorderSide(color: AppColors.primary)),
@@ -571,7 +572,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         SizedBox(height: 8.h),
 
         if (_nearbyWifiList.isNotEmpty) ...[
-          Text('点击 WiFi 名称自动填入', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+          Text(AppLocalizations.of(context)!.clickWifiToFill, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
           SizedBox(height: 6.h),
           Container(
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(12.r), border: Border.all(color: const Color(0xFFE5E7EB))),
@@ -602,7 +603,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         TextField(
           controller: _workingSsidController,
           decoration: InputDecoration(
-            labelText: 'WiFi 名称', hintText: '点击上方 WiFi 或手动输入',
+            labelText: AppLocalizations.of(context)!.wifiName, hintText: AppLocalizations.of(context)!.clickAboveOrManual,
             prefixIcon: const Icon(Icons.wifi, color: AppColors.primary),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
@@ -614,7 +615,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           controller: _workingPasswordController,
           obscureText: !_showPassword,
           decoration: InputDecoration(
-            labelText: 'WiFi 密码', hintText: '请输入 WiFi 密码',
+            labelText: AppLocalizations.of(context)!.wifiPassword, hintText: AppLocalizations.of(context)!.inputWifiPassword,
             prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textHint),
             suffixIcon: IconButton(
               icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility, color: AppColors.textHint),
@@ -632,7 +633,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             icon: _provisioning
                 ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
                 : const Icon(Icons.router, size: 22),
-            label: Text(_provisioning ? '配网中...' : '⚡ 发送配网信息', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            label: Text(_provisioning ? AppLocalizations.of(context)!.configuring : '⚡ ${AppLocalizations.of(context)!.sendingProvisionInfo}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.successLight, foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
           ),
@@ -658,13 +659,14 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Widget _buildSmartConfigSection() {
+    final l10n = AppLocalizations.of(context)!;
     final statusText = switch (_scStatus) {
-      SmartConfigStatus.idle => '就绪',
-      SmartConfigStatus.scanning => '扫描中...',
-      SmartConfigStatus.configuring => '正在发送配网信息...',
-      SmartConfigStatus.success => '✅ 配网成功',
-      SmartConfigStatus.timeout => '⏱ 配网超时',
-      SmartConfigStatus.error => '❌ 配网失败',
+      SmartConfigStatus.idle => l10n.provisionReady,
+      SmartConfigStatus.scanning => l10n.scanning,
+      SmartConfigStatus.configuring => l10n.sendingProvisionInfo,
+      SmartConfigStatus.success => '✅ ${l10n.configSuccess}',
+      SmartConfigStatus.timeout => l10n.provisionTimeout,
+      SmartConfigStatus.error => l10n.provisionFailedX,
     };
 
     final statusColor = switch (_scStatus) {
@@ -688,7 +690,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
           SizedBox(width: 10.w),
           Expanded(child: Text(
-            'SmartConfig 模式：手机无需连接设备热点，通过手机广播扩散 WiFi 信息给设备',
+            AppLocalizations.of(context)!.smartConfigModeDesc,
             style: TextStyle(fontSize: 12.sp, color: AppColors.textPrimary),
           )),
         ]),
@@ -698,8 +700,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         controller: _scSsidController,
         enabled: !_scConfiguring,
         decoration: InputDecoration(
-          labelText: 'WiFi 名称',
-          hintText: '请输入要配网的 WiFi 名称',
+          labelText: AppLocalizations.of(context)!.wifiName,
+          hintText: AppLocalizations.of(context)!.pleaseInputWifiName,
           prefixIcon: const Icon(Icons.wifi, color: AppColors.primary),
           suffixIcon: IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.textHint, size: 20),
@@ -716,8 +718,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         enabled: !_scConfiguring,
         obscureText: !_scShowPassword,
         decoration: InputDecoration(
-          labelText: 'WiFi 密码',
-          hintText: '请输入 WiFi 密码',
+          labelText: AppLocalizations.of(context)!.wifiPassword,
+          hintText: AppLocalizations.of(context)!.inputWifiPassword,
           prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textHint),
           suffixIcon: IconButton(
             icon: Icon(_scShowPassword ? Icons.visibility_off : Icons.visibility, color: AppColors.textHint),
@@ -746,7 +748,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             child: OutlinedButton.icon(
               onPressed: _stopSmartConfig,
               icon: const Icon(Icons.stop, size: 20),
-              label: const Text('停止配网', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              label: Text(AppLocalizations.of(context)!.stopProvision, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.errorLight,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
@@ -760,7 +762,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           child: ElevatedButton.icon(
             onPressed: _scStatus == SmartConfigStatus.success ? null : _startSmartConfig,
             icon: const Icon(Icons.settings_input_antenna, size: 22),
-            label: Text(_scStatus == SmartConfigStatus.success ? '配网成功' : '开始配网',
+            label: Text(_scStatus == SmartConfigStatus.success ? AppLocalizations.of(context)!.configSuccess : AppLocalizations.of(context)!.provisionStarted,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
               backgroundColor: _scStatus == SmartConfigStatus.success ? AppColors.successLight : AppColors.primary,

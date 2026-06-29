@@ -1,6 +1,10 @@
 package handler
 
+// TODO: AlertRule handler is a stub implementation. All endpoints return hardcoded/fake data.
+// This needs to be implemented with a proper repository layer and database operations.
+
 import (
+	"log"
 	"strconv"
 
 	"inv-api-server/pkg/response"
@@ -15,6 +19,7 @@ func NewAlertRuleHandler() *AlertRuleHandler {
 }
 
 func (h *AlertRuleHandler) List(c *gin.Context) {
+	log.Printf("WARNING: alert_rule_handler.List is using stub implementation")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
@@ -29,6 +34,7 @@ func (h *AlertRuleHandler) List(c *gin.Context) {
 }
 
 func (h *AlertRuleHandler) GetByID(c *gin.Context) {
+	log.Printf("WARNING: alert_rule_handler.GetByID is using stub implementation")
 	ruleID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "invalid rule id")
@@ -46,6 +52,7 @@ func (h *AlertRuleHandler) GetByID(c *gin.Context) {
 }
 
 func (h *AlertRuleHandler) Create(c *gin.Context) {
+	log.Printf("WARNING: alert_rule_handler.Create is using stub implementation")
 	var req struct {
 		Name        string                 `json:"name" binding:"required"`
 		Description string                 `json:"description"`
@@ -63,6 +70,7 @@ func (h *AlertRuleHandler) Create(c *gin.Context) {
 }
 
 func (h *AlertRuleHandler) Update(c *gin.Context) {
+	log.Printf("WARNING: alert_rule_handler.Update is using stub implementation")
 	ruleID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "invalid rule id")
@@ -86,6 +94,7 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 }
 
 func (h *AlertRuleHandler) Delete(c *gin.Context) {
+	log.Printf("WARNING: alert_rule_handler.Delete is using stub implementation")
 	ruleID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "invalid rule id")

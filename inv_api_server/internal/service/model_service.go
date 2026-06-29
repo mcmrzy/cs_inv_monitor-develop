@@ -58,6 +58,20 @@ type BatchUpdateFieldsRequest struct {
 	Fields []repository.BatchFieldItem `json:"fields" binding:"required"`
 }
 
+type CreateProtocolRequest struct {
+	TopicPattern string                 `json:"topic_pattern" binding:"required"`
+	ParseType    string                 `json:"parse_type" binding:"required"`
+	ParseConfig  map[string]interface{} `json:"parse_config"`
+	IsActive     *bool                  `json:"is_active"`
+}
+
+type UpdateProtocolRequest struct {
+	TopicPattern *string                `json:"topic_pattern"`
+	ParseType    *string                `json:"parse_type"`
+	ParseConfig  map[string]interface{} `json:"parse_config"`
+	IsActive     *bool                  `json:"is_active"`
+}
+
 func (s *ModelService) ListModels(ctx context.Context) ([]model.DeviceModel, error) {
 	return s.modelRepo.ListModels(ctx)
 }
@@ -149,4 +163,38 @@ func (s *ModelService) GetFieldsByModelCode(ctx context.Context, code string) ([
 	}
 
 	return s.modelRepo.GetFieldsByModelID(ctx, m.ID)
+}
+
+// ==================== Protocol CRUD ====================
+
+func (s *ModelService) GetProtocols(ctx context.Context, modelID int64) ([]model.DeviceModelProtocol, error) {
+	return s.modelRepo.GetProtocolsByModelID(ctx, modelID)
+}
+
+func (s *ModelService) CreateProtocol(ctx context.Context, modelID int64, req *CreateProtocolRequest) (*model.DeviceModelProtocol, error) {
+	isActive := true
+	if req.IsActive != nil {
+		isActive = *req.IsActive
+	}
+
+	p := &model.DeviceModelProtocol{
+		ModelID:      int32(modelID),
+		TopicPattern: req.TopicPattern,
+		ParseType:    req.ParseType,
+		ParseConfig:  req.ParseConfig,
+		IsActive:     isActive,
+	}
+
+	if err := s.modelRepo.CreateProtocol(ctx, p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (s *ModelService) UpdateProtocol(ctx context.Context, protocolID int64, req *UpdateProtocolRequest) error {
+	return s.modelRepo.UpdateProtocol(ctx, protocolID, req.TopicPattern, req.ParseType, req.ParseConfig, req.IsActive)
+}
+
+func (s *ModelService) DeleteProtocol(ctx context.Context, protocolID int64) error {
+	return s.modelRepo.DeleteProtocol(ctx, protocolID)
 }

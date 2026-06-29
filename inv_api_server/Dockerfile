@@ -13,11 +13,11 @@ WORKDIR /app
 COPY --from=builder /app/inv-api-server ./main
 COPY config.docker.yaml ./config.yaml
 
-ENV TZ=Asia/Shanghai
+ENV TZ=UTC
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost:8080/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD wget -q -O /dev/null http://localhost:8080/health || exit 1
 
 CMD ["./main", "-config", "config.yaml"]

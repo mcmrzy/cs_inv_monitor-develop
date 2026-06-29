@@ -22,11 +22,16 @@ type Client struct {
 	config *config.MQTTConfig
 	hub    *Hub
 
-	onOtaStatus func(sn string, payload []byte)
+	onOtaStatus    func(sn string, payload []byte)
+	onStatusChange func(sn string, online bool)
 }
 
 func (c *Client) SetOtaStatusHandler(handler func(sn string, payload []byte)) {
 	c.onOtaStatus = handler
+}
+
+func (c *Client) SetStatusChangeHandler(handler func(sn string, online bool)) {
+	c.onStatusChange = handler
 }
 
 type Hub struct {
@@ -37,19 +42,19 @@ type Hub struct {
 }
 
 type DeviceCommand struct {
-	DeviceSN    string
-	CmdType     string
-	Params      map[string]interface{}
-	RawPayload  []byte // OTA 等命令的原始 JSON，直接作为 MQTT payload 发送
+	DeviceSN   string
+	CmdType    string
+	Params     map[string]interface{}
+	RawPayload []byte // OTA 等命令的原始 JSON，直接作为 MQTT payload 发送
 }
 
 type MQTTStats struct {
-	DataReceived   int64     `json:"data_received"`
-	InfoReceived   int64     `json:"info_received"`
-	AlarmReceived  int64     `json:"alarm_received"`
-	CmdSent        int64     `json:"cmd_sent"`
-	LastDataAt     time.Time `json:"last_data_at"`
-	OnlineClients  int       `json:"online_clients"`
+	DataReceived  int64     `json:"data_received"`
+	InfoReceived  int64     `json:"info_received"`
+	AlarmReceived int64     `json:"alarm_received"`
+	CmdSent       int64     `json:"cmd_sent"`
+	LastDataAt    time.Time `json:"last_data_at"`
+	OnlineClients int       `json:"online_clients"`
 }
 
 const onlineTimeoutSeconds = 120
@@ -67,10 +72,7 @@ func (h *Hub) MarkDeviceOnline(sn string) {
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		h.rdb.ZAdd(ctx, "device:online", redis.Z{
-			Score:  float64(now.Unix()),
-			Member: sn,
-		})
+		h.rdb.HSet(ctx, "device:online", sn, now.Unix())
 	}
 }
 
@@ -78,11 +80,15 @@ func (h *Hub) IsDeviceOnline(sn string) bool {
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		score, err := h.rdb.ZScore(ctx, "device:online", sn).Result()
+		tsStr, err := h.rdb.HGet(ctx, "device:online", sn).Result()
 		if err != nil {
 			return false
 		}
-		return time.Now().Unix()-int64(score) < onlineTimeoutSeconds
+		var ts int64
+		if _, err := fmt.Sscanf(tsStr, "%d", &ts); err != nil {
+			return false
+		}
+		return time.Now().Unix()-ts < onlineTimeoutSeconds
 	}
 	return false
 }
@@ -91,15 +97,22 @@ func (h *Hub) GetOnlineDeviceSNs() []string {
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		cutoff := float64(time.Now().Unix() - onlineTimeoutSeconds)
-		members, err := h.rdb.ZRangeByScore(ctx, "device:online", &redis.ZRangeBy{
-			Min: fmt.Sprintf("%f", cutoff),
-			Max: "+inf",
-		}).Result()
+		cutoff := time.Now().Unix() - onlineTimeoutSeconds
+		all, err := h.rdb.HGetAll(ctx, "device:online").Result()
 		if err != nil {
 			return nil
 		}
-		return members
+		var sns []string
+		for sn, tsStr := range all {
+			var ts int64
+			if _, err := fmt.Sscanf(tsStr, "%d", &ts); err != nil {
+				continue
+			}
+			if ts > cutoff {
+				sns = append(sns, sn)
+			}
+		}
+		return sns
 	}
 	return nil
 }
@@ -141,12 +154,13 @@ func (c *Client) Connect(ctx context.Context) error {
 			if _, err := cm.Subscribe(ctx, &paho.Subscribe{
 				Subscriptions: []paho.SubscribeOptions{
 					{Topic: "cs_inv/+/data/#", QoS: 1},
+					{Topic: "cs_inv/+/status", QoS: 1},
 					{Topic: "cs_inv/+/ota/status", QoS: 1},
 				},
 			}); err != nil {
 				logger.Error("Failed to subscribe to topic", zap.Error(err))
 			} else {
-				logger.Info("Subscribed to cs_inv/+/data/# and cs_inv/+/ota/status")
+				logger.Info("Subscribed to cs_inv/+/data/#, cs_inv/+/status, cs_inv/+/ota/status")
 			}
 		},
 		OnConnectError: func(err error) {
@@ -158,6 +172,24 @@ func (c *Client) Connect(ctx context.Context) error {
 				func(pr paho.PublishReceived) (bool, error) {
 					topic := pr.Packet.Topic
 					sn := extractSN(topic)
+
+					// 设备状态主题（LWT 离线/上线消息）：不更新在线心跳时间戳
+					if isDeviceStatusTopic(topic) {
+						online := parseStatusOnline(pr.Packet.Payload)
+						if online {
+							// 设备主动上报在线，更新心跳
+							c.hub.MarkDeviceOnline(sn)
+							c.hub.stats.DataReceived++
+							c.hub.stats.LastDataAt = time.Now()
+						}
+						// LWT 离线消息不更新心跳，让 Redis 时间戳自然过期
+						if c.onStatusChange != nil {
+							c.onStatusChange(sn, online)
+						}
+						return true, nil
+					}
+
+					// 非状态主题（数据/OTA 等）：设备发了真实数据，标记在线
 					c.hub.MarkDeviceOnline(sn)
 					c.hub.stats.DataReceived++
 					c.hub.stats.LastDataAt = time.Now()
@@ -173,12 +205,12 @@ func (c *Client) Connect(ctx context.Context) error {
 				logger.Error("MQTT client error", zap.Error(err))
 			},
 			OnServerDisconnect: func(d *paho.Disconnect) {
-			if d.Properties != nil && d.Properties.ReasonString != "" {
-				logger.Error("MQTT server disconnect", zap.String("reason", d.Properties.ReasonString))
-			} else {
-				logger.Error("MQTT server disconnect", zap.Uint8("reason_code", d.ReasonCode))
-			}
-		},
+				if d.Properties != nil && d.Properties.ReasonString != "" {
+					logger.Error("MQTT server disconnect", zap.String("reason", d.Properties.ReasonString))
+				} else {
+					logger.Error("MQTT server disconnect", zap.Uint8("reason_code", d.ReasonCode))
+				}
+			},
 		},
 	}
 
@@ -315,4 +347,32 @@ func isOtaStatusTopic(topic string) bool {
 		return true
 	}
 	return false
+}
+
+// isDeviceStatusTopic 匹配 cs_inv/{sn}/status（设备在线/离线状态，含 LWT）
+func isDeviceStatusTopic(topic string) bool {
+	parts := strings.Split(topic, "/")
+	// 匹配 cs_inv/{sn}/status（排除 cs_inv/{sn}/data/status 和 cs_inv/{sn}/ota/status）
+	if len(parts) == 3 && parts[0] == "cs_inv" && parts[2] == "status" {
+		return true
+	}
+	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/status
+	if len(parts) == 6 && parts[0] == "$share" && parts[3] == "cs_inv" && parts[5] == "status" {
+		return true
+	}
+	return false
+}
+
+// parseStatusOnline 从 status 消息的 payload 中解析 online 字段
+func parseStatusOnline(payload []byte) bool {
+	var data map[string]interface{}
+	if err := json.Unmarshal(payload, &data); err != nil {
+		// 解析失败时默认认为在线（收到消息本身说明设备还在）
+		return true
+	}
+	online, ok := data["online"].(bool)
+	if !ok {
+		return true
+	}
+	return online
 }

@@ -1,0 +1,83 @@
+export const queryKeys = {
+  stations: {
+    all: ['stations'] as const,
+    list: () => ['stations', 'list'] as const,
+  },
+  devices: {
+    all: ['devices'] as const,
+    list: (params?: Record<string, any>) => ['devices', 'list', params] as const,
+    realtime: (sn: string) => ['devices', 'realtime', sn] as const,
+    realtimeBatch: () => ['devices', 'realtime-batch'] as const,
+    detail: (sn: string) => ['devices', 'detail', sn] as const,
+    telemetry: (sn: string, params?: Record<string, any>) => ['devices', 'telemetry', sn, params] as const,
+    lifecycle: (sn: string) => ['devices', 'lifecycle', sn] as const,
+    commandTemplates: () => ['devices', 'command-templates'] as const,
+    commandHistory: (sn: string) => ['devices', 'command-history', sn] as const,
+    unbindRequests: () => ['devices', 'unbind-requests'] as const,
+    allDevices: () => ['allDevices'] as const,
+  },
+  alerts: {
+    all: ['alerts'] as const,
+    list: (params?: Record<string, any>) => ['alerts', 'list', params] as const,
+    stats: () => ['alerts', 'stats'] as const,
+  },
+  alertRules: {
+    all: ['alert-rules'] as const,
+    list: (params?: Record<string, any>) => ['alert-rules', 'list', params] as const,
+  },
+  workOrders: {
+    all: ['work-orders'] as const,
+    list: (params?: Record<string, any>) => ['work-orders', 'list', params] as const,
+    stats: () => ['work-orders', 'stats'] as const,
+    detail: (id: string) => ['work-orders', 'detail', id] as const,
+  },
+  users: {
+    all: ['users'] as const,
+    list: (params?: Record<string, any>) => ['users', 'list', params] as const,
+  },
+  models: {
+    all: ['models'] as const,
+    list: () => ['models', 'list'] as const,
+    fields: (modelId: number) => ['models', 'fields', modelId] as const,
+    protocols: (modelId: number) => ['models', 'protocols', modelId] as const,
+  },
+  ota: {
+    all: ['ota'] as const,
+    firmwares: (params?: Record<string, any>) => ['ota', 'firmwares', params] as const,
+    tasks: (params?: Record<string, any>) => ['ota', 'tasks', params] as const,
+    taskDetail: (id: string) => ['ota', 'task-detail', id] as const,
+    appVersions: (params?: Record<string, any>) => ['ota', 'app-versions', params] as const,
+  },
+  parallel: {
+    all: ['parallel'] as const,
+    list: (params?: Record<string, any>) => ['parallel', 'list', params] as const,
+    detail: (id: string) => ['parallel', 'detail', id] as const,
+  },
+  admin: {
+    auditLogs: (params?: Record<string, any>) => ['admin', 'audit-logs', params] as const,
+    health: () => ['admin', 'health'] as const,
+    tenants: (params?: Record<string, any>) => ['admin', 'tenants', params] as const,
+    config: () => ['admin', 'config'] as const,
+    permissions: (role: number) => ['admin', 'permissions', role] as const,
+  },
+  dashboard: {
+    statistics: () => ['dashboard', 'statistics'] as const,
+    deviceDistribution: () => ['dashboard', 'deviceDistribution'] as const,
+    trend: (type: string) => ['dashboard', 'trend', type] as const,
+    energyStats: (type: string) => ['dashboard', 'energyStats', type] as const,
+    stationRanking: (period: string) => ['dashboard', 'stationRanking', period] as const,
+    devices: (params?: Record<string, any>) => ['dashboard', 'devices', params] as const,
+    compare: (params?: Record<string, any>) => ['dashboard', 'compare', params] as const,
+  },
+  monitoring: {
+    realtime: (sn: string) => ['monitoring', 'realtime', sn] as const,
+    devices: (stationId: string) => ['monitoring', 'devices', stationId] as const,
+    history: (sn: string, params?: Record<string, any>) => ['monitoring', 'history', sn, params] as const,
+    alarms: (sn: string, params?: Record<string, any>) => ['monitoring', 'alarms', sn, params] as const,
+  },
+  operationLogs: {
+    systemEvents: (params?: Record<string, any>) => ['operation-logs', 'system-events', params] as const,
+    alarmRecords: (params?: Record<string, any>) => ['operation-logs', 'alarm-records', params] as const,
+    commandRecords: (params?: Record<string, any>) => ['operation-logs', 'command-records', params] as const,
+  },
+}

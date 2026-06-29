@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:dio/dio.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -23,6 +25,7 @@ class _SettingsPageState extends State<SettingsPage> {
   String _unitType = 'kW';
   String _serverUrl = '';
   String _currentLocale = 'zh';
+  String _currentTimezone = TimezoneUtils.defaultTimezone;
   bool _loading = true;
 
   @override
@@ -36,6 +39,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final darkMode = await _storage.getIsDarkMode();
     final serverUrl = await _storage.getServerUrl();
     final locale = await _storage.getLocale();
+    final timezone = await _storage.getTimezone();
 
     if (mounted) {
       setState(() {
@@ -43,10 +47,13 @@ class _SettingsPageState extends State<SettingsPage> {
         _isDarkMode = darkMode;
         _serverUrl = serverUrl ?? AppConfig.apiBaseUrl;
         _currentLocale = locale ?? 'zh';
+        _currentTimezone = timezone ?? TimezoneUtils.defaultTimezone;
         _loading = false;
       });
     }
   }
+
+  AppLocalizations get l10n => AppLocalizations.of(context)!;
 
   Future<void> _toggleLocalMode(bool value) async {
     await _storage.saveIsLocalMode(value);
@@ -54,7 +61,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _isLocalMode = value);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(value ? '已切换到本地模式' : '已切换到远程模式'),
+          content: Text(value ? l10n.localModeOn : l10n.localModeOff),
           duration: const Duration(seconds: 1),
         ),
       );
@@ -67,7 +74,7 @@ class _SettingsPageState extends State<SettingsPage> {
       setState(() => _isDarkMode = value);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(value ? '已开启深色模式' : '已切换到浅色模式'),
+          content: Text(value ? l10n.darkModeOn : l10n.darkModeOff),
           duration: const Duration(seconds: 1),
         ),
       );
@@ -78,14 +85,14 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text('选择功率单位'),
+        title: Text(l10n.selectPowerUnit),
         children: [
           SimpleDialogOption(
             onPressed: () {
               setState(() => _unitType = 'kW');
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('单位已切换为 kW'), duration: Duration(seconds: 1)),
+                SnackBar(content: Text(l10n.str('unit_changed', {'unit': 'kW'})), duration: const Duration(seconds: 1)),
               );
             },
             child: Padding(
@@ -106,7 +113,7 @@ class _SettingsPageState extends State<SettingsPage> {
               setState(() => _unitType = 'W');
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('单位已切换为 W'), duration: Duration(seconds: 1)),
+                SnackBar(content: Text(l10n.str('unit_changed', {'unit': 'W'})), duration: const Duration(seconds: 1)),
               );
             },
             child: Padding(
@@ -132,11 +139,11 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('自定义服务器地址'),
+        title: Text(l10n.serverAddress),
         content: TextField(
           controller: controller,
           decoration: InputDecoration(
-            hintText: '例如: http://192.168.1.100:8080/api/v1',
+            hintText: l10n.serverHint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
           ),
           keyboardType: TextInputType.url,
@@ -144,7 +151,7 @@ class _SettingsPageState extends State<SettingsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () async {
@@ -155,17 +162,59 @@ class _SettingsPageState extends State<SettingsPage> {
                   setState(() => _serverUrl = url);
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('服务器地址已保存，请重启应用生效'),
-                      duration: Duration(seconds: 2),
+                    SnackBar(
+                      content: Text(l10n.serverSaved),
+                      duration: const Duration(seconds: 2),
                     ),
                   );
                 }
               }
             },
-            child: const Text('保存'),
+            child: Text(l10n.save),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showTimezoneDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(l10n.selectTimezone),
+        children: TimezoneUtils.commonTimezones.map((tz) {
+          final id = tz['id']!;
+          final label = TimezoneUtils.getLabel(id, langCode: _currentLocale);
+          return SimpleDialogOption(
+            onPressed: () async {
+              await _storage.saveTimezone(id);
+              // 同步时区到服务器
+              try {
+                final dio = getIt<Dio>();
+                await dio.put('/auth/profile', data: {'timezone': id});
+              } catch (_) {}
+              if (mounted) {
+                setState(() => _currentTimezone = id);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(l10n.str('timezone_changed', {'timezone': label})), duration: const Duration(seconds: 1)),
+                );
+              }
+            },
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h),
+              child: Row(
+                children: [
+                  Text(label, style: TextStyle(fontSize: 16.sp)),
+                  if (_currentTimezone == id) ...[
+                    const Spacer(),
+                    Icon(Icons.check, color: AppColors.primary),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -174,7 +223,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => SimpleDialog(
-        title: Text(AppLocalizations.of(context)?.languageSwitch ?? '选择语言'),
+        title: Text(l10n.languageSwitch),
         children: [
           SimpleDialogOption(
             onPressed: () {
@@ -223,26 +272,26 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: Text(AppLocalizations.of(context)?.systemSettings ?? '系统设置')),
+        appBar: AppBar(title: Text(l10n.systemSettings)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(AppLocalizations.of(context)?.systemSettings ?? '系统设置')),
+      appBar: AppBar(title: Text(l10n.systemSettings)),
       body: ListView(
         children: [
-          _buildSectionTitle('连接设置'),
+          _buildSectionTitle(l10n.connectionSettings),
           SwitchListTile(
-            title: Text(AppLocalizations.of(context)?.localMode ?? '本地模式'),
-            subtitle: Text(AppLocalizations.of(context)?.localModeDesc ?? '通过局域网直连设备，无需云端'),
+            title: Text(l10n.localMode),
+            subtitle: Text(l10n.localModeDesc),
             value: _isLocalMode,
             onChanged: _toggleLocalMode,
             activeColor: AppColors.primary,
           ),
           const Divider(height: 1),
           ListTile(
-            title: Text(AppLocalizations.of(context)?.customServer ?? '自定义服务器'),
+            title: Text(l10n.customServer),
             subtitle: Text(
               _serverUrl,
               maxLines: 1,
@@ -252,23 +301,30 @@ class _SettingsPageState extends State<SettingsPage> {
             trailing: const Icon(Icons.chevron_right),
             onTap: _showServerUrlDialog,
           ),
-          _buildSectionTitle('显示设置'),
+          _buildSectionTitle(l10n.displaySettings),
           SwitchListTile(
-            title: Text(AppLocalizations.of(context)?.darkMode ?? '深色模式'),
+            title: Text(l10n.darkMode),
             value: _isDarkMode,
             onChanged: _toggleDarkMode,
             activeColor: AppColors.primary,
           ),
           const Divider(height: 1),
           ListTile(
-            title: Text(AppLocalizations.of(context)?.unitSwitch ?? '功率单位'),
+            title: Text(l10n.unitSwitch),
             subtitle: Text(_unitType),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showUnitDialog,
           ),
-          _buildSectionTitle('通用设置'),
+          const Divider(height: 1),
           ListTile(
-            title: Text(AppLocalizations.of(context)?.languageSwitch ?? '语言'),
+            title: Text(l10n.timezone),
+            subtitle: Text(TimezoneUtils.getLabel(_currentTimezone, langCode: _currentLocale)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _showTimezoneDialog,
+          ),
+          _buildSectionTitle(l10n.generalSettings),
+          ListTile(
+            title: Text(l10n.languageSwitch),
             subtitle: Text(_currentLocale == 'zh' ? '中文' : 'English'),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showLanguageDialog,
@@ -297,14 +353,14 @@ class _SettingsPageState extends State<SettingsPage> {
           final confirmed = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('重置设置'),
-              content: const Text('确定要重置所有设置为默认值吗？'),
+              title: Text(l10n.resetSettings),
+              content: Text(l10n.resetConfirm),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.cancel)),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
                   style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-                  child: const Text('重置'),
+                  child: Text(l10n.reset),
                 ),
               ],
             ),
@@ -314,14 +370,16 @@ class _SettingsPageState extends State<SettingsPage> {
             await _storage.saveIsLocalMode(false);
             await _storage.saveIsDarkMode(false);
             await _storage.saveServerUrl(AppConfig.apiBaseUrl);
+            await _storage.saveTimezone(TimezoneUtils.defaultTimezone);
             if (mounted) {
               setState(() {
                 _isLocalMode = false;
                 _isDarkMode = false;
                 _serverUrl = AppConfig.apiBaseUrl;
+                _currentTimezone = TimezoneUtils.defaultTimezone;
               });
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('设置已重置'), duration: Duration(seconds: 1)),
+                SnackBar(content: Text(l10n.settingsReset), duration: const Duration(seconds: 1)),
               );
             }
           }
@@ -332,7 +390,7 @@ class _SettingsPageState extends State<SettingsPage> {
           padding: EdgeInsets.symmetric(vertical: 14.h),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
         ),
-        child: const Text('重置所有设置'),
+        child: Text(l10n.resetAll),
       ),
     );
   }

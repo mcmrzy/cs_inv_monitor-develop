@@ -16,7 +16,7 @@ COPY --from=builder /app/inv-device-server ./main
 COPY config.docker.yaml ./config.yaml
 RUN mkdir -p /app/logs
 
-ENV TZ=Asia/Shanghai
+ENV TZ=UTC
 
 EXPOSE 8081
 

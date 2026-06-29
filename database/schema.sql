@@ -1,4 +1,4 @@
--- 光伏逆变器APP数据库设计
+-- 辰烁科技光伏逆变器APP数据库设计
 -- 数据库: PostgreSQL 15+
 -- 字符集: UTF-8
 
@@ -102,6 +102,7 @@ CREATE TABLE stations (
     valley_price DECIMAL(10,4), -- 谷电价
     latitude DECIMAL(10,7),
     longitude DECIMAL(10,7),
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 电站所在时区, IANA 时区标识符
     status SMALLINT NOT NULL DEFAULT 1, -- 1:正常 0:禁用
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -110,6 +111,7 @@ CREATE TABLE stations (
 
 CREATE INDEX idx_stations_user ON stations(user_id);
 CREATE INDEX idx_stations_location ON stations(province, city, district);
+CREATE INDEX idx_stations_timezone ON stations(timezone);
 
 -- ============================================
 -- 3. 设备相关表
@@ -126,6 +128,7 @@ CREATE TABLE devices (
     mac_address VARCHAR(17),
     station_id BIGINT,
     user_id BIGINT NOT NULL,
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 设备所在时区, 继承自所属电站
     status SMALLINT NOT NULL DEFAULT 0, -- 0:离线 1:在线 2:故障
     last_online_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -137,6 +140,7 @@ CREATE INDEX idx_devices_sn ON devices(sn);
 CREATE INDEX idx_devices_station ON devices(station_id);
 CREATE INDEX idx_devices_user ON devices(user_id);
 CREATE INDEX idx_devices_status ON devices(status);
+CREATE INDEX idx_devices_timezone ON devices(timezone);
 
 -- [已废弃] 设备实时数据表 - 已由 device_telemetry 超表替代
 -- CREATE TABLE device_realtime_data (...);
@@ -194,6 +198,24 @@ CREATE TABLE alarm_notifications (
 
 CREATE INDEX idx_alarm_notify_alarm ON alarm_notifications(alarm_id);
 CREATE INDEX idx_alarm_notify_user ON alarm_notifications(user_id);
+
+-- 系统通知表（设备上下线等）
+CREATE TABLE notifications (
+    id BIGSERIAL PRIMARY KEY,
+    device_sn VARCHAR(50) NOT NULL,
+    station_id BIGINT,
+    user_id BIGINT NOT NULL,
+    notify_type VARCHAR(30) NOT NULL, -- device_online, device_offline, ota_available
+    title VARCHAR(200) NOT NULL,
+    content TEXT,
+    status SMALLINT NOT NULL DEFAULT 0, -- 0:未读 1:已读
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_notifications_user ON notifications(user_id);
+CREATE INDEX idx_notifications_sn ON notifications(device_sn);
+CREATE INDEX idx_notifications_type ON notifications(notify_type);
+CREATE INDEX idx_notifications_time ON notifications(created_at);
 
 -- ============================================
 -- 5. [已废弃] 设备分享表 - 功能已移除
@@ -312,7 +334,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================
--- 阶段2: 时序遥测数据表（替代旧 device_realtime_data）
+-- 时序遥测数据表（替代旧 device_realtime_data）
 -- ============================================
 
 -- 设备遥测数据表（时序超表，支持万级设备）
@@ -354,7 +376,7 @@ FROM device_telemetry dt
 ORDER BY dt.device_sn, dt.time DESC;
 
 -- ============================================
--- 阶段3: 设备型号注册表
+-- 设备型号注册表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS device_models (
@@ -386,7 +408,7 @@ INSERT INTO device_models (model_code, model_name, manufacturer, category, rated
 ON CONFLICT (model_code) DO NOTHING;
 
 -- ============================================
--- 阶段4: 设备告警、命令日志、日统计表
+-- 设备告警、命令日志、日统计表
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS device_alarms (
@@ -418,8 +440,7 @@ CREATE INDEX IF NOT EXISTS idx_cmd_logs_sn ON device_cmd_logs(device_sn);
 CREATE TABLE IF NOT EXISTS device_day_data (
     device_sn VARCHAR(50) NOT NULL,
     data_date DATE NOT NULL,
-    energy_produce DECIMAL(12,4) DEFAULT 0,
-    run_minutes INTEGER DEFAULT 0,
+    data JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (device_sn, data_date)
 );

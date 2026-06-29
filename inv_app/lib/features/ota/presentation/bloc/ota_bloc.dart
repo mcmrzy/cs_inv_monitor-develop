@@ -87,7 +87,7 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
           if (status == 'completed') {
             emit(OTAComplete());
           } else {
-            emit(OTAError(message: data['error_message'] as String? ?? '升级失败'));
+            emit(OTAError(message: data['error_message'] as String? ?? 'Upgrade failed'));
           }
         }
       },

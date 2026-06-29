@@ -6,6 +6,7 @@ import 'package:inv_app/core/widgets/param_confirm_dialog.dart';
 import 'package:inv_app/features/device/domain/entities/device_param.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceParamsPage extends StatefulWidget {
   final String deviceSN;
@@ -203,7 +204,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消'),
+                  child: Text(AppLocalizations.of(context)!.cancel),
                 ),
                 FilledButton(
                   onPressed: () {
@@ -213,7 +214,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                       Navigator.pop(ctx);
                     }
                   },
-                  child: const Text('确定'),
+                  child: Text(AppLocalizations.of(context)!.confirm),
                 ),
               ],
             );
@@ -228,13 +229,13 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('参数设置')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.paramSettings)),
       body: BlocConsumer<DeviceBloc, DeviceState>(
         listener: (context, state) {
           if (state is DeviceParamsUpdateSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text('参数设置成功'),
+                content: Text(AppLocalizations.of(context)!.paramSetSuccess),
                 backgroundColor: AppColors.success,
                 duration: const Duration(seconds: 2),
               ),
@@ -248,7 +249,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           if (state is DeviceError) {
             setState(() => _isApplying = false);
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: AppColors.error),
+              SnackBar(content: Text(AppLocalizations.of(context)!.translateError(state.message)), backgroundColor: AppColors.error),
             );
           }
         },
@@ -258,7 +259,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           }
 
           if (state is DeviceError && _params.isEmpty) {
-            return Center(child: Text(state.message));
+            return Center(child: Text(AppLocalizations.of(context)!.translateError(state.message)));
           }
 
           if (state is DeviceParamsLoaded) {
@@ -268,7 +269,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           }
 
           if (_params.isEmpty) {
-            return const Center(child: Text('暂无参数'));
+            return Center(child: Text(AppLocalizations.of(context)!.noParams));
           }
 
           final filtered = _filterParams(_params);
@@ -281,7 +282,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                 padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 4.h),
                 child: TextField(
                   decoration: InputDecoration(
-                    hintText: '搜索参数...',
+                    hintText: AppLocalizations.of(context)!.searchParams,
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
@@ -394,7 +395,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                       borderRadius: BorderRadius.circular(4.r),
                     ),
                     child: Text(
-                      '已修改',
+                        AppLocalizations.of(context)!.paramModified,
                       style: TextStyle(fontSize: 10.sp, color: AppColors.primary, fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -506,7 +507,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     return Row(
       children: [
         Text(
-          val ? '开启' : '关闭',
+          val ? AppLocalizations.of(context)!.paramOn : AppLocalizations.of(context)!.paramOff,
           style: TextStyle(
             fontSize: 14.sp,
             color: val ? AppColors.success : theme.colorScheme.onSurfaceVariant,
@@ -527,7 +528,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     return TextField(
       controller: controller,
       decoration: InputDecoration(
-        hintText: '输入${param.label}',
+        hintText: '${AppLocalizations.of(context)!.inputParam}${param.label}',
         isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
       ),
@@ -554,7 +555,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           children: [
             Expanded(
               child: Text(
-                '已修改 $_modifiedCount 项参数',
+                AppLocalizations.of(context)!.paramModifiedCount('$_modifiedCount'),
                 style: TextStyle(fontSize: 13.sp, color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
@@ -570,7 +571,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                       height: 18.w,
                       child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Text('应用修改'),
+                  : Text(AppLocalizations.of(context)!.applyChanges),
             ),
           ],
         ),

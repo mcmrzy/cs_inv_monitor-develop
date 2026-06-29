@@ -78,9 +78,15 @@ type SystemStatus struct {
 
 // ==================== 能量统计 (cs_inv/{sn}/data/energy) ====================
 type EnergyData struct {
-	DailyPV      float64 `json:"daily_pv"`
-	TotalPV      float64 `json:"total_pv"`
-	RuntimeHours float64 `json:"runtime_hours"`
+	DailyPV         float64 `json:"daily_pv"`
+	TotalPV         float64 `json:"total_pv"`
+	DailyCharge     float64 `json:"daily_charge"`
+	TotalCharge     float64 `json:"total_charge"`
+	DailyDischarge  float64 `json:"daily_discharge"`
+	TotalDischarge  float64 `json:"total_discharge"`
+	DailyLoad       float64 `json:"daily_load"`
+	TotalLoad       float64 `json:"total_load"`
+	RuntimeHours    float64 `json:"runtime_hours"`
 
 	SN         string    `json:"-"`
 	ReceivedAt time.Time `json:"-"`
@@ -108,7 +114,7 @@ type AlarmData struct {
 	AlarmCode int                    `json:"alarm_code"`
 	Trigger   map[string]interface{} `json:"trigger"`
 
-	SN         string    `json:"-"`
+	SN         string    `json:"sn"`
 	ReceivedAt time.Time `json:"-"`
 }
 
@@ -139,6 +145,7 @@ type Device struct {
 	RatedPower     float64    `json:"rated_power"`
 	FirmwareARM    string     `json:"firmware_arm"`
 	FirmwareESP    string     `json:"firmware_esp"`
+	Timezone       string     `json:"timezone"`
 	Status         int        `json:"status"`
 	LastOnlineAt   *time.Time `json:"last_online_at"`
 	IPAddress      string     `json:"ip_address"`

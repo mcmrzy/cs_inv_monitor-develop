@@ -45,15 +45,12 @@ export interface WorkOrderTemplate {
 }
 
 export const workOrderApi = {
-  getWorkOrders: (params?: any) => api.get('/work-orders', { params }),
-  getWorkOrder: (id: string) => api.get(`/work-orders/${id}`),
-  createWorkOrder: (data: any) => api.post('/work-orders', data),
-  updateWorkOrder: (id: string, data: any) => api.patch(`/work-orders/${id}`, data),
+  list: (params?: any) => api.get('/work-orders', { params }),
+  getDetail: (id: string) => api.get(`/work-orders/${id}`),
+  create: (data: any) => api.post('/work-orders', data),
+  update: (id: string, data: any) => api.patch(`/work-orders/${id}`, data),
   updateStatus: (id: string, status: string) => api.patch(`/work-orders/${id}/status`, { status }),
   getStats: () => api.get('/work-orders/stats'),
-  list: (params?: any) => api.get('/work-orders', { params }),
-  create: (data: any) => api.post('/work-orders', data),
-  getDetail: (id: string) => api.get(`/work-orders/${id}`),
   getTemplates: () => api.get('/work-orders/templates'),
   uploadAttachment: (id: string, formData: FormData) =>
     api.post(`/work-orders/${id}/attachments`, formData, {

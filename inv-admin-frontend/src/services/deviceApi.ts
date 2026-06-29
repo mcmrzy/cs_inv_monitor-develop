@@ -22,8 +22,8 @@ export const deviceApi = {
   },
   getTelemetry: (sn: string, params?: any) => api.get(`/devices/${sn}/telemetry`, { params }),
   getRealtime: (sn: string) => api.get(`/devices/${sn}/realtime`),
-  sendCommand: (sn: string, data: any) => api.post(`/devices/${sn}/config`, data),
-  getAll: () => api.get('/devices', { params: { pageSize: 9999 } }),
+  sendCommand: (sn: string, data: any) => api.post(`/devices/${sn}/control`, data),
+  getAll: () => api.get('/devices', { params: { pageSize: 200 } }),
   exportTelemetry: (sn: string, format: 'csv' | 'excel', params?: any) =>
     api.get(`/devices/${sn}/telemetry/export${format === 'excel' ? '-excel' : ''}`, {
       params,

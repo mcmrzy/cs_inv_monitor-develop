@@ -1,4 +1,4 @@
-FROM docker.1ms.run/library/node:18-alpine AS builder
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY . .
 
 RUN npm run build
 
-FROM docker.1ms.run/library/alpine:3.19
+FROM alpine:3.19
 
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
     apk add --no-cache nginx && \
