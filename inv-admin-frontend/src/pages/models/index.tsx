@@ -1,29 +1,112 @@
-import { useState, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Button, Input, Space, Modal, Form, Select, Switch,
-  Tag, Popconfirm, message, Typography, InputNumber, Tooltip, Drawer,
-  Empty,
+  Tag, Popconfirm, message, Typography, InputNumber, Drawer,
+  Empty, Collapse, Tabs, Tooltip, Badge, Descriptions, Divider,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined, SettingOutlined, DeleteOutlined, EditOutlined,
-  ArrowUpOutlined, ArrowDownOutlined, HolderOutlined,
+  ThunderboltOutlined, ApiOutlined, EyeOutlined, EyeInvisibleOutlined,
+  ControlOutlined, InfoCircleOutlined,
 } from '@ant-design/icons'
-import { modelApi, DeviceModelItem, DeviceModelFieldItem } from '@/services/modelApi'
+import { modelApi, DeviceModelItem, DeviceModelFieldItem, DeviceModelProtocolItem } from '@/services/modelApi'
+import useTranslation from '@/hooks/useTranslation'
 
-const { Text } = Typography
+const { Text, Title } = Typography
 
-const FIELD_TYPE_LABELS: Record<string, string> = {
-  int: '整数',
-  float: '浮点数',
-  string: '字符串',
-  bool: '布尔值',
+const GROUP_CONFIG_KEYS = [
+  'models.acParams', 'models.batteryParams', 'models.pvParams',
+  'models.systemStatus', 'models.energyStats', 'models.deviceInfo',
+  'models.controlStatus', 'models.inverterControl', 'models.bmsControl',
+  'models.mpptControl', 'models.epsControl', 'models.parallelControl',
+]
+
+const GROUP_COLOR_MAP: Record<string, string> = {
+  'models.acParams': '#7c3aed',
+  'models.batteryParams': '#10b981',
+  'models.pvParams': '#f59e0b',
+  'models.systemStatus': '#06b6d4',
+  'models.energyStats': '#3b82f6',
+  'models.deviceInfo': '#6b7280',
+  'models.controlStatus': '#8b5cf6',
+  'models.inverterControl': '#ef4444',
+  'models.bmsControl': '#ef4444',
+  'models.mpptControl': '#ef4444',
+  'models.epsControl': '#ef4444',
+  'models.parallelControl': '#ef4444',
+}
+
+const GROUP_ICON_MAP: Record<string, string> = {
+  'models.acParams': '\u26a1',
+  'models.batteryParams': '\ud83d\udd0b',
+  'models.pvParams': '\u2600\ufe0f',
+  'models.systemStatus': '\ud83d\udcca',
+  'models.energyStats': '\ud83d\udcc8',
+  'models.deviceInfo': '\ud83d\udccb',
+  'models.controlStatus': '\ud83c\udf9b\ufe0f',
+  'models.inverterControl': '\ud83c\udfae',
+  'models.bmsControl': '\ud83c\udfae',
+  'models.mpptControl': '\ud83c\udfae',
+  'models.epsControl': '\ud83c\udfae',
+  'models.parallelControl': '\ud83c\udfae',
 }
 
 const ModelsPage: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [messageApi, contextHolder] = message.useMessage()
+
+  const GROUP_NAME_MAP: Record<string, string> = {
+    [t('models.acParams')]: 'models.acParams',
+    [t('models.batteryParams')]: 'models.batteryParams',
+    [t('models.pvParams')]: 'models.pvParams',
+    [t('models.systemStatus')]: 'models.systemStatus',
+    [t('models.energyStats')]: 'models.energyStats',
+    [t('models.deviceInfo')]: 'models.deviceInfo',
+    [t('models.controlStatus')]: 'models.controlStatus',
+    [t('models.inverterControl')]: 'models.inverterControl',
+    [t('models.bmsControl')]: 'models.bmsControl',
+    [t('models.mpptControl')]: 'models.mpptControl',
+    [t('models.epsControl')]: 'models.epsControl',
+    [t('models.parallelControl')]: 'models.parallelControl',
+  }
+
+  const getGroupConfig = (groupName: string) => {
+    const key = GROUP_NAME_MAP[groupName]
+    return {
+      color: (key ? GROUP_COLOR_MAP[key] : null) || '#999',
+      icon: (key ? GROUP_ICON_MAP[key] : null) || '\ud83d\udcc1',
+    }
+  }
+
+  const FIELD_TYPE_OPTIONS = [
+    { label: t('models.floatType'), value: 'float' },
+    { label: t('models.intType'), value: 'int' },
+    { label: t('models.stringType'), value: 'string' },
+    { label: t('models.boolType'), value: 'bool' },
+  ]
+
+  const PARSE_TYPE_OPTIONS = [
+    { label: 'JSON', value: 'json' },
+    { label: 'Modbus', value: 'modbus' },
+    { label: t('models.custom'), value: 'custom' },
+  ]
+
+  const CATEGORY_OPTIONS = [
+    { label: t('models.inverter'), value: 'inverter' },
+    { label: t('models.energyStorage'), value: 'storage' },
+    { label: t('models.chargingPile'), value: 'charger' },
+    { label: t('models.meter'), value: 'meter' },
+    { label: t('models.hybrid'), value: 'hybrid' },
+  ]
+
+  const INPUT_TYPE_OPTIONS = [
+    { label: t('models.sliderInput'), value: 'number' },
+    { label: t('models.dropdownSelect'), value: 'select' },
+    { label: t('models.switchToggle'), value: 'switch' },
+  ]
 
   const [keyword, setKeyword] = useState('')
   const [modelModalOpen, setModelModalOpen] = useState(false)
@@ -36,120 +119,108 @@ const ModelsPage: React.FC = () => {
   const [fieldModalOpen, setFieldModalOpen] = useState(false)
   const [editingField, setEditingField] = useState<DeviceModelFieldItem | null>(null)
   const [fieldForm] = Form.useForm()
+  const [isControl, setIsControl] = useState(false)
 
-  const { data: modelList = [], isLoading, refetch } = useQuery({
+  const [protocolModalOpen, setProtocolModalOpen] = useState(false)
+  const [editingProtocol, setEditingProtocol] = useState<DeviceModelProtocolItem | null>(null)
+  const [protocolForm] = Form.useForm()
+
+  const { data: modelList = [], isLoading } = useQuery({
     queryKey: ['models'],
-    queryFn: () =>
-      modelApi.listModels().then((res) => {
-        const d = res.data
-        return (Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : [])) as DeviceModelItem[]
-      }),
+    queryFn: () => modelApi.listModels().then((res) => {
+      const d = res.data
+      return (Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []) as DeviceModelItem[]
+    }),
   })
 
   const { data: fieldList = [], refetch: refetchFields } = useQuery({
     queryKey: ['modelFields', currentModelId],
-    queryFn: () =>
-      modelApi.getFields(currentModelId!).then((res) => {
-        const d = res.data
-        return (Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : [])) as DeviceModelFieldItem[]
-      }),
+    queryFn: () => modelApi.getFields(currentModelId!).then((res) => {
+      const d = res.data
+      return (Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []) as DeviceModelFieldItem[]
+    }),
     enabled: currentModelId != null,
   })
 
+  const { data: protocolList = [], refetch: refetchProtocols } = useQuery({
+    queryKey: ['modelProtocols', currentModelId],
+    queryFn: () => modelApi.getProtocols(currentModelId!).then((res) => {
+      const d = res.data
+      return (Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []) as DeviceModelProtocolItem[]
+    }),
+    enabled: currentModelId != null,
+  })
+
+  const groupedFields = useMemo(() => {
+    const groups: Record<string, DeviceModelFieldItem[]> = {}
+    for (const f of fieldList) {
+      const g = f.group_name || t('models.noGroup')
+      if (!groups[g]) groups[g] = []
+      groups[g].push(f)
+    }
+    for (const list of Object.values(groups)) {
+      list.sort((a, b) => a.sort - b.sort)
+    }
+    return groups
+  }, [fieldList, t])
+
   const filteredModels = modelList.filter(
-    (m) =>
-      !keyword ||
-      m.model_code.toLowerCase().includes(keyword.toLowerCase()) ||
-      m.model_name.toLowerCase().includes(keyword.toLowerCase())
+    (m) => !keyword || m.model_code.toLowerCase().includes(keyword.toLowerCase()) || m.model_name.toLowerCase().includes(keyword.toLowerCase())
   )
 
   const createModelMut = useMutation({
     mutationFn: (data: any) => modelApi.createModel(data),
-    onSuccess: () => {
-      messageApi.success('型号创建成功')
-      setModelModalOpen(false)
-      modelForm.resetFields()
-      queryClient.invalidateQueries({ queryKey: ['models'] })
-    },
-    onError: (err: any) => messageApi.error(err?.response?.data?.message || '创建失败'),
+    onSuccess: () => { messageApi.success(t('models.modelCreateSuccess')); setModelModalOpen(false); modelForm.resetFields(); queryClient.invalidateQueries({ queryKey: ['models'] }) },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.modelCreateFailed')),
   })
 
   const updateModelMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => modelApi.updateModel(id, data),
-    onSuccess: () => {
-      messageApi.success('型号更新成功')
-      setModelModalOpen(false)
-      modelForm.resetFields()
-      queryClient.invalidateQueries({ queryKey: ['models'] })
-    },
-    onError: (err: any) => messageApi.error(err?.response?.data?.message || '更新失败'),
+    onSuccess: () => { messageApi.success(t('models.modelUpdateSuccess')); setModelModalOpen(false); modelForm.resetFields(); queryClient.invalidateQueries({ queryKey: ['models'] }) },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.modelUpdateFailed')),
   })
 
   const deleteModelMut = useMutation({
     mutationFn: (id: number) => modelApi.deleteModel(id),
-    onSuccess: () => {
-      messageApi.success('型号已删除')
-      queryClient.invalidateQueries({ queryKey: ['models'] })
-    },
-    onError: (err: any) => messageApi.error(err?.response?.data?.message || '删除失败'),
+    onSuccess: () => { messageApi.success(t('models.modelDeleteSuccess')); queryClient.invalidateQueries({ queryKey: ['models'] }) },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.modelDeleteFailed')),
   })
 
   const createFieldMut = useMutation({
-    mutationFn: ({ modelId, data }: { modelId: number; data: any }) =>
-      modelApi.createField(modelId, data),
-    onSuccess: () => {
-      messageApi.success('字段添加成功')
-      setFieldModalOpen(false)
-      fieldForm.resetFields()
-      refetchFields()
-    },
-    onError: (err: any) => messageApi.error(err?.response?.data?.message || '添加失败'),
+    mutationFn: ({ modelId, data }: { modelId: number; data: any }) => modelApi.createField(modelId, data),
+    onSuccess: () => { messageApi.success(t('models.fieldAddSuccess')); setFieldModalOpen(false); fieldForm.resetFields(); refetchFields() },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.fieldAddFailed')),
   })
 
   const updateFieldMut = useMutation({
-    mutationFn: ({ modelId, fieldId, data }: { modelId: number; fieldId: number; data: any }) =>
-      modelApi.updateField(modelId, fieldId, data),
-    onSuccess: () => {
-      messageApi.success('字段更新成功')
-      setFieldModalOpen(false)
-      fieldForm.resetFields()
-      refetchFields()
-    },
-    onError: (err: any) => messageApi.error(err?.response?.data?.message || '更新失败'),
+    mutationFn: ({ modelId, fieldId, data }: { modelId: number; fieldId: number; data: any }) => modelApi.updateField(modelId, fieldId, data),
+    onSuccess: () => { messageApi.success(t('models.fieldUpdateSuccess')); setFieldModalOpen(false); fieldForm.resetFields(); refetchFields() },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.fieldUpdateFailed')),
   })
 
   const deleteFieldMut = useMutation({
-    mutationFn: ({ modelId, fieldId }: { modelId: number; fieldId: number }) =>
-      modelApi.deleteField(modelId, fieldId),
-    onSuccess: () => {
-      messageApi.success('字段已删除')
-      refetchFields()
-    },
-    onError: (err: any) => messageApi.error(err?.response?.data?.message || '删除失败'),
+    mutationFn: ({ modelId, fieldId }: { modelId: number; fieldId: number }) => modelApi.deleteField(modelId, fieldId),
+    onSuccess: () => { messageApi.success(t('models.fieldDeleteSuccess')); refetchFields() },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.fieldDeleteFailed')),
   })
 
-  const handleCreateModel = () => {
-    setEditingModel(null)
-    modelForm.resetFields()
-    modelForm.setFieldsValue({ category: 'inverter', rated_power_kw: 0 })
-    setModelModalOpen(true)
-  }
+  const createProtocolMut = useMutation({
+    mutationFn: ({ modelId, data }: { modelId: number; data: any }) => modelApi.createProtocol(modelId, data),
+    onSuccess: () => { messageApi.success(t('models.protocolAddSuccess')); setProtocolModalOpen(false); protocolForm.resetFields(); refetchProtocols() },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.protocolAddFailed')),
+  })
 
-  const handleEditModel = (record: DeviceModelItem) => {
-    setEditingModel(record)
-    modelForm.setFieldsValue(record)
-    setModelModalOpen(true)
-  }
+  const updateProtocolMut = useMutation({
+    mutationFn: ({ modelId, protocolId, data }: { modelId: number; protocolId: number; data: any }) => modelApi.updateProtocol(modelId, protocolId, data),
+    onSuccess: () => { messageApi.success(t('models.protocolUpdateSuccess')); setProtocolModalOpen(false); protocolForm.resetFields(); refetchProtocols() },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.protocolUpdateFailed')),
+  })
 
-  const handleModelSubmit = () => {
-    modelForm.validateFields().then((values) => {
-      if (editingModel) {
-        updateModelMut.mutate({ id: editingModel.id, data: values })
-      } else {
-        createModelMut.mutate(values)
-      }
-    })
-  }
+  const deleteProtocolMut = useMutation({
+    mutationFn: ({ modelId, protocolId }: { modelId: number; protocolId: number }) => modelApi.deleteProtocol(modelId, protocolId),
+    onSuccess: () => { messageApi.success(t('models.protocolDeleteSuccess')); refetchProtocols() },
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.protocolDeleteFailed')),
+  })
 
   const handleManageFields = (record: DeviceModelItem) => {
     setCurrentModelId(record.id)
@@ -157,73 +228,76 @@ const ModelsPage: React.FC = () => {
     setFieldsDrawerOpen(true)
   }
 
-  const handleCreateField = () => {
+  const handleCreateField = (groupName?: string) => {
     setEditingField(null)
     fieldForm.resetFields()
-    fieldForm.setFieldsValue({ field_type: 'float', sort: 0, is_show: true, is_control: false })
+    fieldForm.setFieldsValue({ field_type: 'float', sort: 0, is_show: true, is_control: false, group_name: groupName || '' })
+    setIsControl(false)
     setFieldModalOpen(true)
   }
 
   const handleEditField = (record: DeviceModelFieldItem) => {
     setEditingField(record)
     fieldForm.setFieldsValue(record)
+    setIsControl(record.is_control)
     setFieldModalOpen(true)
   }
 
   const handleFieldSubmit = () => {
     fieldForm.validateFields().then((values) => {
+      if (!values.is_control) {
+        values.control_params = {}
+      }
       if (editingField) {
-        updateFieldMut.mutate({
-          modelId: currentModelId!,
-          fieldId: editingField.id,
-          data: values,
-        })
+        updateFieldMut.mutate({ modelId: currentModelId!, fieldId: editingField.id, data: values })
       } else {
         createFieldMut.mutate({ modelId: currentModelId!, data: values })
       }
     })
   }
 
-  const handleDeleteField = (fieldId: number) => {
-    deleteFieldMut.mutate({ modelId: currentModelId!, fieldId })
+  const handleCreateProtocol = () => {
+    setEditingProtocol(null)
+    protocolForm.resetFields()
+    protocolForm.setFieldsValue({ parse_type: 'json', is_active: true })
+    setProtocolModalOpen(true)
   }
 
-  const handleMoveField = (fieldId: number, direction: 'up' | 'down') => {
-    const idx = fieldList.findIndex((f) => f.id === fieldId)
-    if (idx < 0) return
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= fieldList.length) return
+  const handleEditProtocol = (record: DeviceModelProtocolItem) => {
+    setEditingProtocol(record)
+    protocolForm.setFieldsValue(record)
+    setProtocolModalOpen(true)
+  }
 
-    const updated = [...fieldList]
-    const currentSort = updated[idx].sort
-    updated[idx] = { ...updated[idx], sort: updated[swapIdx].sort }
-    updated[swapIdx] = { ...updated[swapIdx], sort: currentSort }
-
-    modelApi.batchUpdateFields(currentModelId!, updated).then(() => {
-      refetchFields()
+  const handleProtocolSubmit = () => {
+    protocolForm.validateFields().then((values) => {
+      if (typeof values.parse_config === 'string') {
+        try { values.parse_config = JSON.parse(values.parse_config) } catch { values.parse_config = {} }
+      }
+      if (editingProtocol) {
+        updateProtocolMut.mutate({ modelId: currentModelId!, protocolId: editingProtocol.id, data: values })
+      } else {
+        createProtocolMut.mutate({ modelId: currentModelId!, data: values })
+      }
     })
   }
 
   const modelColumns: ColumnsType<DeviceModelItem> = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: '型号编码', dataIndex: 'model_code', key: 'model_code', width: 140 },
-    { title: '型号名称', dataIndex: 'model_name', key: 'model_name', width: 160 },
-    { title: '厂商', dataIndex: 'manufacturer', key: 'manufacturer', width: 120, render: (v: string) => v || '-' },
-    { title: '类别', dataIndex: 'category', key: 'category', width: 100, render: (v: string) => <Tag>{v}</Tag> },
-    { title: '额定功率(kW)', dataIndex: 'rated_power_kw', key: 'rated_power_kw', width: 120, render: (v: number) => v != null ? `${v} kW` : '-' },
+    { title: t('models.modelCode'), dataIndex: 'model_code', key: 'model_code', width: 140 },
+    { title: t('models.modelName'), dataIndex: 'model_name', key: 'model_name', width: 160 },
+    { title: t('models.manufacturer'), dataIndex: 'manufacturer', key: 'manufacturer', width: 120, render: (v: string) => v || '-' },
+    { title: t('models.category'), dataIndex: 'category', key: 'category', width: 100, render: (v: string) => <Tag>{v}</Tag> },
+    { title: t('models.ratedPower'), dataIndex: 'rated_power_kw', key: 'rated_power_kw', width: 100, render: (v: number) => v != null ? `${v} kW` : '-' },
+    { title: t('models.deviceCount'), dataIndex: 'device_count', key: 'device_count', width: 80, render: (v: number) => v ?? 0 },
+    { title: t('models.status'), dataIndex: 'is_active', key: 'is_active', width: 80, render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
     {
-      title: '状态', dataIndex: 'is_active', key: 'is_active', width: 80,
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '启用' : '禁用'}</Tag>,
-    },
-    {
-      title: '操作', key: 'actions', width: 220, fixed: 'right',
+      title: t('common.operation'), key: 'actions', width: 200, fixed: 'right',
       render: (_, record) => (
         <Space size="small">
-          <Button size="small" icon={<SettingOutlined />} onClick={() => handleManageFields(record)}>
-            字段配置
-          </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEditModel(record)} />
-          <Popconfirm title="确定删除此型号？" onConfirm={() => deleteModelMut.mutate(record.id)}>
+          <Button size="small" icon={<SettingOutlined />} onClick={() => handleManageFields(record)}>{t('models.config')}</Button>
+          <Button size="small" icon={<EditOutlined />} onClick={() => { setEditingModel(record); modelForm.setFieldsValue(record); setModelModalOpen(true) }} />
+          <Popconfirm title={t('models.confirmDeleteModel')} onConfirm={() => deleteModelMut.mutate(record.id)}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -231,170 +305,347 @@ const ModelsPage: React.FC = () => {
     },
   ]
 
-  const fieldColumns: ColumnsType<DeviceModelFieldItem> = [
-    { title: '排序', key: 'sort', width: 100, render: (_, record) => (
-      <Space size="small">
-        <Button size="small" icon={<ArrowUpOutlined />} onClick={() => handleMoveField(record.id, 'up')} />
-        <Button size="small" icon={<ArrowDownOutlined />} onClick={() => handleMoveField(record.id, 'down')} />
-        <HolderOutlined style={{ color: '#999' }} />
-        <Text type="secondary">{record.sort}</Text>
-      </Space>
-    )},
-    { title: '字段标识', dataIndex: 'field_key', key: 'field_key', width: 160 },
-    { title: '字段名称', dataIndex: 'field_name', key: 'field_name', width: 140 },
+  const protocolColumns: ColumnsType<DeviceModelProtocolItem> = [
+    { title: t('models.topicPattern'), dataIndex: 'topic_pattern', key: 'topic_pattern', width: 200, render: (v: string) => <Text code>{v}</Text> },
+    { title: t('models.parseType'), dataIndex: 'parse_type', key: 'parse_type', width: 100, render: (v: string) => <Tag color="blue">{v}</Tag> },
+    { title: t('models.parseConfig'), dataIndex: 'parse_config', key: 'parse_config', width: 200, ellipsis: true, render: (v: any) => v && Object.keys(v).length > 0 ? <Text code style={{ fontSize: 11 }}>{JSON.stringify(v)}</Text> : '-' },
+    { title: t('models.status'), dataIndex: 'is_active', key: 'is_active', width: 80, render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
     {
-      title: '类型', dataIndex: 'field_type', key: 'field_type', width: 80,
-      render: (v: string) => <Tag>{FIELD_TYPE_LABELS[v] || v}</Tag>,
-    },
-    { title: '单位', dataIndex: 'unit', key: 'unit', width: 70, render: (v: string) => v || '-' },
-    {
-      title: '显示', dataIndex: 'is_show', key: 'is_show', width: 60,
-      render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? '是' : '否'}</Tag>,
-    },
-    {
-      title: '控制指令', dataIndex: 'is_control', key: 'is_control', width: 80,
-      render: (v: boolean) => <Tag color={v ? 'blue' : 'default'}>{v ? '是' : '否'}</Tag>,
-    },
-    {
-      title: '解析规则', dataIndex: 'parse_rule', key: 'parse_rule', width: 200, ellipsis: true,
-      render: (v: string) => v ? <Text code style={{ fontSize: 12 }}>{v}</Text> : '-',
-    },
-    {
-      title: '操作', key: 'actions', width: 120, fixed: 'right',
+      title: t('common.operation'), key: 'actions', width: 120,
       render: (_, record) => (
         <Space size="small">
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEditField(record)} />
-          <Popconfirm title="确定删除此字段？" onConfirm={() => handleDeleteField(record.id)}>
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEditProtocol(record)} />
+          <Popconfirm title={t('models.confirmDeleteProtocol')} onConfirm={() => deleteProtocolMut.mutate({ modelId: currentModelId!, protocolId: record.id })}>
             <Button size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       ),
     },
   ]
+
+  const renderFieldGroups = () => {
+    const groupNames = Object.keys(groupedFields)
+    if (groupNames.length === 0) {
+      return <Empty description={t('models.noFields')} />
+    }
+
+    const displayGroups = groupNames.filter(g => !groupedFields[g].some(f => f.is_control))
+    const controlGroups = groupNames.filter(g => groupedFields[g].some(f => f.is_control))
+
+    return (
+      <>
+        {displayGroups.length > 0 && (
+          <>
+            <Text strong style={{ fontSize: 13, color: '#666', marginBottom: 8, display: 'block' }}>
+              <EyeOutlined /> {t('models.displayFields')} ({displayGroups.reduce((s, g) => s + groupedFields[g].filter(f => f.is_show).length, 0)})
+            </Text>
+            <Collapse
+              size="small"
+              defaultActiveKey={displayGroups}
+              items={displayGroups.map(groupName => ({
+                key: groupName,
+                label: (
+                  <Space>
+                    <span>{getGroupConfig(groupName).icon}</span>
+                    <Text strong>{groupName}</Text>
+                    <Badge count={groupedFields[groupName].length} style={{ backgroundColor: getGroupConfig(groupName).color }} />
+                  </Space>
+                ),
+                extra: (
+                  <Button size="small" type="link" icon={<PlusOutlined />}
+                    onClick={(e) => { e.stopPropagation(); handleCreateField(groupName) }}>
+                    {t('models.add')}
+                  </Button>
+                ),
+                children: (
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    dataSource={groupedFields[groupName]}
+                    pagination={false}
+                    columns={[
+                      { title: t('models.fieldId'), dataIndex: 'field_key', key: 'field_key', width: 180, render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text> },
+                      { title: t('models.displayName'), dataIndex: 'field_name', key: 'field_name', width: 120 },
+                      { title: t('models.type'), dataIndex: 'field_type', key: 'field_type', width: 80, render: (v: string) => <Tag>{v}</Tag> },
+                      { title: t('models.unit'), dataIndex: 'unit', key: 'unit', width: 60, render: (v: string) => v || '-' },
+                      { title: t('models.display'), dataIndex: 'is_show', key: 'is_show', width: 60, render: (v: boolean) => v ? <EyeOutlined style={{ color: '#52c41a' }} /> : <EyeInvisibleOutlined style={{ color: '#ccc' }} /> },
+                      { title: t('models.parseRule'), dataIndex: 'parse_rule', key: 'parse_rule', width: 120, ellipsis: true, render: (v: string) => v ? <Text code style={{ fontSize: 11 }}>{v}</Text> : '-' },
+                      {
+                        title: t('common.operation'), key: 'actions', width: 80,
+                        render: (_, record) => (
+                          <Space size="small">
+                            <Button size="small" type="link" icon={<EditOutlined />} onClick={() => handleEditField(record)} />
+                            <Popconfirm title={t('models.confirmDelete')} onConfirm={() => deleteFieldMut.mutate({ modelId: currentModelId!, fieldId: record.id })}>
+                              <Button size="small" type="link" danger icon={<DeleteOutlined />} />
+                            </Popconfirm>
+                          </Space>
+                        ),
+                      },
+                    ]}
+                  />
+                ),
+              }))}
+            />
+            <Divider />
+          </>
+        )}
+
+        {controlGroups.length > 0 && (
+          <>
+            <Text strong style={{ fontSize: 13, color: '#666', marginBottom: 8, display: 'block' }}>
+              <ControlOutlined /> {t('models.controlCommands')} ({controlGroups.reduce((s, g) => s + groupedFields[g].length, 0)})
+            </Text>
+            <Collapse
+              size="small"
+              defaultActiveKey={controlGroups}
+              items={controlGroups.map(groupName => ({
+                key: groupName,
+                label: (
+                  <Space>
+                    <span>{getGroupConfig(groupName).icon}</span>
+                    <Text strong>{groupName}</Text>
+                    <Badge count={groupedFields[groupName].length} style={{ backgroundColor: '#ef4444' }} />
+                  </Space>
+                ),
+                extra: (
+                  <Button size="small" type="link" icon={<PlusOutlined />}
+                    onClick={(e) => { e.stopPropagation(); handleCreateField(groupName) }}>
+                    {t('models.add')}
+                  </Button>
+                ),
+                children: (
+                  <Table
+                    size="small"
+                    rowKey="id"
+                    dataSource={groupedFields[groupName]}
+                    pagination={false}
+                    columns={[
+                      { title: t('models.commandId'), dataIndex: 'field_key', key: 'field_key', width: 180, render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text> },
+                      { title: t('models.displayName'), dataIndex: 'field_name', key: 'field_name', width: 120 },
+                      { title: t('models.paramType'), dataIndex: 'field_type', key: 'field_type', width: 80, render: (v: string) => <Tag>{v}</Tag> },
+                      {
+                        title: t('models.controlParam'), dataIndex: 'control_params', key: 'control_params', width: 250,
+                        render: (v: any) => {
+                          if (!v || Object.keys(v).length === 0) return '-'
+                          const parts = []
+                          if (v.confirm) parts.push(t('models.needConfirmShort'))
+                          if (v.input_type === 'number') parts.push(`${t('models.numericInput')}: ${v.min ?? 0}~${v.max ?? '?'}`)
+                          if (v.input_type === 'select') parts.push(`${t('models.dropdownSelect')}: ${v.options?.length ?? 0}${t('models.items')}`)
+                          return <Text type="secondary" style={{ fontSize: 12 }}>{parts.join(' | ')}</Text>
+                        },
+                      },
+                      {
+                        title: t('common.operation'), key: 'actions', width: 80,
+                        render: (_, record) => (
+                          <Space size="small">
+                            <Button size="small" type="link" icon={<EditOutlined />} onClick={() => handleEditField(record)} />
+                            <Popconfirm title={t('models.confirmDelete')} onConfirm={() => deleteFieldMut.mutate({ modelId: currentModelId!, fieldId: record.id })}>
+                              <Button size="small" type="link" danger icon={<DeleteOutlined />} />
+                            </Popconfirm>
+                          </Space>
+                        ),
+                      },
+                    ]}
+                  />
+                ),
+              }))}
+            />
+          </>
+        )}
+      </>
+    )
+  }
 
   return (
     <>
       {contextHolder}
+
       <Card
-        title="型号管理"
+        bordered={false}
+        style={{ borderRadius: 12 }}
+        title={t('models.title')}
         extra={
           <Space>
-            <Input.Search
-              placeholder="搜索型号编码/名称"
-              allowClear
-              style={{ width: 220 }}
-              onSearch={setKeyword}
-              onChange={(e) => !e.target.value && setKeyword('')}
-            />
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateModel}>
-              新增型号
+            <Input.Search placeholder={t('models.searchModel')} allowClear style={{ width: 220 }}
+              onSearch={setKeyword} onChange={(e) => !e.target.value && setKeyword('')} />
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingModel(null); modelForm.resetFields(); modelForm.setFieldsValue({ category: 'inverter', rated_power_kw: 0 }); setModelModalOpen(true) }}>
+              {t('models.addModel')}
             </Button>
           </Space>
         }
       >
-        <Table
-          rowKey="id"
-          columns={modelColumns}
-          dataSource={filteredModels}
-          loading={isLoading}
-          pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
-          scroll={{ x: 900 }}
-          locale={{ emptyText: <Empty description="暂无型号数据，请点击「新增型号」" /> }}
-        />
+        <Table rowKey="id" columns={modelColumns} dataSource={filteredModels} loading={isLoading} size="small"
+          pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => t('common.total', { total }) }}
+          scroll={{ x: 1000 }}
+          locale={{ emptyText: <Empty description={t('common.noData')} /> }} />
       </Card>
 
-      <Modal
-        title={editingModel ? '编辑型号' : '新增型号'}
-        open={modelModalOpen}
-        onOk={handleModelSubmit}
-        onCancel={() => setModelModalOpen(false)}
-        confirmLoading={createModelMut.isPending || updateModelMut.isPending}
-        width={560}
-      >
-        <Form form={modelForm} layout="vertical">
-          <Form.Item name="model_code" label="型号编码" rules={[{ required: true, message: '请输入型号编码' }]}>
-            <Input placeholder="如: INV-5K-48V" disabled={!!editingModel} />
-          </Form.Item>
-          <Form.Item name="model_name" label="型号名称" rules={[{ required: true, message: '请输入型号名称' }]}>
-            <Input placeholder="如: 5kW离网逆变器" />
-          </Form.Item>
-          <Form.Item name="manufacturer" label="厂商">
-            <Input placeholder="厂商名称" />
-          </Form.Item>
-          <Form.Item name="category" label="类别">
-            <Select options={[
-              { label: '逆变器', value: 'inverter' },
-              { label: '储能', value: 'storage' },
-              { label: '充电桩', value: 'charger' },
-            ]} />
-          </Form.Item>
-          <Form.Item name="rated_power_kw" label="额定功率(kW)">
-            <InputNumber min={0} step={0.1} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} placeholder="型号描述" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
       <Drawer
-        title={`字段配置 - ${currentModelName}`}
+        title={
+          <Space>
+            <SettingOutlined />
+            <span>{t('models.fieldConfig')} - {currentModelName}</span>
+            <Tag>{t('models.fieldCount', { count: fieldList.length })}</Tag>
+          </Space>
+        }
         open={fieldsDrawerOpen}
         onClose={() => setFieldsDrawerOpen(false)}
-        width={960}
+        width={1000}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateField}>
-            新增字段
-          </Button>
+          <Space>
+            <Button icon={<PlusOutlined />} onClick={() => handleCreateField()}>{t('models.addField')}</Button>
+          </Space>
         }
       >
-        <Table
-          rowKey="id"
-          columns={fieldColumns}
-          dataSource={fieldList}
-          pagination={false}
-          scroll={{ x: 900 }}
-          locale={{ emptyText: <Empty description="暂无字段配置" /> }}
+        <Tabs
+          items={[
+            {
+              key: 'fields',
+              label: <span><EyeOutlined /> {t('models.fieldConfig')}</span>,
+              children: renderFieldGroups(),
+            },
+            {
+              key: 'protocols',
+              label: (
+                <Space>
+                  <ApiOutlined />
+                  <span>{t('models.mqttProtocol')}</span>
+                  <Badge count={protocolList.length} size="small" />
+                </Space>
+              ),
+              children: (
+                <>
+                  <div style={{ marginBottom: 12 }}>
+                    <Button type="primary" icon={<PlusOutlined />} size="small" onClick={handleCreateProtocol}>
+                      {t('models.addProtocol')}
+                    </Button>
+                    <Text type="secondary" style={{ marginLeft: 12, fontSize: 12 }}>
+                      {t('models.mqttConfigDesc')}
+                    </Text>
+                  </div>
+                  <Table rowKey="id" columns={protocolColumns} dataSource={protocolList} pagination={false} size="small"
+                    locale={{ emptyText: <Empty description={t('models.noProtocol')} /> }} />
+                </>
+              ),
+            },
+          ]}
         />
       </Drawer>
 
-      <Modal
-        title={editingField ? '编辑字段' : '新增字段'}
-        open={fieldModalOpen}
+      <Modal title={editingModel ? t('models.editModel') : t('models.addModel')} open={modelModalOpen}
+        onOk={() => modelForm.validateFields().then((values) => editingModel ? updateModelMut.mutate({ id: editingModel.id, data: values }) : createModelMut.mutate(values))}
+        onCancel={() => setModelModalOpen(false)} confirmLoading={createModelMut.isPending || updateModelMut.isPending} width={560}>
+        <Form form={modelForm} layout="vertical">
+          <Form.Item name="model_code" label={t('models.modelCode')} rules={[{ required: true, message: t('models.pleaseInputModelCode') }]}><Input placeholder={t('models.mCodePlaceholder')} disabled={!!editingModel} /></Form.Item>
+          <Form.Item name="model_name" label={t('models.modelName')} rules={[{ required: true, message: t('models.pleaseInputModelName') }]}><Input placeholder={t('models.mNamePlaceholder')} /></Form.Item>
+          <Form.Item name="manufacturer" label={t('models.manufacturer')}><Input placeholder={t('models.manufacturerPlaceholder')} /></Form.Item>
+          <Form.Item name="category" label={t('models.category')}>
+            <Select options={CATEGORY_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="rated_power_kw" label={t('models.ratedPower_kW')}><InputNumber min={0} step={0.1} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="description" label={t('models.description')}><Input.TextArea rows={2} /></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal title={editingField ? t('models.editField') : t('models.addFieldTitle')} open={fieldModalOpen}
         onOk={handleFieldSubmit}
-        onCancel={() => setFieldModalOpen(false)}
-        confirmLoading={createFieldMut.isPending || updateFieldMut.isPending}
-        width={560}
-      >
+        onCancel={() => setFieldModalOpen(false)} confirmLoading={createFieldMut.isPending || updateFieldMut.isPending} width={640}>
         <Form form={fieldForm} layout="vertical">
-          <Form.Item name="field_key" label="字段标识" rules={[{ required: true, message: '请输入字段标识' }]}>
-            <Input placeholder="如: ac.power, battery.soc" disabled={!!editingField} />
+          <Form.Item name="field_key" label={t('models.fieldId')} rules={[{ required: true, message: t('models.pleaseInputFieldKey') }]}
+            help={t('models.fieldKeyHelp')}>
+            <Input placeholder={t('models.fieldKeyPlaceholder')} disabled={!!editingField} />
           </Form.Item>
-          <Form.Item name="field_name" label="字段名称" rules={[{ required: true, message: '请输入字段名称' }]}>
-            <Input placeholder="如: 交流功率, 电池SOC" />
+          <Form.Item name="field_name" label={t('models.displayName')} rules={[{ required: true, message: t('models.pleaseInputFieldName') }]}>
+            <Input placeholder={t('models.fieldNamePlaceholder')} />
           </Form.Item>
-          <Form.Item name="field_type" label="字段类型" rules={[{ required: true }]}>
-            <Select options={[
-              { label: '整数 (int)', value: 'int' },
-              { label: '浮点数 (float)', value: 'float' },
-              { label: '字符串 (string)', value: 'string' },
-              { label: '布尔值 (bool)', value: 'bool' },
-            ]} />
+          <Space size="large" style={{ display: 'flex' }}>
+            <Form.Item name="field_type" label={t('models.dataType')} rules={[{ required: true }]} style={{ flex: 1 }}>
+              <Select options={FIELD_TYPE_OPTIONS} />
+            </Form.Item>
+            <Form.Item name="unit" label={t('models.unit')} style={{ flex: 1 }}>
+              <Input placeholder={t('models.unitPlaceholder')} />
+            </Form.Item>
+            <Form.Item name="sort" label={t('models.sort')} style={{ flex: 1 }}>
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="group_name" label={t('models.group')}
+            help={t('models.groupHelp')}>
+            <Select
+              showSearch
+              allowClear
+              placeholder={t('models.selectOrInputGroup')}
+              options={GROUP_CONFIG_KEYS.map(key => ({ label: `${GROUP_ICON_MAP[key] || ''} ${t(key)}`, value: t(key) }))}
+              dropdownRender={(menu) => menu}
+            />
           </Form.Item>
-          <Form.Item name="unit" label="单位">
-            <Input placeholder="如: W, V, %, ℃" />
+          <Space size="large" style={{ display: 'flex' }}>
+            <Form.Item name="is_show" label={t('models.frontendDisplay')} valuePropName="checked">
+              <Switch checkedChildren={t('common.show')} unCheckedChildren={t('common.hide')} />
+            </Form.Item>
+            <Form.Item name="is_control" label={t('models.controlCommand')} valuePropName="checked"
+              help={t('models.controlHelp')}>
+              <Switch checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} onChange={(v) => setIsControl(v)} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="parse_rule" label={t('models.parseRule')} help={t('models.parseRuleHelp')}>
+            <Input placeholder={t('models.parseRulePlaceholder')} />
           </Form.Item>
-          <Form.Item name="sort" label="显示排序">
-            <InputNumber min={0} style={{ width: '100%' }} />
+
+          {isControl && (
+            <>
+              <Divider orientation="left" plain>{t('models.controlParams')}</Divider>
+              <Form.Item name={['control_params', 'label']} label={t('models.buttonLabel')}>
+                <Input placeholder={t('models.buttonLabelPlaceholder')} />
+              </Form.Item>
+              <Form.Item name={['control_params', 'confirm']} label={t('models.needConfirm')} valuePropName="checked">
+                <Switch checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} />
+              </Form.Item>
+              <Form.Item name={['control_params', 'confirm_message']} label={t('models.confirmPrompt')}>
+                <Input placeholder={t('models.confirmPromptPlaceholder')} />
+              </Form.Item>
+              <Form.Item name={['control_params', 'input_type']} label={t('models.inputMethod')}>
+                <Select allowClear placeholder={t('models.noExtraInput')}
+                  options={INPUT_TYPE_OPTIONS} />
+              </Form.Item>
+              <Form.Item noStyle shouldUpdate={(prev, cur) => prev.control_params?.input_type !== cur.control_params?.input_type}>
+                {({ getFieldValue }) => {
+                  const inputType = getFieldValue(['control_params', 'input_type'])
+                  if (inputType === 'number') {
+                    return (
+                      <Space size="large" style={{ display: 'flex' }}>
+                        <Form.Item name={['control_params', 'min']} label={t('models.minValue')} style={{ flex: 1 }}><InputNumber style={{ width: '100%' }} /></Form.Item>
+                        <Form.Item name={['control_params', 'max']} label={t('models.maxValue')} style={{ flex: 1 }}><InputNumber style={{ width: '100%' }} /></Form.Item>
+                        <Form.Item name={['control_params', 'step']} label={t('models.step')} style={{ flex: 1 }}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
+                        <Form.Item name={['control_params', 'unit']} label={t('models.unit')} style={{ flex: 1 }}><Input placeholder="W" /></Form.Item>
+                      </Space>
+                    )
+                  }
+                  return null
+                }}
+              </Form.Item>
+            </>
+          )}
+        </Form>
+      </Modal>
+
+      <Modal title={editingProtocol ? t('models.editProtocol') : t('models.addProtocolTitle')} open={protocolModalOpen}
+        onOk={handleProtocolSubmit}
+        onCancel={() => setProtocolModalOpen(false)} confirmLoading={createProtocolMut.isPending || updateProtocolMut.isPending} width={560}>
+        <Form form={protocolForm} layout="vertical">
+          <Form.Item name="topic_pattern" label={t('models.topicPattern')} rules={[{ required: true, message: t('models.pleaseInputTopicPattern') }]}
+            help={t('models.topicPatternHelp')}>
+            <Input placeholder={t('models.topicPatternPlaceholder')} />
           </Form.Item>
-          <Form.Item name="is_show" label="前端显示" valuePropName="checked">
-            <Switch checkedChildren="显示" unCheckedChildren="隐藏" />
+          <Form.Item name="parse_type" label={t('models.parseType')} rules={[{ required: true }]}>
+            <Select options={PARSE_TYPE_OPTIONS} />
           </Form.Item>
-          <Form.Item name="is_control" label="控制指令" valuePropName="checked" help="开启后该字段可作为设备控制指令下发">
-            <Switch checkedChildren="是" unCheckedChildren="否" />
+          <Form.Item name="parse_config" label={t('models.parseConfig')}
+            help={t('models.parseConfigHelp')}>
+            <Input.TextArea rows={4} placeholder='{"field_mapping": {"raw_key": "standard_key"}}' />
           </Form.Item>
-          <Form.Item name="parse_rule" label="解析规则" help="JSON格式的解析路径，如: $.data.ac.power">
-            <Input placeholder="如: $.data.ac.power" />
+          <Form.Item name="is_active" label={t('common.enabled')} valuePropName="checked">
+            <Switch checkedChildren={t('common.enabled')} unCheckedChildren={t('common.disabled')} />
           </Form.Item>
         </Form>
       </Modal>

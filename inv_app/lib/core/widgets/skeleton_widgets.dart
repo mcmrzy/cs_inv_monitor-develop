@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class ShimmerSkeleton extends StatelessWidget {
   final Widget child;
@@ -458,7 +459,7 @@ class OfflineDataBanner extends StatelessWidget {
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
-              '当前无网络，显示缓存数据',
+              AppLocalizations.of(context)?.noNetworkCached ?? 'No network, showing cached data',
               style: TextStyle(fontSize: 12.sp, color: const Color(0xFF92400E)),
             ),
           ),
@@ -472,7 +473,7 @@ class OfflineDataBanner extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6.r),
                 ),
                 child: Text(
-                  '重试',
+                  AppLocalizations.of(context)?.retry ?? 'Retry',
                   style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: const Color(0xFF92400E)),
                 ),
               ),

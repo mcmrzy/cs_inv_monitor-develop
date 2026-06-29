@@ -46,11 +46,15 @@ class AuthRemoteDataSource {
     return await dio.get('/auth/profile');
   }
 
-  Future<Response> updateProfile(String? nickname, String? avatar) async {
-    return await dio.put('/auth/profile', data: {
+  Future<Response> updateProfile(String? nickname, String? avatar, {String? timezone}) async {
+    final data = <String, dynamic>{
       'nickname': nickname,
       'avatar': avatar,
-    });
+    };
+    if (timezone != null) {
+      data['timezone'] = timezone;
+    }
+    return await dio.put('/auth/profile', data: data);
   }
 
   Future<Response> emailLogin(String email, String password) async {

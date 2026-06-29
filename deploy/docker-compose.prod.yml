@@ -1,0 +1,225 @@
+# ============================================================
+# cs_inv_monitor - Production Docker Compose
+# Excludes EMQX/Kafka/mqtt-kafka-bridge (running externally)
+# ============================================================
+
+name: inv-monitor-prod
+
+services:
+  # ---------- PostgreSQL (TimescaleDB) ----------
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: inv-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: inv_mqtt
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../database/migration_architecture_upgrade_20260529.sql:/docker-entrypoint-initdb.d/02-upgrade.sql:ro
+      - ../database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/03-timescaledb.sql:ro
+    networks:
+      - inv-prod-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inv_mqtt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+        reservations:
+          memory: 512M
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------- Redis ----------
+  redis:
+    image: redis:7-alpine
+    container_name: inv-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    networks:
+      - inv-prod-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------- inv-device-server ----------
+  # Must start before api-server since api-server depends on it
+  inv-device-server:
+    build:
+      context: ../inv_device_server
+      dockerfile: Dockerfile
+    container_name: inv-device-server
+    ports:
+      - "8081:8081"
+    env_file:
+      - .env.prod
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      MQTT_BROKER: ${MQTT_BROKER}
+      MQTT_PORT: ${MQTT_PORT}
+      KAFKA_BROKER: ${KAFKA_BROKER}
+      API_SERVER_URL: http://inv-api-server:8080
+      INTERNAL_KEY: ${INTERNAL_KEY}
+    volumes:
+      - ./configs/device-server.yaml:/app/config.yaml:ro
+      - device-logs:/app/logs
+    networks:
+      - inv-prod-network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------- inv-api-server ----------
+  inv-api-server:
+    build:
+      context: ../inv_api_server
+      dockerfile: Dockerfile
+    container_name: inv-api-server
+    ports:
+      - "18080:8080"
+    env_file:
+      - .env.prod
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      DEVICE_SERVER_URL: http://inv-device-server:8081
+      INTERNAL_KEY: ${INTERNAL_KEY}
+    volumes:
+      - ./configs/api-server.yaml:/app/config.yaml:ro
+    networks:
+      - inv-prod-network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      inv-device-server:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------- api-gateway ----------
+  api-gateway:
+    build:
+      context: ../api-gateway
+      dockerfile: Dockerfile
+    container_name: inv-api-gateway
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.prod
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      API_SERVER_URL: http://inv-api-server:8080
+      DEVICE_SERVER_URL: http://inv-device-server:8081
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+    volumes:
+      - ./configs/gateway.yaml:/app/config.yaml:ro
+    networks:
+      - inv-prod-network
+    restart: unless-stopped
+    depends_on:
+      - inv-api-server
+      - inv-device-server
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ---------- inv-admin-frontend ----------
+  inv-admin-frontend:
+    build:
+      context: ../inv-admin-frontend
+      dockerfile: Dockerfile
+    container_name: inv-admin-frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/http.d/default.conf:ro
+    networks:
+      - inv-prod-network
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+networks:
+  inv-prod-network:
+    driver: bridge
+
+volumes:
+  pg-data:
+  redis-data:
+  device-logs:

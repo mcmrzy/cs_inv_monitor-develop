@@ -16,12 +16,17 @@ import (
 
 const prefix = "gw:role_perms:"
 
+type permCacheEntry struct {
+	perms     []repository.PermissionEntry
+	loadedAt  time.Time
+}
+
 type PermChecker struct {
 	rdb       *redis.Client
 	userRepo  *repository.UserRepository
 	cacheTTL  time.Duration
 	mu        sync.RWMutex
-	memCache  map[string][]repository.PermissionEntry
+	memCache  map[string]permCacheEntry
 }
 
 func NewPermChecker(rdb *redis.Client, userRepo *repository.UserRepository) *PermChecker {
@@ -29,7 +34,7 @@ func NewPermChecker(rdb *redis.Client, userRepo *repository.UserRepository) *Per
 		rdb:       rdb,
 		userRepo:  userRepo,
 		cacheTTL:  5 * time.Minute,
-		memCache:  make(map[string][]repository.PermissionEntry),
+		memCache:  make(map[string]permCacheEntry),
 	}
 }
 
@@ -110,9 +115,9 @@ func (c *PermChecker) loadRolePerms(ctx context.Context, roleID int64) ([]reposi
 	cacheKey := prefix + fmt.Sprintf("%d", roleID)
 
 	c.mu.RLock()
-	if cached, ok := c.memCache[cacheKey]; ok {
+	if entry, ok := c.memCache[cacheKey]; ok && time.Since(entry.loadedAt) < c.cacheTTL {
 		c.mu.RUnlock()
-		return cached, nil
+		return entry.perms, nil
 	}
 	c.mu.RUnlock()
 
@@ -122,7 +127,7 @@ func (c *PermChecker) loadRolePerms(ctx context.Context, roleID int64) ([]reposi
 			var perms []repository.PermissionEntry
 			if err := json.Unmarshal([]byte(cached), &perms); err == nil {
 				c.mu.Lock()
-				c.memCache[cacheKey] = perms
+				c.memCache[cacheKey] = permCacheEntry{perms: perms, loadedAt: time.Now()}
 				c.mu.Unlock()
 				return perms, nil
 			}
@@ -140,7 +145,7 @@ func (c *PermChecker) loadRolePerms(ctx context.Context, roleID int64) ([]reposi
 	}
 
 	c.mu.Lock()
-	c.memCache[cacheKey] = perms
+	c.memCache[cacheKey] = permCacheEntry{perms: perms, loadedAt: time.Now()}
 	c.mu.Unlock()
 
 	return perms, nil

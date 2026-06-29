@@ -84,6 +84,8 @@ func (r *OTARepository) FindExistingTask(ctx context.Context, sn string, firmwar
 		SELECT t.id, t.name, t.firmware_id, t.firmware_version, t.model, t.target_type, COALESCE(t.target_value,''),
 		       t.total_count, t.success_count, t.fail_count, t.status, COALESCE(t.description,''), t.created_by,
 		       COALESCE(t.push_strategy,'all_at_once'), COALESCE(t.push_percentage,100), COALESCE(t.batch_size,10),
+		       t.scheduled_at, COALESCE(t.auto_rollback, FALSE), COALESCE(t.rollback_threshold,30),
+		       COALESCE(t.current_batch,0), COALESCE(t.total_batches,0),
 		       t.created_at, COALESCE(t.started_at, t.created_at), t.completed_at, t.updated_at
 		FROM ota_tasks t
 		WHERE t.firmware_id = $1 AND t.target_value = $2 AND t.status IN ('failed','pending')
@@ -91,7 +93,9 @@ func (r *OTARepository) FindExistingTask(ctx context.Context, sn string, firmwar
 	`, firmwareID, sn).Scan(&t.ID, &t.Name, &t.FirmwareID, &t.FirmwareVersion, &t.Model,
 		&t.TargetType, &t.TargetValue, &t.TotalCount, &t.SuccessCount, &t.FailCount,
 		&t.Status, &t.Description, &t.CreatedBy, &t.PushStrategy, &t.PushPercentage,
-		&t.BatchSize, &t.CreatedAt, &t.StartedAt, &t.CompletedAt, &t.UpdatedAt)
+		&t.BatchSize, &t.ScheduledAt, &t.AutoRollback, &t.RollbackThreshold,
+		&t.CurrentBatch, &t.TotalBatches,
+		&t.CreatedAt, &t.StartedAt, &t.CompletedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -101,12 +105,14 @@ func (r *OTARepository) FindExistingTask(ctx context.Context, sn string, firmwar
 func (r *OTARepository) CreateTask(ctx context.Context, t *model.OtaTask) error {
 	return r.db.QueryRow(ctx, `
 		INSERT INTO ota_tasks (name, firmware_id, firmware_version, model, target_type, target_value, total_count,
-		                       success_count, fail_count, status, description, created_by, push_strategy, push_percentage, batch_size, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW(),NOW())
+		                       success_count, fail_count, status, description, created_by, push_strategy, push_percentage, batch_size,
+		                       scheduled_at, auto_rollback, rollback_threshold, current_batch, total_batches, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NOW(),NOW())
 		RETURNING id, created_at, updated_at
 	`, t.Name, t.FirmwareID, t.FirmwareVersion, t.Model, t.TargetType, t.TargetValue,
 		t.TotalCount, t.SuccessCount, t.FailCount, t.Status, t.Description, t.CreatedBy,
-		t.PushStrategy, t.PushPercentage, t.BatchSize).
+		t.PushStrategy, t.PushPercentage, t.BatchSize,
+		t.ScheduledAt, t.AutoRollback, t.RollbackThreshold, t.CurrentBatch, t.TotalBatches).
 		Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
 }
 
@@ -118,6 +124,8 @@ func (r *OTARepository) ListTasks(ctx context.Context, status string, page, page
 		SELECT id, name, firmware_id, firmware_version, model, target_type, COALESCE(target_value,''),
 		       total_count, success_count, fail_count, status, COALESCE(description,''), created_by,
 		       COALESCE(push_strategy,'all_at_once'), COALESCE(push_percentage,100), COALESCE(batch_size,10),
+		       scheduled_at, COALESCE(auto_rollback, FALSE), COALESCE(rollback_threshold,30),
+		       COALESCE(current_batch,0), COALESCE(total_batches,0),
 		       created_at, COALESCE(started_at, created_at), completed_at, updated_at
 		FROM ota_tasks WHERE ($1='' OR status=$1)
 		ORDER BY created_at DESC LIMIT $2 OFFSET $3
@@ -133,7 +141,9 @@ func (r *OTARepository) ListTasks(ctx context.Context, status string, page, page
 		if err := rows.Scan(&t.ID, &t.Name, &t.FirmwareID, &t.FirmwareVersion, &t.Model,
 			&t.TargetType, &t.TargetValue, &t.TotalCount, &t.SuccessCount, &t.FailCount,
 			&t.Status, &t.Description, &t.CreatedBy, &t.PushStrategy, &t.PushPercentage,
-			&t.BatchSize, &t.CreatedAt, &t.StartedAt, &t.CompletedAt, &t.UpdatedAt); err != nil {
+			&t.BatchSize, &t.ScheduledAt, &t.AutoRollback, &t.RollbackThreshold,
+			&t.CurrentBatch, &t.TotalBatches,
+			&t.CreatedAt, &t.StartedAt, &t.CompletedAt, &t.UpdatedAt); err != nil {
 			continue
 		}
 		tasks = append(tasks, t)
@@ -147,12 +157,16 @@ func (r *OTARepository) GetTask(ctx context.Context, id string) (*model.OtaTask,
 		SELECT id, name, firmware_id, firmware_version, model, target_type, COALESCE(target_value,''),
 		       total_count, success_count, fail_count, status, COALESCE(description,''), created_by,
 		       COALESCE(push_strategy,'all_at_once'), COALESCE(push_percentage,100), COALESCE(batch_size,10),
+		       scheduled_at, COALESCE(auto_rollback, FALSE), COALESCE(rollback_threshold,30),
+		       COALESCE(current_batch,0), COALESCE(total_batches,0),
 		       created_at, COALESCE(started_at, created_at), completed_at, updated_at
 		FROM ota_tasks WHERE id = $1
 	`, id).Scan(&t.ID, &t.Name, &t.FirmwareID, &t.FirmwareVersion, &t.Model,
 		&t.TargetType, &t.TargetValue, &t.TotalCount, &t.SuccessCount, &t.FailCount,
 		&t.Status, &t.Description, &t.CreatedBy, &t.PushStrategy, &t.PushPercentage,
-		&t.BatchSize, &t.CreatedAt, &t.StartedAt, &t.CompletedAt, &t.UpdatedAt)
+		&t.BatchSize, &t.ScheduledAt, &t.AutoRollback, &t.RollbackThreshold,
+		&t.CurrentBatch, &t.TotalBatches,
+		&t.CreatedAt, &t.StartedAt, &t.CompletedAt, &t.UpdatedAt)
 	return &t, err
 }
 
@@ -380,4 +394,103 @@ func (r *OTARepository) GetDeviceOTAHistory(ctx context.Context, sn string, page
 		devices = append(devices, d)
 	}
 	return devices, total, nil
+}
+
+// ========== App版本管理 ==========
+
+// GetLatestAppVersion 获取指定平台的最新App版本
+func (r *OTARepository) GetLatestAppVersion(ctx context.Context, platform string) (*model.AppVersion, error) {
+	var v model.AppVersion
+	err := r.db.QueryRow(ctx, `
+		SELECT id, platform, version_code, version_name, 
+		       COALESCE(download_url,''), COALESCE(file_size,0), COALESCE(file_md5,''),
+		       COALESCE(changelog,''), is_force, COALESCE(min_supported_version,0),
+		       COALESCE(rollout_percentage,100), COALESCE(is_rolled_back,FALSE), rolled_back_at,
+		       status, created_at
+		FROM app_versions
+		WHERE platform = $1 AND status = 1 AND COALESCE(is_rolled_back, FALSE) = FALSE
+		ORDER BY version_code DESC
+		LIMIT 1
+	`, platform).Scan(&v.ID, &v.Platform, &v.VersionCode, &v.VersionName,
+		&v.DownloadURL, &v.FileSize, &v.FileMD5,
+		&v.Changelog, &v.IsForce, &v.MinSupportedVersion,
+		&v.RolloutPercentage, &v.IsRolledBack, &v.RolledBackAt,
+		&v.Status, &v.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// CreateAppVersion 创建App版本
+func (r *OTARepository) CreateAppVersion(ctx context.Context, v *model.AppVersion) error {
+	return r.db.QueryRow(ctx, `
+		INSERT INTO app_versions (platform, version_code, version_name, download_url, file_size, file_md5, changelog, is_force, min_supported_version, rollout_percentage, status, created_by)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,1,$11)
+		RETURNING id, created_at
+	`, v.Platform, v.VersionCode, v.VersionName, v.DownloadURL, v.FileSize, v.FileMD5,
+		v.Changelog, v.IsForce, v.MinSupportedVersion, v.RolloutPercentage, v.CreatedBy).
+		Scan(&v.ID, &v.CreatedAt)
+}
+
+// ListAppVersions 列出所有App版本
+func (r *OTARepository) ListAppVersions(ctx context.Context, platform string) ([]model.AppVersion, error) {
+	query := `
+		SELECT id, platform, version_code, version_name, 
+		       COALESCE(download_url,''), COALESCE(file_size,0), COALESCE(file_md5,''),
+		       COALESCE(changelog,''), is_force, COALESCE(min_supported_version,0),
+		       COALESCE(rollout_percentage,100), COALESCE(is_rolled_back,FALSE), rolled_back_at,
+		       status, created_at
+		FROM app_versions WHERE status = 1
+	`
+	args := []interface{}{}
+	if platform != "" {
+		query += " AND platform = $1"
+		args = append(args, platform)
+	}
+	query += " ORDER BY version_code DESC"
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []model.AppVersion
+	for rows.Next() {
+		var v model.AppVersion
+		if err := rows.Scan(&v.ID, &v.Platform, &v.VersionCode, &v.VersionName,
+			&v.DownloadURL, &v.FileSize, &v.FileMD5,
+			&v.Changelog, &v.IsForce, &v.MinSupportedVersion,
+			&v.RolloutPercentage, &v.IsRolledBack, &v.RolledBackAt,
+			&v.Status, &v.CreatedAt); err != nil {
+			continue
+		}
+		result = append(result, v)
+	}
+	return result, nil
+}
+
+// UpdateAppVersionRollout 更新App版本灰度比例
+func (r *OTARepository) UpdateAppVersionRollout(ctx context.Context, id int64, percentage int) error {
+	_, err := r.db.Exec(ctx, "UPDATE app_versions SET rollout_percentage = $1, updated_at = NOW() WHERE id = $2", percentage, id)
+	return err
+}
+
+// RollbackAppVersion 回滚App版本
+func (r *OTARepository) RollbackAppVersion(ctx context.Context, id int64) error {
+	_, err := r.db.Exec(ctx, "UPDATE app_versions SET is_rolled_back = TRUE, rolled_back_at = NOW(), rollout_percentage = 0, updated_at = NOW() WHERE id = $1", id)
+	return err
+}
+
+// RestoreAppVersion 恢复已回滚的App版本
+func (r *OTARepository) RestoreAppVersion(ctx context.Context, id int64, percentage int) error {
+	_, err := r.db.Exec(ctx, "UPDATE app_versions SET is_rolled_back = FALSE, rolled_back_at = NULL, rollout_percentage = $1, updated_at = NOW() WHERE id = $2", percentage, id)
+	return err
+}
+
+// DeleteAppVersion 删除App版本（软删除）
+func (r *OTARepository) DeleteAppVersion(ctx context.Context, id int64) error {
+	_, err := r.db.Exec(ctx, "UPDATE app_versions SET status = 0 WHERE id = $1", id)
+	return err
 }

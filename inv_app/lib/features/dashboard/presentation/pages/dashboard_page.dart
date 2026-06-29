@@ -9,6 +9,7 @@ import 'package:inv_app/core/widgets/status_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/animated_value.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class DashboardPage extends StatefulWidget {
   final InverterRealtime? data;
@@ -107,6 +108,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildHeader(BuildContext context, InverterRealtime? data) {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -130,7 +132,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 SizedBox(width: 8.w),
                 Text(
-                  widget.isOnline ? (data?.sysStatus?.state ?? '在线') : '离线',
+                  widget.isOnline ? (data?.sysStatus?.state ?? l10n.online) : l10n.offline,
                   style: TextStyle(
                     fontSize: 13.sp,
                     color: AppColor.onSurfaceVariant(context),
@@ -144,7 +146,7 @@ class _DashboardPageState extends State<DashboardPage> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '更新 $_lastUpdate',
+              '${l10n.lastUpdate} $_lastUpdate',
               style: TextStyle(fontSize: 11.sp, color: AppColor.outline(context)),
             ),
             SizedBox(height: 4.h),
@@ -160,6 +162,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Hero section with power gauge and gradient background.
   Widget _buildPowerHero(BuildContext context, InverterRealtime? data) {
+    final l10n = AppLocalizations.of(context)!;
     final activePower = (data?.ac?.power ?? 0) / 1000.0;
 
     return Container(
@@ -168,7 +171,7 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Column(
         children: [
           Text(
-            '交流输出功率',
+            l10n.acOutputPower,
             style: TextStyle(
               fontSize: 13.sp,
               fontWeight: FontWeight.w500,
@@ -191,15 +194,16 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Compact quick stats below the hero card.
   Widget _buildQuickStats(BuildContext context, InverterRealtime? data) {
+    final l10n = AppLocalizations.of(context)!;
     final loadPercent = data?.ac?.loadPercent ?? 0;
     final frequency = data?.ac?.frequency ?? 0;
     final pf = data?.ac?.pf ?? 0;
 
     return Row(
       children: [
-        _quickStatChip(context, '负载率', '${loadPercent.toStringAsFixed(1)}%', Icons.speed, AppColors.success),
+        _quickStatChip(context, l10n.loadRate, '${loadPercent.toStringAsFixed(1)}%', Icons.speed, AppColors.success),
         SizedBox(width: 8.w),
-        _quickStatChip(context, '频率', '${frequency.toStringAsFixed(1)}Hz', Icons.electrical_services, AppColors.warning),
+        _quickStatChip(context, l10n.frequency, '${frequency.toStringAsFixed(1)}Hz', Icons.electrical_services, AppColors.warning),
         SizedBox(width: 8.w),
         _quickStatChip(context, 'PF', pf.toStringAsFixed(2), Icons.tune, AppColors.blue),
       ],
@@ -242,23 +246,24 @@ class _DashboardPageState extends State<DashboardPage> {
     return _buildStaticSections(context, data);
   }
 
-  static const _dynamicSectionDefs = [
-    {'title': '交流输出', 'icon': Icons.power, 'color': AppColors.success, 'prefix': 'ac_'},
-    {'title': '电池 BMS', 'icon': Icons.battery_charging_full, 'color': AppColors.success, 'prefix': 'batt_'},
-    {'title': '光伏 MPPT', 'icon': Icons.wb_sunny, 'color': AppColors.orange, 'prefix': 'pv_'},
-    {'title': '负载', 'icon': Icons.home, 'color': AppColors.blue, 'prefix': 'load_'},
-    {'title': '电表', 'icon': Icons.electric_meter, 'color': AppColors.warning, 'prefix': 'meter_'},
-    {'title': '能量统计', 'icon': Icons.battery_charging_full, 'color': AppColors.primary, 'prefix': 'energy_'},
-    {'title': '系统状态', 'icon': Icons.info_outline, 'color': AppColors.primary, 'prefix': 'sys_'},
+  List<Map<String, dynamic>> _getDynamicSectionDefs(AppLocalizations l10n) => [
+    {'title': l10n.acOutput, 'icon': Icons.power, 'color': AppColors.success, 'prefix': 'ac_'},
+    {'title': l10n.batteryBms, 'icon': Icons.battery_charging_full, 'color': AppColors.success, 'prefix': 'batt_'},
+    {'title': l10n.pvMppt, 'icon': Icons.wb_sunny, 'color': AppColors.orange, 'prefix': 'pv_'},
+    {'title': l10n.loadLabel, 'icon': Icons.home, 'color': AppColors.blue, 'prefix': 'load_'},
+    {'title': l10n.electricMeter, 'icon': Icons.electric_meter, 'color': AppColors.warning, 'prefix': 'meter_'},
+    {'title': l10n.energyStatsLabel, 'icon': Icons.battery_charging_full, 'color': AppColors.primary, 'prefix': 'energy_'},
+    {'title': l10n.systemStatusLabel, 'icon': Icons.info_outline, 'color': AppColors.primary, 'prefix': 'sys_'},
   ];
 
   Widget _buildDynamicSections(BuildContext context, InverterRealtime? data) {
+    final l10n = AppLocalizations.of(context)!;
     final fields = widget.fields!;
     final realtimeMap = _buildRealtimeMapForFields(data);
 
     final widgets = <Widget>[];
 
-    for (final def in _dynamicSectionDefs) {
+    for (final def in _getDynamicSectionDefs(l10n)) {
       final prefix = def['prefix'] as String;
       final sectionFields = fields
           .where((f) => f.isShow && f.fieldKey.startsWith(prefix))
@@ -326,6 +331,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Original hardcoded sections - used as fallback.
   Widget _buildStaticSections(BuildContext context, InverterRealtime? data) {
+    final l10n = AppLocalizations.of(context)!;
     final batt = data?.battery;
     final pv = data?.pv;
     final ac = data?.ac;
@@ -338,55 +344,55 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           // Battery BMS
           if (batt != null) ...[
-            _sectionHeader(context, '电池 BMS', Icons.battery_charging_full, AppColors.success),
+            _sectionHeader(context, l10n.batteryBms, Icons.battery_charging_full, AppColors.success),
             _dataGrid(context, [
               _dataItem('SOC', '${batt.soc.toStringAsFixed(1)}%', AppColors.success),
-              _dataItem('电压', '${batt.voltage.toStringAsFixed(1)}V', AppColors.blue),
-              _dataItem('电流', '${batt.current.toStringAsFixed(2)}A', AppColors.warning),
+              _dataItem(l10n.voltage, '${batt.voltage.toStringAsFixed(1)}V', AppColors.blue),
+              _dataItem(l10n.current, '${batt.current.toStringAsFixed(2)}A', AppColors.warning),
               _dataItem('SOH', '${batt.soh.toStringAsFixed(1)}%', AppColors.teal),
-              _dataItem('充放状态', batt.chargeState, AppColors.teal),
+              _dataItem(l10n.chargeDischargeStatus, batt.chargeState, AppColors.teal),
             ]),
           ],
 
           // PV MPPT
           if (pv != null) ...[
             _divider(context),
-            _sectionHeader(context, '光伏 MPPT', Icons.wb_sunny, AppColors.orange, trailing: pv.mpptState),
+            _sectionHeader(context, l10n.pvMppt, Icons.wb_sunny, AppColors.orange, trailing: pv.mpptState),
             _dataGrid(context, [
-              _dataItem('PV电压', '${pv.pvVoltage.toStringAsFixed(1)}V', AppColors.orange),
-              _dataItem('PV电流', '${pv.pvCurrent.toStringAsFixed(2)}A', AppColors.warning),
-              _dataItem('PV功率', '${(pv.pvPower / 1000).toStringAsFixed(2)}kW', AppColors.success),
+              _dataItem(l10n.pvVoltage, '${pv.pvVoltage.toStringAsFixed(1)}V', AppColors.orange),
+              _dataItem(l10n.pvCurrent, '${pv.pvCurrent.toStringAsFixed(2)}A', AppColors.warning),
+              _dataItem(l10n.pvPower, '${(pv.pvPower / 1000).toStringAsFixed(2)}kW', AppColors.success),
             ]),
           ],
 
           // AC Output
           if (ac != null) ...[
             _divider(context),
-            _sectionHeader(context, '交流输出', Icons.power, AppColors.success),
+            _sectionHeader(context, l10n.acOutput, Icons.power, AppColors.success),
             _dataGrid(context, [
-              _dataItem('电压', '${ac.voltage.toStringAsFixed(1)}V', AppColors.success),
-              _dataItem('电流', '${ac.current.toStringAsFixed(2)}A', AppColors.warning),
-              _dataItem('有功功率', '${ac.power.toStringAsFixed(0)}W', AppColors.success),
-              _dataItem('频率', '${ac.frequency.toStringAsFixed(2)}Hz', AppColors.orange),
-              _dataItem('负载率', '${ac.loadPercent.toStringAsFixed(1)}%', AppColors.blue),
+              _dataItem(l10n.voltage, '${ac.voltage.toStringAsFixed(1)}V', AppColors.success),
+              _dataItem(l10n.current, '${ac.current.toStringAsFixed(2)}A', AppColors.warning),
+              _dataItem(l10n.activePower, '${ac.power.toStringAsFixed(0)}W', AppColors.success),
+              _dataItem(l10n.frequency, '${ac.frequency.toStringAsFixed(2)}Hz', AppColors.orange),
+              _dataItem(l10n.loadRate, '${ac.loadPercent.toStringAsFixed(1)}%', AppColors.blue),
             ]),
           ],
 
           // Energy
           if (energy != null) ...[
             _divider(context),
-            _sectionHeader(context, '能量统计', Icons.battery_charging_full, AppColors.primary),
+            _sectionHeader(context, l10n.energyStatsLabel, Icons.battery_charging_full, AppColors.primary),
             _dataGrid(context, [
-              _dataItem('日PV发电', '${energy.dailyPV.toStringAsFixed(2)}kWh', AppColors.success),
-              _dataItem('总PV发电', '${energy.totalPV.toStringAsFixed(1)}kWh', AppColors.blue),
-              _dataItem('运行时', '${energy.runtimeHours}h', AppColors.teal),
+              _dataItem(l10n.dailyPvGeneration, '${energy.dailyPV.toStringAsFixed(2)}kWh', AppColors.success),
+              _dataItem(l10n.totalPvGeneration, '${energy.totalPV.toStringAsFixed(1)}kWh', AppColors.blue),
+              _dataItem(l10n.runningTime, '${energy.runtimeHours}h', AppColors.teal),
             ]),
           ],
 
           // System Status
           if (sysStatus != null) ...[
             _divider(context),
-            _sectionHeader(context, '系统状态', Icons.info_outline, AppColors.primary),
+            _sectionHeader(context, l10n.systemStatusLabel, Icons.info_outline, AppColors.primary),
             _statusGrid(context, sysStatus),
           ],
 
@@ -489,6 +495,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// Status grid with colored indicators.
   Widget _statusGrid(BuildContext context, SystemStatus sysStatus) {
+    final l10n = AppLocalizations.of(context)!;
     final isRunning = sysStatus.state == 'inverting';
     final hasFault = sysStatus.faultCode != 0;
     final hasAlarm = sysStatus.alarmCode != 0;
@@ -499,21 +506,21 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           Row(
             children: [
-              Expanded(child: _statusCell(context, '工作状态', sysStatus.state, isRunning ? AppColors.success : AppColors.warning)),
+              Expanded(child: _statusCell(context, l10n.workStatus, sysStatus.state, isRunning ? AppColors.success : AppColors.warning)),
               SizedBox(width: 8.w),
-              Expanded(child: _statusCell(context, '故障码', '${sysStatus.faultCode}', hasFault ? AppColors.error : AppColors.success)),
+              Expanded(child: _statusCell(context, l10n.faultCode, '${sysStatus.faultCode}', hasFault ? AppColors.error : AppColors.success)),
               SizedBox(width: 8.w),
-              Expanded(child: _statusCell(context, '告警码', '${sysStatus.alarmCode}', hasAlarm ? AppColors.warning : AppColors.success)),
+              Expanded(child: _statusCell(context, l10n.alarmCodeLabel, '${sysStatus.alarmCode}', hasAlarm ? AppColors.warning : AppColors.success)),
             ],
           ),
           SizedBox(height: 8.h),
           Row(
             children: [
-              Expanded(child: _statusCell(context, '效率', '${sysStatus.efficiency.toStringAsFixed(1)}%', AppColors.blue)),
+              Expanded(child: _statusCell(context, l10n.efficiency, '${sysStatus.efficiency.toStringAsFixed(1)}%', AppColors.blue)),
               SizedBox(width: 8.w),
-              Expanded(child: _statusCell(context, '逆变温度', '${sysStatus.tempInv.toStringAsFixed(1)}°C', AppColors.warning)),
+              Expanded(child: _statusCell(context, l10n.inverterTemp, '${sysStatus.tempInv.toStringAsFixed(1)}°C', AppColors.warning)),
               SizedBox(width: 8.w),
-              Expanded(child: _statusCell(context, 'MOS温度', '${sysStatus.tempMos.toStringAsFixed(1)}°C', AppColors.errorLight)),
+              Expanded(child: _statusCell(context, l10n.mosTemp, '${sysStatus.tempMos.toStringAsFixed(1)}°C', AppColors.errorLight)),
             ],
           ),
         ],

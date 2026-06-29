@@ -37,6 +37,7 @@ abstract class AuthRepository {
   Future<Either<Failure, void>> updateProfile({
     String? nickname,
     String? avatar,
+    String? timezone,
   });
 
   Future<Either<Failure, LoginResponse>> emailLogin({

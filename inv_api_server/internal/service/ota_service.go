@@ -109,13 +109,19 @@ func (s *OTAService) DeleteFirmware(ctx context.Context, id int64) error {
 }
 
 type CreateTaskReq struct {
-	Name        string
-	FirmwareID  int64
-	Model       string
-	TargetType  string
-	TargetValue string
-	DeviceSNs   []string
-	Description string
+	Name            string
+	FirmwareID      int64
+	Model           string
+	TargetType      string
+	TargetValue     string
+	DeviceSNs       []string
+	Description     string
+	PushStrategy    string
+	PushPercentage  int
+	BatchSize       int
+	ScheduledAt     *time.Time
+	AutoRollback    bool
+	RollbackThreshold int
 }
 
 func (s *OTAService) CreateTask(ctx context.Context, req *CreateTaskReq) (*model.OtaTask, error) {
@@ -124,20 +130,47 @@ func (s *OTAService) CreateTask(ctx context.Context, req *CreateTaskReq) (*model
 		return nil, fmt.Errorf("固件不存在")
 	}
 
+	pushStrategy := req.PushStrategy
+	if pushStrategy == "" {
+		pushStrategy = "all_at_once"
+	}
+	pushPercentage := req.PushPercentage
+	if pushPercentage == 0 {
+		pushPercentage = 100
+	}
+	batchSize := req.BatchSize
+	if batchSize == 0 {
+		batchSize = 10
+	}
+	rollbackThreshold := req.RollbackThreshold
+	if rollbackThreshold == 0 {
+		rollbackThreshold = 30
+	}
+
+	// Calculate total batches for batch strategy
+	totalBatches := 0
+	if pushStrategy == "batch" && batchSize > 0 {
+		totalBatches = (len(req.DeviceSNs) + batchSize - 1) / batchSize
+	}
+
 	task := &model.OtaTask{
-		ID: fmt.Sprintf("ota-%d-%d", req.FirmwareID, time.Now().UnixMilli()),
-		Name:        req.Name,
-		FirmwareID:  req.FirmwareID,
-		FirmwareVersion: fw.Version,
-		Model:       req.Model,
-		TargetType:  req.TargetType,
-		TargetValue: req.TargetValue,
-		TotalCount:  len(req.DeviceSNs),
-		Status:      "pending",
-		Description: req.Description,
-		PushStrategy: "all_at_once",
-		PushPercentage: 100,
-		BatchSize:   10,
+		ID:                fmt.Sprintf("ota-%d-%d", req.FirmwareID, time.Now().UnixMilli()),
+		Name:              req.Name,
+		FirmwareID:        req.FirmwareID,
+		FirmwareVersion:   fw.Version,
+		Model:             req.Model,
+		TargetType:        req.TargetType,
+		TargetValue:       req.TargetValue,
+		TotalCount:        len(req.DeviceSNs),
+		Status:            "pending",
+		Description:       req.Description,
+		PushStrategy:      pushStrategy,
+		PushPercentage:    pushPercentage,
+		BatchSize:         batchSize,
+		ScheduledAt:       req.ScheduledAt,
+		AutoRollback:      req.AutoRollback,
+		RollbackThreshold: rollbackThreshold,
+		TotalBatches:      totalBatches,
 	}
 
 	if err := s.repo.CreateTask(ctx, task); err != nil {
@@ -505,4 +538,46 @@ func (s *OTAService) sendOTANotification(ctx context.Context, task *model.OtaTas
 // GetPendingOTAForDevice 获取设备待处理的OTA任务
 func (s *OTAService) GetPendingOTAForDevice(ctx context.Context, sn string) (*model.OtaTask, *model.Firmware, error) {
 	return s.repo.GetPendingOTATaskForDevice(ctx, sn)
+}
+
+// ========== App版本管理 ==========
+
+// CheckAppUpdate 检查App是否有新版本
+func (s *OTAService) CheckAppUpdate(ctx context.Context, platform string, currentVersionCode int) (*model.AppVersion, bool, error) {
+	latest, err := s.repo.GetLatestAppVersion(ctx, platform)
+	if err != nil {
+		return nil, false, err
+	}
+	hasUpdate := latest.VersionCode > currentVersionCode
+	return latest, hasUpdate, nil
+}
+
+// CreateAppVersion 创建App版本
+func (s *OTAService) CreateAppVersion(ctx context.Context, v *model.AppVersion) error {
+	return s.repo.CreateAppVersion(ctx, v)
+}
+
+// ListAppVersions 列出App版本
+func (s *OTAService) ListAppVersions(ctx context.Context, platform string) ([]model.AppVersion, error) {
+	return s.repo.ListAppVersions(ctx, platform)
+}
+
+// DeleteAppVersion 删除App版本
+func (s *OTAService) DeleteAppVersion(ctx context.Context, id int64) error {
+	return s.repo.DeleteAppVersion(ctx, id)
+}
+
+// UpdateAppVersionRollout 更新灰度比例
+func (s *OTAService) UpdateAppVersionRollout(ctx context.Context, id int64, percentage int) error {
+	return s.repo.UpdateAppVersionRollout(ctx, id, percentage)
+}
+
+// RollbackAppVersion 回滚App版本
+func (s *OTAService) RollbackAppVersion(ctx context.Context, id int64) error {
+	return s.repo.RollbackAppVersion(ctx, id)
+}
+
+// RestoreAppVersion 恢复已回滚的App版本
+func (s *OTAService) RestoreAppVersion(ctx context.Context, id int64, percentage int) error {
+	return s.repo.RestoreAppVersion(ctx, id, percentage)
 }

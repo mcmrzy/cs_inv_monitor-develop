@@ -17,7 +17,9 @@ import (
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/jwt"
 	"inv-api-server/pkg/logger"
+	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/telemetry"
+	"inv-api-server/pkg/timezone"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -121,9 +123,10 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache)
 	stationHandler := handler.NewStationHandler(stationService, deviceService)
-	weatherHandler := handler.NewWeatherHandler(stationService)
+	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
+	notificationHandler := handler.NewNotificationHandler(db)
 	wsHandler := handler.NewWSHandler(rdb, jwtService)
 	modelHandler := handler.NewModelHandler(modelService)
 	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb)
@@ -132,40 +135,49 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	alertRuleHandler := handler.NewAlertRuleHandler()
 	workOrderHandler := handler.NewWorkOrderHandler()
 
-	go runHeartbeatCheck(deviceRepo)
+	heartbeatDone := make(chan struct{})
+	defer close(heartbeatDone)
+	go runHeartbeatCheck(deviceRepo, heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
-		DB:               db,
-		RDB:              rdb,
-		JWTInstance:      jwtInstance,
-		JWTService:       jwtService,
-		AuthHandler:      authHandler,
-		StationHandler:   stationHandler,
-		DeviceHandler:    deviceHandler,
-		AlarmHandler:     alarmHandler,
-		WeatherHandler:   weatherHandler,
-		ModelHandler:     modelHandler,
-		PermChecker:      permChecker,
-		AdminHandler:     adminHandler,
-		OTAHandler:       otaHandler,
-		DashboardHandler: dashboardHandler,
-		AlertRuleHandler: alertRuleHandler,
-		WorkOrderHandler: workOrderHandler,
+		DB:                  db,
+		RDB:                 rdb,
+		JWTInstance:         jwtInstance,
+		JWTService:          jwtService,
+		AuthHandler:         authHandler,
+		StationHandler:      stationHandler,
+		DeviceHandler:       deviceHandler,
+		AlarmHandler:        alarmHandler,
+		NotificationHandler: notificationHandler,
+		WeatherHandler:      weatherHandler,
+		ModelHandler:        modelHandler,
+		PermChecker:         permChecker,
+		AdminHandler:        adminHandler,
+		OTAHandler:          otaHandler,
+		DashboardHandler:    dashboardHandler,
+		AlertRuleHandler:    alertRuleHandler,
+		WorkOrderHandler:    workOrderHandler,
 	})
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
 	serve(cfg, router)
 }
 
-func runHeartbeatCheck(deviceRepo *repository.DeviceRepository) {
+func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, done chan struct{}) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 180)
-		if err != nil {
-			logger.Error("Heartbeat check failed", zap.Error(err))
-		} else if len(sns) > 0 {
-			logger.Info("Marked stale devices offline", zap.Int("count", len(sns)))
-			deviceRepo.SyncStationStatus(context.Background())
+	for {
+		select {
+		case <-done:
+			logger.Info("Heartbeat check stopped")
+			return
+		case <-ticker.C:
+			sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 120)
+			if err != nil {
+				logger.Error("Heartbeat check failed", zap.Error(err))
+			} else if len(sns) > 0 {
+				logger.Info("Marked stale devices offline", zap.Int("count", len(sns)))
+				deviceRepo.SyncStationStatus(context.Background())
+			}
 		}
 	}
 }
@@ -211,7 +223,7 @@ func initLogger(cfg *config.LogConfig) error {
 	if cfg != nil && cfg.Level != "" {
 		level = cfg.Level
 	}
-	
+
 	zapCfg := zap.NewProductionConfig()
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
@@ -220,27 +232,15 @@ func initLogger(cfg *config.LogConfig) error {
 	zapCfg.Level = lvl
 	zapCfg.OutputPaths = []string{"stdout"}
 	zapCfg.ErrorOutputPaths = []string{"stderr"}
-	
+
 	return logger.Init(zapCfg)
 }
 
 func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
-	tz := cfg.Timezone
-	if tz == "" {
-		tz = "Asia/Shanghai"
-	}
 	dsn := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s timezone=%s",
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s timezone=UTC",
 		cfg.Database.Host, cfg.Database.Port, cfg.Database.User,
-		cfg.Database.Password, cfg.Database.Database, cfg.Database.SSLMode, tz,
-	)
-
-	logger.Info("Database connecting",
-		zap.String("host", cfg.Database.Host),
-		zap.Int("port", cfg.Database.Port),
-		zap.String("database", cfg.Database.Database),
-		zap.String("user", cfg.Database.User),
-		zap.String("sslmode", cfg.Database.SSLMode),
+		cfg.Database.Password, cfg.Database.Database, cfg.Database.SSLMode,
 	)
 
 	poolConfig, err := pgxpool.ParseConfig(dsn)
@@ -254,27 +254,46 @@ func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
 	poolConfig.MaxConnLifetime = cfg.Database.ConnMaxLifetime
 	poolConfig.MaxConnIdleTime = cfg.Database.ConnMaxIdleTime
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
-	if err != nil {
-		return nil, err
+	const maxRetries = 10
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		logger.Info("Database connecting",
+			zap.String("host", cfg.Database.Host),
+			zap.Int("port", cfg.Database.Port),
+			zap.String("database", cfg.Database.Database),
+			zap.String("user", cfg.Database.User),
+			zap.String("sslmode", cfg.Database.SSLMode),
+			zap.Int("attempt", attempt),
+			zap.Int("maxRetries", maxRetries),
+		)
+
+		pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+		if err != nil {
+			logger.Warn("Database pool creation failed", zap.Error(err), zap.Int("attempt", attempt))
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := pool.Ping(ctx); err != nil {
+			cancel()
+			pool.Close()
+			logger.Warn("Database ping failed", zap.Error(err), zap.Int("attempt", attempt))
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			continue
+		}
+
+		var dbName string
+		err = pool.QueryRow(ctx, "SELECT current_database()").Scan(&dbName)
+		cancel()
+		if err != nil {
+			logger.Warn("Failed to get database name", zap.Error(err))
+		} else {
+			logger.Info("Database connected", zap.String("dbname", dbName))
+		}
+		return pool, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := pool.Ping(ctx); err != nil {
-		return nil, err
-	}
-
-	var dbName string
-	err = pool.QueryRow(ctx, "SELECT current_database()").Scan(&dbName)
-	if err != nil {
-		logger.Warn("Failed to get database name", zap.Error(err))
-	} else {
-		logger.Info("Database connected", zap.String("dbname", dbName))
-	}
-
-	return pool, nil
+	return nil, fmt.Errorf("database connection failed after %d attempts", maxRetries)
 }
 
 func initRedis(cfg *config.Config) (*redis.Client, error) {
@@ -284,34 +303,42 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 		DB:       cfg.Redis.DB,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		return nil, err
+	const maxRetries = 10
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			cancel()
+			logger.Warn("Redis ping failed", zap.Error(err), zap.Int("attempt", attempt))
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			continue
+		}
+		cancel()
+		logger.Info("Redis connected")
+		return rdb, nil
 	}
 
-	logger.Info("Redis connected")
-	return rdb, nil
+	rdb.Close()
+	return nil, fmt.Errorf("redis connection failed after %d attempts", maxRetries)
 }
 
 type RouterDeps struct {
-	DB               *pgxpool.Pool
-	RDB              *redis.Client
-	JWTInstance      *jwt.JWT
-	JWTService       *service.JWTService
-	AuthHandler      *handler.AuthHandler
-	StationHandler   *handler.StationHandler
-	DeviceHandler    *handler.DeviceHandler
-	AlarmHandler     *handler.AlarmHandler
-	WeatherHandler   *handler.WeatherHandler
-	ModelHandler     *handler.ModelHandler
-	PermChecker      *service.PermChecker
-	AdminHandler     *handler.AdminHandler
-	OTAHandler       *handler.OTAHandler
-	DashboardHandler *handler.DashboardHandler
-	AlertRuleHandler *handler.AlertRuleHandler
-	WorkOrderHandler *handler.WorkOrderHandler
+	DB                  *pgxpool.Pool
+	RDB                 *redis.Client
+	JWTInstance         *jwt.JWT
+	JWTService          *service.JWTService
+	AuthHandler         *handler.AuthHandler
+	StationHandler      *handler.StationHandler
+	DeviceHandler       *handler.DeviceHandler
+	AlarmHandler        *handler.AlarmHandler
+	NotificationHandler *handler.NotificationHandler
+	WeatherHandler      *handler.WeatherHandler
+	ModelHandler        *handler.ModelHandler
+	PermChecker         *service.PermChecker
+	AdminHandler        *handler.AdminHandler
+	OTAHandler          *handler.OTAHandler
+	DashboardHandler    *handler.DashboardHandler
+	AlertRuleHandler    *handler.AlertRuleHandler
+	WorkOrderHandler    *handler.WorkOrderHandler
 }
 
 func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
@@ -361,7 +388,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/ota-status", internalHandler.OTAStatus)
 	}
 
- 	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
+	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
 	router.Static("/firmware", "/data/firmware")
 
 	api := router.Group("/api/v1")
@@ -370,10 +397,16 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.POST("/auth/register", deps.AuthHandler.Register)
 		api.POST("/auth/send-code", deps.AuthHandler.SendCode)
 		api.POST("/auth/reset-password", deps.AuthHandler.ResetPassword)
+		api.POST("/auth/email-reset-password", deps.AuthHandler.EmailResetPassword)
 		api.POST("/auth/email-register", deps.AuthHandler.EmailRegister)
 		api.POST("/auth/email-login", deps.AuthHandler.EmailLogin)
 		api.POST("/auth/send-email-code", deps.AuthHandler.SendEmailCode)
 		api.POST("/auth/refresh", deps.AuthHandler.RefreshToken)
+
+		// 公共参考数据 (无需认证)
+		api.GET("/timezones", func(c *gin.Context) {
+			response.Success(c, timezone.GetTimezoneList())
+		})
 
 		auth := api.Group("").Use(middleware.Auth(deps.JWTService))
 		{
@@ -393,63 +426,84 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.GET("/stations/:id/statistics", deps.StationHandler.GetStatistics)
 
 			auth.GET("/devices", deps.DeviceHandler.List)
-		auth.GET("/devices/:sn", deps.DeviceHandler.GetDetail)
-		auth.GET("/devices/:sn/realtime", deps.DeviceHandler.GetRealtimeData)
-		auth.POST("/devices/bind", deps.DeviceHandler.Bind)
-		auth.POST("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
-		auth.DELETE("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
-		auth.DELETE("/devices/:sn", deps.DeviceHandler.DeleteDevice)
-		auth.POST("/devices/:sn/control", deps.DeviceHandler.Control)
-		auth.GET("/devices/:sn/commands", deps.DeviceHandler.GetCommands)
-		auth.GET("/devices/:sn/commands/history", deps.DeviceHandler.GetCommands)
-		auth.GET("/devices/:sn/telemetry", deps.DeviceHandler.GetTelemetry)
-		auth.GET("/devices/:sn/lifecycle", deps.DeviceHandler.GetLifecycleHistory)
-		auth.GET("/devices/:sn/history", deps.DeviceHandler.GetHistory)
-		auth.GET("/devices/:sn/alarms", deps.DeviceHandler.GetAlarms)
-		auth.GET("/devices/:sn/statistics", deps.DeviceHandler.GetStatistics)
-		auth.POST("/devices/add-to-station", deps.DeviceHandler.AddToStation)
-		auth.GET("/devices/scan/local", deps.DeviceHandler.ScanLocal)
-		auth.GET("/devices/unbind-requests", deps.DeviceHandler.GetUnbindRequests)
-		auth.POST("/devices/unbind-requests/:id/approve", deps.DeviceHandler.ApproveUnbind)
-		auth.POST("/devices/unbind-requests/:id/reject", deps.DeviceHandler.RejectUnbind)
+			auth.GET("/devices/:sn", deps.DeviceHandler.GetDetail)
+			auth.GET("/devices/:sn/realtime", deps.DeviceHandler.GetRealtimeData)
+			auth.POST("/devices/bind", deps.DeviceHandler.Bind)
+			auth.POST("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
+			auth.DELETE("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
+			auth.DELETE("/devices/:sn", deps.DeviceHandler.DeleteDevice)
+			auth.POST("/devices/:sn/control", deps.DeviceHandler.Control)
+			auth.GET("/devices/:sn/control-fields", deps.DeviceHandler.GetControlFields)
+			auth.GET("/devices/:sn/commands", deps.DeviceHandler.GetCommands)
+			auth.GET("/devices/:sn/commands/history", deps.DeviceHandler.GetCommands)
+			auth.GET("/devices/:sn/telemetry", deps.DeviceHandler.GetTelemetry)
+			auth.GET("/devices/:sn/lifecycle", deps.DeviceHandler.GetLifecycleHistory)
+			auth.GET("/devices/:sn/history", deps.DeviceHandler.GetHistory)
+			auth.GET("/devices/:sn/alarms", deps.DeviceHandler.GetAlarms)
+			auth.GET("/devices/:sn/statistics", deps.DeviceHandler.GetStatistics)
+			auth.POST("/devices/add-to-station", deps.DeviceHandler.AddToStation)
+			auth.GET("/devices/scan/local", deps.DeviceHandler.ScanLocal)
+			auth.GET("/devices/unbind-requests", deps.DeviceHandler.GetUnbindRequests)
+			auth.POST("/devices/unbind-requests/:id/approve", deps.DeviceHandler.ApproveUnbind)
+			auth.POST("/devices/unbind-requests/:id/reject", deps.DeviceHandler.RejectUnbind)
 
 			auth.GET("/alarms", deps.AlarmHandler.List)
 			auth.GET("/alarms/:id", deps.AlarmHandler.GetByID)
 			auth.PUT("/alarms/:id/handle", deps.AlarmHandler.MarkHandled)
+			auth.POST("/alarms/:id/acknowledge", deps.AlarmHandler.Acknowledge)
+			auth.POST("/alarms/:id/ignore", deps.AlarmHandler.Ignore)
+			auth.DELETE("/alarms/clear", deps.AlarmHandler.ClearAll)
+			auth.DELETE("/alarms/:id", deps.AlarmHandler.Delete)
 			auth.PUT("/alarms/read", deps.AlarmHandler.MarkRead)
 			auth.GET("/alarms/stats", deps.AlarmHandler.GetStats)
 
+			// 通知管理
+			auth.GET("/notifications", deps.NotificationHandler.List)
+			auth.GET("/notifications/stats", deps.NotificationHandler.GetStats)
+			auth.DELETE("/notifications/clear", deps.NotificationHandler.ClearAll)
+			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
+
 			auth.GET("/models", deps.ModelHandler.ListModels)
-		auth.POST("/models", deps.ModelHandler.CreateModel)
-		auth.GET("/models/:id", deps.ModelHandler.GetModel)
-		auth.PUT("/models/:id", deps.ModelHandler.UpdateModel)
-		auth.DELETE("/models/:id", deps.ModelHandler.DeleteModel)
-		auth.GET("/models/:id/fields", deps.ModelHandler.GetModelFields)
-		auth.GET("/models/by-code/:code/fields", deps.ModelHandler.GetFieldsByModelCode)
-		auth.POST("/models/:id/fields", deps.ModelHandler.CreateField)
-		auth.PUT("/models/:id/fields/:fieldId", deps.ModelHandler.UpdateField)
-		auth.DELETE("/models/:id/fields/:fieldId", deps.ModelHandler.DeleteField)
-		auth.PUT("/models/:id/fields/batch", deps.ModelHandler.BatchUpdateFields)
+			auth.POST("/models", deps.ModelHandler.CreateModel)
+			auth.GET("/models/:id", deps.ModelHandler.GetModel)
+			auth.PUT("/models/:id", deps.ModelHandler.UpdateModel)
+			auth.DELETE("/models/:id", deps.ModelHandler.DeleteModel)
+			auth.GET("/models/:id/fields", deps.ModelHandler.GetModelFields)
+			auth.GET("/models/by-code/:code/fields", deps.ModelHandler.GetFieldsByModelCode)
+			auth.POST("/models/:id/fields", deps.ModelHandler.CreateField)
+			auth.PUT("/models/:id/fields/:fieldId", deps.ModelHandler.UpdateField)
+			auth.DELETE("/models/:id/fields/:fieldId", deps.ModelHandler.DeleteField)
+			auth.PUT("/models/:id/fields/batch", deps.ModelHandler.BatchUpdateFields)
 
-		auth.GET("/dashboard/statistics", deps.DashboardHandler.GetStatistics)
-		auth.GET("/dashboard/device-distribution", deps.DashboardHandler.GetDeviceDistribution)
-		auth.GET("/dashboard/trend", deps.DashboardHandler.GetTrend)
-		auth.GET("/dashboard/big-screen", deps.DashboardHandler.GetBigScreen)
-		auth.GET("/dashboard/compare", deps.DashboardHandler.CompareDevices)
+			// Protocol CRUD
+			auth.GET("/models/:id/protocols", deps.ModelHandler.GetProtocols)
+			auth.POST("/models/:id/protocols", deps.ModelHandler.CreateProtocol)
+			auth.PUT("/models/:id/protocols/:protocolId", deps.ModelHandler.UpdateProtocol)
+			auth.DELETE("/models/:id/protocols/:protocolId", deps.ModelHandler.DeleteProtocol)
 
-		auth.GET("/alert-rules", deps.AlertRuleHandler.List)
-		auth.GET("/alert-rules/:id", deps.AlertRuleHandler.GetByID)
-		auth.POST("/alert-rules", deps.AlertRuleHandler.Create)
-		auth.PUT("/alert-rules/:id", deps.AlertRuleHandler.Update)
-		auth.DELETE("/alert-rules/:id", deps.AlertRuleHandler.Delete)
+			auth.GET("/dashboard/statistics", deps.DashboardHandler.GetStatistics)
+			auth.GET("/dashboard/device-distribution", deps.DashboardHandler.GetDeviceDistribution)
+			auth.GET("/dashboard/trend", deps.DashboardHandler.GetTrend)
+			auth.GET("/dashboard/big-screen", deps.DashboardHandler.GetBigScreen)
+			auth.GET("/dashboard/compare", deps.DashboardHandler.CompareDevices)
+			auth.GET("/dashboard/energy-stats", deps.DashboardHandler.GetEnergyStats)
+			auth.GET("/dashboard/energy-flow", deps.DashboardHandler.GetEnergyFlow)
+			auth.GET("/dashboard/station-ranking", deps.DashboardHandler.GetStationRanking)
+			auth.GET("/dashboard/sse", deps.DashboardHandler.SSE)
 
-		auth.GET("/work-orders", deps.WorkOrderHandler.List)
-		auth.GET("/work-orders/:id", deps.WorkOrderHandler.GetByID)
-		auth.GET("/work-orders/stats", deps.WorkOrderHandler.GetStatistics)
-		auth.POST("/work-orders", deps.WorkOrderHandler.Create)
-		auth.PUT("/work-orders/:id", deps.WorkOrderHandler.Update)
-		auth.DELETE("/work-orders/:id", deps.WorkOrderHandler.Delete)
-	}
+			auth.GET("/alert-rules", deps.AlertRuleHandler.List)
+			auth.GET("/alert-rules/:id", deps.AlertRuleHandler.GetByID)
+			auth.POST("/alert-rules", deps.AlertRuleHandler.Create)
+			auth.PUT("/alert-rules/:id", deps.AlertRuleHandler.Update)
+			auth.DELETE("/alert-rules/:id", deps.AlertRuleHandler.Delete)
+
+			auth.GET("/work-orders", deps.WorkOrderHandler.List)
+			auth.GET("/work-orders/:id", deps.WorkOrderHandler.GetByID)
+			auth.GET("/work-orders/stats", deps.WorkOrderHandler.GetStatistics)
+			auth.POST("/work-orders", deps.WorkOrderHandler.Create)
+			auth.PUT("/work-orders/:id", deps.WorkOrderHandler.Update)
+			auth.DELETE("/work-orders/:id", deps.WorkOrderHandler.Delete)
+		}
 
 		requireAdmin := middleware.RequirePermission(deps.PermChecker, "admin", "manage")
 		adminGroup := api.Group("/admin").Use(middleware.Auth(deps.JWTService), requireAdmin)
@@ -480,12 +534,12 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		}
 
 		usersGroup := api.Group("/users").Use(middleware.Auth(deps.JWTService))
-	{
-		usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
-		usersGroup.GET("/:id", deps.AdminHandler.GetUser)
-		usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
-		usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
-	}
+		{
+			usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
+			usersGroup.GET("/:id", deps.AdminHandler.GetUser)
+			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
+			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
+		}
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService))
 		{
@@ -509,6 +563,15 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.GET("/devices/:sn/status", deps.OTAHandler.GetDeviceOTAStatus)
 			otaGroup.GET("/devices/:sn/history", deps.OTAHandler.GetDeviceOTAHistory)
 			otaGroup.GET("/firmwares", deps.OTAHandler.GetAllFirmware)
+
+			// App版本管理
+			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP检查更新（无需额外权限）
+			otaGroup.GET("/app/versions", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListAppVersions)
+			otaGroup.POST("/app/versions", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateAppVersion)
+			otaGroup.DELETE("/app/versions/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteAppVersion)
+			otaGroup.PUT("/app/versions/:id/rollout", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.UpdateAppVersionRollout)
+			otaGroup.POST("/app/versions/:id/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackAppVersion)
+			otaGroup.POST("/app/versions/:id/restore", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RestoreAppVersion)
 		}
 	}
 
@@ -516,15 +579,13 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 }
 
 func setTimezone(tz string) error {
-	if tz == "" {
-		tz = "Asia/Shanghai"
-	}
-	loc, err := time.LoadLocation(tz)
+	// 统一使用 UTC 作为服务端时区, 前端根据站点 timezone 做本地化显示
+	loc, err := time.LoadLocation("UTC")
 	if err != nil {
-		return fmt.Errorf("invalid timezone %q: %w", tz, err)
+		return fmt.Errorf("invalid timezone UTC: %w", err)
 	}
 	time.Local = loc
-	os.Setenv("TZ", tz)
+	os.Setenv("TZ", "UTC")
 	return nil
 }
 

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -30,6 +31,7 @@ class _SplashPageState extends State<SplashPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthAuthenticated) {
@@ -62,7 +64,7 @@ class _SplashPageState extends State<SplashPage> {
               ),
               SizedBox(height: 24.h),
               Text(
-                '光伏逆变器',
+                l10n.pvInverter,
                 style: GoogleFonts.notoSansSc(
                   fontSize: 32.sp,
                   fontWeight: FontWeight.bold,
@@ -71,7 +73,7 @@ class _SplashPageState extends State<SplashPage> {
               ),
               SizedBox(height: 8.h),
               Text(
-                '智能监控平台',
+                l10n.smartMonitorPlatform,
                 style: GoogleFonts.notoSansSc(
                   fontSize: 16.sp,
                   color: Colors.white.withOpacity(0.9),

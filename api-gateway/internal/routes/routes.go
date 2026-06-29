@@ -72,6 +72,7 @@ func registerGatewayEndpoints(r *gin.Engine) {
 
 func registerAPIRoutes(r *gin.Engine, p *proxy.ReverseProxy) {
 	r.Any("/api/v1/auth/*action", p.Handler())
+	r.GET("/api/v1/timezones", p.Handler())
 	r.Any("/api/v1/stations/*action", p.Handler())
 	r.Any("/api/v1/stations", p.Handler())
 	r.Any("/api/v1/devices/*action", p.Handler())
@@ -80,6 +81,8 @@ func registerAPIRoutes(r *gin.Engine, p *proxy.ReverseProxy) {
 	r.Any("/api/v1/alarms", p.Handler())
 	r.Any("/api/v1/alerts/*action", p.RewriteHandler("/api/v1/alarms"))
 	r.Any("/api/v1/alerts", p.RewriteHandler("/api/v1/alarms"))
+	r.Any("/api/v1/notifications/*action", p.Handler())
+	r.Any("/api/v1/notifications", p.Handler())
 	r.Any("/api/v1/alert-rules/*action", p.Handler())
 	r.Any("/api/v1/alert-rules", p.Handler())
 	r.Any("/api/v1/models/*action", p.Handler())

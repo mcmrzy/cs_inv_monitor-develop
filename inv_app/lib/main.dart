@@ -11,7 +11,8 @@ import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
-import 'package:inv_app/features/statistics/presentation/bloc/statistics_bloc.dart';
+import 'package:inv_app/features/notification/presentation/bloc/notification_bloc.dart';
+import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/core/router/app_router.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -67,8 +68,11 @@ class _InvAppState extends State<InvApp> {
         BlocProvider<AlarmBloc>(
           create: (_) => getIt<AlarmBloc>(),
         ),
-        BlocProvider<StatisticsBloc>(
-          create: (_) => getIt<StatisticsBloc>(),
+        BlocProvider<NotificationBloc>(
+          create: (_) => getIt<NotificationBloc>(),
+        ),
+        BlocProvider<DashboardBloc>(
+          create: (_) => getIt<DashboardBloc>(),
         ),
       ],
       child: ScreenUtilInit(

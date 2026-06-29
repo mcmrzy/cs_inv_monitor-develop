@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class EditStationPage extends StatefulWidget {
   final int stationId;
@@ -92,7 +93,7 @@ class _EditStationPageState extends State<EditStationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('编辑电站')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.editStation)),
       body: BlocConsumer<StationBloc, StationState>(
         listener: (context, state) {
           if (state is StationUpdateSuccess) {
@@ -101,7 +102,7 @@ class _EditStationPageState extends State<EditStationPage> {
           } else if (state is StationError) {
             setState(() => _isSubmitting = false);
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.red),
+              SnackBar(content: Text(AppLocalizations.of(context)!.translateError(state.message)), backgroundColor: Colors.red),
             );
           }
         },
@@ -116,27 +117,27 @@ class _EditStationPageState extends State<EditStationPage> {
               key: _formKey,
               child: Column(
                 children: [
-                  _buildField(_nameController, '电站名称'),
+                  _buildField(_nameController, AppLocalizations.of(context)!.stationName),
                   SizedBox(height: 12.h),
-                  _buildField(_provinceController, '省份'),
+                  _buildField(_provinceController, AppLocalizations.of(context)!.provinceLabel),
                   SizedBox(height: 12.h),
-                  _buildField(_cityController, '城市'),
+                  _buildField(_cityController, AppLocalizations.of(context)!.cityLabel),
                   SizedBox(height: 12.h),
-                  _buildField(_districtController, '区/县'),
+                  _buildField(_districtController, AppLocalizations.of(context)!.districtLabel),
                   SizedBox(height: 12.h),
-                  _buildField(_addressController, '详细地址'),
+                  _buildField(_addressController, AppLocalizations.of(context)!.detailAddress),
                   SizedBox(height: 12.h),
-                  _buildField(_capacityController, '装机容量(kW)', inputType: TextInputType.number),
+                  _buildField(_capacityController, AppLocalizations.of(context)!.installedCapacity, inputType: TextInputType.number),
                   SizedBox(height: 12.h),
-                  _buildField(_panelCountController, '组件数量', inputType: TextInputType.number),
+                  _buildField(_panelCountController, AppLocalizations.of(context)!.panelCount, inputType: TextInputType.number),
                   SizedBox(height: 12.h),
-                  _buildField(_peakPriceController, '峰时电价', inputType: TextInputType.number),
+                  _buildField(_peakPriceController, AppLocalizations.of(context)!.peakPrice, inputType: TextInputType.number),
                   SizedBox(height: 12.h),
-                  _buildField(_valleyPriceController, '谷时电价', inputType: TextInputType.number),
+                  _buildField(_valleyPriceController, AppLocalizations.of(context)!.valleyPrice, inputType: TextInputType.number),
                   SizedBox(height: 12.h),
-                  _buildField(_latitudeController, '纬度', inputType: TextInputType.number),
+                  _buildField(_latitudeController, AppLocalizations.of(context)!.latitude, inputType: TextInputType.number),
                   SizedBox(height: 12.h),
-                  _buildField(_longitudeController, '经度', inputType: TextInputType.number),
+                  _buildField(_longitudeController, AppLocalizations.of(context)!.longitude, inputType: TextInputType.number),
                   SizedBox(height: 24.h),
                   SizedBox(
                     width: double.infinity,
@@ -149,7 +150,7 @@ class _EditStationPageState extends State<EditStationPage> {
                               width: 20,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Text('保存修改'),
+                          : Text(AppLocalizations.of(context)!.saveChanges),
                     ),
                   ),
                 ],

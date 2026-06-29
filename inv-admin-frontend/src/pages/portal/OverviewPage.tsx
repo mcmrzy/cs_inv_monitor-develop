@@ -10,6 +10,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { dashboardApi } from '@/services/dashboardApi'
 import { deviceApi } from '@/services/deviceApi'
 import useAuthStore from '@/stores/authStore'
+import useTranslation from '@/hooks/useTranslation'
 
 echarts.use([LineChart, BarChart, TooltipComponent, GridComponent, LegendComponent, CanvasRenderer])
 
@@ -18,6 +19,7 @@ const { Title, Text } = Typography
 const OverviewPage: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<any>({})
   const [devices, setDevices] = useState<any[]>([])
@@ -64,7 +66,7 @@ const OverviewPage: React.FC = () => {
       axisLabel: { fontSize: 10 },
     },
     series: [{
-      name: '日发电量',
+      name: t('portal.dailyGeneration'),
       type: 'line',
       data: trendData.map((i: any) => i.energy ?? 0),
       smooth: true,
@@ -91,17 +93,17 @@ const OverviewPage: React.FC = () => {
   return (
     <div style={{ padding: '0 0 24px' }}>
       <Title level={4} style={{ marginBottom: 24 }}>
-        🏠 我的电站
+        🏠 {t('portal.myStation')}
         <Text type="secondary" style={{ fontSize: 14, marginLeft: 12 }}>
-          {user?.nickname || '用户'}
+          {user?.nickname || t('portal.user')}
         </Text>
       </Title>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card hoverable onClick={() => navigate('/portal/devices')}>
+          <Card hoverable bordered={false} style={{ borderRadius: 12 }} onClick={() => navigate('/portal/devices')}>
             <Statistic
-              title="设备总数"
+              title={t('portal.deviceTotal')}
               value={deviceStats.total ?? devices.length}
               prefix={<DashboardOutlined />}
               valueStyle={{ color: '#1677ff' }}
@@ -109,9 +111,9 @@ const OverviewPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card hoverable onClick={() => navigate('/portal/devices')}>
+          <Card hoverable bordered={false} style={{ borderRadius: 12 }} onClick={() => navigate('/portal/devices')}>
             <Statistic
-              title="在线设备"
+              title={t('portal.deviceOnline')}
               value={deviceStats.online ?? onlineDevices.length}
               suffix={`/ ${deviceStats.total ?? devices.length}`}
               prefix={<CheckCircleOutlined />}
@@ -120,9 +122,9 @@ const OverviewPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card bordered={false} style={{ borderRadius: 12 }}>
             <Statistic
-              title="今日发电量"
+              title={t('portal.todayGeneration')}
               value={todayEnergy.toFixed(1)}
               suffix="kWh"
               prefix={<SunOutlined />}
@@ -131,9 +133,9 @@ const OverviewPage: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card bordered={false} style={{ borderRadius: 12 }}>
             <Statistic
-              title="累计发电量"
+              title={t('portal.totalGeneration')}
               value={totalEnergy.toFixed(0)}
               suffix="kWh"
               prefix={<ThunderboltOutlined />}
@@ -143,15 +145,15 @@ const OverviewPage: React.FC = () => {
         </Col>
       </Row>
 
-      <Card title="近30日发电量趋势" style={{ marginTop: 16 }}>
+      <Card title={t('portal.generationTrend')} bordered={false} style={{ marginTop: 16, borderRadius: 12 }}>
         {trendData.length > 0 ? (
           <ReactEChartsCore option={trendOption} style={{ height: 280 }} echarts={echarts} />
         ) : (
-          <Empty description="暂无数据" />
+          <Empty description={t('portal.noData')} />
         )}
       </Card>
 
-      <Card title="设备概览" style={{ marginTop: 16 }}>
+      <Card title={t('portal.deviceOverview')} bordered={false} style={{ marginTop: 16, borderRadius: 12 }}>
         {devices.length > 0 ? (
           <Row gutter={[12, 12]}>
             {devices.slice(0, 12).map((device: any) => {
@@ -162,12 +164,14 @@ const OverviewPage: React.FC = () => {
                   <Card
                     size="small"
                     hoverable
+                    bordered={false}
+                    style={{ borderRadius: 12 }}
                     onClick={() => navigate(`/portal/devices?sn=${device.sn}`)}
                   >
                     <Space direction="vertical" size={4} style={{ width: '100%' }}>
                       <Space>
                         <Tag color={isOnline ? 'green' : isFault ? 'red' : 'default'}>
-                          {isOnline ? '在线' : isFault ? '故障' : '离线'}
+                          {isOnline ? t('common.online') : isFault ? t('common.fault') : t('common.offline')}
                         </Tag>
                         <Text strong>{device.model || '-'}</Text>
                       </Space>
@@ -176,7 +180,7 @@ const OverviewPage: React.FC = () => {
                       </Text>
                       {device.ratedPower != null && (
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          额定功率: {device.ratedPower}W
+                          {t('portal.ratedPower')}: {device.ratedPower}W
                         </Text>
                       )}
                     </Space>
@@ -186,7 +190,7 @@ const OverviewPage: React.FC = () => {
             })}
           </Row>
         ) : (
-          <Empty description="暂无设备" />
+          <Empty description={t('portal.noDevice')} />
         )}
       </Card>
     </div>

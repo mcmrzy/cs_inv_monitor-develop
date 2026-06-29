@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class EnergyFlowDiagram extends StatefulWidget {
   final double pvPower;
@@ -51,6 +52,7 @@ class _EnergyFlowDiagramState extends State<EnergyFlowDiagram>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
@@ -68,7 +70,7 @@ class _EnergyFlowDiagramState extends State<EnergyFlowDiagram>
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '能量流',
+            l10n.energyFlow,
             style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
           ),
           SizedBox(height: 12.h),
@@ -92,6 +94,10 @@ class _EnergyFlowDiagramState extends State<EnergyFlowDiagram>
                     batteryDischargeColor: Colors.blue,
                     loadColor: Colors.purple,
                     gridColor: Colors.blue,
+                    inverterLabel: l10n.inverterLabel,
+                    batteryLabel: l10n.batteryLabel,
+                    loadLabel: l10n.loadLabel,
+                    gridLabel: l10n.gridLabel,
                   ),
                   size: Size(280.w, 280.h),
                 );
@@ -164,6 +170,10 @@ class _EnergyFlowPainter extends CustomPainter {
   final Color batteryDischargeColor;
   final Color loadColor;
   final Color gridColor;
+  final String inverterLabel;
+  final String batteryLabel;
+  final String loadLabel;
+  final String gridLabel;
 
   static const double _nodeRadius = 28.0;
   static const double _lineInset = 32.0;
@@ -181,6 +191,10 @@ class _EnergyFlowPainter extends CustomPainter {
     required this.batteryDischargeColor,
     required this.loadColor,
     required this.gridColor,
+    required this.inverterLabel,
+    required this.batteryLabel,
+    required this.loadLabel,
+    required this.gridLabel,
   });
 
   // ── Node positions (cross layout) ──
@@ -217,10 +231,10 @@ class _EnergyFlowPainter extends CustomPainter {
 
     // ── Labels ──
     _drawNodeLabel(canvas, pvCenter, 'PV', pvColor, below: true);
-    _drawNodeLabel(canvas, invCenter, '逆变器', AppColors.primary, below: true);
-    _drawNodeLabel(canvas, battCenter, '电池', battColor, below: true);
-    _drawNodeLabel(canvas, loadCenter, '负载', loadColor, below: true);
-    _drawNodeLabel(canvas, gridCenter, '电网', gridColor, below: true);
+    _drawNodeLabel(canvas, invCenter, l10n.inverterOutput, AppColors.primary, below: true);
+    _drawNodeLabel(canvas, battCenter, l10n.battery, battColor, below: true);
+    _drawNodeLabel(canvas, loadCenter, l10n.load, loadColor, below: true);
+    _drawNodeLabel(canvas, gridCenter, l10n.grid, gridColor, below: true);
 
     // ── Flow paths ──
     //

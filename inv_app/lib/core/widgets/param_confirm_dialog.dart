@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class ParamConfirmDialog extends StatelessWidget {
   final Map<String, MapEntry<dynamic, dynamic>> changes;
@@ -37,7 +38,7 @@ class ParamConfirmDialog extends StatelessWidget {
         children: [
           Icon(Icons.edit_note, size: 24.sp, color: theme.colorScheme.primary),
           SizedBox(width: 8.w),
-          const Text('确认参数修改'),
+          Text(AppLocalizations.of(context)?.confirmParamModify ?? 'Confirm Parameter Change'),
         ],
       ),
       content: SingleChildScrollView(
@@ -59,7 +60,7 @@ class ParamConfirmDialog extends StatelessWidget {
                     SizedBox(width: 8.w),
                     Expanded(
                       child: Text(
-                        '包含危险参数，修改可能影响设备安全运行',
+                        AppLocalizations.of(context)?.dangerousParamWarning ?? 'Contains dangerous parameters',
                         style: TextStyle(
                           fontSize: 13.sp,
                           color: AppColors.error,
@@ -88,14 +89,14 @@ class ParamConfirmDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('取消'),
+          child: Text(AppLocalizations.of(context)?.cancel ?? 'Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
           style: hasDangerous
               ? FilledButton.styleFrom(backgroundColor: AppColors.error)
               : null,
-          child: Text(hasDangerous ? '确认修改(危险)' : '确认修改'),
+          child: Text(hasDangerous ? (AppLocalizations.of(context)?.confirmChangeDangerous ?? 'Confirm (Dangerous)') : (AppLocalizations.of(context)?.confirm ?? 'Confirm')),
         ),
       ],
     );

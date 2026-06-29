@@ -18,17 +18,17 @@ class DeviceRepositoryImpl implements DeviceRepository {
     final message = e.message ?? e.toString();
     switch (statusCode) {
       case 401:
-        return UnauthorizedFailure('未授权，请重新登录');
+        return UnauthorizedFailure('Unauthorized');
       case 403:
-        return ForbiddenFailure('无权限访问');
+        return ForbiddenFailure('Access denied');
       case 404:
-        return NotFoundFailure('资源不存在');
+        return NotFoundFailure('Not found');
       case 422:
         return ValidationFailure(message);
       case null:
-        return NetworkFailure('网络连接失败');
+        return NetworkFailure('Network error');
       default:
-        return ServerFailure('服务器错误: $statusCode');
+        return ServerFailure('Server error: $statusCode');
     }
   }
 
@@ -42,9 +42,9 @@ class DeviceRepositoryImpl implements DeviceRepository {
         }
         return Right(<String, dynamic>{});
       }
-      return Left(ServerFailure(data['message'] ?? '请求失败'));
+      return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
-    return Left(ServerFailure('响应格式错误'));
+    return Left(ServerFailure('Response format error'));
   }
 
   Either<Failure, List<dynamic>> _parseList(Response response) {
@@ -57,9 +57,9 @@ class DeviceRepositoryImpl implements DeviceRepository {
         }
         return Right(<dynamic>[]);
       }
-      return Left(ServerFailure(data['message'] ?? '请求失败'));
+      return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
-    return Left(ServerFailure('响应格式错误'));
+    return Left(ServerFailure('Response format error'));
   }
 
   @override
@@ -199,7 +199,7 @@ class DeviceRepositoryImpl implements DeviceRepository {
         if (inner is List) return Right(inner.cast<Map<String, dynamic>>());
         return const Right([]);
       }
-      return Left(ServerFailure('获取字段元数据失败'));
+      return Left(ServerFailure('Failed to get field metadata'));
     } on DioException catch (e) {
       return Left(_mapError(e));
     } catch (e) {

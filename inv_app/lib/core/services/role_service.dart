@@ -22,13 +22,14 @@ class RoleService {
   static const int roleInstaller = 2;
   static const int roleEndUser = 3;
 
-  static List<NavItem> getNavItems(int role) {
-    return const [
-      NavItem(path: '/home', label: '首页', icon: Icons.home_outlined, activeIcon: Icons.home),
-      NavItem(path: '/statistics', label: '统计', icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart),
-      NavItem(path: '/devices', label: '设备', icon: Icons.devices_outlined, activeIcon: Icons.devices),
-      NavItem(path: '/alarms', label: '告警', icon: Icons.notifications_outlined, activeIcon: Icons.notifications),
-      NavItem(path: '/profile', label: '我的', icon: Icons.person_outline, activeIcon: Icons.person),
+  static List<NavItem> getNavItems(int role, {List<String>? labels}) {
+    final l = labels ?? const ['Home', 'Overview', 'Device', 'Alarm', 'Profile'];
+    return [
+      NavItem(path: '/home', label: l[0], icon: Icons.home_outlined, activeIcon: Icons.home),
+      NavItem(path: '/statistics', label: l[1], icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard),
+      NavItem(path: '/devices', label: l[2], icon: Icons.devices_outlined, activeIcon: Icons.devices),
+      NavItem(path: '/alarms', label: l[3], icon: Icons.notifications_outlined, activeIcon: Icons.notifications),
+      NavItem(path: '/profile', label: l[4], icon: Icons.person_outline, activeIcon: Icons.person),
     ];
   }
 
@@ -59,15 +60,15 @@ class RoleService {
   static String getRoleName(int role) {
     switch (role) {
       case roleSuperAdmin:
-        return '超级管理员';
+        return 'Admin';
       case roleAgent:
-        return '代理商';
+        return 'Agent';
       case roleInstaller:
-        return '安装商';
+        return 'Installer';
       case roleEndUser:
-        return '用户';
+        return 'User';
       default:
-        return '用户';
+        return 'User';
     }
   }
 }

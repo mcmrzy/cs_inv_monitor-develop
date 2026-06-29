@@ -259,3 +259,101 @@ func (h *ModelHandler) GetFieldsByModelCode(c *gin.Context) {
 
 	response.Success(c, fields)
 }
+
+// ==================== Protocol CRUD ====================
+
+func (h *ModelHandler) GetProtocols(c *gin.Context) {
+	modelIDStr := c.Param("id")
+	modelID, err := strconv.ParseInt(modelIDStr, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的型号ID")
+		return
+	}
+
+	protocols, err := h.modelService.GetProtocols(c.Request.Context(), modelID)
+	if err != nil {
+		response.InternalError(c, "查询协议配置失败")
+		return
+	}
+
+	response.Success(c, protocols)
+}
+
+func (h *ModelHandler) CreateProtocol(c *gin.Context) {
+	role := middleware.GetRole(c)
+	if role > 1 {
+		response.Forbidden(c, "仅管理员可操作")
+		return
+	}
+
+	modelIDStr := c.Param("id")
+	modelID, err := strconv.ParseInt(modelIDStr, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的型号ID")
+		return
+	}
+
+	var req service.CreateProtocolRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	protocol, err := h.modelService.CreateProtocol(c.Request.Context(), modelID, &req)
+	if err != nil {
+		response.InternalError(c, "创建协议配置失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, protocol)
+}
+
+func (h *ModelHandler) UpdateProtocol(c *gin.Context) {
+	role := middleware.GetRole(c)
+	if role > 1 {
+		response.Forbidden(c, "仅管理员可操作")
+		return
+	}
+
+	protocolIDStr := c.Param("protocolId")
+	protocolID, err := strconv.ParseInt(protocolIDStr, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的协议ID")
+		return
+	}
+
+	var req service.UpdateProtocolRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	if err := h.modelService.UpdateProtocol(c.Request.Context(), protocolID, &req); err != nil {
+		response.InternalError(c, "更新协议配置失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, nil)
+}
+
+func (h *ModelHandler) DeleteProtocol(c *gin.Context) {
+	role := middleware.GetRole(c)
+	if role > 1 {
+		response.Forbidden(c, "仅管理员可操作")
+		return
+	}
+
+	protocolIDStr := c.Param("protocolId")
+	protocolID, err := strconv.ParseInt(protocolIDStr, 10, 64)
+	if err != nil {
+		response.BadRequest(c, "无效的协议ID")
+		return
+	}
+
+	if err := h.modelService.DeleteProtocol(c.Request.Context(), protocolID); err != nil {
+		response.InternalError(c, "删除协议配置失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, nil)
+}

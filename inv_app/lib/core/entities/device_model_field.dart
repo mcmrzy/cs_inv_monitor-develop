@@ -9,6 +9,8 @@ class DeviceModelField {
   final bool isShow;
   final bool isControl;
   final String? parseRule;
+  final String groupName;
+  final Map<String, dynamic>? controlParams;
 
   const DeviceModelField({
     required this.id,
@@ -21,6 +23,8 @@ class DeviceModelField {
     this.isShow = true,
     this.isControl = false,
     this.parseRule,
+    this.groupName = '',
+    this.controlParams,
   });
 
   factory DeviceModelField.fromJson(Map<String, dynamic> json) {
@@ -35,19 +39,23 @@ class DeviceModelField {
       isShow: json['is_show'] as bool? ?? true,
       isControl: json['is_control'] as bool? ?? false,
       parseRule: json['parse_rule'] as String?,
+      groupName: json['group_name'] as String? ?? '',
+      controlParams: json['control_params'] as Map<String, dynamic>?,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'model_id': modelId,
-    'field_key': fieldKey,
-    'field_name': fieldName,
-    'field_type': fieldType,
-    'unit': unit,
-    'sort': sort,
-    'is_show': isShow,
-    'is_control': isControl,
-    'parse_rule': parseRule,
-  };
+        'id': id,
+        'model_id': modelId,
+        'field_key': fieldKey,
+        'field_name': fieldName,
+        'field_type': fieldType,
+        'unit': unit,
+        'sort': sort,
+        'is_show': isShow,
+        'is_control': isControl,
+        'parse_rule': parseRule,
+        'group_name': groupName,
+        'control_params': controlParams,
+      };
 }

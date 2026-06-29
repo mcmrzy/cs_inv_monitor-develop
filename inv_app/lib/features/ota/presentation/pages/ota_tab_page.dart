@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class OtaTabPage extends StatefulWidget {
   const OtaTabPage({super.key});
@@ -24,12 +25,13 @@ class _OtaTabPageState extends State<OtaTabPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: const Text('OTA升级', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(l10n.otaTitle, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -44,7 +46,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
           }
 
           if (_cachedState != null) {
-            return _buildDeviceList(context, _cachedState!);
+            return _buildDeviceList(context, _cachedState!, l10n);
           }
 
           if (state is DeviceError) {
@@ -54,9 +56,9 @@ class _OtaTabPageState extends State<OtaTabPage> {
                 children: [
                   Container(padding: EdgeInsets.all(20.w), decoration: BoxDecoration(color: AppColors.error.withAlpha(20), shape: BoxShape.circle), child: Icon(Icons.error_outline_rounded, size: 40.sp, color: AppColors.error)),
                   SizedBox(height: 12.h),
-                  Text(state.message, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+                  Text(l10n.translateError(state.message), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
                   SizedBox(height: 16.h),
-                  OutlinedButton(onPressed: () => context.read<DeviceBloc>().add(const DeviceListRequested()), child: const Text('重试')),
+                  OutlinedButton(onPressed: () => context.read<DeviceBloc>().add(const DeviceListRequested()), child: Text(l10n.retry)),
                 ],
               ),
             );
@@ -68,7 +70,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
     );
   }
 
-  Widget _buildDeviceList(BuildContext context, DeviceListLoaded state) {
+  Widget _buildDeviceList(BuildContext context, DeviceListLoaded state, AppLocalizations l10n) {
     if (state.devices.isEmpty) {
       return Center(
         child: Column(
@@ -76,7 +78,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
           children: [
             Icon(Icons.system_update_outlined, size: 64.sp, color: AppColors.textHint),
             SizedBox(height: 16.h),
-            Text('暂无可升级设备', style: TextStyle(fontSize: 16.sp, color: AppColors.textSecondary)),
+            Text(l10n.noUpgradableDevices, style: TextStyle(fontSize: 16.sp, color: AppColors.textSecondary)),
           ],
         ),
       );
@@ -86,17 +88,17 @@ class _OtaTabPageState extends State<OtaTabPage> {
       child: ListView.builder(
         padding: EdgeInsets.all(12.w),
         itemCount: state.devices.length,
-        itemBuilder: (context, index) => _buildDeviceCard(context, state.devices[index]),
+        itemBuilder: (context, index) => _buildDeviceCard(context, state.devices[index], l10n),
       ),
     );
   }
 
-  Widget _buildDeviceCard(BuildContext context, dynamic device) {
+  Widget _buildDeviceCard(BuildContext context, dynamic device, AppLocalizations l10n) {
     final sn = device['sn'] ?? device['device_sn'] ?? '';
     final name = device['name'] ?? device['device_name'] ?? sn;
     final model = device['model'] ?? device['device_model'] ?? '';
     final status = device['status'] ?? 0;
-    final firmwareVersion = device['firmware_version'] ?? device['fw_version'] ?? '未知';
+    final firmwareVersion = device['firmware_version'] ?? device['fw_version'] ?? l10n.firmwareUnknown;
     final isOnline = status == 1;
 
     return Container(
@@ -132,9 +134,9 @@ class _OtaTabPageState extends State<OtaTabPage> {
                   children: [
                     Text(name, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                     SizedBox(height: 2.h),
-                    Text('型号: $model', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+                    Text('${l10n.modelLabel}: $model', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
                     SizedBox(height: 2.h),
-                    Text('固件: $firmwareVersion', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+                    Text('${l10n.firmwareLabel}: $firmwareVersion', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
                   ],
                 ),
               ),
@@ -148,7 +150,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
                       borderRadius: BorderRadius.circular(6.r),
                     ),
                     child: Text(
-                      isOnline ? '在线' : '离线',
+                      isOnline ? l10n.online : l10n.offline,
                       style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: isOnline ? AppColors.success : AppColors.textHint),
                     ),
                   ),

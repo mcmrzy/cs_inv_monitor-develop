@@ -6,6 +6,7 @@ import 'package:inv_app/core/services/contact_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class AlarmDetailPage extends StatefulWidget {
   final int alarmId;
@@ -36,16 +37,16 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     return int.tryParse(str) ?? -1;
   }
 
-  String _severityLabel(String severity) {
+  String _severityLabel(String severity, AppLocalizations l10n) {
     switch (severity) {
       case 'critical':
-        return '严重';
+        return l10n.severe;
       case 'warning':
-        return '警告';
+        return l10n.warningLevel;
       case 'info':
-        return '信息';
+        return l10n.infoLevel;
       default:
-        return '未知';
+        return l10n.unknown;
     }
   }
 
@@ -75,8 +76,9 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('故障诊断')),
+      appBar: AppBar(title: Text(l10n.faultDiagnosis)),
       body: BlocBuilder<AlarmBloc, AlarmState>(
         builder: (context, state) {
           if (state is AlarmDetailLoaded) {
@@ -86,7 +88,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(state.message), duration: const Duration(seconds: 2)),
+                  SnackBar(content: Text(l10n.translateError(state.message)), duration: const Duration(seconds: 2)),
                 );
               }
             });
@@ -95,7 +97,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
           if (_cachedState is AlarmDetailLoaded) {
             final alarm = (_cachedState as AlarmDetailLoaded).alarm;
             if (alarm == null) {
-              return const Center(child: Text('告警不存在'));
+              return Center(child: Text(l10n.alarmNotFound));
             }
 
             final faultCode = _parseFaultCode(alarm['fault_code']);
@@ -104,11 +106,11 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             final severityColor = _severityColor(severity);
             final isHandled = alarm['status'] == 1;
 
-            return _buildDetailContent(alarm, faultCode, alarmEntry, severity, severityColor, isHandled);
+            return _buildDetailContent(alarm, faultCode, alarmEntry, severity, severityColor, isHandled, l10n);
           }
 
           if (state is AlarmError) {
-            return Center(child: Text(state.message));
+            return Center(child: Text(l10n.translateError(state.message)));
           }
 
           return _buildSkeletonBody();
@@ -131,7 +133,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildDetailContent(dynamic alarm, int faultCode, dynamic alarmEntry, String severity, Color severityColor, bool isHandled) {
+  Widget _buildDetailContent(dynamic alarm, int faultCode, dynamic alarmEntry, String severity, Color severityColor, bool isHandled, AppLocalizations l10n) {
     return Column(
       children: [
         Expanded(
@@ -140,19 +142,19 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSeverityTag(severity, severityColor),
+                _buildSeverityTag(severity, severityColor, l10n),
                 SizedBox(height: 12.h),
-                _buildAlarmCodeCard(alarm, faultCode, alarmEntry),
+                _buildAlarmCodeCard(alarm, faultCode, alarmEntry, l10n),
                 SizedBox(height: 12.h),
-                _buildDescriptionCard(alarmEntry),
+                _buildDescriptionCard(alarmEntry, l10n),
                 SizedBox(height: 12.h),
-                _buildPossibleCauseCard(alarmEntry),
+                _buildPossibleCauseCard(alarmEntry, l10n),
                 SizedBox(height: 12.h),
-                _buildSuggestionCard(alarmEntry),
+                _buildSuggestionCard(alarmEntry, l10n),
                 SizedBox(height: 12.h),
-                _buildDeviceInfoCard(alarm),
+                _buildDeviceInfoCard(alarm, l10n),
                 SizedBox(height: 12.h),
-                _buildTimeInfoCard(alarm, isHandled),
+                _buildTimeInfoCard(alarm, isHandled, l10n),
                 if (!isHandled) ...[
                   SizedBox(height: 20.h),
                   SizedBox(
@@ -171,7 +173,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                           borderRadius: BorderRadius.circular(10.r),
                         ),
                       ),
-                      child: Text('标记已处理', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
+                      child: Text(l10n.markProcessed, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ],
@@ -180,12 +182,12 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             ),
           ),
         ),
-        _buildContactButtons(alarm),
+        _buildContactButtons(alarm, l10n),
       ],
     );
   }
 
-  Widget _buildSeverityTag(String severity, Color color) {
+  Widget _buildSeverityTag(String severity, Color color, AppLocalizations l10n) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
       decoration: BoxDecoration(
@@ -199,7 +201,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
           Icon(Icons.warning_amber_rounded, size: 18.sp, color: color),
           SizedBox(width: 6.w),
           Text(
-            _severityLabel(severity),
+            _severityLabel(severity, l10n),
             style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: color),
           ),
         ],
@@ -207,7 +209,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildAlarmCodeCard(dynamic alarm, int faultCode, AlarmCodeEntry? entry) {
+  Widget _buildAlarmCodeCard(dynamic alarm, int faultCode, AlarmCodeEntry? entry, AppLocalizations l10n) {
     return Card(
       child: Padding(
         padding: EdgeInsets.all(16.w),
@@ -218,7 +220,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               children: [
                 Icon(Icons.error_outline, size: 20.sp, color: AppColors.primary),
                 SizedBox(width: 8.w),
-                Text('告警码', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.alarmCode, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               ],
             ),
             SizedBox(height: 12.h),
@@ -241,16 +243,9 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        entry?.nameZh ?? alarm['fault_message'] ?? '未知告警',
+                        entry?.getLocalizedName(Localizations.localeOf(context).languageCode) ?? alarm['fault_message'] ?? l10n.unknownAlarm,
                         style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                       ),
-                      if (entry != null) ...[
-                        SizedBox(height: 2.h),
-                        Text(
-                          entry.nameEn,
-                          style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -262,8 +257,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildDescriptionCard(AlarmCodeEntry? entry) {
-    final description = entry?.description ?? '暂无该告警码的详细描述信息。';
+  Widget _buildDescriptionCard(AlarmCodeEntry? entry, AppLocalizations l10n) {
+    final description = entry?.description ?? l10n.noAlarmDescription;
     return Card(
       child: Padding(
         padding: EdgeInsets.all(16.w),
@@ -274,7 +269,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               children: [
                 Icon(Icons.description_outlined, size: 20.sp, color: AppColors.primary),
                 SizedBox(width: 8.w),
-                Text('告警描述', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.alarmDescription, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               ],
             ),
             SizedBox(height: 12.h),
@@ -285,7 +280,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildPossibleCauseCard(AlarmCodeEntry? entry) {
+  Widget _buildPossibleCauseCard(AlarmCodeEntry? entry, AppLocalizations l10n) {
     final causes = (entry?.possibleCause ?? '').split('\n').where((s) => s.trim().isNotEmpty).toList();
     if (causes.isEmpty) return const SizedBox.shrink();
 
@@ -299,7 +294,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               children: [
                 Icon(Icons.search, size: 20.sp, color: AppColors.warning),
                 SizedBox(width: 8.w),
-                Text('可能原因', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.possibleCauses, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               ],
             ),
             SizedBox(height: 12.h),
@@ -325,8 +320,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildSuggestionCard(AlarmCodeEntry? entry) {
-    final suggestions = (entry?.suggestion ?? '请联系安装商或售后服务获取技术支持。').split('\n').where((s) => s.trim().isNotEmpty).toList();
+  Widget _buildSuggestionCard(AlarmCodeEntry? entry, AppLocalizations l10n) {
+    final suggestions = (entry?.suggestion ?? l10n.pleaseContactService).split('\n').where((s) => s.trim().isNotEmpty).toList();
 
     return Card(
       child: Padding(
@@ -338,7 +333,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               children: [
                 Icon(Icons.build_outlined, size: 20.sp, color: AppColors.success),
                 SizedBox(width: 8.w),
-                Text('建议处理措施', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.suggestedActions, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               ],
             ),
             SizedBox(height: 12.h),
@@ -376,7 +371,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildDeviceInfoCard(dynamic alarm) {
+  Widget _buildDeviceInfoCard(dynamic alarm, AppLocalizations l10n) {
     return Card(
       child: Padding(
         padding: EdgeInsets.all(16.w),
@@ -387,20 +382,20 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               children: [
                 Icon(Icons.devices, size: 20.sp, color: AppColors.primary),
                 SizedBox(width: 8.w),
-                Text('设备信息', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.deviceInfo, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
               ],
             ),
             SizedBox(height: 12.h),
-            _buildInfoRow('设备SN', alarm['device_sn'] ?? '-'),
-            _buildInfoRow('设备型号', alarm['device_model'] ?? '-'),
-            _buildInfoRow('固件版本', alarm['firmware_version'] ?? '-'),
+            _buildInfoRow(l10n.deviceSn, alarm['device_sn'] ?? '-'),
+            _buildInfoRow(l10n.deviceModel, alarm['device_model'] ?? '-'),
+            _buildInfoRow(l10n.firmwareVersion, alarm['firmware_version'] ?? '-'),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTimeInfoCard(dynamic alarm, bool isHandled) {
+  Widget _buildTimeInfoCard(dynamic alarm, bool isHandled, AppLocalizations l10n) {
     return Card(
       child: Padding(
         padding: EdgeInsets.all(16.w),
@@ -411,7 +406,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               children: [
                 Icon(Icons.access_time, size: 20.sp, color: AppColors.primary),
                 SizedBox(width: 8.w),
-                Text('时间信息', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.timeInfo, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                 const Spacer(),
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 3.h),
@@ -420,7 +415,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                     borderRadius: BorderRadius.circular(4.r),
                   ),
                   child: Text(
-                    isHandled ? '已处理' : '未处理',
+                    isHandled ? l10n.processed : l10n.unprocessed,
                     style: TextStyle(
                       fontSize: 12.sp,
                       fontWeight: FontWeight.w600,
@@ -431,9 +426,9 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               ],
             ),
             SizedBox(height: 12.h),
-            _buildInfoRow('发生时间', alarm['occurred_at']?.toString() ?? '-'),
-            _buildInfoRow('恢复时间', alarm['recovered_at']?.toString() ?? '-'),
-            _buildInfoRow('处理时间', alarm['handled_at']?.toString() ?? '-'),
+            _buildInfoRow(l10n.occurrenceTime, alarm['occurred_at']?.toString() ?? '-'),
+            _buildInfoRow(l10n.recoveryTime, alarm['recovered_at']?.toString() ?? '-'),
+            _buildInfoRow(l10n.processTime, alarm['handled_at']?.toString() ?? '-'),
           ],
         ),
       ),
@@ -458,7 +453,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildContactButtons(dynamic alarm) {
+  Widget _buildContactButtons(dynamic alarm, AppLocalizations l10n) {
     final installerPhone = alarm?['installer_phone'] as String?;
 
     return Container(
@@ -478,12 +473,12 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                     _contactService.makePhoneCall(installerPhone);
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('暂无安装商联系方式')),
+                      SnackBar(content: Text(l10n.noInstallerContact)),
                     );
                   }
                 },
                 icon: Icon(Icons.phone, size: 18.sp),
-                label: Text('联系安装商', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                label: Text(l10n.contactInstaller, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary),
@@ -501,7 +496,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                   _contactService.makePhoneCall('400-888-8888');
                 },
                 icon: Icon(Icons.headset_mic, size: 18.sp),
-                label: Text('联系客服', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                label: Text(l10n.contactService, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
                   foregroundColor: Colors.white,

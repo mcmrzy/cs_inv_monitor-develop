@@ -98,8 +98,9 @@ class UpdateProfileUseCase {
   Future<Either<Failure, void>> call({
     String? nickname,
     String? avatar,
+    String? timezone,
   }) {
-    return repository.updateProfile(nickname: nickname, avatar: avatar);
+    return repository.updateProfile(nickname: nickname, avatar: avatar, timezone: timezone);
   }
 }
 

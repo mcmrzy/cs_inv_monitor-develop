@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -11,11 +12,24 @@ import (
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
+	"inv-api-server/pkg/timezone"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// setAuthCookies 设置 httpOnly cookie 存储 token（防 XSS）
+func setAuthCookies(c *gin.Context, accessToken, refreshToken string, accessExpire, refreshExpire time.Duration) {
+	c.SetCookie("access_token", accessToken, int(accessExpire.Seconds()), "/", "", false, true)
+	c.SetCookie("refresh_token", refreshToken, int(refreshExpire.Seconds()), "/", "", false, true)
+}
+
+// clearAuthCookies 清除认证 cookie
+func clearAuthCookies(c *gin.Context) {
+	c.SetCookie("access_token", "", -1, "/", "", false, true)
+	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+}
 
 type AuthHandler struct {
 	userService  *service.UserService
@@ -55,6 +69,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// 检查登录失败次数限制（防暴力破解）
+	failKey := fmt.Sprintf("login_fail:%s", req.Account)
+	failCount, _ := h.userService.Cache().Get(c.Request.Context(), failKey).Int()
+	if failCount >= 5 {
+		ttl, _ := h.userService.Cache().TTL(c.Request.Context(), failKey).Result()
+		response.Error(c, 4029, fmt.Sprintf("登录失败次数过多，请 %d 分钟后再试", int(ttl.Minutes())+1))
+		return
+	}
+
 	var user *model.User
 
 	user, _ = h.userService.GetByPhone(c.Request.Context(), req.Account)
@@ -78,9 +101,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		// 记录登录失败次数
+		h.userService.Cache().Incr(c.Request.Context(), failKey)
+		h.userService.Cache().Expire(c.Request.Context(), failKey, 15*time.Minute)
 		response.Error(c, 4003, "invalid password")
 		return
 	}
+
+	// 登录成功，清除失败记录
+	h.userService.Cache().Del(c.Request.Context(), failKey)
 
 	token, refreshToken, err := h.jwtService.GenerateToken(user.ID, user.Phone, user.Role)
 	if err != nil {
@@ -98,6 +127,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		if err := h.userService.UpdateLoginInfo(ctx, user.ID, c.ClientIP()); err != nil {
 			logger.Warn("UpdateLoginInfo failed", zap.Error(err))
 		}
+		// 记录登录审计日志
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "login", "auth", "", "{}", c.ClientIP())
 	}()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -107,6 +138,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// 获取用户权限列表
 	permissions, _ := h.rbacCache.GetUserPermissions(c.Request.Context(), user.ID)
+
+	// 设置 httpOnly cookie（同时返回 body 保持兼容）
+	setAuthCookies(c, token, refreshToken, 2*time.Hour, 7*24*time.Hour)
 
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
@@ -181,6 +215,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		if err := h.userService.UpdateLoginInfo(ctx, user.ID, c.ClientIP()); err != nil {
 			logger.Warn("UpdateLoginInfo failed", zap.Error(err))
 		}
+		// 记录注册审计日志
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "register", "auth", "", "{}", c.ClientIP())
 	}()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -209,10 +245,40 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	if err := h.smsService.SendCode(c.Request.Context(), req.Phone, req.Type); err != nil {
-		response.Error(c, 4006, "send code failed: "+err.Error())
+	// IP 级频率限制：每个 IP 每小时最多发送 10 次验证码
+	ipLimitKey := fmt.Sprintf("send_code_ip:%s", c.ClientIP())
+	ipCount, _ := h.userService.Cache().Get(c.Request.Context(), ipLimitKey).Int()
+	if ipCount >= 10 {
+		response.Error(c, 4029, "发送验证码过于频繁，请稍后再试")
 		return
 	}
+
+	// 检查手机号注册状态
+	existingUser, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
+	if err != nil {
+		response.InternalError(c, "system error")
+		return
+	}
+
+	if req.Type == "reset_password" && existingUser == nil {
+		response.Error(c, 4001, "该手机号未注册")
+		return
+	}
+
+	if req.Type == "register" && existingUser != nil {
+		response.Error(c, 4009, "该手机号已注册")
+		return
+	}
+
+	if err := h.smsService.SendCode(c.Request.Context(), req.Phone, req.Type); err != nil {
+		logger.Warn("send code failed", zap.String("phone", req.Phone), zap.Error(err))
+		response.Error(c, 4006, err.Error())
+		return
+	}
+
+	// 增加 IP 发送计数
+	h.userService.Cache().Incr(c.Request.Context(), ipLimitKey)
+	h.userService.Cache().Expire(c.Request.Context(), ipLimitKey, 1*time.Hour)
 
 	response.SuccessWithMessage(c, "code sent", nil)
 }
@@ -242,7 +308,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	}
 
 	if !h.smsService.VerifyCode(c.Request.Context(), req.Phone, req.Code, "reset_password") {
-		response.Error(c, 4005, "invalid verification code")
+		response.Error(c, 4005, "验证码错误")
 		return
 	}
 
@@ -256,6 +322,72 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		response.InternalError(c, "update password failed")
 		return
 	}
+
+	// 记录重置密码审计日志
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "reset_password", "auth", "", "{}", c.ClientIP())
+	}()
+
+	response.SuccessWithMessage(c, "password reset success", nil)
+}
+
+type EmailResetPasswordRequest struct {
+	Email       string `json:"email" binding:"required"`
+	Code        string `json:"code" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=6,max=20"`
+}
+
+func (h *AuthHandler) EmailResetPassword(c *gin.Context) {
+	var req EmailResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request")
+		return
+	}
+
+	if !emailRegex.MatchString(req.Email) {
+		response.Error(c, 4008, "invalid email format")
+		return
+	}
+
+	user, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
+	if err != nil {
+		response.InternalError(c, "system error")
+		return
+	}
+
+	if user == nil {
+		response.Error(c, 4001, "该邮箱未注册")
+		return
+	}
+
+	if !h.emailService.VerifyCode(c.Request.Context(), req.Email, req.Code, "reset_password") {
+		response.Error(c, 4005, "验证码错误")
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		response.InternalError(c, "password encryption failed")
+		return
+	}
+
+	if err := h.userService.UpdatePassword(c.Request.Context(), user.ID, string(hashedPassword)); err != nil {
+		response.InternalError(c, "update password failed")
+		return
+	}
+
+	// 重置密码后，撤销该用户所有已有的 refresh token，强制重新登录
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := h.jwtService.RevokeAllUserTokens(ctx, user.ID); err != nil {
+			logger.Warn("RevokeAllUserTokens failed after password reset", zap.Error(err))
+		}
+		// 记录重置密码审计日志
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "reset_password", "auth", "", "{}", c.ClientIP())
+	}()
 
 	response.SuccessWithMessage(c, "password reset success", nil)
 }
@@ -320,6 +452,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 type UpdateProfileRequest struct {
 	Nickname string `json:"nickname"`
 	Avatar   string `json:"avatar"`
+	Timezone string `json:"timezone"`
 }
 
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
@@ -331,7 +464,15 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.UpdateProfile(c.Request.Context(), userID, req.Nickname, req.Avatar); err != nil {
+	// 验证时区
+	if req.Timezone != "" {
+		if err := timezone.ValidateTimezone(req.Timezone); err != nil {
+			response.BadRequest(c, "invalid timezone: "+req.Timezone)
+			return
+		}
+	}
+
+	if err := h.userService.UpdateProfile(c.Request.Context(), userID, req.Nickname, req.Avatar, req.Timezone); err != nil {
 		response.InternalError(c, "update profile failed")
 		return
 	}
@@ -342,22 +483,39 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 func (h *AuthHandler) Logout(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
+	// 从 header 或 cookie 获取 token
+	tokenStr := ""
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" {
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) == 2 && parts[0] == "Bearer" {
-			if claims, err := h.jwtService.ParseToken(parts[1]); err == nil {
-				jti := h.jwtService.GetJTI(claims)
-				if jti != "" {
-					h.jwtService.AddToBlacklist(c.Request.Context(), jti, 2*time.Hour)
-				}
+			tokenStr = parts[1]
+		}
+	}
+	if tokenStr == "" {
+		tokenStr, _ = c.Cookie("access_token")
+	}
+
+	if tokenStr != "" {
+		if claims, err := h.jwtService.ParseToken(tokenStr); err == nil {
+			jti := h.jwtService.GetJTI(claims)
+			if jti != "" {
+				h.jwtService.AddToBlacklist(c.Request.Context(), jti, 2*time.Hour)
 			}
 		}
 	}
 
-	if refreshToken := c.GetHeader("X-Refresh-Token"); refreshToken != "" && userID > 0 {
+	// 从 header 或 cookie 获取 refresh token
+	refreshToken := c.GetHeader("X-Refresh-Token")
+	if refreshToken == "" {
+		refreshToken, _ = c.Cookie("refresh_token")
+	}
+	if refreshToken != "" && userID > 0 {
 		h.jwtService.RevokeRefreshToken(c.Request.Context(), userID, refreshToken)
 	}
+
+	// 清除 httpOnly cookie
+	clearAuthCookies(c)
 
 	response.SuccessWithMessage(c, "logout success", nil)
 }
@@ -368,8 +526,13 @@ type RefreshTokenRequest struct {
 
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	var req RefreshTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+	// 优先从 body 读取，其次从 cookie 读取
+	if err := c.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
+		req.RefreshToken, _ = c.Cookie("refresh_token")
+	}
+
+	if req.RefreshToken == "" {
+		response.BadRequest(c, "missing refresh token")
 		return
 	}
 
@@ -379,19 +542,28 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	if !h.jwtService.ValidateRefreshToken(c.Request.Context(), claims.UserID, req.RefreshToken) {
-		response.Unauthorized(c, "refresh token expired or revoked")
-		return
-	}
-
 	newAccessToken, newRefreshToken, err := h.jwtService.GenerateToken(claims.UserID, claims.Phone, claims.Role)
 	if err != nil {
 		response.InternalError(c, "generate token failed")
 		return
 	}
 
-	h.jwtService.RevokeRefreshToken(c.Request.Context(), claims.UserID, req.RefreshToken)
-	h.jwtService.StoreRefreshToken(c.Request.Context(), claims.UserID, newRefreshToken, 7*24*time.Hour)
+	swapped, err := h.jwtService.SwapRefreshToken(c.Request.Context(), claims.UserID, req.RefreshToken, newRefreshToken, 7*24*time.Hour)
+	if err != nil {
+		response.InternalError(c, "token refresh failed")
+		return
+	}
+
+	if !swapped {
+		err = h.jwtService.StoreRefreshToken(c.Request.Context(), claims.UserID, newRefreshToken, 7*24*time.Hour)
+		if err != nil {
+			response.InternalError(c, "token refresh failed")
+			return
+		}
+	}
+
+	// 更新 httpOnly cookie
+	setAuthCookies(c, newAccessToken, newRefreshToken, 2*time.Hour, 7*24*time.Hour)
 
 	response.Success(c, gin.H{
 		"access_token":  newAccessToken,
@@ -414,15 +586,45 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 		return
 	}
 
+	// IP 级频率限制：每个 IP 每小时最多发送 10 次验证码
+	ipLimitKey := fmt.Sprintf("send_code_ip:%s", c.ClientIP())
+	ipCount, _ := h.userService.Cache().Get(c.Request.Context(), ipLimitKey).Int()
+	if ipCount >= 10 {
+		response.Error(c, 4029, "发送验证码过于频繁，请稍后再试")
+		return
+	}
+
 	if !emailRegex.MatchString(req.Email) {
 		response.Error(c, 4008, "invalid email format")
 		return
 	}
 
-	if err := h.emailService.SendCode(c.Request.Context(), req.Email, req.Type); err != nil {
-		response.Error(c, 4010, "send email code failed: "+err.Error())
+	// 检查邮箱注册状态
+	existingUser, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
+	if err != nil {
+		response.InternalError(c, "system error")
 		return
 	}
+
+	if req.Type == "reset_password" && existingUser == nil {
+		response.Error(c, 4011, "该邮箱未注册")
+		return
+	}
+
+	if req.Type == "register" && existingUser != nil {
+		response.Error(c, 4009, "该邮箱已注册")
+		return
+	}
+
+	if err := h.emailService.SendCode(c.Request.Context(), req.Email, req.Type); err != nil {
+		logger.Warn("send email code failed", zap.String("email", req.Email), zap.Error(err))
+		response.Error(c, 4010, err.Error())
+		return
+	}
+
+	// 增加 IP 发送计数
+	h.userService.Cache().Incr(c.Request.Context(), ipLimitKey)
+	h.userService.Cache().Expire(c.Request.Context(), ipLimitKey, 1*time.Hour)
 
 	response.SuccessWithMessage(c, "code sent", nil)
 }
@@ -485,7 +687,8 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 	}
 
 	if err := h.userService.Create(c.Request.Context(), user); err != nil {
-		response.InternalError(c, "create user failed: "+err.Error())
+		logger.Error("create user failed", zap.String("email", req.Email), zap.Error(err))
+		response.InternalError(c, "创建用户失败，请稍后重试")
 		return
 	}
 
@@ -505,6 +708,8 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		if err := h.userService.UpdateLoginInfo(ctx, user.ID, c.ClientIP()); err != nil {
 			logger.Warn("UpdateLoginInfo failed", zap.Error(err))
 		}
+		// 记录登录审计日志
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "login", "auth", "", "{}", c.ClientIP())
 	}()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -533,6 +738,15 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 		return
 	}
 
+	// 检查登录失败次数限制（防暴力破解）
+	failKey := fmt.Sprintf("login_fail:%s", req.Email)
+	failCount, _ := h.userService.Cache().Get(c.Request.Context(), failKey).Int()
+	if failCount >= 5 {
+		ttl, _ := h.userService.Cache().TTL(c.Request.Context(), failKey).Result()
+		response.Error(c, 4029, fmt.Sprintf("登录失败次数过多，请 %d 分钟后再试", int(ttl.Minutes())+1))
+		return
+	}
+
 	user, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
 		response.InternalError(c, "system error")
@@ -550,9 +764,15 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		// 记录登录失败次数
+		h.userService.Cache().Incr(c.Request.Context(), failKey)
+		h.userService.Cache().Expire(c.Request.Context(), failKey, 15*time.Minute)
 		response.Error(c, 4003, "invalid password")
 		return
 	}
+
+	// 登录成功，清除失败记录
+	h.userService.Cache().Del(c.Request.Context(), failKey)
 
 	identifier := user.Phone
 	if identifier == "" {
@@ -574,6 +794,8 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 		if err := h.userService.UpdateLoginInfo(ctx, user.ID, c.ClientIP()); err != nil {
 			logger.Warn("UpdateLoginInfo failed", zap.Error(err))
 		}
+		// 记录登录审计日志
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "login", "auth", "", "{}", c.ClientIP())
 	}()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

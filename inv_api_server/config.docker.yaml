@@ -23,7 +23,7 @@ redis:
   db: 0
 
 jwt:
-  secret: ""
+  secret: "CSKJINVAPPJWTSECRET"
   expire_time: 168h
   issuer: inv-api-server
 

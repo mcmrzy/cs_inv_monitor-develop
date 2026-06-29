@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class NotifySettingsPage extends StatefulWidget {
   const NotifySettingsPage({super.key});
@@ -122,21 +123,23 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('消息通知设置')),
+        appBar: AppBar(title: Text(l10n.messageNotifySettings)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('消息通知设置')),
+      appBar: AppBar(title: Text(l10n.messageNotifySettings)),
       body: ListView(
         children: [
-          _buildSectionTitle('通知类型'),
+          _buildSectionTitle(l10n.notificationType),
           SwitchListTile(
-            title: const Text('推送通知'),
-            subtitle: const Text('开启后可接收消息推送'),
+            title: Text(l10n.pushNotification),
+            subtitle: Text(l10n.pushNotificationDesc),
             value: _pushEnabled,
             onChanged: (value) async {
               setState(() => _pushEnabled = value);
@@ -146,8 +149,8 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           ),
           const Divider(height: 1),
           SwitchListTile(
-            title: const Text('告警推送'),
-            subtitle: const Text('设备告警时推送通知'),
+            title: Text(l10n.alarmPush),
+            subtitle: Text(l10n.alarmPushDesc),
             value: _alertEnabled,
             onChanged: (value) async {
               setState(() => _alertEnabled = value);
@@ -157,8 +160,8 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           ),
           const Divider(height: 1),
           SwitchListTile(
-            title: const Text('离线推送'),
-            subtitle: const Text('设备离线时推送通知'),
+            title: Text(l10n.offlinePush),
+            subtitle: Text(l10n.offlinePushDesc),
             value: _offlineEnabled,
             onChanged: (value) async {
               setState(() => _offlineEnabled = value);
@@ -168,8 +171,8 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           ),
           const Divider(height: 1),
           SwitchListTile(
-            title: const Text('系统消息'),
-            subtitle: const Text('系统公告和活动通知'),
+            title: Text(l10n.systemMessage),
+            subtitle: Text(l10n.systemMessageDesc),
             value: _systemEnabled,
             onChanged: (value) async {
               setState(() => _systemEnabled = value);
@@ -177,9 +180,9 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
             },
             activeColor: AppColors.primary,
           ),
-          _buildSectionTitle('免打扰'),
+          _buildSectionTitle(l10n.dndSection),
           SwitchListTile(
-            title: const Text('免打扰模式'),
+            title: Text(l10n.dndMode),
             subtitle: Text('$_dndStart - $_dndEnd'),
             value: _dndEnabled,
             onChanged: (value) async {
@@ -191,20 +194,20 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           if (_dndEnabled) ...[
             const Divider(height: 1),
             ListTile(
-              title: const Text('开始时间'),
+              title: Text(l10n.startTime),
               subtitle: Text(_dndStart),
               trailing: const Icon(Icons.access_time),
               onTap: () => _showTimePickerDialog('start'),
             ),
             const Divider(height: 1),
             ListTile(
-              title: const Text('结束时间'),
+              title: Text(l10n.endTime),
               subtitle: Text(_dndEnd),
               trailing: const Icon(Icons.access_time),
               onTap: () => _showTimePickerDialog('end'),
             ),
           ],
-          _buildResetButton(),
+          _buildResetButton(l10n),
         ],
       ),
     );
@@ -220,7 +223,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     );
   }
 
-  Widget _buildResetButton() {
+  Widget _buildResetButton(AppLocalizations l10n) {
     return Padding(
       padding: EdgeInsets.all(16.w),
       child: OutlinedButton(
@@ -228,14 +231,14 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           final confirmed = await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
-              title: const Text('重置通知设置'),
-              content: const Text('确定要重置所有通知设置为默认值吗？'),
+              title: Text(l10n.resetNotifySettings),
+              content: Text(l10n.resetNotifyConfirm),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.cancel)),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
                   style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-                  child: const Text('重置'),
+                  child: Text(l10n.reset),
                 ),
               ],
             ),
@@ -260,7 +263,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
                 _dndEnd = '07:00';
               });
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('通知设置已重置'), duration: Duration(seconds: 1)),
+                SnackBar(content: Text(l10n.notifySettingsReset), duration: const Duration(seconds: 1)),
               );
             }
           }
@@ -271,7 +274,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           padding: EdgeInsets.symmetric(vertical: 14.h),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
         ),
-        child: const Text('重置所有通知设置'),
+        child: Text(l10n.resetAllNotify),
       ),
     );
   }

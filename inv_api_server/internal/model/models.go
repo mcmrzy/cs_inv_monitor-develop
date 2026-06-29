@@ -12,6 +12,7 @@ type User struct {
 	Role         int        `json:"role"`
 	RegionID     *int64     `json:"region_id"`
 	Status       int        `json:"status"`
+	Timezone     string     `json:"timezone"`
 	LastLoginAt  *time.Time `json:"last_login_at"`
 	LastLoginIP  string     `json:"last_login_ip"`
 	CreatedAt    time.Time  `json:"created_at"`
@@ -32,6 +33,7 @@ type Station struct {
 	ValleyPrice float64    `json:"valley_price"`
 	Latitude    float64    `json:"latitude"`
 	Longitude   float64    `json:"longitude"`
+	Timezone    string     `json:"timezone"`
 	Status      int        `json:"status"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -54,6 +56,7 @@ type Device struct {
 	CellCount      int        `json:"cell_count"`
 	StationID      *int64     `json:"station_id"`
 	UserID         int64      `json:"user_id"`
+	Timezone       string     `json:"timezone"`
 	Status         int        `json:"status"`
 	CurrentPower   float64    `json:"current_power"`
 	DailyEnergy    float64    `json:"daily_energy"`
@@ -151,16 +154,10 @@ type DeviceShare struct {
 }
 
 type DeviceDayData struct {
-	DeviceSN      string    `json:"device_sn"`
-	DataDate      time.Time `json:"data_date"`
-	EnergyProduce float64   `json:"energy_produce"`
-	EnergyConsume float64   `json:"energy_consume"`
-	EnergySell    float64   `json:"energy_sell"`
-	EnergyBuy     float64   `json:"energy_buy"`
-	MaxPower      float64   `json:"max_power"`
-	AvgSOC        int       `json:"avg_soc"`
-	RunMinutes    int       `json:"run_minutes"`
-	Income        float64   `json:"income"`
+	DeviceSN  string    `json:"device_sn"`
+	DataDate  time.Time `json:"data_date"`
+	Data      string    `json:"data"` // JSONB - 日聚合数据，字段通过 device_model_field 表动态配置
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type StationDayData struct {
@@ -238,16 +235,28 @@ type DeviceModel struct {
 }
 
 type DeviceModelField struct {
-	ID        int64   `json:"id"`
-	ModelID   int32   `json:"model_id"`
-	FieldKey  string  `json:"field_key"`
-	FieldName string  `json:"field_name"`
-	FieldType string  `json:"field_type"`
-	Unit      string  `json:"unit"`
-	Sort      int     `json:"sort"`
-	IsShow    bool    `json:"is_show"`
-	IsControl bool    `json:"is_control"`
-	ParseRule *string `json:"parse_rule"`
+	ID            int64                  `json:"id"`
+	ModelID       int32                  `json:"model_id"`
+	FieldKey      string                 `json:"field_key"`
+	FieldName     string                 `json:"field_name"`
+	FieldType     string                 `json:"field_type"`
+	Unit          string                 `json:"unit"`
+	Sort          int                    `json:"sort"`
+	IsShow        bool                   `json:"is_show"`
+	IsControl     bool                   `json:"is_control"`
+	ParseRule     *string                `json:"parse_rule"`
+	GroupName     string                 `json:"group_name"`
+	ControlParams map[string]interface{} `json:"control_params,omitempty"`
+}
+
+type DeviceModelProtocol struct {
+	ID           int64                  `json:"id"`
+	ModelID      int32                  `json:"model_id"`
+	TopicPattern string                 `json:"topic_pattern"`
+	ParseType    string                 `json:"parse_type"`
+	ParseConfig  map[string]interface{} `json:"parse_config,omitempty"`
+	IsActive     bool                   `json:"is_active"`
+	CreatedAt    string                 `json:"created_at"`
 }
 
 type AuditLog struct {
@@ -306,6 +315,11 @@ type OtaTask struct {
 	PushStrategy    string     `json:"push_strategy"`
 	PushPercentage  int        `json:"push_percentage"`
 	BatchSize       int        `json:"batch_size"`
+	ScheduledAt     *time.Time `json:"scheduled_at"`
+	AutoRollback    bool       `json:"auto_rollback"`
+	RollbackThreshold int      `json:"rollback_threshold"`
+	CurrentBatch    int        `json:"current_batch"`
+	TotalBatches    int        `json:"total_batches"`
 	CreatedAt       time.Time  `json:"created_at"`
 	StartedAt       *time.Time `json:"started_at"`
 	CompletedAt     *time.Time `json:"completed_at"`
@@ -359,4 +373,24 @@ type SystemConfig struct {
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type AppVersion struct {
+	ID                  int64      `json:"id"`
+	Platform            string     `json:"platform"`
+	VersionCode         int        `json:"version_code"`
+	VersionName         string     `json:"version_name"`
+	DownloadURL         string     `json:"download_url"`
+	FileSize            int64      `json:"file_size"`
+	FileMD5             string     `json:"file_md5"`
+	Changelog           string     `json:"changelog"`
+	IsForce             bool       `json:"is_force"`
+	MinSupportedVersion int        `json:"min_supported_version"`
+	RolloutPercentage   int        `json:"rollout_percentage"`
+	IsRolledBack        bool       `json:"is_rolled_back"`
+	RolledBackAt        *time.Time `json:"rolled_back_at"`
+	Status              int        `json:"status"`
+	CreatedBy           int64      `json:"created_by"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }

@@ -11,11 +11,14 @@ import 'package:intl/intl.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/device_list_view.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/energy_statistics_tab.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class StationDetailPage extends StatefulWidget {
   final int stationId;
@@ -33,16 +36,12 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   String _weatherIcon = '\uD83C\uDF1E';
   String? _weatherTemp;
 
-  String _statsPeriod = 'day';
-  DateTime _statsDate = DateTime.now();
-  List<Map<String, dynamic>> _statsData = [];
-  bool _statsLoading = false;
-  double _statsProduce = 0;
-  double _statsConsume = 0;
-  bool _statsInitialized = false;
+  // 统计数据已移至 EnergyStatisticsTab 组件
 
   final Set<String> _mqttSubscribed = {};
   StreamSubscription<InverterRealtime>? _mqttSub;
+  StreamSubscription<dynamic>? _statusSub;
+  StreamSubscription<dynamic>? _alarmSub;
   double _mqttPvW = 0;
   double _mqttLoadW = 0;
   double _mqttBattW = 0;
@@ -62,6 +61,13 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     _mqttSubscribed.clear();
     _mqttActive = false;
     context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+    final mqtt = getIt<MQTTService>();
+    _statusSub = mqtt.statusStream.listen((_) {
+      context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+    });
+    _alarmSub = mqtt.alarmStream.listen((_) {
+      context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+    });
     _fetchWeather();
   }
 
@@ -102,7 +108,9 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     if (lat == null || lng == null || (lat == 0 && lng == 0)) return;
 
     try {
-      final url = 'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lng&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=Asia%2FShanghai';
+      final tz = TimezoneUtils.getTimezoneFromStation(station);
+      final encodedTz = TimezoneUtils.encodeTimezoneForUrl(tz);
+      final url = 'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lng&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=$encodedTz';
       final openMeteoDio = Dio(BaseOptions(
         connectTimeout: const Duration(seconds: 5),
         receiveTimeout: const Duration(seconds: 5),
@@ -140,6 +148,8 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
 
   @override
   void dispose() {
+    _statusSub?.cancel();
+    _alarmSub?.cancel();
     _anim.dispose();
     _mqttSub?.cancel();
     final mqtt = getIt<MQTTService>();
@@ -219,6 +229,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   Widget build(BuildContext context) {
     return BlocBuilder<StationBloc, StationState>(
       builder: (context, state) {
+        final l10n = AppLocalizations.of(context)!;
         if (state is StationDetailLoaded) {
           if (state.stationId == widget.stationId) {
             _cachedState = state;
@@ -235,7 +246,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
 
         final station = ds.station;
         if (station == null) {
-          return const Scaffold(body: Center(child: Text('电站不存在')));
+          return Scaffold(body: Center(child: Text(l10n.stationNotFound)));
         }
 
         return Scaffold(
@@ -331,6 +342,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   }
 
   Widget _topBar(String name, bool online) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
       child: Column(
@@ -364,7 +376,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
                   children: [
                     Container(width: 6, height: 6, decoration: BoxDecoration(color: online ? AppColors.successLight : AppColors.textHint, shape: BoxShape.circle)),
                     SizedBox(width: 4.w),
-                    Text(online ? '在线' : '离线', style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w500, color: online ? AppColors.successLight : AppColors.textHint)),
+                    Text(online ? l10n.online : l10n.offline, style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w500, color: online ? AppColors.successLight : AppColors.textHint)),
                   ],
                 ),
               ),
@@ -384,6 +396,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   }
 
   Widget _flowArea(double pv, double load, double batt, double grid, double soc, List<FlowEdge> flows) {
+    final l10n = AppLocalizations.of(context)!;
     final pvW = pv.toStringAsFixed(0);
     final loadW = load.toStringAsFixed(0);
     final gridW = grid.abs().toStringAsFixed(0);
@@ -400,10 +413,10 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
                 painter: _EnergyFlowPainter(flows: flows, animValue: _anim.value),
               ),
             ),
-            _energyNode('光伏', pvW, Icons.wb_sunny, const Color(0xFFF59E0B), const Alignment(0, -0.75), true, active: pv > 0),
-            _energyNode('负载', loadW, Icons.home_rounded, const Color(0xFF3B82F6), const Alignment(0, 0.75), false, active: load > 0),
-            _energyNodeBatt('储能', battW, soc, Icons.battery_charging_full, AppColors.successLight, const Alignment(-0.75, 0), active: batt.abs() > 0),
-            _energyNode('电网', gridW, Icons.electrical_services, AppColors.textSecondary, const Alignment(0.75, 0), true, active: grid.abs() > 0),
+            _energyNode(l10n.pv, pvW, Icons.wb_sunny, const Color(0xFFF59E0B), const Alignment(0, -0.75), true, active: pv > 0),
+            _energyNode(l10n.load, loadW, Icons.home_rounded, const Color(0xFF3B82F6), const Alignment(0, 0.75), false, active: load > 0),
+            _energyNodeBatt(l10n.battery, battW, soc, Icons.battery_charging_full, AppColors.successLight, const Alignment(-0.75, 0), active: batt.abs() > 0),
+            _energyNode(l10n.grid, gridW, Icons.electrical_services, AppColors.textSecondary, const Alignment(0.75, 0), true, active: grid.abs() > 0),
           ],
         ),
       ),
@@ -600,15 +613,16 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   }
 
   Widget _twoCards(double pvW, double totalPowerW, double todayKwh) {
+    final l10n = AppLocalizations.of(context)!;
     final w = pvW.toStringAsFixed(0);
     final kwh = todayKwh.toStringAsFixed(1);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Row(
         children: [
-          Expanded(child: _crd(Icons.wb_sunny_outlined, w, 'W', '当前功率', const Color(0xFFF59E0B))),
+          Expanded(child: _crd(Icons.wb_sunny_outlined, w, 'W', l10n.currentPower, const Color(0xFFF59E0B))),
           SizedBox(width: 10.w),
-          Expanded(child: _crd(Icons.bolt_rounded, kwh, 'kWh', '今日发电', AppColors.successLight)),
+          Expanded(child: _crd(Icons.bolt_rounded, kwh, 'kWh', l10n.todayGeneration, AppColors.successLight)),
         ],
       ),
     );
@@ -649,6 +663,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   }
 
   Widget _statsRow(double month, double year, double total) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Container(
@@ -656,9 +671,9 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14.r), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))]),
         child: Row(
           children: [
-            _sItem('${month.toStringAsFixed(0)}', 'kWh', '当月发电量'),
-            _sItem('${year.toStringAsFixed(0)}', 'kWh', '当年发电量'),
-            _sItem('${total.toStringAsFixed(0)}', 'kWh', '累计发电量'),
+            _sItem('${month.toStringAsFixed(0)}', 'kWh', l10n.monthlyGeneration),
+            _sItem('${year.toStringAsFixed(0)}', 'kWh', l10n.yearlyGeneration),
+            _sItem('${total.toStringAsFixed(0)}', 'kWh', l10n.totalGenerationAll),
           ],
         ),
       ),
@@ -686,6 +701,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   }
 
   Widget _ecoRow(String coal, String co2, String trees) {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Container(
@@ -694,15 +710,15 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('社会贡献', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            Text(l10n.socialContribution, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
             SizedBox(height: 10.h),
             Row(
               children: [
-                _ecoCard('$coal kg', '节约标准煤', Icons.factory_outlined, const Color(0xFF06B6D4)),
+                _ecoCard('$coal kg', l10n.coalSaved, Icons.factory_outlined, const Color(0xFF06B6D4)),
                 SizedBox(width: 8.w),
-                _ecoCard('$co2 kg', 'CO₂减排量', Icons.cloud_outlined, AppColors.successLight),
+                _ecoCard('$co2 kg', l10n.co2Reduction, Icons.cloud_outlined, AppColors.successLight),
                 SizedBox(width: 8.w),
-                _ecoCard('$trees 棵', '等效植树量', Icons.park_outlined, const Color(0xFF84CC16)),
+                _ecoCard(l10n.str('tree_count', {'count': trees}), l10n.treeEquivalent, Icons.park_outlined, const Color(0xFF84CC16)),
               ],
             ),
           ],
@@ -735,41 +751,35 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
 
   Widget _buildStatisticsBody(dynamic station) {
     final name = station['station_name'] ?? station['name'] ?? '';
-
-    if (!_statsInitialized) {
-      _statsInitialized = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _fetchStatistics());
-    }
-
-    return Stack(
+    return Column(
       children: [
-        Positioned.fill(
-          child: Container(color: const Color(0xFFF5F7FA)),
-        ),
-        Column(
-          children: [
-            SizedBox(height: MediaQuery.of(context).padding.top + 6.h),
-            _statsTopBar(name),
-            SizedBox(height: 0.h),
-            Expanded(child: _buildStatsContent()),
-          ],
+        SizedBox(height: MediaQuery.of(context).padding.top + 6.h),
+        _buildSimpleTopBar(name),
+        SizedBox(height: 8.h),
+        Expanded(
+          child: EnergyStatisticsTab(stationId: widget.stationId),
         ),
       ],
     );
   }
 
-  Widget _statsTopBar(String name) {
+  Widget _buildSimpleTopBar(String name) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => context.pop(),
-            child: const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => context.pop(),
+              borderRadius: BorderRadius.circular(8.r),
+              child: Padding(
+                padding: EdgeInsets.all(8.w),
+                child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+              ),
             ),
           ),
+          SizedBox(width: 4.w),
           Expanded(
             child: Text(name, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
@@ -778,631 +788,17 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     );
   }
 
-  Widget _buildStatsContent() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16.w),
-      child: Container(
-        padding: EdgeInsets.all(16.w),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14.r),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
-        child: Column(
-          children: [
-            _buildPeriodSelector(),
-            SizedBox(height: 12.h),
-            _buildDateNavigator(),
-            SizedBox(height: 14.h),
-            _buildEnergyCard(),
-            SizedBox(height: 14.h),
-            _buildChart(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPeriodSelector() {
-    return Container(
-      padding: EdgeInsets.all(4.w),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE5E7EB),
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: Row(
-        children: [
-          _periodBtn('day', '日'),
-          _periodBtn('month', '月'),
-          _periodBtn('year', '年'),
-        ],
-      ),
-    );
-  }
-
-  Widget _periodBtn(String period, String label) {
-    final active = _statsPeriod == period;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (_statsPeriod == period) return;
-          setState(() {
-            _statsPeriod = period;
-            _statsDate = DateTime.now();
-          });
-          _fetchStatistics();
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: EdgeInsets.symmetric(vertical: 10.h),
-          decoration: BoxDecoration(
-            color: active ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(10.r),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-                color: active ? Colors.white : AppColors.textSecondary,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDateNavigator() {
-    String dateText;
-    switch (_statsPeriod) {
-      case 'day':
-        dateText = DateFormat('yyyy/M/d').format(_statsDate);
-        break;
-      case 'month':
-        dateText = DateFormat('yyyy/M').format(_statsDate);
-        break;
-      default:
-        dateText = DateFormat('yyyy').format(_statsDate);
-    }
-
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: 4.h),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                switch (_statsPeriod) {
-                  case 'day': _statsDate = _statsDate.subtract(const Duration(days: 1)); break;
-                  case 'month': _statsDate = DateTime(_statsDate.year, _statsDate.month - 1, 1); break;
-                  default: _statsDate = DateTime(_statsDate.year - 1, 1, 1); break;
-                }
-              });
-              _fetchStatistics();
-            },
-            child: const Icon(Icons.chevron_left, size: 22, color: AppColors.textSecondary),
-          ),
-          GestureDetector(
-            onTap: () => _showDatePickerSheet(),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(dateText, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                SizedBox(width: 2.w),
-                const Icon(Icons.arrow_drop_down, size: 24, color: AppColors.textPrimary),
-              ],
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                switch (_statsPeriod) {
-                  case 'day': _statsDate = _statsDate.add(const Duration(days: 1)); break;
-                  case 'month': _statsDate = DateTime(_statsDate.year, _statsDate.month + 1, 1); break;
-                  default: _statsDate = DateTime(_statsDate.year + 1, 1, 1); break;
-                }
-              });
-              _fetchStatistics();
-            },
-            child: const Icon(Icons.chevron_right, size: 22, color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDatePickerSheet() {
-    int selectedYear = _statsDate.year;
-    int selectedMonth = _statsDate.month;
-    int selectedDay = _statsDate.day;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16.r))),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            final yearWidget = SizedBox(
-              width: 100.w,
-              child: ListWheelScrollView.useDelegate(
-                itemExtent: 44.h,
-                diameterRatio: 1.5,
-                physics: const FixedExtentScrollPhysics(),
-                controller: FixedExtentScrollController(initialItem: selectedYear - 1900),
-                onSelectedItemChanged: (i) => setSheetState(() => selectedYear = 1900 + i),
-                childDelegate: ListWheelChildBuilderDelegate(
-                  builder: (context, i) {
-                    final y = 1900 + i;
-                    return Center(child: Text('$y', style: TextStyle(fontSize: y == selectedYear ? 18.sp : 14.sp, fontWeight: y == selectedYear ? FontWeight.w700 : FontWeight.w400, color: y == selectedYear ? AppColors.primary : AppColors.textHint)));
-                  },
-                  childCount: 200,
-                ),
-              ),
-            );
-
-            final monthWidget = _statsPeriod != 'year'
-                ? SizedBox(
-                    width: 70.w,
-                    child: ListWheelScrollView.useDelegate(
-                      itemExtent: 44.h,
-                      diameterRatio: 1.5,
-                      physics: const FixedExtentScrollPhysics(),
-                      controller: FixedExtentScrollController(initialItem: selectedMonth - 1),
-                      onSelectedItemChanged: (i) {
-                        setSheetState(() {
-                          selectedMonth = i + 1;
-                          final maxDay = DateUtils.getDaysInMonth(selectedYear, selectedMonth);
-                          if (selectedDay > maxDay) selectedDay = maxDay;
-                        });
-                      },
-                      childDelegate: ListWheelChildBuilderDelegate(
-                        builder: (context, i) {
-                          final m = i + 1;
-                          return Center(child: Text('$m月', style: TextStyle(fontSize: m == selectedMonth ? 18.sp : 14.sp, fontWeight: m == selectedMonth ? FontWeight.w700 : FontWeight.w400, color: m == selectedMonth ? AppColors.primary : AppColors.textHint)));
-                        },
-                        childCount: 12,
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink();
-
-            final dayWidget = _statsPeriod == 'day'
-                ? SizedBox(
-                    width: 70.w,
-                    child: ListWheelScrollView.useDelegate(
-                      itemExtent: 44.h,
-                      diameterRatio: 1.5,
-                      physics: const FixedExtentScrollPhysics(),
-                      controller: FixedExtentScrollController(initialItem: selectedDay - 1),
-                      onSelectedItemChanged: (i) => setSheetState(() => selectedDay = i + 1),
-                      childDelegate: ListWheelChildBuilderDelegate(
-                        builder: (context, i) {
-                          final d = i + 1;
-                          final maxDay = DateUtils.getDaysInMonth(selectedYear, selectedMonth);
-                          final valid = d <= maxDay;
-                          return Center(child: Text('$d日', style: TextStyle(fontSize: d == selectedDay ? 18.sp : 14.sp, fontWeight: d == selectedDay ? FontWeight.w700 : FontWeight.w400, color: d == selectedDay ? AppColors.primary : valid ? AppColors.textHint : AppColors.textHint)));
-                        },
-                        childCount: 31,
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink();
-
-            return Container(
-              height: 260.h,
-              padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 8.w),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text('取消', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
-                      ),
-                      Text('选择日期', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          final maxDay = DateUtils.getDaysInMonth(selectedYear, selectedMonth);
-                          if (_statsPeriod == 'year') {
-                            selectedMonth = 1;
-                            selectedDay = 1;
-                          } else if (_statsPeriod == 'month') {
-                            selectedDay = 1;
-                          }
-                          if (selectedDay > maxDay) selectedDay = maxDay;
-                          setState(() {
-                            _statsDate = DateTime(selectedYear, selectedMonth, selectedDay);
-                          });
-                          _fetchStatistics();
-                        },
-                        child: Text('确定', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 8.h),
-                  Expanded(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (_statsPeriod == 'day') ...[
-                          yearWidget,
-                          monthWidget,
-                          dayWidget,
-                        ] else if (_statsPeriod == 'month') ...[
-                          yearWidget,
-                          SizedBox(width: 20.w),
-                          monthWidget,
-                        ] else ...[
-                          yearWidget,
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildEnergyCard() {
-    if (_statsLoading) {
-      return Padding(
-        padding: EdgeInsets.symmetric(vertical: 20.h),
-        child: ShimmerSkeleton(
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SkeletonBox(width: 80.w, height: 12.h),
-                    SizedBox(height: 4.h),
-                    SkeletonBox(width: 120.w, height: 22.h),
-                  ],
-                ),
-              ),
-              Container(width: 1, height: 40.h, color: const Color(0xFFE5E7EB)),
-              SizedBox(width: 16.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SkeletonBox(width: 80.w, height: 12.h),
-                    SizedBox(height: 4.h),
-                    SkeletonBox(width: 120.w, height: 22.h),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    String periodLabel;
-    switch (_statsPeriod) {
-      case 'day': periodLabel = '当日'; break;
-      case 'month': periodLabel = '当月'; break;
-      default: periodLabel = '当年'; break;
-    }
-
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 10.h),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${periodLabel}发电量', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
-                SizedBox(height: 4.h),
-                Text('${_statsProduce.toStringAsFixed(2)} kWh', style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800, color: AppColors.successLight)),
-              ],
-            ),
-          ),
-          Container(width: 1, height: 40.h, color: const Color(0xFFE5E7EB)),
-          SizedBox(width: 16.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${periodLabel}用电量', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
-                SizedBox(height: 4.h),
-                Text('${_statsConsume.toStringAsFixed(2)} kWh', style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800, color: AppColors.errorLight)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChart() {
-    if (_statsLoading) {
-      return ShimmerSkeleton(
-        child: SizedBox(
-          height: 260.h,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SkeletonBox(width: 100.w, height: 14.h),
-              SizedBox(height: 8.h),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8.r),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_statsData.isEmpty) {
-      return SizedBox(
-        height: 260.h,
-        child: const Center(child: Text('暂无数据', style: TextStyle(fontSize: 14, color: AppColors.textHint))),
-      );
-    }
-
-    final produceSpots = <FlSpot>[];
-    final consumeSpots = <FlSpot>[];
-    
-    final isDayView = _statsPeriod == 'day';
-
-    for (int i = 0; i < _statsData.length; i++) {
-      final item = _statsData[i];
-      final produce = (item['energy_produce'] as num?)?.toDouble() ?? 0;
-      final consume = (item['energy_consume'] as num?)?.toDouble() ?? 0;
-      produceSpots.add(FlSpot(i.toDouble(), produce));
-      consumeSpots.add(FlSpot(i.toDouble(), consume));
-    }
-
-    final maxY = [_statsProduce, _statsConsume, ...produceSpots.map((s) => s.y), ...consumeSpots.map((s) => s.y)].reduce((a, b) => a > b ? a : b);
-    final yMax = maxY > 0 ? maxY * 1.2 : 10.0;
-    
-    String yUnit;
-    String chartTitle;
-    if (isDayView) {
-      yUnit = 'W';
-      chartTitle = '功率趋势';
-    } else {
-      yUnit = 'kWh';
-      chartTitle = '发电/用电趋势';
-    }
-
-    return SizedBox(
-      height: 280.h,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(chartTitle, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          SizedBox(height: 4.h),
-          Row(
-            children: [
-              _legendDot(const Color(0xFFF59E0B)),
-              SizedBox(width: 4.w),
-              Text(isDayView ? '光伏功率' : '发电', style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary)),
-              SizedBox(width: 16.w),
-              _legendDot(const Color(0xFF8B5CF6)),
-              SizedBox(width: 4.w),
-              Text(isDayView ? '负载功率' : '用电', style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary)),
-            ],
-          ),
-          SizedBox(height: 8.h),
-          Expanded(
-            child: LineChart(
-              LineChartData(
-                minY: 0,
-                maxY: yMax,
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: yMax > 0 ? (yMax / 4).clamp(1.0, double.infinity) : 1,
-                  getDrawingHorizontalLine: (value) => FlLine(color: const Color(0xFFE5E7EB), strokeWidth: 0.8),
-                ),
-                titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40.w,
-                      getTitlesWidget: (value, meta) {
-                        return Text('${value.toStringAsFixed(0)}', style: TextStyle(fontSize: 9.sp, color: AppColors.textHint));
-                      },
-                    ),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 28.h,
-                      interval: (_statsData.length / 5).ceilToDouble().clamp(1, double.infinity),
-                      getTitlesWidget: (value, meta) {
-                        final idx = value.toInt();
-                        if (idx < 0 || idx >= _statsData.length) return const SizedBox.shrink();
-                        final time = _statsData[idx]['time']?.toString() ?? '';
-                        String label;
-                        switch (_statsPeriod) {
-                          case 'day':
-                            label = time.length >= 16 ? time.substring(11, 16) : time;
-                            break;
-                          case 'month':
-                            label = time.length >= 10 ? time.substring(8, 10) : time;
-                            break;
-                          default:
-                            label = time.length >= 7 ? time.substring(5, 7) : time;
-                        }
-                        return Padding(
-                          padding: EdgeInsets.only(top: 6.h),
-                          child: Text(label, style: TextStyle(fontSize: 9.sp, color: AppColors.textHint)),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    getTooltipItems: (spots) {
-                      return spots.map((spot) {
-                        final isProduce = spot.barIndex == 0;
-                        final unit = isDayView ? 'W' : 'kWh';
-                        final label = isDayView 
-                          ? (isProduce ? "光伏功率" : "负载功率")
-                          : (isProduce ? "发电" : "用电");
-                        return LineTooltipItem(
-                          '$label: ${spot.y.toStringAsFixed(1)} $unit',
-                          TextStyle(fontSize: 11.sp, color: Colors.white),
-                        );
-                      }).toList();
-                    },
-                  ),
-                ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: produceSpots,
-                    isCurved: true,
-                    color: const Color(0xFFF59E0B),
-                    barWidth: 2.5,
-                    dotData: FlDotData(show: _statsData.length <= 31),
-                    belowBarData: BarAreaData(show: true, color: const Color(0xFFF59E0B).withValues(alpha: 0.08)),
-                  ),
-                  LineChartBarData(
-                    spots: consumeSpots,
-                    isCurved: true,
-                    color: const Color(0xFF8B5CF6),
-                    barWidth: 2.5,
-                    dotData: FlDotData(show: _statsData.length <= 31),
-                    belowBarData: BarAreaData(show: true, color: const Color(0xFF8B5CF6).withValues(alpha: 0.08)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _legendDot(Color color) {
-    return Container(width: 8.w, height: 8.w, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
-  }
-
-  Future<void> _fetchStatistics() async {
-    setState(() => _statsLoading = true);
-    try {
-      final dio = getIt<Dio>();
-      String startDate;
-      String endDate;
-      String period;
-
-      switch (_statsPeriod) {
-        case 'day':
-          final d = _statsDate;
-          startDate = DateFormat('yyyy-MM-dd').format(d);
-          endDate = startDate;
-          period = 'hour';
-          break;
-        case 'month':
-          final y = _statsDate.year;
-          final m = _statsDate.month;
-          startDate = '$y-${m.toString().padLeft(2, '0')}-01';
-          final lastDay = DateUtils.getDaysInMonth(y, m);
-          endDate = '$y-${m.toString().padLeft(2, '0')}-$lastDay';
-          period = 'day';
-          break;
-        default:
-          final y = _statsDate.year;
-          startDate = '$y-01-01';
-          endDate = '$y-12-31';
-          period = 'month';
-      }
-
-      final res = await dio.get('/stations/${widget.stationId}/statistics', queryParameters: {
-        'start_date': startDate,
-        'end_date': endDate,
-        'period': period,
-      });
-
-      if (res.statusCode == 200) {
-        final body = res.data;
-        List<dynamic> rawList;
-        if (body is Map && body.containsKey('data')) {
-          rawList = body['data'] as List<dynamic>? ?? [];
-        } else if (body is List) {
-          rawList = body;
-        } else {
-          rawList = [];
-        }
-
-        final list = rawList.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        
-        double produceValue = 0;
-        double consumeValue = 0;
-        
-        if (_statsPeriod == 'day') {
-          // 按日视图：找最大的daily_pv作为当日发电量
-          double maxDailyPv = 0;
-          double maxAcPower = 0;
-          for (final item in list) {
-            final dailyPv = (item['daily_pv'] as num?)?.toDouble() ?? 0;
-            final acPower = (item['energy_consume'] as num?)?.toDouble() ?? 0;
-            if (dailyPv > maxDailyPv) maxDailyPv = dailyPv;
-            if (acPower > maxAcPower) maxAcPower = acPower;
-          }
-          produceValue = maxDailyPv;
-          consumeValue = maxAcPower;
-        } else {
-          // 按月/年视图：累加每天的发电量
-          for (final item in list) {
-            produceValue += (item['energy_produce'] as num?)?.toDouble() ?? 0;
-            consumeValue += (item['energy_consume'] as num?)?.toDouble() ?? 0;
-          }
-        }
-
-        setState(() {
-          _statsData = list;
-          _statsProduce = produceValue;
-          _statsConsume = consumeValue;
-          _statsLoading = false;
-        });
-      } else {
-        setState(() => _statsLoading = false);
-      }
-    } catch (e) {
-      debugPrint('[Statistics] _fetchStatistics error: $e');
-      setState(() {
-        _statsData = [];
-        _statsProduce = 0;
-        _statsConsume = 0;
-        _statsLoading = false;
-      });
-    }
-  }
-
   Widget _bottomBar() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       height: 56.h + MediaQuery.of(context).padding.bottom,
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, -1))]),
       child: Row(
         children: [
-          _tab(0, Icons.info_outline, '电站概况'),
-          _tab(1, Icons.show_chart_rounded, '统计数据'),
-          _tab(2, Icons.dns_outlined, '关联设备'),
+          _tab(0, Icons.info_outline, l10n.stationOverview),
+          _tab(1, Icons.show_chart_rounded, l10n.stationStatistics),
+          _tab(2, Icons.dns_outlined, l10n.stationDevices),
         ],
       ),
     );
@@ -1435,6 +831,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   Widget _buildDevicesBody(dynamic ds) {
     final station = ds.station;
     final name = station != null ? (station['station_name'] ?? station['name'] ?? '') : '';
+    final devices = _mergeMqttFaultStatus((ds.devices as List?) ?? []);
 
     return Stack(
       children: [
@@ -1448,7 +845,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
             SizedBox(height: 0.h),
             Expanded(
               child: DeviceListView(
-                devices: (ds.devices as List?) ?? [],
+                devices: devices,
                 showSearch: false,
                 whiteHeader: true,
                 bottomPadding: 100,
@@ -1458,6 +855,30 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         ),
       ],
     );
+  }
+
+  /// 将 MQTT 实时数据中的故障状态合并到设备列表中，
+  /// 确保即使 API 数据尚未更新，UI 也能立即反映故障状态。
+  List<Map<String, dynamic>> _mergeMqttFaultStatus(List<dynamic> devices) {
+    final mqtt = getIt<MQTTService>();
+    return devices.map((d) {
+      final Map<String, dynamic> device = Map<String, dynamic>.from(d as Map);
+      final sn = device['sn'] as String?;
+      if (sn == null || sn.isEmpty) return device;
+      final rt = mqtt.getLatestData(sn);
+      if (rt == null) return device;
+      final sys = rt.sysStatus;
+      if (sys != null && (sys.hasFault || sys.state == 'fault')) {
+        device['status'] = 2;
+        if (sys.faultCode != 0) {
+          device['fault_code'] = sys.faultCode;
+        }
+        if (sys.alarmCode != 0) {
+          device['alarm_code'] = sys.alarmCode;
+        }
+      }
+      return device;
+    }).toList();
   }
 
   Widget _devicesTopBar(String name) {
@@ -1478,25 +899,6 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
           ),
           Expanded(
             child: Text(name, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-          Material(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(10.r),
-            child: InkWell(
-              onTap: () => context.push('/add-device?station_id=${widget.stationId}'),
-              borderRadius: BorderRadius.circular(10.r),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.add, size: 18, color: Colors.white),
-                    SizedBox(width: 4.w),
-                    Text('添加设备', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: Colors.white)),
-                  ],
-                ),
-              ),
-            ),
           ),
         ],
       ),

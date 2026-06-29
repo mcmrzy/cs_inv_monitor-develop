@@ -60,11 +60,11 @@ class ProvisionService {
       final body = await response.transform(utf8.decoder).join();
       final data = jsonDecode(body);
       if (data['result'] == 'ok') {
-        return ProvisionResult(success: true, message: data['message'] ?? '配置成功');
+        return ProvisionResult(success: true, message: data['message'] ?? 'Configuration successful');
       }
-      return ProvisionResult(success: false, message: data['message'] ?? '配置失败');
+      return ProvisionResult(success: false, message: data['message'] ?? 'Configuration failed');
     } catch (e) {
-      return ProvisionResult(success: false, message: '请求超时: $e');
+      return ProvisionResult(success: false, message: 'Request timeout: $e');
     }
   }
 
@@ -79,11 +79,11 @@ class ProvisionService {
       final body = await response.transform(utf8.decoder).join();
       final data = jsonDecode(body);
       if (data['result'] == 'ok') {
-        return ProvisionResult(success: true, message: data['message'] ?? '配置成功');
+        return ProvisionResult(success: true, message: data['message'] ?? 'Configuration successful');
       }
-      return ProvisionResult(success: false, message: data['message'] ?? '配置失败');
+      return ProvisionResult(success: false, message: data['message'] ?? 'Configuration failed');
     } catch (e) {
-      return ProvisionResult(success: false, message: '请求超时: $e');
+      return ProvisionResult(success: false, message: 'Request timeout: $e');
     }
   }
 
@@ -98,14 +98,14 @@ class ProvisionService {
       if (data['connected'] == true) {
         return ProvisionResult(
           success: true,
-          message: 'WiFi 已连接',
+          message: 'WiFi connected',
           ssid: data['ssid'],
           ip: data['ip'],
         );
       }
-      return ProvisionResult(success: false, message: '等待连接...');
+      return ProvisionResult(success: false, message: 'Waiting for connection...');
     } catch (_) {
-      return ProvisionResult(success: false, message: '设备正在重启...');
+      return ProvisionResult(success: false, message: 'Device rebooting...');
     }
   }
 

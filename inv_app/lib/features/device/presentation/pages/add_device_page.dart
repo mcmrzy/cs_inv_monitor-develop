@@ -12,6 +12,7 @@ import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class AddDevicePage extends StatefulWidget {
   final int? stationId;
@@ -91,7 +92,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
       _scanning = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('无法识别的二维码:\n$raw'),
+          content: Text('${AppLocalizations.of(context)!.qrNotRecognized}:\n$raw'),
           backgroundColor: AppColors.errorLight,
           duration: const Duration(seconds: 3),
         ));
@@ -108,7 +109,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
       _scanning = false;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('SN格式不正确:\n${formatSNForDisplay(sn)}'),
+          content: Text('${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}'),
           backgroundColor: AppColors.errorLight,
           duration: const Duration(seconds: 3),
         ));
@@ -122,11 +123,11 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
         final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('校验码不匹配'),
-            content: Text('SN: ${formatSNForDisplay(sn)}\n校验码不匹配，请确认 SN 是否正确。\n是否仍要添加此设备？'),
+            title: Text(AppLocalizations.of(context)!.checksumMismatch),
+            content: Text('SN: ${formatSNForDisplay(sn)}\n${AppLocalizations.of(context)!.checksumMismatch}\n${AppLocalizations.of(context)!.snConfirmAdd}'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('继续添加')),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancel)),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.continueAdd)),
             ],
           ),
         );
@@ -189,7 +190,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
   Future<void> _manualBind() async {
     final raw = _snController.text.trim();
     if (raw.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请输入设备SN')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.pleaseInputSn)));
       return;
     }
 
@@ -198,7 +199,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
 
     if (!validateSNFormat(sn)) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('SN格式不正确:\n${formatSNForDisplay(sn)}'),
+        content: Text('${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}'),
         backgroundColor: AppColors.errorLight,
         duration: const Duration(seconds: 3),
       ));
@@ -210,11 +211,11 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
         final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('校验码不匹配'),
-            content: Text('SN: ${formatSNForDisplay(sn)}\n校验码不匹配，请确认 SN 是否正确。\n是否仍要添加此设备？'),
+            title: Text(AppLocalizations.of(context)!.checksumMismatch),
+            content: Text('SN: ${formatSNForDisplay(sn)}\n${AppLocalizations.of(context)!.checksumMismatch}\n${AppLocalizations.of(context)!.snConfirmAdd}'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('继续添加')),
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancel)),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.continueAdd)),
             ],
           ),
         );
@@ -231,7 +232,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('添加设备'),
+        title: Text(AppLocalizations.of(context)!.addDevice),
         actions: [
           if (_selectedStationId != null && _selectedStationName != null)
             Padding(
@@ -265,7 +266,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                 }
               },
               icon: const Icon(Icons.home_work, size: 18),
-              label: Text('选择电站', style: TextStyle(fontSize: 13.sp)),
+              label: Text(AppLocalizations.of(context)!.selectStation, style: TextStyle(fontSize: 13.sp)),
             ),
         ],
         bottom: TabBar(
@@ -273,9 +274,9 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textHint,
           indicatorColor: AppColors.primary,
-          tabs: const [
-            Tab(text: '扫码', icon: Icon(Icons.qr_code_scanner, size: 20)),
-            Tab(text: '手动输入', icon: Icon(Icons.edit, size: 20)),
+          tabs: [
+            Tab(text: AppLocalizations.of(context)!.scanCode, icon: const Icon(Icons.qr_code_scanner, size: 20)),
+            Tab(text: AppLocalizations.of(context)!.manualInput, icon: const Icon(Icons.edit, size: 20)),
           ],
         ),
       ),
@@ -292,7 +293,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
             });
             _addToScanHistory(_lastScanned, true);
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('✅ 设备添加成功 (本次已绑定 $_sessionBoundCount 台)'),
+              content: Text('✅ ${AppLocalizations.of(context)!.alreadyBoundNDevices('$_sessionBoundCount')}'),
               backgroundColor: AppColors.successLight,
             ));
           } else if (state is DeviceError) {
@@ -301,7 +302,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
             _scannedPin = '';
             _addToScanHistory(_lastScanned, false);
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(state.message),
+              content: Text(AppLocalizations.of(context)!.translateError(state.message)),
               backgroundColor: AppColors.errorLight,
             ));
           }
@@ -331,7 +332,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
               children: [
                 const Icon(Icons.check_circle, color: AppColors.successLight, size: 18),
                 SizedBox(width: 6.w),
-                Text('本次已绑定 $_sessionBoundCount 台设备',
+                Text(AppLocalizations.of(context)!.alreadyBoundNDevices('$_sessionBoundCount'),
                   style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF065F46))),
               ],
             ),
@@ -353,10 +354,10 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
               ),
               if (_scanning || state is DeviceLoading)
                 Container(color: Colors.black54,
-                  child: const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
                     CircularProgressIndicator(color: Colors.white),
                     SizedBox(height: 16),
-                    Text('正在添加设备...', style: TextStyle(color: Colors.white, fontSize: 16)),
+                    Text(AppLocalizations.of(context)!.addingDevice, style: TextStyle(color: Colors.white, fontSize: 16)),
                   ]))),
             ],
           ),
@@ -372,7 +373,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                     child: ElevatedButton.icon(
                       onPressed: _continueScanning,
                       icon: const Icon(Icons.qr_code_scanner, size: 20),
-                      label: const Text('继续扫码', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      label: Text(AppLocalizations.of(context)!.continueScan, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -386,7 +387,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                     child: ElevatedButton.icon(
                       onPressed: () => context.pop(),
                       icon: const Icon(Icons.check_circle_outline, size: 20),
-                      label: const Text('完成', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      label: Text(AppLocalizations.of(context)!.finish, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.successLight,
                         foregroundColor: Colors.white,
@@ -406,16 +407,16 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                       child: Text('PIN: $_scannedPin',
                         style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.successLight))),
                 ] else
-                  Text('将 SN 二维码对准扫描框',
+                  Text(AppLocalizations.of(context)!.pointSnAtScan,
                     style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
               ],
               SizedBox(height: 8.h),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _actionChip(Icons.flash_on, '闪光灯', () => _cameraController?.toggleTorch()),
+                  _actionChip(Icons.flash_on, AppLocalizations.of(context)!.flashLight, () => _cameraController?.toggleTorch()),
                   SizedBox(width: 12.w),
-                  _actionChip(Icons.flip_camera_android, '翻转', () => _cameraController?.switchCamera()),
+                  _actionChip(Icons.flip_camera_android, AppLocalizations.of(context)!.flipCamera, () => _cameraController?.switchCamera()),
                   SizedBox(width: 12.w),
                   GestureDetector(
                     onTap: () => setState(() => _autoFlash = !_autoFlash),
@@ -429,7 +430,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.auto_fix_high, size: 16.sp, color: _autoFlash ? AppColors.primary : AppColors.textSecondary),
                         SizedBox(width: 4.w),
-                        Text('自动闪光', style: TextStyle(fontSize: 12.sp, color: _autoFlash ? AppColors.primary : AppColors.textSecondary)),
+                        Text(AppLocalizations.of(context)!.autoFlash, style: TextStyle(fontSize: 12.sp, color: _autoFlash ? AppColors.primary : AppColors.textSecondary)),
                       ]),
                     ),
                   ),
@@ -447,7 +448,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
               children: [
                 Padding(
                   padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 4.h),
-                  child: Text('扫码记录', style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                  child: Text(AppLocalizations.of(context)!.scanRecords, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                 ),
                 Expanded(
                   child: ListView.separated(
@@ -467,7 +468,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                         ),
                         title: Text(formatSNForDisplay(entry.sn),
                           style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
-                        trailing: Text(entry.success ? '绑定成功' : '绑定失败',
+                        trailing: Text(entry.success ? AppLocalizations.of(context)!.bindSuccess : AppLocalizations.of(context)!.bindFailed,
                           style: TextStyle(fontSize: 11.sp, color: entry.success ? AppColors.successLight : AppColors.errorLight)),
                       );
                     },
@@ -497,16 +498,16 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
 
   Widget _buildManualTab(DeviceState state) {
     return ListView(padding: EdgeInsets.all(20.w), children: [
-      Text('手动输入设备序列号', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+      Text(AppLocalizations.of(context)!.manualInputSn, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
       SizedBox(height: 8.h),
-      Text('SN格式: 16位辰烁标准编码 (如 H1CNA0013A000011)', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+      Text(AppLocalizations.of(context)!.snFormatDesc, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
       SizedBox(height: 4.h),
-      Text('也支持输入 SN:xxxxxxx PIN:xxxxx 格式', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+      Text(AppLocalizations.of(context)!.snFormatHint, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
       SizedBox(height: 16.h),
       TextField(
         controller: _snController,
         decoration: InputDecoration(
-          labelText: '设备SN', hintText: '请输入16位设备序列号',
+          labelText: AppLocalizations.of(context)!.deviceSnLabel, hintText: AppLocalizations.of(context)!.input16DigitSn,
           prefixIcon: const Icon(Icons.devices, color: AppColors.textHint),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
@@ -523,7 +524,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
           ),
           child: state is DeviceLoading
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : const Text('绑定设备', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              : Text(AppLocalizations.of(context)!.bindDevice, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
       ),
     ]);
@@ -640,7 +641,7 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
               padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
               child: Row(
                 children: [
-                  Text('选择电站', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  Text(AppLocalizations.of(context)!.selectStation, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
                   const Spacer(),
                   GestureDetector(
                     onTap: widget.onCancel,
@@ -651,7 +652,7 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
             ),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.w),
-              child: Text('请选择设备要绑定的电站', style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+              child: Text(AppLocalizations.of(context)!.selectStationForDevice, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
             ),
             SizedBox(height: 12.h),
             Expanded(
@@ -665,11 +666,11 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(state.message, style: TextStyle(fontSize: 14.sp, color: AppColors.errorLight)),
+                          Text(AppLocalizations.of(context)!.translateError(state.message), style: TextStyle(fontSize: 14.sp, color: AppColors.errorLight)),
                           SizedBox(height: 12.h),
                           ElevatedButton(
                             onPressed: () => context.read<StationBloc>().add(StationSummaryRequested()),
-                            child: const Text('重试'),
+                            child: Text(AppLocalizations.of(context)!.retry),
                           ),
                         ],
                       ),
@@ -686,9 +687,9 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                         children: [
                           Icon(Icons.home_work_outlined, size: 48, color: AppColors.textHint),
                           SizedBox(height: 12.h),
-                          Text('暂无电站', style: TextStyle(fontSize: 15.sp, color: AppColors.textSecondary)),
+                          Text(AppLocalizations.of(context)!.noStationsYet, style: TextStyle(fontSize: 15.sp, color: AppColors.textSecondary)),
                           SizedBox(height: 8.h),
-                          Text('请先创建电站后再添加设备', style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+                          Text(AppLocalizations.of(context)!.createStationFirst, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
                           SizedBox(height: 16.h),
                           ElevatedButton.icon(
                             onPressed: () {
@@ -696,7 +697,7 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                               context.push('/station/create');
                             },
                             icon: const Icon(Icons.add),
-                            label: const Text('创建电站'),
+                            label: Text(AppLocalizations.of(context)!.createStation),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
@@ -742,7 +743,7 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                                     children: [
                                       Text(name, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                                       SizedBox(height: 2.h),
-                                      Text('$deviceCount 台设备', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+                                      Text(AppLocalizations.of(context)!.nDevices('$deviceCount'), style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
                                     ],
                                   ),
                                 ),

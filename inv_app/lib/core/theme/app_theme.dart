@@ -224,10 +224,11 @@ class AppColor {
 
   /// Hero card with primary gradient background.
   static BoxDecoration heroCard(BuildContext context) => BoxDecoration(
-    gradient: LinearGradient(
+    gradient: const LinearGradient(
       colors: [
-        Theme.of(context).colorScheme.primary,
-        Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+        Color(0xFF1565C0),
+        Color(0xFF1976D2),
+        Color(0xFF2196F3),
       ],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
@@ -235,7 +236,7 @@ class AppColor {
     borderRadius: BorderRadius.circular(20.r),
     boxShadow: [
       BoxShadow(
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+        color: const Color(0xFF1565C0).withValues(alpha: 0.4),
         blurRadius: 20,
         offset: const Offset(0, 8),
       ),

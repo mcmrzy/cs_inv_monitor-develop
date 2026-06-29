@@ -3,9 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/data/alarm_code_mapping.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class AlarmPage extends StatefulWidget {
   const AlarmPage({super.key});
@@ -25,8 +27,9 @@ class _AlarmPageState extends State<AlarmPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('消息告警')),
+      appBar: AppBar(title: Text(l10n.alarmList)),
       body: BlocBuilder<AlarmBloc, AlarmState>(
         builder: (context, state) {
           if (state is AlarmListLoaded) {
@@ -36,7 +39,7 @@ class _AlarmPageState extends State<AlarmPage> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(state.message), duration: const Duration(seconds: 2)),
+                  SnackBar(content: Text(l10n.translateError(state.message)), duration: const Duration(seconds: 2)),
                 );
               }
             });
@@ -53,7 +56,7 @@ class _AlarmPageState extends State<AlarmPage> {
                       children: [
                         Icon(Icons.notifications_none, size: 64.sp, color: AppColors.textHint),
                         SizedBox(height: 16.h),
-                        Text('暂无告警', style: TextStyle(color: AppColors.textHint, fontSize: 16.sp)),
+                        Text(l10n.noAlarms, style: TextStyle(color: AppColors.textHint, fontSize: 16.sp)),
                       ],
                     ),
                   ),
@@ -71,7 +74,7 @@ class _AlarmPageState extends State<AlarmPage> {
                     child: ListView.builder(
                       padding: EdgeInsets.all(12.w),
                       itemCount: ds.alarms.length,
-                      itemBuilder: (context, index) => _buildAlarmCard(context, ds.alarms[index]),
+                      itemBuilder: (context, index) => _buildAlarmCard(context, ds.alarms[index], l10n),
                     ),
                   ),
                 ),
@@ -86,12 +89,12 @@ class _AlarmPageState extends State<AlarmPage> {
                 children: [
                   Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
                   SizedBox(height: 12.h),
-                  Text(state.message, style: TextStyle(color: AppColors.textSecondary)),
+                  Text(l10n.translateError(state.message), style: TextStyle(color: AppColors.textSecondary)),
                   SizedBox(height: 12.h),
                   FilledButton.icon(
                     onPressed: () => context.read<AlarmBloc>().add(const AlarmListRequested()),
                     icon: const Icon(Icons.refresh),
-                    label: const Text('重试'),
+                    label: Text(l10n.retry),
                   ),
                 ],
               ),
@@ -112,21 +115,48 @@ class _AlarmPageState extends State<AlarmPage> {
     );
   }
 
-  Widget _buildAlarmCard(BuildContext context, dynamic alarm) {
+  String _levelToSeverity(dynamic level) {
+    switch (level) {
+      case 1:
+        return 'critical';
+      case 2:
+        return 'warning';
+      default:
+        return 'info';
+    }
+  }
+
+  Widget _buildAlarmCard(BuildContext context, dynamic alarm, AppLocalizations l10n) {
+    // 优先使用 fault_code 映射实际严重级别
+    final faultCode = alarm['fault_code'];
+    int parsedCode = -1;
+    if (faultCode is int) {
+      parsedCode = faultCode;
+    } else if (faultCode != null) {
+      final str = faultCode.toString();
+      if (str.startsWith('0x') || str.startsWith('0X')) {
+        parsedCode = int.tryParse(str.substring(2), radix: 16) ?? -1;
+      } else {
+        parsedCode = int.tryParse(str) ?? -1;
+      }
+    }
+    final alarmEntry = parsedCode >= 0 ? AlarmCodeMapping.getEntry(parsedCode) : null;
+    final severity = alarmEntry?.severity ?? _levelToSeverity(alarm['alarm_level']);
+
     Color levelColor;
     String levelText;
-    switch (alarm['alarm_level']) {
-      case 1:
+    switch (severity) {
+      case 'critical':
         levelColor = AppColors.errorLight;
-        levelText = '严重';
+        levelText = l10n.severe;
         break;
-      case 2:
+      case 'warning':
         levelColor = AppColors.warning;
-        levelText = '重要';
+        levelText = l10n.warningLevel;
         break;
       default:
         levelColor = AppColors.orange;
-        levelText = '一般';
+        levelText = l10n.general;
     }
 
     final isRead = alarm['status'] == 1;
@@ -166,7 +196,7 @@ class _AlarmPageState extends State<AlarmPage> {
                       children: [
                         Expanded(
                           child: Text(
-                            alarm['fault_message'] ?? '告警',
+                            alarm['fault_message'] ?? l10n.alarm,
                             style: TextStyle(
                               fontSize: 14.sp,
                               fontWeight: isRead ? FontWeight.w500 : FontWeight.w600,
@@ -189,7 +219,7 @@ class _AlarmPageState extends State<AlarmPage> {
                     ),
                     SizedBox(height: 4.h),
                     Text(
-                      '设备: ${alarm['device_sn'] ?? '-'}  故障码: ${alarm['fault_code'] ?? '-'}',
+                      '${l10n.deviceLabel}: ${alarm['device_sn'] ?? '-'}  ${l10n.faultCodeLabel}: ${alarm['fault_code'] ?? '-'}',
                       style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
                     ),
                   ],

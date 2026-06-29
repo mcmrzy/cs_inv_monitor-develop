@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 
 	"inv-api-server/internal/model"
 
@@ -115,7 +116,8 @@ func (r *ModelRepository) DeleteModel(ctx context.Context, id int64) error {
 
 func (r *ModelRepository) GetFieldsByModelID(ctx context.Context, modelID int64) ([]model.DeviceModelField, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule
+		SELECT id, model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule,
+			COALESCE(group_name, ''), COALESCE(control_params, '{}')
 		FROM device_model_field
 		WHERE model_id = $1
 		ORDER BY sort, id`, modelID)
@@ -127,9 +129,13 @@ func (r *ModelRepository) GetFieldsByModelID(ctx context.Context, modelID int64)
 	var fields []model.DeviceModelField
 	for rows.Next() {
 		var f model.DeviceModelField
+		var controlParamsJSON []byte
 		if err := rows.Scan(&f.ID, &f.ModelID, &f.FieldKey, &f.FieldName, &f.FieldType,
-			&f.Unit, &f.Sort, &f.IsShow, &f.IsControl, &f.ParseRule); err != nil {
+			&f.Unit, &f.Sort, &f.IsShow, &f.IsControl, &f.ParseRule, &f.GroupName, &controlParamsJSON); err != nil {
 			continue
+		}
+		if len(controlParamsJSON) > 0 {
+			json.Unmarshal(controlParamsJSON, &f.ControlParams)
 		}
 		fields = append(fields, f)
 	}
@@ -214,7 +220,8 @@ func (r *ModelRepository) GetModelIDByDeviceSN(ctx context.Context, sn string) (
 
 func (r *ModelRepository) GetControlFieldsByModelID(ctx context.Context, modelID int64) ([]model.DeviceModelField, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule
+		SELECT id, model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule,
+			COALESCE(group_name, ''), COALESCE(control_params, '{}')
 		FROM device_model_field
 		WHERE model_id = $1 AND is_control = true
 		ORDER BY sort, id`, modelID)
@@ -226,13 +233,93 @@ func (r *ModelRepository) GetControlFieldsByModelID(ctx context.Context, modelID
 	var fields []model.DeviceModelField
 	for rows.Next() {
 		var f model.DeviceModelField
+		var controlParamsJSON []byte
 		if err := rows.Scan(&f.ID, &f.ModelID, &f.FieldKey, &f.FieldName, &f.FieldType,
-			&f.Unit, &f.Sort, &f.IsShow, &f.IsControl, &f.ParseRule); err != nil {
+			&f.Unit, &f.Sort, &f.IsShow, &f.IsControl, &f.ParseRule, &f.GroupName, &controlParamsJSON); err != nil {
 			continue
+		}
+		if len(controlParamsJSON) > 0 {
+			json.Unmarshal(controlParamsJSON, &f.ControlParams)
 		}
 		fields = append(fields, f)
 	}
 	return fields, nil
+}
+
+// ==================== Protocol CRUD ====================
+
+func (r *ModelRepository) GetProtocolsByModelID(ctx context.Context, modelID int64) ([]model.DeviceModelProtocol, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, model_id, topic_pattern, parse_type, COALESCE(parse_config, '{}'), is_active,
+			TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS')
+		FROM device_model_protocol
+		WHERE model_id = $1
+		ORDER BY id`, modelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var protocols []model.DeviceModelProtocol
+	for rows.Next() {
+		var p model.DeviceModelProtocol
+		var configJSON []byte
+		if err := rows.Scan(&p.ID, &p.ModelID, &p.TopicPattern, &p.ParseType, &configJSON, &p.IsActive, &p.CreatedAt); err != nil {
+			continue
+		}
+		if len(configJSON) > 0 {
+			json.Unmarshal(configJSON, &p.ParseConfig)
+		}
+		protocols = append(protocols, p)
+	}
+	return protocols, nil
+}
+
+func (r *ModelRepository) CreateProtocol(ctx context.Context, p *model.DeviceModelProtocol) error {
+	configJSON, _ := json.Marshal(p.ParseConfig)
+	return r.db.QueryRow(ctx, `
+		INSERT INTO device_model_protocol (model_id, topic_pattern, parse_type, parse_config, is_active)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at`,
+		p.ModelID, p.TopicPattern, p.ParseType, configJSON, p.IsActive).Scan(&p.ID, &p.CreatedAt)
+}
+
+func (r *ModelRepository) UpdateProtocol(ctx context.Context, id int64, topicPattern *string, parseType *string, parseConfig map[string]interface{}, isActive *bool) error {
+	if topicPattern != nil {
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_protocol SET topic_pattern = $1 WHERE id = $2`, *topicPattern, id); err != nil {
+			return err
+		}
+	}
+	if parseType != nil {
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_protocol SET parse_type = $1 WHERE id = $2`, *parseType, id); err != nil {
+			return err
+		}
+	}
+	if parseConfig != nil {
+		configJSON, _ := json.Marshal(parseConfig)
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_protocol SET parse_config = $1 WHERE id = $2`, configJSON, id); err != nil {
+			return err
+		}
+	}
+	if isActive != nil {
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_protocol SET is_active = $1 WHERE id = $2`, *isActive, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ModelRepository) DeleteProtocol(ctx context.Context, id int64) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM device_model_protocol WHERE id = $1`, id)
+	return err
+}
+
+// GetModelIDByDeviceSNWithFields returns model ID and whether the device has a model configured
+func (r *ModelRepository) GetDeviceModelInfo(ctx context.Context, sn string) (modelID int64, modelCode string, err error) {
+	err = r.db.QueryRow(ctx, `
+		SELECT COALESCE(d.model_id, 0), COALESCE(d.model, '')
+		FROM devices d WHERE d.sn = $1 AND d.deleted_at IS NULL`, sn).Scan(&modelID, &modelCode)
+	return
 }
 
 func (r *ModelRepository) GetUserAllowedSNs(ctx context.Context, userID int64) ([]string, error) {

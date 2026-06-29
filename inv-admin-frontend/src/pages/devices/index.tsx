@@ -22,6 +22,7 @@ import { modelApi } from '@/services/modelApi'
 import useAuthStore from '@/stores/authStore'
 import { Role } from '@/types'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
+import useTranslation from '@/hooks/useTranslation'
 import StatusBadge from '@/components/StatusBadge'
 import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 
@@ -130,14 +131,6 @@ interface CommandHistoryRecord {
   completed_at: string
 }
 
-const COMMAND_CATEGORY_LABELS: Record<string, string> = {
-  power: '功率控制',
-  battery: '电池管理',
-  grid: '电网保护',
-  system: '系统控制',
-  ota: '远程升级',
-}
-
 const COMMAND_STATUS_COLORS: Record<string, string> = {
   pending: 'default',
   sent: 'processing',
@@ -145,17 +138,6 @@ const COMMAND_STATUS_COLORS: Record<string, string> = {
   success: 'green',
   failed: 'red',
   timeout: 'orange',
-}
-
-const LIFECYCLE_EVENT_LABELS: Record<string, string> = {
-  registered: '注册',
-  bound: '绑定',
-  unbound: '解绑',
-  activated: '激活',
-  decommissioned: '退役',
-  maintenance: '维护',
-  firmware_upgrade: '固件升级',
-  hardware_replace: '硬件更换',
 }
 
 const LIFECYCLE_EVENT_COLORS: Record<string, string> = {
@@ -170,7 +152,28 @@ const LIFECYCLE_EVENT_COLORS: Record<string, string> = {
 }
 
 const DevicesPage: React.FC = () => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
+
+  const COMMAND_CATEGORY_LABELS: Record<string, string> = {
+    power: t('dev.powerControl'),
+    battery: t('dev.batteryManage'),
+    grid: t('dev.gridProtect'),
+    system: t('dev.systemControl'),
+    ota: t('dev.remoteUpgrade'),
+  }
+
+  const LIFECYCLE_EVENT_LABELS: Record<string, string> = {
+    registered: t('dev.register'),
+    bound: t('dev.bind'),
+    unbound: t('dev.unbindAction'),
+    activated: t('dev.activate'),
+    decommissioned: t('dev.retire'),
+    maintenance: t('dev.maintenance'),
+    firmware_upgrade: t('dev.firmwareUpgrade'),
+    hardware_replace: t('dev.hardwareReplace'),
+  }
+
   const { user } = useAuthStore()
   const [messageApi, contextHolder] = message.useMessage()
   const screens = Grid.useBreakpoint()
@@ -321,15 +324,12 @@ const DevicesPage: React.FC = () => {
     try {
       const s = range[0].toISOString();
       const e = range[1].toISOString();
-      console.log('[Telemetry] Fetching:', sn, s, e);
-      const res = await deviceApi.getTelemetry(sn, { startTime: s, endTime: e });
-      console.log('[Telemetry] Raw:', res.status, res.data);
+      const res = await deviceApi.getTelemetry(sn, { startTime: s, endTime: e, pageSize: 500 });
       const payload = res.data;
-      const items = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []);
-      console.log('[Telemetry] Items:', items.length, items);
+      const inner = payload?.data ?? payload;
+      const items = Array.isArray(inner?.items) ? inner.items : (Array.isArray(inner) ? inner : []);
       setTelemetryData(items);
     } catch (err: any) {
-      console.error('[Telemetry] Error:', err?.response?.status, err?.response?.data || err?.message);
       setTelemetryData([]);
     } finally {
       setTelemetryLoading(false);
@@ -415,80 +415,80 @@ const DevicesPage: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: (data: any) => deviceApi.createDevice(data).then((r) => r.data),
     onSuccess: () => {
-      messageApi.success('设备添加成功')
+      messageApi.success(t('dev.addSuccess'))
       setAddModalOpen(false)
       addForm.resetFields()
       queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
     onError: () => {
-      messageApi.error('添加失败，请重试')
+      messageApi.error(t('dev.addFailed'))
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: (data: any) => deviceApi.updateDevice(data.sn, data).then((r) => r.data),
     onSuccess: () => {
-      messageApi.success('设备更新成功')
+      messageApi.success(t('dev.updateSuccess'))
       setEditModalOpen(false)
       editForm.resetFields()
       queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
     onError: () => {
-      messageApi.error('更新失败，请重试')
+      messageApi.error(t('dev.updateFailed'))
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (sn: string) => deviceApi.deleteDevice(sn),
     onSuccess: () => {
-      messageApi.success('设备已删除')
+      messageApi.success(t('dev.deleteSuccess'))
       queryClient.invalidateQueries({ queryKey: ['devices'] })
       setSelectedRowKeys([])
     },
-    onError: (err: any) => messageApi.error(err?.response?.data?.message || err?.message || '删除失败'),
+    onError: (err: any) => messageApi.error(err?.response?.data?.message || err?.message || t('dev.deleteFailed')),
   })
 
   const unbindMutation = useMutation({
     mutationFn: (sn: string) => deviceApi.unbindDevice(sn),
     onSuccess: () => {
-      messageApi.success('设备已解绑')
+      messageApi.success(t('dev.unbindSuccess'))
       queryClient.invalidateQueries({ queryKey: ['devices'] })
       setSelectedRowKeys([])
     },
-    onError: () => messageApi.error('解绑失败'),
+    onError: () => messageApi.error(t('dev.unbindFailed')),
   })
 
   const requestUnbindMutation = useMutation({
     mutationFn: ({ sn, reason }: { sn: string; reason: string }) =>
       deviceApi.requestUnbind(sn, reason),
     onSuccess: () => {
-      messageApi.success('解绑申请已提交，等待审批')
+      messageApi.success(t('dev.unbindSubmitted'))
       setUnbindModalOpen(false)
       setUnbindReason('')
       setUnbindTargetSn('')
     },
-    onError: () => messageApi.error('提交失败'),
+    onError: () => messageApi.error(t('dev.submitFailed')),
   })
 
   const approveUnbindMutation = useMutation({
     mutationFn: ({ id, comment }: { id: number; comment?: string }) =>
       deviceApi.approveUnbind(id, comment),
     onSuccess: () => {
-      messageApi.success('已批准解绑')
+      messageApi.success(t('dev.unbindApproved'))
       queryClient.invalidateQueries({ queryKey: ['unbindRequests'] })
       queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
-    onError: () => messageApi.error('操作失败'),
+    onError: () => messageApi.error(t('dev.approveFailed')),
   })
 
   const rejectUnbindMutation = useMutation({
     mutationFn: ({ id, comment }: { id: number; comment?: string }) =>
       deviceApi.rejectUnbind(id, comment),
     onSuccess: () => {
-      messageApi.success('已拒绝解绑申请')
+      messageApi.success(t('dev.unbindRejected'))
       queryClient.invalidateQueries({ queryKey: ['unbindRequests'] })
     },
-    onError: () => messageApi.error('操作失败'),
+    onError: () => messageApi.error(t('dev.approveFailed')),
   })
 
   const handleAdd = () => {
@@ -596,15 +596,15 @@ const DevicesPage: React.FC = () => {
         params,
       })
       const result = res.data?.data ?? res.data
-      setCommandResult({ success: result?.success ?? true, message: result?.message ?? '指令执行成功' })
+      setCommandResult({ success: result?.success ?? true, message: result?.message ?? t('dev.commandSent') })
       if (result?.success !== false) {
-        messageApi.success('指令执行成功')
+        messageApi.success(t('dev.commandSent'))
       } else {
-        messageApi.warning(result?.message || '指令执行失败')
+        messageApi.warning(result?.message || t('dev.commandFailed'))
       }
       queryClient.invalidateQueries({ queryKey: ['commandHistory', detailSn] })
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || '指令执行失败'
+      const msg = err?.response?.data?.message || err?.message || t('dev.commandFailed')
       setCommandResult({ success: false, message: msg })
       messageApi.error(msg)
     } finally {
@@ -637,22 +637,22 @@ const DevicesPage: React.FC = () => {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
-      messageApi.success(`${format === 'excel' ? 'Excel' : 'CSV'} 导出成功`)
+      messageApi.success(t('dev.exportSuccess', { format: format === 'excel' ? 'Excel' : 'CSV' }))
     } catch (err: any) {
-      messageApi.error('导出失败: ' + (err?.message || '未知错误'))
+      messageApi.error(t('dev.exportFailed') + (err?.message || ''))
     }
   }
 
   const exportMenuItems: MenuProps['items'] = [
     {
       key: 'csv',
-      label: '导出 CSV',
+      label: t('common.exportCSV'),
       icon: <DownloadOutlined />,
       onClick: () => handleExportTelemetry('csv'),
     },
     {
       key: 'excel',
-      label: '导出 Excel',
+      label: t('common.exportExcel'),
       icon: <DownloadOutlined />,
       onClick: () => handleExportTelemetry('excel'),
     },
@@ -661,10 +661,10 @@ const DevicesPage: React.FC = () => {
   const handleUnbind = (record: DeviceRecord) => {
     if (canDirectUnbind) {
       Modal.confirm({
-        title: '确认解绑',
-        content: `确认解绑设备 ${record.sn}？`,
-        okText: '确认',
-        cancelText: '取消',
+        title: t('dev.unbindConfirm'),
+        content: t('dev.unbindDevice') + ` ${record.sn}？`,
+        okText: t('common.confirm'),
+        cancelText: t('common.cancel'),
         onOk: () => unbindMutation.mutate(record.sn),
       })
     } else {
@@ -676,7 +676,7 @@ const DevicesPage: React.FC = () => {
 
   const handleRequestUnbind = async () => {
     if (!unbindReason.trim()) {
-      messageApi.warning('请输入解绑原因')
+      messageApi.warning(t('dev.pleaseEnterUnbindReason'))
       return
     }
     requestUnbindMutation.mutate({ sn: unbindTargetSn, reason: unbindReason })
@@ -691,7 +691,7 @@ const DevicesPage: React.FC = () => {
         const XLSX = (window as any).XLSX
         if (!XLSX) {
           setImportPreview([])
-          messageApi.warning('Excel解析库未加载，请刷新重试')
+          messageApi.warning(t('dev.excelNotLoaded'))
           return
         }
         const data = new Uint8Array(e.target?.result as ArrayBuffer)
@@ -709,7 +709,7 @@ const DevicesPage: React.FC = () => {
         }))
         setImportPreview(previewRows)
       } catch {
-        messageApi.error('Excel文件解析失败')
+        messageApi.error(t('dev.excelParseFailed'))
         setImportPreview([])
       }
     }
@@ -725,11 +725,11 @@ const DevicesPage: React.FC = () => {
       const result = res.data?.data ?? res.data
       setImportResult(result)
       if (result?.success > 0) {
-        messageApi.success(`成功导入 ${result.success} 台设备`)
+        messageApi.success(t('dev.importSuccess', { count: result.success }))
       }
       queryClient.invalidateQueries({ queryKey: ['devices'] })
     } catch (err: any) {
-      messageApi.error(err?.response?.data?.message || '导入失败')
+      messageApi.error(err?.response?.data?.message || t('dev.importFailed'))
     } finally {
       setImporting(false)
     }
@@ -737,53 +737,53 @@ const DevicesPage: React.FC = () => {
 
   const importPreviewColumns: ColumnsType<ExcelPreviewRow> = [
     { title: 'SN', dataIndex: 'SN', key: 'SN', width: 150 },
-    { title: '型号', dataIndex: 'Model', key: 'Model', width: 120 },
-    { title: '额定功率(kW)', dataIndex: 'RatedPower(kW)', key: 'RatedPower(kW)', width: 120 },
-    { title: '固件版本', dataIndex: 'FirmwareVersion', key: 'FirmwareVersion', width: 110 },
-    { title: '硬件版本', dataIndex: 'HardwareVersion', key: 'HardwareVersion', width: 110 },
-    { title: '电站名称', dataIndex: 'StationName', key: 'StationName', width: 120 },
+    { title: t('common.model'), dataIndex: 'Model', key: 'Model', width: 120 },
+    { title: t('dev.ratedPower_kW'), dataIndex: 'RatedPower(kW)', key: 'RatedPower(kW)', width: 120 },
+    { title: t('dev.firmwareVersion'), dataIndex: 'FirmwareVersion', key: 'FirmwareVersion', width: 110 },
+    { title: t('dev.hardwareVersion'), dataIndex: 'HardwareVersion', key: 'HardwareVersion', width: 110 },
+    { title: t('dev.stationName'), dataIndex: 'StationName', key: 'StationName', width: 120 },
   ]
 
   const unbindRequestColumns: ColumnsType<UnbindRequestRecord> = [
     {
-      title: '设备SN',
+      title: t('dev.deviceSN'),
       dataIndex: 'device_sn',
       key: 'device_sn',
       width: 150,
     },
     {
-      title: '申请人ID',
+      title: t('dev.applicantID'),
       dataIndex: 'requested_by',
       key: 'requested_by',
       width: 100,
     },
     {
-      title: '解绑原因',
+      title: t('dev.unbindReason'),
       dataIndex: 'reason',
       key: 'reason',
       width: 200,
       render: (v: string) => v || '-',
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
       render: (status: string) => {
         const colorMap: Record<string, string> = { pending: 'orange', approved: 'green', rejected: 'red' }
-        const labelMap: Record<string, string> = { pending: '待审批', approved: '已批准', rejected: '已拒绝' }
+        const labelMap: Record<string, string> = { pending: t('dev.pending'), approved: t('dev.approved'), rejected: t('dev.rejected') }
         return <Tag color={colorMap[status] || 'default'}>{labelMap[status] || status}</Tag>
       },
     },
     {
-      title: '申请时间',
+      title: t('dev.applyTime'),
       dataIndex: 'created_at',
       key: 'created_at',
       width: 170,
       render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       width: 200,
       render: (_: any, record: UnbindRequestRecord) => {
@@ -791,23 +791,23 @@ const DevicesPage: React.FC = () => {
         return (
           <Space size="small">
             <Popconfirm
-              title="确认批准此解绑申请？"
+              title={t('dev.unbindApprovalConfirm')}
               onConfirm={() => approveUnbindMutation.mutate({ id: record.id })}
-              okText="确认"
-              cancelText="取消"
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" icon={<CheckOutlined />} style={{ color: '#52c41a' }}>
-                批准
+                {t('dev.approve')}
               </Button>
             </Popconfirm>
             <Popconfirm
-              title="确认拒绝此解绑申请？"
+              title={t('dev.confirmRejectUnbind')}
               onConfirm={() => rejectUnbindMutation.mutate({ id: record.id })}
-              okText="确认"
-              cancelText="取消"
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
             >
               <Button type="link" size="small" icon={<CloseOutlined />} danger>
-                拒绝
+                {t('dev.reject')}
               </Button>
             </Popconfirm>
           </Space>
@@ -819,64 +819,64 @@ const DevicesPage: React.FC = () => {
   const batchMenuItems: MenuProps['items'] = [
     {
       key: 'unbind',
-      label: '批量解绑',
+      label: t('dev.batchUnbind'),
       icon: <LinkOutlined />,
       danger: true,
       onClick: () => {
         Modal.confirm({
-          title: '批量解绑',
-          content: `确认解绑选中的 ${selectedRowKeys.length} 台设备？`,
-          okText: '确认',
-          cancelText: '取消',
+          title: t('dev.batchUnbind'),
+          content: t('dev.confirmBatchUnbind', { count: selectedRowKeys.length }),
+          okText: t('common.confirm'),
+          cancelText: t('common.cancel'),
           onOk: () => {
             Promise.all(selectedRowKeys.map((sn) => deviceApi.unbindDevice(String(sn))))
               .then(() => {
-                messageApi.success('批量解绑完成')
+                messageApi.success(t('dev.batchUnbindComplete'))
                 queryClient.invalidateQueries({ queryKey: ['devices'] })
                 setSelectedRowKeys([])
               })
-              .catch(() => messageApi.error('部分解绑失败'))
+              .catch(() => messageApi.error(t('dev.partialUnbindFailed')))
           },
         })
       },
     },
     {
       key: 'delete',
-      label: '批量删除',
+      label: t('dev.batchDelete'),
       icon: <DeleteOutlined />,
       danger: true,
       onClick: () => {
         Modal.confirm({
-          title: '批量删除',
-          content: `确认删除选中的 ${selectedRowKeys.length} 台设备？此操作不可逆！`,
-          okText: '确认删除',
-          cancelText: '取消',
+          title: t('dev.batchDelete'),
+          content: t('dev.confirmBatchDelete', { count: selectedRowKeys.length }),
+          okText: t('dev.confirmBatchDeleteBtn'),
+          cancelText: t('common.cancel'),
           okButtonProps: { danger: true },
           onOk: () => {
             Promise.all(selectedRowKeys.map((sn) => deviceApi.deleteDevice(String(sn))))
               .then(() => {
-                messageApi.success('批量删除完成')
+                messageApi.success(t('dev.batchDeleteComplete'))
                 queryClient.invalidateQueries({ queryKey: ['devices'] })
                 setSelectedRowKeys([])
               })
-              .catch(() => messageApi.error('部分删除失败'))
+              .catch(() => messageApi.error(t('dev.partialDeleteFailed')))
           },
         })
       },
     },
     {
       key: 'ota',
-      label: '创建OTA任务',
+      label: t('dev.createOTATask'),
       icon: <DownloadOutlined />,
       onClick: () => {
-        messageApi.info('OTA任务创建功能 - 选中设备: ' + selectedRowKeys.join(', '))
+        messageApi.info(t('dev.otaTaskCreated') + ': ' + selectedRowKeys.join(', '))
       },
     },
   ]
 
   const columns: ColumnsType<DeviceRecord> = [
     {
-      title: '设备序列号',
+      title: t('dev.deviceSN'),
       dataIndex: 'sn',
       key: 'sn',
       width: 150,
@@ -888,14 +888,14 @@ const DevicesPage: React.FC = () => {
       ),
     },
     {
-      title: '型号',
+      title: t('common.model'),
       dataIndex: 'model',
       key: 'model',
       width: 120,
       responsive: ['sm'],
     },
     {
-      title: '额定功率',
+      title: t('dev.ratedPower'),
       dataIndex: 'rated_power',
       key: 'rated_power',
       width: 100,
@@ -903,7 +903,7 @@ const DevicesPage: React.FC = () => {
       render: (val: number) => val != null ? `${val} W` : '-',
     },
     {
-      title: '固件版本',
+      title: t('dev.firmwareVersion'),
       dataIndex: 'firmware_version',
       key: 'firmware_version',
       width: 110,
@@ -911,7 +911,7 @@ const DevicesPage: React.FC = () => {
       render: (v: string) => v || '-',
     },
     {
-      title: '所有者',
+      title: t('common.owner'),
       key: 'owner',
       width: 130,
       render: (_: any, record: any) => {
@@ -920,7 +920,7 @@ const DevicesPage: React.FC = () => {
       },
     },
     {
-      title: '安装商',
+      title: t('common.installer'),
       key: 'installer',
       width: 120,
       render: (_: any, record: any) => {
@@ -929,21 +929,21 @@ const DevicesPage: React.FC = () => {
       },
     },
     {
-      title: '在线状态',
+      title: t('dev.onlineStatus'),
       dataIndex: 'status',
       key: 'status',
       width: 100,
       render: (status: number) => <StatusBadge status={status} />,
     },
     {
-      title: '最后通信时间',
+      title: t('common.lastOnline'),
       dataIndex: 'last_online_at',
       key: 'last_online_at',
       width: 170,
       render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       width: 220,
       fixed: 'right',
@@ -955,7 +955,7 @@ const DevicesPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => openDeviceDetail(record.sn)}
           >
-            详情
+            {t('common.detail')}
           </Button>
           {!isEndUser && (
             <>
@@ -965,7 +965,7 @@ const DevicesPage: React.FC = () => {
                 icon={<EditOutlined />}
                 onClick={() => handleEdit(record)}
               >
-                编辑
+                {t('common.edit')}
               </Button>
               <Button
                 type="link"
@@ -974,17 +974,17 @@ const DevicesPage: React.FC = () => {
                 danger
                 onClick={() => handleUnbind(record)}
               >
-                解绑
+                {t('dev.unbind')}
               </Button>
               {isSuperAdmin && (
                 <Popconfirm
-                  title="确认删除？"
+                  title={t('dev.confirmDelete')}
                   onConfirm={() => deleteMutation.mutate(record.sn)}
-                  okText="确认"
-                  cancelText="取消"
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
                 >
                   <Button type="link" size="small" icon={<DeleteOutlined />} danger>
-                    删除
+                    {t('common.delete')}
                   </Button>
                 </Popconfirm>
               )}
@@ -1000,16 +1000,16 @@ const DevicesPage: React.FC = () => {
     const times = telemetryData.map((item: any) =>
       dayjs(item.timestamp ?? item.time).format('MM-DD HH:mm'),
     )
-    const powers = telemetryData.map((item: any) => item.power ?? item.acPower ?? 0)
-    const voltages = telemetryData.map((item: any) => item.voltage ?? item.acVoltage ?? 0)
-    const currents = telemetryData.map((item: any) => item.current ?? item.acCurrent ?? 0)
+    const powers = telemetryData.map((item: any) => item.ac_power ?? item.power ?? item.acPower ?? 0)
+    const voltages = telemetryData.map((item: any) => item.ac_voltage ?? item.voltage ?? item.acVoltage ?? 0)
+    const currents = telemetryData.map((item: any) => item.ac_current ?? item.current ?? item.acCurrent ?? 0)
 
     return {
       tooltip: {
         trigger: 'axis' as const,
       },
       legend: {
-        data: ['功率(W)', '电压(V)', '电流(A)'],
+        data: [t('dev.power') + '(W)', t('dev.voltage') + '(V)', t('dev.current') + '(A)'],
       },
       grid: {
         left: '3%',
@@ -1027,7 +1027,7 @@ const DevicesPage: React.FC = () => {
       },
       series: [
         {
-          name: '功率(W)',
+          name: t('dev.power') + '(W)',
           type: 'line',
           data: powers,
           smooth: true,
@@ -1035,7 +1035,7 @@ const DevicesPage: React.FC = () => {
           symbol: 'none',
         },
         {
-          name: '电压(V)',
+          name: t('dev.voltage') + '(V)',
           type: 'line',
           data: voltages,
           smooth: true,
@@ -1043,7 +1043,7 @@ const DevicesPage: React.FC = () => {
           symbol: 'none',
         },
         {
-          name: '电流(A)',
+          name: t('dev.current') + '(A)',
           type: 'line',
           data: currents,
           smooth: true,
@@ -1055,9 +1055,9 @@ const DevicesPage: React.FC = () => {
   }, [telemetryData])
 
   const renderRealtimePanel = () => {
-    if (realtimeLoading) return <Spin tip="加载中..." />
+    if (realtimeLoading) return <Spin tip={t('common.loading')} />
     if (!realtimeData)
-      return <Empty description="暂无实时数据" />
+      return <Empty description={t('dev.noRealtimeData')} />
 
     const { ac, pv, battery, system, online } = realtimeData
     const isOnline = online?.online ?? false
@@ -1066,30 +1066,30 @@ const DevicesPage: React.FC = () => {
       <Row gutter={[12, 12]}>
         {ac && (
           <Col span={24}>
-            <Card size="small" title="交流侧 (AC)" style={{ background: '#fafafa' }}>
+            <Card size="small" title={t('dev.acSide')} style={{ background: '#fafafa' }}>
               <Row gutter={[12, 8]}>
                 <Col span={8}>
-                  <Text type="secondary">电压</Text>
+                  <Text type="secondary">{t('dev.voltage')}</Text>
                   <br />
                   <Text strong>{ac.voltage?.toFixed(1) ?? '-'} V</Text>
                 </Col>
                 <Col span={8}>
-                  <Text type="secondary">电流</Text>
+                  <Text type="secondary">{t('dev.current')}</Text>
                   <br />
                   <Text strong>{ac.current?.toFixed(2) ?? '-'} A</Text>
                 </Col>
                 <Col span={8}>
-                  <Text type="secondary">功率</Text>
+                  <Text type="secondary">{t('dev.power')}</Text>
                   <br />
                   <Text strong>{ac.power?.toFixed(1) ?? '-'} W</Text>
                 </Col>
                 <Col span={8}>
-                  <Text type="secondary">频率</Text>
+                  <Text type="secondary">{t('dev.frequency')}</Text>
                   <br />
                   <Text strong>{ac.frequency?.toFixed(1) ?? '-'} Hz</Text>
                 </Col>
                 <Col span={8}>
-                  <Text type="secondary">功率因数</Text>
+                  <Text type="secondary">{t('dev.powerFactor')}</Text>
                   <br />
                   <Text strong>{ac.powerFactor?.toFixed(2) ?? '-'}</Text>
                 </Col>
@@ -1099,20 +1099,20 @@ const DevicesPage: React.FC = () => {
         )}
         {pv && (
           <Col span={24}>
-            <Card size="small" title="光伏 (PV)" style={{ background: '#fafafa' }}>
+            <Card size="small" title={t('dev.pvSide')} style={{ background: '#fafafa' }}>
               <Row gutter={[12, 8]}>
                 <Col span={8}>
-                  <Text type="secondary">电压</Text>
+                  <Text type="secondary">{t('dev.voltage')}</Text>
                   <br />
                   <Text strong>{pv.voltage?.toFixed(1) ?? '-'} V</Text>
                 </Col>
                 <Col span={8}>
-                  <Text type="secondary">电流</Text>
+                  <Text type="secondary">{t('dev.current')}</Text>
                   <br />
                   <Text strong>{pv.current?.toFixed(2) ?? '-'} A</Text>
                 </Col>
                 <Col span={8}>
-                  <Text type="secondary">功率</Text>
+                  <Text type="secondary">{t('dev.power')}</Text>
                   <br />
                   <Text strong>{pv.power?.toFixed(1) ?? '-'} W</Text>
                 </Col>
@@ -1122,7 +1122,7 @@ const DevicesPage: React.FC = () => {
         )}
         {battery && (
           <Col span={24}>
-            <Card size="small" title="电池" style={{ background: '#fafafa' }}>
+            <Card size="small" title={t('dev.battery')} style={{ background: '#fafafa' }}>
               <Row gutter={[12, 8]}>
                 <Col span={6}>
                   <Text type="secondary">SOC</Text>
@@ -1130,17 +1130,17 @@ const DevicesPage: React.FC = () => {
                   <Text strong>{battery.soc?.toFixed(1) ?? '-'} %</Text>
                 </Col>
                 <Col span={6}>
-                  <Text type="secondary">电压</Text>
+                  <Text type="secondary">{t('dev.voltage')}</Text>
                   <br />
                   <Text strong>{battery.voltage?.toFixed(1) ?? '-'} V</Text>
                 </Col>
                 <Col span={6}>
-                  <Text type="secondary">电流</Text>
+                  <Text type="secondary">{t('dev.current')}</Text>
                   <br />
                   <Text strong>{battery.current?.toFixed(2) ?? '-'} A</Text>
                 </Col>
                 <Col span={6}>
-                  <Text type="secondary">温度</Text>
+                  <Text type="secondary">{t('dev.temperature')}</Text>
                   <br />
                   <Text strong>{battery.temp?.toFixed(1) ?? '-'} °C</Text>
                 </Col>
@@ -1150,27 +1150,27 @@ const DevicesPage: React.FC = () => {
         )}
         {system && (
           <Col span={24}>
-            <Card size="small" title="系统信息" style={{ background: '#fafafa' }}>
+            <Card size="small" title={t('dev.systemInfo')} style={{ background: '#fafafa' }}>
               <Row gutter={[12, 8]}>
                 <Col span={6}>
-                  <Text type="secondary">工作状态</Text>
+                  <Text type="secondary">{t('dev.workStatus')}</Text>
                   <br />
                   <Text strong>{system.state ?? '-'}</Text>
                 </Col>
                 <Col span={6}>
-                  <Text type="secondary">故障码</Text>
+                  <Text type="secondary">{t('dev.faultCode')}</Text>
                   <br />
                   <Text strong style={{ color: system.fault_code ? '#ff4d4f' : undefined }}>
-                    {system.fault_code || '无'}
+                    {system.fault_code || t('dev.none')}
                   </Text>
                 </Col>
                 <Col span={6}>
-                  <Text type="secondary">逆变温度</Text>
+                  <Text type="secondary">{t('dev.inverterTemp')}</Text>
                   <br />
                   <Text strong>{system.temp_inv?.toFixed(1) ?? '-'} °C</Text>
                 </Col>
                 <Col span={6}>
-                  <Text type="secondary">环境温度</Text>
+                  <Text type="secondary">{t('dev.ambientTemp')}</Text>
                   <br />
                   <Text strong>{system.temp_ambient?.toFixed(1) ?? '-'} °C</Text>
                 </Col>
@@ -1185,7 +1185,7 @@ const DevicesPage: React.FC = () => {
   const renderLifecyclePanel = () => {
     const lifecycles = lifecycleRes?.items ?? []
     if (lifecycles.length === 0) {
-      return <Empty description="暂无生命周期记录" />
+      return <Empty description={t('dev.noLifecycleRecords')} />
     }
     return (
       <Timeline
@@ -1205,7 +1205,7 @@ const DevicesPage: React.FC = () => {
               {event.triggered_by && (
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    操作人ID: {event.triggered_by}
+                    {t('dev.operatorID')}: {event.triggered_by}
                   </Text>
                 </div>
               )}
@@ -1235,32 +1235,32 @@ const DevicesPage: React.FC = () => {
   const drawerTabItems = [
     {
       key: 'info',
-      label: '基本信息',
+      label: t('dev.deviceInfo'),
       children: deviceDetail && (
         <>
-          <Card size="small" title="设备信息" style={{ marginBottom: 16 }}>
+          <Card size="small" title={t('dev.deviceInfo')} style={{ marginBottom: 16 }}>
             <Descriptions column={2} size="small">
-              <Descriptions.Item label="序列号">{deviceDetail.sn}</Descriptions.Item>
-              <Descriptions.Item label="型号">{deviceDetail.model ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="额定功率">
+              <Descriptions.Item label={t('dev.serialNumber')}>{deviceDetail.sn}</Descriptions.Item>
+              <Descriptions.Item label={t('common.model')}>{deviceDetail.model ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('dev.ratedPower')}>
                 {(deviceDetail as any).rated_power != null ? `${(deviceDetail as any).rated_power} W` : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="固件版本">
+              <Descriptions.Item label={t('dev.firmwareVersion')}>
                 {(deviceDetail as any).firmware_version || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="硬件版本">
+              <Descriptions.Item label={t('dev.hardwareVersion')}>
                 {(deviceDetail as any).hardware_version || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="状态">
+              <Descriptions.Item label={t('common.status')}>
                 <StatusBadge status={currentStatus} />
               </Descriptions.Item>
-              <Descriptions.Item label="所有者">
+              <Descriptions.Item label={t('common.owner')}>
                 {deviceDetail.owner?.nickname || deviceDetail.owner?.phone || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="安装商">
+              <Descriptions.Item label={t('common.installer')}>
                 {deviceDetail.installer?.nickname || deviceDetail.installer?.phone || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="最后通信">
+              <Descriptions.Item label={t('common.lastOnline')}>
                 {(deviceDetail as any).last_online_at
                   ? dayjs((deviceDetail as any).last_online_at).format('YYYY-MM-DD HH:mm:ss')
                   : '-'}
@@ -1269,7 +1269,7 @@ const DevicesPage: React.FC = () => {
           </Card>
 
           {modelFields?.cache && modelFields.cache.showFields.length > 0 && (
-            <Card size="small" title={`${detailDevice?.model ?? ''} 状态概览`} style={{ marginBottom: 16 }}>
+            <Card size="small" title={`${detailDevice?.model ?? ''} ${t('dev.statusOverview')}`} style={{ marginBottom: 16 }}>
               <DynamicStatCards
                 fields={modelFields.cache.showFields.slice(0, 6)}
                 data={realtimeData ?? {}}
@@ -1277,12 +1277,8 @@ const DevicesPage: React.FC = () => {
             </Card>
           )}
 
-          <Card size="small" title="实时遥测数据" style={{ marginBottom: 16 }}>
-            {renderRealtimePanel()}
-          </Card>
-
-          {modelFields?.cache && modelFields.cache.showFields.length > 0 && (
-            <Card size="small" title={`${detailDevice?.model ?? ''} 动态字段`} style={{ marginBottom: 16 }}>
+          {modelFields?.cache && modelFields.cache.showFields.length > 0 ? (
+            <Card size="small" title={`${detailDevice?.model ?? ''} ${t('dev.realtimeData')}`} style={{ marginBottom: 16 }}>
               <DynamicFieldRenderer
                 fields={modelFields.cache.showFields}
                 data={realtimeData ?? {}}
@@ -1290,9 +1286,13 @@ const DevicesPage: React.FC = () => {
                 size="small"
               />
             </Card>
+          ) : (
+            <Card size="small" title={t('dev.realtimeTelemetry')} style={{ marginBottom: 16 }}>
+              {renderRealtimePanel()}
+            </Card>
           )}
 
-          <Card size="small" title="历史遥测数据" style={{ marginBottom: 16 }}>
+          <Card size="small" title={t('dev.historyTelemetry')} style={{ marginBottom: 16 }}>
             <Space style={{ marginBottom: 12 }}>
               <RangePicker
                 value={telemetryRange}
@@ -1308,70 +1308,103 @@ const DevicesPage: React.FC = () => {
                   setTelemetryVersion(v => v + 1)
                 }}
               >
-                查询
+                {t('dev.query')}
               </Button>
               <Dropdown menu={{ items: exportMenuItems }}>
-                <Button icon={<DownloadOutlined />}>导出</Button>
+                <Button icon={<DownloadOutlined />}>{t('dev.export')}</Button>
               </Dropdown>
             </Space>
             {telemetryLoading ? (
-              <Spin tip="加载历史数据中..." />
+              <Spin tip={t('dev.loadingHistory')} />
             ) : telemetryData && telemetryData.length > 0 ? (
               <ReactECharts key={telemetryVersion} option={telemetryOption} notMerge={true} style={{ height: 280 }} />
             ) : (
               <div style={{ textAlign: 'center', padding: 40 }}>
-                <Empty description={`暂无遥测数据 (${detailSn}, ${telemetryRange[0].format('MM-DD HH:mm')} ~ ${telemetryRange[1].format('MM-DD HH:mm')})`} />
+                <Empty description={`${t('dev.noRealtimeData')} (${detailSn}, ${telemetryRange[0].format('MM-DD HH:mm')} ~ ${telemetryRange[1].format('MM-DD HH:mm')})`} />
               </div>
             )}
           </Card>
 
           {modelFields?.cache && modelFields.cache.controlFields.length > 0 && (
-            <Card size="small" title="型号控制指令" style={{ marginBottom: 16 }}>
-              <Alert
-                type="info"
-                message="以下为当前型号支持的控制字段，由型号配置自动生成"
-                style={{ marginBottom: 12 }}
-                showIcon
-              />
+            <Card size="small" title={t('dev.modelControl')} style={{ marginBottom: 16 }}>
               <List
                 size="small"
                 dataSource={modelFields.cache.controlFields}
-                renderItem={(field) => (
-                  <List.Item
-                    actions={[
-                      <Button
-                        key="control"
-                        type="primary"
-                        size="small"
-                        icon={<ThunderboltOutlined />}
-                        onClick={() => {
-                          message.info(`下发控制指令: ${field.field_name}`)
-                        }}
-                      >
-                        下发
-                      </Button>,
-                    ]}
-                  >
-                    <List.Item.Meta
-                      title={`${field.field_name} (${field.field_key})`}
-                      description={`类型: ${field.field_type} | 单位: ${field.unit || '无'}`}
-                    />
-                    <InputNumber
-                      style={{ width: 180 }}
-                      placeholder={`输入${field.field_name}`}
-                      size="small"
-                    />
-                  </List.Item>
-                )}
+                renderItem={(field) => {
+                  const params = (field as any).control_params || {};
+                  const label = params.label || field.field_name;
+                  const needConfirm = params.confirm === true;
+                  const confirmMsg = params.confirm_message || t('dev.confirmExecute', { label });
+                  const inputType = params.input_type;
+
+                  const executeCommand = (cmdParams: any = {}) => {
+                    return commandApi.execute(detailSn!, { command: field.field_key, params: cmdParams })
+                      .then(() => message.success(t('dev.commandSent')))
+                      .catch((e: any) => message.error(t('dev.commandFailed') + `: ${e.message}`));
+                  };
+
+                  return (
+                    <List.Item
+                      actions={[
+                        <Button
+                          key="control"
+                          type="primary"
+                          size="small"
+                          icon={<ThunderboltOutlined />}
+                          onClick={() => {
+                            if (inputType === 'number') {
+                              // 数值输入弹窗
+                              let numValue = params.min ?? 0;
+                              Modal.confirm({
+                                title: label,
+                                width: 400,
+                                content: (
+                                  <div>
+                                    <p>{t('dev.rangeHint', { min: params.min ?? 0, max: params.max ?? 10000, unit: params.unit || '' })}</p>
+                                    <InputNumber
+                                      min={params.min ?? 0}
+                                      max={params.max ?? 10000}
+                                      step={params.step ?? 1}
+                                      defaultValue={params.min ?? 0}
+                                      style={{ width: '100%' }}
+                                      addonAfter={params.unit || ''}
+                                      onChange={(v) => { numValue = v ?? 0; }}
+                                    />
+                                  </div>
+                                ),
+                                onOk: () => executeCommand({ value: numValue }),
+                              });
+                            } else if (needConfirm) {
+                              Modal.confirm({
+                                title: label,
+                                content: confirmMsg,
+                                onOk: () => executeCommand(),
+                              });
+                            } else {
+                              executeCommand();
+                            }
+                          }}
+                        >
+                          {t('dev.send')}
+                        </Button>,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={label}
+                        description={`${t('dev.param')}: ${field.field_key} | ${t('common.model')}: ${field.field_type}`}
+                      />
+                    </List.Item>
+                  );
+                }}
               />
             </Card>
           )}
 
-          <Card size="small" title="设备控制">
+          <Card size="small" title={t('dev.deviceControl')}>
             <div style={{ marginBottom: 12 }}>
-              <Text strong>选择指令模板</Text>
+              <Text strong>{t('dev.selectTemplate')}</Text>
               <Select
-                placeholder="请选择需下发的控制指令..."
+                placeholder={t('dev.selectTemplatePlaceholder')}
                 style={{ width: '100%', marginTop: 6 }}
                 value={selectedCommand?.name}
                 onChange={handleCommandSelect}
@@ -1418,7 +1451,7 @@ const DevicesPage: React.FC = () => {
                         <Input
                           value={commandParams[param.name] as string}
                           onChange={(e) => handleParamChange(param.name, e.target.value)}
-                          placeholder={`请输入${param.label}`}
+                          placeholder={`${t('common.pleaseInput')}${param.label}`}
                         />
                       )}
                       {param.type === 'boolean' && (
@@ -1446,8 +1479,8 @@ const DevicesPage: React.FC = () => {
 
             {selectedCommand && selectedCommand.requiresConfirm && (
               <Alert
-                message="注意事项"
-                description={selectedCommand.confirmationMessage || '此操作需要二次确认'}
+                message={t('dev.note')}
+                description={selectedCommand.confirmationMessage || t('dev.needConfirm')}
                 type="warning"
                 showIcon
                 style={{ marginBottom: 12 }}
@@ -1456,7 +1489,7 @@ const DevicesPage: React.FC = () => {
 
             {commandResult && (
               <Alert
-                message={commandResult.success ? '执行成功' : '执行失败'}
+                message={commandResult.success ? t('dev.executeSuccess') : t('dev.executeFailed')}
                 description={commandResult.message}
                 type={commandResult.success ? 'success' : 'error'}
                 showIcon
@@ -1475,19 +1508,19 @@ const DevicesPage: React.FC = () => {
                 disabled={!selectedCommand || currentStatus === 0}
               >
                 {selectedCommand
-                  ? `执行: ${selectedCommand.label}`
-                  : '请先选择指令模板'}
+                  ? t('dev.executeCmd', { label: selectedCommand.label })
+                  : t('dev.pleaseSelectTemplate')}
               </Button>
               {selectedCommand && (
                 <Button onClick={() => { setSelectedCommand(null); setCommandParams({}); setCommandResult(null) }}>
-                  重置选择
+                  {t('dev.resetSelection')}
                 </Button>
               )}
               <Button
                 icon={<ReloadOutlined />}
                 onClick={() => queryClient.invalidateQueries({ queryKey: ['commandTemplates', detailSn] })}
               >
-                刷新模板
+                {t('dev.refreshTemplate')}
               </Button>
             </Space>
 
@@ -1495,10 +1528,10 @@ const DevicesPage: React.FC = () => {
 
             <div>
               <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                指令历史
+                {t('dev.commandHistory')}
               </Text>
               {commandHistory.length === 0 ? (
-                <Empty description="暂无指令记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty description={t('dev.noCommandRecords')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
                 <List
                   size="small"
@@ -1509,12 +1542,12 @@ const DevicesPage: React.FC = () => {
                         <Space size={4}>
                           <Text strong>{item.command_label}</Text>
                           <Tag color={COMMAND_STATUS_COLORS[item.status] || 'default'}>
-                            {item.status === 'pending' && '等待中'}
-                            {item.status === 'sent' && '已发送'}
-                            {item.status === 'ack_received' && '设备已确认'}
-                            {item.status === 'success' && '成功'}
-                            {item.status === 'failed' && '失败'}
-                            {item.status === 'timeout' && '超时'}
+                            {item.status === 'pending' && t('dev.waiting')}
+                            {item.status === 'sent' && t('dev.sent')}
+                            {item.status === 'ack_received' && t('dev.deviceConfirmed')}
+                            {item.status === 'success' && t('dev.success')}
+                            {item.status === 'failed' && t('dev.failed')}
+                            {item.status === 'timeout' && t('dev.timeout')}
                           </Tag>
                         </Space>
                         <Text type="secondary" style={{ fontSize: 12 }}>
@@ -1524,7 +1557,7 @@ const DevicesPage: React.FC = () => {
                       {item.params && Object.keys(item.params).length > 0 && (
                         <div style={{ marginTop: 2 }}>
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            参数: {JSON.stringify(item.params)}
+                            {t('dev.param')}: {JSON.stringify(item.params)}
                           </Text>
                         </div>
                       )}
@@ -1546,9 +1579,9 @@ const DevicesPage: React.FC = () => {
     },
     {
       key: 'lifecycle',
-      label: '生命周期',
+      label: t('dev.lifecycle'),
       children: (
-        <Card size="small" title="生命周期记录">
+        <Card size="small" title={t('dev.lifecycleRecords')}>
           {renderLifecyclePanel()}
         </Card>
       ),
@@ -1560,7 +1593,7 @@ const DevicesPage: React.FC = () => {
       {contextHolder}
 
       <Title level={4} style={{ marginBottom: 24 }}>
-        设备管理
+        {t('dev.title')}
       </Title>
 
       {canDirectUnbind && (
@@ -1571,13 +1604,13 @@ const DevicesPage: React.FC = () => {
             items={[
               {
                 key: 'devices',
-                label: '设备列表',
+                label: t('dev.deviceList'),
               },
               {
                 key: 'approvals',
                 label: (
                   <span>
-                    解绑审批
+                    {t('dev.unbindApproval')}
                     {unbindRequestsRes && unbindRequestsRes.total > 0 && (
                       <Tag color="orange" style={{ marginLeft: 8 }}>
                         {unbindRequestsRes.total}
@@ -1597,7 +1630,7 @@ const DevicesPage: React.FC = () => {
             <Row gutter={[12, 12]} align="middle">
               <Col xs={24} sm={8} md={6}>
                 <Input.Search
-                  placeholder="搜索序列号、型号..."
+                  placeholder={t('dev.searchPlaceholder')}
                   allowClear
                   value={filters.keyword}
                   onChange={(e) => setFilters((f) => ({ ...f, keyword: e.target.value }))}
@@ -1610,22 +1643,22 @@ const DevicesPage: React.FC = () => {
               </Col>
               <Col xs={12} sm={8} md={4}>
                 <Select
-                  placeholder="在线状态"
+                  placeholder={t('dev.onlineStatus')}
                   allowClear
                   style={{ width: '100%' }}
                   value={filters.status}
                   onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
                   options={[
-                    { label: '全部', value: '' },
-                    { label: '在线', value: '1' },
-                    { label: '离线', value: '0' },
-                    { label: '故障', value: '2' },
+                    { label: t('common.all'), value: '' },
+                    { label: t('common.online'), value: '1' },
+                    { label: t('common.offline'), value: '0' },
+                    { label: t('common.fault'), value: '2' },
                   ]}
                 />
               </Col>
               <Col xs={12} sm={8} md={4}>
                 <Select
-                  placeholder="设备型号"
+                  placeholder={t('common.model')}
                   allowClear
                   style={{ width: '100%' }}
                   value={filters.model}
@@ -1638,7 +1671,7 @@ const DevicesPage: React.FC = () => {
               <Col xs={24} sm={12} md={6}>
                 <RangePicker
                   style={{ width: '100%' }}
-                  placeholder={['最近上线开始', '最近上线结束']}
+                  placeholder={[t('dev.lastOnlineStart'), t('dev.lastOnlineEnd')]}
                   value={
                     filters.lastOnlineRange
                       ? [dayjs(filters.lastOnlineRange[0]), dayjs(filters.lastOnlineRange[1])]
@@ -1659,10 +1692,10 @@ const DevicesPage: React.FC = () => {
               <Col xs={24} sm={12} md={4}>
                 <Space>
                   <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
-                    搜索
+                    {t('common.search')}
                   </Button>
                   <Button icon={<ReloadOutlined />} onClick={handleReset}>
-                    重置
+                    {t('common.reset')}
                   </Button>
                 </Space>
               </Col>
@@ -1675,7 +1708,7 @@ const DevicesPage: React.FC = () => {
                 <Space>
                   {!isEndUser && (
                     <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-                      添加设备
+                      {t('dev.addDevice')}
                     </Button>
                   )}
                   {(isSuperAdmin || isAgent) && (
@@ -1685,13 +1718,13 @@ const DevicesPage: React.FC = () => {
                       setImportPreview([])
                       setImportResult(null)
                     }}>
-                      导入Excel
+                      {t('dev.importExcel')}
                     </Button>
                   )}
                   {!isEndUser && selectedRowKeys.length > 0 && (
                     <Dropdown menu={{ items: batchMenuItems }} placement="bottomLeft">
                       <Button icon={<SettingOutlined />}>
-                        批量操作 ({selectedRowKeys.length})
+                        {t('dev.batchOps')} ({selectedRowKeys.length})
                       </Button>
                     </Dropdown>
                   )}
@@ -1699,7 +1732,7 @@ const DevicesPage: React.FC = () => {
               </Col>
               <Col>
                 <Text type="secondary">
-                  {isInstaller ? '仅展示您安装的设备' : ''}
+                  {isInstaller ? t('dev.onlyMyDevices') : ''}
                 </Text>
               </Col>
             </Row>
@@ -1725,7 +1758,7 @@ const DevicesPage: React.FC = () => {
                 total: devicesRes?.total ?? 0,
                 showSizeChanger: true,
                 pageSizeOptions: ['10', '20', '50'],
-                showTotal: (total) => `共 ${total} 条`,
+                showTotal: (total) => t('common.total', { total }),
                 onChange: (p, ps) => {
                   setPage(p)
                   setPageSize(ps)
@@ -1733,7 +1766,7 @@ const DevicesPage: React.FC = () => {
               }}
               onChange={handleTableChange}
               scroll={{ x: 1300 }}
-              size="middle"
+              size="small"
             />
           </Card>
         </>
@@ -1751,58 +1784,58 @@ const DevicesPage: React.FC = () => {
               pageSize: unbindReqPageSize,
               total: unbindRequestsRes?.total ?? 0,
               showSizeChanger: true,
-              showTotal: (total) => `共 ${total} 条`,
+              showTotal: (total) => t('common.total', { total }),
               onChange: (p, ps) => {
                 setUnbindReqPage(p)
                 setUnbindReqPageSize(ps)
               },
             }}
             scroll={{ x: 800 }}
-            size="middle"
+            size="small"
           />
         </Card>
       )}
 
       <Modal
-        title="添加设备"
+        title={t('dev.addDeviceTitle')}
         open={addModalOpen}
         onCancel={() => setAddModalOpen(false)}
         onOk={handleAddSubmit}
         confirmLoading={createMutation.isPending}
-        okText="确认添加"
-        cancelText="取消"
+        okText={t('dev.addDevice')}
+        cancelText={t('common.cancel')}
         destroyOnClose
       >
         <Form form={addForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
             name="sn"
-            label="设备序列号"
-            rules={[{ required: true, message: '请输入设备序列号' }]}
+            label={t('dev.deviceSN')}
+            rules={[{ required: true, message: t('dev.deviceSN') }]}
           >
-            <Input placeholder="请输入SN" />
+            <Input placeholder={t('dev.deviceSN')} />
           </Form.Item>
-          <Form.Item name="model" label="型号">
-            <Input placeholder="请输入型号" />
+          <Form.Item name="model" label={t('common.model')}>
+            <Input placeholder={t('common.model')} />
           </Form.Item>
-          <Form.Item name="ratedPower" label="额定功率(W)">
-            <Input type="number" placeholder="请输入额定功率" />
+          <Form.Item name="ratedPower" label={t('dev.ratedPower_W')}>
+            <InputNumber style={{ width: '100%' }} placeholder={t('dev.ratedPower_W')} />
           </Form.Item>
-          <Form.Item name="firmwareVersion" label="固件版本">
-            <Input placeholder="请输入固件版本" />
+          <Form.Item name="firmwareVersion" label={t('dev.firmwareVersion')}>
+            <Input placeholder={t('dev.firmwareVersion')} />
           </Form.Item>
-          <Form.Item name="hardwareVersion" label="硬件版本">
-            <Input placeholder="请输入硬件版本" />
+          <Form.Item name="hardwareVersion" label={t('dev.hardwareVersion')}>
+            <Input placeholder={t('dev.hardwareVersion')} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="确认执行指令"
+        title={t('dev.confirmExecute')}
         open={confirmModalOpen}
         onOk={handleConfirmExecute}
         onCancel={() => { setConfirmModalOpen(false); setPendingExecution(null) }}
-        okText="确认执行"
-        cancelText="取消"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true }}
       >
         <div style={{ marginBottom: 12 }}>
@@ -1810,7 +1843,7 @@ const DevicesPage: React.FC = () => {
             message={selectedCommand?.label || pendingExecution?.commandName}
             description={
               selectedCommand?.confirmationMessage ||
-              '请确认是否执行此操作，部分操作可能影响设备正常运行'
+              t('dev.needConfirm')
             }
             type="warning"
             showIcon
@@ -1828,56 +1861,56 @@ const DevicesPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="编辑设备"
+        title={t('dev.editDeviceTitle')}
         open={editModalOpen}
         onCancel={() => setEditModalOpen(false)}
         onOk={handleEditSubmit}
         confirmLoading={updateMutation.isPending}
-        okText="确认修改"
-        cancelText="取消"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         destroyOnClose
       >
         <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="sn" label="设备序列号">
+          <Form.Item name="sn" label={t('dev.deviceSN')}>
             <Input disabled />
           </Form.Item>
-          <Form.Item name="model" label="型号">
-            <Input placeholder="请输入型号" />
+          <Form.Item name="model" label={t('common.model')}>
+            <Input placeholder={t('common.model')} />
           </Form.Item>
-          <Form.Item name="ratedPower" label="额定功率(W)">
-            <Input type="number" placeholder="请输入额定功率" />
+          <Form.Item name="ratedPower" label={t('dev.ratedPower_W')}>
+            <InputNumber style={{ width: '100%' }} placeholder={t('dev.ratedPower_W')} />
           </Form.Item>
-          <Form.Item name="firmwareVersion" label="固件版本">
-            <Input placeholder="请输入固件版本" />
+          <Form.Item name="firmwareVersion" label={t('dev.firmwareVersion')}>
+            <Input placeholder={t('dev.firmwareVersion')} />
           </Form.Item>
-          <Form.Item name="hardwareVersion" label="硬件版本">
-            <Input placeholder="请输入硬件版本" />
+          <Form.Item name="hardwareVersion" label={t('dev.hardwareVersion')}>
+            <Input placeholder={t('dev.hardwareVersion')} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="导入设备 (Excel)"
+        title={t('dev.importDeviceTitle')}
         open={importModalOpen}
         onCancel={() => setImportModalOpen(false)}
         onOk={handleImportSubmit}
         confirmLoading={importing}
-        okText="确认导入"
-        cancelText="取消"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         width={800}
         okButtonProps={{ disabled: !importFile }}
         destroyOnClose
       >
         <div style={{ marginBottom: 16 }}>
           <Text type="secondary">
-            支持 .xlsx / .xls 格式，表头需包含: SN, Model, RatedPower(kW), FirmwareVersion, HardwareVersion, StationName(可选)
+            {t('dev.importHintFull')}
           </Text>
           <br />
           <a
             onClick={() => {
               const XLSX = (window as any).XLSX
               if (!XLSX) {
-                messageApi.warning('Excel库未加载，请刷新页面')
+                messageApi.warning(t('dev.excelNotLoaded2'))
                 return
               }
               const wb = XLSX.utils.book_new()
@@ -1895,7 +1928,7 @@ const DevicesPage: React.FC = () => {
               XLSX.writeFile(wb, 'device_import_template.xlsx')
             }}
           >
-            下载导入模板
+            {t('common.downloadTemplate')}
           </a>
         </div>
 
@@ -1913,13 +1946,13 @@ const DevicesPage: React.FC = () => {
           <p className="ant-upload-drag-icon">
             <InboxOutlined />
           </p>
-          <p className="ant-upload-text">点击或拖拽Excel文件到此处</p>
-          <p className="ant-upload-hint">仅支持 .xlsx / .xls 格式文件</p>
+          <p className="ant-upload-text">{t('dev.uploadExcelHere')}</p>
+          <p className="ant-upload-hint">{t('dev.excelOnly')}</p>
         </Dragger>
 
         {importPreview.length > 0 && (
           <div style={{ marginTop: 16 }}>
-            <Text strong>数据预览 (前20条):</Text>
+            <Text strong>{t('dev.dataPreview')}</Text>
             <Table
               columns={importPreviewColumns}
               dataSource={importPreview.map((row, idx) => ({ ...row, key: idx }))}
@@ -1938,14 +1971,14 @@ const DevicesPage: React.FC = () => {
               <Col span={12}>
                 <Card size="small">
                   <Text strong style={{ color: '#52c41a', fontSize: 18 }}>
-                    成功: {importResult.success}
+                    {t('dev.importSuccessCount')}: {importResult.success}
                   </Text>
                 </Card>
               </Col>
               <Col span={12}>
                 <Card size="small">
                   <Text strong style={{ color: '#ff4d4f', fontSize: 18 }}>
-                    失败: {importResult.failed}
+                    {t('dev.importFailedCount')}: {importResult.failed}
                   </Text>
                 </Card>
               </Col>
@@ -1954,8 +1987,8 @@ const DevicesPage: React.FC = () => {
               <div style={{ marginTop: 8, maxHeight: 200, overflow: 'auto' }}>
                 <Table
                   columns={[
-                    { title: '行号', dataIndex: 'row', key: 'row', width: 80 },
-                    { title: '错误信息', dataIndex: 'message', key: 'message' },
+                    { title: t('dev.rowNum'), dataIndex: 'row', key: 'row', width: 80 },
+                    { title: t('dev.errorInfo'), dataIndex: 'message', key: 'message' },
                   ]}
                   dataSource={importResult.errors.map((e, idx) => ({ ...e, key: idx }))}
                   size="small"
@@ -1968,7 +2001,7 @@ const DevicesPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="申请解绑设备"
+        title={t('dev.unbindDeviceTitle')}
         open={unbindModalOpen}
         onCancel={() => {
           setUnbindModalOpen(false)
@@ -1977,21 +2010,21 @@ const DevicesPage: React.FC = () => {
         }}
         onOk={handleRequestUnbind}
         confirmLoading={requestUnbindMutation.isPending}
-        okText="提交申请"
-        cancelText="取消"
+        okText={t('common.submit')}
+        cancelText={t('common.cancel')}
         destroyOnClose
       >
         <div style={{ marginBottom: 12 }}>
-          <Text>设备序列号: <Text strong>{unbindTargetSn}</Text></Text>
+          <Text>{t('dev.deviceSN')}: <Text strong>{unbindTargetSn}</Text></Text>
         </div>
         <div style={{ marginBottom: 12 }}>
-          <Text type="secondary">解绑需要经过代理商或超级管理员审批</Text>
+          <Text type="secondary">{t('dev.unbindHint')}</Text>
         </div>
         <Form layout="vertical">
-          <Form.Item label="解绑原因" required>
+          <Form.Item label={t('dev.unbindReasonLabel')} required>
             <AntInput.TextArea
               rows={4}
-              placeholder="请输入解绑原因..."
+              placeholder={t('dev.unbindReasonPlaceholder')}
               value={unbindReason}
               onChange={(e) => setUnbindReason(e.target.value)}
             />
@@ -2002,7 +2035,7 @@ const DevicesPage: React.FC = () => {
       <Drawer
         title={
           <Space>
-            <span>设备详情</span>
+            <span>{t('dev.deviceDetail')}</span>
             {deviceDetail && <StatusBadge status={deviceDetail.status} />}
           </Space>
         }
@@ -2019,37 +2052,37 @@ const DevicesPage: React.FC = () => {
             {currentStatus !== 0 && (
               <>
                 <Popconfirm
-                  title="确认重启设备？设备将短暂离线。"
+                  title={t('dev.confirmRestart')}
                   onConfirm={() => {
                     commandApi.execute(detailSn, { command: 'restart', params: {} })
                       .then(() => {
-                        messageApi.success('重启指令已下发')
+                        messageApi.success(t('dev.restartSuccess'))
                         queryClient.invalidateQueries({ queryKey: ['commandHistory', detailSn] })
                       })
-                      .catch(() => messageApi.error('下发失败'))
+                      .catch(() => messageApi.error(t('dev.restartFailed')))
                   }}
-                  okText="确认重启"
-                  cancelText="取消"
+                  okText={t('dev.confirmRestartBtn')}
+                  cancelText={t('common.cancel')}
                 >
-                  <Button icon={<ReloadOutlined />}>重启设备</Button>
+                  <Button icon={<ReloadOutlined />}>{t('dev.restartDevice')}</Button>
                 </Popconfirm>
                 <Button
                   icon={<ThunderboltOutlined />}
                   onClick={() => {
                     commandApi.execute(detailSn, { command: 'query_status', params: {} })
                       .then(() => {
-                        messageApi.success('状态查询指令已下发')
+                        messageApi.success(t('dev.querySuccess'))
                         queryClient.invalidateQueries({ queryKey: ['commandHistory', detailSn] })
                       })
-                      .catch(() => messageApi.error('下发失败'))
+                      .catch(() => messageApi.error(t('dev.queryFailed')))
                   }}
                 >
-                  查询状态
+                  {t('dev.queryStatus')}
                 </Button>
               </>
             )}
             {currentStatus === 0 && (
-              <Tag color="red">设备离线，无法执行指令</Tag>
+              <Tag color="red">{t('dev.deviceOffline')}</Tag>
             )}
           </Space>
         }
@@ -2061,7 +2094,7 @@ const DevicesPage: React.FC = () => {
             items={drawerTabItems}
           />
         ) : (
-          <Spin tip="加载中..." />
+          <Spin tip={t('common.loading')} />
         )}
       </Drawer>
     </div>

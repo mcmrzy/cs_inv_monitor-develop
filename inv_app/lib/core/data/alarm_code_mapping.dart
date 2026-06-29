@@ -19,6 +19,10 @@ class AlarmCodeEntry {
     required this.tags,
   });
 
+  String getLocalizedName(String languageCode) {
+    return languageCode == 'zh' ? nameZh : nameEn;
+  }
+
   factory AlarmCodeEntry.fromJson(Map<String, dynamic> json) {
     return AlarmCodeEntry(
       code: json['code'] as int,
@@ -355,6 +359,16 @@ class AlarmCodeMapping {
   static String getNameZh(int code) {
     final entry = mapping[code];
     return entry?.nameZh ?? '未知告警(0x${code.toRadixString(16).toUpperCase()})';
+  }
+
+  static String getLocalizedName(int code, String languageCode) {
+    final entry = mapping[code];
+    if (entry == null) {
+      return languageCode == 'zh'
+          ? '未知告警(0x${code.toRadixString(16).toUpperCase()})'
+          : 'Unknown alarm(0x${code.toRadixString(16).toUpperCase()})';
+    }
+    return entry.getLocalizedName(languageCode);
   }
 
   static String getDescription(int code) {

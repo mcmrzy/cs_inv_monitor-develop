@@ -60,13 +60,13 @@ class User {
   String get roleName {
     switch (role) {
       case 0:
-        return '超级管理员';
+        return 'Admin';
       case 1:
-        return '代理商';
+        return 'Agent';
       case 2:
-        return '安装商';
+        return 'Installer';
       default:
-        return '用户';
+        return 'User';
     }
   }
 }

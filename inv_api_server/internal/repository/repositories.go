@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"inv-api-server/internal/model"
@@ -26,7 +27,7 @@ func NewUserRepository(db *pgxpool.Pool, cache *redis.Client) *UserRepository {
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
 		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, region_id, status,
-			   last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
+			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`
 
@@ -36,7 +37,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &user.Nickname, &user.Avatar,
-		&user.Role, &regionID, &user.Status, &lastLoginAt, &user.LastLoginIP,
+		&user.Role, &regionID, &user.Status, &user.Timezone, &lastLoginAt, &user.LastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -121,7 +122,7 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
 		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, region_id, status,
-			   last_login_at, last_login_ip, created_at, updated_at
+			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE email = $1 AND deleted_at IS NULL
 	`
 
@@ -132,7 +133,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 	err := r.db.QueryRow(ctx, query, email).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &nickname, &avatar,
-		&user.Role, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
+		&user.Role, &regionID, &user.Status, &user.Timezone, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -212,7 +213,12 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID int64, passw
 	return err
 }
 
-func (r *UserRepository) UpdateProfile(ctx context.Context, userID int64, nickname, avatar string) error {
+func (r *UserRepository) UpdateProfile(ctx context.Context, userID int64, nickname, avatar, tz string) error {
+	if tz != "" {
+		query := `UPDATE users SET nickname = $1, avatar = $2, timezone = $3, updated_at = NOW() WHERE id = $4`
+		_, err := r.db.Exec(ctx, query, nickname, avatar, tz, userID)
+		return err
+	}
 	query := `UPDATE users SET nickname = $1, avatar = $2, updated_at = NOW() WHERE id = $3`
 	_, err := r.db.Exec(ctx, query, nickname, avatar, userID)
 	return err
@@ -463,15 +469,15 @@ func NewStationRepository(db *pgxpool.Pool) *StationRepository {
 func (r *StationRepository) Create(ctx context.Context, station *model.Station) error {
 	query := `
 		INSERT INTO stations (user_id, name, province, city, district, address, capacity,
-							  panel_count, latitude, longitude, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+							  panel_count, latitude, longitude, timezone, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 
 	return r.db.QueryRow(ctx, query,
 		station.UserID, station.Name, station.Province, station.City, station.District,
 		station.Address, station.Capacity, station.PanelCount,
-		station.Latitude, station.Longitude, station.Status,
+		station.Latitude, station.Longitude, station.Timezone, station.Status,
 	).Scan(&station.ID, &station.CreatedAt, &station.UpdatedAt)
 }
 
@@ -479,14 +485,16 @@ func (r *StationRepository) Update(ctx context.Context, station *model.Station) 
 	query := `
 		UPDATE stations SET name = $1, province = $2, city = $3, district = $4, address = $5,
 							 capacity = $6, panel_count = $7,
-							 latitude = $8, longitude = $9, updated_at = NOW()
-		WHERE id = $10
+							 peak_price = $8, valley_price = $9,
+							 latitude = $10, longitude = $11, timezone = $12, updated_at = NOW()
+		WHERE id = $13
 	`
 
 	_, err := r.db.Exec(ctx, query,
 		station.Name, station.Province, station.City, station.District, station.Address,
 		station.Capacity, station.PanelCount,
-		station.Latitude, station.Longitude, station.ID,
+		station.PeakPrice, station.ValleyPrice,
+		station.Latitude, station.Longitude, station.Timezone, station.ID,
 	)
 	return err
 }
@@ -520,7 +528,7 @@ func (r *StationRepository) Assign(ctx context.Context, id int64, userID int64) 
 func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Station, error) {
 	query := `
 		SELECT id, user_id, name, province, city, district, address, capacity,
-			   panel_count, latitude, longitude, status, created_at, updated_at
+			   panel_count, latitude, longitude, timezone, status, created_at, updated_at
 		FROM stations WHERE id = $1 AND deleted_at IS NULL
 	`
 
@@ -528,7 +536,7 @@ func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Stati
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&station.ID, &station.UserID, &station.Name, &station.Province, &station.City,
 		&station.District, &station.Address, &station.Capacity, &station.PanelCount,
-		&station.Latitude, &station.Longitude,
+		&station.Latitude, &station.Longitude, &station.Timezone,
 		&station.Status, &station.CreatedAt, &station.UpdatedAt,
 	)
 
@@ -553,7 +561,7 @@ func (r *StationRepository) GetByUserID(ctx context.Context, userID int64, page,
 
 	query := `
 		SELECT id, user_id, name, province, city, district, address, capacity,
-			   panel_count, latitude, longitude, status, created_at, updated_at
+			   panel_count, latitude, longitude, timezone, status, created_at, updated_at
 		FROM stations WHERE user_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
@@ -571,7 +579,7 @@ func (r *StationRepository) GetByUserID(ctx context.Context, userID int64, page,
 		if err := rows.Scan(
 			&station.ID, &station.UserID, &station.Name, &station.Province, &station.City,
 			&station.District, &station.Address, &station.Capacity, &station.PanelCount,
-			&station.Latitude, &station.Longitude,
+			&station.Latitude, &station.Longitude, &station.Timezone,
 			&station.Status, &station.CreatedAt, &station.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
@@ -593,7 +601,7 @@ func (r *StationRepository) GetAll(ctx context.Context, page, pageSize int) ([]*
 
 	query := `
 		SELECT id, user_id, name, province, city, district, address, capacity,
-			   panel_count, latitude, longitude, status, created_at, updated_at
+			   panel_count, latitude, longitude, timezone, status, created_at, updated_at
 		FROM stations WHERE deleted_at IS NULL
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -611,7 +619,7 @@ func (r *StationRepository) GetAll(ctx context.Context, page, pageSize int) ([]*
 		if err := rows.Scan(
 			&station.ID, &station.UserID, &station.Name, &station.Province, &station.City,
 			&station.District, &station.Address, &station.Capacity, &station.PanelCount,
-			&station.Latitude, &station.Longitude,
+			&station.Latitude, &station.Longitude, &station.Timezone,
 			&station.Status, &station.CreatedAt, &station.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
@@ -673,16 +681,26 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 	switch period {
 	case "hour":
 		query := `
-			SELECT 
+			SELECT
 				DATE_TRUNC('hour', telem.time) as hour_time,
-				AVG(COALESCE((telem.data->'pv'->>'pv_power')::float, (telem.data->>'pv_power')::float)) as avg_pv_power,
-				AVG(COALESCE((telem.data->'ac'->>'power')::float, (telem.data->>'power')::float)) as avg_ac_power,
-				MAX(COALESCE((telem.data->'energy'->>'daily_pv')::float, (telem.data->>'daily_pv')::float)) as max_daily_pv,
-				COUNT(DISTINCT telem.device_sn) as device_count
+				AVG(COALESCE((telem.data->>'pv_power_total')::float, (telem.data->'pv_data'->>'pv_power_total')::float, (telem.data->'data'->>'pv_power_total')::float)) FILTER (WHERE telem.topic = 'data/pv') as avg_pv_power,
+				AVG(COALESCE((telem.data->>'power')::float, (telem.data->'ac_data'->>'power')::float, (telem.data->'data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as avg_ac_power,
+				AVG(COALESCE(
+					(telem.data->>'voltage')::float * (telem.data->>'current')::float,
+					(telem.data->'batt_data'->>'voltage')::float * (telem.data->'batt_data'->>'current')::float,
+					(telem.data->'data'->>'voltage')::float * (telem.data->'data'->>'current')::float,
+					0
+				)) FILTER (WHERE telem.topic = 'data/battery') as avg_batt_power,
+				MAX(COALESCE((telem.data->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float, (telem.data->'data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
+				MAX(COALESCE((telem.data->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float, (telem.data->'data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
+				MAX(COALESCE((telem.data->>'daily_discharge')::float, (telem.data->'energy_data'->>'daily_discharge')::float, (telem.data->'data'->>'daily_discharge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_discharge,
+				MAX(COALESCE((telem.data->>'daily_load')::float, (telem.data->'energy_data'->>'daily_load')::float, (telem.data->'data'->>'daily_load')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_load,
+				COUNT(DISTINCT telem.device_sn) FILTER (WHERE telem.topic IN ('data/pv', 'data/ac')) as device_count
 			FROM device_telemetry telem
 			WHERE telem.device_sn = ANY($1)
 				AND telem.time >= $2::timestamp
 				AND telem.time <= $3::timestamp
+				AND telem.topic IN ('data/pv', 'data/ac', 'data/battery', 'data/energy')
 			GROUP BY DATE_TRUNC('hour', telem.time)
 			ORDER BY hour_time
 		`
@@ -697,17 +715,31 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 
 		for rows.Next() {
 			var hourTime time.Time
-			var avgPvPower, avgAcPower sql.NullFloat64
-			var maxDailyPv sql.NullFloat64
+			var avgPvPower, avgAcPower, avgBattPower sql.NullFloat64
+			var maxDailyPv, maxDailyCharge, maxDailyDischarge, maxDailyLoad sql.NullFloat64
 			var deviceCount int
-			if err := rows.Scan(&hourTime, &avgPvPower, &avgAcPower, &maxDailyPv, &deviceCount); err != nil {
+			if err := rows.Scan(&hourTime, &avgPvPower, &avgAcPower, &avgBattPower, &maxDailyPv, &maxDailyCharge, &maxDailyDischarge, &maxDailyLoad, &deviceCount); err != nil {
 				return nil, err
 			}
+			// 电池功率：正数为充电，负数为放电
+			battPower := avgBattPower.Float64
+			batteryCharge := 0.0
+			batteryDischarge := 0.0
+			if battPower > 0 {
+				batteryCharge = battPower
+			} else if battPower < 0 {
+				batteryDischarge = -battPower
+			}
 			results = append(results, map[string]interface{}{
-				"time":           hourTime,
-				"energy_produce": avgPvPower.Float64,
-				"energy_consume": avgAcPower.Float64,
-				"daily_pv":       maxDailyPv.Float64,
+				"time":              hourTime,
+				"energy_produce":    avgPvPower.Float64,
+				"energy_consume":    avgAcPower.Float64,
+				"battery_charge":    batteryCharge,
+				"battery_discharge": batteryDischarge,
+				"daily_pv":          maxDailyPv.Float64,
+				"daily_charge":      maxDailyCharge.Float64,
+				"daily_discharge":   maxDailyDischarge.Float64,
+				"daily_load":        maxDailyLoad.Float64,
 			})
 		}
 
@@ -715,13 +747,17 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 		query := `
 			SELECT 
 				DATE(telem.time) as day_date,
-				MAX(COALESCE((telem.data->'energy'->>'daily_pv')::float, (telem.data->>'daily_pv')::float)) as max_daily_pv,
-				MAX(COALESCE((telem.data->'ac'->>'power')::float, (telem.data->>'power')::float)) as max_ac_power,
-				COUNT(DISTINCT telem.device_sn) as device_count
+				MAX(COALESCE((telem.data->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float, (telem.data->'data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
+				MAX(COALESCE((telem.data->>'power')::float, (telem.data->'ac_data'->>'power')::float, (telem.data->'data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as max_ac_power,
+				MAX(COALESCE((telem.data->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float, (telem.data->'data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
+				MAX(COALESCE((telem.data->>'daily_discharge')::float, (telem.data->'energy_data'->>'daily_discharge')::float, (telem.data->'data'->>'daily_discharge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_discharge,
+				MAX(COALESCE((telem.data->>'daily_load')::float, (telem.data->'energy_data'->>'daily_load')::float, (telem.data->'data'->>'daily_load')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_load,
+				COUNT(DISTINCT telem.device_sn) FILTER (WHERE telem.topic IN ('data/pv', 'data/ac')) as device_count
 			FROM device_telemetry telem
 			WHERE telem.device_sn = ANY($1)
 				AND telem.time >= $2::timestamp
 				AND telem.time <= $3::timestamp
+				AND telem.topic IN ('data/pv', 'data/ac', 'data/energy')
 			GROUP BY DATE(telem.time)
 			ORDER BY day_date
 		`
@@ -736,15 +772,20 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 		for rows.Next() {
 			var dayDate time.Time
 			var maxDailyPv, maxAcPower sql.NullFloat64
+			var maxDailyCharge, maxDailyDischarge, maxDailyLoad sql.NullFloat64
 			var deviceCount int
-			if err := rows.Scan(&dayDate, &maxDailyPv, &maxAcPower, &deviceCount); err != nil {
+			if err := rows.Scan(&dayDate, &maxDailyPv, &maxAcPower, &maxDailyCharge, &maxDailyDischarge, &maxDailyLoad, &deviceCount); err != nil {
 				return nil, err
 			}
 			results = append(results, map[string]interface{}{
-				"time":           dayDate,
-				"energy_produce": maxDailyPv.Float64,
-				"energy_consume": maxAcPower.Float64,
-				"daily_pv":       maxDailyPv.Float64,
+				"time":              dayDate,
+				"energy_produce":    maxDailyPv.Float64,
+				"energy_consume":    maxDailyLoad.Float64,
+				"ac_power":          maxAcPower.Float64,
+				"daily_pv":          maxDailyPv.Float64,
+				"battery_charge":    maxDailyCharge.Float64,
+				"battery_discharge": maxDailyDischarge.Float64,
+				"daily_load":        maxDailyLoad.Float64,
 			})
 		}
 	}
@@ -1070,11 +1111,15 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, stationID int64) (float64, float64, error) {
 	var dailyEnergy float64
 	query := `
-		SELECT COALESCE(
-			MAX(CASE WHEN daily_energy > 0 THEN daily_energy ELSE (data->>'daily_pv')::float END) -
-			MIN(CASE WHEN daily_energy > 0 THEN daily_energy ELSE (data->>'daily_pv')::float END), 0)
+		SELECT COALESCE(MAX(COALESCE(
+			(data->'data'->>'daily_pv')::float,
+			(data->>'daily_pv')::float,
+			(data->'data'->>'energy_daily_pv')::float,
+			(data->>'energy_daily_pv')::float,
+			daily_energy
+		)), 0)
 		FROM device_telemetry
-		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status = 1)
+		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status IN (1, 2))
 		AND time::date = CURRENT_DATE
 		AND topic = 'data/energy'
 	`
@@ -1106,7 +1151,7 @@ func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, statio
 func (r *DeviceRepository) getStationDeviceSNs(ctx context.Context, stationID int64, onlineOnly bool) ([]string, error) {
 	baseQuery := `SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL`
 	if onlineOnly {
-		baseQuery += ` AND status = 1`
+		baseQuery += ` AND status IN (1, 2)`
 	}
 	rows, err := r.db.Query(ctx, baseQuery, stationID)
 	if err != nil {
@@ -1145,24 +1190,42 @@ func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, station
 				continue
 			}
 
-			if pv, ok := m["pv"].(map[string]interface{}); ok {
-				if p, ok := pv["pv_power"].(float64); ok {
+			// 处理 pv 数据 - 支持 {"pv": {...}} 和 {"pv": {"data": {...}}} 两种格式
+			if pvRaw, ok := m["pv"].(map[string]interface{}); ok {
+				pvData := pvRaw
+				if innerData, ok := pvRaw["data"].(map[string]interface{}); ok {
+					pvData = innerData
+				}
+				// 优先使用 pv_power_total（完整数据格式），其次使用 pv_power（兼容旧格式）
+				if p, ok := pvData["pv_power_total"].(float64); ok {
+					pvPower += p
+					redisHit = true
+				} else if p, ok := pvData["pv_power"].(float64); ok {
 					pvPower += p
 					redisHit = true
 				}
 			}
-			if ac, ok := m["ac"].(map[string]interface{}); ok {
-				if p, ok := ac["power"].(float64); ok {
+			// 处理 ac 数据 - 支持 {"ac": {...}} 和 {"ac": {"data": {...}}} 两种格式
+			if acRaw, ok := m["ac"].(map[string]interface{}); ok {
+				acData := acRaw
+				if innerData, ok := acRaw["data"].(map[string]interface{}); ok {
+					acData = innerData
+				}
+				if p, ok := acData["power"].(float64); ok {
 					loadPower += p
 					redisHit = true
 				}
 			}
 			// 兼容 Redis 缓存中的 key 别名: batt / battery
-			battData, _ := m["batt"].(map[string]interface{})
-			if battData == nil {
-				battData, _ = m["battery"].(map[string]interface{})
+			battRaw, _ := m["batt"].(map[string]interface{})
+			if battRaw == nil {
+				battRaw, _ = m["battery"].(map[string]interface{})
 			}
-			if battData != nil {
+			if battRaw != nil {
+				battData := battRaw
+				if innerData, ok := battRaw["data"].(map[string]interface{}); ok {
+					battData = innerData
+				}
 				v, _ := battData["voltage"].(float64)
 				c, _ := battData["current"].(float64)
 				battPower += v * c
@@ -1183,22 +1246,24 @@ func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, station
 		return
 	}
 
-	// 从 device_telemetry 获取最新数据（兼容嵌套和扁平两种字段格式）
+	// 从 device_telemetry 获取最新数据（按 topic 分别取每个设备的最新值）
 	query := `
 		SELECT
-			COALESCE(SUM(COALESCE((data->'pv'->>'pv_power')::float, (data->>'pv_power')::float)), 0),
-			COALESCE(SUM(COALESCE((data->'ac'->>'power')::float, (data->>'ac_power')::float)), 0),
-			COALESCE(SUM(
-				COALESCE((data->'batt'->>'voltage')::float, (data->>'batt_voltage')::float, 0)
-				* COALESCE((data->'batt'->>'current')::float, (data->>'batt_current')::float, 0)
-			), 0),
-			COALESCE(AVG(NULLIF(COALESCE((data->'batt'->>'soc')::float, (data->>'batt_soc')::float), 0)), 0)
+			COALESCE(SUM(CASE WHEN telem.topic = 'data/pv' THEN COALESCE((telem.data->'pv_data'->>'pv_power_total')::float, (telem.data->'data'->>'pv_power_total')::float) END), 0),
+			COALESCE(SUM(CASE WHEN telem.topic = 'data/ac' THEN COALESCE((telem.data->'ac_data'->>'power')::float, (telem.data->'data'->>'power')::float) END), 0),
+			COALESCE(SUM(CASE WHEN telem.topic = 'data/battery' 
+				THEN COALESCE((telem.data->'batt_data'->>'voltage')::float, (telem.data->'data'->>'voltage')::float, 0) 
+					* COALESCE((telem.data->'batt_data'->>'current')::float, (telem.data->'data'->>'current')::float, 0) 
+			END), 0),
+			COALESCE(AVG(CASE WHEN telem.topic = 'data/battery' THEN NULLIF(COALESCE((telem.data->'batt_data'->>'soc')::float, (telem.data->'data'->>'soc')::float), 0) END), 0)
 		FROM (
-			SELECT DISTINCT ON (device_sn) data
-			FROM device_telemetry
-			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status = 1)
-			ORDER BY device_sn, time DESC
-		) latest
+			SELECT device_sn, telem.topic, telem.data,
+				ROW_NUMBER() OVER (PARTITION BY device_sn, telem.topic ORDER BY telem.time DESC) as rn
+			FROM device_telemetry telem
+			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status IN (1, 2))
+				AND telem.topic IN ('data/pv', 'data/ac', 'data/battery')
+		) telem
+		WHERE telem.rn = 1
 	`
 	if err := r.db.QueryRow(ctx, query, stationID).Scan(&pvPower, &loadPower, &battPower, &battSoc); err != nil {
 		return
@@ -1208,24 +1273,42 @@ func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, station
 }
 
 func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationID int64) (float64, float64) {
-	totalQuery := `
-		SELECT COALESCE(SUM(daily_max), 0)
+	// 累计发电量：直接取每个设备最新的 total_pv 值，然后求和
+	var totalEnergy float64
+	rows, err := r.db.Query(ctx, `
+		SELECT COALESCE(
+			(data->>'total_pv')::float,
+			(data->'data'->>'total_pv')::float,
+			0
+		) as total_pv
 		FROM (
-			SELECT DATE(time) as day, device_sn, MAX(CASE WHEN daily_energy > 0 THEN daily_energy ELSE (data->>'daily_pv')::float END) as daily_max
+			SELECT DISTINCT ON (device_sn) device_sn, data
 			FROM device_telemetry
 			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
 			AND topic = 'data/energy'
-			GROUP BY DATE(time), device_sn
-		) per_device_daily
-		WHERE daily_max > 0
-	`
-	var totalEnergy float64
-	r.db.QueryRow(ctx, totalQuery, stationID).Scan(&totalEnergy)
+			ORDER BY device_sn, time DESC
+		) latest
+		WHERE COALESCE((data->>'total_pv')::float, (data->'data'->>'total_pv')::float, 0) > 0
+	`, stationID)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var pv float64
+			if rows.Scan(&pv) == nil {
+				totalEnergy += pv
+			}
+		}
+	}
 
+	// 本月发电量：用 daily_pv 按天汇总
 	monthQuery := `
 		SELECT COALESCE(SUM(daily_max), 0)
 		FROM (
-			SELECT DATE(time) as day, device_sn, MAX(CASE WHEN daily_energy > 0 THEN daily_energy ELSE (data->>'daily_pv')::float END) as daily_max
+			SELECT DATE(time) as day, device_sn, MAX(COALESCE(
+				(data->>'daily_pv')::float,
+				(data->'data'->>'daily_pv')::float,
+				0
+			)) as daily_max
 			FROM device_telemetry
 			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
 			AND time >= DATE_TRUNC('month', CURRENT_DATE)
@@ -1244,7 +1327,14 @@ func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID i
 	query := `
 		SELECT COALESCE(SUM(daily_max), 0)
 		FROM (
-			SELECT DATE(time) as day, device_sn, MAX(CASE WHEN daily_energy > 0 THEN daily_energy ELSE (data->>'daily_pv')::float END) as daily_max
+			SELECT DATE(time) as day, device_sn,
+				MAX(COALESCE(
+					(data->'data'->>'daily_pv')::float,
+					(data->>'daily_pv')::float,
+					(data->'data'->>'energy_daily_pv')::float,
+					(data->>'energy_daily_pv')::float,
+					daily_energy
+				)) as daily_max
 			FROM device_telemetry
 			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
 			AND time >= DATE_TRUNC('year', CURRENT_DATE)
@@ -1260,9 +1350,13 @@ func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID i
 
 func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID int64) (float64, error) {
 	query := `
-		SELECT COALESCE(
-			MAX(CASE WHEN daily_energy > 0 THEN daily_energy ELSE (data->>'daily_pv')::float END) -
-			MIN(CASE WHEN daily_energy > 0 THEN daily_energy ELSE (data->>'daily_pv')::float END), 0)
+		SELECT COALESCE(MAX(COALESCE(
+			(data->'data'->>'daily_pv')::float,
+			(data->>'daily_pv')::float,
+			(data->'data'->>'energy_daily_pv')::float,
+			(data->>'energy_daily_pv')::float,
+			daily_energy
+		)), 0)
 		FROM device_telemetry
 		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
 		AND time::date = CURRENT_DATE
@@ -1273,12 +1367,121 @@ func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID 
 	return energy, err
 }
 
+// normalizeRealtimeData 将 Redis 缓存的原始数据转换为前端期望的格式
+// 同时将嵌套的 ac/pv/battery/system 数据展平到顶层，供监控页面直接读取
+func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
+	// batt → battery (前端期望 battery)，并展平到顶层
+	if batt, ok := data["batt"]; ok {
+		if battMap, ok := batt.(map[string]interface{}); ok {
+			data["battery"] = battMap
+			if tempBat, exists := battMap["temp_battery"]; exists {
+				battMap["temp"] = tempBat
+			}
+			// 展平电池字段 (监控页面期望 rt.battery_soc, rt.battery_voltage 等)
+			if v, exists := battMap["soc"]; exists {
+				data["battery_soc"] = v
+			}
+			if v, exists := battMap["voltage"]; exists {
+				data["battery_voltage"] = v
+			}
+			// 充放电功率：power > 0 充电, power < 0 放电
+			if v, exists := battMap["power"]; exists {
+				if power, ok := v.(float64); ok {
+					if power >= 0 {
+						data["charge_power"] = v
+						data["discharge_power"] = float64(0)
+					} else {
+						data["charge_power"] = float64(0)
+						data["discharge_power"] = -power
+					}
+				}
+			}
+			if v, exists := battMap["charge_state"]; exists {
+				data["charge_state"] = v
+			}
+		}
+	}
+
+	// sys → system (前端期望 system)，并展平到顶层
+	if sys, ok := data["sys"]; ok {
+		if sysMap, ok := sys.(map[string]interface{}); ok {
+			data["system"] = sysMap
+			if v, exists := sysMap["temp_inv"]; exists {
+				data["inverter_temp"] = v
+			}
+			if v, exists := sysMap["dc_bus_voltage"]; exists {
+				data["vbus1"] = v
+			}
+			if v, exists := sysMap["state"]; exists {
+				data["work_state"] = v
+			}
+		}
+	}
+
+	// pv: 展平所有 PV 字段到顶层 (rt.pv1_voltage, rt.pv2_voltage 等)
+	if pv, ok := data["pv"]; ok {
+		if pvMap, ok := pv.(map[string]interface{}); ok {
+			for k, v := range pvMap {
+				data[k] = v
+			}
+			if v, exists := pvMap["pv_power_total"]; exists {
+				data["pv_total_power"] = v
+			}
+		}
+	}
+
+	// ac: 展平到顶层 (rt.ac_voltage, rt.ac_power 等)
+	if ac, ok := data["ac"]; ok {
+		if acMap, ok := ac.(map[string]interface{}); ok {
+			if v, exists := acMap["voltage"]; exists {
+				data["ac_voltage"] = v
+			}
+			if v, exists := acMap["current"]; exists {
+				data["ac_current"] = v
+			}
+			if v, exists := acMap["power"]; exists {
+				data["ac_power"] = v
+			}
+			if v, exists := acMap["frequency"]; exists {
+				data["ac_frequency"] = v
+			}
+			if v, exists := acMap["pf"]; exists {
+				data["power_factor"] = v
+			}
+		}
+	}
+
+	// energy: 展平到顶层
+	if energy, ok := data["energy"]; ok {
+		if energyMap, ok := energy.(map[string]interface{}); ok {
+			for k, v := range energyMap {
+				data[k] = v
+			}
+		}
+	}
+
+	return data
+}
+
 func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[string]interface{}, error) {
 	online := false
 	var deviceStatus int
 	err := r.db.QueryRow(ctx, `SELECT status FROM devices WHERE sn=$1 AND deleted_at IS NULL`, sn).Scan(&deviceStatus)
 	if err == nil && deviceStatus == 1 {
 		online = true
+	}
+
+	// 优先使用 Redis 中的实时在线标记（Device Server 通过 MarkDeviceOnline 写入）
+	if r.cache != nil {
+		tsStr, err := r.cache.HGet(ctx, "device:online", sn).Result()
+		if err == nil && tsStr != "" {
+			var ts int64
+			if _, err := fmt.Sscanf(tsStr, "%d", &ts); err == nil {
+				if time.Now().Unix()-ts < 120 {
+					online = true
+				}
+			}
+		}
 	}
 
 	if r.cache != nil {
@@ -1291,7 +1494,16 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 			var m map[string]interface{}
 			if json.Unmarshal([]byte(cached), &m) == nil {
 				for k, v := range m {
-					result[k] = v
+					// 处理嵌套格式 {"data": {...}, "timestamp": ...}
+					if nested, ok := v.(map[string]interface{}); ok {
+						if innerData, exists := nested["data"].(map[string]interface{}); exists {
+							result[k] = innerData
+						} else {
+							result[k] = v
+						}
+					} else {
+						result[k] = v
+					}
 				}
 			}
 		}
@@ -1328,7 +1540,7 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 		}
 
 		if len(result) > 3 {
-			return result, nil
+			return normalizeRealtimeData(result), nil
 		}
 
 		for _, cacheKey := range []string{"telemetry:latest:" + sn} {
@@ -1339,7 +1551,7 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 			var m map[string]interface{}
 			if json.Unmarshal([]byte(cached), &m) == nil {
 				m["online"] = online
-				return m, nil
+				return normalizeRealtimeData(m), nil
 			}
 		}
 	}
@@ -1359,7 +1571,7 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 	}
 
 	m["online"] = online
-	return m, nil
+	return normalizeRealtimeData(m), nil
 }
 
 func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
@@ -1371,12 +1583,16 @@ func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
 }
 
 func (r *DeviceRepository) Bind(ctx context.Context, sn string, userID, stationID int64) error {
-	query := `UPDATE devices SET user_id = $1, station_id = $2, updated_at = NOW() WHERE sn = $3`
-	_, err := r.db.Exec(ctx, query, userID, stationID, sn)
-	if err == nil {
-		r.invalidateDeviceCache(ctx, sn)
+	query := `UPDATE devices SET user_id = $1, station_id = $2, updated_at = NOW() WHERE sn = $3 AND user_id = 0`
+	tag, err := r.db.Exec(ctx, query, userID, stationID, sn)
+	if err != nil {
+		return err
 	}
-	return err
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("device already bound")
+	}
+	r.invalidateDeviceCache(ctx, sn)
+	return nil
 }
 
 func (r *DeviceRepository) Unbind(ctx context.Context, sn string) error {
@@ -1438,7 +1654,7 @@ func (r *DeviceRepository) invalidateDeviceCache(ctx context.Context, sn string)
 }
 
 func (r *DeviceRepository) MarkStaleDevicesOffline(ctx context.Context, timeoutSeconds int) ([]string, error) {
-	rows, err := r.db.Query(ctx, `SELECT sn FROM devices WHERE status=1 AND last_online_at < NOW() - MAKE_INTERVAL(secs => $1)`, timeoutSeconds)
+	rows, err := r.db.Query(ctx, `SELECT sn FROM devices WHERE status IN (1, 2) AND last_online_at < NOW() - MAKE_INTERVAL(secs => $1)`, timeoutSeconds)
 	if err != nil {
 		return nil, err
 	}
@@ -1453,8 +1669,25 @@ func (r *DeviceRepository) MarkStaleDevicesOffline(ctx context.Context, timeoutS
 		sns = append(sns, sn)
 	}
 
+	// 双重校验：检查 Redis device:online，如果 Redis 显示设备最近有数据则不标记离线
+	if len(sns) > 0 && r.cache != nil {
+		var stale []string
+		now := time.Now().Unix()
+		for _, sn := range sns {
+			tsStr, err := r.cache.HGet(ctx, "device:online", sn).Result()
+			if err == nil {
+				ts, _ := strconv.ParseInt(tsStr, 10, 64)
+				if ts > 0 && now-ts < int64(timeoutSeconds) {
+					continue // Redis 显示设备在线，跳过
+				}
+			}
+			stale = append(stale, sn)
+		}
+		sns = stale
+	}
+
 	if len(sns) > 0 {
-		r.db.Exec(ctx, `UPDATE devices SET status=0, updated_at=NOW() WHERE status=1 AND last_online_at < NOW() - MAKE_INTERVAL(secs => $1)`, timeoutSeconds)
+		r.db.Exec(ctx, `UPDATE devices SET status=0, updated_at=NOW() WHERE sn = ANY($1)`, sns)
 	}
 
 	return sns, nil
@@ -1464,7 +1697,7 @@ func (r *DeviceRepository) SyncStationStatus(ctx context.Context) error {
 	_, err := r.db.Exec(ctx, `
 		UPDATE stations SET
 			status = CASE
-				WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status = 1 AND devices.deleted_at IS NULL) THEN 1
+				WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status IN (1, 2) AND devices.deleted_at IS NULL) THEN 1
 				ELSE 0
 			END,
 			updated_at = NOW()
@@ -1558,27 +1791,94 @@ func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, en
 }
 
 func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, endDate, period string) (map[string]interface{}, error) {
-	// 从 device_telemetry 计算统计数据
-	query := `
-		SELECT 
-			COALESCE(MAX(daily_energy) - MIN(daily_energy), 0) as total_energy
-		FROM device_telemetry 
-		WHERE device_sn = $1 AND time >= $2 AND time <= $3
+	// JSONB 数据可能是嵌套格式 {"data": {"daily_pv": ...}} 或扁平格式 {"daily_pv": ...}
+	// 使用 COALESCE 兼容两种格式
+
+	// 今日发电量：取今天 data/energy topic 中 daily_pv 的最大值
+	dailyQuery := `
+		SELECT COALESCE(MAX(COALESCE(
+			(data->'data'->>'daily_pv')::float,
+			(data->>'daily_pv')::float,
+			(data->'data'->>'energy_daily_pv')::float,
+			(data->>'energy_daily_pv')::float
+		)), 0)
+		FROM device_telemetry
+		WHERE device_sn = $1 AND time::date = CURRENT_DATE AND topic = 'data/energy'
 	`
+	var dailyEnergy float64
+	r.db.QueryRow(ctx, dailyQuery, sn).Scan(&dailyEnergy)
 
-	var energyProduce float64
-	err := r.db.QueryRow(ctx, query, sn, startDate, endDate).Scan(&energyProduce)
+	// 月发电量：本月每天 daily_pv 最大值之和
+	monthlyQuery := `
+		SELECT COALESCE(SUM(daily_max), 0)
+		FROM (
+			SELECT DATE(time) as day, MAX(COALESCE(
+				(data->'data'->>'daily_pv')::float,
+				(data->>'daily_pv')::float,
+				(data->'data'->>'energy_daily_pv')::float,
+				(data->>'energy_daily_pv')::float
+			)) as daily_max
+			FROM device_telemetry
+			WHERE device_sn = $1
+			  AND time >= DATE_TRUNC('month', CURRENT_DATE)
+			  AND topic = 'data/energy'
+			GROUP BY DATE(time)
+			HAVING MAX(COALESCE(
+				(data->'data'->>'daily_pv')::float,
+				(data->>'daily_pv')::float,
+				(data->'data'->>'energy_daily_pv')::float,
+				(data->>'energy_daily_pv')::float
+			)) > 0
+		) daily
+	`
+	var monthlyEnergy float64
+	r.db.QueryRow(ctx, monthlyQuery, sn).Scan(&monthlyEnergy)
 
-	if err != nil {
-		return nil, err
-	}
+	// 总发电量：历史每天 daily_pv 最大值之和
+	totalQuery := `
+		SELECT COALESCE(SUM(daily_max), 0)
+		FROM (
+			SELECT DATE(time) as day, MAX(COALESCE(
+				(data->'data'->>'daily_pv')::float,
+				(data->>'daily_pv')::float,
+				(data->'data'->>'energy_daily_pv')::float,
+				(data->>'energy_daily_pv')::float
+			)) as daily_max
+			FROM device_telemetry
+			WHERE device_sn = $1 AND topic = 'data/energy'
+			GROUP BY DATE(time)
+			HAVING MAX(COALESCE(
+				(data->'data'->>'daily_pv')::float,
+				(data->>'daily_pv')::float,
+				(data->'data'->>'energy_daily_pv')::float,
+				(data->>'energy_daily_pv')::float
+			)) > 0
+		) daily
+	`
+	var totalEnergy float64
+	r.db.QueryRow(ctx, totalQuery, sn).Scan(&totalEnergy)
+
+	// 今日放电量
+	dischargeQuery := `
+		SELECT COALESCE(MAX(COALESCE(
+			(data->'data'->>'daily_discharge')::float,
+			(data->>'daily_discharge')::float,
+			(data->'data'->>'energy_daily_discharge')::float,
+			(data->>'energy_daily_discharge')::float
+		)), 0)
+		FROM device_telemetry
+		WHERE device_sn = $1 AND time::date = CURRENT_DATE AND topic = 'data/energy'
+	`
+	var dailyDischarge float64
+	r.db.QueryRow(ctx, dischargeQuery, sn).Scan(&dailyDischarge)
 
 	return map[string]interface{}{
-		"energy_produce": energyProduce,
-		"energy_consume": 0.0,
-		"energy_sell":    0.0,
-		"energy_buy":     0.0,
-		"income":         0.0,
+		"daily_energy":    dailyEnergy,
+		"monthly_energy":  monthlyEnergy,
+		"total_energy":    totalEnergy,
+		"daily_discharge": dailyDischarge,
+		"daily_grid_sell": 0.0,
+		"daily_grid_buy":  0.0,
 	}, nil
 }
 
@@ -1598,9 +1898,74 @@ func getJSONFloat(data map[string]interface{}, keys ...string) float64 {
 	return 0
 }
 
-func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, endTime string) ([]map[string]interface{}, error) {
+func getJSONString(data map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if v, ok := data[key]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func getJSONInt(data map[string]interface{}, keys ...string) int64 {
+	for _, key := range keys {
+		if v, ok := data[key]; ok {
+			switch val := v.(type) {
+			case float64:
+				return int64(val)
+			case json.Number:
+				i, _ := val.Int64()
+				return i
+			case int64:
+				return val
+			case int:
+				return int64(val)
+			}
+		}
+	}
+	return 0
+}
+
+func getJSONBool(data map[string]interface{}, keys ...string) (bool, bool) {
+	for _, key := range keys {
+		if v, ok := data[key]; ok {
+			switch val := v.(type) {
+			case bool:
+				return val, true
+			case float64:
+				return val != 0, true
+			}
+		}
+	}
+	return false, false
+}
+
+// skipRawFields 非遥测字段集合，这些字段不应出现在遥测数据表格中
+var skipRawFields = map[string]bool{
+	// 设备信息（通过 info topic 注册到 devices 表，不在遥测流中）
+	"sn": true, "model": true, "manufacturer": true,
+	"firmware_arm": true, "firmware_esp": true, "firmware_dsp": true, "firmware_bms": true,
+	"type": true, "rated_power": true, "rated_voltage": true, "rated_freq": true,
+	"battery_voltage": true, "battery_type": true, "cell_count": true,
+	// 通用非数据字段
+	"timestamp": true, "topic": true, "device_sn": true,
+	"created_at": true, "updated_at": true, "time": true,
+	// 数组类型字段（不适合表格列展示）
+	"voltages": true, "temps": true, "machines": true,
+	// OTA 相关
+	"progress": true, "status_message": true, "ack": true,
+	"file_md5": true, "file_sha256": true, "file_size": true,
+	"target": true, "task_id": true, "url": true, "version": true,
+	// 命令/消息相关
+	"error_message": true, "message": true, "cmd": true,
+	"current_version": true, "device_id": true,
+}
+
+func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, endTime, granularity string) ([]map[string]interface{}, error) {
 	query := `
-		SELECT time, data, total_active_power, daily_energy, work_state, fault_code, internal_temperature
+		SELECT time, topic, data
 		FROM device_telemetry
 		WHERE device_sn = $1 AND time >= $2 AND time <= $3
 		ORDER BY time ASC
@@ -1612,14 +1977,23 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 	}
 	defer rows.Close()
 
-	results := make([]map[string]interface{}, 0)
+	// 按时间窗口聚合，将不同 topic 的数据合并到同一时间槽
+	type timeSlot struct {
+		time              time.Time
+		data              map[string]interface{}
+		maxDailyPV        float64
+		maxDailyDischarge float64
+	}
+
+	slots := make(map[string]*timeSlot)
+	var orderedKeys []string
+
 	for rows.Next() {
 		var dataTime time.Time
+		var topic string
 		var dataJSON []byte
-		var totalPower, dailyEnergy, temp *float64
-		var workState, faultCode *string
 
-		if err := rows.Scan(&dataTime, &dataJSON, &totalPower, &dailyEnergy, &workState, &faultCode, &temp); err != nil {
+		if err := rows.Scan(&dataTime, &topic, &dataJSON); err != nil {
 			return nil, err
 		}
 
@@ -1627,62 +2001,220 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 		if len(dataJSON) > 0 {
 			json.Unmarshal(dataJSON, &rawData)
 		}
-
-		result := map[string]interface{}{
-			"timestamp": dataTime,
+		if rawData == nil {
+			continue
 		}
 
-		// 优先从列取值，否则从 JSONB data 取值
-		if totalPower != nil && *totalPower != 0 {
-			result["power"] = *totalPower
-		} else if rawData != nil {
-			result["power"] = getJSONFloat(rawData, "power", "ac_power")
-		} else {
-			result["power"] = 0
+		// 数据可能是嵌套格式 {"data": {...}, "timestamp": ...}，需要提取内层 data
+		if nestedData, ok := rawData["data"].(map[string]interface{}); ok {
+			rawData = nestedData
 		}
-		if dailyEnergy != nil && *dailyEnergy != 0 {
-			result["daily_energy"] = *dailyEnergy
-		} else if rawData != nil {
-			result["daily_energy"] = getJSONFloat(rawData, "daily_pv", "energy_daily_pv", "total_pv")
-		} else {
-			result["daily_energy"] = 0
-		}
-		if temp != nil {
-			result["temperature"] = *temp
-		} else if rawData != nil {
-			result["temperature"] = getJSONFloat(rawData, "temp_inv", "sys_temp_inv")
-		}
-		if workState != nil && *workState != "" {
-			result["work_state"] = *workState
-		} else if rawData != nil {
-			if v, ok := rawData["charge_state"].(string); ok {
-				result["work_state"] = v
-			} else if v, ok := rawData["state"].(string); ok {
-				result["work_state"] = v
+
+		// 根据 granularity 选择聚合粒度
+		var key string
+		var rounded time.Time
+		switch granularity {
+		case "hour":
+			rounded = dataTime.Truncate(time.Minute)
+			key = rounded.Format(time.RFC3339)
+		case "week", "month":
+			rounded = time.Date(dataTime.Year(), dataTime.Month(), dataTime.Day(), 0, 0, 0, 0, dataTime.Location())
+			key = rounded.Format("2006-01-02")
+		default: // "day" or empty
+			// 判断时间跨度，超过2天按天聚合
+			startT, _ := time.Parse(time.RFC3339, startTime)
+			endT, _ := time.Parse(time.RFC3339, endTime)
+			if !startT.IsZero() && !endT.IsZero() && endT.Sub(startT) > 48*time.Hour {
+				rounded = time.Date(dataTime.Year(), dataTime.Month(), dataTime.Day(), 0, 0, 0, 0, dataTime.Location())
+				key = rounded.Format("2006-01-02")
+			} else {
+				rounded = dataTime.Truncate(time.Minute)
+				key = rounded.Format(time.RFC3339)
 			}
 		}
-		if faultCode != nil && *faultCode != "" {
-			result["fault_code"] = *faultCode
-		} else if rawData != nil {
-			result["fault_code"] = getJSONFloat(rawData, "fault_code", "sys_fault_code", "alarm_code")
+
+		if _, exists := slots[key]; !exists {
+			slots[key] = &timeSlot{time: rounded, data: make(map[string]interface{})}
+			orderedKeys = append(orderedKeys, key)
+		}
+		slot := slots[key]
+
+		// mappedKeys 记录已被标准化映射的原始字段名，避免 pass-through 产生重复列
+		mappedKeys := make(map[string]bool)
+
+		// setFloat 设置浮点字段，值为 0 时跳过（减少空列）
+		setFloat := func(stdKey string, val float64, rawKeys ...string) {
+			if val != 0 {
+				slot.data[stdKey] = val
+			}
+			for _, rk := range rawKeys {
+				mappedKeys[rk] = true
+			}
 		}
 
-		// 从 JSONB data 提取电参量（扁平结构）
-		if rawData != nil {
-			result["voltage"] = getJSONFloat(rawData, "ac_voltage", "voltage")
-			result["current"] = getJSONFloat(rawData, "ac_current", "current")
-			result["acPower"] = getJSONFloat(rawData, "ac_power", "power")
-			result["frequency"] = getJSONFloat(rawData, "ac_frequency", "frequency")
-			result["pv_voltage"] = getJSONFloat(rawData, "pv_voltage")
-			result["pv_current"] = getJSONFloat(rawData, "pv_current")
-			result["pv_power"] = getJSONFloat(rawData, "pv_power")
-			result["soc"] = getJSONFloat(rawData, "batt_soc", "soc")
-			result["batt_voltage"] = getJSONFloat(rawData, "batt_voltage", "battery_voltage")
-			result["batt_current"] = getJSONFloat(rawData, "batt_current")
-			result["efficiency"] = getJSONFloat(rawData, "efficiency", "sys_efficiency")
+		// setString 设置字符串字段
+		setString := func(stdKey string, val string, rawKeys ...string) {
+			if val != "" {
+				slot.data[stdKey] = val
+			}
+			for _, rk := range rawKeys {
+				mappedKeys[rk] = true
+			}
 		}
 
-		results = append(results, result)
+		// setInt 设置整数字段
+		setInt := func(stdKey string, val int64, rawKeys ...string) {
+			if val != 0 {
+				slot.data[stdKey] = val
+			}
+			for _, rk := range rawKeys {
+				mappedKeys[rk] = true
+			}
+		}
+
+		// 根据 topic 提取对应字段，映射为前端标准化的字段名
+		switch topic {
+		case "data/ac":
+			setFloat("ac_voltage", getJSONFloat(rawData, "ac_voltage", "voltage"), "ac_voltage", "voltage")
+			setFloat("ac_current", getJSONFloat(rawData, "ac_current", "current"), "ac_current", "current")
+			setFloat("ac_power", getJSONFloat(rawData, "ac_power", "power"), "ac_power", "power")
+			setFloat("ac_frequency", getJSONFloat(rawData, "ac_frequency", "frequency"), "ac_frequency", "frequency")
+			setFloat("apparent_power", getJSONFloat(rawData, "apparent_power", "apparent"), "apparent_power", "apparent")
+			setFloat("power_factor", getJSONFloat(rawData, "power_factor", "pf"), "power_factor", "pf")
+			setFloat("load_rate", getJSONFloat(rawData, "load_rate", "load_percent"), "load_rate", "load_percent")
+			setFloat("voltage_thd", getJSONFloat(rawData, "voltage_thd", "thd_v"), "voltage_thd", "thd_v")
+
+		case "data/battery":
+			setFloat("battery_soc", getJSONFloat(rawData, "batt_soc", "soc", "battery_soc"), "batt_soc", "soc", "battery_soc")
+			setFloat("battery_voltage", getJSONFloat(rawData, "batt_voltage", "voltage", "battery_voltage"), "batt_voltage", "voltage", "battery_voltage")
+			setFloat("battery_current", getJSONFloat(rawData, "batt_current", "current", "battery_current"), "batt_current", "current", "battery_current")
+			setFloat("battery_capacity", getJSONFloat(rawData, "batt_capacity", "capacity_remain", "remaining_capacity", "battery_capacity"), "batt_capacity", "capacity_remain", "remaining_capacity", "battery_capacity")
+			setFloat("battery_health", getJSONFloat(rawData, "batt_soh", "soh", "battery_health"), "batt_soh", "soh", "battery_health")
+			setFloat("rated_capacity", getJSONFloat(rawData, "capacity_total", "rated_capacity"), "capacity_total", "rated_capacity")
+			setFloat("charge_discharge_power", getJSONFloat(rawData, "batt_power", "power", "charge_discharge_power"), "batt_power", "power", "charge_discharge_power")
+			setInt("cycle_count", getJSONInt(rawData, "cycle_count"), "cycle_count")
+			setFloat("cell_max_temp", getJSONFloat(rawData, "temp_max", "cell_max_temp"), "temp_max", "cell_max_temp")
+			setFloat("cell_min_temp", getJSONFloat(rawData, "temp_min", "cell_min_temp"), "temp_min", "cell_min_temp")
+			setFloat("cell_max_voltage", getJSONFloat(rawData, "cell_volt_max"), "cell_volt_max")
+			setFloat("cell_min_voltage", getJSONFloat(rawData, "cell_volt_min"), "cell_volt_min")
+			setFloat("cell_voltage_diff", getJSONFloat(rawData, "cell_volt_diff"), "cell_volt_diff")
+			setString("charge_status", getJSONString(rawData, "charge_state", "charge_status"), "charge_state", "charge_status")
+			setFloat("battery_avg_temp", getJSONFloat(rawData, "temp_battery", "battery_avg_temp"), "temp_battery", "battery_avg_temp")
+			setInt("bms_fault_code", getJSONInt(rawData, "bms_fault_code"), "bms_fault_code")
+			setFloat("protect_status", getJSONFloat(rawData, "protect_status"), "protect_status")
+			// remaining_capacity 已映射到 battery_capacity
+			setFloat("max_chg_current", getJSONFloat(rawData, "max_chg_current"), "max_chg_current")
+			setFloat("max_dischg_current", getJSONFloat(rawData, "max_dischg_current"), "max_dischg_current")
+			setFloat("charge_volt_ref", getJSONFloat(rawData, "charge_volt_ref"), "charge_volt_ref")
+			setFloat("dischg_cut_volt", getJSONFloat(rawData, "dischg_cut_volt"), "dischg_cut_volt")
+
+		case "data/pv":
+			setFloat("pv1_voltage", getJSONFloat(rawData, "pv1_voltage", "pv_voltage"), "pv1_voltage", "pv_voltage")
+			setFloat("pv1_current", getJSONFloat(rawData, "pv1_current", "pv_current"), "pv1_current", "pv_current")
+			setFloat("pv1_power", getJSONFloat(rawData, "pv1_power", "pv_power"), "pv1_power", "pv_power")
+			setFloat("pv2_voltage", getJSONFloat(rawData, "pv2_voltage"), "pv2_voltage")
+			setFloat("pv2_current", getJSONFloat(rawData, "pv2_current"), "pv2_current")
+			setFloat("pv2_power", getJSONFloat(rawData, "pv2_power"), "pv2_power")
+			setFloat("pv_total_power", getJSONFloat(rawData, "pv_power_total", "pv_total_power"), "pv_power_total", "pv_total_power")
+			setString("mppt_status", getJSONString(rawData, "mppt_state", "mppt_status"), "mppt_state", "mppt_status")
+			setFloat("pv1_voltage_max", getJSONFloat(rawData, "pv1_voltage_max"), "pv1_voltage_max")
+			setFloat("pv1_power_max", getJSONFloat(rawData, "pv1_power_max"), "pv1_power_max")
+			setFloat("pv2_voltage_max", getJSONFloat(rawData, "pv2_voltage_max"), "pv2_voltage_max")
+			setFloat("pv2_power_max", getJSONFloat(rawData, "pv2_power_max"), "pv2_power_max")
+
+		case "data/status":
+			setString("run_status", getJSONString(rawData, "state", "run_status"), "state", "run_status")
+			setInt("fault_code", getJSONInt(rawData, "fault_code"), "fault_code")
+			setInt("alarm_code", getJSONInt(rawData, "alarm_code"), "alarm_code")
+			setFloat("inverter_temp", getJSONFloat(rawData, "temp_inv", "sys_temp_inv", "inverter_temp"), "temp_inv", "sys_temp_inv", "inverter_temp")
+			setFloat("heatsink_temp", getJSONFloat(rawData, "temp_mos", "heatsink_temp"), "temp_mos", "heatsink_temp")
+			setFloat("ambient_temp", getJSONFloat(rawData, "temp_ambient", "ambient_temp"), "temp_ambient", "ambient_temp")
+			setFloat("dc_bus_voltage", getJSONFloat(rawData, "dc_bus_voltage"), "dc_bus_voltage")
+			setFloat("vbus1", getJSONFloat(rawData, "vbus1"), "vbus1")
+			setFloat("vbus2", getJSONFloat(rawData, "vbus2"), "vbus2")
+			setFloat("efficiency", getJSONFloat(rawData, "efficiency", "sys_efficiency"), "efficiency", "sys_efficiency")
+			setFloat("run_time", getJSONFloat(rawData, "runtime_hours", "run_time"), "runtime_hours", "run_time")
+			setFloat("fan_speed", getJSONFloat(rawData, "fan_speed"), "fan_speed")
+
+		case "data/energy":
+			dailyPV := getJSONFloat(rawData, "daily_pv", "energy_daily_pv")
+			if dailyPV > slot.maxDailyPV {
+				slot.maxDailyPV = dailyPV
+			}
+			mappedKeys["daily_pv"] = true
+			mappedKeys["energy_daily_pv"] = true
+			dailyDischarge := getJSONFloat(rawData, "daily_discharge", "energy_daily_discharge")
+			if dailyDischarge > slot.maxDailyDischarge {
+				slot.maxDailyDischarge = dailyDischarge
+			}
+			mappedKeys["daily_discharge"] = true
+			mappedKeys["energy_daily_discharge"] = true
+			setFloat("total_energy", getJSONFloat(rawData, "total_pv", "energy_total_pv"), "total_pv", "energy_total_pv")
+			setFloat("daily_charge", getJSONFloat(rawData, "daily_charge", "energy_daily_charge"), "daily_charge", "energy_daily_charge")
+			setFloat("total_charge", getJSONFloat(rawData, "total_charge", "energy_total_charge"), "total_charge", "energy_total_charge")
+			setFloat("total_discharge", getJSONFloat(rawData, "total_discharge", "energy_total_discharge"), "total_discharge", "energy_total_discharge")
+			setFloat("daily_consumption", getJSONFloat(rawData, "daily_load", "energy_daily_load"), "daily_load", "energy_daily_load")
+			setFloat("total_consumption", getJSONFloat(rawData, "total_load", "energy_total_load"), "total_load", "energy_total_load")
+			setFloat("total_run_time", getJSONFloat(rawData, "runtime_hours", "total_run_time"), "runtime_hours", "total_run_time")
+
+		case "data/control":
+			setFloat("power_limit", getJSONFloat(rawData, "power_limit"), "power_limit")
+			if v, ok := getJSONBool(rawData, "charge_enable"); ok {
+				slot.data["charge_enable"] = v
+			}
+			mappedKeys["charge_enable"] = true
+			if v, ok := getJSONBool(rawData, "discharge_enable"); ok {
+				slot.data["discharge_enable"] = v
+			}
+			mappedKeys["discharge_enable"] = true
+			if v, ok := getJSONBool(rawData, "grid_charge_enable"); ok {
+				slot.data["grid_charge_enable"] = v
+			}
+			mappedKeys["grid_charge_enable"] = true
+			setFloat("max_charge_current", getJSONFloat(rawData, "max_charge_current"), "max_charge_current")
+			setFloat("max_discharge_current", getJSONFloat(rawData, "max_discharge_current"), "max_discharge_current")
+		}
+
+		// 透传原始数据中未被映射且非元数据的字段（如 data/cells 的 cell_count 等）
+		for rawKey, rawVal := range rawData {
+			if mappedKeys[rawKey] || skipRawFields[rawKey] {
+				continue
+			}
+			if _, exists := slot.data[rawKey]; !exists {
+				switch v := rawVal.(type) {
+				case float64:
+					if v != 0 {
+						slot.data[rawKey] = v
+					}
+				case string:
+					if v != "" {
+						slot.data[rawKey] = v
+					}
+				case bool:
+					slot.data[rawKey] = v
+				case nil:
+					// skip nil
+				default:
+					// 跳过数组、嵌套对象等复杂类型
+				}
+			}
+		}
+	}
+
+	// 构建结果数组
+	results := make([]map[string]interface{}, 0, len(orderedKeys))
+	for _, key := range orderedKeys {
+		slot := slots[key]
+		// 对于按天/周/月聚合的场景，填充能量字段
+		if slot.maxDailyPV > 0 {
+			slot.data["energy"] = slot.maxDailyPV
+		}
+		if slot.maxDailyDischarge > 0 {
+			slot.data["discharge"] = slot.maxDailyDischarge
+		}
+		slot.data["time"] = slot.time
+		slot.data["timestamp"] = slot.time
+		results = append(results, slot.data)
 	}
 
 	return results, nil
@@ -1753,7 +2285,7 @@ func (r *DeviceRepository) GetLifecycleHistory(ctx context.Context, sn string, p
 func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64) (map[string]interface{}, error) {
 	query := `
 		SELECT COUNT(DISTINCT d.id) as device_count,
-			   COUNT(DISTINCT CASE WHEN d.status = 1 THEN d.id END) as online_count,
+			   COUNT(DISTINCT CASE WHEN d.status IN (1, 2) THEN d.id END) as online_count,
 			   COUNT(DISTINCT CASE WHEN d.status = 2 THEN d.id END) as fault_count
 		FROM devices d
 		WHERE d.deleted_at IS NULL
@@ -1859,12 +2391,12 @@ func (r *DeviceRepository) GetCommandHistory(ctx context.Context, sn string, pag
 		}
 
 		cmd := map[string]interface{}{
-			"id":           id,
-			"command_name": cmdName,
+			"id":            id,
+			"command_name":  cmdName,
 			"command_label": cmdLabel,
-			"req_id":       reqID,
-			"status":       status,
-			"created_at":   createdAt,
+			"req_id":        reqID,
+			"status":        status,
+			"created_at":    createdAt,
 		}
 
 		if len(params) > 0 {
@@ -1901,22 +2433,56 @@ func NewAlarmRepository(db *pgxpool.Pool) *AlarmRepository {
 	return &AlarmRepository{db: db}
 }
 
-func (r *AlarmRepository) List(ctx context.Context, userID int64, stationID int64, status, page, pageSize int) ([]*model.Alarm, int64, error) {
-	offset := (page - 1) * pageSize
+type AlarmListParams struct {
+	UserID     int64
+	StationID  int64
+	Status     int
+	AlarmLevel int
+	Keyword    string
+	Page       int
+	PageSize   int
+	Role       int
+}
 
-	baseQuery := `FROM alarms WHERE user_id = $1`
-	args := []interface{}{userID}
-	argIdx := 2
+func (r *AlarmRepository) List(ctx context.Context, params AlarmListParams) ([]*model.Alarm, int64, error) {
+	offset := (params.Page - 1) * params.PageSize
 
-	if stationID > 0 {
+	// 管理员角色 (role <= 1) 可查看所有告警，普通用户只能查看自己的
+	isAdmin := params.Role <= 1
+
+	var baseQuery string
+	var args []interface{}
+	argIdx := 1
+
+	if isAdmin {
+		baseQuery = `FROM alarms WHERE 1=1`
+	} else {
+		baseQuery = `FROM alarms WHERE user_id = $1`
+		args = append(args, params.UserID)
+		argIdx = 2
+	}
+
+	if params.StationID > 0 {
 		baseQuery += fmt.Sprintf(" AND station_id = $%d", argIdx)
-		args = append(args, stationID)
+		args = append(args, params.StationID)
 		argIdx++
 	}
 
-	if status >= 0 {
+	if params.Status >= 0 {
 		baseQuery += fmt.Sprintf(" AND status = $%d", argIdx)
-		args = append(args, status)
+		args = append(args, params.Status)
+		argIdx++
+	}
+
+	if params.AlarmLevel > 0 {
+		baseQuery += fmt.Sprintf(" AND alarm_level = $%d", argIdx)
+		args = append(args, params.AlarmLevel)
+		argIdx++
+	}
+
+	if params.Keyword != "" {
+		baseQuery += fmt.Sprintf(" AND (device_sn ILIKE $%d OR fault_message ILIKE $%d OR fault_code ILIKE $%d)", argIdx, argIdx, argIdx)
+		args = append(args, "%"+params.Keyword+"%")
 		argIdx++
 	}
 
@@ -1931,7 +2497,7 @@ func (r *AlarmRepository) List(ctx context.Context, userID int64, stationID int6
 			   fault_detail, status, occurred_at, recovered_at, handled_at, handled_by, created_at
 	` + baseQuery + ` ORDER BY occurred_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
-	args = append(args, pageSize, offset)
+	args = append(args, params.PageSize, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -2085,27 +2651,67 @@ func (r *AlarmRepository) MarkHandled(ctx context.Context, id int64, userID int6
 }
 
 func (r *AlarmRepository) MarkRead(ctx context.Context, ids []int64, userID int64) error {
-	query := `UPDATE alarms SET status = 1, handled_at = NOW(), handled_by = $1 WHERE id = ANY($2)`
-	_, err := r.db.Exec(ctx, query, userID, ids)
+	query := `UPDATE alarms SET status = 1 WHERE id = ANY($1) AND status = 0`
+	_, err := r.db.Exec(ctx, query, ids)
 	return err
 }
 
-func (r *AlarmRepository) GetStats(ctx context.Context, userID int64) (map[string]interface{}, error) {
-	query := `
-		SELECT COUNT(*) as total,
-			   COUNT(CASE WHEN status = 0 THEN 1 END) as unhandled,
-			   COUNT(CASE WHEN status = 1 THEN 1 END) as handled
-		FROM alarms
-		WHERE user_id = $1
-	`
-	var total, unhandled, handled int
-	if err := r.db.QueryRow(ctx, query, userID).Scan(&total, &unhandled, &handled); err != nil {
-		return nil, err
+func (r *AlarmRepository) MarkIgnored(ctx context.Context, id int64) error {
+	query := `UPDATE alarms SET status = 2 WHERE id = $1`
+	_, err := r.db.Exec(ctx, query, id)
+	return err
+}
+
+func (r *AlarmRepository) Delete(ctx context.Context, id int64) error {
+	query := `DELETE FROM alarms WHERE id = $1`
+	_, err := r.db.Exec(ctx, query, id)
+	return err
+}
+
+func (r *AlarmRepository) ClearAll(ctx context.Context) error {
+	query := `DELETE FROM alarms`
+	_, err := r.db.Exec(ctx, query)
+	return err
+}
+
+func (r *AlarmRepository) GetStats(ctx context.Context, userID int64, role ...int) (map[string]interface{}, error) {
+	isAdmin := len(role) > 0 && role[0] <= 1
+
+	var query string
+	if isAdmin {
+		query = `
+			SELECT COUNT(*) as total,
+				   COUNT(CASE WHEN status = 0 THEN 1 END) as unhandled,
+				   COUNT(CASE WHEN status = 1 THEN 1 END) as handled,
+				   COUNT(CASE WHEN alarm_level = 1 THEN 1 END) as critical
+			FROM alarms
+		`
+	} else {
+		query = `
+			SELECT COUNT(*) as total,
+				   COUNT(CASE WHEN status = 0 THEN 1 END) as unhandled,
+				   COUNT(CASE WHEN status = 1 THEN 1 END) as handled,
+				   COUNT(CASE WHEN alarm_level = 1 THEN 1 END) as critical
+			FROM alarms
+			WHERE user_id = $1
+		`
+	}
+
+	var total, unhandled, handled, critical int
+	if isAdmin {
+		if err := r.db.QueryRow(ctx, query).Scan(&total, &unhandled, &handled, &critical); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := r.db.QueryRow(ctx, query, userID).Scan(&total, &unhandled, &handled, &critical); err != nil {
+			return nil, err
+		}
 	}
 	return map[string]interface{}{
 		"total":     total,
 		"unhandled": unhandled,
 		"handled":   handled,
+		"critical":  critical,
 	}, nil
 }
 
@@ -2182,7 +2788,7 @@ func (r *DeviceRepository) ApproveUnbind(ctx context.Context, id int64, reviewer
 
 	var deviceSN string
 	if err := r.db.QueryRow(ctx, `SELECT device_sn FROM device_unbind_requests WHERE id = $1`, id).Scan(&deviceSN); err == nil {
-		r.db.Exec(ctx, `UPDATE devices SET user_id = 0, station_id = 0 WHERE sn = $1`, deviceSN)
+		r.db.Exec(ctx, `UPDATE devices SET user_id = 0, station_id = NULL WHERE sn = $1`, deviceSN)
 	}
 	return nil
 }
@@ -2197,4 +2803,14 @@ func (r *DeviceRepository) RejectUnbind(ctx context.Context, id int64, reviewerI
 		return fmt.Errorf("request not found or already processed")
 	}
 	return nil
+}
+
+func (r *UserRepository) LogAudit(ctx context.Context, operatorID int64, operatorName, action, resourceType, resourceID, detail, ip string) {
+	query := `INSERT INTO audit_logs (operator_id, operator_name, action, resource_type, resource_id, detail, ip, created_at)
+			  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`
+	_, err := r.db.Exec(ctx, query, operatorID, operatorName, action, resourceType, resourceID, detail, ip)
+	if err != nil {
+		// 审计日志写入失败不影响主业务，仅记录警告
+		fmt.Printf("Failed to write audit log: %v\n", err)
+	}
 }

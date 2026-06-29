@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -39,18 +40,19 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('修改密码')),
+      appBar: AppBar(title: Text(l10n.changePassword)),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthPasswordResetSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('密码修改成功'), backgroundColor: Colors.green),
+              SnackBar(content: Text(l10n.passwordChanged), backgroundColor: Colors.green),
             );
             context.pop();
           } else if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(state.message), backgroundColor: Colors.red),
+              SnackBar(content: Text(l10n.translateError(state.message)), backgroundColor: Colors.red),
             );
           }
         },
@@ -65,7 +67,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     controller: _oldPasswordController,
                     obscureText: _obscureOld,
                     decoration: InputDecoration(
-                      labelText: '原密码',
+                      labelText: l10n.currentPassword,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
@@ -73,14 +75,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         onPressed: () => setState(() => _obscureOld = !_obscureOld),
                       ),
                     ),
-                    validator: (value) => value == null || value.isEmpty ? '请输入原密码' : null,
+                    validator: (value) => value == null || value.isEmpty ? l10n.pleaseInputCurrentPassword : null,
                   ),
                   SizedBox(height: 16.h),
                   TextFormField(
                     controller: _newPasswordController,
                     obscureText: _obscureNew,
                     decoration: InputDecoration(
-                      labelText: '新密码',
+                      labelText: l10n.newPasswordLabel,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
@@ -89,8 +91,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return '请输入新密码';
-                      if (value.length < 6 || value.length > 20) return '密码长度为6-20位';
+                      if (value == null || value.isEmpty) return l10n.pleaseInputNewPassword;
+                      if (value.length < 6 || value.length > 20) return l10n.passwordLengthHint;
                       return null;
                     },
                   ),
@@ -99,7 +101,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     controller: _confirmPasswordController,
                     obscureText: _obscureConfirm,
                     decoration: InputDecoration(
-                      labelText: '确认密码',
+                      labelText: l10n.confirmPasswordLabel,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
@@ -108,8 +110,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return '请确认密码';
-                      if (value != _newPasswordController.text) return '两次密码不一致';
+                      if (value == null || value.isEmpty) return l10n.pleaseConfirmPassword;
+                      if (value != _newPasswordController.text) return l10n.passwordNotConsistent;
                       return null;
                     },
                   ),
@@ -121,7 +123,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       onPressed: state is AuthLoading ? null : _submit,
                       child: state is AuthLoading
                           ? const CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
-                          : const Text('确认修改'),
+                          : Text(l10n.confirmChange),
                     ),
                   ),
                 ],

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"strconv"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/response"
+	"inv-api-server/pkg/timezone"
 
 	"github.com/gin-gonic/gin"
 )
@@ -36,6 +38,7 @@ type CreateStationRequest struct {
 	ValleyPrice float64 `json:"valley_price"`
 	Latitude    float64 `json:"latitude"`
 	Longitude   float64 `json:"longitude"`
+	Timezone    string  `json:"timezone"`
 }
 
 func (h *StationHandler) Create(c *gin.Context) {
@@ -60,11 +63,22 @@ func (h *StationHandler) Create(c *gin.Context) {
 		ValleyPrice: req.ValleyPrice,
 		Latitude:    req.Latitude,
 		Longitude:   req.Longitude,
+		Timezone:    req.Timezone,
 		Status:      1,
 	}
 
+	// 验证时区, 默认使用 Asia/Shanghai
+	if station.Timezone == "" {
+		station.Timezone = timezone.AsiaShanghai
+	}
+	if err := timezone.ValidateTimezone(station.Timezone); err != nil {
+		response.BadRequest(c, "invalid timezone: "+station.Timezone)
+		return
+	}
+
 	if err := h.stationService.Create(c.Request.Context(), station); err != nil {
-		response.InternalError(c, "create station failed: "+err.Error())
+		log.Printf("[CreateStation] error: user_id=%d, err=%v", userID, err)
+		response.InternalError(c, "创建电站失败，请稍后重试")
 		return
 	}
 
@@ -83,6 +97,7 @@ type UpdateStationRequest struct {
 	ValleyPrice float64 `json:"valley_price"`
 	Latitude    float64 `json:"latitude"`
 	Longitude   float64 `json:"longitude"`
+	Timezone    string  `json:"timezone"`
 }
 
 func (h *StationHandler) Update(c *gin.Context) {
@@ -147,6 +162,13 @@ func (h *StationHandler) Update(c *gin.Context) {
 	}
 	if req.Longitude != 0 {
 		station.Longitude = req.Longitude
+	}
+	if req.Timezone != "" {
+		if err := timezone.ValidateTimezone(req.Timezone); err != nil {
+			response.BadRequest(c, "invalid timezone: "+req.Timezone)
+			return
+		}
+		station.Timezone = req.Timezone
 	}
 
 	if err := h.stationService.Update(c.Request.Context(), station); err != nil {
@@ -266,33 +288,94 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 	for _, device := range devices {
 		rtData, err := h.deviceService.GetRealtimeData(c.Request.Context(), device.SN)
 		if err == nil && rtData != nil {
-			if v, ok := rtData["model"]; ok && v != nil {
-				if s, ok := v.(string); ok && s != "" && device.Model == "" {
-					device.Model = s
+			// 使用 Redis 在线状态修正设备状态：离线时快速标记
+			if online, ok := rtData["online"].(bool); ok {
+				if !online && device.Status != 0 {
+					device.Status = 0
 				}
 			}
-			if v, ok := rtData["rated_power"]; ok && v != nil {
-				if f, ok := toFloat64(v); ok && f > 0 && device.RatedPower == 0 {
-					device.RatedPower = f
+
+			// 从嵌套的 info 对象读取设备信息（支持 {"info": {...}} 和 {"info": {"data": {...}}} 两种格式）
+			var info map[string]interface{}
+			if v, ok := rtData["info"].(map[string]interface{}); ok {
+				info = v
+				if innerData, ok := v["data"].(map[string]interface{}); ok {
+					info = innerData
 				}
 			}
-			if v, ok := rtData["firmware_arm"]; ok && v != nil {
-				if s, ok := v.(string); ok && s != "" && device.FirmwareArm == "" {
-					device.FirmwareArm = s
+			if info != nil {
+				if v, ok := info["model"]; ok && v != nil {
+					if s, ok := v.(string); ok && s != "" && device.Model == "" {
+						device.Model = s
+					}
+				}
+				if v, ok := info["rated_power"]; ok && v != nil {
+					if f, ok := toFloat64(v); ok && f > 0 && device.RatedPower == 0 {
+						device.RatedPower = f
+					}
+				}
+				if v, ok := info["firmware_arm"]; ok && v != nil {
+					if s, ok := v.(string); ok && s != "" && device.FirmwareArm == "" {
+						device.FirmwareArm = s
+					}
 				}
 			}
-			if v, ok := rtData["daily_pv"]; ok && v != nil {
-				if f, ok := toFloat64(v); ok {
-					device.DailyEnergy = f
+
+			// 从嵌套的 energy 对象读取日发电量（支持 {"energy": {...}} 和 {"energy": {"data": {...}}} 两种格式）
+			var energyData map[string]interface{}
+			if v, ok := rtData["energy"].(map[string]interface{}); ok {
+				energyData = v
+				if innerData, ok := v["data"].(map[string]interface{}); ok {
+					energyData = innerData
 				}
 			}
-			if v, ok := rtData["power"]; ok && v != nil {
-				if f, ok := toFloat64(v); ok {
-					device.CurrentPower = f
+			if energyData != nil {
+				if v, ok := energyData["daily_pv"]; ok && v != nil {
+					if f, ok := toFloat64(v); ok {
+						device.DailyEnergy = f
+					}
 				}
-			} else if v, ok := rtData["ac_power"]; ok && v != nil {
-				if f, ok := toFloat64(v); ok {
-					device.CurrentPower = f
+			}
+
+			// 从嵌套的 ac 对象读取当前功率（支持 {"ac": {...}} 和 {"ac": {"data": {...}}} 两种格式）
+			var acData map[string]interface{}
+			if v, ok := rtData["ac"].(map[string]interface{}); ok {
+				acData = v
+				if innerData, ok := v["data"].(map[string]interface{}); ok {
+					acData = innerData
+				}
+			}
+			if acData != nil {
+				if v, ok := acData["power"]; ok && v != nil {
+					if f, ok := toFloat64(v); ok {
+						device.CurrentPower = f
+					}
+				}
+			}
+
+			// 兼容旧的扁平格式
+			if device.CurrentPower == 0 {
+				if v, ok := rtData["power"]; ok && v != nil {
+					if f, ok := toFloat64(v); ok {
+						device.CurrentPower = f
+					}
+				} else if v, ok := rtData["ac_power"]; ok && v != nil {
+					if f, ok := toFloat64(v); ok {
+						device.CurrentPower = f
+					}
+				} else if v, ok := rtData["total_active_power"]; ok && v != nil {
+					if f, ok := toFloat64(v); ok {
+						device.CurrentPower = f
+					}
+				}
+			}
+
+			// 兼容扁平格式的 daily_energy
+			if device.DailyEnergy == 0 {
+				if v, ok := rtData["daily_energy"]; ok && v != nil {
+					if f, ok := toFloat64(v); ok {
+						device.DailyEnergy = f
+					}
 				}
 			}
 		}
@@ -307,7 +390,7 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 
 	onlineCount := 0
 	for _, d := range devices {
-		if d.Status == 1 {
+		if d.Status == 1 || d.Status == 2 {
 			onlineCount++
 		}
 	}
@@ -324,6 +407,7 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 		"panel_count":  station.PanelCount,
 		"latitude":     station.Latitude,
 		"longitude":    station.Longitude,
+		"timezone":     station.Timezone,
 		"status":       station.Status,
 		"device_count": len(devices),
 		"online_count": onlineCount,
@@ -381,21 +465,21 @@ func (h *StationHandler) List(c *gin.Context) {
 }
 
 type StationSummary struct {
-	StationID     int64   `json:"station_id"`
-	StationName   string  `json:"station_name"`
-	Province      string  `json:"province"`
-	City          string  `json:"city"`
-	District      string  `json:"district"`
-	Capacity      float64 `json:"capacity"`
-	DeviceCount   int     `json:"device_count"`
-	OnlineCount   int     `json:"online_count"`
-	FaultCount    int     `json:"fault_count"`
-	TotalPower    float64 `json:"total_power"`
-	TodayEnergy   float64 `json:"today_energy"`
-	TotalEnergy   float64 `json:"total_energy"`
-	MonthEnergy   float64 `json:"month_energy"`
-	TodayIncome   float64 `json:"today_income"`
-	Status        int     `json:"status"`
+	StationID   int64   `json:"station_id"`
+	StationName string  `json:"station_name"`
+	Province    string  `json:"province"`
+	City        string  `json:"city"`
+	District    string  `json:"district"`
+	Capacity    float64 `json:"capacity"`
+	DeviceCount int     `json:"device_count"`
+	OnlineCount int     `json:"online_count"`
+	FaultCount  int     `json:"fault_count"`
+	TotalPower  float64 `json:"total_power"`
+	TodayEnergy float64 `json:"today_energy"`
+	TotalEnergy float64 `json:"total_energy"`
+	MonthEnergy float64 `json:"month_energy"`
+	TodayIncome float64 `json:"today_income"`
+	Status      int     `json:"status"`
 }
 
 func (h *StationHandler) GetSummary(c *gin.Context) {
@@ -420,11 +504,12 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 		faultCount := 0
 		totalPower := 0.0
 
-		// 统计设备状态
+		// 统计设备状态：status=1(在线) 和 status=2(故障) 都算在线
 		for _, device := range devices {
-			if device.Status == 1 {
+			if device.Status == 1 || device.Status == 2 {
 				onlineCount++
-			} else if device.Status == 2 {
+			}
+			if device.Status == 2 {
 				faultCount++
 			}
 		}
@@ -471,14 +556,14 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 	result := map[string]interface{}{
 		"stations": summaries,
 		"summary": map[string]interface{}{
-			"today_energy":   totalEnergy,
-			"total_energy":   grandTotalEnergy,
-			"month_energy":   grandMonthEnergy,
-			"total_income":   totalIncome,
-			"total_power":    float64(0),
-			"device_count":   totalDeviceCount,
-			"online_count":   totalOnlineCount,
-			"fault_count":    totalFaultCount,
+			"today_energy": totalEnergy,
+			"total_energy": grandTotalEnergy,
+			"month_energy": grandMonthEnergy,
+			"total_income": totalIncome,
+			"total_power":  float64(0),
+			"device_count": totalDeviceCount,
+			"online_count": totalOnlineCount,
+			"fault_count":  totalFaultCount,
 		},
 	}
 

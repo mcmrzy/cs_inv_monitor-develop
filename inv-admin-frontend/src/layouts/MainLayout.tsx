@@ -1,52 +1,65 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
-  Layout, Menu, Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Modal, Form, Input, App,
+  Layout, Menu, Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Modal, Form, Input, App, Select,
 } from 'antd'
 import {
   DashboardOutlined, DesktopOutlined, CloudUploadOutlined, AlertOutlined,
   ToolOutlined, TeamOutlined, SettingOutlined, LogoutOutlined, UserOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined, SafetyOutlined, ClusterOutlined,
-  FundViewOutlined, HomeOutlined, ThunderboltOutlined, HistoryOutlined,
+  FundViewOutlined, HomeOutlined, ThunderboltOutlined,
   EnvironmentOutlined, LockOutlined, FileTextOutlined,
+  RadarChartOutlined, ControlOutlined, UnorderedListOutlined,
+  EditOutlined, ExperimentOutlined, GlobalOutlined, ClockCircleOutlined,
 } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
+import useLocaleStore from '@/stores/localeStore'
+import useTranslation from '@/hooks/useTranslation'
 import { ROLE_MAP, ROLE_COLORS } from '@/utils/constants'
 import { Role } from '@/types'
 import api from '@/services/api'
+import { TIMEZONE_LIST } from '@/utils/timezone'
 
 const { Header, Sider, Content } = Layout
 
 interface MenuItem {
   key: string
-  icon: React.ReactNode
+  icon?: React.ReactNode
   label: string
   permission?: string
+  children?: MenuItem[]
+  type?: string
 }
 
-const adminMenuItems: MenuItem[] = [
-  { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘', permission: 'dashboard:view' },
-  { key: '/devices', icon: <DesktopOutlined />, label: '设备管理', permission: 'devices:view' },
-  { key: '/ota', icon: <CloudUploadOutlined />, label: 'OTA升级', permission: 'firmware:view' },
-  { key: '/alerts', icon: <AlertOutlined />, label: '告警管理', permission: 'alerts:view' },
-  { key: '/alert-rules', icon: <SafetyOutlined />, label: '告警规则', permission: 'alert_rules:view' },
-  { key: '/work-orders', icon: <ToolOutlined />, label: '工单管理', permission: 'work_orders:view' },
-  { key: '/parallel', icon: <ClusterOutlined />, label: '并机管理', permission: 'parallel:view' },
-  { key: '/stations', icon: <EnvironmentOutlined />, label: '电站管理', permission: 'stations:view' },
-  { key: '/models', icon: <SettingOutlined />, label: '型号管理', permission: 'models:view' },
-  { key: '/users', icon: <TeamOutlined />, label: '用户管理', permission: 'users:view' },
-  { key: '/admin', icon: <SettingOutlined />, label: '系统管理', permission: 'admin:view' },
-  { key: '/big-screen', icon: <FundViewOutlined />, label: '大屏监控', permission: 'dashboard:view' },
+const getAdminMenuItems = (t: (key: string) => string): MenuItem[] => [
+  { key: '/dashboard', icon: <DashboardOutlined />, label: t('menu.dashboard'), permission: 'dashboard:view' },
+  { key: '/big-screen', icon: <FundViewOutlined />, label: t('menu.bigScreen'), permission: 'dashboard:view' },
+  { key: '/monitoring', icon: <ThunderboltOutlined />, label: t('menu.stationMonitor'), permission: 'devices:view' },
+  { key: '/stations', icon: <EnvironmentOutlined />, label: t('menu.stationManage'), permission: 'stations:view' },
+  { key: '/devices', icon: <DesktopOutlined />, label: t('menu.deviceManage'), permission: 'devices:view' },
+  { key: '/models', icon: <ExperimentOutlined />, label: t('menu.modelManage'), permission: 'models:view' },
+  { key: '/parallel', icon: <ClusterOutlined />, label: t('menu.parallelManage'), permission: 'parallel:view' },
+  { key: '/remote-settings', icon: <ControlOutlined />, label: t('menu.remoteSettings'), permission: 'devices:view' },
+  { key: '/batch-settings', icon: <EditOutlined />, label: t('menu.batchSettings'), permission: 'devices:view' },
+  { key: '/ota', icon: <CloudUploadOutlined />, label: t('menu.ota'), permission: 'firmware:view' },
+  { key: '/alerts', icon: <AlertOutlined />, label: t('menu.alertCenter'), permission: 'alerts:view' },
+  { key: '/alert-rules', icon: <SafetyOutlined />, label: t('menu.alertRules'), permission: 'alert_rules:view' },
+  { key: '/work-orders', icon: <FileTextOutlined />, label: t('menu.workOrders'), permission: 'work_orders:view' },
+  { key: '/admin', icon: <SettingOutlined />, label: t('menu.systemConfig'), permission: 'admin:view' },
+  { key: '/users', icon: <TeamOutlined />, label: t('menu.userManage'), permission: 'users:view' },
+  { key: '/operation-logs', icon: <UnorderedListOutlined />, label: t('menu.operationLogs'), permission: 'admin:view' },
 ]
 
-const userMenuItems: MenuItem[] = [
-  { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘', permission: 'dashboard:view' },
-  { key: '/devices', icon: <DesktopOutlined />, label: '设备管理', permission: 'devices:view' },
-  { key: '/stations', icon: <EnvironmentOutlined />, label: '电站管理', permission: 'stations:view' },
-  { key: '/alerts', icon: <AlertOutlined />, label: '告警管理', permission: 'alerts:view' },
-  { key: '/alert-rules', icon: <AlertOutlined />, label: '告警规则', permission: 'alert_rules:view' },
-  { key: '/work-orders', icon: <FileTextOutlined />, label: '工单管理', permission: 'work_orders:view' },
-  { key: '/portal', icon: <HomeOutlined />, label: '我的电站', permission: 'dashboard:view' },
+const getUserMenuItems = (t: (key: string) => string): MenuItem[] => [
+  { key: '/dashboard', icon: <DashboardOutlined />, label: t('menu.dashboard'), permission: 'dashboard:view' },
+  { key: '/monitoring', icon: <ThunderboltOutlined />, label: t('menu.stationMonitor'), permission: 'devices:view' },
+  { key: '/stations', icon: <EnvironmentOutlined />, label: t('menu.stationManage'), permission: 'stations:view' },
+  { key: '/devices', icon: <DesktopOutlined />, label: t('menu.deviceManage'), permission: 'devices:view' },
+  { key: '/remote-settings', icon: <ControlOutlined />, label: t('menu.remoteSettings'), permission: 'devices:view' },
+  { key: '/alerts', icon: <AlertOutlined />, label: t('menu.alertCenter'), permission: 'alerts:view' },
+  { key: '/alert-rules', icon: <SafetyOutlined />, label: t('menu.alertRules'), permission: 'alert_rules:view' },
+  { key: '/work-orders', icon: <FileTextOutlined />, label: t('menu.workOrders'), permission: 'work_orders:view' },
+  { key: '/portal', icon: <HomeOutlined />, label: t('menu.myStation'), permission: 'dashboard:view' },
 ]
 
 const MainLayout: React.FC = () => {
@@ -55,9 +68,14 @@ const MainLayout: React.FC = () => {
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [passwordForm] = Form.useForm()
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileForm] = Form.useForm()
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout, hasPermission } = useAuthStore()
+  const { lang, setLang } = useLocaleStore()
+  const { t } = useTranslation()
   const { token: themeToken } = theme.useToken()
   const screens = Grid.useBreakpoint()
   const { message } = App.useApp()
@@ -72,12 +90,19 @@ const MainLayout: React.FC = () => {
 
   const isAdminRole = user && (user.role === Role.SUPER_ADMIN || user.role === Role.AGENT)
 
+  const filterMenuItems = (items: MenuItem[]): any[] => {
+    return items
+      .map(({ permission, ...rest }) => {
+        if (permission && !hasPermission(permission)) return null
+        return rest
+      })
+      .filter(Boolean)
+  }
+
   const displayMenuItems = useMemo(() => {
-    const source = isAdminRole ? adminMenuItems : userMenuItems
-    return source
-      .filter(item => !item.permission || hasPermission(item.permission))
-      .map(({ permission, ...rest }) => rest)
-  }, [isAdminRole, hasPermission])
+    const source = isAdminRole ? getAdminMenuItems(t) : getUserMenuItems(t)
+    return filterMenuItems(source)
+  }, [isAdminRole, hasPermission, lang])
 
   const selectedKey = '/' + (location.pathname.split('/')[1] || (isAdminRole ? 'dashboard' : 'portal'))
 
@@ -90,6 +115,37 @@ const MainLayout: React.FC = () => {
     navigate('/login')
   }
 
+  const handleOpenProfile = () => {
+    profileForm.setFieldsValue({
+      nickname: user?.nickname || '',
+      timezone: user?.timezone || 'Asia/Shanghai',
+    })
+    setProfileModalOpen(true)
+  }
+
+  const handleUpdateProfile = async (values: { nickname: string; timezone: string }) => {
+    setProfileLoading(true)
+    try {
+      const res = await api.put('/auth/profile', values)
+      const responseData = res.data as Record<string, unknown>
+      if (responseData?.code !== undefined && responseData.code !== 0) {
+        message.error((responseData.message as string) || t('msg.profileUpdateFailed'))
+        return
+      }
+      message.success(t('msg.profileUpdated'))
+      setProfileModalOpen(false)
+      // 更新本地存储的用户信息
+      if (user) {
+        const updatedUser = { ...user, nickname: values.nickname, timezone: values.timezone }
+        useAuthStore.setState({ user: updatedUser })
+      }
+    } catch {
+      message.error(t('msg.profileUpdateFailed'))
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
   const handleChangePassword = async (values: { old_password: string; new_password: string }) => {
     setPasswordLoading(true)
     try {
@@ -99,24 +155,54 @@ const MainLayout: React.FC = () => {
       })
       const responseData = res.data as Record<string, unknown>
       if (responseData?.code !== undefined && responseData.code !== 0) {
-        message.error((responseData.message as string) || '修改密码失败')
+        message.error((responseData.message as string) || t('msg.passwordChangeFailed'))
         return
       }
-      message.success('密码修改成功')
+      message.success(t('msg.passwordChanged'))
       setPasswordModalOpen(false)
       passwordForm.resetFields()
     } catch (error) {
-      message.error('修改密码失败，请检查旧密码是否正确')
+      message.error(t('msg.passwordCheckFailed'))
     } finally {
       setPasswordLoading(false)
     }
   }
 
   const userMenuItemsDropdown = [
-    { key: 'profile', icon: <UserOutlined />, label: '个人信息' },
-    { key: 'change-password', icon: <LockOutlined />, label: '修改密码', onClick: () => setPasswordModalOpen(true) },
-    { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true, onClick: handleLogout },
+    { key: 'profile', icon: <UserOutlined />, label: t('header.profile'), onClick: handleOpenProfile },
+    { key: 'change-password', icon: <LockOutlined />, label: t('header.changePassword'), onClick: () => setPasswordModalOpen(true) },
+    { key: 'logout', icon: <LogoutOutlined />, label: t('header.logout'), danger: true, onClick: handleLogout },
   ]
+
+  const langMenuItems = [
+    { key: 'zh', label: '中文' },
+    { key: 'en', label: 'English' },
+  ]
+
+  const currentTimezone = user?.timezone || 'Asia/Shanghai'
+  const currentTimezoneLabel = TIMEZONE_LIST.find(tz => tz.id === currentTimezone)?.label || currentTimezone
+
+  const handleTimezoneChange = async (tz: string) => {
+    try {
+      const res = await api.put('/auth/profile', { timezone: tz })
+      const responseData = res.data as Record<string, unknown>
+      if (responseData?.code !== undefined && responseData.code !== 0) {
+        message.error((responseData.message as string) || t('msg.timezoneUpdateFailed'))
+        return
+      }
+      message.success(t('msg.timezoneUpdated'))
+      if (user) {
+        useAuthStore.setState({ user: { ...user, timezone: tz } })
+      }
+    } catch {
+      message.error(t('msg.timezoneUpdateFailed'))
+    }
+  }
+
+  const timezoneMenuItems = TIMEZONE_LIST.map(tz => ({
+    key: tz.id,
+    label: tz.label,
+  }))
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -141,13 +227,35 @@ const MainLayout: React.FC = () => {
         <Header style={{ padding: isMobile ? '0 12px' : '0 24px', background: themeToken.colorBgContainer, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${themeToken.colorBorderSecondary}`, position: 'sticky', top: 0, zIndex: 99 }}>
           <Button type="text" icon={siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => { if (isMobile) { setMobileCollapsed(!mobileCollapsed) } else { setCollapsed(!collapsed) } }} style={{ fontSize: 16, width: 40, height: 40 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Dropdown menu={{ items: langMenuItems, onClick: ({ key }) => setLang(key as 'zh' | 'en') }} placement="bottomRight">
+              <Button type="text" icon={<GlobalOutlined />} style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 4 }}>
+                {lang === 'zh' ? '中文' : 'EN'}
+              </Button>
+            </Dropdown>
+            <Dropdown
+              menu={{
+                items: timezoneMenuItems,
+                onClick: ({ key }) => handleTimezoneChange(key),
+                selectedKeys: [currentTimezone],
+              }}
+              placement="bottomRight"
+              dropdownRender={(menu) => (
+                <div style={{ maxHeight: 300, overflow: 'auto' }}>
+                  {menu}
+                </div>
+              )}
+            >
+              <Button type="text" icon={<ClockCircleOutlined />} style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 4 }}>
+                {currentTimezoneLabel}
+              </Button>
+            </Dropdown>
             {user && (
               <Badge color={ROLE_COLORS[user.role]} text={<Typography.Text style={{ fontSize: 13 }}>{ROLE_MAP[user.role] || user.role}</Typography.Text>} />
             )}
             <Dropdown menu={{ items: userMenuItemsDropdown }} placement="bottomRight">
               <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Avatar size="small" icon={<UserOutlined />} src={user?.avatar} />
-                <Typography.Text>{user?.nickname || '用户'}</Typography.Text>
+                <Typography.Text>{user?.nickname || t('header.user')}</Typography.Text>
               </div>
             </Dropdown>
           </div>
@@ -158,7 +266,7 @@ const MainLayout: React.FC = () => {
       </Layout>
 
       <Modal
-        title="修改密码"
+        title={t('modal.changePassword')}
         open={passwordModalOpen}
         onCancel={() => {
           setPasswordModalOpen(false)
@@ -175,48 +283,98 @@ const MainLayout: React.FC = () => {
         >
           <Form.Item
             name="old_password"
-            label="旧密码"
-            rules={[{ required: true, message: '请输入旧密码' }]}
+            label={t('modal.oldPassword')}
+            rules={[{ required: true, message: t('msg.oldPasswordRequired') }]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="请输入旧密码" />
+            <Input.Password prefix={<LockOutlined />} placeholder={t('modal.oldPasswordPlaceholder')} />
           </Form.Item>
           <Form.Item
             name="new_password"
-            label="新密码"
+            label={t('modal.newPassword')}
             rules={[
-              { required: true, message: '请输入新密码' },
-              { min: 6, message: '密码至少6位' },
+              { required: true, message: t('msg.newPasswordRequired') },
+              { min: 6, message: t('msg.pwdMinLength') },
             ]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="请输入新密码" />
+            <Input.Password prefix={<LockOutlined />} placeholder={t('modal.newPasswordPlaceholder')} />
           </Form.Item>
           <Form.Item
             name="confirm_password"
-            label="确认新密码"
+            label={t('modal.confirmPassword')}
             dependencies={['new_password']}
             rules={[
-              { required: true, message: '请确认新密码' },
+              { required: true, message: t('msg.confirmPasswordRequired') },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('new_password') === value) {
                     return Promise.resolve()
                   }
-                  return Promise.reject(new Error('两次输入的密码不一致'))
+                  return Promise.reject(new Error(t('msg.pwdMismatch')))
                 },
               }),
             ]}
           >
-            <Input.Password prefix={<LockOutlined />} placeholder="请确认新密码" />
+            <Input.Password prefix={<LockOutlined />} placeholder={t('modal.confirmPasswordPlaceholder')} />
           </Form.Item>
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
             <Button onClick={() => {
               setPasswordModalOpen(false)
               passwordForm.resetFields()
             }} style={{ marginRight: 8 }}>
-              取消
+              {t('modal.cancel')}
             </Button>
             <Button type="primary" htmlType="submit" loading={passwordLoading}>
-              确认修改
+              {t('modal.confirm')}
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t('modal.profile')}
+        open={profileModalOpen}
+        onCancel={() => {
+          setProfileModalOpen(false)
+          profileForm.resetFields()
+        }}
+        footer={null}
+        destroyOnClose
+      >
+        <Form
+          form={profileForm}
+          onFinish={handleUpdateProfile}
+          layout="vertical"
+          style={{ marginTop: 16 }}
+        >
+          <Form.Item
+            name="nickname"
+            label={t('modal.nickname')}
+          >
+            <Input prefix={<UserOutlined />} placeholder={t('modal.nicknamePlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            name="timezone"
+            label={t('modal.timezone')}
+            extra={t('modal.timezoneExtra')}
+          >
+            <Select
+              showSearch
+              placeholder={t('modal.timezonePlaceholder')}
+              options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: tz.label }))}
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+            />
+          </Form.Item>
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Button onClick={() => {
+              setProfileModalOpen(false)
+              profileForm.resetFields()
+            }} style={{ marginRight: 8 }}>
+              {t('modal.cancel')}
+            </Button>
+            <Button type="primary" htmlType="submit" loading={profileLoading}>
+              {t('modal.save')}
             </Button>
           </Form.Item>
         </Form>

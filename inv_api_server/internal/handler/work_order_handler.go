@@ -1,6 +1,10 @@
 package handler
 
+// TODO: WorkOrder handler is a stub implementation. All endpoints return hardcoded/fake data.
+// This needs to be implemented with a proper repository layer and database operations.
+
 import (
+	"log"
 	"strconv"
 
 	"inv-api-server/pkg/response"
@@ -15,6 +19,7 @@ func NewWorkOrderHandler() *WorkOrderHandler {
 }
 
 func (h *WorkOrderHandler) List(c *gin.Context) {
+	log.Printf("WARNING: work_order_handler.List is using stub implementation")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
@@ -29,6 +34,7 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 }
 
 func (h *WorkOrderHandler) GetByID(c *gin.Context) {
+	log.Printf("WARNING: work_order_handler.GetByID is using stub implementation")
 	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "invalid order id")
@@ -48,6 +54,7 @@ func (h *WorkOrderHandler) GetByID(c *gin.Context) {
 }
 
 func (h *WorkOrderHandler) GetStatistics(c *gin.Context) {
+	log.Printf("WARNING: work_order_handler.GetStatistics is using stub implementation")
 	response.Success(c, gin.H{
 		"total":    0,
 		"pending":  0,
@@ -58,6 +65,7 @@ func (h *WorkOrderHandler) GetStatistics(c *gin.Context) {
 }
 
 func (h *WorkOrderHandler) Create(c *gin.Context) {
+	log.Printf("WARNING: work_order_handler.Create is using stub implementation")
 	var req struct {
 		Title       string `json:"title" binding:"required"`
 		Description string `json:"description"`
@@ -74,6 +82,7 @@ func (h *WorkOrderHandler) Create(c *gin.Context) {
 }
 
 func (h *WorkOrderHandler) Update(c *gin.Context) {
+	log.Printf("WARNING: work_order_handler.Update is using stub implementation")
 	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "invalid order id")
@@ -96,6 +105,7 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 }
 
 func (h *WorkOrderHandler) Delete(c *gin.Context) {
+	log.Printf("WARNING: work_order_handler.Delete is using stub implementation")
 	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "invalid order id")

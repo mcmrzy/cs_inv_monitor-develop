@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class CreateStationPage extends StatefulWidget {
   const CreateStationPage({super.key});
@@ -59,9 +60,10 @@ class _CreateStationPageState extends State<CreateStationPage> {
   }
 
   void _submit() {
-    if (_province == null) { _showErr('请选择省份'); return; }
-    if (_city == null)     { _showErr('请选择城市'); return; }
-    if (_district == null) { _showErr('请选择区/县'); return; }
+    final l10n = AppLocalizations.of(context)!;
+    if (_province == null) { _showErr(l10n.pleaseSelectProvince); return; }
+    if (_city == null)     { _showErr(l10n.pleaseSelectCity); return; }
+    if (_district == null) { _showErr(l10n.pleaseSelectDistrict); return; }
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _submitting = true);
@@ -109,7 +111,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('新建电站', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+        title: Text(AppLocalizations.of(context)!.newStation, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -123,7 +125,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
             context.pop();
           } else if (state is StationError) {
             setState(() => _submitting = false);
-            _showErr(state.message);
+            _showErr(AppLocalizations.of(context)!.translateError(state.message));
           }
         },
         builder: (context, state) {
@@ -135,11 +137,11 @@ class _CreateStationPageState extends State<CreateStationPage> {
                 children: [
                   _buildSection(
                     icon: Icons.solar_power_rounded,
-                    title: '电站信息',
-                    subtitle: '填写电站基本信息',
+                    title: AppLocalizations.of(context)!.stationInfo,
+                    subtitle: AppLocalizations.of(context)!.fillStationInfo,
                     child: Column(
                       children: [
-                        _field(_nameCtl, '电站名称', '例如：我家屋顶电站', required: true),
+                        _field(_nameCtl, AppLocalizations.of(context)!.stationName, AppLocalizations.of(context)!.stationNameHint, required: true),
                         SizedBox(height: 12.h),
                         Container(
                           padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
@@ -154,7 +156,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                               SizedBox(width: 10.w),
                               Expanded(
                                 child: Text(
-                                  '装机容量将根据关联设备的逆变器额定功率自动计算',
+                                  AppLocalizations.of(context)!.capacityAutoCalculate,
                                   style: TextStyle(fontSize: 13.sp, color: const Color(0xFF0369A1)),
                                 ),
                               ),
@@ -167,8 +169,8 @@ class _CreateStationPageState extends State<CreateStationPage> {
                   SizedBox(height: 16.h),
                   _buildSection(
                     icon: Icons.location_on_outlined,
-                    title: '所在地区',
-                    subtitle: '选择电站安装位置',
+                    title: AppLocalizations.of(context)!.region,
+                    subtitle: AppLocalizations.of(context)!.selectInstallLocation,
                     child: Column(
                       children: [
                         GestureDetector(
@@ -186,7 +188,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                                 SizedBox(width: 10.w),
                                 Expanded(
                                   child: Text(
-                                    _province != null ? _addressText : '请选择省市区',
+                                    _province != null ? _addressText : AppLocalizations.of(context)!.selectProvinceCityDistrict,
                                     style: TextStyle(
                                       fontSize: 14.sp,
                                       color: _province != null ? AppColors.textPrimary : AppColors.textHint,
@@ -200,7 +202,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                           ),
                         ),
                         SizedBox(height: 12.h),
-                        _field(_detailCtl, '详细地址', '例如：xx街道xx小区1栋（选填）'),
+                        _field(_detailCtl, AppLocalizations.of(context)!.detailAddress, AppLocalizations.of(context)!.detailAddressHint),
                       ],
                     ),
                   ),
@@ -218,13 +220,13 @@ class _CreateStationPageState extends State<CreateStationPage> {
                       ),
                       child: _submitting
                           ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                          : Text('创建电站', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
+                          : Text(AppLocalizations.of(context)!.createStationBtn, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
                     ),
                   ),
                   SizedBox(height: 16.h),
                   TextButton(
                     onPressed: () => context.pop(),
-                    child: Text('取消', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+                    child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
                   ),
                 ],
               ),
@@ -295,7 +297,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
             errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r), borderSide: const BorderSide(color: AppColors.errorLight)),
           ),
-          validator: required ? (v) => (v == null || v.trim().isEmpty) ? '请输入$label' : null : null,
+          validator: required ? (v) => (v == null || v.trim().isEmpty) ? '${AppLocalizations.of(context)!.pleaseInput}$label' : null : null,
         ),
       ],
     );
@@ -442,12 +444,12 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Text('取消', style: TextStyle(fontSize: 15.sp, color: AppColors.textHint)),
+                        child: Text(AppLocalizations.of(context)!.cancel, style: TextStyle(fontSize: 15.sp, color: AppColors.textHint)),
                       ),
-                      Text('选择地区', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                      Text(AppLocalizations.of(context)!.selectRegion, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                       TextButton(
                         onPressed: _confirm,
-                        child: Text('确定', style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                        child: Text(AppLocalizations.of(context)!.confirm, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.primary)),
                       ),
                     ],
                   ),
@@ -456,11 +458,11 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                   height: _itemH * 7,
                   child: Row(
                     children: [
-                      Expanded(flex: 3, child: _buildColumn(widget.provinces, _provCtrl, _provIdx, _onProvChanged, colLabel: '省')),
+                      Expanded(flex: 3, child: _buildColumn(widget.provinces, _provCtrl, _provIdx, _onProvChanged, colLabel: AppLocalizations.of(context)!.localProvince)),
                       Container(width: 1, color: AppColors.surfaceHover),
-                      Expanded(flex: 3, child: _buildColumn(_cities, _cityCtrl, _cityIdx, _onCityChanged, colLabel: '市')),
+                      Expanded(flex: 3, child: _buildColumn(_cities, _cityCtrl, _cityIdx, _onCityChanged, colLabel: AppLocalizations.of(context)!.localCity)),
                       Container(width: 1, color: AppColors.surfaceHover),
-                      Expanded(flex: 3, child: _buildColumn(_districts, _distCtrl, _distIdx, _onDistChanged, colLabel: '区')),
+                      Expanded(flex: 3, child: _buildColumn(_districts, _distCtrl, _distIdx, _onDistChanged, colLabel: AppLocalizations.of(context)!.localDistrict)),
                     ],
                   ),
                 ),

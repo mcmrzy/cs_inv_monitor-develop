@@ -17,14 +17,14 @@ class LocalFirmwareService {
   }) async {
     final file = File(filePath);
     if (!await file.exists()) {
-      throw LocalFirmwareException('固件文件不存在: $filePath');
+      throw LocalFirmwareException('Firmware file not found: $filePath');
     }
 
     try {
       await _localComm.connect(deviceIP);
       await _localComm.uploadFirmware(filePath, onProgress: onProgress);
     } catch (e) {
-      throw LocalFirmwareException('上传固件失败: $e');
+      throw LocalFirmwareException('Upload firmware failed: $e');
     }
   }
 
@@ -44,7 +44,7 @@ class LocalFirmwareService {
       await _localComm.connect(deviceIP);
       return await _localComm.getOTAProgress();
     } catch (e) {
-      throw LocalFirmwareException('获取升级进度失败: $e');
+      throw LocalFirmwareException('Failed to get upgrade progress: $e');
     }
   }
 

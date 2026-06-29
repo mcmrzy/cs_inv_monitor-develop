@@ -14,21 +14,26 @@ import (
 
 func Auth(jwtService *service.JWTService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 从 Authorization header 或 httpOnly cookie 获取 token
+		tokenStr := ""
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			response.Unauthorized(c, "missing authorization header")
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenStr = parts[1]
+			}
+		}
+		if tokenStr == "" {
+			tokenStr, _ = c.Cookie("access_token")
+		}
+
+		if tokenStr == "" {
+			response.Unauthorized(c, "missing authorization")
 			c.Abort()
 			return
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if !(len(parts) == 2 && parts[0] == "Bearer") {
-			response.Unauthorized(c, "invalid authorization format")
-			c.Abort()
-			return
-		}
-
-		claims, err := jwtService.ParseToken(parts[1])
+		claims, err := jwtService.ParseToken(tokenStr)
 		if err != nil {
 			response.Unauthorized(c, "invalid token")
 			c.Abort()

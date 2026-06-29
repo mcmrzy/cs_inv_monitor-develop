@@ -27,8 +27,8 @@ class NotificationService {
       final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       await androidPlugin?.createNotificationChannel(const AndroidNotificationChannel(
         'ota_updates',
-        'OTA升级通知',
-        description: '固件升级相关通知',
+        'OTA Upgrade',
+        description: 'Firmware upgrade notifications',
         importance: Importance.high,
       ));
     }
@@ -43,8 +43,8 @@ class NotificationService {
   Future<void> showOTAUpdateNotification(String title, String body, {String? payload}) async {
     const androidDetails = AndroidNotificationDetails(
       'ota_updates',
-      'OTA升级通知',
-      channelDescription: '固件升级相关通知',
+      'OTA Upgrade',
+      channelDescription: 'Firmware upgrade notifications',
       importance: Importance.high,
       priority: Priority.high,
       showWhen: true,

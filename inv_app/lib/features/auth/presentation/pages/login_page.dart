@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -66,7 +67,7 @@ class _LoginPageState extends State<LoginPage> {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(state.message),
+                content: Text(AppLocalizations.of(context)!.translateError(state.message)),
                 backgroundColor: AppColors.error,
               ),
             );
@@ -110,10 +111,11 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildLogo() {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         Text(
-          '光伏逆变器',
+          l10n.pvInverter,
           style: TextStyle(
             fontSize: 28.sp,
             fontWeight: FontWeight.bold,
@@ -122,7 +124,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
         SizedBox(height: 8.h),
         Text(
-          '智能监控平台',
+          l10n.smartMonitorPlatform,
           style: TextStyle(
             fontSize: 16.sp,
             color: AppColors.textSecondary,
@@ -133,29 +135,31 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildAccountField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _accountController,
       keyboardType: TextInputType.text,
       decoration: InputDecoration(
-        labelText: '手机号 / 邮箱 / 用户名',
-        hintText: '输入手机号、邮箱或用户名',
+        labelText: l10n.phoneOrEmailOrUsername,
+        hintText: l10n.inputPhoneEmailUsername,
         prefixIcon: const Icon(Icons.person_outlined),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
-        if (value == null || value.isEmpty) return '请输入账号';
+        if (value == null || value.isEmpty) return l10n.pleaseInputAccount;
         return null;
       },
     );
   }
 
   Widget _buildPasswordField() {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
       controller: _passwordController,
       obscureText: _obscurePassword,
       decoration: InputDecoration(
-        labelText: '密码',
-        hintText: '请输入密码',
+        labelText: l10n.password,
+        hintText: l10n.inputPasswordHint,
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
           icon: Icon(
@@ -173,10 +177,10 @@ class _LoginPageState extends State<LoginPage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return '请输入密码';
+          return l10n.pleaseInputPassword;
         }
         if (value.length < 6 || value.length > 20) {
-          return '密码长度为6-20位';
+          return l10n.passwordLength;
         }
         return null;
       },
@@ -184,6 +188,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildRememberRow() {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Checkbox(
@@ -194,17 +199,18 @@ class _LoginPageState extends State<LoginPage> {
             });
           },
         ),
-        Text('记住密码', style: TextStyle(fontSize: 14.sp)),
+        Text(l10n.rememberPassword, style: TextStyle(fontSize: 14.sp)),
         const Spacer(),
         TextButton(
           onPressed: () => context.push('/forgot-password'),
-          child: Text('忘记密码?', style: TextStyle(fontSize: 14.sp)),
+          child: Text(l10n.forgotPasswordQ, style: TextStyle(fontSize: 14.sp)),
         ),
       ],
     );
   }
 
   Widget _buildLoginButton(AuthState state) {
+    final l10n = AppLocalizations.of(context)!;
     return ElevatedButton(
       onPressed: state is AuthLoading ? null : _handleLogin,
       style: ElevatedButton.styleFrom(
@@ -224,30 +230,32 @@ class _LoginPageState extends State<LoginPage> {
                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
               ),
             )
-          : Text('登录', style: TextStyle(fontSize: 16.sp)),
+          : Text(l10n.login, style: TextStyle(fontSize: 16.sp)),
     );
   }
 
   Widget _buildRegisterRow() {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text('还没有账号?', style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+        Text(l10n.notHaveAccount, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
         TextButton(
           onPressed: () => context.push('/register'),
-          child: Text('立即注册', style: TextStyle(fontSize: 14.sp)),
+          child: Text(l10n.registerNow, style: TextStyle(fontSize: 14.sp)),
         ),
       ],
     );
   }
 
   Widget _buildSocialLoginDivider() {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
         Expanded(child: Divider(color: const Color(0xFFE5E7EB), thickness: 1.h)),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 16.w),
-          child: Text('其他登录方式', style: TextStyle(fontSize: 12.sp, color: const Color(0xFF9CA3AF))),
+          child: Text(l10n.otherLogin, style: TextStyle(fontSize: 12.sp, color: const Color(0xFF9CA3AF))),
         ),
         Expanded(child: Divider(color: const Color(0xFFE5E7EB), thickness: 1.h)),
       ],
@@ -255,12 +263,13 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Widget _buildSocialLoginButtons() {
+    final l10n = AppLocalizations.of(context)!;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _buildSocialButton(
           iconPath: 'assets/icons/wechat.svg',
-          label: '微信',
+          label: l10n.wechat,
           onTap: () {
             context.read<AuthBloc>().add(const AuthWechatLoginRequested(code: ''));
           },

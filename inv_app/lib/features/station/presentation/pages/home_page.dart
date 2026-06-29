@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inv_app/core/entities/inverter_data.dart';
+import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,8 +24,13 @@ class _HomePageState extends State<HomePage> {
   StationSummaryLoaded? _cachedState;
   int _filterIndex = 0;
   bool _showSearch = false;
+  StreamSubscription<dynamic>? _statusSub;
+  StreamSubscription<dynamic>? _alarmSub;
 
-  static const _filters = ['全部', '正常', '告警', '离线'];
+  List<String> get _filters {
+    final l10n = AppLocalizations.of(context)!;
+    return [l10n.all, l10n.normal, l10n.fault, l10n.offline];
+  }
   static const _filterColors = [
     AppColors.primary,
     AppColors.successLight,
@@ -32,10 +42,19 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     context.read<StationBloc>().add(StationSummaryRequested());
+    final mqtt = getIt<MQTTService>();
+    _statusSub = mqtt.statusStream.listen((_) {
+      context.read<StationBloc>().add(StationSummaryRequested());
+    });
+    _alarmSub = mqtt.alarmStream.listen((_) {
+      context.read<StationBloc>().add(StationSummaryRequested());
+    });
   }
 
   @override
   void dispose() {
+    _statusSub?.cancel();
+    _alarmSub?.cancel();
     _searchCtl.dispose();
     super.dispose();
   }
@@ -74,6 +93,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: AppColors.background,
       body: BlocBuilder<StationBloc, StationState>(
         builder: (context, state) {
+          final l10n = AppLocalizations.of(context)!;
           if (state is StationSummaryLoaded) _cachedState = state;
           final ds = _cachedState;
 
@@ -108,13 +128,13 @@ class _HomePageState extends State<HomePage> {
                           padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
                           child: Row(
                             children: [
-                              Text('${filtered.length} 个电站',
+                              Text(l10n.str('station_count', {'count': '${filtered.length}'}),
                                   style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
                               const Spacer(),
                               if (_filterIndex > 0)
                                 GestureDetector(
                                   onTap: () => setState(() => _filterIndex = 0),
-                                  child: Text('清除筛选', style: TextStyle(fontSize: 12.sp, color: AppColors.primary)),
+                                  child: Text(l10n.clearFilter, style: TextStyle(fontSize: 12.sp, color: AppColors.primary)),
                                 ),
                             ],
                           ),
@@ -143,6 +163,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   SliverToBoxAdapter _buildHeader() {
+    final l10n = AppLocalizations.of(context)!;
     return SliverToBoxAdapter(
       child: Container(
         padding: EdgeInsets.only(
@@ -157,14 +178,14 @@ class _HomePageState extends State<HomePage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('辰烁科技',
+                Text(l10n.brandName,
                     style: TextStyle(
                         fontSize: 22.sp,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
                         letterSpacing: -0.3)),
                 SizedBox(height: 2.h),
-                Text('光伏逆变器智能监控',
+                Text(l10n.pvInverterMonitor,
                     style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
               ],
             ),
@@ -219,6 +240,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   SliverToBoxAdapter _buildSearchBar() {
+    final l10n = AppLocalizations.of(context)!;
     return SliverToBoxAdapter(
       child: Container(
         color: Colors.white,
@@ -230,7 +252,7 @@ class _HomePageState extends State<HomePage> {
           cursorColor: AppColors.primary,
           style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
           decoration: InputDecoration(
-            hintText: '搜索电站名称',
+            hintText: l10n.searchStation,
             hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
             prefixIcon: Icon(Icons.search_rounded, size: 20, color: AppColors.textHint),
             suffixIcon: _searchCtl.text.isNotEmpty
@@ -323,6 +345,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildCard(dynamic station) {
+    final l10n = AppLocalizations.of(context)!;
     final name = station['station_name'] ?? station['name'] ?? '';
     final id = station['station_id'] ?? station['id'] ?? 0;
     final faultCount = station['fault_count'] ?? 0;
@@ -341,11 +364,11 @@ class _HomePageState extends State<HomePage> {
     if (province is String && province.isNotEmpty) addressParts.add(province);
     if (city is String && city.isNotEmpty) addressParts.add(city);
     if (district is String && district.isNotEmpty) addressParts.add(district);
-    final addressText = '中国 ${addressParts.join(' ')}';
+    final addressText = '${l10n.china} ${addressParts.join(' ')}';
 
     final badgeColor = ok ? AppColors.badgeNormalText : (hasFault ? AppColors.badgeAlarmText : AppColors.badgeOfflineText);
     final badgeBg = ok ? AppColors.badgeNormalBg : (hasFault ? AppColors.badgeAlarmBg : AppColors.badgeOfflineBg);
-    final badgeText = ok ? '正常' : (hasFault ? '告警' : '离线');
+    final badgeText = ok ? l10n.normal : (hasFault ? l10n.fault : l10n.offline);
 
     return Padding(
       padding: EdgeInsets.only(bottom: 14.h),
@@ -411,9 +434,9 @@ class _HomePageState extends State<HomePage> {
                       SizedBox(height: 10.h),
                       Row(
                         children: [
-                          _energyItem(todayEnergy.toStringAsFixed(1), 'kWh', '今日发电'),
+                          _energyItem(todayEnergy.toStringAsFixed(1), 'kWh', l10n.todayGeneration),
                           SizedBox(width: 24.w),
-                          _energyItem(totalEnergy.toStringAsFixed(0), 'kWh', '累计发电'),
+                          _energyItem(totalEnergy.toStringAsFixed(0), 'kWh', l10n.totalGeneration),
                         ],
                       ),
                     ],
@@ -459,6 +482,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildEmpty() {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 60.h),
       child: Column(
@@ -472,10 +496,10 @@ class _HomePageState extends State<HomePage> {
             child: Icon(Icons.add_home_work_outlined, size: 36.sp, color: AppColors.textHint),
           ),
           SizedBox(height: 18.h),
-          Text('还没有电站',
+          Text(l10n.noStations,
               style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
           SizedBox(height: 6.h),
-          Text('点击右上角 + 创建',
+          Text(l10n.tapPlusToCreate,
               style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
         ],
       ),
@@ -483,6 +507,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildError(String msg) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: EdgeInsets.all(32.w),
@@ -491,14 +516,14 @@ class _HomePageState extends State<HomePage> {
           children: [
             Icon(Icons.cloud_off_rounded, size: 44.sp, color: AppColors.textHint),
             SizedBox(height: 14.h),
-            Text(msg,
+            Text(l10n.translateError(msg),
                 style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
                 textAlign: TextAlign.center),
             SizedBox(height: 16.h),
             OutlinedButton(
                 onPressed: () => context.read<StationBloc>().add(StationSummaryRequested()),
                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
-                child: const Text('重试')),
+                child: Text(l10n.retry)),
           ],
         ),
       ),
@@ -578,29 +603,32 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctl;
 
-  static const _items = [
-    _MenuItemData(
-      icon: Icons.add_home_work_outlined,
-      color: AppColors.primary,
-      title: '创建电站',
-      subtitle: '添加新的光伏电站',
-      path: '/station/create',
-    ),
-    _MenuItemData(
-      icon: Icons.solar_power,
-      color: AppColors.successLight,
-      title: '添加设备',
-      subtitle: '扫码或手动添加逆变器设备',
-      path: '/add-device',
-    ),
-    _MenuItemData(
-      icon: Icons.wifi,
-      color: Color(0xFF8B5CF6),
-      title: '设备配网',
-      subtitle: '为逆变器设备配置WiFi网络',
-      path: '/wifi-config',
-    ),
-  ];
+  List<_MenuItemData> get _items {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      _MenuItemData(
+        icon: Icons.add_home_work_outlined,
+        color: AppColors.primary,
+        title: l10n.createStation,
+        subtitle: l10n.addNewPvStation,
+        path: '/station/create',
+      ),
+      _MenuItemData(
+        icon: Icons.solar_power,
+        color: AppColors.successLight,
+        title: l10n.addDevice,
+        subtitle: l10n.scanOrManualAdd,
+        path: '/add-device',
+      ),
+      _MenuItemData(
+        icon: Icons.wifi,
+        color: Color(0xFF8B5CF6),
+        title: l10n.wifiConfig,
+        subtitle: l10n.configWifiForDevice,
+        path: '/wifi-config',
+      ),
+    ];
+  }
 
   @override
   void initState() {

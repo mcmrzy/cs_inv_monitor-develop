@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"time"
 
 	"inv-api-server/internal/config"
@@ -57,15 +58,30 @@ func (s *EmailService) SendCode(ctx context.Context, email, codeType string) err
 
 func (s *EmailService) VerifyCode(ctx context.Context, email, code, codeType string) bool {
 	key := fmt.Sprintf("email:%s:%s", email, codeType)
+	failKey := fmt.Sprintf("email:%s:%s:fail", email, codeType)
+
 	storedCode, err := s.cache.Get(ctx, key).Result()
 	if err != nil {
 		return false
 	}
 
+	// 检查验证码尝试次数
+	failCount, _ := s.cache.Get(ctx, failKey).Int()
+	if failCount >= 5 {
+		return false
+	}
+
 	if storedCode == code {
+		pipe := s.cache.Pipeline()
+		pipe.Del(ctx, key)
+		pipe.Del(ctx, failKey)
+		pipe.Exec(ctx)
 		return true
 	}
 
+	// 记录失败次数
+	s.cache.Incr(ctx, failKey)
+	s.cache.Expire(ctx, failKey, 5*time.Minute)
 	return false
 }
 
@@ -89,7 +105,7 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>辰烁科技验证码</title>
+    <title>CSERGY 验证码</title>
 </head>
 <body style="margin:0; padding:0; background-color:#EFF2F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;">
     <div style="max-width:520px; margin:30px auto; padding:20px 16px;">
@@ -106,7 +122,7 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <span style="font-size: 28px;">☀️</span>
-                        <span style="font-weight: 600; font-size: 20px; color: #1F2A3E; letter-spacing: 0.5px;">辰烁科技</span>
+                        <span style="font-weight: 600; font-size: 20px; color: #1F2A3E; letter-spacing: 0.5px;">CSERGY</span>
                         <span style="background:#EFF2F9; padding:4px 12px; border-radius:40px; font-size: 12px; font-weight:500; color:#1E88E5; margin-left:6px;">智慧能源</span>
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 8px;">
@@ -123,7 +139,7 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
                 
                 <!-- 正文描述 -->
                 <p style="font-size: 16px; line-height: 1.5; color: #3E4A5E; margin: 0 0 16px 0; font-weight: 400;">
-                    感谢您注册<span style="font-weight:600; color:#1E88E5;"> 辰烁科技光伏逆变器智能监控APP</span>，请使用以下验证码完成账户验证：
+                    感谢您注册<span style="font-weight:600; color:#1E88E5;"> CSERGY光伏逆变器智能监控APP</span>，请使用以下验证码完成账户验证：
                 </p>
                 
                 <!-- 验证码展示区：高端光晕 + 等宽字体 -->
@@ -140,7 +156,7 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
                     </p>
                     <p style="margin: 0; font-size: 14px; color: #5B6A84; line-height: 1.4;">
                         验证码<span style="font-weight:600;"> 5分钟 </span>内有效，请勿将验证码告知他人。<br>
-                        辰烁科技工作人员<span style="font-weight:600;">绝不会</span>向您索要任何验证码。
+                        CSERGY工作人员<span style="font-weight:600;">绝不会</span>向您索要任何验证码。
                     </p>
                 </div>
                 
@@ -152,12 +168,12 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
                 <!-- 底部公司信息 + 光伏场景 -->
                 <div style="margin-top: 32px; padding-top: 20px; border-top: 1px solid #ECF0F5; text-align: center;">
                     <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
-                        <span style="font-size: 13px; color: #7E8A9E;">© 辰烁科技 · 智慧光伏解决方案</span>
+                        <span style="font-size: 13px; color: #7E8A9E;">© CSERGY · 智慧光伏解决方案</span>
                         <span style="width:4px; height:4px; background:#C0CCDA; border-radius:50%%; display:inline-block;"></span>
                         <span style="font-size: 13px; color: #7E8A9E;">让能源更智能</span>
                     </div>
                     <div style="font-size: 12px; color: #B7C1D2;">
-                        辰烁科技 | 清洁能源 · 高效逆变
+                        CSERGY | 清洁能源 · 高效逆变
                     </div>
                 </div>
             </div>
@@ -165,7 +181,7 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
         
         <!-- 额外占位自然留白 -->
         <div style="text-align: center; margin-top: 24px;">
-            <p style="font-size: 12px; color: #A6B1C6; margin: 0;">此邮件由辰烁科技系统自动发出，请勿直接回复</p>
+            <p style="font-size: 12px; color: #A6B1C6; margin: 0;">此邮件由CSERGY系统自动发出，请勿直接回复</p>
         </div>
     </div>
 </body>
@@ -185,10 +201,10 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
 }
 
 func generateEmailCode(length int) string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	digits := make([]byte, length)
-	for i := 0; i < length; i++ {
-		digits[i] = byte(r.Intn(10) + '0')
+	code := make([]byte, length)
+	for i := range code {
+		n, _ := rand.Int(rand.Reader, big.NewInt(10))
+		code[i] = byte('0' + n.Int64())
 	}
-	return string(digits)
+	return string(code)
 }

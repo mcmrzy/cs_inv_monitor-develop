@@ -116,6 +116,13 @@ func main() {
 	// 注册 OTA 状态回调：MQTT 收到设备 OTA 状态后转发给 API Server
 	if mqttClient != nil {
 		mqttClient.SetOtaStatusHandler(dataService.HandleOTAStatus)
+		mqttClient.SetStatusChangeHandler(func(sn string, online bool) {
+			status := 0
+			if online {
+				status = 1
+			}
+			dataService.SyncDeviceStatus(ctx, sn, status)
+		})
 	}
 	dataService.StartMetadataRefresh(ctx)
 
@@ -180,14 +187,10 @@ func main() {
 }
 
 func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
-	tz := cfg.Timezone
-	if tz == "" {
-		tz = "Asia/Shanghai"
-	}
 	dsn := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s timezone=%s",
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s timezone=UTC",
 		cfg.Database.Host, cfg.Database.Port, cfg.Database.User,
-		cfg.Database.Password, cfg.Database.Database, cfg.Database.SSLMode, tz,
+		cfg.Database.Password, cfg.Database.Database, cfg.Database.SSLMode,
 	)
 
 	poolConfig, err := pgxpool.ParseConfig(dsn)
@@ -343,14 +346,12 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 }
 
 func setTimezone(tz string) error {
-	if tz == "" {
-		tz = "Asia/Shanghai"
-	}
-	loc, err := time.LoadLocation(tz)
+	// 统一使用 UTC 作为服务端时区, 前端根据站点 timezone 做本地化显示
+	loc, err := time.LoadLocation("UTC")
 	if err != nil {
-		return fmt.Errorf("invalid timezone %q: %w", tz, err)
+		return fmt.Errorf("invalid timezone UTC: %w", err)
 	}
 	time.Local = loc
-	os.Setenv("TZ", tz)
+	os.Setenv("TZ", "UTC")
 	return nil
 }

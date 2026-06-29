@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>光伏逆变器监控系统 - 鉴权模块代码说明</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            padding: 40px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p { color: #8892b0; font-size: 1.1em; }
+        .content { padding: 40px; }
+        .section {
+            margin-bottom: 40px;
+            padding: 30px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+        }
+        .section h2 {
+            color: #1a1a2e;
+            font-size: 1.6em;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section h2::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #667eea;
+            border-radius: 50%;
+        }
+        .section h3 {
+            color: #2d3748;
+            font-size: 1.2em;
+            margin: 20px 0 10px 0;
+        }
+        .file-tree {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .file-tree .folder { color: #dcdcaa; }
+        .file-tree .file { color: #9cdcfe; }
+        .file-tree .comment { color: #6a9955; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            background: #667eea;
+            color: #fff;
+            font-weight: 600;
+        }
+        tr:hover { background: #f5f5f5; }
+        code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+        }
+        pre .keyword { color: #569cd6; }
+        pre .string { color: #ce9178; }
+        pre .comment { color: #6a9955; }
+        pre .function { color: #dcdcaa; }
+        pre .type { color: #4ec9b0; }
+        .flow-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+        }
+        .flow-item {
+            padding: 12px 24px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            color: #fff;
+            border-radius: 25px;
+            font-weight: 600;
+            min-width: 200px;
+            text-align: center;
+        }
+        .flow-arrow {
+            width: 2px;
+            height: 30px;
+            background: #667eea;
+            position: relative;
+        }
+        .flow-arrow::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid #667eea;
+        }
+        .flow-item-sub {
+            padding: 10px 20px;
+            background: #fff3cd;
+            border-radius: 8px;
+            font-size: 0.9em;
+            color: #856404;
+            border: 1px solid #ffc107;
+        }
+        .flow-branch {
+            display: flex;
+            gap: 60px;
+            justify-content: center;
+        }
+        .flow-branch-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .flow-item-desc {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 8px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        .badge-go { background: #00ADD8; color: #fff; }
+        .badge-ts { background: #3178C6; color: #fff; }
+        .badge-dart { background: #0175C2; color: #fff; }
+        .badge-server { background: #28a745; color: #fff; }
+        .badge-client { background: #dc3545; color: #fff; }
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .two-col { grid-template-columns: 1fr; }
+        }
+        .info-box {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #2196f3;
+        }
+        .warning-box {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .footer {
+            background: #1a1a2e;
+            color: #8892b0;
+            text-align: center;
+            padding: 20px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>光伏逆变器监控系统</h1>
+            <p>鉴权模块代码说明文档</p>
+        </div>
+
+        <div class="content">
+            <!-- 1. 架构概述 -->
+            <div class="section">
+                <h2>1. 鉴权架构概述</h2>
+                <p>系统采用 <strong>JWT + RBAC</strong> 的鉴权架构，API Gateway 作为统一入口进行鉴权，业务服务专注于业务逻辑。</p>
+
+                <div class="flow-diagram">
+                    <div class="flow-item">客户端 (App / Web)</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">API Gateway (:8080)</div>
+                    <div class="flow-item-sub">JWT验证 → RBAC权限检查 → 限流</div>
+                    <div class="flow-branch">
+                        <div class="flow-branch-item">
+                            <div class="flow-arrow"></div>
+                            <div class="flow-item">API Server</div>
+                            <div class="flow-item-desc">用户管理 / Token生成</div>
+                        </div>
+                        <div class="flow-branch-item">
+                            <div class="flow-arrow"></div>
+                            <div class="flow-item">Device Server</div>
+                            <div class="flow-item-desc">MQTT设备通信</div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>鉴权方式对比</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>终端类型</th>
+                            <th>协议</th>
+                            <th>认证方式</th>
+                            <th>凭证类型</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Web管理端 / App</td>
+                            <td>HTTP REST</td>
+                            <td>JWT Token</td>
+                            <td>动态凭证 (登录获取)</td>
+                        </tr>
+                        <tr>
+                            <td>App (实时数据)</td>
+                            <td>MQTT TLS</td>
+                            <td>用户名/密码</td>
+                            <td>用户凭证</td>
+                        </tr>
+                        <tr>
+                            <td>设备端 (ESP32)</td>
+                            <td>MQTT TLS</td>
+                            <td>固定用户名/密码</td>
+                            <td>固定凭证 (硬编码)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 2. 目录结构 -->
+            <div class="section">
+                <h2>2. 代码目录结构</h2>
+                <div class="file-tree">
+<pre>
+<span class="folder">auth-code/</span>
+├── <span class="folder">server/</span>                           <span class="comment"># 服务端代码 (Go)</span>
+│   ├── <span class="folder">gateway/</span>                       <span class="comment"># API Gateway 网关层</span>
+│   │   ├── <span class="folder">middleware/</span>
+│   │   │   ├── <span class="file">jwt.go</span>                 <span class="comment"># JWT Token 验证中间件</span>
+│   │   │   └── <span class="file">rbac.go</span>                <span class="comment"># RBAC 权限控制中间件</span>
+│   │   ├── <span class="file">main.go</span>                    <span class="comment"># 网关入口，组装鉴权链</span>
+│   │   └── <span class="file">config.docker.yaml</span>        <span class="comment"># JWT密钥、RBAC配置</span>
+│   │
+│   └── <span class="folder">api-server/</span>                    <span class="comment"># API Server 业务层</span>
+│       ├── <span class="folder">handler/</span>
+│       │   └── <span class="file">auth_handler.go</span>        <span class="comment"># 登录/注册/Token刷新接口</span>
+│       ├── <span class="folder">jwt/</span>
+│       │   └── <span class="file">jwt.go</span>                 <span class="comment"># JWT Token 生成/解析库</span>
+│       ├── <span class="folder">service/</span>
+│       │   └── <span class="file">rbac_cache.go</span>          <span class="comment"># RBAC 权限缓存服务</span>
+│       └── <span class="file">config.go</span>                  <span class="comment"># JWT过期时间等配置</span>
+│
+└── <span class="folder">client/</span>                           <span class="comment"># 客户端代码</span>
+    ├── <span class="folder">web-admin/</span>                     <span class="comment"># Web管理端 (TypeScript/React)</span>
+    │   ├── <span class="file">api.ts</span>                     <span class="comment"># Axios拦截器 + Token刷新</span>
+    │   └── <span class="file">authStore.ts</span>               <span class="comment"># 认证状态管理 (Zustand)</span>
+    │
+    └── <span class="folder">flutter-app/</span>                   <span class="comment"># Flutter App (Dart)</span>
+        ├── <span class="file">service_locator.dart</span>       <span class="comment"># Dio拦截器 + Token刷新</span>
+        ├── <span class="file">auth_repository_impl.dart</span>  <span class="comment"># 登录/注册 API 调用</span>
+        └── <span class="file">storage_service.dart</span>       <span class="comment"># Token 安全存储</span>
+</pre>
+                </div>
+            </div>
+
+            <!-- 3. 服务端模块说明 -->
+            <div class="section">
+                <h2>3. 服务端模块说明</h2>
+
+                <h3>3.1 API Gateway <span class="badge badge-go">Go</span> <span class="badge badge-server">Server</span></h3>
+                <p>API Gateway 是系统的统一入口，负责鉴权和请求路由。</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>文件</th>
+                            <th>功能</th>
+                            <th>关键函数/类型</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>middleware/jwt.go</code></td>
+                            <td>JWT Token 验证</td>
+                            <td>
+                                <code>JWTAuth()</code> - 验证 Bearer Token<br>
+                                <code>isPublicPath()</code> - 判断公开接口
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>middleware/rbac.go</code></td>
+                            <td>RBAC 权限控制</td>
+                            <td>
+                                <code>RBACGuard()</code> - 权限检查<br>
+                                <code>hasPermission()</code> - 验证用户权限
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>main.go</code></td>
+                            <td>网关入口</td>
+                            <td>组装中间件链: CORS → JWT → RBAC → RateLimit</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="info-box">
+                    <strong>公开接口（无需认证）：</strong><br>
+                    <code>/health</code>, <code>/metrics</code>, <code>/api/docs</code>,<br>
+                    <code>/api/v1/auth/login</code>, <code>/api/v1/auth/register</code>, <code>/api/v1/auth/send-code</code>,<br>
+                    <code>/api/v1/auth/reset-password</code>, <code>/api/v1/auth/email-login</code>, <code>/api/v1/auth/email-register</code>
+                </div>
+
+                <h3>3.2 API Server <span class="badge badge-go">Go</span> <span class="badge badge-server">Server</span></h3>
+                <p>API Server 处理业务逻辑，包括用户管理和 Token 生成。</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>文件</th>
+                            <th>功能</th>
+                            <th>关键函数/类型</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>handler/auth_handler.go</code></td>
+                            <td>认证接口</td>
+                            <td>
+                                <code>Login()</code> - 手机号/邮箱登录<br>
+                                <code>Register()</code> - 注册<br>
+                                <code>RefreshToken()</code> - 刷新 Token<br>
+                                <code>Logout()</code> - 登出
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>jwt/jwt.go</code></td>
+                            <td>JWT 工具库</td>
+                            <td>
+                                <code>GenerateToken()</code> - 生成 Access + Refresh Token<br>
+                                <code>ParseToken()</code> - 解析验证 Token<br>
+                                <code>Claims</code> - Token 声明结构
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><code>service/rbac_cache.go</code></td>
+                            <td>权限缓存</td>
+                            <td>
+                                <code>CacheUserPermissions()</code> - 缓存用户权限<br>
+                                <code>GetUserPermissions()</code> - 获取用户权限
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>JWT Token 结构</h4>
+                <pre><span class="keyword">type</span> <span class="type">Claims</span> <span class="keyword">struct</span> {
+    UserID <span class="type">int64</span>  <span class="string">`json:"user_id"`</span>
+    Phone  <span class="type">string</span> <span class="string">`json:"phone"`</span>
+    Role   <span class="type">int</span>    <span class="string">`json:"role"`</span>     <span class="comment">// 0:超管 1:原厂 2:总代理 3:经销商 4:安装商 5:用户</span>
+    jwt.RegisteredClaims
+}</pre>
+            </div>
+
+            <!-- 4. 客户端模块说明 -->
+            <div class="section">
+                <h2>4. 客户端模块说明</h2>
+
+                <div class="two-col">
+                    <div>
+                        <h3>4.1 Web 管理端 <span class="badge badge-ts">TypeScript</span> <span class="badge badge-client">Client</span></h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>文件</th>
+                                    <th>功能</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>api.ts</code></td>
+                                    <td>
+                                        Axios 拦截器<br>
+                                        - 请求时自动添加 Bearer Token<br>
+                                        - 401 时自动刷新 Token<br>
+                                        - 刷新失败则跳转登录
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>authStore.ts</code></td>
+                                    <td>
+                                        Zustand 状态管理<br>
+                                        - 存储 token/refreshToken/user<br>
+                                        - 权限检查方法<br>
+                                        - localStorage 持久化
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div>
+                        <h3>4.2 Flutter App <span class="badge badge-dart">Dart</span> <span class="badge badge-client">Client</span></h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>文件</th>
+                                    <th>功能</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>service_locator.dart</code></td>
+                                    <td>
+                                        Dio 拦截器<br>
+                                        - 请求时自动添加 Bearer Token<br>
+                                        - 401 时自动刷新 Token<br>
+                                        - 并发请求锁机制
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>auth_repository_impl.dart</code></td>
+                                    <td>登录/注册/刷新 Token API 调用</td>
+                                </tr>
+                                <tr>
+                                    <td><code>storage_service.dart</code></td>
+                                    <td>
+                                        安全存储<br>
+                                        - FlutterSecureStorage 存储 Token<br>
+                                        - SharedPreferences 存储配置
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5. 鉴权流程 -->
+            <div class="section">
+                <h2>5. 鉴权流程</h2>
+
+                <h3>5.1 登录流程</h3>
+                <div class="flow-diagram">
+                    <div class="flow-item">1. 用户输入账号密码</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">2. 客户端 POST /auth/login</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">3. API Server 验证密码 (bcrypt)</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">4. 生成 Access Token (2h) + Refresh Token (7d)</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">5. 返回 Token + 用户信息 + 权限列表</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">6. 客户端存储 Token</div>
+                </div>
+
+                <h3>5.2 API 请求鉴权流程</h3>
+                <div class="flow-diagram">
+                    <div class="flow-item">1. 客户端请求 Authorization: Bearer {token}</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">2. API Gateway 验证 JWT 签名</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">3. 提取 user_id, role 注入请求头</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">4. RBAC 检查用户角色权限</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">5. 转发请求到 API Server</div>
+                </div>
+
+                <h3>5.3 Token 刷新流程</h3>
+                <div class="flow-diagram">
+                    <div class="flow-item">1. API 返回 401 Unauthorized</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">2. 客户端拦截器捕获</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">3. POST /auth/refresh (携带 refresh_token)</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">4. API Server 验证并生成新 Token</div>
+                    <div class="flow-arrow"></div>
+                    <div class="flow-item">5. 客户端更新存储，重试原请求</div>
+                </div>
+            </div>
+
+            <!-- 6. 安全特性 -->
+            <div class="section">
+                <h2>6. 安全特性</h2>
+
+                <div class="two-col">
+                    <div>
+                        <h3>密码安全</h3>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <strong>bcrypt 加密</strong><br>
+                                密码使用 bcrypt 哈希存储，不可逆
+                            </li>
+                            <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <strong>登录失败限制</strong><br>
+                                5次失败后锁定15分钟
+                            </li>
+                            <li style="padding: 8px 0;">
+                                <strong>验证码保护</strong><br>
+                                注册/重置密码需短信/邮箱验证码
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h3>Token 安全</h3>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <strong>双 Token 机制</strong><br>
+                                Access Token (2h) + Refresh Token (7d)
+                            </li>
+                            <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <strong>JWT 黑名单</strong><br>
+                                登出时 Token 加入黑名单
+                            </li>
+                            <li style="padding: 8px 0;">
+                                <strong>HTTPS/TLS</strong><br>
+                                所有通信加密传输
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="warning-box">
+                    <strong>RBAC 角色说明：</strong><br>
+                    <code>0</code> - 超级管理员（拥有所有权限）<br>
+                    <code>1</code> - 原厂 &nbsp;&nbsp;
+                    <code>2</code> - 总代理 &nbsp;&nbsp;
+                    <code>3</code> - 经销商 &nbsp;&nbsp;
+                    <code>4</code> - 安装商 &nbsp;&nbsp;
+                    <code>5</code> - 用户
+                </div>
+            </div>
+
+            <!-- 7. 配置说明 -->
+            <div class="section">
+                <h2>7. 关键配置</h2>
+
+                <h3>JWT 配置 (config.docker.yaml)</h3>
+                <pre><span class="comment"># API Gateway</span>
+<span class="keyword">jwt</span>:
+  <span class="keyword">secret</span>: <span class="string">"${JWT_SECRET}"</span>          <span class="comment"># JWT 签名密钥</span>
+
+<span class="comment"># API Server</span>
+<span class="keyword">jwt</span>:
+  <span class="keyword">secret</span>: <span class="string">"${JWT_SECRET}"</span>
+  <span class="keyword">expire_time</span>: <span class="string">2h</span>                 <span class="comment"># Access Token 过期时间</span>
+  <span class="keyword">refresh_expire_time</span>: <span class="string">168h</span>       <span class="comment"># Refresh Token 过期时间 (7天)</span>
+  <span class="keyword">issuer</span>: <span class="string">"inv-api-server"</span>         <span class="comment"># Token 签发者</span></pre>
+
+                <h3>RBAC 配置</h3>
+                <pre><span class="keyword">rbac</span>:
+  <span class="keyword">enabled</span>: <span class="string">true</span>                   <span class="comment"># 启用 RBAC</span>
+  <span class="keyword">cache_ttl_sec</span>: <span class="string">300</span>              <span class="comment"># 权限缓存 TTL (5分钟)</span></pre>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>光伏逆变器监控系统 - 鉴权模块代码说明</p>
+            <p>生成时间: 2026-06-25 | 技术栈: Go + TypeScript + Dart</p>
+        </div>
+    </div>
+</body>
+</html>

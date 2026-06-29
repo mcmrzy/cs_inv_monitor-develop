@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>辰烁科技器监控系统 - 数据库设计文档</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f5f7fa; color: #333; line-height: 1.6; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; padding: 30px 40px; border-radius: 16px; margin-bottom: 30px; }
+        .header h1 { font-size: 28px; font-weight: 600; }
+        .header p { margin-top: 8px; opacity: 0.9; font-size: 14px; }
+        .nav { display: flex; gap: 12px; margin-bottom: 30px; overflow-x: auto; }
+        .nav button { padding: 10px 20px; border: 2px solid #e5e7eb; background: white; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.2s; white-space: nowrap; }
+        .nav button:hover { border-color: #3b82f6; color: #3b82f6; }
+        .nav button.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+        .section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .section-title { font-size: 20px; font-weight: 600; color: #1f2937; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #e5e7eb; display: flex; align-items: center; gap: 8px; }
+        .section-title::before { content: ''; width: 4px; height: 20px; background: #3b82f6; border-radius: 2px; }
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background: #f9fafb; font-weight: 600; color: #4b5563; }
+        tr:hover { background: #f9fafb; }
+        .table-caption { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .badge-primary { background: #dbeafe; color: #1d4ed8; }
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-warning { background: #fef3c7; color: #b45309; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        .badge-info { background: #e0e7ff; color: #4338ca; }
+        .code-block { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; overflow-x: auto; margin: 12px 0; }
+        .code-block code { display: block; white-space: pre; }
+        .note { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; font-size: 13px; }
+        .info { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; font-size: 13px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+        .card { background: #f9fafb; border-radius: 8px; padding: 16px; }
+        .card-title { font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+        .card-value { font-size: 24px; font-weight: 700; color: #1f2937; }
+        .card-desc { font-size: 12px; color: #6b7280; margin-top: 4px; }
+        .category-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+        .category-tab { padding: 6px 14px; background: #f3f4f6; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s; }
+        .category-tab.active { background: #3b82f6; color: white; }
+        .collapsible { cursor: pointer; user-select: none; }
+        .collapsible::after { content: ' ▼'; font-size: 10px; }
+        .collapsible.collapsed::after { content: ' ▶'; }
+        .collapsible-content { display: none; }
+        .collapsible-content.show { display: block; }
+        .table-group { margin-bottom: 24px; }
+        .table-group:last-child { margin-bottom: 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>光伏逆变器监控系统 - 数据库设计文档</h1>
+            <p>PostgreSQL 15+ | TimescaleDB | UTF-8 | 最后更新: 2026-06-25</p>
+        </div>
+
+        <div class="nav">
+            <button class="active" onclick="showSection('overview')">概述</button>
+            <button onclick="showSection('schema')">完整 Schema</button>
+            <button onclick="showSection('tables')">表结构详解</button>
+            <button onclick="showSection('timescaledb')">TimescaleDB 配置</button>
+            <button onclick="showSection('migrations')">版本迁移</button>
+            <button onclick="showSection('views')">视图与函数</button>
+        </div>
+
+        <div id="overview" class="section">
+            <div class="section-title">系统概述</div>
+            <div class="grid">
+                <div class="card">
+                    <div class="card-title">数据库类型</div>
+                    <div class="card-value">PostgreSQL</div>
+                    <div class="card-desc">版本 15+，支持 JSONB、TimescaleDB</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">数据表数量</div>
+                    <div class="card-value">19</div>
+                    <div class="card-desc">包含用户、设备、遥测、告警等模块</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">时序表</div>
+                    <div class="card-value">3</div>
+                    <div class="card-desc">device_telemetry、device_alarms、device_cmd_logs</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">连续聚合视图</div>
+                    <div class="card-value">3</div>
+                    <div class="card-desc">1min、1hour、1day 降采样</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">索引数量</div>
+                    <div class="card-value">20+</div>
+                    <div class="card-desc">覆盖高频查询场景</div>
+                </div>
+                <div class="card">
+                    <div class="card-title">压缩策略</div>
+                    <div class="card-value">7天自动压缩</div>
+                    <div class="card-desc">压缩比约 10:1</div>
+                </div>
+            </div>
+            <div class="info" style="margin-top: 16px;">
+                <strong>核心架构：</strong> 用户 → 电站 → 设备 → 遥测数据，形成完整的数据链路。使用 TimescaleDB 处理海量时序数据，PostgreSQL 存储元数据。
+            </div>
+        </div>
+
+        <div id="schema" class="section" style="display: none;">
+            <div class="section-title">完整 Schema 定义</div>
+            <div class="code-block">
+                <code>-- 光伏逆变器APP数据库设计
+-- 数据库: PostgreSQL 15+ | 字符集: UTF-8
+
+-- ============================================
+-- 1. 用户相关表
+-- ============================================
+
+-- 用户表
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    phone VARCHAR(20) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    nickname VARCHAR(50),
+    avatar VARCHAR(500),
+    role SMALLINT NOT NULL DEFAULT 5, -- 1:原厂 2:总代理 3:经销商 4:安装商 5:用户
+    region_id BIGINT,
+    status SMALLINT NOT NULL DEFAULT 1, -- 1:正常 0:禁用
+    last_login_at TIMESTAMP,
+    last_login_ip VARCHAR(45),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP
+);
+
+-- 用户操作日志表
+CREATE TABLE user_operation_logs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    device_sn VARCHAR(50),
+    operation_type VARCHAR(50) NOT NULL, -- login/logout/device_control/param_modify/ota_upgrade
+    operation_detail JSONB,
+    result VARCHAR(20) NOT NULL, -- success/failed
+    error_message TEXT,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 用户会话表（已废弃，改用JWT）
+CREATE TABLE user_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    token_hash VARCHAR(255) NOT NULL,
+    device_type VARCHAR(20), -- ios/android/web
+    device_id VARCHAR(100),
+    ip_address VARCHAR(45),
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 验证码表
+CREATE TABLE verification_codes (
+    id BIGSERIAL PRIMARY KEY,
+    phone VARCHAR(20) NOT NULL,
+    code VARCHAR(6) NOT NULL,
+    type VARCHAR(20) NOT NULL, -- register/reset_password/login
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- 2. 电站相关表
+-- ============================================
+
+-- 区域表(省市区)
+CREATE TABLE regions (
+    id BIGSERIAL PRIMARY KEY,
+    parent_id BIGINT,
+    name VARCHAR(50) NOT NULL,
+    level SMALLINT NOT NULL, -- 1:省 2:市 3:区
+    code VARCHAR(20) NOT NULL UNIQUE
+);
+
+-- 电站表
+CREATE TABLE stations (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    province VARCHAR(50) NOT NULL,
+    city VARCHAR(50) NOT NULL,
+    district VARCHAR(50),
+    address VARCHAR(200) NOT NULL,
+    capacity DECIMAL(10,2) NOT NULL, -- 装机容量(kW)
+    panel_count INTEGER,
+    peak_price DECIMAL(10,4), -- 峰电价
+    valley_price DECIMAL(10,4), -- 谷电价
+    latitude DECIMAL(10,7),
+    longitude DECIMAL(10,7),
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai',
+    status SMALLINT NOT NULL DEFAULT 1, -- 1:正常 0:禁用
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP
+);
+
+-- ============================================
+-- 3. 设备相关表
+-- ============================================
+
+-- 设备表
+CREATE TABLE devices (
+    id BIGSERIAL PRIMARY KEY,
+    sn VARCHAR(50) NOT NULL UNIQUE,
+    model VARCHAR(100),
+    rated_power DECIMAL(10,2), -- 额定功率(kW)
+    firmware_version VARCHAR(50),
+    hardware_version VARCHAR(50),
+    mac_address VARCHAR(17),
+    station_id BIGINT,
+    user_id BIGINT NOT NULL,
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai',
+    status SMALLINT NOT NULL DEFAULT 0, -- 0:离线 1:在线 2:故障
+    last_online_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP
+);
+
+-- ============================================
+-- 4. 告警相关表
+-- ============================================
+
+-- 告警表
+CREATE TABLE alarms (
+    id BIGSERIAL PRIMARY KEY,
+    device_sn VARCHAR(50) NOT NULL,
+    station_id BIGINT,
+    user_id BIGINT NOT NULL,
+    alarm_level SMALLINT NOT NULL, -- 1:提示 2:警告 3:严重
+    fault_code VARCHAR(20) NOT NULL,
+    fault_message VARCHAR(200) NOT NULL,
+    fault_detail TEXT,
+    status SMALLINT NOT NULL DEFAULT 0, -- 0:未处理 1:已处理 2:已忽略
+    occurred_at TIMESTAMP NOT NULL,
+    recovered_at TIMESTAMP,
+    handled_at TIMESTAMP,
+    handled_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 告警通知记录表
+CREATE TABLE alarm_notifications (
+    id BIGSERIAL PRIMARY KEY,
+    alarm_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    notify_type VARCHAR(20) NOT NULL, -- push/sms/email
+    notify_status VARCHAR(20) NOT NULL, -- pending/sent/failed
+    sent_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 系统通知表
+CREATE TABLE notifications (
+    id BIGSERIAL PRIMARY KEY,
+    device_sn VARCHAR(50) NOT NULL,
+    station_id BIGINT,
+    user_id BIGINT NOT NULL,
+    notify_type VARCHAR(30) NOT NULL, -- device_online, device_offline, ota_available
+    title VARCHAR(200) NOT NULL,
+    content TEXT,
+    status SMALLINT NOT NULL DEFAULT 0, -- 0:未读 1:已读
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- 8. OTA升级相关表
+-- ============================================
+
+-- 固件版本表
+CREATE TABLE firmware_versions (
+    id BIGSERIAL PRIMARY KEY,
+    model VARCHAR(100) NOT NULL,
+    version VARCHAR(50) NOT NULL,
+    file_url VARCHAR(500) NOT NULL,
+    file_size BIGINT,
+    file_md5 VARCHAR(32),
+    changelog TEXT,
+    is_force BOOLEAN DEFAULT FALSE,
+    status SMALLINT DEFAULT 1, -- 1:正常 0:禁用
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(model, version)
+);
+
+-- OTA升级记录表
+CREATE TABLE ota_records (
+    id BIGSERIAL PRIMARY KEY,
+    device_sn VARCHAR(50) NOT NULL,
+    firmware_id BIGINT NOT NULL,
+    old_version VARCHAR(50),
+    new_version VARCHAR(50),
+    status VARCHAR(20) NOT NULL, -- pending/downloading/upgrading/success/failed
+    progress INTEGER DEFAULT 0,
+    error_message TEXT,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- 9. 系统配置表
+-- ============================================
+
+CREATE TABLE system_configs (
+    id BIGSERIAL PRIMARY KEY,
+    config_key VARCHAR(100) NOT NULL UNIQUE,
+    config_value TEXT,
+    description VARCHAR(200),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- 阶段2: 时序遥测数据表
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS device_telemetry (
+    id          BIGSERIAL,
+    device_sn   VARCHAR(50) NOT NULL,
+    model_code  VARCHAR(50),
+    topic       VARCHAR(200),
+    data        JSONB NOT NULL,
+    total_active_power DECIMAL(12,2) DEFAULT 0,
+    daily_energy       DECIMAL(14,4) DEFAULT 0,
+    work_state         VARCHAR(50),
+    fault_code         VARCHAR(50),
+    internal_temperature DECIMAL(6,1) DEFAULT 0,
+    time               TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- ============================================
+-- 阶段3: 设备型号注册表
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS device_models (
+    id              SERIAL PRIMARY KEY,
+    model_code      VARCHAR(50) NOT NULL UNIQUE,
+    model_name      VARCHAR(100) NOT NULL,
+    manufacturer    VARCHAR(50),
+    category        VARCHAR(20) NOT NULL DEFAULT 'inverter',
+    rated_power_kw  DECIMAL(8,2) DEFAULT 0,
+    data_fields     JSONB NOT NULL DEFAULT '{}',
+    field_mapping   JSONB NOT NULL DEFAULT '{}',
+    mqtt_topics     JSONB NOT NULL DEFAULT '[]',
+    description     TEXT,
+    is_active       BOOLEAN NOT NULL DEFAULT true,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- ============================================
+-- 阶段4: 设备告警、命令日志、日统计表
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS device_alarms (
+    id BIGSERIAL PRIMARY KEY,
+    device_sn VARCHAR(50) NOT NULL,
+    event_type VARCHAR(50),
+    source VARCHAR(50),
+    fault_code INTEGER,
+    fault_desc TEXT,
+    alarm_code INTEGER,
+    trigger_info JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS device_cmd_logs (
+    id BIGSERIAL PRIMARY KEY,
+    device_sn VARCHAR(50) NOT NULL,
+    cmd VARCHAR(50) NOT NULL,
+    result VARCHAR(20),
+    message TEXT,
+    sent_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS device_day_data (
+    device_sn VARCHAR(50) NOT NULL,
+    data_date DATE NOT NULL,
+    data JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (device_sn, data_date)
+);
+
+CREATE TABLE IF NOT EXISTS station_day_data (
+    station_id BIGINT NOT NULL,
+    data_date DATE NOT NULL,
+    energy_produce DECIMAL(12,4) DEFAULT 0,
+    income DECIMAL(12,4) DEFAULT 0,
+    device_count INTEGER DEFAULT 0,
+    online_count INTEGER DEFAULT 0,
+    fault_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (station_id, data_date)
+);</code>
+            </div>
+        </div>
+
+        <div id="tables" class="section" style="display: none;">
+            <div class="section-title">表结构详解</div>
+            <div class="category-tabs">
+                <div class="category-tab active" onclick="filterTables('all')">全部</div>
+                <div class="category-tab" onclick="filterTables('user')">用户模块</div>
+                <div class="category-tab" onclick="filterTables('station')">电站模块</div>
+                <div class="category-tab" onclick="filterTables('device')">设备模块</div>
+                <div class="category-tab" onclick="filterTables('alarm')">告警模块</div>
+                <div class="category-tab" onclick="filterTables('ota')">OTA模块</div>
+                <div class="category-tab" onclick="filterTables('system')">系统模块</div>
+            </div>
+
+            <div class="table-group" data-category="user">
+                <div class="table-caption">users - 用户表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>用户ID</td></tr>
+                        <tr><td>phone</td><td>VARCHAR(20)</td><td>NOT NULL, UNIQUE</td><td>手机号码</td></tr>
+                        <tr><td>password_hash</td><td>VARCHAR(255)</td><td>NOT NULL</td><td>密码哈希</td></tr>
+                        <tr><td>nickname</td><td>VARCHAR(50)</td><td></td><td>昵称</td></tr>
+                        <tr><td>avatar</td><td>VARCHAR(500)</td><td></td><td>头像URL</td></tr>
+                        <tr><td>role</td><td>SMALLINT</td><td>NOT NULL, DEFAULT 5</td><td>1:原厂 2:总代理 3:经销商 4:安装商 5:用户</td></tr>
+                        <tr><td>region_id</td><td>BIGINT</td><td></td><td>所属区域</td></tr>
+                        <tr><td>status</td><td>SMALLINT</td><td>NOT NULL, DEFAULT 1</td><td>1:正常 0:禁用</td></tr>
+                        <tr><td>last_login_at</td><td>TIMESTAMP</td><td></td><td>最后登录时间</td></tr>
+                        <tr><td>last_login_ip</td><td>VARCHAR(45)</td><td></td><td>最后登录IP</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                        <tr><td>updated_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>更新时间</td></tr>
+                        <tr><td>deleted_at</td><td>TIMESTAMP</td><td></td><td>删除时间（软删除）</td></tr>
+                    </table>
+                </div>
+                <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                    索引: idx_users_phone, idx_users_role, idx_users_region
+                </div>
+            </div>
+
+            <div class="table-group" data-category="user">
+                <div class="table-caption">verification_codes - 验证码表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>ID</td></tr>
+                        <tr><td>phone</td><td>VARCHAR(20)</td><td>NOT NULL</td><td>手机号</td></tr>
+                        <tr><td>code</td><td>VARCHAR(6)</td><td>NOT NULL</td><td>验证码</td></tr>
+                        <tr><td>type</td><td>VARCHAR(20)</td><td>NOT NULL</td><td>register/reset_password/login</td></tr>
+                        <tr><td>expires_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>过期时间</td></tr>
+                        <tr><td>used</td><td>BOOLEAN</td><td>DEFAULT FALSE</td><td>是否已使用</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="station">
+                <div class="table-caption">regions - 区域表(省市区)</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>区域ID</td></tr>
+                        <tr><td>parent_id</td><td>BIGINT</td><td></td><td>父级区域ID</td></tr>
+                        <tr><td>name</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>区域名称</td></tr>
+                        <tr><td>level</td><td>SMALLINT</td><td>NOT NULL</td><td>1:省 2:市 3:区</td></tr>
+                        <tr><td>code</td><td>VARCHAR(20)</td><td>NOT NULL, UNIQUE</td><td>区域编码</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="station">
+                <div class="table-caption">stations - 电站表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>电站ID</td></tr>
+                        <tr><td>user_id</td><td>BIGINT</td><td>NOT NULL</td><td>所属用户ID</td></tr>
+                        <tr><td>name</td><td>VARCHAR(100)</td><td>NOT NULL</td><td>电站名称</td></tr>
+                        <tr><td>province</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>省份</td></tr>
+                        <tr><td>city</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>城市</td></tr>
+                        <tr><td>district</td><td>VARCHAR(50)</td><td></td><td>区县</td></tr>
+                        <tr><td>address</td><td>VARCHAR(200)</td><td>NOT NULL</td><td>详细地址</td></tr>
+                        <tr><td>capacity</td><td>DECIMAL(10,2)</td><td>NOT NULL</td><td>装机容量(kW)</td></tr>
+                        <tr><td>panel_count</td><td>INTEGER</td><td></td><td>组件数量</td></tr>
+                        <tr><td>peak_price</td><td>DECIMAL(10,4)</td><td></td><td>峰电价</td></tr>
+                        <tr><td>valley_price</td><td>DECIMAL(10,4)</td><td></td><td>谷电价</td></tr>
+                        <tr><td>latitude</td><td>DECIMAL(10,7)</td><td></td><td>纬度</td></tr>
+                        <tr><td>longitude</td><td>DECIMAL(10,7)</td><td></td><td>经度</td></tr>
+                        <tr><td>timezone</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>IANA时区标识符</td></tr>
+                        <tr><td>status</td><td>SMALLINT</td><td>NOT NULL, DEFAULT 1</td><td>1:正常 0:禁用</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                        <tr><td>updated_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>更新时间</td></tr>
+                        <tr><td>deleted_at</td><td>TIMESTAMP</td><td></td><td>删除时间</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="device">
+                <div class="table-caption">devices - 设备表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>设备ID</td></tr>
+                        <tr><td>sn</td><td>VARCHAR(50)</td><td>NOT NULL, UNIQUE</td><td>设备序列号</td></tr>
+                        <tr><td>model</td><td>VARCHAR(100)</td><td></td><td>设备型号</td></tr>
+                        <tr><td>rated_power</td><td>DECIMAL(10,2)</td><td></td><td>额定功率(kW)</td></tr>
+                        <tr><td>firmware_version</td><td>VARCHAR(50)</td><td></td><td>固件版本</td></tr>
+                        <tr><td>hardware_version</td><td>VARCHAR(50)</td><td></td><td>硬件版本</td></tr>
+                        <tr><td>mac_address</td><td>VARCHAR(17)</td><td></td><td>MAC地址</td></tr>
+                        <tr><td>station_id</td><td>BIGINT</td><td></td><td>所属电站ID</td></tr>
+                        <tr><td>user_id</td><td>BIGINT</td><td>NOT NULL</td><td>所属用户ID</td></tr>
+                        <tr><td>timezone</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>时区</td></tr>
+                        <tr><td>status</td><td>SMALLINT</td><td>NOT NULL, DEFAULT 0</td><td>0:离线 1:在线 2:故障</td></tr>
+                        <tr><td>last_online_at</td><td>TIMESTAMP</td><td></td><td>最后在线时间</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                        <tr><td>updated_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>更新时间</td></tr>
+                        <tr><td>deleted_at</td><td>TIMESTAMP</td><td></td><td>删除时间</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="device">
+                <div class="table-caption">device_models - 设备型号注册表 <span class="badge badge-info">新增</span></div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>SERIAL</td><td>PRIMARY KEY</td><td>ID</td></tr>
+                        <tr><td>model_code</td><td>VARCHAR(50)</td><td>NOT NULL, UNIQUE</td><td>型号编码</td></tr>
+                        <tr><td>model_name</td><td>VARCHAR(100)</td><td>NOT NULL</td><td>显示名称</td></tr>
+                        <tr><td>manufacturer</td><td>VARCHAR(50)</td><td></td><td>制造商</td></tr>
+                        <tr><td>category</td><td>VARCHAR(20)</td><td>DEFAULT 'inverter'</td><td>inverter/battery/meter/hybrid</td></tr>
+                        <tr><td>rated_power_kw</td><td>DECIMAL(8,2)</td><td>DEFAULT 0</td><td>额定功率kW</td></tr>
+                        <tr><td>data_fields</td><td>JSONB</td><td>NOT NULL</td><td>标准字段定义</td></tr>
+                        <tr><td>field_mapping</td><td>JSONB</td><td>NOT NULL</td><td>MQTT字段→标准字段映射</td></tr>
+                        <tr><td>mqtt_topics</td><td>JSONB</td><td>NOT NULL</td><td>订阅Topic列表</td></tr>
+                        <tr><td>is_active</td><td>BOOLEAN</td><td>NOT NULL, DEFAULT true</td><td>是否启用</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                        <tr><td>updated_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>更新时间</td></tr>
+                    </table>
+                </div>
+                <div class="note">新型号只需在此配置，无需修改代码</div>
+            </div>
+
+            <div class="table-group" data-category="device">
+                <div class="table-caption">device_telemetry - 设备遥测数据表 <span class="badge badge-primary">TimescaleDB超表</span></div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td></td><td>ID</td></tr>
+                        <tr><td>device_sn</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>设备序列号</td></tr>
+                        <tr><td>model_code</td><td>VARCHAR(50)</td><td></td><td>设备型号</td></tr>
+                        <tr><td>topic</td><td>VARCHAR(200)</td><td></td><td>来源MQTT Topic</td></tr>
+                        <tr><td>data</td><td>JSONB</td><td>NOT NULL</td><td>原始JSON数据</td></tr>
+                        <tr><td>total_active_power</td><td>DECIMAL(12,2)</td><td>DEFAULT 0</td><td>总有功功率</td></tr>
+                        <tr><td>daily_energy</td><td>DECIMAL(14,4)</td><td>DEFAULT 0</td><td>日发电量</td></tr>
+                        <tr><td>work_state</td><td>VARCHAR(50)</td><td></td><td>工作状态</td></tr>
+                        <tr><td>fault_code</td><td>VARCHAR(50)</td><td></td><td>故障码</td></tr>
+                        <tr><td>internal_temperature</td><td>DECIMAL(6,1)</td><td>DEFAULT 0</td><td>内部温度</td></tr>
+                        <tr><td>time</td><td>TIMESTAMP</td><td>NOT NULL</td><td>数据时间（分区键）</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="alarm">
+                <div class="table-caption">alarms - 告警表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>告警ID</td></tr>
+                        <tr><td>device_sn</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>设备序列号</td></tr>
+                        <tr><td>station_id</td><td>BIGINT</td><td></td><td>所属电站ID</td></tr>
+                        <tr><td>user_id</td><td>BIGINT</td><td>NOT NULL</td><td>所属用户ID</td></tr>
+                        <tr><td>alarm_level</td><td>SMALLINT</td><td>NOT NULL</td><td>1:提示 2:警告 3:严重</td></tr>
+                        <tr><td>fault_code</td><td>VARCHAR(20)</td><td>NOT NULL</td><td>故障码</td></tr>
+                        <tr><td>fault_message</td><td>VARCHAR(200)</td><td>NOT NULL</td><td>故障消息</td></tr>
+                        <tr><td>fault_detail</td><td>TEXT</td><td></td><td>故障详情</td></tr>
+                        <tr><td>status</td><td>SMALLINT</td><td>NOT NULL, DEFAULT 0</td><td>0:未处理 1:已处理 2:已忽略</td></tr>
+                        <tr><td>occurred_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>发生时间</td></tr>
+                        <tr><td>recovered_at</td><td>TIMESTAMP</td><td></td><td>恢复时间</td></tr>
+                        <tr><td>handled_at</td><td>TIMESTAMP</td><td></td><td>处理时间</td></tr>
+                        <tr><td>handled_by</td><td>BIGINT</td><td></td><td>处理人</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="alarm">
+                <div class="table-caption">device_alarms - 设备告警事件表 <span class="badge badge-primary">TimescaleDB超表</span></div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>ID</td></tr>
+                        <tr><td>device_sn</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>设备序列号</td></tr>
+                        <tr><td>event_type</td><td>VARCHAR(50)</td><td></td><td>事件类型</td></tr>
+                        <tr><td>source</td><td>VARCHAR(50)</td><td></td><td>来源</td></tr>
+                        <tr><td>fault_code</td><td>INTEGER</td><td></td><td>故障码</td></tr>
+                        <tr><td>fault_desc</td><td>TEXT</td><td></td><td>故障描述</td></tr>
+                        <tr><td>alarm_code</td><td>INTEGER</td><td></td><td>告警码</td></tr>
+                        <tr><td>trigger_info</td><td>JSONB</td><td></td><td>触发信息</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>DEFAULT NOW()</td><td>创建时间</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="ota">
+                <div class="table-caption">firmware_versions - 固件版本表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>固件ID</td></tr>
+                        <tr><td>model</td><td>VARCHAR(100)</td><td>NOT NULL</td><td>适用型号</td></tr>
+                        <tr><td>version</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>版本号</td></tr>
+                        <tr><td>file_url</td><td>VARCHAR(500)</td><td>NOT NULL</td><td>固件文件URL</td></tr>
+                        <tr><td>file_size</td><td>BIGINT</td><td></td><td>文件大小</td></tr>
+                        <tr><td>file_md5</td><td>VARCHAR(32)</td><td></td><td>文件MD5</td></tr>
+                        <tr><td>changelog</td><td>TEXT</td><td></td><td>更新日志</td></tr>
+                        <tr><td>is_force</td><td>BOOLEAN</td><td>DEFAULT FALSE</td><td>是否强制升级</td></tr>
+                        <tr><td>status</td><td>SMALLINT</td><td>DEFAULT 1</td><td>1:正常 0:禁用</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="ota">
+                <div class="table-caption">ota_records - OTA升级记录表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>记录ID</td></tr>
+                        <tr><td>device_sn</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>设备序列号</td></tr>
+                        <tr><td>firmware_id</td><td>BIGINT</td><td>NOT NULL</td><td>固件ID</td></tr>
+                        <tr><td>old_version</td><td>VARCHAR(50)</td><td></td><td>旧版本</td></tr>
+                        <tr><td>new_version</td><td>VARCHAR(50)</td><td></td><td>新版本</td></tr>
+                        <tr><td>status</td><td>VARCHAR(20)</td><td>NOT NULL</td><td>pending/downloading/upgrading/success/failed</td></tr>
+                        <tr><td>progress</td><td>INTEGER</td><td>DEFAULT 0</td><td>升级进度</td></tr>
+                        <tr><td>error_message</td><td>TEXT</td><td></td><td>错误信息</td></tr>
+                        <tr><td>started_at</td><td>TIMESTAMP</td><td></td><td>开始时间</td></tr>
+                        <tr><td>completed_at</td><td>TIMESTAMP</td><td></td><td>完成时间</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="table-group" data-category="system">
+                <div class="table-caption">system_configs - 系统配置表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>id</td><td>BIGSERIAL</td><td>PRIMARY KEY</td><td>ID</td></tr>
+                        <tr><td>config_key</td><td>VARCHAR(100)</td><td>NOT NULL, UNIQUE</td><td>配置键</td></tr>
+                        <tr><td>config_value</td><td>TEXT</td><td></td><td>配置值</td></tr>
+                        <tr><td>description</td><td>VARCHAR(200)</td><td></td><td>配置说明</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>创建时间</td></tr>
+                        <tr><td>updated_at</td><td>TIMESTAMP</td><td>NOT NULL</td><td>更新时间</td></tr>
+                    </table>
+                </div>
+                <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                    初始化配置: mqtt_broker_url, mqtt_ws_url, token_expire_hours, verify_code_expire_minutes, data_retention_days, max_devices_per_user, max_stations_per_user
+                </div>
+            </div>
+
+            <div class="table-group" data-category="device">
+                <div class="table-caption">device_day_data - 设备日统计表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>device_sn</td><td>VARCHAR(50)</td><td>NOT NULL</td><td>设备序列号</td></tr>
+                        <tr><td>data_date</td><td>DATE</td><td>NOT NULL</td><td>统计日期</td></tr>
+                        <tr><td>data</td><td>JSONB</td><td>NOT NULL</td><td>聚合数据</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>DEFAULT NOW()</td><td>创建时间</td></tr>
+                    </table>
+                </div>
+                <div class="note">主键: (device_sn, data_date)</div>
+            </div>
+
+            <div class="table-group" data-category="station">
+                <div class="table-caption">station_day_data - 电站日统计表</div>
+                <div class="table-container">
+                    <table>
+                        <tr><th>字段名</th><th>类型</th><th>约束</th><th>说明</th></tr>
+                        <tr><td>station_id</td><td>BIGINT</td><td>NOT NULL</td><td>电站ID</td></tr>
+                        <tr><td>data_date</td><td>DATE</td><td>NOT NULL</td><td>统计日期</td></tr>
+                        <tr><td>energy_produce</td><td>DECIMAL(12,4)</td><td>DEFAULT 0</td><td>发电量</td></tr>
+                        <tr><td>income</td><td>DECIMAL(12,4)</td><td>DEFAULT 0</td><td>收益</td></tr>
+                        <tr><td>device_count</td><td>INTEGER</td><td>DEFAULT 0</td><td>设备总数</td></tr>
+                        <tr><td>online_count</td><td>INTEGER</td><td>DEFAULT 0</td><td>在线数</td></tr>
+                        <tr><td>fault_count</td><td>INTEGER</td><td>DEFAULT 0</td><td>故障数</td></tr>
+                        <tr><td>created_at</td><td>TIMESTAMP</td><td>DEFAULT NOW()</td><td>创建时间</td></tr>
+                    </table>
+                </div>
+                <div class="note">主键: (station_id, data_date)</div>
+            </div>
+        </div>
+
+        <div id="timescaledb" class="section" style="display: none;">
+            <div class="section-title">TimescaleDB 配置</div>
+            <div class="info">
+                <strong>TimescaleDB</strong> 是 PostgreSQL 的时序数据库扩展，用于处理海量设备遥测数据。支持自动分区、连续聚合、数据压缩等特性。
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">1. 启用 TimescaleDB 扩展</h3>
+                <div class="code-block">
+                    <code>CREATE EXTENSION IF NOT EXISTS timescaledb;</code>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">2. 创建超表</h3>
+                <div class="code-block">
+                    <code>-- 将 device_telemetry 转换为超表，按时间自动分区
+SELECT create_hypertable('device_telemetry', 'time', if_not_exists => TRUE);</code>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">3. 压缩策略</h3>
+                <div class="code-block">
+                    <code>-- 启用自动压缩策略（7天前的数据自动压缩，压缩比约 10:1）
+SELECT add_compression_policy('device_telemetry', INTERVAL '7 days', if_not_exists => TRUE);
+
+ALTER TABLE device_telemetry SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'device_sn',
+    timescaledb.compress_orderby = 'time DESC'
+);</code>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">4. 连续聚合视图</h3>
+                <div class="grid" style="margin-bottom: 16px;">
+                    <div class="card">
+                        <div class="card-title">device_telemetry_1min</div>
+                        <div class="card-desc">1分钟降采样，自动刷新间隔1分钟</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">device_telemetry_1hour</div>
+                        <div class="card-desc">1小时降采样，自动刷新间隔1小时</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">device_telemetry_1day</div>
+                        <div class="card-desc">1天降采样，自动刷新间隔1天</div>
+                    </div>
+                </div>
+                <div class="code-block">
+                    <code>-- 1分钟聚合
+CREATE MATERIALIZED VIEW IF NOT EXISTS device_telemetry_1min
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 minute', time) AS bucket,
+    device_sn,
+    AVG(total_active_power) AS avg_active_power,
+    MAX(total_active_power) AS max_active_power,
+    AVG(internal_temperature) AS avg_temperature,
+    LAST(daily_energy, time) - FIRST(daily_energy, time) AS energy_delta,
+    LAST(work_state, time) AS work_state,
+    LAST(fault_code, time) AS fault_code
+FROM device_telemetry
+GROUP BY bucket, device_sn;
+
+SELECT add_continuous_aggregate_policy('device_telemetry_1min',
+    start_offset    => INTERVAL '2 minutes',
+    end_offset      => INTERVAL '1 minute',
+    schedule_interval => INTERVAL '1 minute',
+    if_not_exists   => TRUE
+);
+
+-- 1小时聚合
+CREATE MATERIALIZED VIEW IF NOT EXISTS device_telemetry_1hour
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 hour', time) AS bucket,
+    device_sn,
+    AVG(total_active_power) AS avg_active_power,
+    MAX(total_active_power) AS max_active_power,
+    AVG(internal_temperature) AS avg_temperature,
+    LAST(daily_energy, time) - FIRST(daily_energy, time) AS energy_delta,
+    COUNT(*) AS sample_count,
+    SUM(CASE WHEN total_active_power > 0 THEN 1 ELSE 0 END) AS run_minutes
+FROM device_telemetry
+GROUP BY bucket, device_sn;
+
+-- 1天聚合
+CREATE MATERIALIZED VIEW IF NOT EXISTS device_telemetry_1day
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 day', time) AS bucket,
+    device_sn,
+    AVG(total_active_power) AS avg_active_power,
+    MAX(total_active_power) AS max_active_power,
+    AVG(internal_temperature) AS avg_temperature,
+    LAST(daily_energy, time) - FIRST(daily_energy, time) AS daily_energy,
+    SUM(CASE WHEN total_active_power > 0 THEN 1 ELSE 0 END) AS run_minutes
+FROM device_telemetry
+GROUP BY bucket, device_sn;</code>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">5. 压缩策略配置</h3>
+                <div class="table-container">
+                    <table>
+                        <tr><th>表名</th><th>压缩间隔</th><th>分段字段</th><th>排序字段</th></tr>
+                        <tr><td>device_telemetry</td><td>7天</td><td>device_sn</td><td>time DESC</td></tr>
+                        <tr><td>device_alarms</td><td>30天</td><td>device_sn</td><td>created_at DESC</td></tr>
+                        <tr><td>device_cmd_logs</td><td>7天</td><td>device_sn</td><td>sent_at DESC</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="migrations" class="section" style="display: none;">
+            <div class="section-title">版本化迁移脚本</div>
+            <div class="info">
+                迁移脚本位于 <code>database/migrations/</code> 目录，按版本顺序执行，确保数据库结构的一致性和可追溯性。
+            </div>
+
+            <div style="margin-top: 20px;">
+                <div class="table-container">
+                    <table>
+                        <tr><th>版本</th><th>文件名</th><th>描述</th><th>主要变更</th></tr>
+                        <tr><td>1</td><td>001_init_schema.up.sql</td><td>基础表结构</td><td>创建 users, stations, devices, alarms, firmware_versions, system_configs, schema_migrations</td></tr>
+                        <tr><td>2</td><td>002_add_performance_indexes.up.sql</td><td>高频查询索引优化</td><td>添加复合索引、部分索引、设备状态索引等</td></tr>
+                        <tr><td>3</td><td>003_timescaledb_compression.up.sql</td><td>TimescaleDB 压缩策略</td><td>为 device_telemetry、device_alarms、device_cmd_logs 启用自动压缩</td></tr>
+                        <tr><td>4</td><td>004_add_energy_columns.up.sql</td><td>为日数据表新增能量字段</td><td>添加 daily_charge, daily_discharge, daily_load 列</td></tr>
+                        <tr><td>5</td><td>005_device_day_data_jsonb.up.sql</td><td>日数据表改为 JSONB 存储</td><td>将结构化列迁移到 JSONB，实现模块化</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">迁移执行顺序</h3>
+                <div class="code-block">
+                    <code>-- 1. 初始化基础表结构
+psql -U postgres -d inv_mqtt -f migrations/001_init_schema.up.sql
+
+-- 2. 添加性能索引
+psql -U postgres -d inv_mqtt -f migrations/002_add_performance_indexes.up.sql
+
+-- 3. 配置 TimescaleDB 压缩
+psql -U postgres -d inv_mqtt -f migrations/003_timescaledb_compression.up.sql
+
+-- 4. 添加能量字段
+psql -U postgres -d inv_mqtt -f migrations/004_add_energy_columns.up.sql
+
+-- 5. 迁移到 JSONB 存储
+psql -U postgres -d inv_mqtt -f migrations/005_device_day_data_jsonb.up.sql</code>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">迁移版本跟踪</h3>
+                <div class="code-block">
+                    <code>-- schema_migrations 表用于跟踪已执行的迁移
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version BIGINT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 查询已执行的迁移
+SELECT * FROM schema_migrations ORDER BY version;</code>
+                </div>
+            </div>
+        </div>
+
+        <div id="views" class="section" style="display: none;">
+            <div class="section-title">视图与函数</div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">视图</h3>
+                <div class="table-container">
+                    <table>
+                        <tr><th>视图名</th><th>用途</th><th>说明</th></tr>
+                        <tr><td>v_device_latest</td><td>获取每个设备的最新遥测数据</td><td>替代旧的实时表单行查询，使用 DISTINCT ON 高效获取最新记录</td></tr>
+                    </table>
+                </div>
+                <div class="code-block" style="margin-top: 12px;">
+                    <code>CREATE OR REPLACE VIEW v_device_latest AS
+SELECT DISTINCT ON (dt.device_sn)
+    dt.device_sn,
+    dt.model_code,
+    dt.topic,
+    dt.data,
+    dt.total_active_power,
+    dt.daily_energy,
+    dt.work_state,
+    dt.fault_code,
+    dt.internal_temperature,
+    dt.time as data_time,
+    dt.created_at as updated_at
+FROM device_telemetry dt
+ORDER BY dt.device_sn, dt.time DESC;</code>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">函数</h3>
+                <div class="table-container">
+                    <table>
+                        <tr><th>函数名</th><th>返回类型</th><th>用途</th></tr>
+                        <tr><td>update_updated_at_column()</td><td>TRIGGER</td><td>更新表的 updated_at 时间戳</td></tr>
+                        <tr><td>clean_expired_data()</td><td>void</td><td>清理过期的验证码数据</td></tr>
+                    </table>
+                </div>
+                <div class="code-block" style="margin-top: 12px;">
+                    <code>-- 更新时间戳函数
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- 清理过期数据函数
+CREATE OR REPLACE FUNCTION clean_expired_data()
+RETURNS void AS $$
+BEGIN
+    DELETE FROM verification_codes WHERE expires_at < CURRENT_TIMESTAMP;
+END;
+$$ LANGUAGE plpgsql;</code>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">触发器</h3>
+                <div class="table-container">
+                    <table>
+                        <tr><th>触发器名</th><th>关联表</th><th>触发时机</th></tr>
+                        <tr><td>update_users_updated_at</td><td>users</td><td>BEFORE UPDATE</td></tr>
+                        <tr><td>update_stations_updated_at</td><td>stations</td><td>BEFORE UPDATE</td></tr>
+                        <tr><td>update_devices_updated_at</td><td>devices</td><td>BEFORE UPDATE</td></tr>
+                        <tr><td>update_system_configs_updated_at</td><td>system_configs</td><td>BEFORE UPDATE</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showSection(id) {
+            document.querySelectorAll('.nav button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            document.querySelectorAll('.section').forEach(sec => sec.style.display = 'none');
+            document.getElementById(id).style.display = 'block';
+        }
+
+        function filterTables(category) {
+            document.querySelectorAll('.category-tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+            document.querySelectorAll('.table-group').forEach(group => {
+                if (category === 'all' || group.dataset.category === category) {
+                    group.style.display = 'block';
+                } else {
+                    group.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html>
