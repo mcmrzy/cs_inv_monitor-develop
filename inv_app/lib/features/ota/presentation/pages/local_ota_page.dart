@@ -407,7 +407,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         _resultMessage = l10n.str('upload_firmware_failed', {'error': '$e'});
         _currentStep = LocalOTAStep.result;
       });
+      _disconnectDeviceHotspot();
     }
+  }
+
+  /// 升级结束后断开设备热点WiFi，恢复正常网络
+  void _disconnectDeviceHotspot() {
+    WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
   }
 
   /// 检测当前 WiFi 是否仍连接到设备热点
@@ -546,6 +552,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               _currentStep = LocalOTAStep.result;
             });
           }
+          _disconnectDeviceHotspot();
           return;
         }
 
@@ -559,6 +566,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               _currentStep = LocalOTAStep.result;
             });
           }
+          _disconnectDeviceHotspot();
           return;
         }
       } on DeviceConnectionException {
@@ -586,6 +594,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         _currentStep = LocalOTAStep.result;
       });
     }
+    _disconnectDeviceHotspot();
   }
 
   String _mapStatus(String status) {
