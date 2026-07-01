@@ -103,6 +103,8 @@ type UpdateStationRequest struct {
 
 func (h *StationHandler) Update(c *gin.Context) {
 	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid station id"))
@@ -120,7 +122,8 @@ func (h *StationHandler) Update(c *gin.Context) {
 		return
 	}
 
-	if station.UserID != userID {
+	// 超级管理员可以修改任意电站
+	if !isAdmin && station.UserID != userID {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
@@ -182,6 +185,8 @@ func (h *StationHandler) Update(c *gin.Context) {
 
 func (h *StationHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid station id"))
@@ -199,7 +204,8 @@ func (h *StationHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if station.UserID != userID {
+	// 超级管理员可以删除任意电站
+	if !isAdmin && station.UserID != userID {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
@@ -261,6 +267,8 @@ func (h *StationHandler) Assign(c *gin.Context) {
 
 func (h *StationHandler) GetByID(c *gin.Context) {
 	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid station id"))
@@ -278,7 +286,8 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	if station.UserID != userID {
+	// 超级管理员可以访问任意电站
+	if !isAdmin && station.UserID != userID {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}

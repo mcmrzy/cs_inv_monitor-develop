@@ -21,6 +21,6 @@ ENV TZ=UTC
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD wget -q --spider http://localhost:8081/health || exit 1
+    CMD wget -q -O /dev/null http://localhost:8081/health || exit 1
 
 CMD ["./main", "-config", "config.yaml"]
