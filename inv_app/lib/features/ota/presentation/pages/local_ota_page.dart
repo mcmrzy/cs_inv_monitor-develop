@@ -110,6 +110,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     _downloadProgressSub?.cancel();
     _downloadService.dispose();
     // 退出页面时恢复正常网络，取消forceWifiUsage
+    WiFiForIoTPlugin.disconnect().catchError((_) => false);
     WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
     super.dispose();
   }
@@ -413,6 +414,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   /// 升级结束后断开设备热点WiFi，恢复正常网络
   void _disconnectDeviceHotspot() {
+    WiFiForIoTPlugin.disconnect().catchError((_) => false);
     WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
   }
 
@@ -523,7 +525,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         final status = progress['status'] as String? ?? '';
         final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
         final message = progress['message'] as String? ?? '';
-        final version = progress['version'] as String? ?? '';
+        // 兼容设备返回版本号的多种字段名
+        final version = (progress['version'] as String? ?? '')
+            .isNotEmpty
+            ? (progress['version'] as String)
+            : (progress[versionKey] as String? ?? '');
+        print('OTA progress: status=$status, version=$version, raw=$progress');
 
         if (mounted) {
           setState(() {
@@ -540,10 +547,18 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             try {
               final info = await _firmwareService.getDeviceInfo(
                   deviceIP: widget.deviceIP);
+              print('Device info response: $info');
               newVersion = info[versionKey] as String? ?? '';
-              if (newVersion.isEmpty) newVersion = null;
-            } catch (_) {}
+              // 兑底尝试其他常见版本号字段
+              if (newVersion!.isEmpty) {
+                newVersion = info['version'] as String? ?? '';
+              }
+              if (newVersion!.isEmpty) newVersion = null;
+            } catch (e) {
+              print('Failed to get device info: $e');
+            }
           }
+          print('Final newVersion: $newVersion');
           if (mounted) {
             setState(() {
               _isProcessing = false;
