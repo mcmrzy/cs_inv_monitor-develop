@@ -10,6 +10,7 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
@@ -65,7 +66,7 @@ type LoginResponse struct {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -113,7 +114,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	token, refreshToken, err := h.jwtService.GenerateToken(user.ID, user.Phone, user.Role)
 	if err != nil {
-		response.InternalError(c, "generate token failed")
+		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
@@ -161,13 +162,13 @@ type RegisterRequest struct {
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
 	existingUser, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
@@ -183,7 +184,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		response.InternalError(c, "password encryption failed")
+		response.HandleError(c, apperr.Internal("password encryption failed", err))
 		return
 	}
 
@@ -195,13 +196,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := h.userService.Create(c.Request.Context(), user); err != nil {
-		response.InternalError(c, "create user failed")
+		response.HandleError(c, apperr.Internal("create user failed", err))
 		return
 	}
 
 	token, refreshToken, err := h.jwtService.GenerateToken(user.ID, user.Phone, user.Role)
 	if err != nil {
-		response.InternalError(c, "generate token failed")
+		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
@@ -241,7 +242,7 @@ type SendCodeRequest struct {
 func (h *AuthHandler) SendCode(c *gin.Context) {
 	var req SendCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -256,7 +257,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	// 检查手机号注册状态
 	existingUser, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
@@ -292,13 +293,13 @@ type ResetPasswordRequest struct {
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
 	user, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
@@ -314,12 +315,12 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		response.InternalError(c, "password encryption failed")
+		response.HandleError(c, apperr.Internal("password encryption failed", err))
 		return
 	}
 
 	if err := h.userService.UpdatePassword(c.Request.Context(), user.ID, string(hashedPassword)); err != nil {
-		response.InternalError(c, "update password failed")
+		response.HandleError(c, apperr.Internal("update password failed", err))
 		return
 	}
 
@@ -342,7 +343,7 @@ type EmailResetPasswordRequest struct {
 func (h *AuthHandler) EmailResetPassword(c *gin.Context) {
 	var req EmailResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -353,7 +354,7 @@ func (h *AuthHandler) EmailResetPassword(c *gin.Context) {
 
 	user, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
@@ -369,12 +370,12 @@ func (h *AuthHandler) EmailResetPassword(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		response.InternalError(c, "password encryption failed")
+		response.HandleError(c, apperr.Internal("password encryption failed", err))
 		return
 	}
 
 	if err := h.userService.UpdatePassword(c.Request.Context(), user.ID, string(hashedPassword)); err != nil {
-		response.InternalError(c, "update password failed")
+		response.HandleError(c, apperr.Internal("update password failed", err))
 		return
 	}
 
@@ -402,13 +403,13 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
 	user, err := h.userService.GetByID(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
@@ -419,12 +420,12 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		response.InternalError(c, "password encryption failed")
+		response.HandleError(c, apperr.Internal("password encryption failed", err))
 		return
 	}
 
 	if err := h.userService.UpdatePassword(c.Request.Context(), userID, string(hashedPassword)); err != nil {
-		response.InternalError(c, "update password failed")
+		response.HandleError(c, apperr.Internal("update password failed", err))
 		return
 	}
 
@@ -436,12 +437,12 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 
 	user, err := h.userService.GetByID(c.Request.Context(), userID)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
 	if user == nil {
-		response.NotFound(c, "user not found")
+		response.HandleError(c, apperr.NotFound("user not found"))
 		return
 	}
 
@@ -460,20 +461,20 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 
 	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
 	// 验证时区
 	if req.Timezone != "" {
 		if err := timezone.ValidateTimezone(req.Timezone); err != nil {
-			response.BadRequest(c, "invalid timezone: "+req.Timezone)
+			response.HandleError(c, apperr.BadRequest("invalid timezone: "+req.Timezone))
 			return
 		}
 	}
 
 	if err := h.userService.UpdateProfile(c.Request.Context(), userID, req.Nickname, req.Avatar, req.Timezone); err != nil {
-		response.InternalError(c, "update profile failed")
+		response.HandleError(c, apperr.Internal("update profile failed", err))
 		return
 	}
 
@@ -532,32 +533,32 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	if req.RefreshToken == "" {
-		response.BadRequest(c, "missing refresh token")
+		response.HandleError(c, apperr.BadRequest("missing refresh token"))
 		return
 	}
 
 	claims, err := h.jwtService.ParseToken(req.RefreshToken)
 	if err != nil {
-		response.Unauthorized(c, "invalid refresh token")
+		response.HandleError(c, apperr.Unauthorized("invalid refresh token"))
 		return
 	}
 
 	newAccessToken, newRefreshToken, err := h.jwtService.GenerateToken(claims.UserID, claims.Phone, claims.Role)
 	if err != nil {
-		response.InternalError(c, "generate token failed")
+		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
 	swapped, err := h.jwtService.SwapRefreshToken(c.Request.Context(), claims.UserID, req.RefreshToken, newRefreshToken, 7*24*time.Hour)
 	if err != nil {
-		response.InternalError(c, "token refresh failed")
+		response.HandleError(c, apperr.Internal("token refresh failed", err))
 		return
 	}
 
 	if !swapped {
 		err = h.jwtService.StoreRefreshToken(c.Request.Context(), claims.UserID, newRefreshToken, 7*24*time.Hour)
 		if err != nil {
-			response.InternalError(c, "token refresh failed")
+			response.HandleError(c, apperr.Internal("token refresh failed", err))
 			return
 		}
 	}
@@ -582,7 +583,7 @@ type SendEmailCodeRequest struct {
 func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 	var req SendEmailCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -602,7 +603,7 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 	// 检查邮箱注册状态
 	existingUser, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
@@ -640,7 +641,7 @@ type EmailRegisterRequest struct {
 func (h *AuthHandler) EmailRegister(c *gin.Context) {
 	var req EmailRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -673,7 +674,7 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		response.InternalError(c, "password encryption failed")
+		response.HandleError(c, apperr.Internal("password encryption failed", err))
 		return
 	}
 
@@ -688,13 +689,13 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 
 	if err := h.userService.Create(c.Request.Context(), user); err != nil {
 		logger.Error("create user failed", zap.String("email", req.Email), zap.Error(err))
-		response.InternalError(c, "创建用户失败，请稍后重试")
+		response.HandleError(c, apperr.Internal("创建用户失败，请稍后重试", err))
 		return
 	}
 
 	token, refreshToken, err := h.jwtService.GenerateToken(user.ID, user.Phone, user.Role)
 	if err != nil {
-		response.InternalError(c, "generate token failed")
+		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
@@ -734,7 +735,7 @@ type EmailLoginRequest struct {
 func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	var req EmailLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -749,7 +750,7 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 
 	user, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
@@ -780,7 +781,7 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	}
 	token, refreshToken, err := h.jwtService.GenerateToken(user.ID, identifier, user.Role)
 	if err != nil {
-		response.InternalError(c, "generate token failed")
+		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 

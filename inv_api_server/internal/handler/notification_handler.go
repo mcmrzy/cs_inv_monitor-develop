@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -91,7 +92,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	countQuery := `SELECT COUNT(*) ` + baseQuery
 	var total int64
 	if err := h.db.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 
@@ -102,7 +103,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
-		response.InternalError(c, "system error")
+		response.HandleError(c, apperr.Internal("system error", err))
 		return
 	}
 	defer rows.Close()
@@ -124,7 +125,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		var n Notification
 		var stationID *int64
 		if err := rows.Scan(&n.ID, &n.DeviceSN, &stationID, &n.UserID, &n.NotifyType, &n.Title, &n.Content, &n.Status, &n.CreatedAt); err != nil {
-			response.InternalError(c, "system error")
+			response.HandleError(c, apperr.Internal("system error", err))
 			return
 		}
 		n.StationID = stationID
@@ -161,12 +162,12 @@ func (h *NotificationHandler) GetStats(c *gin.Context) {
 	var total, unread int
 	if isAdmin {
 		if err := h.db.QueryRow(ctx, query).Scan(&total, &unread); err != nil {
-			response.InternalError(c, "system error")
+			response.HandleError(c, apperr.Internal("system error", err))
 			return
 		}
 	} else {
 		if err := h.db.QueryRow(ctx, query, userID).Scan(&total, &unread); err != nil {
-			response.InternalError(c, "system error")
+			response.HandleError(c, apperr.Internal("system error", err))
 			return
 		}
 	}
@@ -180,7 +181,7 @@ func (h *NotificationHandler) GetStats(c *gin.Context) {
 func (h *NotificationHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid notification id")
+		response.HandleError(c, apperr.BadRequest("invalid notification id"))
 		return
 	}
 
@@ -189,7 +190,7 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 
 	_, err = h.db.Exec(ctx, `DELETE FROM notifications WHERE id = $1`, id)
 	if err != nil {
-		response.InternalError(c, "delete failed")
+		response.HandleError(c, apperr.Internal("delete failed", err))
 		return
 	}
 
@@ -202,7 +203,7 @@ func (h *NotificationHandler) ClearAll(c *gin.Context) {
 
 	_, err := h.db.Exec(ctx, `DELETE FROM notifications`)
 	if err != nil {
-		response.InternalError(c, "clear failed")
+		response.HandleError(c, apperr.Internal("clear failed", err))
 		return
 	}
 

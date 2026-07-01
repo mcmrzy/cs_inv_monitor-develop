@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
 
@@ -94,7 +95,7 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 		&deviceStats.Total, &deviceStats.Online, &deviceStats.Offline, &deviceStats.Fault,
 	)
 	if err != nil {
-		response.InternalError(c, "get device stats failed")
+		response.HandleError(c, apperr.Internal("get device stats failed", err))
 		return
 	}
 
@@ -263,7 +264,7 @@ func (h *DashboardHandler) GetDeviceDistribution(c *gin.Context) {
 
 	err := h.db.QueryRow(ctx, query, args...).Scan(&online, &offline, &fault)
 	if err != nil {
-		response.InternalError(c, "get distribution failed")
+		response.HandleError(c, apperr.Internal("get distribution failed", err))
 		return
 	}
 
@@ -353,7 +354,7 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
 		log.Printf("[GetTrend] query error: user_id=%d, err=%v", userID, err)
-		response.InternalError(c, "获取趋势数据失败")
+		response.HandleError(c, apperr.Internal("获取趋势数据失败", err))
 		return
 	}
 	defer rows.Close()
@@ -419,7 +420,7 @@ func (h *DashboardHandler) CompareDevices(c *gin.Context) {
 	endTime := c.Query("endTime")
 
 	if devicesParam == "" {
-		response.BadRequest(c, "missing devices parameter")
+		response.HandleError(c, apperr.BadRequest("missing devices parameter"))
 		return
 	}
 
@@ -433,7 +434,7 @@ func (h *DashboardHandler) CompareDevices(c *gin.Context) {
 			"SELECT COUNT(*) FROM devices WHERE sn = $1 AND user_id = $2 AND deleted_at IS NULL",
 			sn, userID).Scan(&count)
 		if err != nil || count == 0 {
-			response.Forbidden(c, "permission denied for device: "+sn)
+			response.HandleError(c, apperr.Forbidden("permission denied for device: "+sn))
 			return
 		}
 	}
@@ -458,7 +459,7 @@ func (h *DashboardHandler) CompareDevices(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
-		response.InternalError(c, "get compare data failed")
+		response.HandleError(c, apperr.Internal("get compare data failed", err))
 		return
 	}
 	defer rows.Close()
@@ -549,7 +550,7 @@ func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 	if stationIDStr != "" {
 		sid, err := strconv.ParseInt(stationIDStr, 10, 64)
 		if err != nil || sid < 1 {
-			response.BadRequest(c, "invalid stationId")
+			response.HandleError(c, apperr.BadRequest("invalid stationId"))
 			return
 		}
 
@@ -621,7 +622,7 @@ func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
 		log.Printf("[GetEnergyStats] query error: %v, args: %v", err, args)
-		response.InternalError(c, "get energy stats failed")
+		response.HandleError(c, apperr.Internal("get energy stats failed", err))
 		return
 	}
 	defer rows.Close()
@@ -746,7 +747,7 @@ func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
-		response.InternalError(c, "get station ranking failed")
+		response.HandleError(c, apperr.Internal("get station ranking failed", err))
 		return
 	}
 	defer rows.Close()
@@ -773,7 +774,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	dateStr := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	targetDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
-		response.BadRequest(c, "invalid date format, use YYYY-MM-DD")
+		response.HandleError(c, apperr.BadRequest("invalid date format, use YYYY-MM-DD"))
 		return
 	}
 
@@ -1002,7 +1003,7 @@ func (h *DashboardHandler) SSE(c *gin.Context) {
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
-		response.InternalError(c, "streaming unsupported")
+		response.HandleError(c, apperr.Internal("streaming unsupported", nil))
 		return
 	}
 

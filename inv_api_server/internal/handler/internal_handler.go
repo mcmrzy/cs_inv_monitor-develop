@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
@@ -93,11 +94,11 @@ func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service
 func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	var req internalDeviceStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if req.SN == "" {
-		response.BadRequest(c, "sn is required")
+		response.HandleError(c, apperr.BadRequest("sn is required"))
 		return
 	}
 
@@ -152,7 +153,7 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	`, req.SN, newStatus)
 	if err != nil {
 		logger.Error("InternalDeviceStatus failed", zap.String("sn", req.SN), zap.Error(err))
-		response.InternalError(c, "update device status failed")
+		response.HandleError(c, apperr.Internal("update device status failed", err))
 		return
 	}
 
@@ -248,11 +249,11 @@ func (h *InternalHandler) pushRealtimeData(ctx context.Context, sn string, data 
 func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 	var req internalDeviceInfoRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if req.SN == "" {
-		response.BadRequest(c, "sn is required")
+		response.HandleError(c, apperr.BadRequest("sn is required"))
 		return
 	}
 
@@ -287,7 +288,7 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 		req.RatedPower, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount)
 	if err != nil {
 		logger.Error("InternalDeviceInfo failed", zap.String("sn", req.SN), zap.Error(err))
-		response.InternalError(c, "upsert device info failed")
+		response.HandleError(c, apperr.Internal("upsert device info failed", err))
 		return
 	}
 
@@ -303,17 +304,17 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 func (h *InternalHandler) DeviceData(c *gin.Context) {
 	var req internalDeviceDataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if req.SN == "" || req.Topic == "" || req.Data == nil {
-		response.BadRequest(c, "sn, topic and data are required")
+		response.HandleError(c, apperr.BadRequest("sn, topic and data are required"))
 		return
 	}
 
 	rawJSON, err := json.Marshal(req.Data)
 	if err != nil {
-		response.BadRequest(c, "invalid data payload")
+		response.HandleError(c, apperr.BadRequest("invalid data payload"))
 		return
 	}
 
@@ -333,7 +334,7 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 	`, req.SN, req.Topic, string(rawJSON), telemetryTime)
 	if err != nil {
 		logger.Error("InternalDeviceData failed", zap.String("sn", req.SN), zap.Error(err))
-		response.InternalError(c, "insert telemetry failed")
+		response.HandleError(c, apperr.Internal("insert telemetry failed", err))
 		return
 	}
 
@@ -370,7 +371,7 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 		`, req.SN, dataDate, string(dayDataJSON))
 		if err != nil {
 			logger.Error("InternalDeviceData upsert day data failed", zap.String("sn", req.SN), zap.Error(err))
-			response.InternalError(c, "upsert device day data failed")
+			response.HandleError(c, apperr.Internal("upsert device day data failed", err))
 			return
 		}
 
@@ -390,7 +391,7 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 			`, req.StationID, dataDate, req.DailyPV)
 			if err != nil {
 				logger.Error("InternalDeviceData upsert station data failed", zap.Int64("station_id", req.StationID), zap.Error(err))
-				response.InternalError(c, "upsert station day data failed")
+				response.HandleError(c, apperr.Internal("upsert station day data failed", err))
 				return
 			}
 		}
@@ -402,11 +403,11 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 func (h *InternalHandler) DeviceCmdStatus(c *gin.Context) {
 	var req internalDeviceCmdStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if req.SN == "" {
-		response.BadRequest(c, "sn is required")
+		response.HandleError(c, apperr.BadRequest("sn is required"))
 		return
 	}
 
@@ -421,7 +422,7 @@ func (h *InternalHandler) DeviceCmdStatus(c *gin.Context) {
 	`, req.SN, req.Cmd, req.Result, req.Message, req.Timestamp)
 	if err != nil {
 		logger.Error("InternalDeviceCmdStatus failed", zap.String("sn", req.SN), zap.Error(err))
-		response.InternalError(c, "insert command log failed")
+		response.HandleError(c, apperr.Internal("insert command log failed", err))
 		return
 	}
 
@@ -443,11 +444,11 @@ type internalDeviceCmdResultRequest struct {
 func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 	var req internalDeviceCmdResultRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if req.SN == "" {
-		response.BadRequest(c, "sn is required")
+		response.HandleError(c, apperr.BadRequest("sn is required"))
 		return
 	}
 
@@ -544,11 +545,11 @@ type internalOTACmdAckRequest struct {
 func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 	var req internalOTACmdAckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if req.DeviceSN == "" {
-		response.BadRequest(c, "device_sn is required")
+		response.HandleError(c, apperr.BadRequest("device_sn is required"))
 		return
 	}
 
@@ -573,7 +574,7 @@ func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 		`, req.DeviceSN)
 		if err != nil {
 			logger.Error("OTACmdAck update failed", zap.String("sn", req.DeviceSN), zap.Error(err))
-			response.InternalError(c, "update OTA cmd ack failed")
+			response.HandleError(c, apperr.Internal("update OTA cmd ack failed", err))
 			return
 		}
 		logger.Info("OTA cmd_ack applied", zap.String("sn", req.DeviceSN), zap.Int64("rows_affected", tag.RowsAffected()))
@@ -585,11 +586,11 @@ func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	var req internalOTAStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if req.DeviceSN == "" {
-		response.BadRequest(c, "device_sn is required")
+		response.HandleError(c, apperr.BadRequest("device_sn is required"))
 		return
 	}
 
@@ -626,7 +627,7 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	`, req.DeviceSN, dbStatus, req.Progress, req.Message)
 	if err != nil {
 		logger.Error("InternalOTAStatus failed", zap.String("sn", req.DeviceSN), zap.Error(err))
-		response.InternalError(c, "update OTA status failed")
+		response.HandleError(c, apperr.Internal("update OTA status failed", err))
 		return
 	}
 
@@ -692,11 +693,11 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	var req internalDeviceAlarmRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if req.SN == "" {
-		response.BadRequest(c, "sn is required")
+		response.HandleError(c, apperr.BadRequest("sn is required"))
 		return
 	}
 
@@ -859,7 +860,7 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	`, req.SN, alarmType, alarmLevel, alarmLevel, stationID, userID, faultCode, faultMessage, string(detailJSON), faultMessage)
 	if err != nil {
 		logger.Error("InternalDeviceAlarm insert failed", zap.String("sn", req.SN), zap.Error(err))
-		response.InternalError(c, "insert alarm failed")
+		response.HandleError(c, apperr.Internal("insert alarm failed", err))
 		return
 	}
 
