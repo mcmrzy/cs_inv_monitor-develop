@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -448,7 +449,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 	router := gin.New()
 	router.MaxMultipartMemory = 200 << 20 // 200MB
-	router.Use(gin.Recovery())
+	router.Use(customRecovery())
 	router.Use(middleware.CORS(cfg.CORS.AllowedOrigins))
 	router.Use(tracingMiddleware())
 	router.Use(middleware.RateLimit())
@@ -711,6 +712,19 @@ func setTimezone(tz string) error {
 	time.Local = loc
 	os.Setenv("TZ", "UTC")
 	return nil
+}
+
+func customRecovery() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] %s %s: %v\n%s\n",
+					c.Request.Method, c.Request.URL.Path, r, debug.Stack())
+				c.AbortWithStatus(http.StatusInternalServerError)
+			}
+		}()
+		c.Next()
+	}
 }
 
 func tracingMiddleware() gin.HandlerFunc {

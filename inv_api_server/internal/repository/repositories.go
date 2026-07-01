@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"inv-api-server/internal/model"
@@ -2890,9 +2891,16 @@ func (r *DeviceRepository) RejectUnbind(ctx context.Context, id int64, reviewerI
 }
 
 func (r *UserRepository) LogAudit(ctx context.Context, operatorID int64, operatorName, action, resourceType, resourceID, detail, ip string) {
+	// resource_id 为 bigint 类型，空字符串会导致类型转换错误
+	var resID *int64
+	if resourceID != "" {
+		if v, err := strconv.ParseInt(resourceID, 10, 64); err == nil {
+			resID = &v
+		}
+	}
 	query := `INSERT INTO audit_logs (operator_id, operator_name, action, resource_type, resource_id, detail, ip, created_at)
 			  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`
-	_, err := r.db.Exec(ctx, query, operatorID, operatorName, action, resourceType, resourceID, detail, ip)
+	_, err := r.db.Exec(ctx, query, operatorID, operatorName, action, resourceType, resID, detail, ip)
 	if err != nil {
 		// 审计日志写入失败不影响主业务，仅记录警告
 		fmt.Printf("Failed to write audit log: %v\n", err)
