@@ -107,6 +107,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("mqtt.username", "")
 	viper.SetDefault("mqtt.password", "")
 	viper.SetDefault("mqtt.qos", 1)
+	viper.SetDefault("mqtt.tls_insecure", false)
 	
 	viper.SetDefault("kafka.enabled", true)
 	viper.SetDefault("kafka.brokers", []string{"kafka:29092"})
@@ -129,6 +130,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("mqtt.client_id", "MQTT_CLIENT_ID")
 	viper.BindEnv("mqtt.username", "MQTT_USERNAME")
 	viper.BindEnv("mqtt.password", "MQTT_PASSWORD")
+	viper.BindEnv("mqtt.tls_insecure", "MQTT_TLS_INSECURE")
 	
 	viper.BindEnv("kafka.brokers", "KAFKA_BROKER")
 	viper.BindEnv("kafka.enabled", "KAFKA_ENABLED")

@@ -27,34 +27,24 @@ class OTATriggerRequested extends OtaEvent {
 }
 
 class OTAProgressPollRequested extends OtaEvent {
-  final int taskId;
+  final String deviceSn;
 
-  const OTAProgressPollRequested({required this.taskId});
+  const OTAProgressPollRequested({required this.deviceSn});
 
   @override
-  List<Object?> get props => [taskId];
+  List<Object?> get props => [deviceSn];
 }
 
 class OTAProgressStopPoll extends OtaEvent {
   const OTAProgressStopPoll();
 }
 
-class OTAHistoryRequested extends OtaEvent {
+/// Admin already pushed command; skip trigger API and start polling directly.
+class OTAPackageTriggerRequested extends OtaEvent {
   final String sn;
-  final int page;
-
-  const OTAHistoryRequested({required this.sn, this.page = 1});
+  const OTAPackageTriggerRequested({required this.sn});
 
   @override
-  List<Object?> get props => [sn, page];
+  List<Object?> get props => [sn];
 }
 
-class OTAFirmwareListRequested extends OtaEvent {
-  final int page;
-  final int pageSize;
-
-  const OTAFirmwareListRequested({this.page = 1, this.pageSize = 20});
-
-  @override
-  List<Object?> get props => [page, pageSize];
-}

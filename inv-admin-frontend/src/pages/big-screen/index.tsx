@@ -14,7 +14,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { dashboardApi } from '@/services/dashboardApi'
-import { ALARM_LEVEL_MAP, TASK_STATUS_MAP, getAlarmLevelDisplay, parseFaultCode, FAULT_CODE_SEVERITY } from '@/utils/constants'
+import { ALARM_LEVEL_MAP, TASK_STATUS_MAP, getAlarmLevelDisplay, parseFaultCode, ALARM_CODE_LEVEL } from '@/utils/constants'
 import type { ColumnsType } from 'antd/es/table'
 import useTranslation from '@/hooks/useTranslation'
 
@@ -556,8 +556,8 @@ const BigScreenPage: React.FC = () => {
             <span style={{ color: '#ff4d4f', fontSize: 10 }}>
               {alerts.filter((a) => {
                 const code = parseFaultCode(a.faultCode)
-                const severity = code >= 0 ? FAULT_CODE_SEVERITY[code] : undefined
-                return severity === 'critical' || (severity == null && a.alarmLevel === 'critical')
+                const level = code >= 0 ? ALARM_CODE_LEVEL[code] : undefined
+                return level === 3 || (level == null && (String(a.alarmLevel) === '3' || a.alarmLevel === 'critical'))
               }).length} {t('bigScreen.criticalCount')}
             </span>
           </div>
@@ -572,8 +572,8 @@ const BigScreenPage: React.FC = () => {
             style={{ flex: 1, minHeight: 0 }}
             rowClassName={(record: AlertItem) => {
               const code = parseFaultCode(record.faultCode)
-              const severity = code >= 0 ? FAULT_CODE_SEVERITY[code] : undefined
-              const isCritical = severity === 'critical' || (severity == null && record.alarmLevel === 'critical')
+              const level = code >= 0 ? ALARM_CODE_LEVEL[code] : undefined
+              const isCritical = level === 3 || (level == null && (String(record.alarmLevel) === '3' || record.alarmLevel === 'critical'))
               return isCritical ? 'big-screen-alert-critical' : ''
             }}
           />

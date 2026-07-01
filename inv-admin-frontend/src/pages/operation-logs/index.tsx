@@ -111,6 +111,7 @@ const OperationLogsPage: React.FC = () => {
 
   const COMMAND_STATUS_MAP: Record<string, { label: string; color: string }> = {
     pending: { label: t('logs.waiting'), color: 'default' },
+    queued: { label: t('logs.queued') || '排队中', color: 'gold' },
     sent: { label: t('logs.sent'), color: 'processing' },
     ack_received: { label: t('logs.deviceConfirmed'), color: 'blue' },
     success: { label: t('logs.success'), color: 'green' },
@@ -686,7 +687,7 @@ const OperationLogsPage: React.FC = () => {
             dataSource={alarmData}
             loading={alarmLoading}
             rowClassName={(record: any) =>
-              String(record.alarm_level) === '1' ? 'alert-row-critical' : ''
+              String(record.alarm_level) === '3' ? 'alert-row-critical' : ''
             }
             pagination={{
               current: alarmPage,

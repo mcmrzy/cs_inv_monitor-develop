@@ -117,8 +117,8 @@ class _AlarmPageState extends State<AlarmPage> {
 
   String _levelToSeverity(dynamic level) {
     switch (level) {
-      case 1:
-        return 'critical';
+      case 3:
+        return 'fault';
       case 2:
         return 'warning';
       default:
@@ -146,7 +146,7 @@ class _AlarmPageState extends State<AlarmPage> {
     Color levelColor;
     String levelText;
     switch (severity) {
-      case 'critical':
+      case 'fault':
         levelColor = AppColors.errorLight;
         levelText = l10n.severe;
         break;
@@ -154,8 +154,16 @@ class _AlarmPageState extends State<AlarmPage> {
         levelColor = AppColors.warning;
         levelText = l10n.warningLevel;
         break;
+      case 'info':
+        levelColor = AppColors.blue;
+        levelText = l10n.infoLevel;
+        break;
+      case 'normal':
+        levelColor = AppColors.success;
+        levelText = '正常';
+        break;
       default:
-        levelColor = AppColors.orange;
+        levelColor = AppColors.textHint;
         levelText = l10n.general;
     }
 

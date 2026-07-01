@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: admin_frontend/work_orders_ota
+title: 工单与OTA升级管理
+scope:
+    - inv-admin-frontend/src/services/workOrderApi.ts
+    - inv-admin-frontend/src/services/otaApi.ts
+    - inv-admin-frontend/src/locales/workOrders.ts
+    - inv-admin-frontend/src/locales/ota.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: api_server/ota

@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/errors/failures.dart';
@@ -22,10 +23,33 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     on<StationDeleteRequested>(_onDeleteRequested);
   }
 
+  /// 快速检查是否有网络连接
+  Future<bool> _hasNetwork() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
+      return !result.contains(ConnectivityResult.none);
+    } catch (_) {
+      return true; // 检查失败时假定有网络
+    }
+  }
+
   Future<void> _onSummaryRequested(
     StationSummaryRequested event,
     Emitter<StationState> emit,
   ) async {
+    // 断网时直接加载缓存，不等待 30s 超时
+    if (!await _hasNetwork()) {
+      if (dataCacheService != null) {
+        final cached = dataCacheService!.load(DataCacheService.stationSummary);
+        if (cached != null && cached is Map<String, dynamic>) {
+          final stations = (cached['stations'] as List?) ?? [];
+          final summary = (cached['summary'] as Map<String, dynamic>?) ?? {};
+          emit(StationSummaryLoaded(stations: stations, summary: summary, isFromCache: true));
+          return;
+        }
+      }
+    }
+
     final result = await repository.getSummary();
     result.fold(
       (failure) {
@@ -82,6 +106,20 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     Emitter<StationState> emit,
   ) async {
     emit(StationLoading());
+
+    // 断网时直接加载缓存
+    if (!await _hasNetwork()) {
+      if (dataCacheService != null) {
+        final cached = dataCacheService!.load(DataCacheService.stationDetail(event.stationId));
+        if (cached != null && cached is Map<String, dynamic>) {
+          final station = cached['station'];
+          final devices = (cached['devices'] as List?) ?? [];
+          emit(StationDetailLoaded(stationId: event.stationId, station: station, devices: devices, isFromCache: true));
+          return;
+        }
+      }
+    }
+
     final result = await repository.getDetail(event.stationId);
     result.fold(
       (failure) {

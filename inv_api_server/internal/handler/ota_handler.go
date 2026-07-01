@@ -186,134 +186,110 @@ func (h *OTAHandler) DeleteFirmware(c *gin.Context) {
 	response.SuccessWithMessage(c, "固件已删除", nil)
 }
 
-type CreateTaskRequest struct {
-	Name              string   `json:"name" binding:"required"`
-	FirmwareID        int64    `json:"firmware_id" binding:"required"`
-	Model             string   `json:"model" binding:"required"`
-	TargetType        string   `json:"target_type" binding:"required"`
-	TargetValue       string   `json:"target_value"`
-	DeviceSNs         []string `json:"device_sns"`
-	Description       string   `json:"description"`
-	PushStrategy      string   `json:"push_strategy"`
-	PushPercentage    int      `json:"push_percentage"`
-	BatchSize         int      `json:"batch_size"`
-	ScheduledAt       string   `json:"scheduled_at"`
-	AutoRollback      bool     `json:"auto_rollback"`
-	RollbackThreshold int      `json:"rollback_threshold"`
-}
-
-func parseScheduledAt(s string) *time.Time {
-	if s == "" {
-		return nil
+// PushUpgrade 管理员推送升级
+func (h *OTAHandler) PushUpgrade(c *gin.Context) {
+	var req struct {
+		FirmwareID int64    `json:"firmware_id" binding:"required"`
+		DeviceSNs  []string `json:"device_sns" binding:"required"`
+		Immediate  bool     `json:"immediate"`
 	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		t2, err2 := time.Parse("2006-01-02T15:04:05Z07:00", s)
-		if err2 != nil {
-			return nil
-		}
-		return &t2
-	}
-	return &t
-}
-
-func (h *OTAHandler) CreateTask(c *gin.Context) {
-	var req CreateTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.BadRequest(c, "invalid request: "+err.Error())
+		return
+	}
+	if len(req.DeviceSNs) == 0 {
+		response.BadRequest(c, "请选择至少一台设备")
 		return
 	}
 
-	task, err := h.otaService.CreateTask(c.Request.Context(), &service.CreateTaskReq{
-		Name:              req.Name,
-		FirmwareID:        req.FirmwareID,
-		Model:             req.Model,
-		TargetType:        req.TargetType,
-		TargetValue:       req.TargetValue,
-		DeviceSNs:         req.DeviceSNs,
-		Description:       req.Description,
-		PushStrategy:      req.PushStrategy,
-		PushPercentage:    req.PushPercentage,
-		BatchSize:         req.BatchSize,
-		ScheduledAt:       parseScheduledAt(req.ScheduledAt),
-		AutoRollback:      req.AutoRollback,
-		RollbackThreshold: req.RollbackThreshold,
-	})
-	if err != nil {
-		log.Printf("[CreateTask] error: model=%s, err=%v", req.Model, err)
-		response.InternalError(c, "创建任务失败，请稍后重试")
+	if err := h.otaService.PushUpgrade(c.Request.Context(), &service.PushUpgradeReq{
+		FirmwareID: req.FirmwareID,
+		DeviceSNs:  req.DeviceSNs,
+		Immediate:  req.Immediate,
+	}); err != nil {
+		log.Printf("[PushUpgrade] error: firmware_id=%d, err=%v", req.FirmwareID, err)
+		response.InternalError(c, "推送升级失败: "+err.Error())
 		return
 	}
-	response.Success(c, task)
+	response.SuccessWithMessage(c, "升级已推送", nil)
 }
 
-func (h *OTAHandler) ListTasks(c *gin.Context) {
-	status := c.Query("status")
+// GetUpgradeDashboard 升级管理面板（按固件分组聚合）
+func (h *OTAHandler) GetUpgradeDashboard(c *gin.Context) {
 	page := parseInt(c.DefaultQuery("page", "1"))
 	pageSize := parseInt(c.DefaultQuery("page_size", "20"))
 	if pageSize > 100 {
 		pageSize = 100
 	}
-
-	tasks, total, err := h.otaService.ListTasks(c.Request.Context(), status, page, pageSize)
+	items, total, err := h.otaService.GetUpgradeDashboard(c.Request.Context(), page, pageSize)
 	if err != nil {
-		response.InternalError(c, "查询任务列表失败")
+		response.InternalError(c, "查询升级面板失败")
 		return
 	}
-	response.Success(c, gin.H{"items": tasks, "total": total})
+	response.Success(c, gin.H{"items": items, "total": total})
 }
 
-func (h *OTAHandler) GetTask(c *gin.Context) {
-	id := c.Param("id")
-	task, err := h.otaService.GetTask(c.Request.Context(), id)
+// GetFirmwareUpgradeDetails 获取指定固件的所有设备升级详情
+func (h *OTAHandler) GetFirmwareUpgradeDetails(c *gin.Context) {
+	firmwareID := parseInt(c.Param("firmwareId"))
+	if firmwareID == 0 {
+		response.BadRequest(c, "invalid firmware_id")
+		return
+	}
+	details, err := h.otaService.GetFirmwareUpgradeDetails(c.Request.Context(), int64(firmwareID))
 	if err != nil {
-		response.NotFound(c, "任务不存在")
+		response.InternalError(c, "查询升级详情失败")
 		return
 	}
-	response.Success(c, task)
+	response.Success(c, details)
 }
 
-// GetTaskDevices 获取任务设备列表
-func (h *OTAHandler) GetTaskDevices(c *gin.Context) {
-	id := c.Param("id")
-	devices, err := h.otaService.ListTaskDevices(c.Request.Context(), id)
-	if err != nil {
-		response.InternalError(c, "获取任务设备列表失败")
+// RetryUpgrade 重试失败的设备升级
+func (h *OTAHandler) RetryUpgrade(c *gin.Context) {
+	var req struct {
+		FirmwareID int64    `json:"firmware_id" binding:"required"`
+		DeviceSNs  []string `json:"device_sns" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request")
 		return
 	}
-	response.Success(c, devices)
+	if err := h.otaService.RetryUpgrade(c.Request.Context(), req.FirmwareID, req.DeviceSNs); err != nil {
+		response.InternalError(c, "重试失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "已重试", nil)
 }
 
-func (h *OTAHandler) DispatchTask(c *gin.Context) {
-	id := c.Param("id")
-	if err := h.otaService.DispatchTask(c.Request.Context(), id); err != nil {
-		log.Printf("[DispatchTask] error: id=%s, err=%v", id, err)
-		response.InternalError(c, "任务下发失败，请稍后重试")
+// CancelUpgrade 取消待执行的升级
+func (h *OTAHandler) CancelUpgrade(c *gin.Context) {
+	var req struct {
+		DeviceSN   string `json:"device_sn" binding:"required"`
+		FirmwareID int64  `json:"firmware_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request")
 		return
 	}
-	response.SuccessWithMessage(c, "任务已下发", nil)
+	if err := h.otaService.CancelUpgrade(c.Request.Context(), req.DeviceSN, req.FirmwareID); err != nil {
+		response.InternalError(c, "取消失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "已取消", nil)
 }
 
-// NotifyDevices 通知设备有新版本可用（不立即执行升级）
-func (h *OTAHandler) NotifyDevices(c *gin.Context) {
-	id := c.Param("id")
-	if err := h.otaService.NotifyDevices(c.Request.Context(), id); err != nil {
-		log.Printf("[NotifyDevices] error: id=%s, err=%v", id, err)
-		response.InternalError(c, "通知设备失败，请稍后重试")
+// DeleteUpgradesByFirmware 删除指定固件的所有升级记录
+func (h *OTAHandler) DeleteUpgradesByFirmware(c *gin.Context) {
+	firmwareID := parseInt(c.Param("firmwareId"))
+	if firmwareID == 0 {
+		response.BadRequest(c, "invalid firmware_id")
 		return
 	}
-	response.SuccessWithMessage(c, "已通知设备有新版本", nil)
-}
-
-// DeleteTask 删除任务
-func (h *OTAHandler) DeleteTask(c *gin.Context) {
-	id := c.Param("id")
-	if err := h.otaService.DeleteTask(c.Request.Context(), id); err != nil {
-		log.Printf("[DeleteTask] error: id=%s, err=%v", id, err)
-		response.InternalError(c, "删除任务失败，请稍后重试")
+	if err := h.otaService.DeleteUpgradesByFirmwareID(c.Request.Context(), int64(firmwareID)); err != nil {
+		response.InternalError(c, "删除失败: "+err.Error())
 		return
 	}
-	response.SuccessWithMessage(c, "任务已删除", nil)
+	response.SuccessWithMessage(c, "已删除", nil)
 }
 
 // CheckUpdate 检查设备是否有可用更新
@@ -321,29 +297,6 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
 		response.BadRequest(c, "设备SN不能为空")
-		return
-	}
-	targetChip := c.DefaultQuery("target_chip", "")
-
-	// 优先检查是否有管理员推送的OTA任务
-	task, fw, err := h.otaService.GetPendingOTAForDevice(c.Request.Context(), sn)
-	if err == nil && task != nil && fw != nil {
-		// 有管理员推送的OTA任务
-		response.Success(c, gin.H{
-			"has_update":    true,
-			"firmware_id":   fw.ID,
-			"main_version":  fw.MainVersion,
-			"version":       fw.Version,
-			"target_chip":   fw.TargetChip,
-			"download_url":  fw.FileURL,
-			"file_size":     fw.FileSize,
-			"file_md5":      fw.FileMD5,
-			"changelog":     fw.Changelog,
-			"is_force":      fw.IsForce,
-			"task_id":       task.ID,
-			"task_name":     task.Name,
-			"is_admin_push": true,
-		})
 		return
 	}
 
@@ -354,32 +307,90 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		return
 	}
 
-	// 获取该型号的最新固件
-	firmware, err := h.otaService.GetLatestFirmware(c.Request.Context(), device.Model, targetChip)
-	if err != nil || firmware == nil {
-		response.Success(c, gin.H{"has_update": false, "message": "暂无可用固件"})
+	// 优先检查升级包模式的待执行升级
+	pkgUpgrades, pkg, _ := h.otaService.CheckPendingPackageUpgrade(c.Request.Context(), sn)
+	if pkgUpgrades != nil && pkg != nil && len(pkgUpgrades) > 0 {
+		// 构造 chips_to_upgrade 列表
+		chipsToUpgrade := []map[string]interface{}{}
+		for _, du := range pkgUpgrades {
+			fw, _ := h.otaService.GetFirmware(c.Request.Context(), du.FirmwareID)
+			if fw == nil {
+				continue
+			}
+			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
+				"chip":         du.TargetChip,
+				"current":      du.OldVersion,
+				"target":       du.FirmwareVersion,
+				"firmware_id":  fw.ID,
+				"download_url": h.otaService.BuildDownloadURL(fw.FileURL),
+				"file_size":    fw.FileSize,
+				"file_md5":     fw.FileMD5,
+				"upgrade_id":   du.ID,
+			})
+		}
+
+		// 使用第一个待升级芯片的信息作为主信息
+		firstFW := pkgUpgrades[0]
+		response.Success(c, gin.H{
+			"has_update":             true,
+			"upgrade_mode":           "package",
+			"main_version":           pkg.MainVersion,
+			"current_main_version":   device.MainVersion,
+			"firmware_id":            firstFW.FirmwareID,
+			"version":                firstFW.FirmwareVersion,
+			"target_chip":            firstFW.TargetChip,
+			"current_version":        firstFW.OldVersion,
+			"chips_to_upgrade":       chipsToUpgrade,
+			"changelog":              pkg.Changelog,
+			"is_force":               pkg.IsForce,
+			"upgrade_id":             firstFW.ID,
+			"is_admin_push":          true,
+		})
 		return
 	}
 
-	// 比较版本
-	hasUpdate := device.FirmwareVersion != firmware.Version
+	// 回退到旧的单固件检查逻辑
+	du, fw, err := h.otaService.CheckPendingUpgrade(c.Request.Context(), sn)
+	if err == nil && du != nil && fw != nil {
+		// 获取该芯片的当前版本（而非合并版本）
+		currentChipVersion := ""
+		switch fw.TargetChip {
+		case "arm":
+			currentChipVersion = device.FirmwareArm
+		case "esp":
+			currentChipVersion = device.FirmwareEsp
+		}
+		if currentChipVersion == "" {
+			currentChipVersion = du.OldVersion
+		}
+		response.Success(c, gin.H{
+			"has_update":        true,
+			"upgrade_mode":      "single",
+			"firmware_id":       fw.ID,
+			"main_version":      fw.MainVersion,
+			"version":           fw.Version,
+			"target_chip":       fw.TargetChip,
+			"current_version":   currentChipVersion,
+			"download_url":      h.otaService.BuildDownloadURL(fw.FileURL),
+			"file_name":         fw.Model + "_" + fw.Version + ".bin",
+			"file_size":         fw.FileSize,
+			"file_md5":          fw.FileMD5,
+			"changelog":         fw.Changelog,
+			"is_force":          fw.IsForce,
+			"upgrade_id":        du.ID,
+			"is_admin_push":     true,
+		})
+		return
+	}
+
 	response.Success(c, gin.H{
-		"has_update":      hasUpdate,
-		"firmware_id":     firmware.ID,
-		"main_version":    firmware.MainVersion,
-		"target_chip":     firmware.TargetChip,
-		"current_version": device.FirmwareVersion,
-		"download_url":    firmware.FileURL,
-		"file_name":       firmware.Model + "_" + firmware.Version + ".bin",
-		"file_size":       firmware.FileSize,
-		"file_md5":        firmware.FileMD5,
-		"changelog":       firmware.Changelog,
-		"is_force":        firmware.IsForce,
-		"is_admin_push":   false,
+		"has_update":             false,
+		"current_main_version":   device.MainVersion,
+		"message":                "暂无可用更新",
 	})
 }
 
-// TriggerOTA 触发设备OTA升级
+// TriggerOTA 触发设备OTA升级（兼容App调用，内部转调PushUpgrade）
 func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 	var req struct {
 		SN         string `json:"sn" binding:"required"`
@@ -390,69 +401,45 @@ func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 		return
 	}
 
-	task, err := h.otaService.TriggerSingleDeviceOTA(c.Request.Context(), req.SN, req.FirmwareID)
+	err := h.otaService.PushUpgrade(c.Request.Context(), &service.PushUpgradeReq{
+		FirmwareID: req.FirmwareID,
+		DeviceSNs:  []string{req.SN},
+		Immediate:  true,
+	})
 	if err != nil {
 		log.Printf("[TriggerOTA] error: sn=%s, firmware_id=%d, err=%v", req.SN, req.FirmwareID, err)
-		response.InternalError(c, "触发升级失败，请稍后重试")
+		response.InternalError(c, "触发升级失败: "+err.Error())
 		return
 	}
-	response.Success(c, gin.H{"task_id": task.ID, "message": "升级任务已创建"})
+	response.Success(c, gin.H{"message": "升级已触发"})
 }
 
-// GetTaskProgress 获取任务进度
-func (h *OTAHandler) GetTaskProgress(c *gin.Context) {
-	taskID := c.Param("id")
-	task, err := h.otaService.GetTask(c.Request.Context(), taskID)
+// ResendUpgradeCommand 重新发送待执行升级的MQTT命令
+func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.BadRequest(c, "设备SN不能为空")
+		return
+	}
+
+	err := h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
 	if err != nil {
-		response.NotFound(c, "任务不存在")
+		log.Printf("[ResendUpgradeCommand] error: sn=%s, err=%v", sn, err)
+		response.InternalError(c, "重新发送升级命令失败: "+err.Error())
 		return
 	}
-
-	devices, _ := h.otaService.ListTaskDevices(c.Request.Context(), taskID)
-
-	// 计算总体进度，包含正在升级中的设备进度
-	total := len(devices)
-	completed := 0
-	failed := 0
-	var totalProgress float64
-	for _, d := range devices {
-		switch d.Status {
-		case "success":
-			completed++
-			totalProgress += 100
-		case "failed":
-			failed++
-			totalProgress += 100
-		case "upgrading", "running":
-			totalProgress += float64(d.Progress)
-		}
-	}
-
-	progress := 0.0
-	if total > 0 {
-		progress = totalProgress / float64(total)
-	}
-
-	response.Success(c, gin.H{
-		"task_id":   task.ID,
-		"status":    task.Status,
-		"progress":  progress,
-		"total":     total,
-		"completed": completed,
-		"failed":    failed,
-	})
+	response.Success(c, gin.H{"message": "升级命令已重新发送"})
 }
 
-// GetDeviceOTAStatus 获取设备OTA状态
+// GetDeviceOTAStatus 获取设备当前升级状态
 func (h *OTAHandler) GetDeviceOTAStatus(c *gin.Context) {
 	sn := c.Param("sn")
-	// 获取设备最新的OTA任务
-	taskDevice, err := h.otaService.GetLatestTaskDevice(c.Request.Context(), sn)
-	if err != nil || taskDevice == nil {
+	upgrade, err := h.otaService.GetLatestTaskDevice(c.Request.Context(), sn)
+	if err != nil || upgrade == nil {
 		response.Success(c, gin.H{"status": "idle", "message": "无升级任务"})
 		return
 	}
-	response.Success(c, taskDevice)
+	response.Success(c, upgrade)
 }
 
 // GetDeviceOTAHistory 获取设备OTA历史
@@ -635,4 +622,320 @@ func (h *OTAHandler) RestoreAppVersion(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMessage(c, "版本已恢复", nil)
+}
+
+// ========== 升级包管理 ==========
+
+// CreateUpgradePackage 创建升级包
+func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
+	var req struct {
+		Model       string  `json:"model" binding:"required"`
+		FirmwareIDs []int64 `json:"firmware_ids" binding:"required"`
+		Changelog   string  `json:"changelog"`
+		IsForce     bool    `json:"is_force"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request: "+err.Error())
+		return
+	}
+
+	userID := c.GetInt64("user_id")
+	if err := h.otaService.CreateUpgradePackage(c.Request.Context(), &service.CreatePackageReq{
+		Model:       req.Model,
+		FirmwareIDs: req.FirmwareIDs,
+		Changelog:   req.Changelog,
+		IsForce:     req.IsForce,
+		CreatedBy:   userID,
+	}); err != nil {
+		log.Printf("[CreateUpgradePackage] error: %v", err)
+		response.InternalError(c, "创建升级包失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "升级包创建成功", nil)
+}
+
+// ListUpgradePackages 升级包列表
+func (h *OTAHandler) ListUpgradePackages(c *gin.Context) {
+	modelFilter := c.Query("model")
+	list, err := h.otaService.ListUpgradePackages(c.Request.Context(), modelFilter)
+	if err != nil {
+		response.InternalError(c, "查询升级包列表失败")
+		return
+	}
+	response.Success(c, list)
+}
+
+// GetUpgradePackage 升级包详情
+func (h *OTAHandler) GetUpgradePackage(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+	pkg, err := h.otaService.GetUpgradePackage(c.Request.Context(), id)
+	if err != nil {
+		response.NotFound(c, "升级包不存在")
+		return
+	}
+	response.Success(c, pkg)
+}
+
+// DeleteUpgradePackage 删除升级包
+func (h *OTAHandler) DeleteUpgradePackage(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+	if err := h.otaService.DeleteUpgradePackage(c.Request.Context(), id); err != nil {
+		response.InternalError(c, "删除升级包失败")
+		return
+	}
+	response.SuccessWithMessage(c, "升级包已删除", nil)
+}
+
+// PushPackageUpgrade 推送升级包
+func (h *OTAHandler) PushPackageUpgrade(c *gin.Context) {
+	var req struct {
+		PackageID      int64    `json:"package_id" binding:"required"`
+		DeviceSNs      []string `json:"device_sns" binding:"required"`
+		Immediate      bool     `json:"immediate"`
+		RolloutPercent int      `json:"rollout_percent"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request: "+err.Error())
+		return
+	}
+	if len(req.DeviceSNs) == 0 {
+		response.BadRequest(c, "请选择至少一台设备")
+		return
+	}
+
+	userID := c.GetInt64("user_id")
+	if err := h.otaService.PushPackageUpgrade(c.Request.Context(), &service.PushPackageUpgradeReq{
+		PackageID:      req.PackageID,
+		DeviceSNs:      req.DeviceSNs,
+		PushedBy:       userID,
+		Immediate:      req.Immediate,
+		RolloutPercent: req.RolloutPercent,
+	}); err != nil {
+		log.Printf("[PushPackageUpgrade] error: package_id=%d, err=%v", req.PackageID, err)
+		response.InternalError(c, "推送升级包失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "升级包已推送", nil)
+}
+
+// RollbackPackageUpgrade 回滚升级包
+func (h *OTAHandler) RollbackPackageUpgrade(c *gin.Context) {
+	id := parseInt(c.Param("id"))
+	if id == 0 {
+		response.BadRequest(c, "invalid package_id")
+		return
+	}
+	var req struct {
+		Immediate bool `json:"immediate"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	userID := c.GetInt64("user_id")
+	if err := h.otaService.RollbackPackageUpgrade(c.Request.Context(), int64(id), req.Immediate, userID); err != nil {
+		response.InternalError(c, "回滚失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "回滚指令已发送", nil)
+}
+
+// GetPackageUpgradeDetails 获取升级包的设备升级详情
+func (h *OTAHandler) GetPackageUpgradeDetails(c *gin.Context) {
+	packageID := parseInt(c.Param("id"))
+	if packageID == 0 {
+		response.BadRequest(c, "invalid package_id")
+		return
+	}
+	details, err := h.otaService.GetPackageUpgradesByPackageID(c.Request.Context(), int64(packageID))
+	if err != nil {
+		response.InternalError(c, "查询升级详情失败")
+		return
+	}
+	response.Success(c, details)
+}
+
+// ========== 升级任务管理 ==========
+
+// CreateUpgradeTask 创建升级任务
+func (h *OTAHandler) CreateUpgradeTask(c *gin.Context) {
+	var req struct {
+		Name           string   `json:"name"`
+		TaskType       string   `json:"task_type" binding:"required"`
+		FirmwareID     *int64   `json:"firmware_id"`
+		PackageID      *int64   `json:"package_id"`
+		Model          string   `json:"model"`
+		DeviceSNs      []string `json:"device_sns" binding:"required"`
+		ExecuteMode    string   `json:"execute_mode"`
+		ScheduledAt    string   `json:"scheduled_at"`
+		RolloutPercent int      `json:"rollout_percent"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request: "+err.Error())
+		return
+	}
+	if len(req.DeviceSNs) == 0 {
+		response.BadRequest(c, "请至少选择一台设备")
+		return
+	}
+	if req.ExecuteMode == "" {
+		req.ExecuteMode = "manual"
+	}
+	if req.RolloutPercent <= 0 || req.RolloutPercent > 100 {
+		req.RolloutPercent = 100
+	}
+
+	var scheduledAt *time.Time
+	if req.ExecuteMode == "scheduled" && req.ScheduledAt != "" {
+		t, err := time.Parse("2006-01-02T15:04:05Z07:00", req.ScheduledAt)
+		if err != nil {
+			t, err = time.Parse("2006-01-02 15:04:05", req.ScheduledAt)
+		}
+		if err == nil {
+			scheduledAt = &t
+		}
+	}
+
+	userID := c.GetInt64("user_id")
+	task, err := h.otaService.CreateUpgradeTask(c.Request.Context(), &service.CreateUpgradeTaskReq{
+		Name:           req.Name,
+		TaskType:       req.TaskType,
+		FirmwareID:     req.FirmwareID,
+		PackageID:      req.PackageID,
+		Model:          req.Model,
+		DeviceSNs:      req.DeviceSNs,
+		ExecuteMode:    req.ExecuteMode,
+		ScheduledAt:    scheduledAt,
+		RolloutPercent: req.RolloutPercent,
+		CreatedBy:      userID,
+	})
+	if err != nil {
+		log.Printf("[CreateUpgradeTask] error: %v", err)
+		response.InternalError(c, "创建升级任务失败: "+err.Error())
+		return
+	}
+	response.Success(c, task)
+}
+
+// ListUpgradeTasks 升级任务列表
+func (h *OTAHandler) ListUpgradeTasks(c *gin.Context) {
+	page := parseInt(c.DefaultQuery("page", "1"))
+	pageSize := parseInt(c.DefaultQuery("page_size", "20"))
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	statusFilter := c.Query("status")
+	tasks, total, err := h.otaService.ListUpgradeTasks(c.Request.Context(), page, pageSize, statusFilter)
+	if err != nil {
+		response.InternalError(c, "查询升级任务列表失败")
+		return
+	}
+	response.Success(c, gin.H{"items": tasks, "total": total})
+}
+
+// GetUpgradeTask 获取升级任务详情
+func (h *OTAHandler) GetUpgradeTask(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+	task, err := h.otaService.GetUpgradeTask(c.Request.Context(), id)
+	if err != nil {
+		response.NotFound(c, "任务不存在")
+		return
+	}
+	response.Success(c, task)
+}
+
+// GetUpgradeTaskDevices 获取任务下设备升级详情
+func (h *OTAHandler) GetUpgradeTaskDevices(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+	devices, err := h.otaService.GetUpgradeTaskDevices(c.Request.Context(), id)
+	if err != nil {
+		response.InternalError(c, "查询设备升级详情失败")
+		return
+	}
+	response.Success(c, gin.H{"items": devices})
+}
+
+// ExecuteUpgradeTask 手动执行任务
+func (h *OTAHandler) ExecuteUpgradeTask(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+	if err := h.otaService.ExecuteTask(c.Request.Context(), id); err != nil {
+		response.InternalError(c, "执行任务失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "任务已执行", nil)
+}
+
+// CancelUpgradeTask 取消任务
+func (h *OTAHandler) CancelUpgradeTask(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+	if err := h.otaService.CancelTask(c.Request.Context(), id); err != nil {
+		response.InternalError(c, "取消任务失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "任务已取消", nil)
+}
+
+// RetryUpgradeTask 重试失败设备
+func (h *OTAHandler) RetryUpgradeTask(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+	if err := h.otaService.RetryTaskFailed(c.Request.Context(), id); err != nil {
+		response.InternalError(c, "重试失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "已重试", nil)
+}
+
+// DeleteUpgradeTask 删除任务
+func (h *OTAHandler) DeleteUpgradeTask(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.BadRequest(c, "invalid id")
+		return
+	}
+	if err := h.otaService.DeleteUpgradeTask(c.Request.Context(), id); err != nil {
+		response.InternalError(c, "删除失败: "+err.Error())
+		return
+	}
+	response.SuccessWithMessage(c, "任务已删除", nil)
+}
+
+// GetTaskStats 获取任务统计
+func (h *OTAHandler) GetTaskStats(c *gin.Context) {
+	pending, running, todayCompleted, failed, err := h.otaService.GetTaskStats(c.Request.Context())
+	if err != nil {
+		response.InternalError(c, "查询统计失败")
+		return
+	}
+	response.Success(c, gin.H{
+		"pending":         pending,
+		"running":         running,
+		"today_completed": todayCompleted,
+		"failed":          failed,
+	})
 }

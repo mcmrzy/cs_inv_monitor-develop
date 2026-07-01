@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: database
+title: 光伏逆变器监控数据库架构
+scope:
+    - database/
+source_files: []
+depends_on: []
+related_to:
+    - path: api_server

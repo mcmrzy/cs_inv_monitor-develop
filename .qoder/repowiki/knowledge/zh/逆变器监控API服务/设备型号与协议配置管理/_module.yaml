@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: api_server/model_management
+title: 设备型号与协议配置管理
+scope:
+    - inv_api_server/internal/handler/model_handler.go
+    - inv_api_server/internal/service/model_service.go
+    - inv_api_server/internal/repository/model_repository.go
+source_files: []
+depends_on: []
+related_to:
+    - path: admin_frontend/models_parallel

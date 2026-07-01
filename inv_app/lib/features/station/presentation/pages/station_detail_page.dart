@@ -252,8 +252,11 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         return Scaffold(
           body: Column(
             children: [
-              if (ds.isFromCache) OfflineDataBanner(
-                onRetry: () => context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId)),
+              if (ds.isFromCache) SafeArea(
+                bottom: false,
+                child: OfflineDataBanner(
+                  onRetry: () => context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId)),
+                ),
               ),
               Expanded(
                 child: IndexedStack(

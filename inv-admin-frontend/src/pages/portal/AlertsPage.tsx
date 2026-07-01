@@ -25,7 +25,7 @@ const AlertsPage: React.FC = () => {
       setStats({
         total: list.length,
         unhandled: list.filter((a: any) => a.status === 0 || a.status === 'unhandled').length,
-        critical: list.filter((a: any) => a.alarm_level === 1 || a.alarmLevel === 'critical').length,
+        critical: list.filter((a: any) => a.alarm_level === 3 || a.alarmLevel === 3 || a.alarmLevel === 'critical').length,
       })
     } catch { /* ignore */ }
     setLoading(false)

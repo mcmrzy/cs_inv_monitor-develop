@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:inv_app/core/services/local_discovery_service.dart';
 import 'package:wifi_iot/wifi_iot.dart';
@@ -133,61 +134,121 @@ class LocalCommunicationService {
     return response.data as Map<String, dynamic>;
   }
 
-  /// 上传固件文件到设备（发送原始二进制，不使用multipart）
-  Future<void> uploadFirmware(String filePath, {void Function(int sent, int total)? onProgress}) async {
+  /// 上传固件文件到设备
+  /// target: 'esp' → 使用 octet-stream 直传；'arm' → 使用 multipart + target 字段
+  Future<void> uploadFirmware(
+    String filePath, {
+    String target = 'esp',
+    void Function(int sent, int total)? onProgress,
+  }) async {
     await _ensureWifiUsage();
-    print('Uploading firmware to: http://$_deviceIP/ota/upload');
-    
+    print('Uploading firmware to: http://${_deviceIP}/ota/upload (target=$target)');
+  
     final file = File(filePath);
     final bytes = await file.readAsBytes();
-    
     print('File size: ${bytes.length} bytes');
-    
+  
+    if (target == 'arm') {
+      await _uploadMultipart(bytes, file.path, onProgress: onProgress);
+    } else {
+      await _uploadOctetStream(bytes, onProgress: onProgress);
+    }
+  }
+  
+  /// ESP 固件上传：原始二进制 octet-stream
+  Future<void> _uploadOctetStream(
+    Uint8List bytes, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
     final socket = await Socket.connect(_deviceIP, 80, timeout: const Duration(seconds: 10));
-    print('Socket connected for upload');
-    
-    // 发送原始二进制POST
+    print('Socket connected for upload (octet-stream)');
+  
     final requestHeader = 'POST /ota/upload HTTP/1.0\r\n'
-        'Host: $_deviceIP\r\n'
+        'Host: ${_deviceIP}\r\n'
         'Content-Type: application/octet-stream\r\n'
         'Content-Length: ${bytes.length}\r\n'
         '\r\n';
-    
+  
     socket.write(requestHeader);
     await socket.flush();
-    
-    // 分块发送文件，每块4096字节
+  
+    await _sendBodyAndWaitResponse(socket, bytes, onProgress: onProgress);
+  }
+  
+  /// ARM 固件上传：multipart/form-data + target=arm
+  Future<void> _uploadMultipart(
+    Uint8List bytes,
+    String filePath, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final boundary = '----CSInvOta${DateTime.now().millisecondsSinceEpoch}';
+    final fileName = filePath.split(RegExp(r'[/\\]')).last;
+  
+    // 构造 multipart body
+    final head = utf8.encode(
+      '--$boundary\r\n'
+      'Content-Disposition: form-data; name="target"\r\n\r\n'
+      'arm\r\n'
+      '--$boundary\r\n'
+      'Content-Disposition: form-data; name="file"; filename="$fileName"\r\n'
+      'Content-Type: application/octet-stream\r\n\r\n',
+    );
+    final tail = utf8.encode('\r\n--$boundary--\r\n');
+  
+    final body = Uint8List(head.length + bytes.length + tail.length);
+    body.setRange(0, head.length, head);
+    body.setRange(head.length, head.length + bytes.length, bytes);
+    body.setRange(head.length + bytes.length, body.length, tail);
+  
+    final socket = await Socket.connect(_deviceIP, 80, timeout: const Duration(seconds: 10));
+    print('Socket connected for upload (multipart, target=arm)');
+  
+    final requestHeader = 'POST /ota/upload HTTP/1.0\r\n'
+        'Host: ${_deviceIP}\r\n'
+        'Content-Type: multipart/form-data; boundary=$boundary\r\n'
+        'Content-Length: ${body.length}\r\n'
+        '\r\n';
+  
+    socket.write(requestHeader);
+    await socket.flush();
+  
+    await _sendBodyAndWaitResponse(socket, body, onProgress: onProgress);
+  }
+  
+  /// 分块发送 body 并等待设备响应（通用逻辑）
+  Future<void> _sendBodyAndWaitResponse(
+    Socket socket,
+    Uint8List body, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
     const chunkSize = 4096;
     int sent = 0;
-    
+  
     try {
-      while (sent < bytes.length) {
-        final end = (sent + chunkSize < bytes.length) ? sent + chunkSize : bytes.length;
-        socket.add(bytes.sublist(sent, end));
+      while (sent < body.length) {
+        final end = (sent + chunkSize < body.length) ? sent + chunkSize : body.length;
+        socket.add(body.sublist(sent, end));
         sent = end;
         await socket.flush();
         if (onProgress != null) {
-          onProgress(sent, bytes.length);
+          onProgress(sent, body.length);
         }
         await Future.delayed(const Duration(milliseconds: 5));
       }
       print('Upload data sent ($sent bytes), waiting for response...');
     } catch (e) {
-      // 发送过程中连接断开
-      if (sent >= bytes.length - chunkSize) {
-        // 数据已全部或基本发送完毕，ESP32可能已重启
-        print('Upload: connection reset after sending $sent/${bytes.length} bytes, ESP32 likely restarting');
+      if (sent >= body.length - chunkSize) {
+        print('Upload: connection reset after sending $sent/${body.length} bytes, ESP32 likely restarting');
         try { socket.destroy(); } catch (_) {}
-        return; // 不抛异常，让调用方继续轮询进度
+        return;
       }
       try { socket.destroy(); } catch (_) {}
       throw Exception('Upload failed during send: $e');
     }
-    
-    // 等待ESP32响应（ESP32写完固件后会重启，连接会被重置）
+  
     final completer = Completer<String>();
     final responseBuf = StringBuffer();
-    
+  
     socket.listen(
       (data) {
         responseBuf.write(utf8.decode(data));
@@ -198,15 +259,13 @@ class LocalCommunicationService {
         }
       },
       onError: (e) {
-        // ESP32重启导致连接断开，数据已发送完毕，不算失败
         print('Upload: connection error after all data sent (${e.runtimeType}), ESP32 likely restarting');
         if (!completer.isCompleted) {
-          completer.complete(''); // 返回空响应，不报错
+          completer.complete('');
         }
       },
     );
-    
-    // 超时30秒
+  
     String response;
     try {
       response = await completer.future.timeout(
@@ -214,18 +273,17 @@ class LocalCommunicationService {
         onTimeout: () => responseBuf.toString(),
       );
     } catch (e) {
-      // 数据已发送完毕，超时说明ESP32正在重启
       print('Upload: timeout/error after all data sent, assuming ESP32 restart');
       try { socket.destroy(); } catch (_) {}
       return;
     }
-    
+  
     print('Upload response: $response');
-    
+  
     try {
       socket.destroy();
     } catch (_) {}
-    
+  
     if (response.isNotEmpty && !response.contains('200')) {
       throw Exception('Upload failed: $response');
     }

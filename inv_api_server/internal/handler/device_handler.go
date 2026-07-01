@@ -608,6 +608,54 @@ func (h *DeviceHandler) GetCommands(c *gin.Context) {
 	response.Page(c, commands, total, page, pageSize)
 }
 
+// BatchControl 批量发送控制命令
+func (h *DeviceHandler) BatchControl(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
+
+	var req struct {
+		SNs     []string               `json:"sns" binding:"required"`
+		Command string                 `json:"command" binding:"required"`
+		Params  map[string]interface{} `json:"params"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request: sns and command are required")
+		return
+	}
+
+	if len(req.SNs) == 0 {
+		response.BadRequest(c, "sns cannot be empty")
+		return
+	}
+	if len(req.SNs) > 50 {
+		response.BadRequest(c, "batch size cannot exceed 50")
+		return
+	}
+
+	results := make(map[string]string)
+	for _, sn := range req.SNs {
+		if !isAdmin && !h.deviceService.HasControlPermission(c.Request.Context(), userID, sn) {
+			results[sn] = "permission denied"
+			continue
+		}
+
+		if err := h.deviceService.ValidateControlCommand(c.Request.Context(), sn, req.Command); err != nil {
+			results[sn] = "命令校验失败"
+			continue
+		}
+
+		if err := h.deviceService.SendCommand(c.Request.Context(), sn, req.Command, req.Params); err != nil {
+			results[sn] = err.Error()
+			continue
+		}
+
+		results[sn] = "sent"
+	}
+
+	response.Success(c, gin.H{"results": results})
+}
+
 func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)

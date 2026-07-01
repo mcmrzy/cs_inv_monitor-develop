@@ -142,15 +142,18 @@ class _ProfilePageState extends State<ProfilePage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16.r),
       ),
-      child: Column(
-        children: items.map((item) => ListTile(
-          leading: Icon(item.$1, size: 22.sp, color: AppColors.textSecondary),
-          title: Text(item.$2, style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary)),
-          trailing: Icon(Icons.chevron_right_rounded, size: 18.sp, color: AppColors.textHint),
-          onTap: item.$3,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-          contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-        )).toList(),
+      child: Material(
+        color: Colors.transparent,
+        child: Column(
+          children: items.map((item) => ListTile(
+            leading: Icon(item.$1, size: 22.sp, color: AppColors.textSecondary),
+            title: Text(item.$2, style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary)),
+            trailing: Icon(Icons.chevron_right_rounded, size: 18.sp, color: AppColors.textHint),
+            onTap: item.$3,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+            contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
+          )).toList(),
+        ),
       ),
     );
   }

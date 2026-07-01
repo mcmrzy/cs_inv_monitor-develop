@@ -261,32 +261,42 @@ class RecentAlarmsCard extends StatelessWidget {
 
   String _levelToSeverity(int level) {
     switch (level) {
-      case 1:
-        return 'critical';
+      case 3:
+        return 'fault';
       case 2:
         return 'warning';
-      default:
+      case 1:
         return 'info';
+      default:
+        return 'normal'; // code=0
     }
   }
 
   Color _getSeverityColor(String severity) {
     switch (severity) {
-      case 'critical':
+      case 'fault':
         return AppColors.errorLight;
       case 'warning':
         return AppColors.warning;
-      default:
+      case 'info':
         return AppColors.blue;
+      case 'normal':
+        return AppColors.success;
+      default:
+        return AppColors.textHint;
     }
   }
 
   String _getSeverityLabel(String severity, AppLocalizations l10n) {
     switch (severity) {
-      case 'critical':
+      case 'fault':
         return l10n.severe;
       case 'warning':
         return l10n.warningLevel;
+      case 'info':
+        return l10n.infoLevel;
+      case 'normal':
+        return '正常';
       default:
         return l10n.general;
     }

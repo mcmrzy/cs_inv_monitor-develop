@@ -156,8 +156,8 @@ const DeviceMonitorPage: React.FC = () => {
     },
     {
       title: t('common.firmware'),
-      dataIndex: 'firmwareVersion',
-      key: 'firmwareVersion',
+      dataIndex: 'firmware_arm',
+      key: 'firmware_arm',
       width: 110,
       render: (v: string) => v || '-',
     },

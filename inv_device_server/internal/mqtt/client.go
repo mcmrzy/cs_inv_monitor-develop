@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -23,15 +24,25 @@ type Client struct {
 	hub    *Hub
 
 	onOtaStatus    func(sn string, payload []byte)
+	onOtaCmdAck    func(sn string, payload []byte)
 	onStatusChange func(sn string, online bool)
+	onCmdResult     func(sn string, payload []byte)
 }
 
 func (c *Client) SetOtaStatusHandler(handler func(sn string, payload []byte)) {
 	c.onOtaStatus = handler
 }
 
+func (c *Client) SetOtaCmdAckHandler(handler func(sn string, payload []byte)) {
+	c.onOtaCmdAck = handler
+}
+
 func (c *Client) SetStatusChangeHandler(handler func(sn string, online bool)) {
 	c.onStatusChange = handler
+}
+
+func (c *Client) SetCmdResultHandler(handler func(sn string, payload []byte)) {
+	c.onCmdResult = handler
 }
 
 type Hub struct {
@@ -59,6 +70,13 @@ type MQTTStats struct {
 
 const onlineTimeoutSeconds = 120
 
+// heartbeatKey returns the Redis key for device heartbeat with TTL.
+// Each device gets an independent key that auto-expires after timeout,
+// enabling Redis Keyspace Notifications for event-driven offline detection.
+func heartbeatKey(sn string) string {
+	return "device:heartbeat:" + sn
+}
+
 func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{
 		rdb:     rdb,
@@ -72,7 +90,8 @@ func (h *Hub) MarkDeviceOnline(sn string) {
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		h.rdb.HSet(ctx, "device:online", sn, now.Unix())
+		// Set independent key with TTL for event-driven expiry detection
+		h.rdb.Set(ctx, heartbeatKey(sn), now.Unix(), onlineTimeoutSeconds*time.Second)
 	}
 }
 
@@ -80,36 +99,29 @@ func (h *Hub) IsDeviceOnline(sn string) bool {
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		tsStr, err := h.rdb.HGet(ctx, "device:online", sn).Result()
-		if err != nil {
-			return false
-		}
-		var ts int64
-		if _, err := fmt.Sscanf(tsStr, "%d", &ts); err != nil {
-			return false
-		}
-		return time.Now().Unix()-ts < onlineTimeoutSeconds
+		// Check if the heartbeat key exists (TTL handles expiry automatically)
+		return h.rdb.Exists(ctx, heartbeatKey(sn)).Val() > 0
 	}
 	return false
 }
 
 func (h *Hub) GetOnlineDeviceSNs() []string {
 	if h.rdb != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		cutoff := time.Now().Unix() - onlineTimeoutSeconds
-		all, err := h.rdb.HGetAll(ctx, "device:online").Result()
-		if err != nil {
-			return nil
-		}
 		var sns []string
-		for sn, tsStr := range all {
-			var ts int64
-			if _, err := fmt.Sscanf(tsStr, "%d", &ts); err != nil {
-				continue
+		var cursor uint64
+		for {
+			keys, nextCursor, err := h.rdb.Scan(ctx, cursor, "device:heartbeat:*", 1000).Result()
+			if err != nil {
+				break
 			}
-			if ts > cutoff {
-				sns = append(sns, sn)
+			for _, key := range keys {
+				sns = append(sns, strings.TrimPrefix(key, "device:heartbeat:"))
+			}
+			cursor = nextCursor
+			if cursor == 0 {
+				break
 			}
 		}
 		return sns
@@ -144,8 +156,17 @@ func (c *Client) Connect(ctx context.Context) error {
 		return fmt.Errorf("parse MQTT broker URL: %w", err)
 	}
 
+	// 配置 TLS（跳过证书验证）
+	var tlsConfig *tls.Config
+	if c.config.TLSInsecure {
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
+	}
+
 	cliCfg := autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{serverURL},
+		TlsCfg:                        tlsConfig,
 		KeepAlive:                     120,
 		CleanStartOnInitialConnection: false,
 		SessionExpiryInterval:         86400,
@@ -156,11 +177,13 @@ func (c *Client) Connect(ctx context.Context) error {
 					{Topic: "cs_inv/+/data/#", QoS: 1},
 					{Topic: "cs_inv/+/status", QoS: 1},
 					{Topic: "cs_inv/+/ota/status", QoS: 1},
+					{Topic: "cs_inv/+/ota/cmd_ack", QoS: 1},
+					{Topic: "cs_inv/+/cmd_result", QoS: 1},
 				},
 			}); err != nil {
 				logger.Error("Failed to subscribe to topic", zap.Error(err))
 			} else {
-				logger.Info("Subscribed to cs_inv/+/data/#, cs_inv/+/status, cs_inv/+/ota/status")
+				logger.Info("Subscribed to cs_inv/+/data/#, cs_inv/+/status, cs_inv/+/ota/status, cs_inv/+/ota/cmd_ack, cs_inv/+/cmd_result")
 			}
 		},
 		OnConnectError: func(err error) {
@@ -173,7 +196,7 @@ func (c *Client) Connect(ctx context.Context) error {
 					topic := pr.Packet.Topic
 					sn := extractSN(topic)
 
-					// 设备状态主题（LWT 离线/上线消息）：不更新在线心跳时间戳
+					// 设备状态主题（LWT 离线/上线消息）
 					if isDeviceStatusTopic(topic) {
 						online := parseStatusOnline(pr.Packet.Payload)
 						if online {
@@ -182,7 +205,8 @@ func (c *Client) Connect(ctx context.Context) error {
 							c.hub.stats.DataReceived++
 							c.hub.stats.LastDataAt = time.Now()
 						}
-						// LWT 离线消息不更新心跳，让 Redis 时间戳自然过期
+						// LWT 离线消息：不刷新心跳 key，让 120s TTL 自然过期
+						// 不主动删除 key，避免设备短暂断连后重连导致状态抖动
 						if c.onStatusChange != nil {
 							c.onStatusChange(sn, online)
 						}
@@ -197,6 +221,16 @@ func (c *Client) Connect(ctx context.Context) error {
 					// 处理 OTA 状态上报
 					if isOtaStatusTopic(topic) && c.onOtaStatus != nil {
 						c.onOtaStatus(sn, pr.Packet.Payload)
+					}
+					
+					// 处理 OTA 命令确认
+					if isOtaCmdAckTopic(topic) && c.onOtaCmdAck != nil {
+						c.onOtaCmdAck(sn, pr.Packet.Payload)
+					}
+
+					// 处理命令执行结果上报
+					if isCmdResultTopic(topic) && c.onCmdResult != nil {
+						c.onCmdResult(sn, pr.Packet.Payload)
 					}
 					return true, nil
 				},
@@ -349,6 +383,20 @@ func isOtaStatusTopic(topic string) bool {
 	return false
 }
 
+// isOtaCmdAckTopic 匹配 cs_inv/{sn}/ota/cmd_ack
+func isOtaCmdAckTopic(topic string) bool {
+	parts := strings.Split(topic, "/")
+	// 匹配 cs_inv/{sn}/ota/cmd_ack
+	if len(parts) >= 4 && parts[0] == "cs_inv" && parts[2] == "ota" && parts[3] == "cmd_ack" {
+		return true
+	}
+	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/ota/cmd_ack
+	if len(parts) >= 7 && parts[0] == "$share" && parts[3] == "cs_inv" && parts[5] == "ota" && parts[6] == "cmd_ack" {
+		return true
+	}
+	return false
+}
+
 // isDeviceStatusTopic 匹配 cs_inv/{sn}/status（设备在线/离线状态，含 LWT）
 func isDeviceStatusTopic(topic string) bool {
 	parts := strings.Split(topic, "/")
@@ -358,6 +406,19 @@ func isDeviceStatusTopic(topic string) bool {
 	}
 	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/status
 	if len(parts) == 6 && parts[0] == "$share" && parts[3] == "cs_inv" && parts[5] == "status" {
+		return true
+	}
+	return false
+}
+
+// isCmdResultTopic 匹配 cs_inv/{sn}/cmd_result
+func isCmdResultTopic(topic string) bool {
+	parts := strings.Split(topic, "/")
+	if len(parts) == 3 && parts[0] == "cs_inv" && parts[2] == "cmd_result" {
+		return true
+	}
+	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/cmd_result
+	if len(parts) >= 6 && parts[0] == "$share" && parts[3] == "cs_inv" && parts[5] == "cmd_result" {
 		return true
 	}
 	return false

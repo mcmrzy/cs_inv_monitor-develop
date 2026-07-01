@@ -39,12 +39,14 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
 
   String _severityLabel(String severity, AppLocalizations l10n) {
     switch (severity) {
-      case 'critical':
+      case 'fault':
         return l10n.severe;
       case 'warning':
         return l10n.warningLevel;
       case 'info':
         return l10n.infoLevel;
+      case 'normal':
+        return '正常';
       default:
         return l10n.unknown;
     }
@@ -52,12 +54,14 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
 
   Color _severityColor(String severity) {
     switch (severity) {
-      case 'critical':
+      case 'fault':
         return AppColors.error;
       case 'warning':
         return AppColors.warning;
       case 'info':
         return AppColors.info;
+      case 'normal':
+        return AppColors.success;
       default:
         return AppColors.textHint;
     }
@@ -65,12 +69,14 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
 
   String _levelToSeverity(dynamic level) {
     switch (level) {
-      case 1:
-        return 'critical';
+      case 3:
+        return 'fault';
       case 2:
         return 'warning';
-      default:
+      case 1:
         return 'info';
+      default:
+        return 'normal'; // code=0
     }
   }
 
@@ -142,42 +148,37 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSeverityTag(severity, severityColor, l10n),
-                SizedBox(height: 12.h),
-                _buildAlarmCodeCard(alarm, faultCode, alarmEntry, l10n),
-                SizedBox(height: 12.h),
-                _buildDescriptionCard(alarmEntry, l10n),
-                SizedBox(height: 12.h),
-                _buildPossibleCauseCard(alarmEntry, l10n),
-                SizedBox(height: 12.h),
-                _buildSuggestionCard(alarmEntry, l10n),
-                SizedBox(height: 12.h),
-                _buildDeviceInfoCard(alarm, l10n),
-                SizedBox(height: 12.h),
-                _buildTimeInfoCard(alarm, isHandled, l10n),
-                if (!isHandled) ...[
-                  SizedBox(height: 20.h),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        context.read<AlarmBloc>().add(
-                              AlarmMarkReadRequested(alarmIds: [widget.alarmId]),
-                            );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 14.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10.r),
-                        ),
-                      ),
-                      child: Text(l10n.markProcessed, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                ],
+                // 顶部状态卡片
+                _buildStatusHeader(severity, severityColor, isHandled, l10n),
                 SizedBox(height: 16.h),
+                
+                // 告警信息卡片
+                _buildAlarmInfoCard(alarm, faultCode, alarmEntry, l10n),
+                SizedBox(height: 12.h),
+                
+                // 详细信息区域
+                if (alarmEntry != null) ...[
+                  _buildDescriptionSection(alarmEntry, l10n),
+                  SizedBox(height: 12.h),
+                  _buildCausesSection(alarmEntry, l10n),
+                  SizedBox(height: 12.h),
+                  _buildSuggestionsSection(alarmEntry, l10n),
+                  SizedBox(height: 12.h),
+                ],
+                
+                // 设备信息
+                _buildDeviceInfoSection(alarm, l10n),
+                SizedBox(height: 12.h),
+                
+                // 时间信息
+                _buildTimeInfoSection(alarm, isHandled, l10n),
+                
+                // 处理按钮（仅未处理时显示）
+                if (!isHandled) ...[
+                  SizedBox(height: 24.h),
+                  _buildMarkReadButton(l10n),
+                ],
+                SizedBox(height: 80.h), // 为底部按钮留出空间
               ],
             ),
           ),
@@ -187,266 +188,545 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildSeverityTag(String severity, Color color, AppLocalizations l10n) {
+  // ==================== 顶部状态卡片 ====================
+  Widget _buildStatusHeader(String severity, Color color, bool isHandled, AppLocalizations l10n) {
+    IconData iconData;
+    String statusText;
+    
+    switch (severity) {
+      case 'fault':
+        iconData = Icons.error_outline;
+        statusText = l10n.severe;
+        break;
+      case 'warning':
+        iconData = Icons.warning_amber_rounded;
+        statusText = l10n.warningLevel;
+        break;
+      case 'info':
+        iconData = Icons.info_outline;
+        statusText = l10n.infoLevel;
+        break;
+      case 'normal':
+        iconData = Icons.check_circle_outline;
+        statusText = '正常';
+        break;
+      default:
+        iconData = Icons.notifications_none;
+        statusText = l10n.general;
+    }
+    
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 6.h),
+      padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6.r),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.15),
+            color.withValues(alpha: 0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.warning_amber_rounded, size: 18.sp, color: color),
-          SizedBox(width: 6.w),
-          Text(
-            _severityLabel(severity, l10n),
-            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: color),
+          Container(
+            padding: EdgeInsets.all(12.w),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12.r),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Icon(iconData, size: 32.sp, color: color),
+          ),
+          SizedBox(width: 16.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                SizedBox(height: 4.h),
+                Text(
+                  isHandled ? l10n.processed : l10n.unprocessed,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            isHandled ? Icons.check_circle : Icons.circle_outlined,
+            size: 24.sp,
+            color: isHandled ? AppColors.success : AppColors.textHint,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAlarmCodeCard(dynamic alarm, int faultCode, AlarmCodeEntry? entry, AppLocalizations l10n) {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.error_outline, size: 20.sp, color: AppColors.primary),
-                SizedBox(width: 8.w),
-                Text(l10n.alarmCode, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-              ],
+  // ==================== 告警信息卡片 ====================
+  Widget _buildAlarmInfoCard(dynamic alarm, int faultCode, AlarmCodeEntry? entry, AppLocalizations l10n) {
+    final alarmName = entry?.getLocalizedName(Localizations.localeOf(context).languageCode) ?? alarm['fault_message'] ?? l10n.unknownAlarm;
+    
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 20.sp, color: AppColors.primary),
+              SizedBox(width: 8.w),
+              Text(
+                l10n.alarmInfo,
+                style: TextStyle(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16.h),
+          Text(
+            alarmName,
+            style: TextStyle(
+              fontSize: 17.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+              height: 1.4,
             ),
-            SizedBox(height: 12.h),
-            Row(
+          ),
+          SizedBox(height: 12.h),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8.r),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(6.r),
-                  ),
-                  child: Text(
-                    '0x${faultCode.toRadixString(16).toUpperCase()}',
-                    style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w700, color: AppColors.primary, fontFamily: 'monospace'),
+                Text(
+                  '${l10n.faultCodeLabel}: ',
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-                SizedBox(width: 12.w),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        entry?.getLocalizedName(Localizations.localeOf(context).languageCode) ?? alarm['fault_message'] ?? l10n.unknownAlarm,
-                        style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                      ),
-                    ],
+                Text(
+                  '$faultCode',
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                    fontFamily: 'monospace',
                   ),
                 ),
               ],
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== 描述区域 ====================
+  Widget _buildDescriptionSection(AlarmCodeEntry entry, AppLocalizations l10n) {
+    return _buildSectionCard(
+      icon: Icons.description_outlined,
+      iconColor: AppColors.blue,
+      title: l10n.alarmDescription,
+      content: Text(
+        entry.description,
+        style: TextStyle(
+          fontSize: 14.sp,
+          color: AppColors.textSecondary,
+          height: 1.7,
         ),
       ),
     );
   }
 
-  Widget _buildDescriptionCard(AlarmCodeEntry? entry, AppLocalizations l10n) {
-    final description = entry?.description ?? l10n.noAlarmDescription;
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.description_outlined, size: 20.sp, color: AppColors.primary),
-                SizedBox(width: 8.w),
-                Text(l10n.alarmDescription, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-              ],
-            ),
-            SizedBox(height: 12.h),
-            Text(description, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary, height: 1.6)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPossibleCauseCard(AlarmCodeEntry? entry, AppLocalizations l10n) {
-    final causes = (entry?.possibleCause ?? '').split('\n').where((s) => s.trim().isNotEmpty).toList();
+  // ==================== 可能原因区域 ====================
+  Widget _buildCausesSection(AlarmCodeEntry entry, AppLocalizations l10n) {
+    final causes = entry.possibleCause.split('\n').where((s) => s.trim().isNotEmpty).toList();
     if (causes.isEmpty) return const SizedBox.shrink();
 
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.search, size: 20.sp, color: AppColors.warning),
-                SizedBox(width: 8.w),
-                Text(l10n.possibleCauses, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-              ],
-            ),
-            SizedBox(height: 12.h),
-            ...causes.map((cause) => Padding(
-              padding: EdgeInsets.only(bottom: 8.h),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.only(top: 4.h),
-                    child: Icon(Icons.arrow_right, size: 16.sp, color: AppColors.warning),
-                  ),
-                  SizedBox(width: 4.w),
-                  Expanded(
-                    child: Text(cause.trim(), style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary, height: 1.5)),
-                  ),
-                ],
-              ),
-            )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSuggestionCard(AlarmCodeEntry? entry, AppLocalizations l10n) {
-    final suggestions = (entry?.suggestion ?? l10n.pleaseContactService).split('\n').where((s) => s.trim().isNotEmpty).toList();
-
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.build_outlined, size: 20.sp, color: AppColors.success),
-                SizedBox(width: 8.w),
-                Text(l10n.suggestedActions, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-              ],
-            ),
-            SizedBox(height: 12.h),
-            ...List.generate(suggestions.length, (index) {
-              return Padding(
-                padding: EdgeInsets.only(bottom: 10.h),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 22.w,
-                      height: 22.w,
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(11.r),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.success),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 10.w),
-                    Expanded(
-                      child: Text(suggestions[index].trim(), style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary, height: 1.5)),
-                    ),
-                  ],
+    return _buildSectionCard(
+      icon: Icons.search,
+      iconColor: AppColors.warning,
+      title: l10n.possibleCauses,
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: causes.map((cause) => Padding(
+          padding: EdgeInsets.only(bottom: 10.h),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                margin: EdgeInsets.only(top: 4.h),
+                width: 6.w,
+                height: 6.w,
+                decoration: BoxDecoration(
+                  color: AppColors.warning,
+                  shape: BoxShape.circle,
                 ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDeviceInfoCard(dynamic alarm, AppLocalizations l10n) {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.devices, size: 20.sp, color: AppColors.primary),
-                SizedBox(width: 8.w),
-                Text(l10n.deviceInfo, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-              ],
-            ),
-            SizedBox(height: 12.h),
-            _buildInfoRow(l10n.deviceSn, alarm['device_sn'] ?? '-'),
-            _buildInfoRow(l10n.deviceModel, alarm['device_model'] ?? '-'),
-            _buildInfoRow(l10n.firmwareVersion, alarm['firmware_version'] ?? '-'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeInfoCard(dynamic alarm, bool isHandled, AppLocalizations l10n) {
-    return Card(
-      child: Padding(
-        padding: EdgeInsets.all(16.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 20.sp, color: AppColors.primary),
-                SizedBox(width: 8.w),
-                Text(l10n.timeInfo, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                const Spacer(),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 3.h),
-                  decoration: BoxDecoration(
-                    color: isHandled ? AppColors.success.withValues(alpha: 0.1) : AppColors.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4.r),
+              ),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Text(
+                  cause.trim(),
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: AppColors.textSecondary,
+                    height: 1.6,
                   ),
+                ),
+              ),
+            ],
+          ),
+        )).toList(),
+      ),
+    );
+  }
+
+  // ==================== 建议措施区域 ====================
+  Widget _buildSuggestionsSection(AlarmCodeEntry entry, AppLocalizations l10n) {
+    final suggestions = entry.suggestion.split('\n').where((s) => s.trim().isNotEmpty).toList();
+
+    return _buildSectionCard(
+      icon: Icons.build_outlined,
+      iconColor: AppColors.success,
+      title: l10n.suggestedActions,
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: List.generate(suggestions.length, (index) => Padding(
+          padding: EdgeInsets.only(bottom: 12.h),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 24.w,
+                height: 24.w,
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6.r),
+                  border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                ),
+                child: Center(
                   child: Text(
-                    isHandled ? l10n.processed : l10n.unprocessed,
+                    '${index + 1}',
                     style: TextStyle(
                       fontSize: 12.sp,
-                      fontWeight: FontWeight.w600,
-                      color: isHandled ? AppColors.success : AppColors.error,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.success,
                     ),
                   ),
                 ),
-              ],
-            ),
-            SizedBox(height: 12.h),
-            _buildInfoRow(l10n.occurrenceTime, alarm['occurred_at']?.toString() ?? '-'),
-            _buildInfoRow(l10n.recoveryTime, alarm['recovered_at']?.toString() ?? '-'),
-            _buildInfoRow(l10n.processTime, alarm['handled_at']?.toString() ?? '-'),
-          ],
-        ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: Text(
+                  suggestions[index].trim(),
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: AppColors.textSecondary,
+                    height: 1.6,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        )),
       ),
+    );
+  }
+
+  // ==================== 通用 Section Card ====================
+  Widget _buildSectionCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required Widget content,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20.sp, color: iconColor),
+              SizedBox(width: 8.w),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 14.h),
+          content,
+        ],
+      ),
+    );
+  }
+
+  // ==================== 设备信息区域 ====================
+  Widget _buildDeviceInfoSection(dynamic alarm, AppLocalizations l10n) {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.devices, size: 20.sp, color: AppColors.primary),
+              SizedBox(width: 8.w),
+              Text(
+                l10n.deviceInfo,
+                style: TextStyle(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 14.h),
+          _buildInfoRow(l10n.deviceSn, alarm['device_sn'] ?? '-'),
+          _buildInfoRow(l10n.deviceModel, alarm['device_model'] ?? '-'),
+          _buildInfoRow(l10n.firmwareVersion, alarm['firmware_version'] ?? '-'),
+        ],
+      ),
+    );
+  }
+
+  // ==================== 时间信息区域 ====================
+  Widget _buildTimeInfoSection(dynamic alarm, bool isHandled, AppLocalizations l10n) {
+    return Container(
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.access_time, size: 20.sp, color: AppColors.primary),
+              SizedBox(width: 8.w),
+              Text(
+                l10n.timeInfo,
+                style: TextStyle(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                decoration: BoxDecoration(
+                  color: isHandled ? AppColors.success.withValues(alpha: 0.1) : AppColors.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6.r),
+                  border: Border.all(
+                    color: isHandled ? AppColors.success.withValues(alpha: 0.3) : AppColors.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  isHandled ? l10n.processed : l10n.unprocessed,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    color: isHandled ? AppColors.success : AppColors.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 14.h),
+          _buildInfoRow(l10n.occurrenceTime, alarm['occurred_at']?.toString() ?? '-'),
+          _buildInfoRow(l10n.recoveryTime, alarm['recovered_at']?.toString() ?? '-'),
+          _buildInfoRow(l10n.processTime, alarm['handled_at']?.toString() ?? '-'),
+        ],
+      ),
+    );
+  }
+
+  // ==================== 处理按钮 ====================
+  Widget _buildMarkReadButton(AppLocalizations l10n) {
+    return BlocBuilder<AlarmBloc, AlarmState>(
+      builder: (context, state) {
+        final isLoading = state is AlarmLoading;
+        
+        return SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: isLoading ? null : () async {
+              try {
+                context.read<AlarmBloc>().add(
+                  AlarmMarkReadRequested(alarmIds: [widget.alarmId]),
+                );
+                
+                await Future.delayed(const Duration(milliseconds: 300));
+                
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.white, size: 20.sp),
+                          SizedBox(width: 10.w),
+                          Text(
+                            l10n.markProcessedSuccess,
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: AppColors.success,
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(l10n.translateError(e.toString())),
+                      backgroundColor: AppColors.error,
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            },
+            icon: isLoading 
+              ? SizedBox(
+                  width: 18.sp,
+                  height: 18.sp,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Icon(Icons.check_circle_outline, size: 20.sp),
+            label: Text(
+              isLoading ? l10n.processing : l10n.markProcessed,
+              style: TextStyle(
+                fontSize: 15.sp,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: 14.h),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: EdgeInsets.only(bottom: 8.h),
+      padding: EdgeInsets.only(bottom: 10.h),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 80.w,
-            child: Text(label, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+            width: 90.w,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.sp,
+                color: AppColors.textHint,
+              ),
+            ),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary)),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 13.sp,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),

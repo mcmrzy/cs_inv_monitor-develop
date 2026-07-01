@@ -111,15 +111,20 @@ class _HomePageState extends State<HomePage> {
 
           return Column(
             children: [
-              if (isFromCache) OfflineDataBanner(
-                onRetry: () => context.read<StationBloc>().add(StationSummaryRequested()),
-              ),
               Expanded(
                 child: StyledRefreshIndicator(
                   onRefresh: () async => context.read<StationBloc>().add(StationSummaryRequested()),
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
+                      if (isFromCache) SliverToBoxAdapter(
+                        child: SafeArea(
+                          bottom: false,
+                          child: OfflineDataBanner(
+                            onRetry: () => context.read<StationBloc>().add(StationSummaryRequested()),
+                          ),
+                        ),
+                      ),
                       _buildHeader(),
                       if (_showSearch) _buildSearchBar(),
                       _buildFilterCards(ds),

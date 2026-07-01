@@ -451,7 +451,7 @@ const StationsPage: React.FC = () => {
     },
     {
       title: t('station.firmwareVersion'),
-      dataIndex: 'firmware_version',
+      dataIndex: 'firmware_arm',
       width: 100,
       render: (v: string) => v || '-',
     },

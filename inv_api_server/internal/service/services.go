@@ -1,10 +1,14 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
+	"net/http"
 	"time"
 
 	"inv-api-server/internal/model"
@@ -15,6 +19,12 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
+
+// generateTaskID 生成唯一的任务ID
+func generateTaskID() string {
+	n, _ := rand.Int(rand.Reader, big.NewInt(999999))
+	return fmt.Sprintf("cmd_%d_%06d", time.Now().UnixNano()/1e6, n.Int64())
+}
 
 type UserService struct {
 	repo  *repository.UserRepository
@@ -300,14 +310,25 @@ type DeviceService struct {
 	cache        *redis.Client
 	modelRepo    *repository.ModelRepository
 	deviceSrvURL string
+	internalKey  string
+	httpClient   *http.Client
 }
 
-func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, modelRepo *repository.ModelRepository, deviceSrvURL string) *DeviceService {
+func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, modelRepo *repository.ModelRepository, deviceSrvURL string, internalKey string) *DeviceService {
 	return &DeviceService{
 		repo:         repo,
 		cache:        cache,
 		modelRepo:    modelRepo,
 		deviceSrvURL: deviceSrvURL,
+		internalKey:  internalKey,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        50,
+				MaxIdleConnsPerHost: 20,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
 	}
 }
 
@@ -463,7 +484,120 @@ func (s *DeviceService) FilterByDataPermission(ctx context.Context, userID int64
 }
 
 func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, params map[string]interface{}) error {
-	return s.repo.SendCommand(ctx, sn, cmdType, params)
+	if s.deviceSrvURL == "" {
+		return fmt.Errorf("device server URL not configured")
+	}
+
+	// 生成唯一任务ID
+	taskID := generateTaskID()
+
+	// 1. 写入命令日志（status=pending）
+	paramsJSON, _ := json.Marshal(params)
+	if err := s.repo.InsertCommandLog(ctx, sn, taskID, cmdType, string(paramsJSON)); err != nil {
+		logger.Error("Failed to insert command log",
+			zap.String("sn", sn), zap.String("task_id", taskID), zap.Error(err))
+		// 继续执行，不因为日志插入失败而阻断命令下发
+	}
+
+	// 2. 构造命令体
+	cmdBody := map[string]interface{}{
+		"command": cmdType,
+		"params":  params,
+		"task_id": taskID,
+	}
+	body, err := json.Marshal(cmdBody)
+	if err != nil {
+		return fmt.Errorf("marshal command: %w", err)
+	}
+
+	// 3. 发送到 Device Server
+	url := fmt.Sprintf("%s/api/v1/device/%s/command", s.deviceSrvURL, sn)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if s.internalKey != "" {
+		req.Header.Set("X-Internal-Key", s.internalKey)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		logger.Error("SendCommand HTTP call failed",
+			zap.String("sn", sn), zap.String("cmd", cmdType), zap.Error(err))
+		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "failed", "发送失败: "+err.Error())
+		return fmt.Errorf("send command to device server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 4. 设备离线时，存入 Redis 离线队列
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "queued", "设备离线，已加入待发送队列")
+		if s.cache != nil {
+			queueData, _ := json.Marshal(map[string]interface{}{
+				"command": cmdType,
+				"params":  params,
+				"task_id": taskID,
+			})
+			queueKey := "device:cmd:queue:" + sn
+			_ = s.cache.RPush(ctx, queueKey, queueData).Err()
+			// 设置队列过期时间（7天）
+			_ = s.cache.Expire(ctx, queueKey, 7*24*time.Hour).Err()
+			logger.Info("Command queued for offline device",
+				zap.String("sn", sn), zap.String("task_id", taskID))
+		}
+		return nil // 不返回错误，命令已排队
+	}
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		respBody, _ := io.ReadAll(resp.Body)
+		logger.Error("SendCommand failed",
+			zap.String("sn", sn), zap.String("cmd", cmdType),
+			zap.Int("status", resp.StatusCode), zap.String("body", string(respBody)))
+		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "failed", fmt.Sprintf("Device Server 返回 %d", resp.StatusCode))
+		return fmt.Errorf("device server returned status %d", resp.StatusCode)
+	}
+
+	// 5. 插入发送通知
+	s.insertCmdNotification(ctx, sn, taskID, cmdType)
+
+	logger.Info("Command sent to device server",
+		zap.String("sn", sn), zap.String("cmd", cmdType), zap.String("task_id", taskID))
+	return nil
+}
+
+// insertCmdNotification 插入命令发送通知
+func (s *DeviceService) insertCmdNotification(ctx context.Context, sn, taskID, cmdType string) {
+	if s.repo == nil {
+		return
+	}
+	// 查找设备对应的 user_id 和 station_id
+	device, err := s.repo.GetBySN(ctx, sn)
+	if err != nil || device == nil {
+		return
+	}
+
+	cmdLabels := map[string]string{
+		"get_params":   "读取参数",
+		"set_params":   "设置参数",
+		"batch_config": "批量配置",
+		"reset":        "重置设备",
+		"restart":      "重启设备",
+		"ota":          "OTA升级",
+	}
+	label := cmdLabels[cmdType]
+	if label == "" {
+		label = cmdType
+	}
+
+	title := "控制指令已发送"
+	content := fmt.Sprintf("已向设备 %s 发送「%s」指令", sn, label)
+
+	var stationID int64
+	if device.StationID != nil {
+		stationID = *device.StationID
+	}
+	_ = s.repo.InsertNotification(ctx, sn, stationID, device.UserID, "cmd_sent", title, content)
 }
 
 func (s *DeviceService) GetHistoryData(ctx context.Context, sn, startDate, endDate, period string) ([]map[string]interface{}, error) {

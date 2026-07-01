@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/errors/failures.dart';
@@ -49,10 +50,33 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
     return super.close();
   }
 
+  /// 快速检查是否有网络连接
+  Future<bool> _hasNetwork() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
+      return !result.contains(ConnectivityResult.none);
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> _onListRequested(
     AlarmListRequested event,
     Emitter<AlarmState> emit,
   ) async {
+    // 断网时直接加载缓存
+    if (!await _hasNetwork()) {
+      if (dataCacheService != null) {
+        final cached = dataCacheService!.load(DataCacheService.alarmList);
+        if (cached != null && cached is Map<String, dynamic>) {
+          final alarms = (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
+          final total = (cached['total'] as int?) ?? 0;
+          emit(AlarmListLoaded(alarms: alarms, total: total, isFromCache: true));
+          return;
+        }
+      }
+    }
+
     final result = await repository.getList(
       stationId: event.stationId,
       status: event.status,

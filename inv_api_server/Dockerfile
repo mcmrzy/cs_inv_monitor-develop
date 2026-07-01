@@ -6,9 +6,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-api-server ./cmd/main.go
 
-FROM alpine:latest
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
-    apk --no-cache add ca-certificates tzdata wget
+FROM golang:1.25-alpine
 WORKDIR /app
 COPY --from=builder /app/inv-api-server ./main
 COPY config.docker.yaml ./config.yaml

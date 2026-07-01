@@ -26,6 +26,9 @@ export interface Device {
   model: string
   ratedPower: number
   firmwareVersion: string
+  firmware_arm?: string
+  firmware_esp?: string
+  main_version?: string
   status: 'online' | 'offline' | 'fault'
   lastOnlineAt: string
   userId: string
@@ -48,18 +51,87 @@ export interface Firmware {
   createdAt: string
 }
 
-export interface OtaTask {
+export interface DeviceUpgrade {
+  id: string
+  device_sn: string
+  firmware_id: number
+  firmware_version: string
+  target_chip: string
+  old_version: string
+  status: string // pending/downloading/upgrading/success/failed/cancelled
+  progress: number
+  error_message: string
+  retry_count: number
+  pushed_by: string | null
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+  upgrade_package_id?: number | null
+  task_id?: number | null
+  // 聚合字段（Dashboard 列表用）
+  device_model?: string
+  total_devices?: number
+  success_count?: number
+  failed_count?: number
+  pending_count?: number
+  // 设备当前芯片版本（详情用）
+  current_arm_version?: string
+  current_esp_version?: string
+  // 升级包相关
+  package_main_version?: string
+}
+
+export interface UpgradeTask {
   id: string
   name: string
-  firmwareId: string
-  status: string
-  totalDevices: number
-  successCount: number
-  failedCount: number
-  pushStrategy: string
-  pushPercentage: number
-  batchSize: number
-  createdAt: string
+  task_type: 'single' | 'package'
+  firmware_id?: number | null
+  package_id?: number | null
+  model: string
+  target_version: string
+  status: string // draft/pending/scheduled/running/completed/partial_success/failed/cancelled
+  execute_mode: string // immediate/scheduled/manual
+  scheduled_at?: string | null
+  rollout_percent: number
+  total_devices: number
+  success_count: number
+  failed_count: number
+  created_by?: number | null
+  created_at: string
+  executed_at?: string | null
+  completed_at?: string | null
+  updated_at: string
+  // 关联信息
+  firmware_version?: string
+  firmware_target_chip?: string
+  package_main_version?: string
+  package_items?: UpgradePackageItem[]
+}
+
+export interface UpgradePackage {
+  id: string
+  model: string
+  main_version: string
+  changelog: string
+  is_force: boolean
+  status: number
+  created_by: number
+  created_at: string
+  updated_at: string
+  items?: UpgradePackageItem[]
+}
+
+export interface UpgradePackageItem {
+  id: string
+  package_id: number
+  firmware_id: number
+  target_chip: string
+  firmware_version: string
+  file_url?: string
+  file_size?: number
+  file_md5?: string
+  file_sha256?: string
 }
 
 export interface Alert {

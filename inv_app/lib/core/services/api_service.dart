@@ -81,7 +81,10 @@ class ApiService {
         if (data['code'] == 0) {
           return Right(fromJson(data['data'] ?? {}));
         } else {
-          return Left(ServerFailure(data['message'] ?? 'Unknown error'));
+          final code = data['code'];
+          final msg = data['message'] ?? 'Unknown error';
+          // 将错误码和消息一起传递，方便 translateError 按 code 查找
+          return Left(ServerFailure(code != null ? '[$code] $msg' : msg));
         }
       }
       return Left(ServerFailure('Invalid response format'));

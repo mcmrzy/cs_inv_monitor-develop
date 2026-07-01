@@ -171,7 +171,9 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),
       decoration: AppColor.card(context),
-      child: ListTile(
+      child: Material(
+        color: Colors.transparent,
+        child: ListTile(
         contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
         leading: Container(
           width: 40.w,
@@ -201,6 +203,7 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
                   _sendCommand(field);
                 }
               },
+      ),
       ),
     );
   }
