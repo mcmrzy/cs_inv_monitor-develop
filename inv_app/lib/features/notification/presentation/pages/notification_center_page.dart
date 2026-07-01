@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -6,6 +7,9 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
+import 'package:inv_app/core/services/notification_stream_service.dart';
+import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 import 'package:inv_app/features/notification/presentation/bloc/notification_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -19,12 +23,51 @@ class NotificationCenterPage extends StatefulWidget {
 
 class _NotificationCenterPageState extends State<NotificationCenterPage> {
   AlarmState? _cachedAlarmState;
+  final NotificationStreamService _streamService = NotificationStreamService();
+  StreamSubscription<Map<String, dynamic>>? _sseSubscription;
+  int _sseNotificationCount = 0; // 用于强制触发 UI 重建
 
   @override
   void initState() {
     super.initState();
     context.read<AlarmBloc>().add(const AlarmListRequested());
     context.read<NotificationBloc>().add(const SystemNotificationsRequested());
+    
+    // 先注册 SSE listener
+    _sseSubscription = _streamService.notificationStream.listen(_onSseNotification);
+    
+    // 再启动 SSE 连接
+    _startSSEConnection();
+  }
+
+  void _onSseNotification(Map<String, dynamic> notificationData) {
+    debugPrint('[NotificationCenter] Received real-time notification: $notificationData');
+    if (!mounted) return;
+    // 递增计数器并 setState，强制触发 UI 重建
+    setState(() {
+      _sseNotificationCount++;
+    });
+    // 同时刷新 BLoC 数据
+    _refreshAll();
+  }
+
+  Future<void> _startSSEConnection() async {
+    try {
+      final storageService = getIt<StorageService>();
+      final token = await storageService.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _streamService.start(token: token);
+      }
+    } catch (e) {
+      debugPrint('[NotificationCenter] Failed to start SSE connection: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _sseSubscription?.cancel();
+    _streamService.stop();
+    super.dispose();
   }
 
   void _refreshAll() {
@@ -203,12 +246,14 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
   String _levelToSeverity(dynamic level) {
     switch (level) {
-      case 1:
-        return 'critical';
+      case 3:
+        return 'fault';
       case 2:
         return 'warning';
-      default:
+      case 1:
         return 'info';
+      default:
+        return 'normal'; // code=0, normal/恢复
     }
   }
 
@@ -238,18 +283,32 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
     Color levelColor;
     String levelText;
+    IconData iconData;
     switch (severity) {
-      case 'critical':
+      case 'fault':
         levelColor = AppColors.errorLight;
         levelText = l10n.severe;
+        iconData = Icons.error_outline;
         break;
       case 'warning':
         levelColor = AppColors.warning;
         levelText = l10n.warningLevel;
+        iconData = Icons.warning_amber_rounded;
+        break;
+      case 'info':
+        levelColor = AppColors.blue;
+        levelText = l10n.infoLevel;
+        iconData = Icons.info_outline;
+        break;
+      case 'normal':
+        levelColor = AppColors.success;
+        levelText = '正常';
+        iconData = Icons.check_circle_outline;
         break;
       default:
-        levelColor = AppColors.orange;
+        levelColor = AppColors.textHint;
         levelText = l10n.general;
+        iconData = Icons.notifications_none;
     }
 
     final isRead = alarm['status'] == 1;
@@ -275,7 +334,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                   borderRadius: BorderRadius.circular(8.r),
                 ),
                 child: Icon(
-                  isRead ? Icons.notifications_none : Icons.warning_amber_rounded,
+                  isRead ? Icons.notifications_none : iconData,
                   size: 18.sp,
                   color: isRead ? AppColors.textHint : levelColor,
                 ),
@@ -348,6 +407,14 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       case SystemNotificationType.deviceOffline:
         icon = Icons.highlight_off;
         iconColor = AppColors.errorLight;
+        break;
+      case SystemNotificationType.deviceFault:
+        icon = Icons.error_outline;
+        iconColor = AppColors.errorLight;
+        break;
+      case SystemNotificationType.alarmCleared:
+        icon = Icons.check_circle_outline;
+        iconColor = AppColors.success;
         break;
       case SystemNotificationType.otaAvailable:
         icon = Icons.system_update;

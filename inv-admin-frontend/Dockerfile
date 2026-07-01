@@ -1,4 +1,4 @@
-FROM node:18-alpine AS builder
+FROM docker.m.daocloud.io/library/node:18-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY . .
 
 RUN npm run build
 
-FROM alpine:3.19
+FROM docker.m.daocloud.io/library/alpine:3.19
 
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
     apk add --no-cache nginx && \

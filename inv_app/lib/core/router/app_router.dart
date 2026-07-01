@@ -33,6 +33,7 @@ import 'package:inv_app/features/profile/presentation/pages/about_page.dart';
 import 'package:inv_app/features/profile/presentation/pages/notify_settings_page.dart';
 import 'package:inv_app/features/device/presentation/pages/device_control_page.dart';
 import 'package:inv_app/features/device/presentation/pages/history_chart_page.dart';
+import 'package:inv_app/features/device/presentation/pages/device_settings_page.dart';
 import 'package:inv_app/features/device/presentation/pages/local_mode_page.dart';
 import 'package:inv_app/features/ota/presentation/pages/ota_page.dart';
 import 'package:inv_app/features/ota/presentation/pages/ota_detail_page.dart';
@@ -178,6 +179,14 @@ class AppRouter {
         },
       ),
       GoRoute(
+        path: '/device/:sn/settings',
+        name: 'deviceSettings',
+        pageBuilder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+          return _slidePage(state, DeviceSettingsPage(sn: sn));
+        },
+      ),
+      GoRoute(
         path: '/wifi-config',
         name: 'wifiConfig',
         pageBuilder: (context, state) => _slidePage(state, const WifiConfigPage()),
@@ -257,12 +266,14 @@ class AppRouter {
               : null;
           final firmwareUrl = state.uri.queryParameters['firmware_url'];
           final firmwareFileName = state.uri.queryParameters['firmware_file_name'];
+          final targetChip = state.uri.queryParameters['target_chip'];
           return _slidePage(state, LocalOTAPage(
             deviceSN: sn,
             deviceIP: deviceIP,
             firmwareId: firmwareId,
             firmwareUrl: firmwareUrl,
             firmwareFileName: firmwareFileName,
+            targetChip: targetChip,
           ));
         },
       ),

@@ -35,6 +35,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
   bool _scanningNearbyWifi = false;
   List<ScanResult> _nearbyWifiList = [];
+  List<WifiNetwork> _phoneScannedWifi = []; // 手机端扫描的WiFi列表（连接热点前扫描）
 
   bool _provisioning = false;
   String _provisionStatus = '';
@@ -132,18 +133,59 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         return;
       }
 
-      await WiFiForIoTPlugin.forceWifiUsage(true);
-      final networks = await WiFiForIoTPlugin.loadWifiList();
-      final filtered = networks.where((n) {
+      // 关键改进：先关闭WiFi强制使用，让系统执行一次新的WiFi扫描
+      // Android 系统有4次/2分钟的扫描限制，先关闭再打开可以触发新扫描
+      await WiFiForIoTPlugin.forceWifiUsage(false);
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // 多次读取以获取最新结果
+      List<WifiNetwork> allNetworks = [];
+      for (int i = 0; i < 3; i++) {
+        final networks = await WiFiForIoTPlugin.loadWifiList();
+        allNetworks.addAll(networks);
+        if (i < 2) await Future.delayed(const Duration(milliseconds: 800));
+      }
+
+      // 去重并按信号强度排序
+      final ssidSet = <String>{};
+      final filtered = <WifiNetwork>[];
+      for (final n in allNetworks) {
         final ssid = n.ssid ?? '';
-        return ssid.toUpperCase().startsWith('CS_INV') || ssid.toUpperCase().startsWith('CS-INV');
-      }).toList();
+        if (ssid.isEmpty) continue;
+        if (ssid.toUpperCase().startsWith('CS_INV') || ssid.toUpperCase().startsWith('CS-INV')) {
+          if (!ssidSet.contains(ssid)) {
+            ssidSet.add(ssid);
+            filtered.add(n);
+          }
+        }
+      }
       filtered.sort((a, b) => (b.level ?? -100).compareTo(a.level ?? -100));
+
+      // 同时扫描所有附近WiFi（用于后续配网选择）
+      await _scanAllNearbyWifi();
+
       setState(() { _csInvNetworks = filtered; _wifiScanning = false; });
     } catch (e) {
       setState(() => _wifiScanning = false);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppLocalizations.of(context)!.scanFailed}: $e')));
     }
+  }
+
+  /// 手机端扫描所有附近WiFi（在连接设备热点之前调用，缓存结果）
+  Future<void> _scanAllNearbyWifi() async {
+    try {
+      await WiFiForIoTPlugin.forceWifiUsage(false);
+      await Future.delayed(const Duration(milliseconds: 300));
+      final networks = await WiFiForIoTPlugin.loadWifiList();
+      // 过滤掉设备热点本身和无名称的
+      _phoneScannedWifi = networks.where((n) {
+        final ssid = n.ssid ?? '';
+        if (ssid.isEmpty) return false;
+        final upper = ssid.toUpperCase();
+        return !upper.startsWith('CS_INV') && !upper.startsWith('CS-INV');
+      }).toList();
+      _phoneScannedWifi.sort((a, b) => (b.level ?? -100).compareTo(a.level ?? -100));
+    } catch (_) {}
   }
 
   Future<void> _connectToAp(WifiNetwork network) async {
@@ -158,11 +200,21 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     try {
       final ssid = network.ssid ?? '';
-      final connected = await WiFiForIoTPlugin.connect(ssid,
-        password: null,
-        security: _isOpenNetwork(network) ? NetworkSecurity.NONE : NetworkSecurity.WPA,
-        joinOnce: true,
-      );
+
+      // 改进：连接AP时增加重试机制（Android 10+ WiFi连接有时不稳定）
+      bool connected = false;
+      for (int attempt = 0; attempt < 3; attempt++) {
+        connected = await WiFiForIoTPlugin.connect(ssid,
+          password: null,
+          security: _isOpenNetwork(network) ? NetworkSecurity.NONE : NetworkSecurity.WPA,
+          joinOnce: true,
+        );
+        if (connected) break;
+        if (attempt < 2) {
+          setState(() => _provisionStatus = '${AppLocalizations.of(context)!.connectingSsid(ssid)} (${attempt + 2}/3)');
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
 
       if (connected) {
         setState(() => _provisionStatus = AppLocalizations.of(context)!.waitingStableConnection);
@@ -173,8 +225,14 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         // 等待连接稳定，热点分配IP需要时间
         await Future.delayed(const Duration(seconds: 3));
 
-        // 验证确实连上了设备热点
-        final currentSsid = await WiFiForIoTPlugin.getSSID();
+        // 验证确实连上了设备热点（增加重试检查）
+        String? currentSsid;
+        for (int i = 0; i < 3; i++) {
+          currentSsid = await WiFiForIoTPlugin.getSSID();
+          if (currentSsid != null && currentSsid.toUpperCase().contains('CS_INV')) break;
+          await Future.delayed(const Duration(seconds: 1));
+        }
+
         if (currentSsid == null || !currentSsid.toUpperCase().contains('CS_INV')) {
           setState(() => _provisionStatus = AppLocalizations.of(context)!.noDeviceHotspotRetry);
           return;
@@ -184,7 +242,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           _provisionStatus = AppLocalizations.of(context)!.connectedScanning(ssid);
           _provisionStep = 2;
         });
-        _scanDeviceWiFi();
+        // 使用手机端已缓存的WiFi列表，不再通过设备扫描
+        _usePhoneScannedWifi();
       } else {
         setState(() => _provisionStatus = AppLocalizations.of(context)!.connectionSsidFailed(ssid));
       }
@@ -193,20 +252,75 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     }
   }
 
-  Future<void> _scanDeviceWiFi() async {
-    setState(() { _scanningNearbyWifi = true; _provisionStatus = AppLocalizations.of(context)!.scanningWifiViaDevice; });
+  /// 使用手机端扫描的WiFi列表（连接热点前已缓存，无需再通过设备扫描）
+  void _usePhoneScannedWifi() {
+    setState(() {
+      _nearbyWifiList = _phoneScannedWifi.map((n) => ScanResult(
+        ssid: n.ssid ?? '',
+        rssi: n.level ?? -100,
+        encrypted: !_isOpenNetwork(n),
+      )).toList();
+      _scanningNearbyWifi = false;
+      _provisionStatus = _nearbyWifiList.isEmpty
+          ? AppLocalizations.of(context)!.noWifiFoundInputManually
+          : AppLocalizations.of(context)!.foundNWifi('${_nearbyWifiList.length}');
+      _provisionStep = 2;
+    });
+  }
+
+  /// 重新扫描附近WiFi（手机端，在连接设备热点后临时切回普通模式扫描）
+  Future<void> _rescanNearbyWifiFromPhone() async {
+    setState(() { _scanningNearbyWifi = true; });
     try {
-      // 确保请求走WiFi
+      // 临时切回普通WiFi模式以执行扫描
+      await WiFiForIoTPlugin.forceWifiUsage(false);
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      List<WifiNetwork> networks = [];
+      for (int i = 0; i < 2; i++) {
+        final result = await WiFiForIoTPlugin.loadWifiList();
+        networks.addAll(result);
+        if (i < 1) await Future.delayed(const Duration(milliseconds: 600));
+      }
+
+      // 过滤掉设备热点
+      final filtered = networks.where((n) {
+        final ssid = n.ssid ?? '';
+        if (ssid.isEmpty) return false;
+        final upper = ssid.toUpperCase();
+        return !upper.startsWith('CS_INV') && !upper.startsWith('CS-INV');
+      }).toList();
+      filtered.sort((a, b) => (b.level ?? -100).compareTo(a.level ?? -100));
+
+      // 去重
+      final seen = <String>{};
+      final unique = <WifiNetwork>[];
+      for (final n in filtered) {
+        final ssid = n.ssid ?? '';
+        if (!seen.contains(ssid)) {
+          seen.add(ssid);
+          unique.add(n);
+        }
+      }
+
+      // 切回WiFi强制使用模式
       await WiFiForIoTPlugin.forceWifiUsage(true);
 
-      final list = await _provisionService.scanWiFi();
       setState(() {
-        _nearbyWifiList = list;
+        _nearbyWifiList = unique.map((n) => ScanResult(
+          ssid: n.ssid ?? '',
+          rssi: n.level ?? -100,
+          encrypted: !_isOpenNetwork(n),
+        )).toList();
         _scanningNearbyWifi = false;
-        _provisionStatus = list.isEmpty ? AppLocalizations.of(context)!.noWifiFoundInputManually : AppLocalizations.of(context)!.foundNWifi('${list.length}');
+        _provisionStatus = _nearbyWifiList.isEmpty
+            ? AppLocalizations.of(context)!.noWifiFoundInputManually
+            : AppLocalizations.of(context)!.foundNWifi('${_nearbyWifiList.length}');
         _provisionStep = 2;
       });
     } catch (e) {
+      // 确保切回WiFi模式
+      await WiFiForIoTPlugin.forceWifiUsage(true);
       setState(() {
         _scanningNearbyWifi = false;
         _provisionStatus = '${AppLocalizations.of(context)!.scanFailed}: $e';
@@ -234,7 +348,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     await WiFiForIoTPlugin.forceWifiUsage(true);
 
     var result = await _provisionService.configure(ssid, password);
-    if (!result.success) result = await _provisionService.configureCompat(ssid, password);
 
     if (result.success) {
       setState(() { _provisionStatus = AppLocalizations.of(context)!.provisionSuccessConnecting; _provisionStep = 3; });
@@ -558,11 +671,11 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       if (deviceConnected) ...[
         SizedBox(width: double.infinity, height: 44.h,
           child: OutlinedButton.icon(
-            onPressed: _scanningNearbyWifi ? null : _scanDeviceWiFi,
+            onPressed: _scanningNearbyWifi ? null : _rescanNearbyWifiFromPhone,
             icon: _scanningNearbyWifi
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.wifi_tethering, size: 20),
-            label: Text(_scanningNearbyWifi ? AppLocalizations.of(context)!.scanning : '📡 ${AppLocalizations.of(context)!.scanNearbyWifi}', style: const TextStyle(fontSize: 14)),
+                : const Icon(Icons.wifi, size: 20),
+            label: Text(_scanningNearbyWifi ? AppLocalizations.of(context)!.scanning : AppLocalizations.of(context)!.scanNearbyWifi, style: const TextStyle(fontSize: 14)),
             style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
               side: const BorderSide(color: AppColors.primary)),
@@ -633,7 +746,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             icon: _provisioning
                 ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
                 : const Icon(Icons.router, size: 22),
-            label: Text(_provisioning ? AppLocalizations.of(context)!.configuring : '⚡ ${AppLocalizations.of(context)!.sendingProvisionInfo}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            label: Text(_provisioning ? AppLocalizations.of(context)!.configuring : AppLocalizations.of(context)!.sendingProvisionInfo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.successLight, foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
           ),

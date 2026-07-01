@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: device_server
+title: 设备接入与遥测数据桥接服务
+scope:
+    - inv_device_server/
+source_files: []
+depends_on: []
+related_to:
+    - path: mqtt_kafka_bridge
+    - path: docs

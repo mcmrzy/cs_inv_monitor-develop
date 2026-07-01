@@ -6,4 +6,6 @@ export const commandApi = {
     api.post(`/devices/${sn}/control`, data),
   getHistory: (sn: string, params?: { page?: number; pageSize?: number }) =>
     api.get(`/devices/${sn}/commands/history`, { params }),
+  batchControl: (data: { device_sns: string[]; command: string; params: any }) =>
+    api.post('/devices/batch/control', data),
 }

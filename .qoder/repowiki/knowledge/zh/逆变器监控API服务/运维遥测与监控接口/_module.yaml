@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: api_server/ops_telemetry
+title: 运维遥测与监控接口
+scope:
+    - inv_api_server/internal/handler/dashboard_handler.go
+    - inv_api_server/internal/handler/weather_handler.go
+    - inv_api_server/internal/handler/notification_handler.go
+source_files: []
+depends_on: []
+related_to:
+    - path: admin_frontend/dashboard_monitoring

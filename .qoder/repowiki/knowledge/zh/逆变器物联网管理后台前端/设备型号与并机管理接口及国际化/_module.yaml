@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: admin_frontend/models_parallel
+title: 设备型号与并机管理接口及国际化
+scope:
+    - inv-admin-frontend/src/services/modelApi.ts
+    - inv-admin-frontend/src/services/parallelApi.ts
+    - inv-admin-frontend/src/locales/models.ts
+    - inv-admin-frontend/src/locales/parallel.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: api_server/model_management

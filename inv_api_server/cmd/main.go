@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -112,7 +113,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	smsService := service.NewSMSService(rdb, smsProvider)
 	emailService := service.NewEmailService(rdb, cfg.Email)
 	stationService := service.NewStationService(stationRepo)
-	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer)
+	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
 	alarmService := service.NewAlarmService(alarmRepo)
 	modelService := service.NewModelService(modelRepo)
 	rbacCache := service.NewRBACCacheService(rdb, userRepo)
@@ -137,6 +138,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
+	// 事件驱动：监听 Redis Keyspace Notification，心跳 key 过期时立即标记设备离线
+	go runHeartbeatExpiryListener(rdb, deviceRepo, heartbeatDone)
+	// 兜底：每 5 分钟全量扫描一次，处理监听器可能遗漏的情况
 	go runHeartbeatCheck(deviceRepo, heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
@@ -154,6 +158,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		PermChecker:         permChecker,
 		AdminHandler:        adminHandler,
 		OTAHandler:          otaHandler,
+		OTAService:          otaService,
 		DashboardHandler:    dashboardHandler,
 		AlertRuleHandler:    alertRuleHandler,
 		WorkOrderHandler:    workOrderHandler,
@@ -162,8 +167,92 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	serve(cfg, router)
 }
 
+// runHeartbeatExpiryListener 监听 Redis Keyspace Notification，当 device:heartbeat:{sn} key 过期时
+// 立即将设备标记为离线，实现事件驱动的离线检测，延迟从分钟级降到秒级
+func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.DeviceRepository, done chan struct{}) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 等待 Redis 连接就绪
+	time.Sleep(2 * time.Second)
+
+	// 启用 keyspace notifications for expired events (Ex)
+	// 重试 3 次，确保配置成功
+	var configErr error
+	for i := 0; i < 3; i++ {
+		configErr = rdb.ConfigSet(ctx, "notify-keyspace-events", "Ex").Err()
+		if configErr == nil {
+			break
+		}
+		logger.Warn("Failed to enable Redis keyspace notifications, retrying...",
+			zap.Int("attempt", i+1), zap.Error(configErr))
+		time.Sleep(2 * time.Second)
+	}
+	if configErr != nil {
+		logger.Error("Failed to enable Redis keyspace notifications after 3 retries, "+
+			"event-driven offline detection disabled. Please ensure Redis config has --notify-keyspace-events Ex",
+			zap.Error(configErr))
+		return
+	}
+	logger.Info("Redis keyspace notifications enabled for event-driven offline detection")
+
+	// 订阅 key 过期事件: __keyspace@<db>__:device:heartbeat:*
+	pubsub := rdb.PSubscribe(ctx, "__keyspace@*__:device:heartbeat:*")
+	defer pubsub.Close()
+
+	// 等待订阅就绪
+	time.Sleep(500 * time.Millisecond)
+
+	ch := pubsub.Channel()
+	logger.Info("Heartbeat expiry listener started, waiting for key expiry events")
+	for {
+		select {
+		case <-done:
+			logger.Info("Heartbeat expiry listener stopped")
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				logger.Warn("Heartbeat expiry listener channel closed unexpectedly")
+				return
+			}
+			// 只处理 expired 事件
+			if msg.Payload != "expired" {
+				continue
+			}
+			// 从 channel 名称提取设备 SN: __keyspace@0__:device:heartbeat:{sn}
+			channel := msg.Channel
+			prefix := "device:heartbeat:"
+			idx := strings.LastIndex(channel, prefix)
+			if idx < 0 {
+				continue
+			}
+			sn := channel[idx+len(prefix):]
+			if sn == "" {
+				continue
+			}
+
+			logger.Info("Device heartbeat key expired, marking offline", zap.String("sn", sn))
+			// 标记设备离线（使用新的 context 避免超时）
+			offlineCtx, offlineCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			result, err := deviceRepo.MarkDeviceOfflineBySN(offlineCtx, sn)
+			offlineCancel()
+			if err != nil {
+				logger.Error("Failed to mark device offline on heartbeat expiry", zap.String("sn", sn), zap.Error(err))
+				continue
+			}
+			if result {
+				logger.Info("Device marked offline via keyspace notification", zap.String("sn", sn))
+				syncCtx, syncCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				deviceRepo.SyncStationStatus(syncCtx)
+				syncCancel()
+			}
+		}
+	}
+}
+
 func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, done chan struct{}) {
-	ticker := time.NewTicker(30 * time.Second)
+	// 兜底扫描从 5 分钟缩短为 60 秒，确保事件驱动失效时也能快速发现离线
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -173,9 +262,10 @@ func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, done chan struct
 		case <-ticker.C:
 			sns, err := deviceRepo.MarkStaleDevicesOffline(context.Background(), 120)
 			if err != nil {
-				logger.Error("Heartbeat check failed", zap.Error(err))
+				logger.Error("Heartbeat fallback scan failed", zap.Error(err))
 			} else if len(sns) > 0 {
-				logger.Info("Marked stale devices offline", zap.Int("count", len(sns)))
+				logger.Info("Heartbeat fallback scan: marked stale devices offline",
+					zap.Int("count", len(sns)), zap.Strings("sns", sns))
 				deviceRepo.SyncStationStatus(context.Background())
 			}
 		}
@@ -336,6 +426,7 @@ type RouterDeps struct {
 	PermChecker         *service.PermChecker
 	AdminHandler        *handler.AdminHandler
 	OTAHandler          *handler.OTAHandler
+	OTAService          *service.OTAService
 	DashboardHandler    *handler.DashboardHandler
 	AlertRuleHandler    *handler.AlertRuleHandler
 	WorkOrderHandler    *handler.WorkOrderHandler
@@ -376,7 +467,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		c.JSON(http.StatusOK, status)
 	})
 
-	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB)
+	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService)
 
 	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth())
 	{
@@ -384,8 +475,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/device-info", internalHandler.DeviceInfo)
 		internal.POST("/device-data", internalHandler.DeviceData)
 		internal.POST("/device-cmd-status", internalHandler.DeviceCmdStatus)
+		internal.POST("/device-cmd-result", internalHandler.DeviceCmdResult)
 		internal.POST("/device-alarm", internalHandler.DeviceAlarm)
 		internal.POST("/ota-status", internalHandler.OTAStatus)
+		internal.POST("/ota-cmd-ack", internalHandler.OTACmdAck)
 	}
 
 	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
@@ -433,6 +526,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
 			auth.DELETE("/devices/:sn", deps.DeviceHandler.DeleteDevice)
 			auth.POST("/devices/:sn/control", deps.DeviceHandler.Control)
+			auth.POST("/devices/batch/control", deps.DeviceHandler.BatchControl)
 			auth.GET("/devices/:sn/control-fields", deps.DeviceHandler.GetControlFields)
 			auth.GET("/devices/:sn/commands", deps.DeviceHandler.GetCommands)
 			auth.GET("/devices/:sn/commands/history", deps.DeviceHandler.GetCommands)
@@ -462,6 +556,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.GET("/notifications/stats", deps.NotificationHandler.GetStats)
 			auth.DELETE("/notifications/clear", deps.NotificationHandler.ClearAll)
 			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
+			// SSE 实时推送端点
+			auth.GET("/notifications/stream", internalHandler.NotificationStream)
 
 			auth.GET("/models", deps.ModelHandler.ListModels)
 			auth.POST("/models", deps.ModelHandler.CreateModel)
@@ -548,21 +644,40 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.GET("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetFirmware)
 			otaGroup.POST("/firmware", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateFirmware)
 			otaGroup.DELETE("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteFirmware)
-			otaGroup.GET("/tasks", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListTasks)
-			otaGroup.GET("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetTask)
-			otaGroup.GET("/tasks/:id/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetTaskDevices)
-			otaGroup.POST("/tasks", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateTask)
-			otaGroup.POST("/tasks/:id/dispatch", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.DispatchTask)
-			otaGroup.POST("/tasks/:id/notify", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.NotifyDevices)
-			otaGroup.DELETE("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteTask)
+			// 升级管理（替代旧 /tasks）
+			otaGroup.GET("/upgrades/dashboard", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeDashboard)
+			otaGroup.POST("/upgrades/push", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushUpgrade)
+			otaGroup.GET("/upgrades/firmware/:firmwareId", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetFirmwareUpgradeDetails)
+			otaGroup.POST("/upgrades/retry", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RetryUpgrade)
+			otaGroup.POST("/upgrades/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgrade)
+			otaGroup.DELETE("/upgrades/firmware/:firmwareId", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradesByFirmware)
+
+			// 升级包管理
+			otaGroup.GET("/packages", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListUpgradePackages)
+			otaGroup.GET("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackage)
+			otaGroup.POST("/packages", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateUpgradePackage)
+			otaGroup.DELETE("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradePackage)
+			otaGroup.POST("/packages/push", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushPackageUpgrade)
+			otaGroup.POST("/packages/:id/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackPackageUpgrade)
+			otaGroup.GET("/packages/:id/details", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetPackageUpgradeDetails)
+
+			// 升级任务管理（新统一接口）
+			otaGroup.GET("/tasks", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListUpgradeTasks)
+			otaGroup.POST("/tasks", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateUpgradeTask)
+			otaGroup.GET("/tasks/stats", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetTaskStats)
+			otaGroup.GET("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeTask)
+			otaGroup.POST("/tasks/:id/execute", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.ExecuteUpgradeTask)
+			otaGroup.POST("/tasks/:id/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgradeTask)
+			otaGroup.POST("/tasks/:id/retry", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RetryUpgradeTask)
+			otaGroup.DELETE("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradeTask)
+			otaGroup.GET("/tasks/:id/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeTaskDevices)
 
 			// APP端接口（所有登录用户可访问）
 			otaGroup.GET("/check/:sn", deps.OTAHandler.CheckUpdate)
 			otaGroup.POST("/trigger", deps.OTAHandler.TriggerOTA)
-			otaGroup.GET("/tasks/:id/progress", deps.OTAHandler.GetTaskProgress)
+			otaGroup.POST("/resend/:sn", deps.OTAHandler.ResendUpgradeCommand)
 			otaGroup.GET("/devices/:sn/status", deps.OTAHandler.GetDeviceOTAStatus)
 			otaGroup.GET("/devices/:sn/history", deps.OTAHandler.GetDeviceOTAHistory)
-			otaGroup.GET("/firmwares", deps.OTAHandler.GetAllFirmware)
 
 			// App版本管理
 			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP检查更新（无需额外权限）

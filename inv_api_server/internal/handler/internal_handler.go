@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	"inv-api-server/internal/service"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
@@ -64,22 +65,29 @@ type internalDeviceCmdStatusRequest struct {
 }
 
 type internalDeviceAlarmRequest struct {
-	SN        string                 `json:"sn"`
-	Event     string                 `json:"event"`
-	Source    string                 `json:"source"`
-	FaultCode int                    `json:"fault_code"`
-	FaultDesc string                 `json:"fault_desc"`
-	AlarmCode int                    `json:"alarm_code"`
-	Trigger   map[string]interface{} `json:"trigger"`
+	SN        string `json:"sn"`
+	Code      int    `json:"code"`
+	Level     string `json:"level"`
+	Message   string `json:"message"`
+	Count     int    `json:"count"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 type InternalHandler struct {
-	db  *pgxpool.Pool
-	rdb *redis.Client
+	db         *pgxpool.Pool
+	rdb        *redis.Client
+	otaService *service.OTAService
+	// SSE broadcast channel: map[user_id]chan<- NotificationEvent
+	sseClients map[int64]chan<- string
 }
 
-func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client) *InternalHandler {
-	return &InternalHandler{db: db, rdb: rdb}
+func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService) *InternalHandler {
+	return &InternalHandler{
+		db:         db,
+		rdb:        rdb,
+		otaService: otaService,
+		sseClients: make(map[int64]chan<- string),
+	}
 }
 
 func (h *InternalHandler) DeviceStatus(c *gin.Context) {
@@ -116,7 +124,7 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	if req.Status == 1 && oldStatus == 2 {
 		var activeAlarmCount int
 		_ = h.db.QueryRow(ctx,
-			`SELECT COUNT(*) FROM alarms WHERE device_sn = $1 AND alarm_level = 1 AND status = 0`, req.SN,
+			`SELECT COUNT(*) FROM alarms WHERE device_sn = $1 AND alarm_level = 3 AND status = 0`, req.SN,
 		).Scan(&activeAlarmCount)
 		if activeAlarmCount > 0 {
 			newStatus = 2 // 仍有未处理的严重告警，保持故障状态
@@ -125,19 +133,13 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 
 	// 离线(status=0)来自 MQTT LWT 遗嘱消息
 	// 但设备数据可能仍通过 Kafka 路径正常上报（MQTT连接抖动不影响数据流）
-	// 通过 Redis device:online 检查实际数据活动：如果 Kafka 路径有近期数据，忽略 LWT 离线
+	// 通过 Redis device:heartbeat:{sn} key 检查实际数据活动：如果 key 仍存在，忽略 LWT 离线
 	if req.Status == 0 && h.rdb != nil {
-		tsStr, err := h.rdb.HGet(ctx, "device:online", req.SN).Result()
-		if err == nil {
-			var ts int64
-			if _, parseErr := fmt.Sscanf(tsStr, "%d", &ts); parseErr == nil {
-				if time.Now().Unix()-ts < 120 {
-					logger.Info("Ignoring LWT offline - device has recent data via Kafka",
-						zap.String("sn", req.SN), zap.Int64("redis_age_sec", time.Now().Unix()-ts))
-					response.Success(c, gin.H{"status": "ok", "ignored": true, "reason": "data_active"})
-					return
-				}
-			}
+		if h.rdb.Exists(ctx, "device:heartbeat:"+req.SN).Val() > 0 {
+			logger.Info("Ignoring LWT offline - device heartbeat key still exists",
+				zap.String("sn", req.SN))
+			response.Success(c, gin.H{"status": "ok", "ignored": true, "reason": "data_active"})
+			return
 		}
 	}
 
@@ -178,6 +180,11 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			notifyType = "device_fault"
 			title = "设备故障"
 			content = "设备 " + req.SN + " 发生故障"
+		} else if newStatus == 1 && oldStatus == 2 {
+			// 从故障状态恢复到在线状态 → 生成告警清除通知
+			notifyType = "alarm_cleared"
+			title = "故障恢复"
+			content = "设备 " + req.SN + " 已恢复正常"
 		}
 
 		// 冷却期检查：120 秒内同一设备同类型通知不重复写入
@@ -199,6 +206,9 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
 			VALUES ($1, $2, $3, $4, $5, $6, NOW())
 		`, req.SN, sid, userID, notifyType, title, content)
+
+		// 通过 SSE 实时推送通知给前端
+		h.broadcastNotification(userID, notifyType, title, content, req.SN)
 	}
 
 	response.Success(c, gin.H{"status": "ok"})
@@ -253,23 +263,23 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 		INSERT INTO devices (
 			sn, model, manufacturer, firmware_arm, firmware_esp, device_type,
 			rated_power, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count,
-			status, last_online_at, created_at, updated_at
+			user_id, status, last_online_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 1, NOW(), NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, 1, NOW(), NOW(), NOW())
 		ON CONFLICT (sn) DO UPDATE SET
-			model = EXCLUDED.model,
-			manufacturer = EXCLUDED.manufacturer,
-			firmware_arm = EXCLUDED.firmware_arm,
-			firmware_esp = EXCLUDED.firmware_esp,
-			device_type = EXCLUDED.device_type,
-			rated_power = EXCLUDED.rated_power,
-			rated_voltage = EXCLUDED.rated_voltage,
-			rated_freq = EXCLUDED.rated_freq,
-			battery_voltage = EXCLUDED.battery_voltage,
-			battery_type = EXCLUDED.battery_type,
-			cell_count = EXCLUDED.cell_count,
+			model = COALESCE(NULLIF(EXCLUDED.model, ''), devices.model),
+			manufacturer = COALESCE(NULLIF(EXCLUDED.manufacturer, ''), devices.manufacturer),
+			firmware_arm = COALESCE(NULLIF(EXCLUDED.firmware_arm, ''), devices.firmware_arm),
+			firmware_esp = COALESCE(NULLIF(EXCLUDED.firmware_esp, ''), devices.firmware_esp),
+			device_type = COALESCE(NULLIF(EXCLUDED.device_type, ''), devices.device_type),
+			rated_power = CASE WHEN EXCLUDED.rated_power > 0 THEN EXCLUDED.rated_power ELSE devices.rated_power END,
+			rated_voltage = CASE WHEN EXCLUDED.rated_voltage > 0 THEN EXCLUDED.rated_voltage ELSE devices.rated_voltage END,
+			rated_freq = CASE WHEN EXCLUDED.rated_freq > 0 THEN EXCLUDED.rated_freq ELSE devices.rated_freq END,
+			battery_voltage = CASE WHEN EXCLUDED.battery_voltage > 0 THEN EXCLUDED.battery_voltage ELSE devices.battery_voltage END,
+			battery_type = COALESCE(NULLIF(EXCLUDED.battery_type, ''), devices.battery_type),
+			cell_count = CASE WHEN EXCLUDED.cell_count > 0 THEN EXCLUDED.cell_count ELSE devices.cell_count END,
 			status = CASE WHEN devices.status = 2 AND EXISTS (
-				SELECT 1 FROM alarms WHERE alarms.device_sn = $1 AND alarms.alarm_level = 1 AND alarms.status = 0
+				SELECT 1 FROM alarms WHERE alarms.device_sn = $1 AND alarms.alarm_level = 3 AND alarms.status = 0
 			) THEN 2 ELSE 1 END,
 			last_online_at = NOW(),
 			updated_at = NOW()
@@ -418,13 +428,158 @@ func (h *InternalHandler) DeviceCmdStatus(c *gin.Context) {
 	response.Success(c, gin.H{"status": "ok"})
 }
 
+// DeviceCmdResult 处理设备上报的命令执行结果 (cs_inv/{sn}/cmd_result)
+type internalDeviceCmdResultRequest struct {
+	SN        string          `json:"sn"`
+	TaskID    string          `json:"task_id"`
+	Cmd       string          `json:"cmd"`
+	Result    string          `json:"result"`
+	Success   bool            `json:"success"`
+	Message   string          `json:"message"`
+	Data      json.RawMessage `json:"data"`
+	Timestamp int64           `json:"timestamp"`
+}
+
+func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
+	var req internalDeviceCmdResultRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request")
+		return
+	}
+	if req.SN == "" {
+		response.BadRequest(c, "sn is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	// 确定状态
+	status := "success"
+	if !req.Success && req.Result != "ok" && req.Result != "success" {
+		status = "failed"
+	}
+
+	// 更新命令日志（通过 task_id 匹配）
+	if req.TaskID != "" {
+		_, err := h.db.Exec(ctx, `
+			UPDATE device_cmd_logs
+			SET status = $2, result = $3, message = $4, data = $5::jsonb
+			WHERE task_id = $1
+		`, req.TaskID, status, req.Result, req.Message, req.Data)
+		if err != nil {
+			logger.Error("DeviceCmdResult update failed",
+				zap.String("sn", req.SN), zap.String("task_id", req.TaskID), zap.Error(err))
+		}
+	} else {
+		// 兼容旧格式：没有 task_id，插入新记录
+		_, _ = h.db.Exec(ctx, `
+			INSERT INTO device_cmd_logs (device_sn, cmd, result, message, status, sent_at)
+			VALUES ($1, $2, $3, $4, $5,
+				CASE WHEN $6 > 0 THEN TO_TIMESTAMP($6) ELSE NOW() END
+			)
+		`, req.SN, req.Cmd, req.Result, req.Message, status, req.Timestamp)
+	}
+
+	// 插入命令结果通知
+	userID, stationID := h.getDeviceOwner(ctx, req.SN)
+	if userID > 0 {
+		notifyTitle := "控制指令执行成功"
+		notifyContent := fmt.Sprintf("设备 %s 执行「%s」指令成功", req.SN, req.Cmd)
+		if status == "failed" {
+			notifyTitle = "控制指令执行失败"
+			notifyContent = fmt.Sprintf("设备 %s 执行「%s」指令失败: %s", req.SN, req.Cmd, req.Message)
+		}
+		_ = h.insertNotification(ctx, req.SN, stationID, userID, "cmd_result", notifyTitle, notifyContent)
+	}
+
+	response.Success(c, gin.H{"status": "ok"})
+}
+
+// getDeviceOwner 查询设备所属用户和电站
+func (h *InternalHandler) getDeviceOwner(ctx context.Context, sn string) (int64, int64) {
+	var userID, stationID int64
+	_ = h.db.QueryRow(ctx,
+		`SELECT COALESCE(user_id, 0), COALESCE(station_id, 0) FROM devices WHERE sn = $1 AND deleted_at IS NULL`,
+		sn,
+	).Scan(&userID, &stationID)
+	return userID, stationID
+}
+
+// insertNotification 插入通知（带冷却期）
+func (h *InternalHandler) insertNotification(ctx context.Context, sn string, stationID, userID int64, notifyType, title, content string) error {
+	var exists bool
+	_ = h.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type=$2 AND created_at > NOW() - INTERVAL '60 seconds')`,
+		sn, notifyType,
+	).Scan(&exists)
+	if exists {
+		return nil
+	}
+	_, err := h.db.Exec(ctx, `
+		INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+	`, sn, stationID, userID, notifyType, title, content)
+	return err
+}
+
 type internalOTAStatusRequest struct {
+	DeviceSN   string `json:"device_sn"`
+	FirmwareID *int64 `json:"firmware_id"` // 可选，设备上报时可能携带
+	Status     string `json:"status"`
+	Progress   int    `json:"progress"`
+	Message    string `json:"message"`
+	ErrCode    int    `json:"err_code"`
+}
+
+// OTACmdAck 处理设备上报的 OTA 命令确认 (cs_inv/{sn}/ota/cmd_ack)
+type internalOTACmdAckRequest struct {
 	DeviceSN  string `json:"device_sn"`
-	Status    string `json:"status"`
-	Progress  int    `json:"progress"`
+	Ack       bool   `json:"ack"`
+	TaskID    string `json:"task_id"`
 	Message   string `json:"message"`
-	ErrCode   int    `json:"err_code"`
-	UpdatedAt string `json:"updated_at"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+func (h *InternalHandler) OTACmdAck(c *gin.Context) {
+	var req internalOTACmdAckRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request")
+		return
+	}
+	if req.DeviceSN == "" {
+		response.BadRequest(c, "device_sn is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	// 记录 ACK 日志
+	logger.Info("OTA cmd_ack received",
+		zap.String("sn", req.DeviceSN),
+		zap.Bool("ack", req.Ack),
+		zap.String("task_id", req.TaskID),
+		zap.String("message", req.Message))
+
+	// 更新 device_upgrades 表：标记为升级中（设备已确认收到命令）
+	if req.Ack {
+		tag, err := h.db.Exec(ctx, `
+			UPDATE device_upgrades SET
+				status = 'upgrading',
+				started_at = CASE WHEN started_at IS NULL THEN NOW() ELSE started_at END,
+				updated_at = NOW()
+			WHERE device_sn = $1 AND status = 'pending'
+		`, req.DeviceSN)
+		if err != nil {
+			logger.Error("OTACmdAck update failed", zap.String("sn", req.DeviceSN), zap.Error(err))
+			response.InternalError(c, "update OTA cmd ack failed")
+			return
+		}
+		logger.Info("OTA cmd_ack applied", zap.String("sn", req.DeviceSN), zap.Int64("rows_affected", tag.RowsAffected()))
+	}
+
+	response.Success(c, gin.H{"status": "ok"})
 }
 
 func (h *InternalHandler) OTAStatus(c *gin.Context) {
@@ -444,30 +599,31 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	// 将设备上报的状态映射为数据库状态
 	dbStatus := req.Status
 	switch req.Status {
-	case "downloading", "transferring", "verifying", "upgrading":
+	case "preparing", "downloading", "transferring", "writing", "verifying", "upgrading":
 		dbStatus = "upgrading"
-	case "completed":
+	case "done", "completed":
 		dbStatus = "success"
 	case "failed":
 		dbStatus = "failed"
+	default:
+		// 无法识别的状态，不更新数据库，避免覆盖 pending 等有效状态
+		logger.Warn("Unknown OTA status from device, skipping update",
+			zap.String("sn", req.DeviceSN), zap.String("status", req.Status))
+		response.Success(c, gin.H{"status": "ignored"})
+		return
 	}
 
-	// 查找该设备最新的进行中 OTA 任务
+	// 直接更新 device_upgrades 表
 	tag, err := h.db.Exec(ctx, `
-		UPDATE ota_task_devices SET
-			status = $3::varchar,
-			progress = $4,
-			error_message = CASE WHEN $3::varchar = 'failed' THEN $5 ELSE error_message END,
-			started_at = CASE WHEN started_at IS NULL AND $3::varchar = 'upgrading' THEN NOW() ELSE started_at END,
-			completed_at = CASE WHEN $3::varchar IN ('success', 'failed') THEN NOW() ELSE NULL END
-		WHERE device_sn = $1
-		AND status NOT IN ('success', 'failed', 'cancelled')
-		AND task_id = (
-			SELECT task_id FROM ota_task_devices
-			WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
-			ORDER BY id DESC LIMIT 1
-		)
-	`, req.DeviceSN, req.DeviceSN, dbStatus, req.Progress, req.Message)
+		UPDATE device_upgrades SET
+			status = $2::varchar,
+			progress = $3,
+			error_message = CASE WHEN $2::varchar = 'failed' THEN $4 ELSE error_message END,
+			started_at = CASE WHEN started_at IS NULL AND $2::varchar IN ('downloading','upgrading') THEN NOW() ELSE started_at END,
+			completed_at = CASE WHEN $2::varchar IN ('success', 'failed') THEN NOW() ELSE completed_at END,
+			updated_at = NOW()
+		WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
+	`, req.DeviceSN, dbStatus, req.Progress, req.Message)
 	if err != nil {
 		logger.Error("InternalOTAStatus failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 		response.InternalError(c, "update OTA status failed")
@@ -480,41 +636,53 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 		zap.Int("progress", req.Progress),
 		zap.Int64("rows_affected", tag.RowsAffected()))
 
-	// 当设备升级完成或失败时，检查是否所有设备都已完成，更新任务总体状态
-	if dbStatus == "success" || dbStatus == "failed" {
-		var taskID string
-		err = h.db.QueryRow(ctx, `
-			SELECT task_id FROM ota_task_devices
-			WHERE device_sn = $1
-			ORDER BY id DESC LIMIT 1
-		`, req.DeviceSN).Scan(&taskID)
-		if err == nil && taskID != "" {
-			var pendingCount int
-			h.db.QueryRow(ctx, `
-				SELECT COUNT(*) FROM ota_task_devices
-				WHERE task_id = $1 AND status NOT IN ('success', 'failed', 'cancelled')
-			`, taskID).Scan(&pendingCount)
+	// 单芯片升级成功时，更新设备固件版本并触发下一个芯片
+	if dbStatus == "success" && tag.RowsAffected() > 0 {
+		// 查询升级记录的目标芯片和固件版本
+		var targetChip, firmwareVersion string
+		h.db.QueryRow(ctx, `
+			SELECT COALESCE(target_chip,''), COALESCE(firmware_version,'')
+			FROM device_upgrades
+			WHERE device_sn = $1 AND status = 'success'
+			ORDER BY updated_at DESC LIMIT 1
+		`, req.DeviceSN).Scan(&targetChip, &firmwareVersion)
 
-			if pendingCount == 0 {
-				// 所有设备已完成，根据失败数决定任务最终状态
-				var failCount int
-				h.db.QueryRow(ctx, `
-					SELECT COUNT(*) FROM ota_task_devices
-					WHERE task_id = $1 AND status = 'failed'
-				`, taskID).Scan(&failCount)
-
-				taskStatus := "completed"
-				if failCount > 0 {
-					taskStatus = "failed"
-				}
-				h.db.Exec(ctx, `
-					UPDATE ota_tasks SET status = $1, completed_at = NOW(), updated_at = NOW()
-					WHERE id = $2
-				`, taskStatus, taskID)
-				logger.Info("OTA task finished",
-					zap.String("task_id", taskID),
-					zap.String("status", taskStatus))
+		if targetChip != "" && firmwareVersion != "" {
+			// 更新设备对应芯片的固件版本
+			var updateCol string
+			switch targetChip {
+			case "arm":
+				updateCol = "firmware_arm"
+			case "esp":
+				updateCol = "firmware_esp"
 			}
+			if updateCol != "" {
+				h.db.Exec(ctx, fmt.Sprintf(
+					"UPDATE devices SET %s = $2, updated_at = NOW() WHERE sn = $1",
+					updateCol,
+				), req.DeviceSN, firmwareVersion)
+				logger.Info("Device firmware version updated",
+					zap.String("sn", req.DeviceSN),
+					zap.String("chip", targetChip),
+					zap.String("version", firmwareVersion))
+			}
+		}
+
+		// 升级包模式：自动触发下一个芯片
+		if h.otaService != nil {
+			go func() {
+				bgCtx := context.Background()
+				var pkgID int64
+				err := h.db.QueryRow(bgCtx, `
+					SELECT COALESCE(upgrade_package_id, 0)
+					FROM device_upgrades
+					WHERE device_sn = $1 AND status = 'success' AND upgrade_package_id IS NOT NULL
+					ORDER BY updated_at DESC LIMIT 1
+				`, req.DeviceSN).Scan(&pkgID)
+				if err == nil && pkgID > 0 {
+					h.otaService.OnChipUpgradeComplete(bgCtx, req.DeviceSN, pkgID)
+				}
+			}()
 		}
 	}
 
@@ -532,15 +700,51 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		return
 	}
 
-	// 空 payload 表示无告警，清除设备故障状态，直接返回成功
-	if req.Trigger == nil || len(req.Trigger) == 0 {
-		logger.Info("Device alarm cleared (empty payload)", zap.String("sn", req.SN))
-		// 告警清除时，将设备状态恢复为在线
-		h.db.Exec(c.Request.Context(), `
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	// 告警码到默认描述的映射
+	alarmCodeMessageMap := map[int]string{
+		0:  "故障恢复，系统正常",
+		1:  "逆变器过温保护",
+		2:  "电池过压保护",
+		3:  "电池欠压保护",
+		4:  "输出过载保护",
+		5:  "直流母线过压",
+		6:  "逆变器温度过高",
+		7:  "电池SOC过低",
+		8:  "PV输入异常",
+		9:  "电芯压差过大",
+		10: "系统启动完成",
+		11: "进入待机模式",
+		12: "恢复并网运行",
+	}
+
+	// 告警码到数据库 alarm_level 的映射
+	// DB: 1=提示(info) 2=警告(warning) 3=严重(fault)
+	alarmCodeLevelMap := map[int]int{
+		0:  1, // normal → 提示
+		1:  3, // 逆变器过温保护 → 严重
+		2:  3, // 电池过压保护 → 严重
+		3:  3, // 电池欠压保护 → 严重
+		4:  3, // 输出过载保护 → 严重
+		5:  3, // 直流母线过压 → 严重
+		6:  2, // 逆变器温度过高 → 警告
+		7:  2, // 电池SOC过低 → 警告
+		8:  2, // PV输入异常 → 警告
+		9:  2, // 电芯压差过大 → 警告
+		10: 1, // 系统启动完成 → 提示
+		11: 1, // 进入待机模式 → 提示
+		12: 1, // 恢复并网运行 → 提示
+	}
+
+	// code=0 或 level="normal" → 告警清除，恢复设备状态
+	if req.Code == 0 || req.Level == "normal" {
+		logger.Info("Device alarm cleared", zap.String("sn", req.SN))
+		h.db.Exec(ctx, `
 			UPDATE devices SET status = 1, last_online_at = NOW(), updated_at = NOW() WHERE sn = $1 AND status = 2
 		`, req.SN)
-		// 同步更新电站状态
-		h.db.Exec(c.Request.Context(), `
+		h.db.Exec(ctx, `
 			UPDATE stations SET
 				status = CASE
 					WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status = 1 AND devices.deleted_at IS NULL) THEN 1
@@ -550,12 +754,36 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 			WHERE deleted_at IS NULL
 			AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
 		`, req.SN)
+
+		// 插入故障恢复通知（带 60 秒冷却期）
+		var clearUserID int64
+		var clearStationID sql.NullInt64
+		if err := h.db.QueryRow(ctx,
+			`SELECT user_id, station_id FROM devices WHERE sn = $1`, req.SN,
+		).Scan(&clearUserID, &clearStationID); err == nil && clearUserID > 0 {
+			// 冷却期检查：60 秒内同一设备同类型通知不重复写入
+			var notifyExists bool
+			_ = h.db.QueryRow(ctx,
+				`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type='alarm_cleared' AND created_at > NOW() - INTERVAL '60 seconds')`,
+				req.SN,
+			).Scan(&notifyExists)
+			if !notifyExists {
+				var csid int64
+				if clearStationID.Valid {
+					csid = clearStationID.Int64
+				}
+				clearContent := "设备 " + req.SN + " 已恢复正常"
+				_, _ = h.db.Exec(ctx, `
+					INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+					VALUES ($1, $2, $3, $4, $5, $6, NOW())
+				`, req.SN, csid, clearUserID, "alarm_cleared", "故障恢复", clearContent)
+				h.broadcastNotification(clearUserID, "alarm_cleared", "故障恢复", clearContent, req.SN)
+			}
+		}
+
 		response.Success(c, gin.H{"status": "ok"})
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
-	defer cancel()
 
 	// 查找设备所属用户和电站
 	var userID int64
@@ -568,53 +796,33 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		userID = 0
 	}
 
-	// 故障码到严重级别的映射
-	faultCodeSeverityMap := map[int]int{
-		1:  1, // 逆变器故障 → 严重
-		2:  1, // 电池过压保护 → 严重
-		3:  1, // 电池欠压保护 → 严重
-		4:  1, // 电池过流保护 → 严重
-		5:  1, // 逆变器过温保护 → 严重
-		6:  1, // 逆变器过载保护 → 严重
-		7:  2, // 绝缘阻抗异常 → 警告
-		8:  2, // PV输入异常 → 警告
-		9:  2, // 电芯压差过大 → 警告
-		10: 3, // 系统启动完成 → 提示
-		11: 3, // 进入待机模式 → 提示
-		12: 1, // 交流过压保护 → 严重
-		13: 1, // 交流欠压保护 → 严重
-		14: 1, // 交流过频保护 → 严重
-		15: 1, // 交流欠频保护 → 严重
-		16: 2, // 电池温度过高 → 警告
-		17: 2, // 电池温度过低 → 警告
-		18: 1, // 逆变器硬件故障 → 严重
-		19: 2, // 通信故障 → 警告
-		20: 2, // 未知告警 → 警告
-	}
-
-	// 优先使用设备上报的 level 字段，其次使用故障码映射
-	alarmLevel := 3
-	if lv, ok := req.Trigger["level"]; ok {
-		if lvStr, ok := lv.(string); ok {
-			switch lvStr {
-			case "fault":
-				alarmLevel = 1
-			case "warning":
-				alarmLevel = 2
-			case "info":
-				alarmLevel = 3
-			}
-		}
-	}
-	// 如果设备没有上报 level 或者上报的是 info，使用故障码映射
-	if alarmLevel == 3 {
-		if mappedLevel, ok := faultCodeSeverityMap[req.FaultCode]; ok {
+	// 确定告警级别：优先使用设备上报的 level，其次使用告警码映射
+	alarmLevel := 0
+	switch req.Level {
+	case "fault":
+		alarmLevel = 3
+	case "warning":
+		alarmLevel = 2
+	case "info":
+		alarmLevel = 1
+	default:
+		// 设备未上报 level，使用告警码映射
+		if mappedLevel, ok := alarmCodeLevelMap[req.Code]; ok {
 			alarmLevel = mappedLevel
+		} else {
+			alarmLevel = 2 // 默认警告
 		}
 	}
 
-	faultCode := fmt.Sprintf("%d", req.FaultCode)
-	faultMessage := req.FaultDesc
+	faultCode := fmt.Sprintf("%d", req.Code)
+	faultMessage := req.Message
+	if faultMessage == "" {
+		if defaultMsg, ok := alarmCodeMessageMap[req.Code]; ok {
+			faultMessage = defaultMsg
+		} else {
+			faultMessage = fmt.Sprintf("未知告警(code=%d)", req.Code)
+		}
+	}
 	if len(faultMessage) > 200 {
 		faultMessage = faultMessage[:200]
 	}
@@ -630,25 +838,36 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		return
 	}
 
-	triggerJSON, _ := json.Marshal(req.Trigger)
-	faultDetail := string(triggerJSON)
+	// 构建 fault_detail JSON
+	detailJSON, _ := json.Marshal(map[string]interface{}{
+		"code":      req.Code,
+		"level":     req.Level,
+		"message":   req.Message,
+		"count":     req.Count,
+		"timestamp": req.Timestamp,
+	})
+
+	// type 字段映射
+	alarmType := "device_fault"
+	if req.Code == 0 {
+		alarmType = "alarm_cleared"
+	}
 
 	_, err := h.db.Exec(ctx, `
-		INSERT INTO alarms (device_sn, type, level, alarm_level, station_id, user_id, fault_code, fault_message, fault_detail, status, occurred_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, NOW(), NOW())
-	`, req.SN, req.Event, alarmLevel, alarmLevel, stationID, userID, faultCode, faultMessage, faultDetail)
+		INSERT INTO alarms (device_sn, type, level, alarm_level, station_id, user_id, fault_code, fault_message, fault_detail, message, status, occurred_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, NOW(), NOW())
+	`, req.SN, alarmType, alarmLevel, alarmLevel, stationID, userID, faultCode, faultMessage, string(detailJSON), faultMessage)
 	if err != nil {
 		logger.Error("InternalDeviceAlarm insert failed", zap.String("sn", req.SN), zap.Error(err))
 		response.InternalError(c, "insert alarm failed")
 		return
 	}
 
-	// 告警级别为严重(fault)时，更新设备状态为故障
-	if alarmLevel == 1 {
+	// 告警级别为严重(fault, alarmLevel=3)时，更新设备状态为故障
+	if alarmLevel == 3 {
 		h.db.Exec(ctx, `
 			UPDATE devices SET status = 2, updated_at = NOW() WHERE sn = $1 AND status != 2
 		`, req.SN)
-		// 同步更新电站状态
 		h.db.Exec(ctx, `
 			UPDATE stations SET
 				status = CASE
@@ -661,11 +880,99 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		`, req.SN)
 	}
 
+	// 通过 SSE 实时推送告警信息给前端
+	if userID > 0 {
+		h.broadcastNotification(userID, "alarm", faultMessage, fmt.Sprintf("设备 %s: %s", req.SN, faultMessage), req.SN)
+	}
+
 	logger.Info("Device alarm recorded",
 		zap.String("sn", req.SN),
-		zap.Int("fault_code", req.FaultCode),
-		zap.String("fault_desc", req.FaultDesc),
+		zap.Int("code", req.Code),
+		zap.String("level", req.Level),
+		zap.String("message", req.Message),
 		zap.Int("alarm_level", alarmLevel))
 
 	response.Success(c, gin.H{"status": "ok"})
+}
+
+// NotificationStream SSE endpoint for real-time notifications
+func (h *InternalHandler) NotificationStream(c *gin.Context) {
+	userID := c.GetInt64("user_id")
+	if userID == 0 {
+		c.JSON(401, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Set headers for SSE
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no") // Disable nginx buffering
+
+	// Create channel for this client
+	clientChan := make(chan string, 10)
+	h.sseClients[userID] = clientChan
+	defer func() {
+		delete(h.sseClients, userID)
+		close(clientChan)
+	}()
+
+	// Send initial connection event
+	c.SSEvent("connected", map[string]interface{}{
+		"user_id": userID,
+		"time":    time.Now().Unix(),
+	})
+	c.Writer.Flush()
+
+	// Keep connection alive with periodic ping and send events
+	pingTicker := time.NewTicker(15 * time.Second)
+	defer pingTicker.Stop()
+	for {
+		select {
+		case msg := <-clientChan:
+			// msg 已经是完整的 SSE 格式，直接写入
+			_, _ = c.Writer.WriteString(msg)
+			c.Writer.Flush()
+		case <-pingTicker.C:
+			// SSE 心跳：发送注释行保持连接
+			_, _ = c.Writer.WriteString(": ping\n\n")
+			c.Writer.Flush()
+		case <-c.Request.Context().Done():
+			return
+		}
+	}
+}
+
+// broadcastNotification sends notification to all connected clients of a user
+func (h *InternalHandler) broadcastNotification(userID int64, notifyType, title, content, deviceSn string) {
+	if h.sseClients == nil {
+		return
+	}
+
+	clientChan, exists := h.sseClients[userID]
+	if !exists {
+		log.Printf("[SSE] No connected client for user %d, notification not sent: %s - %s", userID, notifyType, title)
+		return
+	}
+
+	log.Printf("[SSE] Broadcasting notification to user %d: %s - %s", userID, notifyType, title)
+
+	notification := map[string]interface{}{
+		"notify_type": notifyType,
+		"title":       title,
+		"content":     content,
+		"device_sn":   deviceSn,
+		"created_at":  time.Now().Format(time.RFC3339),
+	}
+
+	data, _ := json.Marshal(notification)
+	// SSE 格式: event: notification\ndata: {...}\n\n
+	sseMessage := fmt.Sprintf("event: notification\ndata: %s\n\n", string(data))
+	select {
+	case clientChan <- sseMessage:
+		log.Printf("[SSE] Notification sent successfully to user %d", userID)
+	default:
+		// Channel full, skip
+		log.Printf("Warning: SSE channel full for user %d, dropping notification", userID)
+	}
 }

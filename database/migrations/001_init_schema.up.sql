@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS alarms (
     device_sn VARCHAR(50) NOT NULL,
     station_id BIGINT,
     user_id BIGINT NOT NULL,
-    alarm_level SMALLINT NOT NULL,
+    alarm_level SMALLINT NOT NULL, -- 1:提示(info) 2:警告(warning) 3:严重(fault)
     fault_code VARCHAR(20) NOT NULL,
     fault_message VARCHAR(200) NOT NULL,
     fault_detail TEXT,

@@ -1,0 +1,147 @@
+﻿docker : 2026/06/30 09:25:59 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F
+"
+所在位置 行:1 字符: 1
++ docker logs inv-api-server --since 10m 2>&1 | Out-File -FilePath d:\C ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2026/06/30 09:2...RL escape "%2F":String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+2026/06/30 09:26:19 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:26:29 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:26:54 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:26:59 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:27:29 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:27:59 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:28:04 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:28:29 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:28:39 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:28:59 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:29:14 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:29:29 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:29:49 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:30:04 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:30:24 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:30:34 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:30:59 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:31:04 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:31:34 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:32:04 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:32:09 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:32:34 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:32:44 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+{"level":"info","ts":1782811979.522498,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+2026/06/30 09:32:59 [SSE] Broadcasting notification to user 4: device_online - 璁惧涓婄嚎
+2026/06/30 09:32:59 [SSE] Notification sent successfully to user 4
+{"level":"info","ts":1782811979.6566255,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.6656725,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.6734612,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.687319,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.6985326,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.7057655,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.7131593,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.721563,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.730737,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.7358856,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.7451222,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.7534459,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811979.7624357,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.0674284,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.0687501,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811983.0700076,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.0757463,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.0829868,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.0870006,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.0908923,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+2026/06/30 09:33:04 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+{"level":"info","ts":1782811983.0949786,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.098985,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.104141,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.114038,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.1603339,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811983.1998434,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811983.6689162,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811984.1598985,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811984.1605284,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811984.1934881,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811984.5232816,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811984.5239503,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811984.58857,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811984.9587264,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811985.3946676,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811985.5923078,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811985.6896875,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811987.1942785,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811987.1950088,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811987.3787522,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811987.37878,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811987.3787851,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811987.3789551,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811987.3792632,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811987.7939875,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811987.7945118,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811988.490168,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811988.4906795,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811988.562572,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811988.5547903,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811988.567809,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811988.5725656,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811988.8772063,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811989.1880472,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811989.1890082,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811989.4977047,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811989.49825,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+2026/06/30 09:33:09 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+{"level":"info","ts":1782811989.6932926,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811989.990721,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782811989.991253,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811992.0414379,"caller":"logger/logger.go:21","msg":"Device alarm cleared","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782811992.0540476,"caller":"logger/logger.go:21","msg":"Device alarm recorded","sn":"H1CNA00135000014","code":8,"level":"warning","message":"PV杈撳叆寮傚父","alarm_level":2}
+2026/06/30 09:33:12 [SSE] Broadcasting notification to user 4: alarm_cleared - 鏁呴殰鎭㈠
+2026/06/30 09:33:12 [SSE] Notification sent successfully to user 4
+2026/06/30 09:33:12 [SSE] Broadcasting notification to user 4: alarm - PV杈撳叆寮傚父
+{"level":"info","ts":1782812019.2441223,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812019.2441223,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812019.2441225,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+2026/06/30 09:33:12 [SSE] Notification sent successfully to user 4
+2026/06/30 09:33:14 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:33:19 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:33:34 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:33:39 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+{"level":"info","ts":1782812019.2441225,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812019.2441225,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812019.2452846,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812019.2464168,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812019.2464328,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812019.2754421,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812025.2836063,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812028.2677028,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812028.2700653,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782812028.275075,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812028.2792346,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+2026/06/30 09:33:49 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:33:54 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:34:04 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:34:29 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:34:34 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:34:49 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+{"level":"info","ts":1782812085.238598,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+2026/06/30 09:34:54 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:34:59 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:04 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:09 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:14 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:19 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:24 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:29 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:34 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:39 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+{"level":"info","ts":1782812091.4349854,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812091.4361546,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+{"level":"info","ts":1782812091.5967457,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812091.597849,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812145.2234952,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":1,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812145.5715315,"caller":"logger/logger.go:21","msg":"DeviceStatus called","sn":"H1CNA00135000014","status":0,"source":"inv-monitor-internal-secret-2026","ua":"Go-http-client/1.1"}
+{"level":"info","ts":1782812145.5720966,"caller":"logger/logger.go:21","msg":"Ignoring LWT offline - device heartbeat key still exists","sn":"H1CNA00135000014"}
+2026/06/30 09:35:44 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:49 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"
+2026/06/30 09:35:54 traces export: parse "http://http:%2F%2Flocalhost:4318/v1/traces": invalid URL escape "%2F"

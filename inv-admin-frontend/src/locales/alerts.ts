@@ -43,6 +43,10 @@ export default {
     'alert.tabNotification': '通知',
     'alert.columnTitle': '标题',
     'alert.content': '内容',
+    'alert.commandSent': '命令下发',
+    'alert.commandSuccess': '命令成功',
+    'alert.commandFailed': '命令失败',
+    'alert.commandQueued': '命令排队',
   },
   en: {
     'alert.title': 'Notification Center',
@@ -88,5 +92,9 @@ export default {
     'alert.tabNotification': 'Notifications',
     'alert.columnTitle': 'Title',
     'alert.content': 'Content',
+    'alert.commandSent': 'Command Sent',
+    'alert.commandSuccess': 'Command Success',
+    'alert.commandFailed': 'Command Failed',
+    'alert.commandQueued': 'Command Queued',
   },
 }

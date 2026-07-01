@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"inv-api-server/internal/model"
@@ -1472,15 +1471,10 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 	}
 
 	// 优先使用 Redis 中的实时在线标记（Device Server 通过 MarkDeviceOnline 写入）
+	// 使用独立 Key device:heartbeat:{sn} + TTL，key 存在即在线
 	if r.cache != nil {
-		tsStr, err := r.cache.HGet(ctx, "device:online", sn).Result()
-		if err == nil && tsStr != "" {
-			var ts int64
-			if _, err := fmt.Sscanf(tsStr, "%d", &ts); err == nil {
-				if time.Now().Unix()-ts < 120 {
-					online = true
-				}
-			}
+		if r.cache.Exists(ctx, "device:heartbeat:"+sn).Val() > 0 {
+			online = true
 		}
 	}
 
@@ -1669,17 +1663,12 @@ func (r *DeviceRepository) MarkStaleDevicesOffline(ctx context.Context, timeoutS
 		sns = append(sns, sn)
 	}
 
-	// 双重校验：检查 Redis device:online，如果 Redis 显示设备最近有数据则不标记离线
+	// 双重校验：检查 Redis device:heartbeat:{sn} key 是否存在，如果存在则不标记离线
 	if len(sns) > 0 && r.cache != nil {
 		var stale []string
-		now := time.Now().Unix()
 		for _, sn := range sns {
-			tsStr, err := r.cache.HGet(ctx, "device:online", sn).Result()
-			if err == nil {
-				ts, _ := strconv.ParseInt(tsStr, 10, 64)
-				if ts > 0 && now-ts < int64(timeoutSeconds) {
-					continue // Redis 显示设备在线，跳过
-				}
+			if r.cache.Exists(ctx, "device:heartbeat:"+sn).Val() > 0 {
+				continue // Redis 心跳 key 仍存在，跳过
 			}
 			stale = append(stale, sn)
 		}
@@ -1706,6 +1695,33 @@ func (r *DeviceRepository) SyncStationStatus(ctx context.Context) error {
 	return err
 }
 
+// MarkDeviceOfflineBySN 将指定设备标记为离线（事件驱动离线检测调用）
+// 返回 true 表示设备状态确实发生了变化（从在线/故障变为离线）
+func (r *DeviceRepository) MarkDeviceOfflineBySN(ctx context.Context, sn string) (bool, error) {
+	// 先检查设备当前状态，只处理在线(1)或故障(2)的设备
+	var currentStatus int
+	err := r.db.QueryRow(ctx, `SELECT status FROM devices WHERE sn = $1 AND deleted_at IS NULL`, sn).Scan(&currentStatus)
+	if err != nil {
+		return false, err
+	}
+	if currentStatus == 0 {
+		return false, nil // 已经是离线状态，无需更新
+	}
+
+	// 再次确认 Redis 心跳 key 确实不存在（防止竞态：设备刚好上线）
+	if r.cache != nil {
+		if r.cache.Exists(ctx, "device:heartbeat:"+sn).Val() > 0 {
+			return false, nil // key 又出现了，不标记离线
+		}
+	}
+
+	result, err := r.db.Exec(ctx, `UPDATE devices SET status=0, updated_at=NOW() WHERE sn = $1 AND status IN (1, 2)`, sn)
+	if err != nil {
+		return false, err
+	}
+	return result.RowsAffected() > 0, nil
+}
+
 // DEPRECATED: Device sharing feature removed.
 // func (r *DeviceRepository) GetShare(ctx context.Context, sn string, userID int64) (*model.DeviceShare, error) {
 // 	// Device sharing feature has been removed.
@@ -1724,6 +1740,8 @@ func (r *DeviceRepository) SyncStationStatus(ctx context.Context) error {
 // 	return nil
 // }
 
+// Deprecated: SendCommand via Redis Pub/Sub is no longer used.
+// DeviceService.SendCommand now calls Device Server via HTTP directly.
 func (r *DeviceRepository) SendCommand(ctx context.Context, sn, cmdType string, params map[string]interface{}) error {
 	cmdData, _ := json.Marshal(map[string]interface{}{
 		"cmd_type": cmdType,
@@ -1732,6 +1750,65 @@ func (r *DeviceRepository) SendCommand(ctx context.Context, sn, cmdType string, 
 	})
 
 	return r.cache.Publish(ctx, "device:cmd:"+sn, cmdData).Err()
+}
+
+// InsertCommandLog 插入命令日志（发送时调用，status=pending）
+func (r *DeviceRepository) InsertCommandLog(ctx context.Context, sn, taskID, cmdType, paramsJSON string) error {
+	if r.db == nil {
+		return nil
+	}
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO device_cmd_logs (device_sn, task_id, cmd, params, status, sent_at)
+		VALUES ($1, $2, $3, $4::jsonb, 'pending', NOW())
+	`, sn, taskID, cmdType, paramsJSON)
+	return err
+}
+
+// UpdateCommandLogStatus 更新命令状态（failed/queued）
+func (r *DeviceRepository) UpdateCommandLogStatus(ctx context.Context, taskID, status, message string) error {
+	if r.db == nil {
+		return nil
+	}
+	_, err := r.db.Exec(ctx, `
+		UPDATE device_cmd_logs SET status = $2, result = $3
+		WHERE task_id = $1
+	`, taskID, status, message)
+	return err
+}
+
+// UpdateCommandLogResult 设备回复后更新命令结果
+func (r *DeviceRepository) UpdateCommandLogResult(ctx context.Context, taskID, result, message string, data []byte) error {
+	if r.db == nil {
+		return nil
+	}
+	_, err := r.db.Exec(ctx, `
+		UPDATE device_cmd_logs
+		SET status = $2, result = $3, message = $4, data = $5::jsonb
+		WHERE task_id = $1
+	`, taskID, result, result, message, data)
+	return err
+}
+
+// InsertNotification 插入通知记录
+func (r *DeviceRepository) InsertNotification(ctx context.Context, sn string, stationID, userID int64, notifyType, title, content string) error {
+	if r.db == nil {
+		return nil
+	}
+	// 冷却期：60秒内同设备同类型通知不重复
+	var exists bool
+	_ = r.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type=$2 AND created_at > NOW() - INTERVAL '60 seconds')`,
+		sn, notifyType,
+	).Scan(&exists)
+	if exists {
+		return nil
+	}
+
+	_, err := r.db.Exec(ctx, `
+		INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+	`, sn, stationID, userID, notifyType, title, content)
+	return err
 }
 
 func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, endDate, period string) ([]map[string]interface{}, error) {
@@ -2361,16 +2438,16 @@ func (r *DeviceRepository) GetCommandHistory(ctx context.Context, sn string, pag
 	offset := (page - 1) * pageSize
 
 	var total int64
-	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM command_logs WHERE device_sn = $1`, sn).Scan(&total)
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM device_cmd_logs WHERE device_sn = $1`, sn).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	rows, err := r.db.Query(ctx, `
-		SELECT id, command_name, command_label, params, req_id, status, result_message, created_at, completed_at
-		FROM command_logs 
+		SELECT id, device_sn, cmd, task_id, params, status, result, message, data, sent_at
+		FROM device_cmd_logs 
 		WHERE device_sn = $1 
-		ORDER BY created_at DESC 
+		ORDER BY sent_at DESC 
 		LIMIT $2 OFFSET $3
 	`, sn, pageSize, offset)
 	if err != nil {
@@ -2381,37 +2458,44 @@ func (r *DeviceRepository) GetCommandHistory(ctx context.Context, sn string, pag
 	var commands []map[string]interface{}
 	for rows.Next() {
 		var id int64
-		var cmdName, cmdLabel, reqID, status string
-		var params []byte
-		var resultMsg *string
-		var createdAt, completedAt *time.Time
+		var deviceSn, cmdName, taskID, status string
+		var paramsJSON, dataJSON []byte
+		var result, msg *string
+		var sentAt *time.Time
 
-		if err := rows.Scan(&id, &cmdName, &cmdLabel, &params, &reqID, &status, &resultMsg, &createdAt, &completedAt); err != nil {
+		if err := rows.Scan(&id, &deviceSn, &cmdName, &taskID, &paramsJSON, &status, &result, &msg, &dataJSON, &sentAt); err != nil {
 			continue
 		}
 
-		cmd := map[string]interface{}{
+		item := map[string]interface{}{
 			"id":            id,
+			"device_sn":     deviceSn,
 			"command_name":  cmdName,
-			"command_label": cmdLabel,
-			"req_id":        reqID,
+			"command_label": cmdName,
+			"task_id":       taskID,
+			"req_id":        taskID,
 			"status":        status,
-			"created_at":    createdAt,
+			"created_at":    sentAt,
 		}
 
-		if len(params) > 0 {
+		if len(paramsJSON) > 0 {
 			var p map[string]interface{}
-			json.Unmarshal(params, &p)
-			cmd["params"] = p
+			json.Unmarshal(paramsJSON, &p)
+			item["params"] = p
 		}
-		if resultMsg != nil {
-			cmd["result_message"] = *resultMsg
+		if msg != nil {
+			item["result_message"] = *msg
 		}
-		if completedAt != nil {
-			cmd["completed_at"] = *completedAt
+		if result != nil {
+			item["result"] = *result
+		}
+		if len(dataJSON) > 0 {
+			var d map[string]interface{}
+			json.Unmarshal(dataJSON, &d)
+			item["data"] = d
 		}
 
-		commands = append(commands, cmd)
+		commands = append(commands, item)
 	}
 
 	return commands, total, nil
@@ -2683,7 +2767,7 @@ func (r *AlarmRepository) GetStats(ctx context.Context, userID int64, role ...in
 			SELECT COUNT(*) as total,
 				   COUNT(CASE WHEN status = 0 THEN 1 END) as unhandled,
 				   COUNT(CASE WHEN status = 1 THEN 1 END) as handled,
-				   COUNT(CASE WHEN alarm_level = 1 THEN 1 END) as critical
+				   COUNT(CASE WHEN alarm_level = 3 THEN 1 END) as critical
 			FROM alarms
 		`
 	} else {
@@ -2691,7 +2775,7 @@ func (r *AlarmRepository) GetStats(ctx context.Context, userID int64, role ...in
 			SELECT COUNT(*) as total,
 				   COUNT(CASE WHEN status = 0 THEN 1 END) as unhandled,
 				   COUNT(CASE WHEN status = 1 THEN 1 END) as handled,
-				   COUNT(CASE WHEN alarm_level = 1 THEN 1 END) as critical
+				   COUNT(CASE WHEN alarm_level = 3 THEN 1 END) as critical
 			FROM alarms
 			WHERE user_id = $1
 		`

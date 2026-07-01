@@ -25,7 +25,7 @@ services:
     image: redis:7-alpine
     container_name: inv-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
     ports:
       - "6379:6379"
     volumes:
@@ -34,87 +34,6 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 5
-    networks:
-      - inv-net
-
-  mqtt:
-    image: emqx/emqx:5.3.0
-    container_name: inv-mqtt
-    restart: unless-stopped
-    environment:
-      EMQX_NAME: emqx
-      EMQX_HOST: 0.0.0.0
-      EMQX_ALLOW_ANONYMOUS: "true"
-      EMQX_NODE__COOKIE: "inv-mqtt-cookie-2026"
-      EMQX_MQTT__MAX_PACKET_SIZE: 1MB
-      EMQX_MQTT__MAX_CLIENT_PACKET_RATE: 1000
-    ports:
-      - "1883:1883"
-      - "18083:18083"
-    healthcheck:
-      test: ["CMD", "emqx", "ping"]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-      start_period: 30s
-    networks:
-      - inv-net
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    container_name: inv-zookeeper
-    restart: unless-stopped
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-    networks:
-      - inv-net
-
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: inv-kafka
-    restart: unless-stopped
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    networks:
-      - inv-net
-
-  mqtt-kafka-bridge:
-    build:
-      context: ../mqtt-kafka-bridge
-      dockerfile: Dockerfile
-    image: mqtt-kafka-bridge:latest
-    container_name: inv-mqtt-kafka-bridge
-    restart: unless-stopped
-    ports:
-      - "8083:8083"
-    environment:
-      MQTT_BROKER: jiuxiaoyw.online
-      MQTT_PORT: ${MQTT_PORT:-1883}
-      MQTT_USERNAME: ${MQTT_USERNAME}
-      MQTT_PASSWORD: ${MQTT_PASSWORD}
-      KAFKA_BROKERS: kafka:29092
-      KAFKA_TOPIC: inv-telemetry
-      WEBHOOK_PORT: "8083"
-    depends_on:
-      kafka:
-        condition: service_healthy
-      mqtt:
-        condition: service_healthy
     networks:
       - inv-net
 
@@ -173,10 +92,11 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       MQTT_BROKER: ${MQTT_BROKER:-jiuxiaoyw.online}
-      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_PORT: ${MQTT_PORT:-8883}
       MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-CSKJ-INV-SERVER-DEVICE}
       MQTT_USERNAME: ${MQTT_USERNAME}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
+      MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
       KAFKA_BROKER: jiuxiaoyw.online:9092
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}

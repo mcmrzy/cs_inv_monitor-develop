@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: admin_frontend/settings_admin
+title: 管理后台设置与用户管理
+scope:
+    - inv-admin-frontend/src/services/userApi.ts
+    - inv-admin-frontend/src/services/commandApi.ts
+    - inv-admin-frontend/src/locales/users.ts
+    - inv-admin-frontend/src/locales/batchSettings.ts
+    - inv-admin-frontend/src/locales/remoteSettings.ts
+    - inv-admin-frontend/src/locales/operationLogs.ts
+    - inv-admin-frontend/src/locales/admin.ts
+source_files: []
+depends_on: []
+related_to: []

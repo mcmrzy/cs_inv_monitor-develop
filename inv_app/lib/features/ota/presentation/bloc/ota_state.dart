@@ -11,7 +11,14 @@ class OTAInitial extends OtaState {}
 
 class OTALoading extends OtaState {}
 
-class OTAUpToDate extends OtaState {}
+class OTAUpToDate extends OtaState {
+  final Map<String, dynamic> info;
+
+  const OTAUpToDate({this.info = const {}});
+
+  @override
+  List<Object?> get props => [info];
+}
 
 class OTAUpdateAvailable extends OtaState {
   final Map<String, dynamic> info;
@@ -57,20 +64,4 @@ class OTAError extends OtaState {
   List<Object?> get props => [message];
 }
 
-class OTAFirmwareListLoaded extends OtaState {
-  final List<dynamic> firmwares;
 
-  const OTAFirmwareListLoaded({required this.firmwares});
-
-  @override
-  List<Object?> get props => [firmwares];
-}
-
-class OTAHistoryLoaded extends OtaState {
-  final List<dynamic> history;
-
-  const OTAHistoryLoaded({required this.history});
-
-  @override
-  List<Object?> get props => [history];
-}

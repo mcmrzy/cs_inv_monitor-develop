@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: admin_frontend/alerts_rules
+title: 告警与规则管理
+scope:
+    - inv-admin-frontend/src/services/alertApi.ts
+    - inv-admin-frontend/src/services/alertRuleApi.ts
+    - inv-admin-frontend/src/locales/alerts.ts
+    - inv-admin-frontend/src/locales/alertRules.ts
+source_files: []
+depends_on: []
+related_to: []

@@ -77,45 +77,9 @@ class OtaRepositoryImpl implements OtaRepository {
   }
 
   @override
-  Future<Either<Failure, List<dynamic>>> getFirmwareList({int page = 1, int pageSize = 20}) async {
-    try {
-      final response = await remoteDataSource.getFirmwareList(page: page, pageSize: pageSize);
-      return _parseListData(response);
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Failure, Map<String, dynamic>>> getFirmwareDetail(int id) async {
-    try {
-      final response = await remoteDataSource.getFirmwareDetail(id);
-      return _parseData(response);
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
   Future<Either<Failure, Map<String, dynamic>>> triggerOTA(String sn, int firmwareId) async {
     try {
       final response = await remoteDataSource.triggerOTA(sn, firmwareId);
-      return _parseData(response);
-    } on DioException catch (e) {
-      return Left(_mapError(e));
-    } catch (e) {
-      return Left(UnknownFailure(e.toString()));
-    }
-  }
-
-  @override
-  Future<Either<Failure, Map<String, dynamic>>> getOTATaskProgress(int taskId) async {
-    try {
-      final response = await remoteDataSource.getOTATaskProgress(taskId);
       return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));
@@ -137,14 +101,15 @@ class OtaRepositoryImpl implements OtaRepository {
   }
 
   @override
-  Future<Either<Failure, List<dynamic>>> getOTAHistory(String sn, {int page = 1}) async {
+  Future<Either<Failure, Map<String, dynamic>>> resendUpgradeCommand(String sn) async {
     try {
-      final response = await remoteDataSource.getOTAHistory(sn, page: page);
-      return _parseListData(response);
+      final response = await remoteDataSource.resendUpgradeCommand(sn);
+      return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));
     } catch (e) {
       return Left(UnknownFailure(e.toString()));
     }
   }
+
 }

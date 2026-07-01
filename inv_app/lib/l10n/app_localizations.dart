@@ -394,6 +394,9 @@ class AppLocalizations {
   String get logout => _localizedStrings['logout']!;
   String get logoutConfirm => _localizedStrings['logout_confirm']!;
   String get markProcessed => _localizedStrings['mark_processed']!;
+  String get markProcessedSuccess => _localizedStrings['mark_processed_success']!;
+  String get processing => _localizedStrings['processing']!;
+  String get alarmInfo => _localizedStrings['alarm_info']!;
   String get alarmCode => _localizedStrings['alarm_code']!;
   String get alarmDescription => _localizedStrings['alarm_description']!;
   String get possibleCauses => _localizedStrings['possible_causes']!;
@@ -450,6 +453,7 @@ class AppLocalizations {
   String connectedTo(String name) => str('connected_to', {'name': name});
   String get disconnect => _localizedStrings['disconnect']!;
   String get scanNearbyWifi => _localizedStrings['scan_nearby_wifi']!;
+  String get scanByPhoneHint => _localizedStrings['scan_by_phone_hint'] ?? 'Scan WiFi using phone';
   String get clickWifiToFill => _localizedStrings['click_wifi_to_fill']!;
   String get wifiName => _localizedStrings['wifi_name']!;
   String get clickAboveOrManual => _localizedStrings['click_above_or_manual']!;
@@ -663,6 +667,24 @@ class AppLocalizations {
   String shareDeviceDesc(String sn) => str('share_device_desc', {'sn': sn});
   String get sharePermission => _localizedStrings['share_permission']!;
 
+  // 参数设置页
+  String get tabChargeDischarge => _localizedStrings['tab_charge_discharge'] ?? 'Charge & Discharge';
+  String get tabWorkMode => _localizedStrings['tab_work_mode'] ?? 'Work Mode';
+  String get tabAdvanced => _localizedStrings['tab_advanced'] ?? 'Advanced Settings';
+  String get settingsEntryDesc => _localizedStrings['settings_entry_desc'] ?? 'View & modify device parameters';
+  String settingLabel(String key) => _localizedStrings[key] ?? key;
+  String enumLabel(String key) => _localizedStrings[key] ?? key;
+  String get settingReadSuccess => _localizedStrings['setting_read_success'] ?? 'Parameters loaded';
+  String get settingReadFailed => _localizedStrings['setting_read_failed'] ?? 'Failed to load parameters';
+  String get settingSetSuccess => _localizedStrings['setting_set_success'] ?? 'Parameters saved';
+  String get settingSetFailed => _localizedStrings['setting_set_failed'] ?? 'Failed to save parameters';
+  String get settingForceConfirmTitle => _localizedStrings['setting_force_confirm_title'] ?? 'Confirm Dangerous Operation';
+  String get settingForceChargeConfirm => _localizedStrings['setting_force_charge_confirm'] ?? 'Enable force charge?';
+  String get settingForceDischargeConfirm => _localizedStrings['setting_force_discharge_confirm'] ?? 'Enable force discharge?';
+  String get settingRestartConfirm => _localizedStrings['setting_restart_confirm'] ?? 'Execute fault reset?';
+  String get settingAdvancedHint => _localizedStrings['setting_advanced_hint'] ?? 'Modify with caution.';
+  String get settingRestartBtn => _localizedStrings['setting_restart_btn'] ?? 'Execute Reset';
+
   // 错误消息 getter
   String get errUnknownError => _localizedStrings['err_unknown_error'] ?? 'Unknown error';
   String get errInvalidResponse => _localizedStrings['err_invalid_response'] ?? 'Invalid response';
@@ -760,10 +782,37 @@ class AppLocalizations {
 
   String get confirmExecute => _localizedStrings['confirm_execute'] ?? 'Confirm Execute';
 
-  /// 将英文错误消息翻译为当前语言
-  /// 用于 Repository/Bloc/Service 层输出的英文错误消息在 UI 层显示时翻译
+  /// 将英文/中文错误消息翻译为当前语言
+  /// 支持 [code] message 格式、英文/中文精确匹配和前缀匹配
   String translateError(String message) {
-    // 精确匹配
+    // 错误码翻译表（服务端返回的 code → 本地化 key）
+    const Map<int, String> _codeMap = {
+      4001: 'err_user_not_found',
+      4002: 'err_account_disabled',
+      4003: 'err_invalid_password',
+      4004: 'err_phone_registered',
+      4005: 'err_invalid_code',
+      4006: 'err_send_code_failed',
+      4007: 'err_old_password_wrong',
+      4008: 'err_invalid_email',
+      4009: 'err_email_registered',
+      4029: 'err_too_many_attempts',
+    };
+
+    // 先检查 [code] 格式
+    final codeMatch = RegExp(r'^\[(\d+)\] (.*)$').firstMatch(message);
+    if (codeMatch != null) {
+      final code = int.tryParse(codeMatch.group(1) ?? '');
+      final rawMsg = codeMatch.group(2) ?? '';
+      if (code != null && _codeMap.containsKey(code)) {
+        final translated = _localizedStrings[_codeMap[code]!];
+        if (translated != null) return translated;
+      }
+      // code 不在表中，用原始消息继续下面的精确匹配
+      message = rawMsg;
+    }
+
+    // 精确匹配（英文 + 中文）
     const Map<String, String> _errorKeyMap = {
       'Unknown error': 'err_unknown_error',
       'Invalid response format': 'err_invalid_response',
@@ -785,9 +834,34 @@ class AppLocalizations {
       'Waiting for connection...': 'err_waiting_connection',
       'Device rebooting...': 'err_device_rebooting',
       'Failed to get field metadata': 'err_field_metadata',
+      // 后端错误消息（英文）
+      'user not found': 'err_user_not_found',
+      'account disabled': 'err_account_disabled',
+      'invalid password': 'err_invalid_password',
+      'phone already registered': 'err_phone_registered',
+      'invalid verification code': 'err_invalid_code',
+      'invalid email format': 'err_invalid_email',
+      'old password incorrect': 'err_old_password_wrong',
+      'generate token failed': 'err_generate_token',
+      'password encryption failed': 'err_password_encryption',
+      'create user failed': 'err_create_user',
+      'update password failed': 'err_update_password',
+      'system error': 'err_system_error',
+      'invalid request': 'err_invalid_request',
+      // 后端错误消息（中文）
+      '用户不存在': 'err_user_not_found',
+      '账号已禁用': 'err_account_disabled',
+      '密码错误': 'err_invalid_password',
+      '该手机号已注册': 'err_phone_registered',
+      '该手机号未注册': 'err_user_not_found',
+      '该邮箱未注册': 'err_user_not_found',
+      '该邮箱已注册': 'err_email_registered',
+      '验证码错误': 'err_invalid_code',
+      '验证码已过期': 'err_code_expired',
+      '旧密码不正确': 'err_old_password_wrong',
+      '系统错误': 'err_system_error',
     };
 
-    // 精确匹配
     final key = _errorKeyMap[message];
     if (key != null) return _localizedStrings[key] ?? message;
 
@@ -801,6 +875,13 @@ class AppLocalizations {
     }
     if (message.startsWith('Cannot open installer:')) {
       return _localizedStrings['err_cannot_open_installer'] ?? 'Cannot open installer';
+    }
+    // 中文动态消息（含变量）
+    if (message.contains('登录失败次数过多')) {
+      return _localizedStrings['err_login_too_many'] ?? message;
+    }
+    if (message.contains('验证码发送频繁')) {
+      return _localizedStrings['err_code_too_frequent'] ?? message;
     }
 
     return message;

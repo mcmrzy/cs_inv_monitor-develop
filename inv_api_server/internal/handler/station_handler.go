@@ -461,7 +461,52 @@ func (h *StationHandler) List(c *gin.Context) {
 		return
 	}
 
-	response.Page(c, stations, total, page, pageSize)
+	// 为每个电站填充设备统计和发电数据
+	ctx := c.Request.Context()
+	enrichedStations := make([]map[string]interface{}, 0, len(stations))
+	for _, st := range stations {
+		devices, _ := h.deviceService.GetByStationID(ctx, st.ID)
+		deviceCount := len(devices)
+		onlineCount := 0
+		faultCount := 0
+		for _, d := range devices {
+			if d.Status == 1 || d.Status == 2 {
+				onlineCount++
+			}
+			if d.Status == 2 {
+				faultCount++
+			}
+		}
+
+		todayEnergy, _ := h.deviceService.GetStationTodayEnergy(ctx, st.ID)
+		totalEnergy, _ := h.deviceService.GetStationEnergySummary(ctx, st.ID)
+
+		item := map[string]interface{}{
+			"id":                 st.ID,
+			"user_id":            st.UserID,
+			"name":               st.Name,
+			"province":           st.Province,
+			"city":               st.City,
+			"district":           st.District,
+			"address":            st.Address,
+			"capacity":           st.Capacity,
+			"panel_count":        st.PanelCount,
+			"latitude":           st.Latitude,
+			"longitude":          st.Longitude,
+			"timezone":           st.Timezone,
+			"status":             st.Status,
+			"created_at":         st.CreatedAt,
+			"updated_at":         st.UpdatedAt,
+			"device_count":       deviceCount,
+			"online_count":       onlineCount,
+			"fault_count":        faultCount,
+			"today_generation":   todayEnergy,
+			"total_generation":   totalEnergy,
+		}
+		enrichedStations = append(enrichedStations, item)
+	}
+
+	response.Page(c, enrichedStations, total, page, pageSize)
 }
 
 type StationSummary struct {
@@ -484,8 +529,19 @@ type StationSummary struct {
 
 func (h *StationHandler) GetSummary(c *gin.Context) {
 	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
 
-	stations, _, err := h.stationService.GetByUserID(c.Request.Context(), userID, 1, 100)
+	var stations []*model.Station
+	var total int64
+	var err error
+
+	if isAdmin {
+		stations, total, err = h.stationService.GetAll(c.Request.Context(), 1, 9999)
+	} else {
+		stations, _, err = h.stationService.GetByUserID(c.Request.Context(), userID, 1, 100)
+		total = int64(len(stations))
+	}
 	if err != nil {
 		response.InternalError(c, "system error")
 		return
@@ -556,6 +612,16 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 	result := map[string]interface{}{
 		"stations": summaries,
 		"summary": map[string]interface{}{
+			// 前端期望的 camelCase 字段
+			"totalStations":    total,
+			"totalDevices":     totalDeviceCount,
+			"onlineDevices":    totalOnlineCount,
+			"todayGeneration":  totalEnergy,
+			"totalGeneration":  grandTotalEnergy,
+			"monthGeneration":  grandMonthEnergy,
+			"faultDevices":     totalFaultCount,
+			"totalIncome":      totalIncome,
+			// 兼容旧的 snake_case 字段
 			"today_energy": totalEnergy,
 			"total_energy": grandTotalEnergy,
 			"month_energy": grandMonthEnergy,

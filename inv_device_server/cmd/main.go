@@ -58,6 +58,9 @@ func main() {
 	if p := os.Getenv("MQTT_PASSWORD"); p != "" {
 		cfg.MQTT.Password = p
 	}
+	if insecure := os.Getenv("MQTT_TLS_INSECURE"); insecure == "true" {
+		cfg.MQTT.TLSInsecure = true
+	}
 
 	if cfg.Database.Password == "" {
 		fmt.Println("FATAL: DB_PASSWORD not set")
@@ -116,13 +119,17 @@ func main() {
 	// 注册 OTA 状态回调：MQTT 收到设备 OTA 状态后转发给 API Server
 	if mqttClient != nil {
 		mqttClient.SetOtaStatusHandler(dataService.HandleOTAStatus)
+		mqttClient.SetOtaCmdAckHandler(dataService.HandleOTACmdAck)
 		mqttClient.SetStatusChangeHandler(func(sn string, online bool) {
 			status := 0
 			if online {
 				status = 1
+				// 设备上线时，检查并下发离线命令队列中的积压命令
+				go dataService.FlushPendingCommands(ctx, sn)
 			}
 			dataService.SyncDeviceStatus(ctx, sn, status)
 		})
+		mqttClient.SetCmdResultHandler(dataService.HandleCmdResult)
 	}
 	dataService.StartMetadataRefresh(ctx)
 
@@ -279,6 +286,22 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 
 	api := router.Group("/api/v1")
 	{
+		// 内部认证中间件：校验 X-Internal-Key
+		internalAuth := func() gin.HandlerFunc {
+			key := cfg.Backends.InternalKey
+			return func(c *gin.Context) {
+				if key == "" {
+					c.Next()
+					return
+				}
+				if c.GetHeader("X-Internal-Key") != key {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+					return
+				}
+				c.Next()
+			}
+		}
+
 		api.GET("/device/:sn/online", func(c *gin.Context) {
 			sn := c.Param("sn")
 			online := dataService.IsDeviceOnline(sn)
@@ -300,7 +323,7 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 			c.JSON(http.StatusOK, data)
 		})
 
-		api.POST("/device/:sn/command", func(c *gin.Context) {
+		api.POST("/device/:sn/command", internalAuth(), func(c *gin.Context) {
 			sn := c.Param("sn")
 
 			// 读取完整 body，OTA 命令需要原始 JSON 直接转发
@@ -312,6 +335,7 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 
 			var req struct {
 				Command string                 `json:"command"`
+				Action  string                 `json:"action"`
 				Params  map[string]interface{} `json:"params"`
 			}
 			if err := json.Unmarshal(rawBody, &req); err != nil {
@@ -319,19 +343,25 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 				return
 			}
 
+			// OTA 命令使用 "action" 字段，兼容处理
+			cmdType := req.Command
+			if cmdType == "" {
+				cmdType = req.Action
+			}
+
 			if !dataService.IsDeviceOnline(sn) {
 				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "设备离线"})
 				return
 			}
 
-			if err := dataService.SendCommand(sn, req.Command, req.Params, rawBody); err != nil {
+			if err := dataService.SendCommand(sn, cmdType, req.Params, rawBody); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 
 			c.JSON(http.StatusOK, gin.H{
 				"sn":      sn,
-				"command": req.Command,
+				"command": cmdType,
 				"status":  "sent",
 			})
 		})

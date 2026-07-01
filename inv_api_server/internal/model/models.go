@@ -47,6 +47,7 @@ type Device struct {
 	Manufacturer   string     `json:"manufacturer"`
 	FirmwareArm    string     `json:"firmware_arm"`
 	FirmwareEsp    string     `json:"firmware_esp"`
+	MainVersion    string     `json:"main_version"`
 	DeviceType     string     `json:"device_type"`
 	RatedPower     float64    `json:"rated_power"`
 	RatedVoltage   float64    `json:"rated_voltage"`
@@ -298,47 +299,94 @@ type Firmware struct {
 	MainVersion string    `json:"main_version"`
 }
 
-type OtaTask struct {
-	ID              string     `json:"id"`
-	Name            string     `json:"name"`
+type DeviceUpgrade struct {
+	ID              int64      `json:"id"`
+	DeviceSN        string     `json:"device_sn"`
 	FirmwareID      int64      `json:"firmware_id"`
 	FirmwareVersion string     `json:"firmware_version"`
-	Model           string     `json:"model"`
-	TargetType      string     `json:"target_type"`
-	TargetValue     string     `json:"target_value"`
-	TotalCount      int        `json:"total_count"`
-	SuccessCount    int        `json:"success_count"`
-	FailCount       int        `json:"fail_count"`
-	Status          string     `json:"status"`
-	Description     string     `json:"description"`
-	CreatedBy       int64      `json:"created_by"`
-	PushStrategy    string     `json:"push_strategy"`
-	PushPercentage  int        `json:"push_percentage"`
-	BatchSize       int        `json:"batch_size"`
-	ScheduledAt     *time.Time `json:"scheduled_at"`
-	AutoRollback    bool       `json:"auto_rollback"`
-	RollbackThreshold int      `json:"rollback_threshold"`
-	CurrentBatch    int        `json:"current_batch"`
-	TotalBatches    int        `json:"total_batches"`
-	CreatedAt       time.Time  `json:"created_at"`
+	TargetChip      string     `json:"target_chip"`
+	OldVersion      string     `json:"old_version"`
+	Status          string     `json:"status"` // pending/downloading/upgrading/success/failed/cancelled
+	Progress        int        `json:"progress"`
+	ErrorMessage    string     `json:"error_message"`
+	RetryCount      int        `json:"retry_count"`
+	PushedBy        *int64     `json:"pushed_by"`
 	StartedAt       *time.Time `json:"started_at"`
 	CompletedAt     *time.Time `json:"completed_at"`
+	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+	UpgradePackageID *int64    `json:"upgrade_package_id,omitempty"`
+	TaskID          *int64     `json:"task_id,omitempty"`
+
+	// 聚合查询用, 非数据库字段
+	DeviceModel   string `json:"device_model,omitempty"`
+	TotalDevices  int    `json:"total_devices,omitempty"`
+	SuccessCount  int    `json:"success_count,omitempty"`
+	FailedCount   int    `json:"failed_count,omitempty"`
+	PendingCount  int    `json:"pending_count,omitempty"`
+
+	// 设备当前芯片版本（详情查询用）
+	CurrentArmVersion string `json:"current_arm_version,omitempty"`
+	CurrentEspVersion string `json:"current_esp_version,omitempty"`
+
+	// 升级包相关
+	PackageMainVersion string `json:"package_main_version,omitempty"`
 }
 
-type OtaTaskDevice struct {
-	ID           int64      `json:"id"`
-	TaskID       string     `json:"task_id"`
-	DeviceSN     string     `json:"device_sn"`
-	OldVersion   string     `json:"old_version"`
-	NewVersion   string     `json:"new_version"`
-	Status       string     `json:"status"`
-	Progress     int        `json:"progress"`
-	ErrorMessage string     `json:"error_message"`
-	MQTTMessage  string     `json:"mqtt_message"`
-	StartedAt    *time.Time `json:"started_at"`
-	CompletedAt  *time.Time `json:"completed_at"`
-	CreatedAt    time.Time  `json:"created_at"`
+// UpgradeTask 升级任务 - 统一管理所有升级操作
+type UpgradeTask struct {
+	ID             int64      `json:"id"`
+	Name           string     `json:"name"`
+	TaskType       string     `json:"task_type"`        // 'single' | 'package'
+	FirmwareID     *int64     `json:"firmware_id"`
+	PackageID      *int64     `json:"package_id"`
+	Model          string     `json:"model"`
+	TargetVersion  string     `json:"target_version"`
+	Status         string     `json:"status"`           // draft/pending/scheduled/running/completed/partial_success/failed/cancelled
+	ExecuteMode    string     `json:"execute_mode"`     // 'immediate' | 'scheduled' | 'manual'
+	ScheduledAt    *time.Time `json:"scheduled_at"`
+	RolloutPercent int        `json:"rollout_percent"`
+	TotalDevices   int        `json:"total_devices"`
+	SuccessCount   int        `json:"success_count"`
+	FailedCount    int        `json:"failed_count"`
+	CreatedBy      *int64     `json:"created_by"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ExecutedAt     *time.Time `json:"executed_at"`
+	CompletedAt    *time.Time `json:"completed_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+
+	// 关联信息（非数据库字段，查询时填充）
+	FirmwareVersion    string             `json:"firmware_version,omitempty"`
+	FirmwareTargetChip string             `json:"firmware_target_chip,omitempty"`
+	PackageMainVersion string             `json:"package_main_version,omitempty"`
+	PackageItems       []UpgradePackageItem `json:"package_items,omitempty"`
+}
+
+// UpgradePackage 升级包 - 包含多个芯片固件的组合版本
+type UpgradePackage struct {
+	ID          int64                `json:"id"`
+	Model       string               `json:"model"`
+	MainVersion string               `json:"main_version"`
+	Changelog   string               `json:"changelog"`
+	IsForce     bool                 `json:"is_force"`
+	Status      int                  `json:"status"`
+	CreatedBy   int64                `json:"created_by"`
+	CreatedAt   time.Time            `json:"created_at"`
+	UpdatedAt   time.Time            `json:"updated_at"`
+	Items       []UpgradePackageItem `json:"items,omitempty"`
+}
+
+// UpgradePackageItem 升级包明细
+type UpgradePackageItem struct {
+	ID               int64  `json:"id"`
+	PackageID        int64  `json:"package_id"`
+	FirmwareID       int64  `json:"firmware_id"`
+	TargetChip       string `json:"target_chip"`
+	FirmwareVersion  string `json:"firmware_version"`
+	FileURL          string `json:"file_url,omitempty"`
+	FileSize         int64  `json:"file_size,omitempty"`
+	FileMD5          string `json:"file_md5,omitempty"`
+	FileSHA256       string `json:"file_sha256,omitempty"`
 }
 
 type ParallelConfig struct {

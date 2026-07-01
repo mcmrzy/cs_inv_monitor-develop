@@ -98,7 +98,17 @@ class _OtaTabPageState extends State<OtaTabPage> {
     final name = device['name'] ?? device['device_name'] ?? sn;
     final model = device['model'] ?? device['device_model'] ?? '';
     final status = device['status'] ?? 0;
-    final firmwareVersion = device['firmware_version'] ?? device['fw_version'] ?? l10n.firmwareUnknown;
+    // Show main_version (system-generated package version) if available,
+    // otherwise fall back to legacy sub-version concatenation.
+    final mainVersion = device['main_version'] as String? ?? '';
+    final firmwareVersion = mainVersion.isNotEmpty ? mainVersion : (() {
+      final firmwareArm = device['firmware_arm'] as String? ?? '';
+      final firmwareEsp = device['firmware_esp'] as String? ?? '';
+      final parts = <String>[];
+      if (firmwareArm.isNotEmpty) parts.add(firmwareArm);
+      if (firmwareEsp.isNotEmpty) parts.add(firmwareEsp);
+      return parts.isNotEmpty ? parts.join('-') : l10n.firmwareUnknown;
+    })();
     final isOnline = status == 1;
 
     return Container(

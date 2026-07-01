@@ -235,9 +235,9 @@ func (p *ProtocolParser) processMessage(ctx context.Context, raw *RawMessage) er
 	switch raw.MsgType {
 	case "status", "online":
 		return p.handleOnline(ctx, raw)
-	case "info":
+	case "info", "data/info":
 		return p.handleInfo(ctx, raw)
-	case "cmd", "cmd/response":
+	case "cmd", "cmd/response", "cmd_result":
 		return p.handleCommandResponse(ctx, raw)
 	default:
 		return p.handleTelemetry(ctx, raw)
@@ -265,7 +265,6 @@ func unwrapPayload(payload json.RawMessage) (map[string]interface{}, error) {
 }
 
 func (p *ProtocolParser) handleOnline(ctx context.Context, raw *RawMessage) error {
-	p.hub.MarkDeviceOnline(raw.SN)
 	statusValue := 1
 
 	if p.rdb != nil {
@@ -273,12 +272,20 @@ func (p *ProtocolParser) handleOnline(ctx context.Context, raw *RawMessage) erro
 		if err == nil {
 			online, _ := payloadMap["online"].(bool)
 			if online {
-				p.rdb.HSet(ctx, "device:online", raw.SN, time.Now().Unix())
+				p.hub.MarkDeviceOnline(raw.SN)
+				p.rdb.Set(ctx, "device:heartbeat:"+raw.SN, time.Now().Unix(), 120*time.Second)
 				statusValue = 1
 			} else {
+				// 设备上报离线：不刷新心跳 key，让 120s TTL 自然过期
+				// 不主动删除 key，避免设备短暂断连后重连导致状态抖动
 				statusValue = 0
 			}
+		} else {
+			// 解析失败，默认在线
+			p.hub.MarkDeviceOnline(raw.SN)
 		}
+	} else {
+		p.hub.MarkDeviceOnline(raw.SN)
 	}
 
 	// 防抖：10 秒内同一设备相同状态不上报，避免状态抖动产生大量通知
@@ -309,11 +316,20 @@ func (p *ProtocolParser) handleOnline(ctx context.Context, raw *RawMessage) erro
 }
 
 func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error {
+	// 解析 payload，支持嵌套格式 {"data": {...}, "timestamp": ...} 和扁平格式 {...}
+	payloadBytes := raw.Payload
+	var wrapper map[string]json.RawMessage
+	if err := json.Unmarshal(raw.Payload, &wrapper); err == nil {
+		if dataRaw, ok := wrapper["data"]; ok {
+			payloadBytes = dataRaw
+		}
+	}
+
 	var info model.DeviceInfo
-	if err := json.Unmarshal(raw.Payload, &info); err != nil {
+	if err := json.Unmarshal(payloadBytes, &info); err != nil {
 		// 尝试解包字符串形式的 payload
 		var s string
-		if err2 := json.Unmarshal(raw.Payload, &s); err2 == nil {
+		if err2 := json.Unmarshal(payloadBytes, &s); err2 == nil {
 			if err3 := json.Unmarshal([]byte(s), &info); err3 != nil {
 				return err
 			}
@@ -327,9 +343,46 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 		return err
 	}
 
+	// 同步更新 Redis 缓存中的 info 数据，保持与数据库一致
+	if p.rdb != nil {
+		infoPayload := map[string]interface{}{
+			"data": map[string]interface{}{
+				"model":           info.Model,
+				"manufacturer":    info.Manufacturer,
+				"firmware_arm":    info.FirmwareARM,
+				"firmware_esp":    info.FirmwareESP,
+				"type":            info.Type,
+				"rated_power":     info.RatedPower,
+				"rated_voltage":   info.RatedVoltage,
+				"rated_freq":      info.RatedFreq,
+				"battery_voltage": info.BatteryVoltage,
+				"battery_type":    info.BatteryType,
+				"cell_count":      info.CellCount,
+				"sn":              info.SN,
+			},
+			"timestamp": time.Now().Unix(),
+		}
+		cacheKey := "realtime:latest:" + raw.SN
+		existing, err := p.rdb.Get(ctx, cacheKey).Bytes()
+		var rt map[string]interface{}
+		if err == nil {
+			_ = json.Unmarshal(existing, &rt)
+		}
+		if rt == nil {
+			rt = make(map[string]interface{})
+		}
+		rt["info"] = infoPayload
+		rt["_sn"] = raw.SN
+		rt["_updated_at"] = time.Now().Format(time.RFC3339)
+		mergedBytes, _ := json.Marshal(rt)
+		p.rdb.Set(ctx, cacheKey, mergedBytes, 120*time.Second)
+	}
+
 	logger.Info("Device info registered",
 		zap.String("sn", raw.SN),
-		zap.String("model", info.Model))
+		zap.String("model", info.Model),
+		zap.String("firmware_arm", info.FirmwareARM),
+		zap.String("firmware_esp", info.FirmwareESP))
 	return nil
 }
 
@@ -402,7 +455,7 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 	p.hub.MarkDeviceOnline(raw.SN)
 
 	if p.rdb != nil {
-		p.rdb.HSet(ctx, "device:online", raw.SN, time.Now().Unix())
+		p.rdb.Set(ctx, "device:heartbeat:"+raw.SN, time.Now().Unix(), 120*time.Second)
 	}
 
 	// 诊断日志：记录所有进入 handleTelemetry 的消息类型
@@ -700,13 +753,32 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 		return nil
 	}
 
-	return p.postInternal("/api/v1/internal/device-cmd-status", map[string]interface{}{
+	// 确定 result 字段值（兼容新旧格式）
+	result := resp.Result
+	if result == "" {
+		if resp.Success {
+			result = "success"
+		} else {
+			result = "failed"
+		}
+	}
+
+	// 优先使用新的 cmd_result 接口，回退到旧的 device-cmd-status
+	endpoint := "/api/v1/internal/device-cmd-result"
+	payload := map[string]interface{}{
 		"sn":        raw.SN,
-		"result":    resp.Result,
+		"task_id":   resp.TaskID,
 		"cmd":       resp.Cmd,
+		"result":    result,
+		"success":   resp.Success,
 		"message":   resp.Message,
 		"timestamp": resp.Timestamp,
-	})
+	}
+	if resp.Data != nil {
+		payload["data"] = json.RawMessage(resp.Data)
+	}
+
+	return p.postInternal(endpoint, payload)
 }
 
 func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload map[string]interface{}, msgType string) error {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
@@ -150,11 +151,23 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     }
   }
 
-  /// 按 group_name 分组字段
+  /// 根据 field_key 前缀推断分组名（当数据库 group_name 为空时使用）
+  String _inferGroupFromFieldKey(String fieldKey) {
+    if (fieldKey.startsWith('ac_')) return 'ac_params';
+    if (fieldKey.startsWith('pv_')) return 'pv_params';
+    if (fieldKey.startsWith('batt_') || fieldKey.startsWith('battery_')) return 'battery_params';
+    if (fieldKey.startsWith('energy_') || fieldKey.startsWith('daily_') || fieldKey.startsWith('total_')) return 'energy_stats';
+    if (fieldKey.startsWith('sys_') || fieldKey.startsWith('state') || fieldKey.startsWith('work_') || fieldKey.startsWith('fault_') || fieldKey.startsWith('internal_') || fieldKey.startsWith('temp_')) return 'system_status';
+    if (fieldKey.startsWith('load_')) return 'ac_params';
+    if (fieldKey.startsWith('meter_')) return 'ac_params';
+    return 'device_info';
+  }
+
+  /// 按 group_name 分组字段（group_name 为空时根据 field_key 前缀推断）
   Map<String, List<DeviceModelField>> _groupByField() {
     final groups = <String, List<DeviceModelField>>{};
     for (final field in _modelFields) {
-      final group = field.groupName.isNotEmpty ? field.groupName : 'other';
+      final group = field.groupName.isNotEmpty ? field.groupName : _inferGroupFromFieldKey(field.fieldKey);
       groups.putIfAbsent(group, () => []).add(field);
     }
     // 按 sort 排序每个组内的字段
@@ -232,6 +245,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         children: [
           // 顶部状态卡片
           _buildStatusCard(),
+          SizedBox(height: 12.h),
+          // 参数设置入口
+          _buildSettingsEntry(),
           SizedBox(height: 16.h),
           // 动态分组
           ...groups.entries.map((entry) => _buildGroupCard(entry.key, entry.value)),
@@ -282,6 +298,47 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsEntry() {
+    final l10n = AppLocalizations.of(context)!;
+    return GestureDetector(
+      onTap: () => context.push('/device/${widget.sn}/settings'),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+        decoration: AppColor.card(context),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8.w),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Icon(Icons.tune_rounded, size: 20.sp, color: AppColors.primary),
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.paramSettings,
+                    style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  ),
+                  SizedBox(height: 2.h),
+                  Text(
+                    l10n.settingsEntryDesc,
+                    style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20.sp, color: AppColors.textHint),
+          ],
+        ),
       ),
     );
   }

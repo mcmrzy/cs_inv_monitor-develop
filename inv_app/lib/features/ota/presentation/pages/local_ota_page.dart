@@ -30,6 +30,7 @@ class LocalOTAPage extends StatefulWidget {
   final int? firmwareId;
   final String? firmwareUrl;
   final String? firmwareFileName;
+  final String? targetChip; // 'esp' 或 'arm'
 
   const LocalOTAPage({
     super.key,
@@ -38,6 +39,7 @@ class LocalOTAPage extends StatefulWidget {
     this.firmwareId,
     this.firmwareUrl,
     this.firmwareFileName,
+    this.targetChip,
   });
 
   @override
@@ -64,7 +66,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   // WiFi 热点扫描
   bool _scanningWifi = false;
-  List<WifiNetwork> _csInvNetworks = [];
   WifiNetwork? _selectedAp;
   bool _autoConnecting = false;
 
@@ -119,12 +120,21 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _isProcessing = false;
       _errorMessage = null;
     });
+    // 进入连接设备步骤时自动开始扫描+连接
+    if (step == LocalOTAStep.connectDevice) {
+      _autoScanAndConnect();
+    }
   }
 
-  Future<void> _scanForDeviceHotspot() async {
-    setState(() { _scanningWifi = true; _csInvNetworks = []; _errorMessage = null; });
+  /// 自动扫描热点并连接，整个流程只触发两次 setState（开始/结束）
+  Future<void> _autoScanAndConnect() async {
+    // 已在处理中或已连接成功，不重复触发
+    if (_scanningWifi || _autoConnecting || _isProcessing || _selectedAp != null) return;
+
+    setState(() { _scanningWifi = true; _errorMessage = null; });
     try {
       final status = await Permission.location.request();
+      if (!mounted) return;
       if (!status.isGranted && !status.isLimited) {
         final l10n = AppLocalizations.of(context)!;
         setState(() { _scanningWifi = false; _errorMessage = l10n.locationPermissionRequired; });
@@ -138,40 +148,26 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       }
       await WiFiForIoTPlugin.forceWifiUsage(true);
       final networks = await WiFiForIoTPlugin.loadWifiList();
-
       if (!mounted) return;
 
-      // 直接查找指定 SN 的热点: CS_INV_{SN} 或 CS-INV-{SN}
       final sn = widget.deviceSN.toUpperCase();
       final target = networks.where((n) {
         final ssid = (n.ssid ?? '').toUpperCase();
         return ssid == 'CS_INV_$sn' || ssid == 'CS-INV-$sn';
       }).toList();
 
-      if (target.isNotEmpty) {
-        setState(() { _csInvNetworks = target; _scanningWifi = false; });
-        _connectToAp(target.first);
-      } else {
+      if (target.isEmpty) {
         final l10n = AppLocalizations.of(context)!;
         setState(() {
           _scanningWifi = false;
           _errorMessage = l10n.str('device_hotspot_not_found', {'sn': widget.deviceSN});
         });
+        return;
       }
-    } catch (e) {
-      final l10n = AppLocalizations.of(context)!;
-      setState(() { _scanningWifi = false; _errorMessage = l10n.str('scan_failed', {'error': '$e'}); });
-    }
-  }
 
-  Future<void> _connectToAp(WifiNetwork network) async {
-    setState(() {
+      // 找到热点，继续连接（不更新 UI，保持扫描中状态）
+      final network = target.first;
       _selectedAp = network;
-      _autoConnecting = true;
-      _errorMessage = null;
-    });
-
-    try {
       final ssid = network.ssid ?? '';
       final cap = network.capabilities?.toUpperCase() ?? '';
       final isOpen = !cap.contains('WPA') && !cap.contains('WEP') && !cap.contains('EAP');
@@ -181,35 +177,49 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         security: isOpen ? NetworkSecurity.NONE : NetworkSecurity.WPA,
         joinOnce: true,
       );
-
       if (!mounted) return;
 
-      if (connected) {
-        // 强制 HTTP 请求走 WiFi 而不是移动数据
-        await WiFiForIoTPlugin.forceWifiUsage(true);
-
-        // 等待连接稳定，热点分配IP需要时间
-        await Future.delayed(const Duration(seconds: 3));
-
-        // 验证确实连上了设备热点
-        final currentSsid = await WiFiForIoTPlugin.getSSID();
-        if (currentSsid == null || !(currentSsid.toUpperCase().contains('CS_INV') || currentSsid.toUpperCase().contains('CS-INV'))) {
-          final l10n = AppLocalizations.of(context)!;
-          setState(() { _autoConnecting = false; _errorMessage = l10n.connectionFailedNoHotspot; });
-          return;
-        }
-
-        setState(() { _autoConnecting = false; });
-
-        // 自动测试连接
-        _checkConnectionAndProceed();
-      } else {
+      if (!connected) {
         final l10n = AppLocalizations.of(context)!;
-        setState(() { _autoConnecting = false; _errorMessage = l10n.str('connection_failed_retry', {'ssid': ssid}); });
+        setState(() {
+          _scanningWifi = false;
+          _selectedAp = null;
+          _errorMessage = l10n.str('connection_failed_retry', {'ssid': ssid});
+        });
+        return;
       }
+
+      await WiFiForIoTPlugin.forceWifiUsage(true);
+      await Future.delayed(const Duration(seconds: 3));
+
+      final currentSsid = await WiFiForIoTPlugin.getSSID();
+      if (!mounted) return;
+      if (currentSsid == null || !(currentSsid.toUpperCase().contains('CS_INV') || currentSsid.toUpperCase().contains('CS-INV'))) {
+        final l10n = AppLocalizations.of(context)!;
+        setState(() {
+          _scanningWifi = false;
+          _selectedAp = null;
+          _errorMessage = l10n.connectionFailedNoHotspot;
+        });
+        return;
+      }
+
+      // 连接成功，一次性更新状态
+      setState(() {
+        _scanningWifi = false;
+        _autoConnecting = false;
+      });
+
+      // 自动测试连接并进入下一步
+      _checkConnectionAndProceed();
     } catch (e) {
+      if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
-      setState(() { _autoConnecting = false; _errorMessage = l10n.str('connection_failed_retry', {'ssid': '$e'}); });
+      setState(() {
+        _scanningWifi = false;
+        _selectedAp = null;
+        _errorMessage = l10n.str('scan_failed', {'error': '$e'});
+      });
     }
   }
 
@@ -355,6 +365,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       await _firmwareService.uploadFirmware(
         deviceIP: widget.deviceIP,
         filePath: _selectedFilePath!,
+        target: widget.targetChip ?? 'esp',
         onProgress: (sent, total) {
           if (total > 0 && mounted) {
             setState(() {
@@ -397,8 +408,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
       try {
         // 先检查设备信息，看版本是否已更新
-         final deviceInfo = await _firmwareService.getDeviceInfo(deviceIP: widget.deviceIP);
-         final currentVersion = deviceInfo['esp_version'] as String? ?? '';
+        final deviceInfo = await _firmwareService.getDeviceInfo(deviceIP: widget.deviceIP);
+        // 根据目标芯片读取对应版本
+        final versionKey = (widget.targetChip == 'arm') ? 'arm_version' : 'esp_version';
+        final currentVersion = deviceInfo[versionKey] as String? ?? '';
          
          // 首次获取版本，记录下来
          if (_preUpgradeVersion == null && currentVersion.isNotEmpty) {
@@ -417,25 +430,35 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           return;
         }
         
-        // 尝试获取升级进度
+        // 获取升级进度
         final progress = await _firmwareService.getLocalOTAProgress(deviceIP: widget.deviceIP);
         final status = progress['status'] as String? ?? '';
         final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
-        final target = progress['target'] as String? ?? '';
         final message = progress['message'] as String? ?? '';
         
         progressEndpointWorking = true;
 
         setState(() {
           _upgradeProgress = percent / 100.0;
-          _upgradeStatus = _mapStatus(status) + (message.isNotEmpty ? ' ($message)' : '');
+          // 优先显示设备返回的 message，否则用本地映射的状态文本
+          if (message.isNotEmpty) {
+            _upgradeStatus = message;
+          } else {
+            _upgradeStatus = _mapStatus(status);
+          }
         });
 
         if (status == 'done') {
+          // 升级成功，从设备信息获取实际版本号
+          String? newVersion;
+          try {
+            final info = await _firmwareService.getDeviceInfo(deviceIP: widget.deviceIP);
+            newVersion = info[versionKey] as String? ?? '';
+          } catch (_) {}
           setState(() {
             _isProcessing = false;
             _result = LocalOTAResult.success;
-            _newVersion = target;
+            _newVersion = (newVersion != null && newVersion.isNotEmpty) ? newVersion : null;
             _currentStep = LocalOTAStep.result;
           });
           return;
@@ -755,10 +778,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   Widget _buildConnectDeviceStep() {
     final l10n = AppLocalizations.of(context)!;
-    // 进入此步骤时自动扫描热点
-    if (!_scanningWifi && _csInvNetworks.isEmpty && !_autoConnecting && _selectedAp == null && !_isProcessing) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scanForDeviceHotspot());
-    }
+
+    // 判断是否正在自动流程中（扫描 + 连接）
+    final isInProgress = _scanningWifi || _autoConnecting || _isProcessing;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -776,15 +798,18 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             ),
             child: Column(
               children: [
-                if (_autoConnecting) ...[
+                if (isInProgress) ...[
                   SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
                   SizedBox(height: 12.h),
-                  Text(l10n.str('connecting_to', {'ssid': _selectedAp?.ssid ?? ''}), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
-                ] else if (_scanningWifi) ...[
-                  SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
-                  SizedBox(height: 12.h),
-                  Text(l10n.scanningDeviceHotspot, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
-                ] else if (_selectedAp != null) ...[
+                  Text(
+                    _isProcessing
+                        ? l10n.checkConnection
+                        : _selectedAp != null
+                            ? l10n.str('connecting_to', {'ssid': _selectedAp?.ssid ?? ''})
+                            : l10n.scanningDeviceHotspot,
+                    style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+                  ),
+                ] else if (_selectedAp != null && _errorMessage == null) ...[
                   Icon(Icons.wifi_rounded, size: 48.sp, color: AppColors.successLight),
                   SizedBox(height: 12.h),
                   Text(l10n.connected, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.successLight)),
@@ -810,7 +835,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     width: double.infinity,
                     height: 40.h,
                     child: OutlinedButton.icon(
-                      onPressed: _scanningWifi ? null : _scanForDeviceHotspot,
+                      onPressed: _autoScanAndConnect,
                       icon: Icon(Icons.refresh_rounded, size: 18.sp),
                       label: Text(l10n.rescanHotspot, style: TextStyle(fontSize: 13.sp)),
                       style: OutlinedButton.styleFrom(
@@ -847,9 +872,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           width: double.infinity,
           height: 48.h,
           child: ElevatedButton(
-            onPressed: (_isProcessing || _autoConnecting || _scanningWifi) ? null : _checkConnectionAndProceed,
+            onPressed: isInProgress ? null : _checkConnectionAndProceed,
             style: ElevatedButton.styleFrom(
-              backgroundColor: (_isProcessing || _autoConnecting || _scanningWifi) ? AppColors.textHint : AppColors.primary,
+              backgroundColor: isInProgress ? AppColors.textHint : AppColors.primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
               elevation: 0,

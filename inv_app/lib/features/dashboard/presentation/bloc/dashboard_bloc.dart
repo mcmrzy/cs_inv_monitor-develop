@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as dev;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dartz/dartz.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -42,6 +43,16 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     return super.close();
   }
 
+  /// 快速检查是否有网络连接
+  Future<bool> _hasNetwork() async {
+    try {
+      final result = await Connectivity().checkConnectivity();
+      return !result.contains(ConnectivityResult.none);
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> _onLoadRequested(
     DashboardLoadRequested event,
     Emitter<DashboardState> emit,
@@ -49,6 +60,19 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     // 如果已有数据，不显示 loading（避免刷新时闪烁）
     if (state is! DashboardLoaded) {
       emit(const DashboardLoading());
+    }
+
+    // 断网时直接加载缓存，不等待 30s×4 超时
+    if (!await _hasNetwork()) {
+      final cached = _loadCachedData();
+      if (cached != null) {
+        emit(DashboardLoaded(data: cached));
+      } else if (state is DashboardLoaded) {
+        // 保留旧数据
+      } else {
+        emit(const DashboardError(message: 'Failed to load, please check network'));
+      }
+      return;
     }
 
     // 每个 API 独立 try-catch，一个失败不影响其他

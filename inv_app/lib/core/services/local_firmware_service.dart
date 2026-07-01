@@ -10,9 +10,11 @@ class LocalFirmwareService {
   LocalFirmwareService(this._localComm);
 
   /// 上传固件文件到设备
+  /// target: 'esp' 或 'arm'，决定上传方式
   Future<void> uploadFirmware({
     required String deviceIP,
     required String filePath,
+    String target = 'esp',
     void Function(int sent, int total)? onProgress,
   }) async {
     final file = File(filePath);
@@ -22,7 +24,7 @@ class LocalFirmwareService {
 
     try {
       await _localComm.connect(deviceIP);
-      await _localComm.uploadFirmware(filePath, onProgress: onProgress);
+      await _localComm.uploadFirmware(filePath, target: target, onProgress: onProgress);
     } catch (e) {
       throw LocalFirmwareException('Upload firmware failed: $e');
     }

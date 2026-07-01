@@ -105,25 +105,37 @@ type CellsData struct {
 }
 
 // ==================== 告警事件 (cs_inv/{sn}/data/alarm) ====================
+// 单个告警条目
+type AlarmItem struct {
+	Code    int    `json:"code"`
+	Level   string `json:"level"`
+	Message string `json:"message"`
+}
+
+// MQTT 告警数据格式
 type AlarmData struct {
-	Event     string                 `json:"event"`
-	Timestamp int64                  `json:"timestamp"`
-	Source    string                 `json:"source"`
-	FaultCode int                    `json:"fault_code"`
-	FaultDesc string                 `json:"fault_desc"`
-	AlarmCode int                    `json:"alarm_code"`
-	Trigger   map[string]interface{} `json:"trigger"`
+	Code      int         `json:"code"`
+	Level     string      `json:"level"`
+	Message   string      `json:"message"`
+	Count     int         `json:"count"`
+	Alarms    []AlarmItem `json:"alarms"`
+	Timestamp int64       `json:"timestamp"`
 
 	SN         string    `json:"sn"`
 	ReceivedAt time.Time `json:"-"`
 }
 
-// ==================== 命令响应 (cs_inv/{sn}/cmd/response) ====================
+// ==================== 命令响应 (cs_inv/{sn}/cmd_result) ====================
 type CommandResponse struct {
-	Result    string `json:"result"`
-	Cmd       string `json:"cmd"`
-	Message   string `json:"message"`
-	Timestamp int64  `json:"timestamp"`
+	TaskID    string          `json:"task_id"`
+	Cmd       string          `json:"cmd"`
+	Success   bool            `json:"success"`
+	Message   string          `json:"message"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	Timestamp int64           `json:"timestamp"`
+
+	// 兼容旧格式
+	Result string `json:"result,omitempty"`
 
 	SN         string    `json:"-"`
 	ReceivedAt time.Time `json:"-"`

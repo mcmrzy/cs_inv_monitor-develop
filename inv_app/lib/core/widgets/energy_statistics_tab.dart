@@ -723,7 +723,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     Color levelColor;
     String levelText;
     switch (severity) {
-      case 'critical':
+      case 'fault':
         levelColor = AppColors.errorLight;
         levelText = _l10n.severe;
         break;
@@ -731,8 +731,16 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         levelColor = AppColors.warning;
         levelText = _l10n.warningLevel;
         break;
-      default:
+      case 'info':
         levelColor = AppColors.blue;
+        levelText = _l10n.infoLevel;
+        break;
+      case 'normal':
+        levelColor = AppColors.success;
+        levelText = '正常';
+        break;
+      default:
+        levelColor = AppColors.textHint;
         levelText = _l10n.general;
     }
 
@@ -781,12 +789,14 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
 
   String _levelToSeverity(int level) {
     switch (level) {
-      case 1:
-        return 'critical';
+      case 3:
+        return 'fault';
       case 2:
         return 'warning';
-      default:
+      case 1:
         return 'info';
+      default:
+        return 'normal'; // code=0
     }
   }
 

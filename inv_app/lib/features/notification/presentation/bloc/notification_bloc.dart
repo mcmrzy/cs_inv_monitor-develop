@@ -17,6 +17,8 @@ part 'notification_state.dart';
 enum SystemNotificationType {
   deviceOnline,
   deviceOffline,
+  deviceFault, // 设备故障
+  alarmCleared, // 告警清除/故障恢复
   otaAvailable,
   appUpdate,
 }
@@ -68,6 +70,12 @@ class SystemNotification {
         break;
       case 'device_offline':
         type = SystemNotificationType.deviceOffline;
+        break;
+      case 'device_fault':
+        type = SystemNotificationType.deviceFault;
+        break;
+      case 'alarm_cleared':
+        type = SystemNotificationType.alarmCleared;
         break;
       case 'ota_available':
         type = SystemNotificationType.otaAvailable;

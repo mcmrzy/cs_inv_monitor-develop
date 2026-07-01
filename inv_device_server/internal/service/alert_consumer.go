@@ -26,12 +26,21 @@ type AlertConsumer struct {
 }
 
 type RawAlertMessage struct {
-	SN         string      `json:"sn"`
-	Source     string      `json:"source"`
-	FaultCode  int         `json:"fault_code"`
-	FaultDesc  string      `json:"fault_desc"`
-	ReceivedAt string      `json:"received_at"`
-	Payload    interface{} `json:"payload"`
+	SN        string      `json:"sn"`
+	Source    string      `json:"source"`
+	MsgType   string      `json:"msg_type"`
+	Payload   interface{} `json:"payload"`
+	ReceivedAt string     `json:"received_at"`
+}
+
+// 新告警格式 (MQTT payload)
+type RawAlarmPayload struct {
+	Code      int                    `json:"code"`
+	Level     string                 `json:"level"`
+	Message   string                 `json:"message"`
+	Count     int                    `json:"count"`
+	Alarms    []map[string]interface{} `json:"alarms"`
+	Timestamp int64                  `json:"timestamp"`
 }
 
 func NewAlertConsumer(brokers []string, topic string, groupID string, apiServer string, internalKey string) *AlertConsumer {
@@ -123,13 +132,7 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 		return
 	}
 
-	// 从 payload 中提取设备实际报告的故障码和描述
-	// bridge 包装格式: {"sn":"...", "payload":{"data":{"code":1001,"message":"...",...},"timestamp":...}}
-	// 实际告警字段嵌套在 payload.data 内
-	faultCode := raw.FaultCode
-	faultDesc := raw.FaultDesc
-
-	// 将 payload 统一转为 map（可能是 map 或 JSON 字符串）
+	// 将 payload 统一转为 map
 	var payloadMap map[string]interface{}
 	switch v := raw.Payload.(type) {
 	case map[string]interface{}:
@@ -138,50 +141,125 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 		json.Unmarshal([]byte(v), &payloadMap)
 	}
 
-	if payloadMap != nil {
-		// 先从 payload.data 中提取（bridge 的包装格式）
-		var alarmPayload map[string]interface{}
-		if data, ok := payloadMap["data"]; ok {
-			if dataMap, ok := data.(map[string]interface{}); ok {
-				alarmPayload = dataMap
-			}
+	// 空 payload 或空对象 → 告警清除
+	if len(payloadMap) == 0 {
+		logger.Info("Device alarm cleared (empty payload)", zap.String("sn", raw.SN))
+		alarm := &model.AlarmData{
+			SN:         raw.SN,
+			Code:       0,
+			Level:      "normal",
+			Message:    "故障恢复，系统正常",
+			Count:      0,
+			Alarms:     nil,
+			ReceivedAt: time.Now(),
 		}
-		// 如果 payload.data 不存在，则直接用 payload 本身
-		if alarmPayload == nil {
-			alarmPayload = payloadMap
+		if err := a.postInternalAlarm(alarm); err != nil {
+			logger.Error("Failed to post alarm clear", zap.String("sn", raw.SN), zap.Error(err))
 		}
-		if code, ok := alarmPayload["code"]; ok {
-			if codeNum, ok := toInt(code); ok {
-				faultCode = codeNum
-			}
+		if err := a.consumer.CommitMessages(ctx, m); err != nil {
+			logger.Warn("Failed to commit alert message", zap.Error(err))
 		}
-		if msg, ok := alarmPayload["message"]; ok {
-			if msgStr, ok := msg.(string); ok && msgStr != "" {
-				faultDesc = msgStr
-			}
-		}
+		return
 	}
 
-	alarm := &model.AlarmData{
-		SN:         raw.SN,
-		Source:     raw.Source,
-		FaultCode:  faultCode,
-		FaultDesc:  faultDesc,
-		ReceivedAt: time.Now(),
-		Trigger:    payloadMap,
+	// 解析新告警格式
+	var alarmPayload RawAlarmPayload
+	// 支持嵌套 data 格式: {"data": {"code":..., ...}, "timestamp":...}
+	dataMap := payloadMap
+	if data, ok := payloadMap["data"].(map[string]interface{}); ok {
+		dataMap = data
+		// 保留外层 timestamp
+		if ts, ok := payloadMap["timestamp"]; ok {
+			dataMap["timestamp"] = ts
+		}
+	}
+	dataJSON, _ := json.Marshal(dataMap)
+	json.Unmarshal(dataJSON, &alarmPayload)
+
+	// code=0 且 level="normal" → 告警清除
+	if alarmPayload.Code == 0 && alarmPayload.Level == "normal" {
+		logger.Info("Device alarm cleared (code=0)", zap.String("sn", raw.SN))
+		alarm := &model.AlarmData{
+			SN:         raw.SN,
+			Code:       0,
+			Level:      "normal",
+			Message:    "故障恢复，系统正常",
+			Count:      0,
+			Alarms:     nil,
+			Timestamp:  alarmPayload.Timestamp,
+			ReceivedAt: time.Now(),
+		}
+		if err := a.postInternalAlarm(alarm); err != nil {
+			logger.Error("Failed to post alarm clear", zap.String("sn", raw.SN), zap.Error(err))
+		}
+		if err := a.consumer.CommitMessages(ctx, m); err != nil {
+			logger.Warn("Failed to commit alert message", zap.Error(err))
+		}
+		return
 	}
 
-	if err := a.postInternalAlarm(alarm); err != nil {
-		logger.Error("Failed to insert alarm",
-			zap.String("sn", raw.SN),
-			zap.Int("fault_code", faultCode),
-			zap.String("fault_desc", faultDesc),
-			zap.Error(err))
+	// 有 alarms 数组时，逐个上报
+	if len(alarmPayload.Alarms) > 0 {
+		for _, item := range alarmPayload.Alarms {
+			code := 0
+			level := ""
+			message := ""
+			if c, ok := toInt(item["code"]); ok {
+				code = c
+			}
+			if l, ok := item["level"].(string); ok {
+				level = l
+			}
+			if m, ok := item["message"].(string); ok {
+				message = m
+			}
+			alarm := &model.AlarmData{
+				SN:         raw.SN,
+				Code:       code,
+				Level:      level,
+				Message:    message,
+				Count:      alarmPayload.Count,
+				Alarms:     nil,
+				Timestamp:  alarmPayload.Timestamp,
+				ReceivedAt: time.Now(),
+			}
+			if err := a.postInternalAlarm(alarm); err != nil {
+				logger.Error("Failed to post alarm item",
+					zap.String("sn", raw.SN),
+					zap.Int("code", code),
+					zap.Error(err))
+			} else {
+				logger.Info("Alarm item recorded",
+					zap.String("sn", raw.SN),
+					zap.Int("code", code),
+					zap.String("level", level),
+					zap.String("message", message))
+			}
+		}
 	} else {
-		logger.Warn("Alarm recorded from Kafka",
-			zap.String("sn", raw.SN),
-			zap.Int("fault_code", faultCode),
-			zap.String("fault_desc", faultDesc))
+		// 没有 alarms 数组，使用顶层字段
+		alarm := &model.AlarmData{
+			SN:         raw.SN,
+			Code:       alarmPayload.Code,
+			Level:      alarmPayload.Level,
+			Message:    alarmPayload.Message,
+			Count:      alarmPayload.Count,
+			Alarms:     nil,
+			Timestamp:  alarmPayload.Timestamp,
+			ReceivedAt: time.Now(),
+		}
+		if err := a.postInternalAlarm(alarm); err != nil {
+			logger.Error("Failed to post alarm",
+				zap.String("sn", raw.SN),
+				zap.Int("code", alarmPayload.Code),
+				zap.Error(err))
+		} else {
+			logger.Info("Alarm recorded",
+				zap.String("sn", raw.SN),
+				zap.Int("code", alarmPayload.Code),
+				zap.String("level", alarmPayload.Level),
+				zap.String("message", alarmPayload.Message))
+		}
 	}
 
 	if err := a.consumer.CommitMessages(ctx, m); err != nil {

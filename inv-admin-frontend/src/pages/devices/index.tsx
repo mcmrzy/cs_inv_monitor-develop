@@ -133,6 +133,7 @@ interface CommandHistoryRecord {
 
 const COMMAND_STATUS_COLORS: Record<string, string> = {
   pending: 'default',
+  queued: 'gold',
   sent: 'processing',
   ack_received: 'blue',
   success: 'green',
@@ -510,8 +511,8 @@ const DevicesPage: React.FC = () => {
       sn: record.sn,
       model: record.model,
       ratedPower: record.rated_power,
-      firmwareVersion: record.firmware_version,
-      hardwareVersion: record.hardware_version,
+      firmwareVersion: record.firmware_arm,
+      hardwareVersion: record.firmware_esp,
     })
     setEditModalOpen(true)
   }
@@ -872,6 +873,50 @@ const DevicesPage: React.FC = () => {
         messageApi.info(t('dev.otaTaskCreated') + ': ' + selectedRowKeys.join(', '))
       },
     },
+    {
+      key: 'batchControl',
+      label: t('dev.batchControl'),
+      icon: <ThunderboltOutlined />,
+      onClick: () => {
+        if (selectedRowKeys.length === 0) {
+          messageApi.warning(t('dev.selectDevicesFirst'))
+          return
+        }
+        Modal.confirm({
+          title: t('dev.batchControlTitle'),
+          content: (
+            <div>
+              <p>{t('dev.batchControlConfirm', { count: selectedRowKeys.length, cmd: 'restart' })}</p>
+              <Select
+                defaultValue="restart"
+                style={{ width: '100%', marginTop: 8 }}
+                options={[
+                  { label: 'restart', value: 'restart' },
+                  { label: 'query_status', value: 'query_status' },
+                ]}
+                id="batch-cmd-select"
+              />
+            </div>
+          ),
+          okText: t('common.confirm'),
+          cancelText: t('common.cancel'),
+          onOk: () => {
+            const cmdSelect = document.getElementById('batch-cmd-select') as HTMLSelectElement
+            const cmd = cmdSelect?.value || 'restart'
+            return commandApi.batchControl({
+              device_sns: selectedRowKeys.map(String),
+              command: cmd,
+              params: {},
+            }).then(() => {
+              messageApi.success(t('dev.batchControlSuccess'))
+              setSelectedRowKeys([])
+            }).catch(() => {
+              messageApi.error(t('dev.batchControlFailed'))
+            })
+          },
+        })
+      },
+    },
   ]
 
   const columns: ColumnsType<DeviceRecord> = [
@@ -904,8 +949,8 @@ const DevicesPage: React.FC = () => {
     },
     {
       title: t('dev.firmwareVersion'),
-      dataIndex: 'firmware_version',
-      key: 'firmware_version',
+      dataIndex: 'firmware_arm',
+      key: 'firmware_arm',
       width: 110,
       responsive: ['md'],
       render: (v: string) => v || '-',
@@ -1225,8 +1270,8 @@ const DevicesPage: React.FC = () => {
       ...base,
       model: base.model || rt.model || '',
       rated_power: (base as any).rated_power || rt.rated_power || 0,
-      firmware_version: (base as any).firmware_version || rt.firmware_arm || '',
-      hardware_version: (base as any).hardware_version || rt.firmware_esp || '',
+      firmware_version: (base as any).firmware_arm || rt.firmware_arm || '',
+      hardware_version: (base as any).firmware_esp || rt.firmware_esp || '',
       manufacturer: (base as any).manufacturer || rt.manufacturer || '',
     }
   }, [deviceDetailRaw, detailDevice, realtimeData])
@@ -1246,10 +1291,10 @@ const DevicesPage: React.FC = () => {
                 {(deviceDetail as any).rated_power != null ? `${(deviceDetail as any).rated_power} W` : '-'}
               </Descriptions.Item>
               <Descriptions.Item label={t('dev.firmwareVersion')}>
-                {(deviceDetail as any).firmware_version || '-'}
+                {(deviceDetail as any).firmware_arm || (deviceDetail as any).firmware_version || '-'}
               </Descriptions.Item>
               <Descriptions.Item label={t('dev.hardwareVersion')}>
-                {(deviceDetail as any).hardware_version || '-'}
+                {(deviceDetail as any).firmware_esp || (deviceDetail as any).hardware_version || '-'}
               </Descriptions.Item>
               <Descriptions.Item label={t('common.status')}>
                 <StatusBadge status={currentStatus} />
@@ -1543,6 +1588,7 @@ const DevicesPage: React.FC = () => {
                           <Text strong>{item.command_label}</Text>
                           <Tag color={COMMAND_STATUS_COLORS[item.status] || 'default'}>
                             {item.status === 'pending' && t('dev.waiting')}
+                            {item.status === 'queued' && (t('dev.queued') || '排队中')}
                             {item.status === 'sent' && t('dev.sent')}
                             {item.status === 'ack_received' && t('dev.deviceConfirmed')}
                             {item.status === 'success' && t('dev.success')}
