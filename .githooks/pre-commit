@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — 禁止提交大文件、敏感文件、调试日志
+
+set -e
+
+MAX_FILE_SIZE=$((500 * 1024))  # 500KB
+
+# 禁止的文件模式
+FORBIDDEN_PATTERNS=(
+    '\.exe$'
+    '\.exe~$'
+    '_logs\.txt$'
+    '^debug-.*\.md$'
+    '^fix-.*\.md$'
+    'deploy/\.env\.prod$'
+    'config\.yaml$'
+    '\.pem$'
+    '\.key$'
+    'id_rsa'
+    '\.sqlite$'
+)
+
+errors=0
+
+# 检查暂存文件
+for file in $(git diff --cached --name-only --diff-filter=ACM); do
+    # 1. 文件大小检查
+    if [ -f "$file" ]; then
+        file_size=$(wc -c < "$file")
+        if [ "$file_size" -gt "$MAX_FILE_SIZE" ]; then
+            echo "[HOOK] ERROR: $file is too large (${file_size} bytes > ${MAX_FILE_SIZE} bytes)"
+            errors=1
+        fi
+    fi
+
+    # 2. 文件名模式检查
+    for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+        if echo "$file" | grep -qE "$pattern"; then
+            echo "[HOOK] ERROR: $file matches forbidden pattern '$pattern'"
+            errors=1
+        fi
+    done
+done
+
+if [ "$errors" -ne 0 ]; then
+    echo ""
+    echo "[HOOK] Commit blocked. Fix the above errors and try again."
+    echo "[HOOK] To bypass: git commit --no-verify (NOT recommended)"
+    exit 1
+fi
+
+echo "[HOOK] pre-commit checks passed."

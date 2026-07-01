@@ -137,12 +137,12 @@ const StationsPage: React.FC = () => {
 
   const { data: stations = [], isLoading, refetch } = useQuery({
     queryKey: ['stations'],
-    queryFn: () => api.get('/stations').then(extractList),
+    queryFn: () => api.get('/stations', { params: { all: true } }).then(extractList),
   })
 
   const { data: summary } = useQuery({
     queryKey: ['stations', 'summary'],
-    queryFn: () => api.get('/stations/summary').then(extractData),
+    queryFn: () => api.get('/stations/summary', { params: { all: true } }).then(extractData),
   })
 
   const { data: users = [] } = useQuery({

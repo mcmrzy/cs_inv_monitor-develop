@@ -134,7 +134,7 @@ const MonitoringPage: React.FC = () => {
 
   const { data: stationsRaw } = useQuery({
     queryKey: ['monitoring', 'stations'],
-    queryFn: () => api.get('/stations', { params: { pageSize: 100 } }).then((r) => r.data),
+    queryFn: () => api.get('/stations', { params: { pageSize: 100, all: true } }).then((r) => r.data),
     staleTime: 60_000,
     refetchOnMount: true,
   })

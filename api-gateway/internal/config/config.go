@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -83,4 +84,23 @@ func Load(path string) (*Config, error) {
 
 func (c *Config) RedisAddr() string {
 	return fmt.Sprintf("%s:%d", c.Redis.Host, c.Redis.Port)
+}
+
+// Validate 校验关键配置项
+func (c *Config) Validate() error {
+	var missing []string
+	if c.JWT.Secret == "" || c.JWT.Secret == "CHANGE_ME" {
+		missing = append(missing, "jwt.secret (env: JWT_SECRET)")
+	}
+	if c.Backends.APIServer == "" {
+		missing = append(missing, "backends.api_server (env: API_SERVER_URL)")
+	}
+	if c.Backends.DeviceServer == "" {
+		missing = append(missing, "backends.device_server (env: DEVICE_SERVER_URL)")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("configuration validation failed:\n  - %s",
+			strings.Join(missing, "\n  - "))
+	}
+	return nil
 }

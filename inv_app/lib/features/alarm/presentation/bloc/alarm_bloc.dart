@@ -54,7 +54,7 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
   Future<bool> _hasNetwork() async {
     try {
       final result = await Connectivity().checkConnectivity();
-      return !result.contains(ConnectivityResult.none);
+      return result != ConnectivityResult.none;
     } catch (_) {
       return true;
     }

@@ -1,0 +1,227 @@
+# CS-INV-MONITOR — 光伏逆变器物联网监控系统
+
+## 项目概述
+
+光伏逆变器物联网监控系统，实现设备接入、数据采集、远程监控、告警管理、OTA升级等功能。
+
+### 子系统
+
+| 服务 | 目录 | 端口 | 技术栈 | 职责 |
+|------|------|------|--------|------|
+| inv-api-server | `inv_api_server/` | 8080 | Go + Gin + PostgreSQL + Redis | 用户端 REST API（认证、设备、告警、OTA、RBAC） |
+| inv-device-server | `inv_device_server/` | 8081 | Go + Gin + MQTT + Kafka | 设备通信（MQTT 管理、数据解析、告警消费） |
+| api-gateway | `api-gateway/` | 80 | Go + Gin | 反向代理（JWT 校验、限流、RBAC 权限、请求转发） |
+| mqtt-kafka-bridge | `mqtt-kafka-bridge/` | 8080(webhook) | Go | EMQX Webhook → Kafka 消息转发 |
+| inv-admin-frontend | `inv-admin-frontend/` | 5173(dev) / 3000(prod) | React + TypeScript + Vite + Ant Design | 管理后台 Web UI |
+| inv_app | `inv_app/` | — | Flutter + Dart | 手机 App（设备监控、OTA 升级、WiFi 配网） |
+
+### 基础设施
+
+- **数据库**: PostgreSQL 16 + TimescaleDB（时序数据压缩）
+- **缓存**: Redis 7（设备心跳、RBAC 缓存、会话）
+- **消息队列**: EMQX (MQTT) + Kafka（数据管道）
+- **部署**: Docker Compose
+
+---
+
+## 目录结构约定
+
+### Go 服务（inv_api_server / inv_device_server）
+
+```
+├── cmd/main.go           # 入口（配置加载、依赖初始化、路由注册、优雅退出）
+├── internal/
+│   ├── config/           # 配置结构体 + Viper 加载
+│   ├── handler/          # HTTP Handler（Gin），一个文件对应一个业务领域
+│   ├── middleware/        # JWT、CORS、限流等中间件
+│   ├── model/            # 数据模型（struct，对应数据库表）
+│   ├── repository/       # 数据访问层（SQL 查询）
+│   └── service/          # 业务逻辑层
+└── pkg/                  # 可复用的公共包
+    ├── jwt/              # JWT 生成/校验
+    ├── logger/           # zap 结构化日志
+    ├── response/         # 统一 JSON 响应
+    ├── sn/               # SN 格式校验
+    ├── telemetry/        # 遥测数据处理
+    └── timezone/         # 时区工具
+```
+
+### Flutter App (inv_app)
+
+```
+lib/
+├── core/
+│   ├── router/           # go_router 路由定义
+│   ├── services/         # 全局服务（下载、本地通信）
+│   ├── network/          # Dio HTTP 客户端
+│   └── utils/            # 工具函数
+├── features/
+│   ├── auth/             # 登录/注册
+│   ├── device/           # 设备列表/详情/配网
+│   ├── ota/              # OTA 升级（远程+本地）
+│   └── ...
+│       ├── data/         # 数据源 + 仓库实现
+│       ├── domain/       # 实体 + 仓库接口
+│       └── presentation/ # Bloc + Page + Widget
+├── l10n/                 # 国际化（app_zh.dart / app_en.dart）
+└── main.dart
+```
+
+### React 管理后台 (inv-admin-frontend)
+
+```
+src/
+├── components/           # 通用组件
+├── hooks/                # 自定义 Hooks
+├── layouts/              # 页面布局
+├── locales/              # 国际化（20 个语言文件）
+├── pages/                # 页面（每个目录对应一个功能模块）
+├── services/             # API 调用（每个文件对应一个业务领域）
+├── stores/               # Zustand 状态管理
+├── types/                # TypeScript 类型定义
+└── utils/                # 工具函数
+```
+
+---
+
+## API 响应格式
+
+所有 API 统一使用以下 JSON 格式：
+
+```json
+// 成功
+{"code": 0, "message": "success", "data": {...}}
+
+// 分页
+{"code": 0, "message": "success", "data": {"items": [...], "total": 100, "page": 1, "page_size": 20}}
+
+// 错误
+{"code": 400, "message": "参数错误"}
+```
+
+**Go 端**：使用 `inv_api_server/pkg/response` 包的 `Success()` / `Error()` / `Page()` / `BadRequest()` 等方法。
+**前端**：`ApiResponse<T>` 接口定义在 `inv-admin-frontend/src/types/index.ts`。
+
+---
+
+## 数据库
+
+- **PostgreSQL 16** + **TimescaleDB** 扩展（时序数据压缩）
+- 主要表：`users`, `stations`, `devices`, `device_models`, `model_fields`, `model_protocols`, `firmware_versions`, `device_upgrades`, `upgrade_packages`, `upgrade_tasks`, `alarms`, `work_orders`
+- 时序数据表：`device_data`（TimescaleDB hypertable，按 `created_at` 分区）
+- Schema 定义：`database/schema.sql`
+- 迁移脚本：`database/migrations/`
+
+---
+
+## 认证与权限
+
+- **JWT Token**：Bearer Token 认证，`Authorization: Bearer <token>`
+- **角色**：0=超级管理员, 1=代理商, 2=安装商, 3=终端用户
+- **多租户**：通过 `parent_id` 实现层级关系（代理商→安装商→终端用户）
+- **RBAC**：基于角色的权限控制（Redis 缓存权限矩阵）
+- **内部调用**：`X-Internal-Key` Header 认证（服务间通信）
+
+---
+
+## 命名约定
+
+| 场景 | 规范 | 示例 |
+|------|------|------|
+| Go 数据库字段 | snake_case | `firmware_arm`, `created_at` |
+| Go struct 字段 | PascalCase | `FirmwareArm`, `CreatedAt` |
+| Go JSON tag | snake_case | `"firmware_arm"` |
+| TypeScript | camelCase | `firmwareArm`, `createdAt` |
+| Dart | snake_case | `firmware_arm`, `created_at` |
+| 数据库表名 | snake_case 复数 | `device_upgrades`, `firmware_versions` |
+| API 路径 | kebab-case | `/api/v1/device-upgrades` |
+| Go 文件名 | snake_case | `ota_handler.go`, `device_handler.go` |
+
+---
+
+## MQTT 主题格式
+
+```
+inv/{device_sn}/telemetry    # 设备遥测数据
+inv/{device_sn}/alarm        # 告警数据
+inv/{device_sn}/status       # 在线状态
+inv/{device_sn}/command      # 下行命令
+inv/{device_sn}/ota/status   # OTA 升级状态回报
+inv/{device_sn}/ota/progress # OTA 升级进度
+```
+
+---
+
+## 构建与测试命令
+
+### Go 服务
+```bash
+cd inv_api_server && go build -o inv-api-server ./cmd/main.go
+cd inv_api_server && go test ./... -v
+cd inv_api_server && go vet ./...
+cd inv_device_server && go build -o inv-device-server ./cmd/main.go
+cd api-gateway && go build -o api-gateway ./main.go
+cd mqtt-kafka-bridge && go build -o mqtt-kafka-bridge ./main.go
+```
+
+### Docker
+```bash
+cd deploy && docker compose build inv-api-server inv-device-server
+cd deploy && docker compose up -d
+cd deploy && docker compose logs -f inv-api-server
+```
+
+### Flutter App
+```bash
+cd inv_app && flutter pub get
+cd inv_app && flutter analyze
+cd inv_app && flutter test
+cd inv_app && flutter build apk --release
+cd inv_app && flutter run
+```
+
+### React 管理后台
+```bash
+cd inv-admin-frontend && npm install
+cd inv-admin-frontend && npm run dev
+cd inv-admin-frontend && npm run build
+cd inv-admin-frontend && npx tsc --noEmit
+```
+
+---
+
+## 错误处理规范（Go）
+
+- Handler 层：使用 `response` 包的统一方法返回错误
+- Service 层：返回 `error`，包含上下文信息（`fmt.Errorf("xxx: %w", err)`）
+- Repository 层：返回 `error`，不做日志打印（由上层决定）
+- 日志使用 `pkg/logger`（zap 结构化日志），不用 `fmt.Println` 或 `log.Printf`
+
+---
+
+## OTA 升级体系
+
+### 版本号体系
+- `firmware_versions.version`：芯片固件版本（如 `1.2.1`）
+- `firmware_versions.main_version`：自动递增编号（如 `V1.0.1`），按芯片类型分别计数
+- `upgrade_packages.main_version`：升级包版本（如 `V1.0.0.20260630`）
+- `devices.firmware_esp` / `devices.firmware_arm`：设备当前芯片版本
+- `devices.main_version`：设备升级包版本
+
+### 升级模式
+- **单固件模式**：推送单个固件给指定芯片
+- **升级包模式**：打包多个芯片固件，按顺序逐芯片升级
+
+### 升级流程
+管理后台/App 推送 → `device_upgrades` 记录 → MQTT 命令 → 设备执行 → 状态回报 → 更新数据库
+
+---
+
+## 本地 OTA（App → 设备直连）
+
+- App 通过 WiFi 直连设备热点（SSID: `CS-INV-xxxx`）
+- HTTP 通信：`http://{device_ip}:80`
+- 上传 ESP 固件：`POST /ota/upload`（Content-Type: octet-stream）
+- 上传 ARM 固件：`POST /ota/upload`（Content-Type: multipart + target=arm）
+- 查询进度：`GET /ota/progress` → `{"target":"esp", "progress":50, "status":"uploading", "message":"写入中: 50%"}`
+- 查询设备信息：`GET /ota/info` → `{"esp_version":"...", "arm_version":"..."}`

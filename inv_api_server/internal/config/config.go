@@ -197,3 +197,25 @@ func Load(configPath string) (*Config, error) {
 
 	return &config, nil
 }
+
+// Validate 校验关键配置项，缺失时返回明确错误信息
+func (c *Config) Validate() error {
+	var missing []string
+	if c.JWT.Secret == "" || c.JWT.Secret == "CHANGE_ME" {
+		missing = append(missing, "jwt.secret (env: JWT_SECRET, must not be empty or 'CHANGE_ME')")
+	}
+	if c.Database.Password == "" {
+		missing = append(missing, "database.password (env: DB_PASSWORD)")
+	}
+	if c.Database.Host == "" {
+		missing = append(missing, "database.host (env: DB_HOST)")
+	}
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		missing = append(missing, "server.port (must be 1-65535)")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("configuration validation failed:\n  - %s\n\nHint: Set these via environment variables or config.yaml",
+			strings.Join(missing, "\n  - "))
+	}
+	return nil
+}

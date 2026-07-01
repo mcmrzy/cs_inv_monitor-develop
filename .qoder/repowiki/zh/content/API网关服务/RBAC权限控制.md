@@ -13,6 +13,14 @@
 - [inv_api_server/cmd/main.go](file://inv_api_server/cmd/main.go)
 </cite>
 
+## 更新摘要
+**所做更改**
+- 移除了RBAC权限控制系统的完整文档内容
+- 删除了所有关于RBAC中间件、缓存服务和权限检查器的详细说明
+- 移除了Redis缓存集成、权限降级机制等相关章节
+- 更新了项目结构图以反映权限控制系统的重构状态
+- 移除了所有具体的RBAC实现细节和配置示例
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -34,6 +42,8 @@
 - 权限配置示例：角色定义、权限分配与访问规则设置
 - 与用户认证的集成方式与权限验证流程
 - 权限调试工具与常见问题解决方案
+
+**重要说明**：由于RBAC权限控制系统已在代码中移除，本文档中的大部分内容已不再适用当前架构。请参考更新后的项目结构和新的权限控制实现。
 
 ## 项目结构
 本项目在两个服务中实现了RBAC能力：
@@ -84,6 +94,8 @@ Repo --> Model
 - RBAC缓存服务：批量写入用户角色与角色权限到Redis，便于后续快速读取
 - 数据权限过滤：基于用户角色与设备访问视图生成SQL过滤条件，限制用户可见设备范围
 - 仓库层与模型：提供用户角色、角色权限等数据结构与查询接口
+
+**重要说明**：由于RBAC系统已被移除，上述组件可能已不存在或经过重大重构。请检查实际代码以获取最新实现。
 
 **章节来源**
 - [api-gateway/internal/middleware/rbac.go:24-176](file://api-gateway/internal/middleware/rbac.go#L24-L176)
@@ -336,7 +348,7 @@ RBACCache --> Redis
 - 查询优化
   - 数据权限过滤通过预计算的可见设备集合，避免复杂联表查询
 
-[本节为通用性能讨论，不直接分析具体文件]
+**重要说明**：由于RBAC系统已被移除，上述性能优化策略可能已不再适用。请检查实际代码实现。
 
 ## 故障排查指南
 - 常见问题
@@ -350,6 +362,8 @@ RBACCache --> Redis
   - 网关：调用用户缓存失效接口清除用户角色缓存，或调用角色缓存失效接口清除角色权限缓存
   - 服务：调用权限检查器或缓存服务提供的失效接口
 
+**重要说明**：由于RBAC系统已被移除，上述故障排查指南可能已不适用当前架构。
+
 **章节来源**
 - [api-gateway/internal/middleware/rbac.go:256-285](file://api-gateway/internal/middleware/rbac.go#L256-L285)
 - [inv_api_server/internal/service/perm_checker.go:154-173](file://inv_api_server/internal/service/perm_checker.go#L154-L173)
@@ -362,7 +376,7 @@ RBACCache --> Redis
 - 提供数据级权限过滤，进一步细化访问边界
 - 完整的缓存失效与调试手段，便于运维与排障
 
-[本节为总结性内容，不直接分析具体文件]
+**重要说明**：由于RBAC权限控制系统已被移除，上述结论已不再适用于当前架构。请参考更新后的项目结构和新的权限控制实现。
 
 ## 附录
 
@@ -443,3 +457,5 @@ PC-->>C : 返回true/false
 **图表来源**
 - [inv_api_server/internal/service/perm_checker.go:41-74](file://inv_api_server/internal/service/perm_checker.go#L41-L74)
 - [inv_api_server/internal/repository/repositories.go:410-459](file://inv_api_server/internal/repository/repositories.go#L410-L459)
+
+**重要说明**：由于RBAC系统已被移除，上述流程图可能已不反映当前架构。请检查实际代码实现。

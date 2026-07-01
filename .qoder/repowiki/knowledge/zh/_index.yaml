@@ -2,19 +2,243 @@
 schema_version: 1
 locale: zh-CN
 branch: develop
-exported_at: "2026-06-29T09:14:41Z"
+exported_at: "2026-07-01T06:00:24Z"
 modules:
     "":
         dir_name: 光伏逆变器物联网监控平台
         title: 光伏逆变器物联网监控平台
         scope:
-            - README.md
-            - .gitignore
-            - start_all.bat
-            - debug-alarm-not-displayed.md
-            - debug-user-list-failure.md
             - .claude\settings.local.json
             - .env.example
+            - .gitignore
+            - .qoder\plan-ota-upgrade-redesign.md
+            - .qoder\repowiki\knowledge\zh\API网关与反向代理\_module.yaml
+            - .qoder\repowiki\knowledge\zh\API网关与反向代理\技术栈.md
+            - .qoder\repowiki\knowledge\zh\API网关与反向代理\架构设计.md
+            - .qoder\repowiki\knowledge\zh\API网关与反向代理\概述.md
+            - .qoder\repowiki\knowledge\zh\API网关与反向代理\特殊配置与命令.md
+            - .qoder\repowiki\knowledge\zh\API网关与反向代理\编码规范.md
+            - .qoder\repowiki\knowledge\zh\MQTT-Kafka 桥接服务\_module.yaml
+            - .qoder\repowiki\knowledge\zh\MQTT-Kafka 桥接服务\技术栈.md
+            - .qoder\repowiki\knowledge\zh\MQTT-Kafka 桥接服务\架构设计.md
+            - .qoder\repowiki\knowledge\zh\MQTT-Kafka 桥接服务\概述.md
+            - .qoder\repowiki\knowledge\zh\MQTT-Kafka 桥接服务\特殊配置与命令.md
+            - .qoder\repowiki\knowledge\zh\_index.yaml
+            - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\_module.yaml
+            - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\技术栈.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\架构设计.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\概述.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\编码规范.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控数据库架构\_module.yaml
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控数据库架构\技术栈.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控数据库架构\架构设计.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控数据库架构\概述.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控数据库架构\编码规范.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控移动应用\_module.yaml
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控移动应用\技术栈.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控移动应用\架构设计.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控移动应用\概述.md
+            - .qoder\repowiki\knowledge\zh\光伏逆变器监控移动应用\编码规范.md
+            - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\_module.yaml
+            - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\技术栈.md
+            - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\架构设计.md
+            - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\概述.md
+            - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\特殊配置与命令.md
+            - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\编码规范.md
+            - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\_module.yaml
+            - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\技术栈.md
+            - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\架构设计.md
+            - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\概述.md
+            - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\编码规范.md
+            - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\_module.yaml
+            - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\技术栈.md
+            - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\架构设计.md
+            - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\概述.md
+            - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\仪表盘与监控数据服务及国际化\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\仪表盘与监控数据服务及国际化\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\仪表盘与监控数据服务及国际化\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\仪表盘与监控数据服务及国际化\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\告警与规则管理\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\告警与规则管理\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\告警与规则管理\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\告警与规则管理\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\国际化配置管理\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\国际化配置管理\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\国际化配置管理\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\国际化配置管理\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\工单与OTA升级管理\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\工单与OTA升级管理\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\工单与OTA升级管理\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\工单与OTA升级管理\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\技术栈.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\管理后台设置与用户管理\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\管理后台设置与用户管理\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\管理后台设置与用户管理\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\管理后台设置与用户管理\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备与电站管理模块\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备与电站管理模块\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备与电站管理模块\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备与电站管理模块\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备型号与并机管理接口及国际化\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备型号与并机管理接口及国际化\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备型号与并机管理接口及国际化\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备型号与并机管理接口及国际化\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\OTA升级与版本管理\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\OTA升级与版本管理\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\OTA升级与版本管理\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\OTA升级与版本管理\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\技术栈.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\设备型号与协议配置管理\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\设备型号与协议配置管理\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\设备型号与协议配置管理\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\设备型号与协议配置管理\编码规范.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\_module.yaml
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\技术栈.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\架构设计.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\概述.md
+            - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\编码规范.md
+            - .qoder\repowiki\zh\content\API参考文档\API参考文档.md
+            - .qoder\repowiki\zh\content\API参考文档\OTA升级API.md
+            - .qoder\repowiki\zh\content\API参考文档\WebSocket实时通信API.md
+            - .qoder\repowiki\zh\content\API参考文档\仪表板与统计API.md
+            - .qoder\repowiki\zh\content\API参考文档\内部服务API.md
+            - .qoder\repowiki\zh\content\API参考文档\告警管理API.md
+            - .qoder\repowiki\zh\content\API参考文档\认证与授权API.md
+            - .qoder\repowiki\zh\content\API参考文档\设备管理API.md
+            - .qoder\repowiki\zh\content\API服务器\API服务器.md
+            - .qoder\repowiki\zh\content\API服务器\实时通信服务.md
+            - .qoder\repowiki\zh\content\API服务器\管理后台API.md
+            - .qoder\repowiki\zh\content\API服务器\认证与授权系统.md
+            - .qoder\repowiki\zh\content\API服务器\设备管理API.md
+            - .qoder\repowiki\zh\content\API服务器\配置与中间件.md
+            - .qoder\repowiki\zh\content\API网关服务\API网关服务.md
+            - .qoder\repowiki\zh\content\API网关服务\CORS跨域与缓存.md
+            - .qoder\repowiki\zh\content\API网关服务\JWT认证中间件.md
+            - .qoder\repowiki\zh\content\API网关服务\RBAC权限控制.md
+            - .qoder\repowiki\zh\content\API网关服务\流量限制中间件.md
+            - .qoder\repowiki\zh\content\API网关服务\网关概述与架构.md
+            - .qoder\repowiki\zh\content\API网关服务\请求日志与监控.md
+            - .qoder\repowiki\zh\content\API网关服务\路由配置与代理.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\EMQX规则引擎配置.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\MQTT连接配置.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\MQTT通信协议.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\OTA升级协议.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_ac交流输出主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_alarm告警事件主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_battery电池数据主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_cells电芯详情主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_control远程控制状态主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_energy能量统计主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_parallel并机信息主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_pv光伏数据主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_status系统状态主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\data_three_phase三相数据主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\info设备信息主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\ota_statusOTA升级状态主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\status在线状态主题.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\上行数据格式\上行数据格式.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\下行命令格式\BMS电池管理系统命令.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\下行命令格式\EPS应急电源控制命令.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\下行命令格式\MPPT最大功率点跟踪命令.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\下行命令格式\下行命令格式.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\下行命令格式\发电机控制命令.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\下行命令格式\命令执行流程.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\下行命令格式\逆变器控制命令.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\主题结构规范.md
+            - .qoder\repowiki\zh\content\MQTT通信协议\心跳与遗嘱机制.md
+            - .qoder\repowiki\zh\content\OTA升级系统\App版本管理.md
+            - .qoder\repowiki\zh\content\OTA升级系统\OTA任务调度\OTA任务创建.md
+            - .qoder\repowiki\zh\content\OTA升级系统\OTA任务调度\OTA任务执行.md
+            - .qoder\repowiki\zh\content\OTA升级系统\OTA任务调度\OTA任务监控.md
+            - .qoder\repowiki\zh\content\OTA升级系统\OTA任务调度\OTA任务管理.md
+            - .qoder\repowiki\zh\content\OTA升级系统\OTA任务调度\OTA任务调度.md
+            - .qoder\repowiki\zh\content\OTA升级系统\OTA任务调度\OTA进度跟踪.md
+            - .qoder\repowiki\zh\content\OTA升级系统\OTA升级系统.md
+            - .qoder\repowiki\zh\content\OTA升级系统\OTA状态跟踪.md
+            - .qoder\repowiki\zh\content\OTA升级系统\固件管理.md
+            - .qoder\repowiki\zh\content\OTA升级系统\设备端OTA程序.md
+            - .qoder\repowiki\zh\content\安全与权限\JWT认证机制.md
+            - .qoder\repowiki\zh\content\安全与权限\RBAC权限控制.md
+            - .qoder\repowiki\zh\content\安全与权限\安全与权限.md
+            - .qoder\repowiki\zh\content\安全与权限\安全最佳实践.md
+            - .qoder\repowiki\zh\content\安全与权限\设备端安全.md
+            - .qoder\repowiki\zh\content\开发指南.md
+            - .qoder\repowiki\zh\content\快速开始.md
+            - .qoder\repowiki\zh\content\数据库设计\TimescaleDB时序数据库集成.md
+            - .qoder\repowiki\zh\content\数据库设计\性能优化策略.md
+            - .qoder\repowiki\zh\content\数据库设计\数据完整性与安全.md
+            - .qoder\repowiki\zh\content\数据库设计\数据库设计.md
+            - .qoder\repowiki\zh\content\数据库设计\数据库迁移管理.md
+            - .qoder\repowiki\zh\content\数据库设计\核心表结构设计.md
+            - .qoder\repowiki\zh\content\监控与可观测性\Grafana仪表板.md
+            - .qoder\repowiki\zh\content\监控与可观测性\Prometheus监控.md
+            - .qoder\repowiki\zh\content\监控与可观测性\告警与通知.md
+            - .qoder\repowiki\zh\content\监控与可观测性\性能遥测.md
+            - .qoder\repowiki\zh\content\监控与可观测性\日志系统.md
+            - .qoder\repowiki\zh\content\监控与可观测性\监控与可观测性.md
+            - .qoder\repowiki\zh\content\移动端应用\UI组件库.md
+            - .qoder\repowiki\zh\content\移动端应用\个人中心模块.md
+            - .qoder\repowiki\zh\content\移动端应用\仪表盘模块.md
+            - .qoder\repowiki\zh\content\移动端应用\告警管理模块.md
+            - .qoder\repowiki\zh\content\移动端应用\应用架构设计.md
+            - .qoder\repowiki\zh\content\移动端应用\数据统计模块.md
+            - .qoder\repowiki\zh\content\移动端应用\用户认证模块.md
+            - .qoder\repowiki\zh\content\移动端应用\电站管理模块.md
+            - .qoder\repowiki\zh\content\移动端应用\移动端应用.md
+            - .qoder\repowiki\zh\content\移动端应用\设备管理模块.md
+            - .qoder\repowiki\zh\content\移动端应用\通信集成.md
+            - .qoder\repowiki\zh\content\管理后台前端\UI组件系统.md
+            - .qoder\repowiki\zh\content\管理后台前端\前端架构设计.md
+            - .qoder\repowiki\zh\content\管理后台前端\动态表单系统.md
+            - .qoder\repowiki\zh\content\管理后台前端\国际化系统.md
+            - .qoder\repowiki\zh\content\管理后台前端\状态管理系统.md
+            - .qoder\repowiki\zh\content\管理后台前端\管理后台前端.md
+            - .qoder\repowiki\zh\content\管理后台前端\页面组件.md
+            - .qoder\repowiki\zh\content\系统架构\安全架构.md
+            - .qoder\repowiki\zh\content\系统架构\微服务架构设计.md
+            - .qoder\repowiki\zh\content\系统架构\数据流架构\历史统计数据链路.md
+            - .qoder\repowiki\zh\content\系统架构\数据流架构\实时数据链路.md
+            - .qoder\repowiki\zh\content\系统架构\数据流架构\数据一致性与同步.md
+            - .qoder\repowiki\zh\content\系统架构\数据流架构\数据流架构.md
+            - .qoder\repowiki\zh\content\系统架构\数据流架构\消息路由机制.md
+            - .qoder\repowiki\zh\content\系统架构\消息队列架构.md
+            - .qoder\repowiki\zh\content\系统架构\系统架构.md
+            - .qoder\repowiki\zh\content\系统架构\高可用设计.md
+            - .qoder\repowiki\zh\content\设备服务器\MQTT客户端.md
+            - .qoder\repowiki\zh\content\设备服务器\协议解析服务\协议解析服务.md
+            - .qoder\repowiki\zh\content\设备服务器\协议解析服务\协议适配器.md
+            - .qoder\repowiki\zh\content\设备服务器\协议解析服务\字段映射引擎.md
+            - .qoder\repowiki\zh\content\设备服务器\协议解析服务\数据帧解析算法.md
+            - .qoder\repowiki\zh\content\设备服务器\协议解析服务\消息处理流程.md
+            - .qoder\repowiki\zh\content\设备服务器\告警消费服务.md
+            - .qoder\repowiki\zh\content\设备服务器\数据服务.md
+            - .qoder\repowiki\zh\content\设备服务器\监控与指标.md
+            - .qoder\repowiki\zh\content\设备服务器\设备服务器.md
+            - .qoder\repowiki\zh\content\设备服务器\配置管理.md
+            - .qoder\repowiki\zh\content\部署与运维\CI_CD流水线.md
+            - .qoder\repowiki\zh\content\部署与运维\Kubernetes部署.md
+            - .qoder\repowiki\zh\content\部署与运维\容器化部署.md
+            - .qoder\repowiki\zh\content\部署与运维\生产环境运维.md
+            - .qoder\repowiki\zh\content\部署与运维\监控告警.md
+            - .qoder\repowiki\zh\content\部署与运维\运维脚本.md
+            - .qoder\repowiki\zh\content\部署与运维\部署与运维.md
+            - .qoder\repowiki\zh\content\项目概述\快速开始.md
+            - .qoder\repowiki\zh\content\项目概述\技术栈概览.md
+            - .qoder\repowiki\zh\content\项目概述\核心功能特性.md
+            - .qoder\repowiki\zh\content\项目概述\系统简介.md
+            - .qoder\repowiki\zh\content\项目概述\项目概述.md
+            - .qoder\repowiki\zh\meta\repowiki-metadata.json
+            - .qoder\skills\auto-git-commit\SKILL.md
+            - README.md
             - api-gateway\.dockerignore
             - api-gateway\Dockerfile
             - api-gateway\config.docker.yaml
@@ -32,14 +256,21 @@ modules:
             - api-gateway\internal\proxy\proxy.go
             - api-gateway\internal\routes\routes.go
             - api-gateway\main.go
+            - api_logs.txt
             - database\migration_timescaledb.sql
             - database\migrations\001_init_schema.up.sql
             - database\migrations\002_add_performance_indexes.up.sql
             - database\migrations\003_timescaledb_compression.up.sql
             - database\migrations\004_add_energy_columns.up.sql
             - database\migrations\005_device_day_data_jsonb.up.sql
+            - database\migrations\006_refactor_ota_to_device_upgrades.sql
+            - database\migrations\007_enhance_cmd_logs.up.sql
+            - database\migrations\008_upgrade_packages.up.sql
+            - database\migrations\009_upgrade_tasks.up.sql
             - database\schema.sql
             - database\数据库说明文档.html
+            - debug-alarm-not-displayed.md
+            - debug-user-list-failure.md
             - deploy\.env
             - deploy\.env.prod
             - deploy\README.md
@@ -75,6 +306,7 @@ modules:
             - deploy\test_login.py
             - deploy\timescaledb\Dockerfile
             - deploy\webhook_server.py
+            - device_logs.txt
             - docs\ARM_ESP32_UART_Protocol.md
             - docs\MQTT接口文档.md
             - docs\RECTIFICATION_PLAN.md
@@ -87,6 +319,8 @@ modules:
             - docs\架构升级任务清单.md
             - docs\系统参数规范_48V离网逆变器.md
             - docs\设备端OTA程序开发指南.md
+            - fix-alarm-level-query.md
+            - gw_logs.txt
             - inv-admin-frontend\.gitignore
             - inv-admin-frontend\Dockerfile
             - inv-admin-frontend\index.html
@@ -241,6 +475,14 @@ modules:
             - inv_app\android\.kotlin\errors\errors-1781077744999.log
             - inv_app\android\.kotlin\errors\errors-1781077745057.log
             - inv_app\android\.kotlin\errors\errors-1781077745093.log
+            - inv_app\android\.kotlin\errors\errors-1782872171029.log
+            - inv_app\android\.kotlin\errors\errors-1782872171046.log
+            - inv_app\android\.kotlin\errors\errors-1782872171053.log
+            - inv_app\android\.kotlin\errors\errors-1782872171064.log
+            - inv_app\android\.kotlin\errors\errors-1782873972948.log
+            - inv_app\android\.kotlin\errors\errors-1782873972964.log
+            - inv_app\android\.kotlin\errors\errors-1782873972978.log
+            - inv_app\android\.kotlin\errors\errors-1782873972992.log
             - inv_app\android\app\build.gradle.kts
             - inv_app\android\app\src\main\AndroidManifest.xml
             - inv_app\android\app\src\main\java\io\flutter\plugins\GeneratedPluginRegistrant.java
@@ -344,6 +586,7 @@ modules:
             - inv_app\lib\core\services\mdns_discovery_service.dart
             - inv_app\lib\core\services\mqtt_service.dart
             - inv_app\lib\core\services\notification_service.dart
+            - inv_app\lib\core\services\notification_stream_service.dart
             - inv_app\lib\core\services\offline_cache_service.dart
             - inv_app\lib\core\services\offline_sync_service.dart
             - inv_app\lib\core\services\provision_service.dart
@@ -414,6 +657,7 @@ modules:
             - inv_app\lib\features\device\data\datasources\device_remote_data_source.dart
             - inv_app\lib\features\device\data\repositories\device_repository_impl.dart
             - inv_app\lib\features\device\domain\entities\device_param.dart
+            - inv_app\lib\features\device\domain\entities\device_setting_config.dart
             - inv_app\lib\features\device\domain\repositories\device_repository.dart
             - inv_app\lib\features\device\presentation\bloc\device_bloc.dart
             - inv_app\lib\features\device\presentation\bloc\device_event.dart
@@ -422,6 +666,7 @@ modules:
             - inv_app\lib\features\device\presentation\pages\device_control_page.dart
             - inv_app\lib\features\device\presentation\pages\device_params_page.dart
             - inv_app\lib\features\device\presentation\pages\device_realtime_page.dart
+            - inv_app\lib\features\device\presentation\pages\device_settings_page.dart
             - inv_app\lib\features\device\presentation\pages\history_chart_page.dart
             - inv_app\lib\features\device\presentation\pages\local_mode_page.dart
             - inv_app\lib\features\device\presentation\pages\wifi_config_page.dart
@@ -559,6 +804,7 @@ modules:
             - mqtt-kafka-bridge\go.mod
             - mqtt-kafka-bridge\go.sum
             - mqtt-kafka-bridge\main.go
+            - start_all.bat
             - tools\stress_test\main.go
             - 光伏逆变器物联网监控系统 — 流程文档.md
         source_files: []
@@ -566,110 +812,28 @@ modules:
         depends_on: []
         related_to: []
     admin_frontend:
-        dir_name: 逆变器物联网管理后台前端
-        title: 逆变器物联网管理后台前端
+        dir_name: 管理后台前端应用
+        title: 管理后台前端应用
         scope:
             - inv-admin-frontend/
         source_files: []
         children:
-            - admin_frontend/i18n_config
-            - admin_frontend/settings_admin
-            - admin_frontend/alerts_rules
-            - admin_frontend/devices_stations
-            - admin_frontend/dashboard_monitoring
-            - admin_frontend/work_orders_ota
-            - admin_frontend/models_parallel
+            - admin_frontend/shared_infrastructure
         depends_on: []
         related_to:
-            - path: mobile_app
-    admin_frontend/alerts_rules:
-        dir_name: 告警与规则管理
-        title: 告警与规则管理
+            - path: api_server
+    admin_frontend/shared_infrastructure:
+        dir_name: 前端应用入口与全局配置
+        title: 前端应用入口与全局配置
         scope:
-            - inv-admin-frontend/src/services/alertApi.ts
-            - inv-admin-frontend/src/services/alertRuleApi.ts
-            - inv-admin-frontend/src/locales/alerts.ts
-            - inv-admin-frontend/src/locales/alertRules.ts
+            - inv-admin-frontend/src/App.tsx
+            - inv-admin-frontend/src/main.tsx
+            - inv-admin-frontend/src/global.css
+            - inv-admin-frontend/src/vite-env.d.ts
         source_files: []
         children: []
         depends_on: []
         related_to: []
-    admin_frontend/dashboard_monitoring:
-        dir_name: 仪表盘与监控数据服务及国际化
-        title: 仪表盘与监控数据服务及国际化
-        scope:
-            - inv-admin-frontend/src/services/dashboardApi.ts
-            - inv-admin-frontend/src/locales/dashboard.ts
-            - inv-admin-frontend/src/locales/monitoring.ts
-            - inv-admin-frontend/src/locales/bigScreen.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to:
-            - path: api_server/ops_telemetry
-    admin_frontend/devices_stations:
-        dir_name: 设备与电站管理模块
-        title: 设备与电站管理模块
-        scope:
-            - inv-admin-frontend/src/services/deviceApi.ts
-            - inv-admin-frontend/src/locales/devices.ts
-            - inv-admin-frontend/src/locales/stations.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to: []
-    admin_frontend/i18n_config:
-        dir_name: 国际化配置管理
-        title: 国际化配置管理
-        scope:
-            - inv-admin-frontend/src/locales/index.ts
-            - inv-admin-frontend/src/locales/common.ts
-            - inv-admin-frontend/src/locales/layout.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to: []
-    admin_frontend/models_parallel:
-        dir_name: 设备型号与并机管理接口及国际化
-        title: 设备型号与并机管理接口及国际化
-        scope:
-            - inv-admin-frontend/src/services/modelApi.ts
-            - inv-admin-frontend/src/services/parallelApi.ts
-            - inv-admin-frontend/src/locales/models.ts
-            - inv-admin-frontend/src/locales/parallel.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to:
-            - path: api_server/model_management
-    admin_frontend/settings_admin:
-        dir_name: 管理后台设置与用户管理
-        title: 管理后台设置与用户管理
-        scope:
-            - inv-admin-frontend/src/services/userApi.ts
-            - inv-admin-frontend/src/services/commandApi.ts
-            - inv-admin-frontend/src/locales/users.ts
-            - inv-admin-frontend/src/locales/batchSettings.ts
-            - inv-admin-frontend/src/locales/remoteSettings.ts
-            - inv-admin-frontend/src/locales/operationLogs.ts
-            - inv-admin-frontend/src/locales/admin.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to: []
-    admin_frontend/work_orders_ota:
-        dir_name: 工单与OTA升级管理
-        title: 工单与OTA升级管理
-        scope:
-            - inv-admin-frontend/src/services/workOrderApi.ts
-            - inv-admin-frontend/src/services/otaApi.ts
-            - inv-admin-frontend/src/locales/workOrders.ts
-            - inv-admin-frontend/src/locales/ota.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to:
-            - path: api_server/ota
     api_gateway:
         dir_name: API网关与反向代理
         title: API网关与反向代理
@@ -681,8 +845,8 @@ modules:
         related_to:
             - path: api_server
     api_server:
-        dir_name: 逆变器监控API服务
-        title: 逆变器监控API服务
+        dir_name: 物联网设备监控与管理平台 API 网关
+        title: 物联网设备监控与管理平台 API 网关
         scope:
             - inv_api_server/
         source_files: []
@@ -693,6 +857,8 @@ modules:
         depends_on: []
         related_to:
             - path: api_gateway
+            - path: mobile_app
+            - path: admin_frontend
             - path: database
     api_server/model_management:
         dir_name: 设备型号与协议配置管理
@@ -704,8 +870,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: admin_frontend/models_parallel
+        related_to: []
     api_server/ops_telemetry:
         dir_name: 运维遥测与监控接口
         title: 运维遥测与监控接口
@@ -716,8 +881,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: admin_frontend/dashboard_monitoring
+        related_to: []
     api_server/ota:
         dir_name: OTA升级与版本管理
         title: OTA升级与版本管理
@@ -728,8 +892,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: admin_frontend/work_orders_ota
+        related_to: []
     database:
         dir_name: 光伏逆变器监控数据库架构
         title: 光伏逆变器监控数据库架构
@@ -741,8 +904,8 @@ modules:
         related_to:
             - path: api_server
     deploy:
-        dir_name: 应用部署与运维自动化
-        title: 应用部署与运维自动化
+        dir_name: 部署编排与运维自动化
+        title: 部署编排与运维自动化
         scope:
             - deploy/
         source_files: []
@@ -750,8 +913,8 @@ modules:
         depends_on: []
         related_to: []
     device_server:
-        dir_name: 设备接入与遥测数据桥接服务
-        title: 设备接入与遥测数据桥接服务
+        dir_name: 设备接入与遥测数据解析服务
+        title: 设备接入与遥测数据解析服务
         scope:
             - inv_device_server/
         source_files: []
@@ -779,7 +942,7 @@ modules:
         children: []
         depends_on: []
         related_to:
-            - path: admin_frontend
+            - path: api_server
     mqtt_kafka_bridge:
         dir_name: MQTT-Kafka 桥接服务
         title: MQTT-Kafka 桥接服务

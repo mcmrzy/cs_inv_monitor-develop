@@ -1,0 +1,38 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Go — 强制 tab 缩进（Go 官方规范）
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# Dart / Flutter — 2 空格
+[*.dart]
+indent_size = 2
+
+# TypeScript / JavaScript / React — 2 空格
+[*.{ts,tsx,js,jsx}]
+indent_size = 2
+
+# JSON / YAML — 2 空格
+[*.{json,yml,yaml}]
+indent_size = 2
+
+# SQL
+[*.sql]
+indent_size = 2
+
+# Markdown
+[*.md]
+trim_trailing_whitespace = false
+
+# Makefile — 必须 tab
+[Makefile]
+indent_style = tab
