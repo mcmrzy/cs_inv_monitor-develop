@@ -400,6 +400,8 @@ func (s *DeviceService) HasControlPermission(ctx context.Context, userID int64, 
 var systemCommands = map[string]bool{
 	"get_params":   true,
 	"set_params":   true,
+	"set_control":  true,
+	"set_alarm":    true,
 	"batch_config": true,
 	"reset":        true,
 	"restart":      true,
@@ -580,6 +582,8 @@ func (s *DeviceService) insertCmdNotification(ctx context.Context, sn, taskID, c
 	cmdLabels := map[string]string{
 		"get_params":   "读取参数",
 		"set_params":   "设置参数",
+		"set_control":  "设置控制",
+		"set_alarm":    "告警控制",
 		"batch_config": "批量配置",
 		"reset":        "重置设备",
 		"restart":      "重启设备",

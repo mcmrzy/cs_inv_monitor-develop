@@ -279,19 +279,24 @@ func (c *Client) handleCommands(ctx context.Context) {
 	}
 }
 
+// isOtaCommand 判断是否为 OTA 相关命令
+func isOtaCommand(cmdType string) bool {
+	return cmdType == "ota_upgrade" || cmdType == "ota_notify" || cmdType == "start"
+}
+
 func (c *Client) sendCommand(ctx context.Context, cmd *DeviceCommand) {
 	c.hub.stats.CmdSent++
 
 	// OTA命令使用专用主题 cs_inv/{sn}/ota/cmd，其他命令使用通用主题 cs_inv/{sn}/cmd
 	var topic string
-	if cmd.CmdType == "ota_upgrade" || cmd.CmdType == "ota_notify" || cmd.CmdType == "start" {
+	if isOtaCommand(cmd.CmdType) {
 		topic = fmt.Sprintf("cs_inv/%s/ota/cmd", cmd.DeviceSN)
 	} else {
 		topic = fmt.Sprintf("cs_inv/%s/cmd", cmd.DeviceSN)
 	}
 
 	// OTA 命令有原始 JSON，直接发送
-	if len(cmd.RawPayload) > 0 {
+	if isOtaCommand(cmd.CmdType) && len(cmd.RawPayload) > 0 {
 		_, err := c.cm.Publish(ctx, &paho.Publish{
 			QoS:     1,
 			Topic:   topic,
@@ -311,22 +316,9 @@ func (c *Client) sendCommand(ctx context.Context, cmd *DeviceCommand) {
 		return
 	}
 
-	payload := map[string]string{
-		"topic": cmd.CmdType,
-	}
-	if v, ok := cmd.Params["value"]; ok {
-		payload["payload"] = fmt.Sprintf(`{"value":%v}`, v)
-	} else if params, ok := cmd.Params["params"]; ok {
-		body, _ := json.Marshal(params)
-		payload["payload"] = string(body)
-	} else if len(cmd.Params) > 0 {
-		body, _ := json.Marshal(cmd.Params)
-		payload["payload"] = string(body)
-	} else {
-		payload["payload"] = ""
-	}
-
-	body, err := json.Marshal(payload)
+	// 构造符合文档规范的 MQTT payload: {"cmd": ..., "params": ..., "task_id": ...}
+	mqttPayload := c.buildMqttPayload(cmd)
+	body, err := json.Marshal(mqttPayload)
 	if err != nil {
 		logger.Error("Failed to marshal command", zap.Error(err))
 		return
@@ -347,7 +339,46 @@ func (c *Client) sendCommand(ctx context.Context, cmd *DeviceCommand) {
 
 	logger.Info("Command sent",
 		zap.String("sn", cmd.DeviceSN),
-		zap.String("cmd", cmd.CmdType))
+		zap.String("cmd", cmd.CmdType),
+		zap.String("task_id", mqttPayload["task_id"].(string)))
+}
+
+// buildMqttPayload 构造符合控制命令文档规范的 MQTT payload
+// 格式: {"cmd": "set_control", "params": {...}, "task_id": "cmd_xxx"}
+func (c *Client) buildMqttPayload(cmd *DeviceCommand) map[string]interface{} {
+	payload := map[string]interface{}{
+		"cmd": cmd.CmdType,
+	}
+
+	// 从 RawPayload 中提取 task_id（来自 API Server 的请求体）
+	var taskID string
+	if len(cmd.RawPayload) > 0 {
+		var rawReq map[string]interface{}
+		if err := json.Unmarshal(cmd.RawPayload, &rawReq); err == nil {
+			if tid, ok := rawReq["task_id"].(string); ok {
+				taskID = tid
+			}
+			// 使用 RawPayload 中的 params（可能比 cmd.Params 更完整）
+			if params, ok := rawReq["params"]; ok && params != nil {
+				payload["params"] = params
+			} else if cmd.Params != nil && len(cmd.Params) > 0 {
+				payload["params"] = cmd.Params
+			}
+		} else {
+			if cmd.Params != nil && len(cmd.Params) > 0 {
+				payload["params"] = cmd.Params
+			}
+		}
+	} else if cmd.Params != nil && len(cmd.Params) > 0 {
+		payload["params"] = cmd.Params
+	}
+
+	if taskID == "" {
+		taskID = fmt.Sprintf("cmd_%d", time.Now().UnixNano())
+	}
+	payload["task_id"] = taskID
+
+	return payload
 }
 
 func (c *Client) Disconnect() {
