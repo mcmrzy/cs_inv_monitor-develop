@@ -1014,14 +1014,26 @@ func (r *OTARepository) ListUpgradeTasks(ctx context.Context, page, pageSize int
 
 // UpdateUpgradeTaskStatus 更新任务状态
 func (r *OTARepository) UpdateUpgradeTaskStatus(ctx context.Context, id int64, status string) error {
+	var executedAt, completedAt *time.Time
+	now := time.Now()
+
+	if status == "running" {
+		// 只有 executed_at 为 NULL 时才设置
+		executedAt = &now
+	}
+	if status == "completed" || status == "partial_success" || status == "failed" || status == "cancelled" {
+		completedAt = &now
+	}
+
+	// 使用 COALESCE 保留已有值：若新值为 NULL 则保持原值
 	_, err := r.db.Exec(ctx, `
 		UPDATE upgrade_tasks SET
 		    status = $2,
-		    executed_at = CASE WHEN $2 = 'running' AND executed_at IS NULL THEN NOW() ELSE executed_at END,
-		    completed_at = CASE WHEN $2 IN ('completed','partial_success','failed','cancelled') AND completed_at IS NULL THEN NOW() ELSE completed_at END,
+		    executed_at = CASE WHEN $3::timestamp IS NOT NULL AND executed_at IS NULL THEN $3::timestamp ELSE executed_at END,
+		    completed_at = CASE WHEN $4::timestamp IS NOT NULL AND completed_at IS NULL THEN $4::timestamp ELSE completed_at END,
 		    updated_at = NOW()
 		WHERE id = $1
-	`, id, status)
+	`, id, status, executedAt, completedAt)
 	return err
 }
 
