@@ -385,11 +385,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
       if (isEsp) {
         // ESP自升级：传完固件 → ESP写Flash → HTTP 200 → 立即重启(~500ms)
-        // 等ESP重启完成后轮询 /ota/progress（ESP已将结果持久化到NVS）
+        // ESP重启极快，仅短暂等待后立即开始轮询
         setState(() {
           _upgradeStatus = l10n.str('push_complete_wait_reboot', {});
         });
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(milliseconds: 500));
       } else {
         // ARM升级：ESP作为桥接转发固件给ARM，ESP不重启
         // 直接轮询 /ota/progress 获取实时进度
@@ -467,12 +467,16 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     int totalWaitSeconds = 0;
     int offlineCount = 0; // 连续离线计数
     const maxTotalWait = 180; // 总超时 3 分钟
-    const reconnectInterval = 5; // 每 5 次离线轮询尝试一次重连（即每 10 秒）
+    bool isFirstPoll = true; // 首次轮询跳过初始延迟
 
     while (totalWaitSeconds < maxTotalWait) {
-      await Future.delayed(const Duration(seconds: 2));
-      if (!mounted) return;
-      totalWaitSeconds += 2;
+      // 首次轮询不等待，后续每次间隔 1 秒
+      if (!isFirstPoll) {
+        await Future.delayed(const Duration(seconds: 1));
+        if (!mounted) return;
+        totalWaitSeconds += 1;
+      }
+      isFirstPoll = false;
 
       // 1. 先检查 WiFi 连接状态
       final wifiConnected = await _isDeviceHotspotConnected();
@@ -487,8 +491,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           });
         }
 
-        // 每隔 reconnectInterval 次尝试重连
-        if (offlineCount % reconnectInterval == 0) {
+        // 每 2 次离线检测（约 2 秒）尝试一次重连
+        if (offlineCount % 2 == 0) {
           final reconnected = await _reconnectDeviceHotspot();
           if (reconnected && mounted) {
             setState(() {
