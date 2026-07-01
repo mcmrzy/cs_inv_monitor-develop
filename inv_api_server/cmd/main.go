@@ -1,3 +1,16 @@
+// Package main is the entry point for inv-api-server, the user-facing REST API service.
+//
+// Responsibilities:
+//   - User authentication (login/register/JWT refresh, SMS & email verification)
+//   - Station & device CRUD, binding, and real-time data queries
+//   - Alarm management (list/acknowledge/ignore/clear)
+//   - OTA firmware & upgrade task management
+//   - Dashboard statistics, WebSocket real-time push, SSE notifications
+//   - RBAC-based admin endpoints (user/role/permission/tenant management)
+//
+// Dependencies: PostgreSQL (primary store), Redis (cache/heartbeat/pubsub), inv-device-server (internal)
+// Listens on: :8080 (configurable via server.port)
+// Health endpoint: GET /health
 package main
 
 import (
@@ -43,12 +56,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if cfg.JWT.Secret == "" || cfg.JWT.Secret == "CHANGE_ME" {
-		fmt.Println("FATAL: JWT_SECRET not set or using default value")
-		os.Exit(1)
-	}
-	if cfg.Database.Password == "" {
-		fmt.Println("FATAL: DB_PASSWORD not set")
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "[FATAL] %v\n", err)
 		os.Exit(1)
 	}
 

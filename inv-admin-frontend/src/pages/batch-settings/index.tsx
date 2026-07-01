@@ -127,7 +127,7 @@ const BatchSettingsPage: React.FC = () => {
 
   const { data: stationsRes } = useQuery({
     queryKey: ['stations', 'all'],
-    queryFn: () => api.get('/stations', { params: { pageSize: 999 } }).then((r) => r.data),
+    queryFn: () => api.get('/stations', { params: { pageSize: 999, all: true } }).then((r) => r.data),
     staleTime: 300000,
   })
 

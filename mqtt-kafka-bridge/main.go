@@ -1,3 +1,14 @@
+// Package main is the entry point for mqtt-kafka-bridge, the EMQX-to-Kafka message forwarder.
+//
+// Responsibilities:
+//   - Receive MQTT messages via EMQX webhook (POST /webhook)
+//   - Extract device SN and message type from MQTT topic
+//   - Forward messages to appropriate Kafka topics (telemetry or alarm)
+//   - Expose stats endpoint for monitoring
+//
+// Dependencies: Kafka
+// Listens on: :8080 (configurable)
+// Endpoints: POST /webhook, GET /health, GET /stats
 package main
 
 import (
@@ -32,6 +43,38 @@ type Config struct {
 	EMQX struct {
 		Token string `yaml:"token"`
 	} `yaml:"emqx"`
+}
+
+// Validate 校验关键配置项
+func (c *Config) Validate() error {
+	var missing []string
+	if len(c.Kafka.Brokers) == 0 {
+		missing = append(missing, "kafka.brokers (at least one broker required)")
+	}
+	if c.Kafka.TelemetryTopic == "" {
+		missing = append(missing, "kafka.telemetry_topic")
+	}
+	if c.Kafka.AlarmTopic == "" {
+		missing = append(missing, "kafka.alarm_topic")
+	}
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		missing = append(missing, "server.port (must be 1-65535)")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("configuration validation failed:\n  - %s", joinStrs(missing, "\n  - "))
+	}
+	return nil
+}
+
+func joinStrs(ss []string, sep string) string {
+	r := ""
+	for i, s := range ss {
+		if i > 0 {
+			r += sep
+		}
+		r += s
+	}
+	return r
 }
 
 type stats struct {
@@ -222,6 +265,9 @@ func main() {
 	cfg, err := loadConfig(configFile)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Config validation failed: %v", err)
 	}
 
 	log.Printf("Starting MQTT-Kafka Bridge (Webhook mode)")

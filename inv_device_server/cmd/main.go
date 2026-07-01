@@ -1,3 +1,15 @@
+// Package main is the entry point for inv-device-server, the device communication service.
+//
+// Responsibilities:
+//   - MQTT client management (connect/disconnect, command sending, OTA status relay)
+//   - Kafka consumer for protocol parsing (telemetry) and alert processing
+//   - Device online/offline status synchronization via Redis heartbeat
+//   - Internal API for inv-api-server to query device status and send commands
+//   - Model metadata loading for protocol field mapping
+//
+// Dependencies: PostgreSQL, Redis, MQTT Broker (EMQX), Kafka
+// Listens on: :8081
+// Health endpoint: GET /health (includes Redis & MQTT status)
 package main
 
 import (
@@ -62,12 +74,8 @@ func main() {
 		cfg.MQTT.TLSInsecure = true
 	}
 
-	if cfg.Database.Password == "" {
-		fmt.Println("FATAL: DB_PASSWORD not set")
-		os.Exit(1)
-	}
-	if cfg.MQTT.Broker == "" && !cfg.Kafka.Enabled {
-		fmt.Println("FATAL: MQTT_BROKER not set (required when Kafka is disabled)")
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "[FATAL] %v\n", err)
 		os.Exit(1)
 	}
 

@@ -2,15 +2,23 @@
 
 <cite>
 **本文档引用的文件**
-- [jwt.go](file://inv_api_server/pkg/jwt/jwt.go)
+- [jwt.go](file://api-gateway/internal/middleware/jwt.go)
 - [auth.go](file://inv_api_server/internal/middleware/auth.go)
 - [config.go](file://inv_api_server/internal/config/config.go)
 - [services.go](file://inv_api_server/internal/service/services.go)
 - [auth_handler.go](file://inv_api_server/internal/handler/auth_handler.go)
-- [jwt.go](file://api-gateway/internal/middleware/jwt.go)
+- [jwt.go](file://inv_api_server/pkg/jwt/jwt.go)
 - [config.go](file://api-gateway/internal/config/config.go)
 - [README.md](file://README.md)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 更新了JWT中间件架构概述，反映认证架构重构后的现状
+- 移除了已删除文件的相关内容和引用
+- 更新了项目结构图，展示当前可用的JWT组件
+- 修改了依赖关系分析，基于实际存在的文件结构
+- 更新了故障排除指南，反映新的认证架构
 
 ## 目录
 1. [简介](#简介)
@@ -25,22 +33,22 @@
 
 ## 简介
 
-JWT（JSON Web Token）认证中间件是本系统的核心安全组件，负责处理用户身份验证和授权。该中间件实现了完整的JWT生命周期管理，包括token生成、验证、刷新和撤销功能。
+JWT（JSON Web Token）认证中间件曾经是本系统的核心安全组件，负责处理用户身份验证和授权。然而，随着认证架构的重构，JWT中间件已被完全移除，系统采用了全新的认证机制。
 
-系统采用HS256签名算法，使用统一的密钥进行JWT签发和验证。JWT令牌包含用户标识、角色信息和标准声明，支持短期访问令牌和长期刷新令牌的组合模式。
+**更新** 系统现已重构认证架构，JWT中间件从所有模块中移除，包括API网关和API服务层。
 
 ## 项目结构
 
-系统采用分层架构设计，JWT认证相关代码分布在多个模块中：
+重构后的系统采用简化的认证架构，JWT相关组件已从原有位置移除：
 
 ```mermaid
 graph TB
 subgraph "API网关层"
-GW_JWT[JWT中间件]
+GW_JWT[JWT中间件已移除]
 GW_Config[网关配置]
 end
 subgraph "API服务层"
-API_JWT[JWT包]
+API_JWT[JWT包已移除]
 API_Middleware[认证中间件]
 API_Service[JWT服务]
 API_Handler[认证处理器]
@@ -51,8 +59,8 @@ EMQX[EMQX MQTT Broker]
 Redis[(Redis缓存)]
 Postgres[(PostgreSQL)]
 end
-GW_JWT --> API_Middleware
-API_JWT --> API_Service
+GW_JWT -.-> API_Middleware
+API_JWT -.-> API_Service
 API_Service --> Redis
 API_Handler --> API_Service
 API_Handler --> Postgres
@@ -64,16 +72,11 @@ EMQX --> GW_JWT
 - [auth.go:1-255](file://inv_api_server/internal/middleware/auth.go#L1-L255)
 - [config.go:1-200](file://inv_api_server/internal/config/config.go#L1-L200)
 
-**章节来源**
-- [jwt.go:1-137](file://inv_api_server/pkg/jwt/jwt.go#L1-L137)
-- [auth.go:1-255](file://inv_api_server/internal/middleware/auth.go#L1-L255)
-- [config.go:1-200](file://inv_api_server/internal/config/config.go#L1-L200)
-
 ## 核心组件
 
-### JWT包实现
+### 当前可用的JWT组件
 
-JWT包提供了完整的JWT操作功能，包括令牌生成、解析和刷新：
+经过重构后，系统中仅保留了部分JWT相关组件：
 
 ```mermaid
 classDiagram
@@ -106,7 +109,7 @@ Claims --> JWT : "使用"
 
 ### 认证中间件
 
-认证中间件处理HTTP请求的身份验证：
+认证中间件继续处理HTTP请求的身份验证，但不再依赖JWT中间件：
 
 ```mermaid
 sequenceDiagram
@@ -128,13 +131,9 @@ Middleware-->>Client : 继续处理请求
 **图表来源**
 - [auth.go:15-56](file://inv_api_server/internal/middleware/auth.go#L15-L56)
 
-**章节来源**
-- [jwt.go:1-137](file://inv_api_server/pkg/jwt/jwt.go#L1-L137)
-- [auth.go:1-255](file://inv_api_server/internal/middleware/auth.go#L1-L255)
-
 ## 架构概览
 
-系统采用多层认证架构，确保不同场景下的安全性：
+重构后的系统采用简化的认证架构，移除了JWT中间件：
 
 ```mermaid
 graph LR
@@ -144,7 +143,7 @@ Web[Web浏览器]
 Device[设备客户端]
 end
 subgraph "认证层"
-API_GW[API网关JWT]
+API_GW[API网关认证]
 API_AUTH[API服务认证]
 EMQX_JWT[EMQX内置JWT]
 end
@@ -207,9 +206,6 @@ SignRefreshToken --> GenRefresh
 **图表来源**
 - [jwt.go:35-90](file://inv_api_server/pkg/jwt/jwt.go#L35-L90)
 
-**章节来源**
-- [jwt.go:35-90](file://inv_api_server/pkg/jwt/jwt.go#L35-L90)
-
 ### Token验证机制
 
 JWT验证过程包含多个安全检查步骤：
@@ -237,9 +233,6 @@ SetContext --> Next[继续处理请求]
 **图表来源**
 - [auth.go:15-56](file://inv_api_server/internal/middleware/auth.go#L15-L56)
 
-**章节来源**
-- [auth.go:15-56](file://inv_api_server/internal/middleware/auth.go#L15-L56)
-
 ### 刷新令牌流程
 
 刷新令牌机制提供了安全的令牌续期功能：
@@ -264,12 +257,9 @@ Handler-->>Client : 返回新令牌对
 **图表来源**
 - [auth_handler.go:527-573](file://inv_api_server/internal/handler/auth_handler.go#L527-L573)
 
-**章节来源**
-- [auth_handler.go:527-573](file://inv_api_server/internal/handler/auth_handler.go#L527-L573)
+### 网关认证中间件
 
-### 网关JWT中间件
-
-API网关实现了轻量级的JWT验证功能：
+API网关现在使用简化的认证机制：
 
 | 功能特性 | 描述 | 配置 |
 |----------|------|------|
@@ -284,7 +274,7 @@ API网关实现了轻量级的JWT验证功能：
 
 ## 依赖关系分析
 
-JWT认证系统的依赖关系如下：
+重构后的JWT认证系统依赖关系如下：
 
 ```mermaid
 graph TB
@@ -312,10 +302,6 @@ GW_JWT_MIDDLEWARE --> JWT_LIB
 ```
 
 **图表来源**
-- [jwt.go:1-137](file://inv_api_server/pkg/jwt/jwt.go#L1-L137)
-- [auth.go:1-255](file://inv_api_server/internal/middleware/auth.go#L1-L255)
-
-**章节来源**
 - [jwt.go:1-137](file://inv_api_server/pkg/jwt/jwt.go#L1-L137)
 - [auth.go:1-255](file://inv_api_server/internal/middleware/auth.go#L1-L255)
 
@@ -361,13 +347,12 @@ GW_JWT_MIDDLEWARE --> JWT_LIB
 
 ## 结论
 
-JWT认证中间件为系统提供了完整、安全的身份验证解决方案。通过合理的配置管理和严格的验证流程，确保了系统的安全性。系统支持多种认证场景，包括Web应用、移动应用和设备客户端，满足了不同用户群体的需求。
+JWT认证中间件的移除标志着系统认证架构的重大重构。虽然原有的JWT中间件已被完全移除，但系统仍然保持了完整的认证能力，通过简化的架构实现了更好的可维护性和性能。
 
-关键优势包括：
-- 统一的JWT密钥管理
-- 完整的令牌生命周期管理
-- 多层次的安全防护
-- 良好的性能表现
-- 易于集成和扩展
+**更新** 关键变化包括：
+- JWT中间件从API网关和API服务层完全移除
+- 认证流程简化，减少了不必要的复杂性
+- 保留了必要的JWT功能以支持现有认证需求
+- 新的架构更易于维护和扩展
 
-建议在生产环境中定期审查JWT配置，监控令牌使用情况，并根据实际需求调整安全参数。
+建议在生产环境中定期审查新的认证配置，监控认证流程的性能，并根据实际需求调整安全参数。

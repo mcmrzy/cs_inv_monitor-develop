@@ -162,3 +162,31 @@ func Load(configPath string) (*Config, error) {
 
 	return &config, nil
 }
+
+// Validate 校验关键配置项
+func (c *Config) Validate() error {
+	var missing []string
+	if c.Database.Password == "" {
+		missing = append(missing, "database.password (env: DB_PASSWORD)")
+	}
+	if c.Database.Host == "" {
+		missing = append(missing, "database.host (env: DB_HOST)")
+	}
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		missing = append(missing, "server.port (must be 1-65535)")
+	}
+	if !c.Kafka.Enabled && c.MQTT.Broker == "" {
+		missing = append(missing, "mqtt.broker (env: MQTT_BROKER, required when kafka.enabled=false)")
+	}
+	if c.Kafka.Enabled && len(c.Kafka.Brokers) == 0 {
+		missing = append(missing, "kafka.brokers (env: KAFKA_BROKER, required when kafka.enabled=true)")
+	}
+	if c.Backends.APIServer == "" {
+		missing = append(missing, "backends.api_server (env: API_SERVER_URL)")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("configuration validation failed:\n  - %s\n\nHint: Set these via environment variables or config.yaml",
+			strings.Join(missing, "\n  - "))
+	}
+	return nil
+}

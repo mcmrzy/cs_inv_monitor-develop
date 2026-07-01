@@ -39,6 +39,7 @@ vendor/
 # Logs
 *.log
 **/logs/*.log
+*_logs.txt
 
 # Config with secrets
 **/config.yaml
@@ -47,6 +48,35 @@ vendor/
 # Python
 *.pyc
 __pycache__/
+
+# Debug / fix docs
+debug-*.md
+fix-*.md
+
+# Flutter
+inv_app/build/
+inv_app/.dart_tool/
+inv_app/.flutter-plugins*
+inv_app/android/.gradle/
+inv_app/android/app/build/
+
+# Environment config
+.env
+.env.local
+deploy/.env
+deploy/.env.prod
+
+# AI/IDE tools
+.claude/
+.qoder/
+*.code-workspace
+
+# Go bin output
+inv_api_server/bin/
+inv_device_server/bin/
+api-gateway/bin/
+mqtt-kafka-bridge/bin/
+bin/
 
 # Misc
 *.swp

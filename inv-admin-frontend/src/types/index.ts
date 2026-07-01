@@ -165,7 +165,7 @@ export interface PaginatedResponse<T> {
 }
 
 export interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  message?: string
+  code: number;      // 后端返回 0=成功，非0=错误
+  message: string;
+  data?: T;
 }

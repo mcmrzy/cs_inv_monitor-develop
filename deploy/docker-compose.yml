@@ -56,7 +56,7 @@ services:
       DEVICE_SERVER_URL: http://inv-device-server:8081
       INTERNAL_KEY: ${INTERNAL_KEY}
       INTERNAL_API_SECRET: ${INTERNAL_KEY}
-      SERVER_URL: ${SERVER_URL:-http://192.168.8.248:8080}
+      SERVER_URL: ${SERVER_URL:-http://192.168.8.248}
       AMAP_API_KEY: a1747dbd3566aa8883fffde623290cd9
       WEATHER_SOURCE: amap
       EMAIL_HOST: ${EMAIL_HOST}
@@ -66,8 +66,8 @@ services:
       EMAIL_FROM: ${EMAIL_FROM}
     volumes:
       - firmware_data:/data/firmware
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -100,8 +100,8 @@ services:
       KAFKA_BROKER: jiuxiaoyw.online:9092
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,8 +126,10 @@ services:
     ports:
       - "80:8080"
     depends_on:
-      - inv-api-server
-      - inv-device-server
+      inv-api-server:
+        condition: service_healthy
+      inv-device-server:
+        condition: service_healthy
     networks:
       - inv-net
 

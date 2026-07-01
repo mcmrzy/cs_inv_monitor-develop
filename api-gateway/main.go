@@ -1,3 +1,15 @@
+// Package main is the entry point for api-gateway, the reverse proxy and traffic controller.
+//
+// Responsibilities:
+//   - JWT token validation on all proxied requests
+//   - Rate limiting (global + per-route)
+//   - RBAC permission checking (via Redis cache)
+//   - Request proxying to inv-api-server and inv-device-server
+//   - Prometheus metrics exposure
+//
+// Dependencies: Redis (RBAC cache, optional)
+// Listens on: :8080
+// Health endpoint: GET /health
 package main
 
 import (
@@ -27,8 +39,8 @@ func main() {
 		log.Fatalf("[GW] 加载配置失败: %v", err)
 	}
 
-	if cfg.JWT.Secret == "" || cfg.JWT.Secret == "CHANGE_ME" {
-		log.Fatal("[GW] JWT_SECRET 未设置或使用了默认值，请通过环境变量设置安全密钥")
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("[GW] %v", err)
 	}
 
 	middleware.InitMetrics()

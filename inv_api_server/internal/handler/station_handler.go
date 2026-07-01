@@ -435,6 +435,9 @@ func (h *StationHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	role := middleware.GetRole(c)
 	isAdmin := role == 0
+	// 只有管理员显式传 all=true 时才返回全部电站（管理后台用）
+	// APP 不传此参数，只返回自己的电站
+	showAll := c.Query("all") == "true"
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -450,7 +453,7 @@ func (h *StationHandler) List(c *gin.Context) {
 	var total int64
 	var err error
 
-	if isAdmin {
+	if isAdmin && showAll {
 		stations, total, err = h.stationService.GetAll(c.Request.Context(), page, pageSize)
 	} else {
 		stations, total, err = h.stationService.GetByUserID(c.Request.Context(), userID, page, pageSize)
@@ -531,12 +534,13 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	role := middleware.GetRole(c)
 	isAdmin := role == 0
+	showAll := c.Query("all") == "true"
 
 	var stations []*model.Station
 	var total int64
 	var err error
 
-	if isAdmin {
+	if isAdmin && showAll {
 		stations, total, err = h.stationService.GetAll(c.Request.Context(), 1, 9999)
 	} else {
 		stations, _, err = h.stationService.GetByUserID(c.Request.Context(), userID, 1, 100)

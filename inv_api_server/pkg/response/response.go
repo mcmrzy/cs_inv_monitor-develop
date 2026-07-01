@@ -1,7 +1,10 @@
 package response
 
 import (
+	"errors"
 	"net/http"
+
+	"inv-api-server/pkg/apperr"
 
 	"github.com/gin-gonic/gin"
 )
@@ -87,5 +90,28 @@ func Page(c *gin.Context, list interface{}, total int64, page, pageSize int) {
 			Page:     page,
 			PageSize: pageSize,
 		},
+	})
+}
+
+// HandleError 自动识别 *AppError 类型，返回对应状态码；未知错误返回 500。
+// 用法：
+//
+//	if err != nil {
+//	    response.HandleError(c, err)
+//	    return
+//	}
+func HandleError(c *gin.Context, err error) {
+	var appErr *apperr.AppError
+	if errors.As(err, &appErr) {
+		c.JSON(appErr.HTTPCode, Response{
+			Code:    appErr.BizCode,
+			Message: appErr.Message,
+		})
+		return
+	}
+	// 未知错误返回 500
+	c.JSON(http.StatusInternalServerError, Response{
+		Code:    http.StatusInternalServerError,
+		Message: "system error",
 	})
 }

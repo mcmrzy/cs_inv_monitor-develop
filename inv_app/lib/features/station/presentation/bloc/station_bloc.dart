@@ -27,7 +27,7 @@ class StationBloc extends Bloc<StationEvent, StationState> {
   Future<bool> _hasNetwork() async {
     try {
       final result = await Connectivity().checkConnectivity();
-      return !result.contains(ConnectivityResult.none);
+      return result != ConnectivityResult.none;
     } catch (_) {
       return true; // 检查失败时假定有网络
     }

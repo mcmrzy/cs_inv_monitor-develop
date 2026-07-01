@@ -361,6 +361,18 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     });
 
     try {
+      // 上传前获取当前版本号，作为升级前基准（ESP重启后状态会清空，只能靠版本号判断成功）
+      if (_preUpgradeVersion == null) {
+        try {
+          final info = await _firmwareService.getDeviceInfo(deviceIP: widget.deviceIP);
+          final versionKey = (widget.targetChip == 'arm') ? 'arm_version' : 'esp_version';
+          _preUpgradeVersion = info[versionKey] as String? ?? '';
+          print('Pre-upgrade version captured: $_preUpgradeVersion');
+        } catch (e) {
+          print('Failed to capture pre-upgrade version: $e');
+        }
+      }
+
       // 上传固件文件到设备
       await _firmwareService.uploadFirmware(
         deviceIP: widget.deviceIP,
@@ -413,12 +425,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         final versionKey = (widget.targetChip == 'arm') ? 'arm_version' : 'esp_version';
         final currentVersion = deviceInfo[versionKey] as String? ?? '';
          
-         // 首次获取版本，记录下来
-         if (_preUpgradeVersion == null && currentVersion.isNotEmpty) {
-           _preUpgradeVersion = currentVersion;
-         }
-         
-         // 如果版本已更新（和升级前不同），说明OTA成功
+         // 如果版本已更新（和升级前不同），说明OTA成功（ESP重启后状态清空，靠版本号判断）
          if (_preUpgradeVersion != null && currentVersion.isNotEmpty && 
              currentVersion != _preUpgradeVersion) {
           setState(() {
@@ -437,6 +444,18 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         final message = progress['message'] as String? ?? '';
         
         progressEndpointWorking = true;
+
+        // ESP重启后 /ota/progress 返回 idle（状态已清空），此时靠版本号变化判断成功
+        if (status == 'idle' && _preUpgradeVersion != null && currentVersion.isNotEmpty &&
+            currentVersion != _preUpgradeVersion) {
+          setState(() {
+            _isProcessing = false;
+            _result = LocalOTAResult.success;
+            _newVersion = currentVersion;
+            _currentStep = LocalOTAStep.result;
+          });
+          return;
+        }
 
         setState(() {
           _upgradeProgress = percent / 100.0;

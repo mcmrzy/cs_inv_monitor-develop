@@ -3,7 +3,7 @@ class AppConfig {
   static const String version = '1.0.0';
   static const int versionCode = 1; // 与 pubspec.yaml 中的 build number 一致
   
-  static const String apiBaseUrl = 'http://192.168.8.248:8080/api/v1';
+  static const String apiBaseUrl = 'http://192.168.8.248/api/v1';
   static const String mqttBrokerHost = 'jiuxiaoyw.online';
   static const int mqttBrokerPort = 8883;
   

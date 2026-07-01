@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: admin_frontend
-title: 逆变器物联网管理后台前端
-scope:
-    - inv-admin-frontend/
-source_files: []
-depends_on: []
-related_to:
-    - path: mobile_app

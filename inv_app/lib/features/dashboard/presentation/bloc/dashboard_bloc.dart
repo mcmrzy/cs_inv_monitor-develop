@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as dev;
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:dartz/dartz.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
@@ -47,7 +46,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   Future<bool> _hasNetwork() async {
     try {
       final result = await Connectivity().checkConnectivity();
-      return !result.contains(ConnectivityResult.none);
+      return result != ConnectivityResult.none;
     } catch (_) {
       return true;
     }
@@ -88,7 +87,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       result.fold(
         (failure) => dev.log('Dashboard: getStatistics failed: ${failure.message}'),
         (data) {
-          stats = data as Map<String, dynamic>;
+          stats = data;
           successCount++;
         },
       );

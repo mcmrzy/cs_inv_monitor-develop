@@ -6,7 +6,8 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-api-server ./cmd/main.go
 
-FROM golang:1.25-alpine
+FROM alpine:3.19
+RUN apk --no-cache add ca-certificates tzdata wget
 WORKDIR /app
 COPY --from=builder /app/inv-api-server ./main
 COPY config.docker.yaml ./config.yaml
