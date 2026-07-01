@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM docker.m.daocloud.io/library/golang:1.25-alpine AS builder
 ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -6,7 +6,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-api-server ./cmd/main.go
 
-FROM alpine:3.19
+FROM docker.m.daocloud.io/library/alpine:3.19
 RUN apk --no-cache add ca-certificates tzdata wget
 WORKDIR /app
 COPY --from=builder /app/inv-api-server ./main
