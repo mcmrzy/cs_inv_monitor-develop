@@ -68,7 +68,8 @@ deploy/.env.prod
 
 # AI/IDE tools
 .claude/
-.qoder/
+.qoder/*
+!.qoder/skills/
 *.code-workspace
 
 # Go bin output
