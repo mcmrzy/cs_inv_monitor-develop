@@ -53,8 +53,15 @@ func (h *WeatherHandler) GetStationWeather(c *gin.Context) {
 	}
 
 	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
-	if err != nil || station == nil || station.UserID != userID {
+	if err != nil || station == nil {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+	// 超级管理员可以访问任意电站的天气
+	if !isAdmin && station.UserID != userID {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
