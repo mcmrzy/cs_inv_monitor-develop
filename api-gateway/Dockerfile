@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM docker.m.daocloud.io/library/golang:1.25-alpine AS builder
 
 ENV GOPROXY=https://goproxy.cn,direct
 ENV GO111MODULE=on
@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -o /build/api-gateway \
     ./main.go
 
-FROM alpine:3.19
+FROM docker.m.daocloud.io/library/alpine:3.19
 
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
     apk --no-cache add ca-certificates tzdata

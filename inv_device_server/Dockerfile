@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM docker.m.daocloud.io/library/golang:1.25-alpine AS builder
 ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /app
 COPY go.mod ./
@@ -8,7 +8,7 @@ COPY . .
 RUN go mod tidy 2>/dev/null || true
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-device-server ./cmd/main.go
 
-FROM alpine:3.19
+FROM docker.m.daocloud.io/library/alpine:3.19
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
     apk --no-cache add ca-certificates tzdata wget
 WORKDIR /app
