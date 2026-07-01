@@ -187,9 +187,34 @@ var resourceActionMap = map[string]string{
 	"/api/v1/stations/":       "stations",
 }
 
+// appAllowedPaths 是 APP 端接口的路径前缀列表，这些接口已通 JWT 认证保护，
+// 对所有登录用户开放，不需要 RBAC 权限检查
+var appAllowedPaths = []string{
+	"/api/v1/ota/check/",
+	"/api/v1/ota/trigger",
+	"/api/v1/ota/resend/",
+	"/api/v1/ota/devices/",
+	"/api/v1/ota/app/check",
+}
+
+func isAppAllowedPath(path string) bool {
+	for _, prefix := range appAllowedPaths {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if isPublicPath(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
+
+		// APP 端接口已通 JWT 认证保护，对所有登录用户开放，跳过 RBAC
+		if isAppAllowedPath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
