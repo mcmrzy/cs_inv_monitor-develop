@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
+import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/local_firmware_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -51,7 +52,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   LocalOTAResult? _result;
   String? _resultMessage;
   String? _newVersion;
-  String? _preUpgradeVersion;
 
   String? _selectedFilePath;
   double _downloadProgress = 0.0;
@@ -110,7 +110,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     _downloadProgressSub?.cancel();
     _downloadService.dispose();
     // 退出页面时恢复正常网络，取消forceWifiUsage
-    WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) {});
+    WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
     super.dispose();
   }
 
@@ -360,19 +360,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _errorMessage = null;
     });
 
-    try {
-      // 上传前获取当前版本号，作为升级前基准（ESP重启后状态会清空，只能靠版本号判断成功）
-      if (_preUpgradeVersion == null) {
-        try {
-          final info = await _firmwareService.getDeviceInfo(deviceIP: widget.deviceIP);
-          final versionKey = (widget.targetChip == 'arm') ? 'arm_version' : 'esp_version';
-          _preUpgradeVersion = info[versionKey] as String? ?? '';
-          print('Pre-upgrade version captured: $_preUpgradeVersion');
-        } catch (e) {
-          print('Failed to capture pre-upgrade version: $e');
-        }
-      }
+    final isEsp = (widget.targetChip ?? 'esp') == 'esp';
 
+    try {
       // 上传固件文件到设备
       await _firmwareService.uploadFirmware(
         deviceIP: widget.deviceIP,
@@ -392,13 +382,23 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       });
 
       _goToStep(LocalOTAStep.triggerUpgrade);
-      
-      // 等待ESP32重启（OTA成功后ESP32会自动重启）
-      setState(() {
-        _upgradeStatus = l10n.uploadCompleteWaitReboot;
-      });
-      await Future.delayed(const Duration(seconds: 5));
-      
+
+      if (isEsp) {
+        // ESP自升级：传完固件 → ESP写Flash → HTTP 200 → 立即重启(~500ms)
+        // 等ESP重启完成后轮询 /ota/progress（ESP已将结果持久化到NVS）
+        setState(() {
+          _upgradeStatus = l10n.str('push_complete_wait_reboot', {});
+        });
+        await Future.delayed(const Duration(seconds: 2));
+      } else {
+        // ARM升级：ESP作为桥接转发固件给ARM，ESP不重启
+        // 直接轮询 /ota/progress 获取实时进度
+        setState(() {
+          _upgradeStatus = l10n.uploadingStatus;
+        });
+      }
+
+      // 统一轮询 /ota/progress
       _pollUpgradeProgress();
     } catch (e) {
       setState(() {
@@ -410,99 +410,170 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     }
   }
 
+  /// 检测当前 WiFi 是否仍连接到设备热点
+  Future<bool> _isDeviceHotspotConnected() async {
+    try {
+      final ssid = await WiFiForIoTPlugin.getSSID();
+      if (ssid == null || ssid.isEmpty || ssid == '<unknown ssid>') return false;
+      final upper = ssid.toUpperCase();
+      return upper.contains('CS_INV') || upper.contains('CS-INV');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 尝试重新连接设备热点
+  Future<bool> _reconnectDeviceHotspot() async {
+    try {
+      await WiFiForIoTPlugin.forceWifiUsage(true);
+      final networks = await WiFiForIoTPlugin.loadWifiList();
+      final sn = widget.deviceSN.toUpperCase();
+      final target = networks.where((n) {
+        final ssid = (n.ssid ?? '').toUpperCase();
+        return ssid == 'CS_INV_$sn' || ssid == 'CS-INV-$sn';
+      }).toList();
+
+      if (target.isEmpty) return false;
+
+      final network = target.first;
+      final ssid = network.ssid ?? '';
+      final cap = network.capabilities?.toUpperCase() ?? '';
+      final isOpen = !cap.contains('WPA') && !cap.contains('WEP') && !cap.contains('EAP');
+
+      final connected = await WiFiForIoTPlugin.connect(
+        ssid,
+        password: null,
+        security: isOpen ? NetworkSecurity.NONE : NetworkSecurity.WPA,
+        joinOnce: true,
+      );
+      if (!connected) return false;
+
+      await WiFiForIoTPlugin.forceWifiUsage(true);
+      await Future.delayed(const Duration(seconds: 3)); // 等待IP分配
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 统一轮询 /ota/progress，ESP和ARM走同一套逻辑
+  /// ESP: NVS持久化结果，重启后首次请求返回 done/error
+  /// ARM: 实时返回 uploading → verifying → done
   Future<void> _pollUpgradeProgress() async {
     final l10n = AppLocalizations.of(context)!;
-    bool progressEndpointWorking = false;
-    
-    for (int i = 0; i < 120; i++) {
+    final isEsp = (widget.targetChip ?? 'esp') == 'esp';
+    final versionKey = isEsp ? 'esp_version' : 'arm_version';
+
+    int totalWaitSeconds = 0;
+    int offlineCount = 0; // 连续离线计数
+    const maxTotalWait = 180; // 总超时 3 分钟
+    const reconnectInterval = 5; // 每 5 次离线轮询尝试一次重连（即每 10 秒）
+
+    while (totalWaitSeconds < maxTotalWait) {
       await Future.delayed(const Duration(seconds: 2));
       if (!mounted) return;
+      totalWaitSeconds += 2;
 
-      try {
-        // 先检查设备信息，看版本是否已更新
-        final deviceInfo = await _firmwareService.getDeviceInfo(deviceIP: widget.deviceIP);
-        // 根据目标芯片读取对应版本
-        final versionKey = (widget.targetChip == 'arm') ? 'arm_version' : 'esp_version';
-        final currentVersion = deviceInfo[versionKey] as String? ?? '';
-         
-         // 如果版本已更新（和升级前不同），说明OTA成功（ESP重启后状态清空，靠版本号判断）
-         if (_preUpgradeVersion != null && currentVersion.isNotEmpty && 
-             currentVersion != _preUpgradeVersion) {
+      // 1. 先检查 WiFi 连接状态
+      final wifiConnected = await _isDeviceHotspotConnected();
+
+      if (!wifiConnected) {
+        offlineCount++;
+        // 设备热点断开 = 正在重启
+        if (mounted) {
           setState(() {
-            _isProcessing = false;
-            _result = LocalOTAResult.success;
-            _newVersion = currentVersion;
-            _currentStep = LocalOTAStep.result;
+            _upgradeStatus = l10n.str('waiting_hotspot_recovery',
+                {'seconds': '$totalWaitSeconds'});
           });
-          return;
         }
-        
-        // 获取升级进度
-        final progress = await _firmwareService.getLocalOTAProgress(deviceIP: widget.deviceIP);
+
+        // 每隔 reconnectInterval 次尝试重连
+        if (offlineCount % reconnectInterval == 0) {
+          final reconnected = await _reconnectDeviceHotspot();
+          if (reconnected && mounted) {
+            setState(() {
+              _upgradeStatus = l10n.str('hotspot_reconnected', {});
+            });
+            offlineCount = 0;
+            // 重连成功，继续下面的轮询
+          } else {
+            continue; // 重连失败，继续等待
+          }
+        } else {
+          continue; // 热点未恢复，继续等待
+        }
+      } else {
+        offlineCount = 0;
+      }
+
+      // 2. 热点已连接，尝试获取升级进度
+      try {
+        final progress =
+            await _firmwareService.getLocalOTAProgress(deviceIP: widget.deviceIP);
         final status = progress['status'] as String? ?? '';
         final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
         final message = progress['message'] as String? ?? '';
-        
-        progressEndpointWorking = true;
+        final version = progress['version'] as String? ?? '';
 
-        // ESP重启后 /ota/progress 返回 idle（状态已清空），此时靠版本号变化判断成功
-        if (status == 'idle' && _preUpgradeVersion != null && currentVersion.isNotEmpty &&
-            currentVersion != _preUpgradeVersion) {
+        if (mounted) {
           setState(() {
-            _isProcessing = false;
-            _result = LocalOTAResult.success;
-            _newVersion = currentVersion;
-            _currentStep = LocalOTAStep.result;
+            _upgradeProgress = percent / 100.0;
+            _upgradeStatus = message.isNotEmpty ? message : _mapStatus(status);
           });
-          return;
         }
 
-        setState(() {
-          _upgradeProgress = percent / 100.0;
-          // 优先显示设备返回的 message，否则用本地映射的状态文本
-          if (message.isNotEmpty) {
-            _upgradeStatus = message;
-          } else {
-            _upgradeStatus = _mapStatus(status);
-          }
-        });
-
         if (status == 'done') {
-          // 升级成功，从设备信息获取实际版本号
-          String? newVersion;
-          try {
-            final info = await _firmwareService.getDeviceInfo(deviceIP: widget.deviceIP);
-            newVersion = info[versionKey] as String? ?? '';
-          } catch (_) {}
-          setState(() {
-            _isProcessing = false;
-            _result = LocalOTAResult.success;
-            _newVersion = (newVersion != null && newVersion.isNotEmpty) ? newVersion : null;
-            _currentStep = LocalOTAStep.result;
-          });
+          // 优先从 /ota/progress 的 version 字段获取新版本号
+          // 如果为空，再从 /ota/info 获取
+          String? newVersion = version.isNotEmpty ? version : null;
+          if (newVersion == null) {
+            try {
+              final info = await _firmwareService.getDeviceInfo(
+                  deviceIP: widget.deviceIP);
+              newVersion = info[versionKey] as String? ?? '';
+              if (newVersion.isEmpty) newVersion = null;
+            } catch (_) {}
+          }
+          if (mounted) {
+            setState(() {
+              _isProcessing = false;
+              _result = LocalOTAResult.success;
+              _newVersion = newVersion;
+              _currentStep = LocalOTAStep.result;
+            });
+          }
           return;
         }
 
         if (status == 'error') {
-          setState(() {
-            _isProcessing = false;
-            _result = LocalOTAResult.failed;
-            _resultMessage = message.isNotEmpty ? message : l10n.upgradeFailed;
-            _currentStep = LocalOTAStep.result;
-          });
+          if (mounted) {
+            setState(() {
+              _isProcessing = false;
+              _result = LocalOTAResult.failed;
+              _resultMessage =
+                  message.isNotEmpty ? message : l10n.upgradeFailed;
+              _currentStep = LocalOTAStep.result;
+            });
+          }
           return;
         }
-      } catch (_) {
-        // 设备可能还在重启中，继续等待
-        if (i % 5 == 0) {
+      } on DeviceConnectionException {
+        // 连接失败，设备可能刚重启完还在初始化 HTTP 服务
+        offlineCount++;
+        if (mounted) {
           setState(() {
-            _upgradeStatus = l10n.str('waiting_device_response', {'seconds': '${i * 2}'});
+            _upgradeStatus = l10n.str('waiting_device_response',
+                {'seconds': '$totalWaitSeconds'});
           });
         }
+        continue;
+      } catch (_) {
+        // 其他异常，继续等待
         continue;
       }
     }
 
+    // 总超时
     if (mounted) {
       setState(() {
         _isProcessing = false;
@@ -564,7 +635,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Widget _buildStepIndicator() {
-    final l10n = AppLocalizations.of(context)!;
     final steps = LocalOTAStep.values;
     final currentIndex = steps.indexOf(_currentStep);
 
@@ -1055,11 +1125,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   child: ElevatedButton(
                     onPressed: () {
                       setState(() {
-                        _currentStep = LocalOTAStep.connectDevice;
                         _result = null;
                         _resultMessage = null;
+                        _selectedAp = null;
+                        _isProcessing = false;
                       });
-                      _startPushFirmware();
+                      _goToStep(LocalOTAStep.connectDevice);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,

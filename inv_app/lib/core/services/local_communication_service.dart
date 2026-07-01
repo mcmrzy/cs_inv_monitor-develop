@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/local_discovery_service.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 
@@ -340,8 +341,15 @@ class LocalCommunicationService {
         return json.decode(jsonStr) as Map<String, dynamic>;
       }
       return {};
+    } on SocketException catch (e) {
+      // 连接失败 = 设备离线（热点断开/重启中），向上层抛出
+      throw DeviceConnectionException('设备连接失败: $e');
+    } on TimeoutException catch (e) {
+      // 超时 = 设备无响应
+      throw DeviceConnectionException('设备响应超时: $e');
     } catch (e) {
-      print('Get OTA progress failed: $e');
+      // 其他异常（JSON解析等），返回空Map（设备过渡状态）
+      print('Get OTA progress parse failed: $e');
       return {};
     }
   }
