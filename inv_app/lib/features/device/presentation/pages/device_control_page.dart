@@ -284,18 +284,24 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
 
   IconData _getCommandIcon(String fieldKey) {
     switch (fieldKey) {
+      case 'set_control':
       case 'ac_on':
         return Icons.power_settings_new;
       case 'ac_off':
         return Icons.power_off;
+      case 'set_params':
       case 'set_power_limit':
         return Icons.tune;
-      case 'eco_mode':
-        return Icons.eco;
-      case 'restart':
-        return Icons.restart_alt;
+      case 'get_params':
       case 'query':
         return Icons.search;
+      case 'set_alarm':
+        return Icons.warning_amber_rounded;
+      case 'reset':
+      case 'restart':
+        return Icons.restart_alt;
+      case 'eco_mode':
+        return Icons.eco;
       default:
         return Icons.send_rounded;
     }

@@ -461,14 +461,14 @@ class MQTTServiceImpl implements MQTTService {
   Future<void> sendCommand(String deviceSN, String cmdType, {Map<String, dynamic>? value}) async {
     final topic = 'cs_inv/$deviceSN/cmd';
 
+    // 构造符合控制命令文档规范的 MQTT payload: {cmd, params, task_id}
     final payloadJson = <String, dynamic>{
-      'topic': cmdType,
+      'cmd': cmdType,
+      'task_id': 'cmd_${DateTime.now().millisecondsSinceEpoch}',
     };
 
     if (value != null) {
-      payloadJson['payload'] = json.encode(value);
-    } else {
-      payloadJson['payload'] = '';
+      payloadJson['params'] = value;
     }
 
     final payload = json.encode(payloadJson);
