@@ -142,7 +142,7 @@ const UpgradeTasksTab: React.FC = () => {
   const { message } = App.useApp()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [statusFilter, setStatusFilter] = useState<string>()
+  const [statusFilter, setStatusFilter] = useState<string>('active')
   const [createOpen, setCreateOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
   const [taskType, setTaskType] = useState<'single' | 'package'>('single')
@@ -470,6 +470,7 @@ const UpgradeTasksTab: React.FC = () => {
               value={statusFilter}
               onChange={(val) => { setStatusFilter(val); setPage(1) }}
               options={[
+                { label: t('ota.taskStatusActive') || '进行中', value: 'active' },
                 { label: t('ota.taskStatusPending'), value: 'pending' },
                 { label: t('ota.taskStatusRunning'), value: 'running' },
                 { label: t('ota.taskStatusCompleted'), value: 'completed' },

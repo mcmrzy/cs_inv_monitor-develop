@@ -976,9 +976,15 @@ func (r *OTARepository) ListUpgradeTasks(ctx context.Context, page, pageSize int
 	`
 	args := []interface{}{}
 	if statusFilter != "" {
-		countQuery += " WHERE status = $1"
-		query += " WHERE status = $1"
-		args = append(args, statusFilter)
+		if statusFilter == "active" {
+			// "active" 表示进行中的任务（排除已完成、已取消）
+			countQuery += " WHERE status NOT IN ('completed','cancelled')"
+			query += " WHERE status NOT IN ('completed','cancelled')"
+		} else {
+			countQuery += " WHERE status = $1"
+			query += " WHERE status = $1"
+			args = append(args, statusFilter)
+		}
 	}
 	r.db.QueryRow(ctx, countQuery, args...).Scan(&total)
 
