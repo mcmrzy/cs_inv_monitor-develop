@@ -10,6 +10,7 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
@@ -47,14 +48,14 @@ type WeatherResponse struct {
 func (h *WeatherHandler) GetStationWeather(c *gin.Context) {
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid station id")
+		response.HandleError(c, apperr.BadRequest("invalid station id"))
 		return
 	}
 
 	userID := middleware.GetUserID(c)
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil || station == nil || station.UserID != userID {
-		response.Forbidden(c, "permission denied")
+		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
 
@@ -70,7 +71,7 @@ func (h *WeatherHandler) GetStationWeather(c *gin.Context) {
 	}
 
 	if err != nil {
-		response.InternalError(c, "weather service unavailable")
+		response.HandleError(c, apperr.Internal("weather service unavailable", err))
 		return
 	}
 

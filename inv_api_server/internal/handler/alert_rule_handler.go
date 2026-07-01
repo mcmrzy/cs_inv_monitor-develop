@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +38,7 @@ func (h *AlertRuleHandler) GetByID(c *gin.Context) {
 	log.Printf("WARNING: alert_rule_handler.GetByID is using stub implementation")
 	ruleID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid rule id")
+		response.HandleError(c, apperr.BadRequest("invalid rule id"))
 		return
 	}
 
@@ -62,7 +63,7 @@ func (h *AlertRuleHandler) Create(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -73,7 +74,7 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 	log.Printf("WARNING: alert_rule_handler.Update is using stub implementation")
 	ruleID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid rule id")
+		response.HandleError(c, apperr.BadRequest("invalid rule id"))
 		return
 	}
 
@@ -86,7 +87,7 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -97,7 +98,7 @@ func (h *AlertRuleHandler) Delete(c *gin.Context) {
 	log.Printf("WARNING: alert_rule_handler.Delete is using stub implementation")
 	ruleID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid rule id")
+		response.HandleError(c, apperr.BadRequest("invalid rule id"))
 		return
 	}
 

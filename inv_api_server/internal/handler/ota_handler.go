@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 	"io"
 	"log"
@@ -50,23 +51,23 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		isForce := c.PostForm("is_force") == "true"
 
 		if model == "" || targetChip == "" {
-			response.BadRequest(c, "型号和目标芯片必填")
+			response.HandleError(c, apperr.BadRequest("型号和目标芯片必填"))
 			return
 		}
 
 		safePattern := regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 		if !safePattern.MatchString(model) {
-			response.BadRequest(c, "型号包含非法字符")
+			response.HandleError(c, apperr.BadRequest("型号包含非法字符"))
 			return
 		}
 		if version != "" && !safePattern.MatchString(version) {
-			response.BadRequest(c, "版本号包含非法字符")
+			response.HandleError(c, apperr.BadRequest("版本号包含非法字符"))
 			return
 		}
 
 		file, err := c.FormFile("file")
 		if err != nil {
-			response.BadRequest(c, "请选择固件文件")
+			response.HandleError(c, apperr.BadRequest("请选择固件文件"))
 			return
 		}
 
@@ -76,21 +77,21 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 
 		ext := filepath.Ext(file.Filename)
 		if ext != "" && !safePattern.MatchString(ext[1:]) {
-			response.BadRequest(c, "文件扩展名包含非法字符")
+			response.HandleError(c, apperr.BadRequest("文件扩展名包含非法字符"))
 			return
 		}
 		filename := fmt.Sprintf("%s_%s%s", model, version, ext)
 		savePath := filepath.Join(uploadDir, filename)
 
 		if err := c.SaveUploadedFile(file, savePath); err != nil {
-			response.InternalError(c, "保存文件失败")
+			response.HandleError(c, apperr.Internal("保存文件失败", err))
 			return
 		}
 
 		// 计算文件MD5和SHA256
 		f, err := os.Open(savePath)
 		if err != nil {
-			response.InternalError(c, "读取文件失败")
+			response.HandleError(c, apperr.Internal("读取文件失败", err))
 			return
 		}
 		defer f.Close()
@@ -99,7 +100,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		sha256Hash := sha256.New()
 		writer := io.MultiWriter(md5Hash, sha256Hash)
 		if _, err := io.Copy(writer, f); err != nil {
-			response.InternalError(c, "计算文件哈希失败")
+			response.HandleError(c, apperr.Internal("计算文件哈希失败", err))
 			return
 		}
 
@@ -117,7 +118,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			IsForce:    isForce,
 		}
 		if err := h.otaService.CreateFirmware(c.Request.Context(), fw); err != nil {
-			response.InternalError(c, "创建固件失败")
+			response.HandleError(c, apperr.Internal("创建固件失败", err))
 			return
 		}
 		response.SuccessWithMessage(c, "固件上传成功", nil)
@@ -127,7 +128,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 	// 支持 JSON 方式
 	var req CreateFirmwareRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -143,7 +144,7 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		IsForce:    req.IsForce,
 	}
 	if err := h.otaService.CreateFirmware(c.Request.Context(), fw); err != nil {
-		response.InternalError(c, "创建固件失败")
+		response.HandleError(c, apperr.Internal("创建固件失败", err))
 		return
 	}
 	response.SuccessWithMessage(c, "固件创建成功", nil)
@@ -153,7 +154,7 @@ func (h *OTAHandler) ListFirmware(c *gin.Context) {
 	model := c.Query("model")
 	list, err := h.otaService.ListFirmware(c.Request.Context(), model)
 	if err != nil {
-		response.InternalError(c, "查询固件列表失败")
+		response.HandleError(c, apperr.Internal("查询固件列表失败", err))
 		return
 	}
 	response.Success(c, list)
@@ -162,12 +163,12 @@ func (h *OTAHandler) ListFirmware(c *gin.Context) {
 func (h *OTAHandler) GetFirmware(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	fw, err := h.otaService.GetFirmware(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "固件不存在")
+		response.HandleError(c, apperr.NotFound("固件不存在"))
 		return
 	}
 	response.Success(c, fw)
@@ -176,11 +177,11 @@ func (h *OTAHandler) GetFirmware(c *gin.Context) {
 func (h *OTAHandler) DeleteFirmware(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	if err := h.otaService.DeleteFirmware(c.Request.Context(), id); err != nil {
-		response.InternalError(c, "删除固件失败")
+		response.HandleError(c, apperr.Internal("删除固件失败", err))
 		return
 	}
 	response.SuccessWithMessage(c, "固件已删除", nil)
@@ -194,11 +195,11 @@ func (h *OTAHandler) PushUpgrade(c *gin.Context) {
 		Immediate  bool     `json:"immediate"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request: "+err.Error())
+		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
 		return
 	}
 	if len(req.DeviceSNs) == 0 {
-		response.BadRequest(c, "请选择至少一台设备")
+		response.HandleError(c, apperr.BadRequest("请选择至少一台设备"))
 		return
 	}
 
@@ -208,7 +209,7 @@ func (h *OTAHandler) PushUpgrade(c *gin.Context) {
 		Immediate:  req.Immediate,
 	}); err != nil {
 		log.Printf("[PushUpgrade] error: firmware_id=%d, err=%v", req.FirmwareID, err)
-		response.InternalError(c, "推送升级失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("推送升级失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "升级已推送", nil)
@@ -223,7 +224,7 @@ func (h *OTAHandler) GetUpgradeDashboard(c *gin.Context) {
 	}
 	items, total, err := h.otaService.GetUpgradeDashboard(c.Request.Context(), page, pageSize)
 	if err != nil {
-		response.InternalError(c, "查询升级面板失败")
+		response.HandleError(c, apperr.Internal("查询升级面板失败", err))
 		return
 	}
 	response.Success(c, gin.H{"items": items, "total": total})
@@ -233,12 +234,12 @@ func (h *OTAHandler) GetUpgradeDashboard(c *gin.Context) {
 func (h *OTAHandler) GetFirmwareUpgradeDetails(c *gin.Context) {
 	firmwareID := parseInt(c.Param("firmwareId"))
 	if firmwareID == 0 {
-		response.BadRequest(c, "invalid firmware_id")
+		response.HandleError(c, apperr.BadRequest("invalid firmware_id"))
 		return
 	}
 	details, err := h.otaService.GetFirmwareUpgradeDetails(c.Request.Context(), int64(firmwareID))
 	if err != nil {
-		response.InternalError(c, "查询升级详情失败")
+		response.HandleError(c, apperr.Internal("查询升级详情失败", err))
 		return
 	}
 	response.Success(c, details)
@@ -251,11 +252,11 @@ func (h *OTAHandler) RetryUpgrade(c *gin.Context) {
 		DeviceSNs  []string `json:"device_sns" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if err := h.otaService.RetryUpgrade(c.Request.Context(), req.FirmwareID, req.DeviceSNs); err != nil {
-		response.InternalError(c, "重试失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("重试失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "已重试", nil)
@@ -268,11 +269,11 @@ func (h *OTAHandler) CancelUpgrade(c *gin.Context) {
 		FirmwareID int64  `json:"firmware_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 	if err := h.otaService.CancelUpgrade(c.Request.Context(), req.DeviceSN, req.FirmwareID); err != nil {
-		response.InternalError(c, "取消失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("取消失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "已取消", nil)
@@ -282,11 +283,11 @@ func (h *OTAHandler) CancelUpgrade(c *gin.Context) {
 func (h *OTAHandler) DeleteUpgradesByFirmware(c *gin.Context) {
 	firmwareID := parseInt(c.Param("firmwareId"))
 	if firmwareID == 0 {
-		response.BadRequest(c, "invalid firmware_id")
+		response.HandleError(c, apperr.BadRequest("invalid firmware_id"))
 		return
 	}
 	if err := h.otaService.DeleteUpgradesByFirmwareID(c.Request.Context(), int64(firmwareID)); err != nil {
-		response.InternalError(c, "删除失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("删除失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "已删除", nil)
@@ -296,14 +297,14 @@ func (h *OTAHandler) DeleteUpgradesByFirmware(c *gin.Context) {
 func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.BadRequest(c, "设备SN不能为空")
+		response.HandleError(c, apperr.BadRequest("设备SN不能为空"))
 		return
 	}
 
 	// 获取设备信息
 	device, err := h.otaService.GetDeviceBySN(c.Request.Context(), sn)
 	if err != nil || device == nil {
-		response.NotFound(c, "设备不存在")
+		response.HandleError(c, apperr.NotFound("设备不存在"))
 		return
 	}
 
@@ -397,7 +398,7 @@ func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 		FirmwareID int64  `json:"firmware_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -408,7 +409,7 @@ func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 	})
 	if err != nil {
 		log.Printf("[TriggerOTA] error: sn=%s, firmware_id=%d, err=%v", req.SN, req.FirmwareID, err)
-		response.InternalError(c, "触发升级失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("触发升级失败: "+err.Error(), err))
 		return
 	}
 	response.Success(c, gin.H{"message": "升级已触发"})
@@ -418,14 +419,14 @@ func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.BadRequest(c, "设备SN不能为空")
+		response.HandleError(c, apperr.BadRequest("设备SN不能为空"))
 		return
 	}
 
 	err := h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
 	if err != nil {
 		log.Printf("[ResendUpgradeCommand] error: sn=%s, err=%v", sn, err)
-		response.InternalError(c, "重新发送升级命令失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("重新发送升级命令失败: "+err.Error(), err))
 		return
 	}
 	response.Success(c, gin.H{"message": "升级命令已重新发送"})
@@ -450,7 +451,7 @@ func (h *OTAHandler) GetDeviceOTAHistory(c *gin.Context) {
 
 	history, total, err := h.otaService.GetDeviceOTAHistory(c.Request.Context(), sn, page, pageSize)
 	if err != nil {
-		response.InternalError(c, "查询历史失败")
+		response.HandleError(c, apperr.Internal("查询历史失败", err))
 		return
 	}
 	response.Success(c, gin.H{"items": history, "total": total})
@@ -460,7 +461,7 @@ func (h *OTAHandler) GetDeviceOTAHistory(c *gin.Context) {
 func (h *OTAHandler) GetAllFirmware(c *gin.Context) {
 	list, err := h.otaService.ListFirmware(c.Request.Context(), "")
 	if err != nil {
-		response.InternalError(c, "查询固件列表失败")
+		response.HandleError(c, apperr.Internal("查询固件列表失败", err))
 		return
 	}
 	response.Success(c, list)
@@ -474,7 +475,7 @@ func (h *OTAHandler) CheckAppUpdate(c *gin.Context) {
 	versionCodeStr := c.DefaultQuery("version_code", "0")
 
 	if platform != "android" && platform != "ios" {
-		response.BadRequest(c, "platform 必须是 android 或 ios")
+		response.HandleError(c, apperr.BadRequest("platform 必须是 android 或 ios"))
 		return
 	}
 
@@ -515,12 +516,12 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 		MinSupportedVersion int    `json:"min_supported_version"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "参数错误: "+err.Error())
+		response.HandleError(c, apperr.BadRequest("参数错误: "+err.Error()))
 		return
 	}
 
 	if req.Platform != "android" && req.Platform != "ios" {
-		response.BadRequest(c, "platform 必须是 android 或 ios")
+		response.HandleError(c, apperr.BadRequest("platform 必须是 android 或 ios"))
 		return
 	}
 
@@ -538,7 +539,7 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 
 	if err := h.otaService.CreateAppVersion(c.Request.Context(), v); err != nil {
 		log.Printf("[CreateAppVersion] error: %v", err)
-		response.InternalError(c, "创建版本失败")
+		response.HandleError(c, apperr.Internal("创建版本失败", err))
 		return
 	}
 	response.Success(c, v)
@@ -549,7 +550,7 @@ func (h *OTAHandler) ListAppVersions(c *gin.Context) {
 	platform := c.Query("platform")
 	list, err := h.otaService.ListAppVersions(c.Request.Context(), platform)
 	if err != nil {
-		response.InternalError(c, "查询版本列表失败")
+		response.HandleError(c, apperr.Internal("查询版本列表失败", err))
 		return
 	}
 	response.Success(c, list)
@@ -559,11 +560,11 @@ func (h *OTAHandler) ListAppVersions(c *gin.Context) {
 func (h *OTAHandler) DeleteAppVersion(c *gin.Context) {
 	id := parseInt(c.Param("id"))
 	if id == 0 {
-		response.BadRequest(c, "无效的ID")
+		response.HandleError(c, apperr.BadRequest("无效的ID"))
 		return
 	}
 	if err := h.otaService.DeleteAppVersion(c.Request.Context(), int64(id)); err != nil {
-		response.InternalError(c, "删除失败")
+		response.HandleError(c, apperr.Internal("删除失败", err))
 		return
 	}
 	response.SuccessWithMessage(c, "删除成功", nil)
@@ -573,18 +574,18 @@ func (h *OTAHandler) DeleteAppVersion(c *gin.Context) {
 func (h *OTAHandler) UpdateAppVersionRollout(c *gin.Context) {
 	id := parseInt(c.Param("id"))
 	if id == 0 {
-		response.BadRequest(c, "无效的ID")
+		response.HandleError(c, apperr.BadRequest("无效的ID"))
 		return
 	}
 	var req struct {
 		Percentage int `json:"percentage"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.Percentage < 0 || req.Percentage > 100 {
-		response.BadRequest(c, "灰度比例需在0-100之间")
+		response.HandleError(c, apperr.BadRequest("灰度比例需在0-100之间"))
 		return
 	}
 	if err := h.otaService.UpdateAppVersionRollout(c.Request.Context(), int64(id), req.Percentage); err != nil {
-		response.InternalError(c, "更新失败")
+		response.HandleError(c, apperr.Internal("更新失败", err))
 		return
 	}
 	response.SuccessWithMessage(c, "灰度比例已更新", nil)
@@ -594,11 +595,11 @@ func (h *OTAHandler) UpdateAppVersionRollout(c *gin.Context) {
 func (h *OTAHandler) RollbackAppVersion(c *gin.Context) {
 	id := parseInt(c.Param("id"))
 	if id == 0 {
-		response.BadRequest(c, "无效的ID")
+		response.HandleError(c, apperr.BadRequest("无效的ID"))
 		return
 	}
 	if err := h.otaService.RollbackAppVersion(c.Request.Context(), int64(id)); err != nil {
-		response.InternalError(c, "回滚失败")
+		response.HandleError(c, apperr.Internal("回滚失败", err))
 		return
 	}
 	response.SuccessWithMessage(c, "版本已回滚", nil)
@@ -608,7 +609,7 @@ func (h *OTAHandler) RollbackAppVersion(c *gin.Context) {
 func (h *OTAHandler) RestoreAppVersion(c *gin.Context) {
 	id := parseInt(c.Param("id"))
 	if id == 0 {
-		response.BadRequest(c, "无效的ID")
+		response.HandleError(c, apperr.BadRequest("无效的ID"))
 		return
 	}
 	var req struct {
@@ -618,7 +619,7 @@ func (h *OTAHandler) RestoreAppVersion(c *gin.Context) {
 		req.Percentage = 100
 	}
 	if err := h.otaService.RestoreAppVersion(c.Request.Context(), int64(id), req.Percentage); err != nil {
-		response.InternalError(c, "恢复失败")
+		response.HandleError(c, apperr.Internal("恢复失败", err))
 		return
 	}
 	response.SuccessWithMessage(c, "版本已恢复", nil)
@@ -635,7 +636,7 @@ func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
 		IsForce     bool    `json:"is_force"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request: "+err.Error())
+		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
 		return
 	}
 
@@ -648,7 +649,7 @@ func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
 		CreatedBy:   userID,
 	}); err != nil {
 		log.Printf("[CreateUpgradePackage] error: %v", err)
-		response.InternalError(c, "创建升级包失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("创建升级包失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "升级包创建成功", nil)
@@ -659,7 +660,7 @@ func (h *OTAHandler) ListUpgradePackages(c *gin.Context) {
 	modelFilter := c.Query("model")
 	list, err := h.otaService.ListUpgradePackages(c.Request.Context(), modelFilter)
 	if err != nil {
-		response.InternalError(c, "查询升级包列表失败")
+		response.HandleError(c, apperr.Internal("查询升级包列表失败", err))
 		return
 	}
 	response.Success(c, list)
@@ -669,12 +670,12 @@ func (h *OTAHandler) ListUpgradePackages(c *gin.Context) {
 func (h *OTAHandler) GetUpgradePackage(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	pkg, err := h.otaService.GetUpgradePackage(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "升级包不存在")
+		response.HandleError(c, apperr.NotFound("升级包不存在"))
 		return
 	}
 	response.Success(c, pkg)
@@ -684,11 +685,11 @@ func (h *OTAHandler) GetUpgradePackage(c *gin.Context) {
 func (h *OTAHandler) DeleteUpgradePackage(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	if err := h.otaService.DeleteUpgradePackage(c.Request.Context(), id); err != nil {
-		response.InternalError(c, "删除升级包失败")
+		response.HandleError(c, apperr.Internal("删除升级包失败", err))
 		return
 	}
 	response.SuccessWithMessage(c, "升级包已删除", nil)
@@ -703,11 +704,11 @@ func (h *OTAHandler) PushPackageUpgrade(c *gin.Context) {
 		RolloutPercent int      `json:"rollout_percent"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request: "+err.Error())
+		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
 		return
 	}
 	if len(req.DeviceSNs) == 0 {
-		response.BadRequest(c, "请选择至少一台设备")
+		response.HandleError(c, apperr.BadRequest("请选择至少一台设备"))
 		return
 	}
 
@@ -720,7 +721,7 @@ func (h *OTAHandler) PushPackageUpgrade(c *gin.Context) {
 		RolloutPercent: req.RolloutPercent,
 	}); err != nil {
 		log.Printf("[PushPackageUpgrade] error: package_id=%d, err=%v", req.PackageID, err)
-		response.InternalError(c, "推送升级包失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("推送升级包失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "升级包已推送", nil)
@@ -730,7 +731,7 @@ func (h *OTAHandler) PushPackageUpgrade(c *gin.Context) {
 func (h *OTAHandler) RollbackPackageUpgrade(c *gin.Context) {
 	id := parseInt(c.Param("id"))
 	if id == 0 {
-		response.BadRequest(c, "invalid package_id")
+		response.HandleError(c, apperr.BadRequest("invalid package_id"))
 		return
 	}
 	var req struct {
@@ -740,7 +741,7 @@ func (h *OTAHandler) RollbackPackageUpgrade(c *gin.Context) {
 
 	userID := c.GetInt64("user_id")
 	if err := h.otaService.RollbackPackageUpgrade(c.Request.Context(), int64(id), req.Immediate, userID); err != nil {
-		response.InternalError(c, "回滚失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("回滚失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "回滚指令已发送", nil)
@@ -750,12 +751,12 @@ func (h *OTAHandler) RollbackPackageUpgrade(c *gin.Context) {
 func (h *OTAHandler) GetPackageUpgradeDetails(c *gin.Context) {
 	packageID := parseInt(c.Param("id"))
 	if packageID == 0 {
-		response.BadRequest(c, "invalid package_id")
+		response.HandleError(c, apperr.BadRequest("invalid package_id"))
 		return
 	}
 	details, err := h.otaService.GetPackageUpgradesByPackageID(c.Request.Context(), int64(packageID))
 	if err != nil {
-		response.InternalError(c, "查询升级详情失败")
+		response.HandleError(c, apperr.Internal("查询升级详情失败", err))
 		return
 	}
 	response.Success(c, details)
@@ -777,11 +778,11 @@ func (h *OTAHandler) CreateUpgradeTask(c *gin.Context) {
 		RolloutPercent int      `json:"rollout_percent"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request: "+err.Error())
+		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
 		return
 	}
 	if len(req.DeviceSNs) == 0 {
-		response.BadRequest(c, "请至少选择一台设备")
+		response.HandleError(c, apperr.BadRequest("请至少选择一台设备"))
 		return
 	}
 	if req.ExecuteMode == "" {
@@ -817,7 +818,7 @@ func (h *OTAHandler) CreateUpgradeTask(c *gin.Context) {
 	})
 	if err != nil {
 		log.Printf("[CreateUpgradeTask] error: %v", err)
-		response.InternalError(c, "创建升级任务失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("创建升级任务失败: "+err.Error(), err))
 		return
 	}
 	response.Success(c, task)
@@ -833,7 +834,7 @@ func (h *OTAHandler) ListUpgradeTasks(c *gin.Context) {
 	statusFilter := c.Query("status")
 	tasks, total, err := h.otaService.ListUpgradeTasks(c.Request.Context(), page, pageSize, statusFilter)
 	if err != nil {
-		response.InternalError(c, "查询升级任务列表失败")
+		response.HandleError(c, apperr.Internal("查询升级任务列表失败", err))
 		return
 	}
 	response.Success(c, gin.H{"items": tasks, "total": total})
@@ -843,12 +844,12 @@ func (h *OTAHandler) ListUpgradeTasks(c *gin.Context) {
 func (h *OTAHandler) GetUpgradeTask(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	task, err := h.otaService.GetUpgradeTask(c.Request.Context(), id)
 	if err != nil {
-		response.NotFound(c, "任务不存在")
+		response.HandleError(c, apperr.NotFound("任务不存在"))
 		return
 	}
 	response.Success(c, task)
@@ -858,12 +859,12 @@ func (h *OTAHandler) GetUpgradeTask(c *gin.Context) {
 func (h *OTAHandler) GetUpgradeTaskDevices(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	devices, err := h.otaService.GetUpgradeTaskDevices(c.Request.Context(), id)
 	if err != nil {
-		response.InternalError(c, "查询设备升级详情失败")
+		response.HandleError(c, apperr.Internal("查询设备升级详情失败", err))
 		return
 	}
 	response.Success(c, gin.H{"items": devices})
@@ -873,11 +874,11 @@ func (h *OTAHandler) GetUpgradeTaskDevices(c *gin.Context) {
 func (h *OTAHandler) ExecuteUpgradeTask(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	if err := h.otaService.ExecuteTask(c.Request.Context(), id); err != nil {
-		response.InternalError(c, "执行任务失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("执行任务失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "任务已执行", nil)
@@ -887,11 +888,11 @@ func (h *OTAHandler) ExecuteUpgradeTask(c *gin.Context) {
 func (h *OTAHandler) CancelUpgradeTask(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	if err := h.otaService.CancelTask(c.Request.Context(), id); err != nil {
-		response.InternalError(c, "取消任务失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("取消任务失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "任务已取消", nil)
@@ -901,11 +902,11 @@ func (h *OTAHandler) CancelUpgradeTask(c *gin.Context) {
 func (h *OTAHandler) RetryUpgradeTask(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	if err := h.otaService.RetryTaskFailed(c.Request.Context(), id); err != nil {
-		response.InternalError(c, "重试失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("重试失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "已重试", nil)
@@ -915,11 +916,11 @@ func (h *OTAHandler) RetryUpgradeTask(c *gin.Context) {
 func (h *OTAHandler) DeleteUpgradeTask(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if id <= 0 {
-		response.BadRequest(c, "invalid id")
+		response.HandleError(c, apperr.BadRequest("invalid id"))
 		return
 	}
 	if err := h.otaService.DeleteUpgradeTask(c.Request.Context(), id); err != nil {
-		response.InternalError(c, "删除失败: "+err.Error())
+		response.HandleError(c, apperr.Internal("删除失败: "+err.Error(), err))
 		return
 	}
 	response.SuccessWithMessage(c, "任务已删除", nil)
@@ -929,7 +930,7 @@ func (h *OTAHandler) DeleteUpgradeTask(c *gin.Context) {
 func (h *OTAHandler) GetTaskStats(c *gin.Context) {
 	pending, running, todayCompleted, failed, err := h.otaService.GetTaskStats(c.Request.Context())
 	if err != nil {
-		response.InternalError(c, "查询统计失败")
+		response.HandleError(c, apperr.Internal("查询统计失败", err))
 		return
 	}
 	response.Success(c, gin.H{

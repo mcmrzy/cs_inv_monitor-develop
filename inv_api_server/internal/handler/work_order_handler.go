@@ -7,6 +7,7 @@ import (
 	"log"
 	"strconv"
 
+	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -37,7 +38,7 @@ func (h *WorkOrderHandler) GetByID(c *gin.Context) {
 	log.Printf("WARNING: work_order_handler.GetByID is using stub implementation")
 	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid order id")
+		response.HandleError(c, apperr.BadRequest("invalid order id"))
 		return
 	}
 
@@ -74,7 +75,7 @@ func (h *WorkOrderHandler) Create(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -85,7 +86,7 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 	log.Printf("WARNING: work_order_handler.Update is using stub implementation")
 	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid order id")
+		response.HandleError(c, apperr.BadRequest("invalid order id"))
 		return
 	}
 
@@ -97,7 +98,7 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "invalid request")
+		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
 
@@ -108,7 +109,7 @@ func (h *WorkOrderHandler) Delete(c *gin.Context) {
 	log.Printf("WARNING: work_order_handler.Delete is using stub implementation")
 	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.BadRequest(c, "invalid order id")
+		response.HandleError(c, apperr.BadRequest("invalid order id"))
 		return
 	}
 
