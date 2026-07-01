@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 
 class LocalFirmwareService {
@@ -45,6 +46,8 @@ class LocalFirmwareService {
     try {
       await _localComm.connect(deviceIP);
       return await _localComm.getOTAProgress();
+    } on DeviceConnectionException {
+      rethrow; // 保留原始异常类型，让上层处理连接异常
     } catch (e) {
       throw LocalFirmwareException('Failed to get upgrade progress: $e');
     }
