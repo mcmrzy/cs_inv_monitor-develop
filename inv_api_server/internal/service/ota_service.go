@@ -1156,9 +1156,13 @@ func (s *OTAService) CancelTask(ctx context.Context, taskID int64) error {
 	}
 
 	// 取消待执行的设备升级
-	s.repo.CancelUpgradesByTask(ctx, taskID)
+	if err := s.repo.CancelUpgradesByTask(ctx, taskID); err != nil {
+		return fmt.Errorf("取消设备升级失败: %w", err)
+	}
 	// 更新任务状态
-	s.repo.UpdateUpgradeTaskStatus(ctx, taskID, "cancelled")
+	if err := s.repo.UpdateUpgradeTaskStatus(ctx, taskID, "cancelled"); err != nil {
+		return fmt.Errorf("更新任务状态失败: %w", err)
+	}
 	return nil
 }
 
