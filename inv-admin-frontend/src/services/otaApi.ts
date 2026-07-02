@@ -34,13 +34,34 @@ export const otaApi = {
   // 升级包管理
   listPackages: (params?: any) => api.get('/ota/packages', { params }),
   getPackage: (id: number) => api.get(`/ota/packages/${id}`),
-  createPackage: (data: { model: string; firmware_ids: number[]; changelog?: string; is_force?: boolean }) =>
-    api.post('/ota/packages', data),
+  createPackage: (data: {
+    model: string
+    firmware_ids: number[]
+    changelog?: string
+    is_force?: boolean
+    user_version?: string
+    user_changelog?: string
+    is_published?: boolean
+    rollout_type?: 'all' | 'model' | 'user' | 'device'
+    rollout_targets?: any
+  }) => api.post('/ota/packages', data),
+  updatePackage: (id: number, data: {
+    user_version?: string
+    user_changelog?: string
+    is_published?: boolean
+    rollout_type?: 'all' | 'model' | 'user' | 'device'
+    rollout_targets?: any
+  }) => api.put(`/ota/packages/${id}`, data),
   deletePackage: (id: number) => api.delete(`/ota/packages/${id}`),
   pushPackageUpgrade: (data: { package_id: number; device_sns: string[]; immediate?: boolean; rollout_percent?: number }) =>
     api.post('/ota/packages/push', data),
   getPackageUpgradeDetails: (packageId: number) => api.get(`/ota/packages/${packageId}/details`),
   rollbackPackage: (id: number, data: { immediate?: boolean }) => api.post(`/ota/packages/${id}/rollback`, data),
+
+  // 回退升级（新接口）
+  rollbackUpgrade: (data: { sn: string; package_id: number }) => api.post('/ota/rollback', data),
+  // 获取设备可用升级包
+  getAvailablePackages: (sn: string) => api.get(`/ota/packages/available/${sn}`),
 
   // 升级任务管理（新统一接口）
   listTasks: (params?: any) => api.get('/ota/tasks', { params }),

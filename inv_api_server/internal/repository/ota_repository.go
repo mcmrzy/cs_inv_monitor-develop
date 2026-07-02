@@ -322,7 +322,7 @@ func (r *OTARepository) GetDeviceUpgradeBySN(ctx context.Context, sn string) (*m
 	err := r.db.QueryRow(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
 		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
-		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at,
+		       COALESCE(retry_count,0), pushed_by, COALESCE(source,'admin'), started_at, completed_at, created_at, updated_at,
 		       COALESCE(task_id, 0), COALESCE(upgrade_package_id, 0)
 		FROM device_upgrades
 		WHERE device_sn = $1
@@ -330,7 +330,7 @@ func (r *OTARepository) GetDeviceUpgradeBySN(ctx context.Context, sn string) (*m
 		LIMIT 1
 	`, sn).Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 		&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
-		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
+		&du.RetryCount, &du.PushedBy, &du.Source, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 		&taskID, &pkgID)
 	if err != nil {
 		return nil, err
@@ -592,10 +592,12 @@ func (r *OTARepository) CreateUpgradePackage(ctx context.Context, pkg *model.Upg
 	defer tx.Rollback(ctx)
 
 	err = tx.QueryRow(ctx, `
-		INSERT INTO upgrade_packages (model, main_version, changelog, is_force, created_by, status)
-		VALUES ($1, $2, $3, $4, $5, 1)
+		INSERT INTO upgrade_packages (model, main_version, changelog, is_force, created_by, status,
+			user_version, user_changelog, rollout_type, rollout_targets, is_published)
+		VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10)
 		RETURNING id, created_at, updated_at
-	`, pkg.Model, pkg.MainVersion, pkg.Changelog, pkg.IsForce, pkg.CreatedBy).
+	`, pkg.Model, pkg.MainVersion, pkg.Changelog, pkg.IsForce, pkg.CreatedBy,
+		pkg.UserVersion, pkg.UserChangelog, pkg.RolloutType, pkg.RolloutTargets, pkg.IsPublished).
 		Scan(&pkg.ID, &pkg.CreatedAt, &pkg.UpdatedAt)
 	if err != nil {
 		return err
@@ -658,7 +660,9 @@ func (r *OTARepository) GetUpgradePackage(ctx context.Context, id int64) (*model
 func (r *OTARepository) ListUpgradePackages(ctx context.Context, modelFilter string) ([]model.UpgradePackage, error) {
 	query := `
 		SELECT id, model, main_version, COALESCE(changelog,''), is_force, status,
-		       COALESCE(created_by,0), created_at, updated_at
+		       COALESCE(created_by,0), created_at, updated_at,
+		       COALESCE(user_version,''), COALESCE(user_changelog,''),
+		       COALESCE(rollout_type,'all'), COALESCE(rollout_targets,''), COALESCE(is_published,FALSE)
 		FROM upgrade_packages WHERE status = 1
 	`
 	args := []interface{}{}
@@ -678,7 +682,8 @@ func (r *OTARepository) ListUpgradePackages(ctx context.Context, modelFilter str
 	for rows.Next() {
 		var pkg model.UpgradePackage
 		if err := rows.Scan(&pkg.ID, &pkg.Model, &pkg.MainVersion, &pkg.Changelog, &pkg.IsForce,
-			&pkg.Status, &pkg.CreatedBy, &pkg.CreatedAt, &pkg.UpdatedAt); err != nil {
+			&pkg.Status, &pkg.CreatedBy, &pkg.CreatedAt, &pkg.UpdatedAt,
+			&pkg.UserVersion, &pkg.UserChangelog, &pkg.RolloutType, &pkg.RolloutTargets, &pkg.IsPublished); err != nil {
 			continue
 		}
 		result = append(result, pkg)
@@ -707,10 +712,216 @@ func (r *OTARepository) ListUpgradePackages(ctx context.Context, modelFilter str
 	return result, nil
 }
 
+// GetPublishedPackagesForDevice 查询设备可见的已发布升级包
+func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn string, userID int64) ([]model.UpgradePackage, error) {
+	device, err := r.GetDeviceBySN(ctx, sn)
+	if err != nil {
+		return nil, fmt.Errorf("get device by sn: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT id, model, main_version, COALESCE(changelog,''), is_force, status,
+		       COALESCE(created_by,0), created_at, updated_at,
+		       COALESCE(user_version,''), COALESCE(user_changelog,''),
+		       COALESCE(rollout_type,'all'), COALESCE(rollout_targets,''), COALESCE(is_published,FALSE)
+		FROM upgrade_packages
+		WHERE status = 1
+		  AND is_published = TRUE
+		  AND model = $1
+		  AND (
+		      rollout_type = 'all'
+		      OR (rollout_type = 'model' AND $2 = ANY(string_to_array(rollout_targets, ',')))
+		      OR (rollout_type = 'user' AND $3::text = ANY(string_to_array(rollout_targets, ',')))
+		      OR (rollout_type = 'device' AND $4 = ANY(string_to_array(rollout_targets, ',')))
+		  )
+		ORDER BY created_at DESC
+	`, device.Model, device.Model, userID, sn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var candidates []model.UpgradePackage
+	for rows.Next() {
+		var pkg model.UpgradePackage
+		if err := rows.Scan(&pkg.ID, &pkg.Model, &pkg.MainVersion, &pkg.Changelog, &pkg.IsForce,
+			&pkg.Status, &pkg.CreatedBy, &pkg.CreatedAt, &pkg.UpdatedAt,
+			&pkg.UserVersion, &pkg.UserChangelog, &pkg.RolloutType, &pkg.RolloutTargets, &pkg.IsPublished); err != nil {
+			continue
+		}
+		candidates = append(candidates, pkg)
+	}
+
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	chipVersions := map[string]string{
+		"arm": device.FirmwareArm,
+		"esp": device.FirmwareEsp,
+		"dsp": device.FirmwareDSP,
+		"bms": device.FirmwareBMS,
+	}
+
+	var result []model.UpgradePackage
+	for i := range candidates {
+		pkgRows, err := r.db.Query(ctx, `
+			SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
+			       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,'')
+			FROM upgrade_package_items upi
+			JOIN firmware_versions f ON upi.firmware_id = f.id
+			WHERE upi.package_id = $1 ORDER BY upi.target_chip
+		`, candidates[i].ID)
+		if err != nil {
+			continue
+		}
+
+		allUpToDate := true
+		hasItem := false
+		for pkgRows.Next() {
+			var item model.UpgradePackageItem
+			if err := pkgRows.Scan(&item.ID, &item.PackageID, &item.FirmwareID, &item.TargetChip,
+				&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256); err != nil {
+				continue
+			}
+			candidates[i].Items = append(candidates[i].Items, item)
+			hasItem = true
+			if currentVer := chipVersions[item.TargetChip]; currentVer != item.FirmwareVersion {
+				allUpToDate = false
+			}
+		}
+		pkgRows.Close()
+
+		if hasItem && !allUpToDate {
+			result = append(result, candidates[i])
+		}
+	}
+
+	return result, nil
+}
+
 // DeleteUpgradePackage 软删除升级包
 func (r *OTARepository) DeleteUpgradePackage(ctx context.Context, id int64) error {
 	_, err := r.db.Exec(ctx, "UPDATE upgrade_packages SET status = 0, updated_at = NOW() WHERE id = $1", id)
 	return err
+}
+
+// RollbackToPackage 将设备回退到指定升级包版本
+func (r *OTARepository) RollbackToPackage(ctx context.Context, sn string, packageID int64) (int64, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// 事务内查询升级包（避免 TOCTOU 竞态）
+	var pkg model.UpgradePackage
+	err = tx.QueryRow(ctx, `
+		SELECT id, model, main_version, COALESCE(changelog,''), is_force, status,
+		       COALESCE(created_by,0), created_at, updated_at
+		FROM upgrade_packages WHERE id = $1 AND status = 1
+	`, packageID).Scan(&pkg.ID, &pkg.Model, &pkg.MainVersion, &pkg.Changelog, &pkg.IsForce,
+		&pkg.Status, &pkg.CreatedBy, &pkg.CreatedAt, &pkg.UpdatedAt)
+	if err != nil {
+		return 0, fmt.Errorf("upgrade package not found")
+	}
+
+	pkgItemRows, err := tx.Query(ctx, `
+		SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
+		       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,'')
+		FROM upgrade_package_items upi
+		JOIN firmware_versions f ON upi.firmware_id = f.id
+		WHERE upi.package_id = $1
+		ORDER BY upi.target_chip
+	`, packageID)
+	if err == nil {
+		for pkgItemRows.Next() {
+			var item model.UpgradePackageItem
+			if err := pkgItemRows.Scan(&item.ID, &item.PackageID, &item.FirmwareID, &item.TargetChip,
+				&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256); err == nil {
+				pkg.Items = append(pkg.Items, item)
+			}
+		}
+		pkgItemRows.Close()
+	}
+
+	// 事务内查询设备信息（避免 TOCTOU 竞态）
+	var device DeviceInfo
+	err = tx.QueryRow(ctx, `
+		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,'')
+		FROM devices WHERE sn = $1
+	`, sn).Scan(&device.SN, &device.Model, &device.FirmwareArm, &device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion)
+	if err != nil {
+		return 0, fmt.Errorf("get device by sn: %w", err)
+	}
+
+	task := &model.UpgradeTask{
+		Name:          fmt.Sprintf("回退到 %s", pkg.MainVersion),
+		TaskType:      model.TaskTypePackage,
+		PackageID:     &packageID,
+		Model:         pkg.Model,
+		TargetVersion: pkg.MainVersion,
+		Status:        model.TaskStatusPending,
+		ExecuteMode:   model.ExecuteModeManual,
+		TotalDevices:  1,
+		Source:        model.OTASourceAdmin,
+	}
+
+	err = tx.QueryRow(ctx, `
+		INSERT INTO upgrade_tasks (name, task_type, firmware_id, package_id, model, target_version,
+		    status, execute_mode, scheduled_at, rollout_percent, total_devices, created_by,
+		    source, triggered_by, notes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		RETURNING id, created_at, updated_at
+	`, task.Name, task.TaskType, task.FirmwareID, task.PackageID, task.Model, task.TargetVersion,
+		task.Status, task.ExecuteMode, task.ScheduledAt, task.RolloutPercent, task.TotalDevices, task.CreatedBy,
+		task.Source, task.TriggeredBy, task.Notes).
+		Scan(&task.ID, &task.CreatedAt, &task.UpdatedAt)
+	if err != nil {
+		return 0, fmt.Errorf("insert upgrade task: %w", err)
+	}
+
+	chipVersions := map[string]string{
+		"arm": device.FirmwareArm,
+		"esp": device.FirmwareEsp,
+		"dsp": device.FirmwareDSP,
+		"bms": device.FirmwareBMS,
+	}
+
+	for _, item := range pkg.Items {
+		currentVer := chipVersions[item.TargetChip]
+		if currentVer == item.FirmwareVersion {
+			continue
+		}
+
+		_, err = tx.Exec(ctx, `
+			INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
+			    old_version, status, progress, error_message, retry_count, pushed_by,
+			    upgrade_package_id, task_id, source, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+			ON CONFLICT (device_sn, firmware_id, COALESCE(upgrade_package_id, 0)) DO UPDATE SET
+			    status = CASE
+			        WHEN device_upgrades.status = 'success' THEN device_upgrades.status
+			        ELSE $6
+			    END,
+			    firmware_version = $3,
+			    old_version = CASE WHEN device_upgrades.old_version = '' THEN $5 ELSE device_upgrades.old_version END,
+			    progress = $7,
+			    task_id = COALESCE($12, device_upgrades.task_id),
+			    source = $13,
+			    updated_at = NOW()
+		`, sn, item.FirmwareID, item.FirmwareVersion, item.TargetChip, currentVer,
+			model.UpgradeStatusPending, 0, "", 0, nil, packageID, task.ID, model.OTASourceAdmin)
+		if err != nil {
+			return 0, fmt.Errorf("insert device upgrade: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit transaction: %w", err)
+	}
+	return task.ID, nil
 }
 
 // GetLatestPackageVersion 获取指定型号的最新升级包主版本号
@@ -979,14 +1190,283 @@ func (r *OTARepository) GetPendingUpgradesBySN(ctx context.Context, sn string) (
 
 // CreateUpgradeTask 创建升级任务
 func (r *OTARepository) CreateUpgradeTask(ctx context.Context, t *model.UpgradeTask) error {
+	if t.Source == "" {
+		t.Source = model.OTASourceAdmin
+	}
 	return r.db.QueryRow(ctx, `
 		INSERT INTO upgrade_tasks (name, task_type, firmware_id, package_id, model, target_version,
-		    status, execute_mode, scheduled_at, rollout_percent, total_devices, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		    status, execute_mode, scheduled_at, rollout_percent, total_devices, created_by,
+		    source, triggered_by, notes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id, created_at, updated_at
 	`, t.Name, t.TaskType, t.FirmwareID, t.PackageID, t.Model, t.TargetVersion,
-		t.Status, t.ExecuteMode, t.ScheduledAt, t.RolloutPercent, t.TotalDevices, t.CreatedBy).
+		t.Status, t.ExecuteMode, t.ScheduledAt, t.RolloutPercent, t.TotalDevices, t.CreatedBy,
+		t.Source, t.TriggeredBy, t.Notes).
 		Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
+}
+
+// CreateTaskFromAppTrigger App 端触发升级时创建任务与升级记录
+func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int64, sn string, firmwareID int64, packageID *int64) (int64, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// 事务内查询设备信息（避免 TOCTOU 竞态）
+	var device DeviceInfo
+	err = tx.QueryRow(ctx, `
+		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,'')
+		FROM devices WHERE sn = $1
+	`, sn).Scan(&device.SN, &device.Model, &device.FirmwareArm, &device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion)
+	if err != nil {
+		return 0, fmt.Errorf("get device by sn: %w", err)
+	}
+
+	var taskName, taskType, deviceModel string
+	var fwID *int64
+	var pkgID *int64
+	var targetVersion string
+	var items []model.UpgradePackageItem
+
+	if packageID != nil && *packageID > 0 {
+		// 事务内查询升级包（避免 TOCTOU 竞态）
+		var pkg model.UpgradePackage
+		err = tx.QueryRow(ctx, `
+			SELECT id, model, main_version, COALESCE(changelog,''), is_force, status,
+			       COALESCE(created_by,0), created_at, updated_at
+			FROM upgrade_packages WHERE id = $1 AND status = 1
+		`, *packageID).Scan(&pkg.ID, &pkg.Model, &pkg.MainVersion, &pkg.Changelog, &pkg.IsForce,
+			&pkg.Status, &pkg.CreatedBy, &pkg.CreatedAt, &pkg.UpdatedAt)
+		if err != nil {
+			return 0, fmt.Errorf("upgrade package not found")
+		}
+		pkgItemRows, pkgErr := tx.Query(ctx, `
+			SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
+			       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,'')
+			FROM upgrade_package_items upi
+			JOIN firmware_versions f ON upi.firmware_id = f.id
+			WHERE upi.package_id = $1
+			ORDER BY upi.target_chip
+		`, *packageID)
+		if pkgErr == nil {
+			for pkgItemRows.Next() {
+				var item model.UpgradePackageItem
+				if scanErr := pkgItemRows.Scan(&item.ID, &item.PackageID, &item.FirmwareID, &item.TargetChip,
+					&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256); scanErr == nil {
+					pkg.Items = append(pkg.Items, item)
+				}
+			}
+			pkgItemRows.Close()
+		}
+		taskName = fmt.Sprintf("App升级到 %s", pkg.MainVersion)
+		taskType = model.TaskTypePackage
+		deviceModel = pkg.Model
+		pkgID = &pkg.ID
+		targetVersion = pkg.MainVersion
+		items = pkg.Items
+	} else if firmwareID > 0 {
+		// 事务内查询固件（避免 TOCTOU 竞态）
+		var fw model.Firmware
+		err = tx.QueryRow(ctx, `
+			SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
+			       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
+			       COALESCE(target_chip,''), COALESCE(main_version,'')
+			FROM firmware_versions WHERE id = $1
+		`, firmwareID).Scan(&fw.ID, &fw.Model, &fw.Version, &fw.FileURL, &fw.FileSize,
+			&fw.FileMD5, &fw.FileSHA256, &fw.Changelog, &fw.IsForce, &fw.UploadedBy,
+			&fw.Status, &fw.CreatedAt, &fw.TargetChip, &fw.MainVersion)
+		if err != nil {
+			return 0, fmt.Errorf("firmware not found")
+		}
+		taskName = fmt.Sprintf("App升级到 %s", fw.Version)
+		taskType = model.TaskTypeSingle
+		deviceModel = fw.Model
+		fwID = &fw.ID
+		targetVersion = fw.Version
+		items = []model.UpgradePackageItem{{
+			FirmwareID:      fw.ID,
+			TargetChip:      fw.TargetChip,
+			FirmwareVersion: fw.Version,
+		}}
+	} else {
+		return 0, fmt.Errorf("firmware_id or package_id required")
+	}
+
+	triggeredBy := userID
+	totalDevices := 1
+	task := &model.UpgradeTask{
+		Name:           taskName,
+		TaskType:       taskType,
+		FirmwareID:     fwID,
+		PackageID:      pkgID,
+		Model:          deviceModel,
+		TargetVersion:  targetVersion,
+		Status:         model.TaskStatusRunning,
+		ExecuteMode:    model.ExecuteModeImmediate,
+		TotalDevices:   totalDevices,
+		Source:         model.OTASourceApp,
+		TriggeredBy:    &triggeredBy,
+	}
+
+	err = tx.QueryRow(ctx, `
+		INSERT INTO upgrade_tasks (name, task_type, firmware_id, package_id, model, target_version,
+		    status, execute_mode, scheduled_at, rollout_percent, total_devices, created_by,
+		    source, triggered_by, notes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		RETURNING id, created_at, updated_at
+	`, task.Name, task.TaskType, task.FirmwareID, task.PackageID, task.Model, task.TargetVersion,
+		task.Status, task.ExecuteMode, task.ScheduledAt, task.RolloutPercent, task.TotalDevices, task.CreatedBy,
+		task.Source, task.TriggeredBy, task.Notes).
+		Scan(&task.ID, &task.CreatedAt, &task.UpdatedAt)
+	if err != nil {
+		return 0, fmt.Errorf("insert upgrade task: %w", err)
+	}
+
+	chipVersions := map[string]string{
+		"arm": device.FirmwareArm,
+		"esp": device.FirmwareEsp,
+		"dsp": device.FirmwareDSP,
+		"bms": device.FirmwareBMS,
+	}
+
+	for _, item := range items {
+		currentVer := chipVersions[item.TargetChip]
+		if currentVer == item.FirmwareVersion {
+			continue
+		}
+
+		var firmwareIDVal int64
+		if item.FirmwareID > 0 {
+			firmwareIDVal = item.FirmwareID
+		} else if fwID != nil {
+			firmwareIDVal = *fwID
+		}
+		if firmwareIDVal == 0 {
+			continue
+		}
+
+		_, err = tx.Exec(ctx, `
+			INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
+			    old_version, status, progress, error_message, retry_count, pushed_by,
+			    upgrade_package_id, task_id, source, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+		`, sn, firmwareIDVal, item.FirmwareVersion, item.TargetChip, currentVer,
+			model.UpgradeStatusPending, 0, "", 0, userID, pkgID, task.ID, model.OTASourceApp)
+		if err != nil {
+			return 0, fmt.Errorf("insert device upgrade: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit transaction: %w", err)
+	}
+	return task.ID, nil
+}
+
+// CreateTaskFromLocalOTA 本地 OTA 完成后记录任务并更新设备版本
+func (r *OTARepository) CreateTaskFromLocalOTA(ctx context.Context, userID int64, sn, targetChip, newVersion, mainVersion string) (int64, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	device, err := r.GetDeviceBySN(ctx, sn)
+	if err != nil {
+		return 0, fmt.Errorf("get device by sn: %w", err)
+	}
+
+	triggeredBy := userID
+	task := &model.UpgradeTask{
+		Name:          fmt.Sprintf("本地OTA升级到 %s", newVersion),
+		TaskType:      model.TaskTypeSingle,
+		Model:         device.Model,
+		TargetVersion: newVersion,
+		Status:        model.TaskStatusCompleted,
+		TotalDevices:  1,
+		Source:        model.OTASourceLocal,
+		TriggeredBy:   &triggeredBy,
+	}
+
+	err = tx.QueryRow(ctx, `
+		INSERT INTO upgrade_tasks (name, task_type, model, target_version,
+		    status, execute_mode, rollout_percent, total_devices, created_by,
+		    source, triggered_by, notes)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id, created_at, updated_at
+	`, task.Name, task.TaskType, task.Model, task.TargetVersion,
+		task.Status, model.ExecuteModeImmediate, 100, task.TotalDevices, userID,
+		task.Source, task.TriggeredBy, task.Notes).
+		Scan(&task.ID, &task.CreatedAt, &task.UpdatedAt)
+	if err != nil {
+		return 0, fmt.Errorf("insert upgrade task: %w", err)
+	}
+
+	var oldVersion string
+	switch targetChip {
+	case "arm":
+		oldVersion = device.FirmwareArm
+	case "esp":
+		oldVersion = device.FirmwareEsp
+	case "dsp":
+		oldVersion = device.FirmwareDSP
+	case "bms":
+		oldVersion = device.FirmwareBMS
+	}
+
+	// 查找 firmware_id（device_upgrades 表要求 NOT NULL）
+	var firmwareID int64
+	err = tx.QueryRow(ctx, `SELECT id FROM firmware_versions WHERE model = $1 AND target_chip = $2 AND version = $3 ORDER BY created_at DESC LIMIT 1`,
+		device.Model, targetChip, newVersion).Scan(&firmwareID)
+	if err != nil {
+		return 0, fmt.Errorf("firmware record not found for model=%s chip=%s version=%s", device.Model, targetChip, newVersion)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
+		    old_version, status, progress, source, task_id, pushed_by, completed_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(), NOW())
+	`, sn, firmwareID, newVersion, targetChip, oldVersion, model.UpgradeStatusSuccess, 100, model.OTASourceLocal, task.ID, userID)
+	if err != nil {
+		return 0, fmt.Errorf("insert device upgrade: %w", err)
+	}
+
+	updateCol := ""
+	switch targetChip {
+	case "arm":
+		updateCol = "firmware_arm"
+	case "esp":
+		updateCol = "firmware_esp"
+	case "dsp":
+		updateCol = "firmware_dsp"
+	case "bms":
+		updateCol = "firmware_bms"
+	}
+	if updateCol != "" && newVersion != "" {
+		_, err = tx.Exec(ctx, fmt.Sprintf(
+			"UPDATE devices SET %s = $2, updated_at = NOW() WHERE sn = $1",
+			updateCol,
+		), sn, newVersion)
+		if err != nil {
+			return 0, fmt.Errorf("update firmware version: %w", err)
+		}
+	}
+
+	if mainVersion != "" {
+		_, err = tx.Exec(ctx,
+			"UPDATE devices SET main_version = $2, updated_at = NOW() WHERE sn = $1",
+			sn, mainVersion)
+		if err != nil {
+			return 0, fmt.Errorf("update main version: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, fmt.Errorf("commit transaction: %w", err)
+	}
+	return task.ID, nil
 }
 
 // GetUpgradeTask 获取升级任务详情
@@ -996,12 +1476,14 @@ func (r *OTARepository) GetUpgradeTask(ctx context.Context, id int64) (*model.Up
 		SELECT id, COALESCE(name,''), task_type, firmware_id, package_id, model,
 		       COALESCE(target_version,''), status, execute_mode, scheduled_at,
 		       rollout_percent, total_devices, success_count, failed_count,
-		       created_by, created_at, executed_at, completed_at, updated_at
+		       created_by, COALESCE(source,'admin'), triggered_by, COALESCE(notes,''),
+		       created_at, executed_at, completed_at, updated_at
 		FROM upgrade_tasks WHERE id = $1
 	`, id).Scan(&t.ID, &t.Name, &t.TaskType, &t.FirmwareID, &t.PackageID, &t.Model,
 		&t.TargetVersion, &t.Status, &t.ExecuteMode, &t.ScheduledAt,
 		&t.RolloutPercent, &t.TotalDevices, &t.SuccessCount, &t.FailedCount,
-		&t.CreatedBy, &t.CreatedAt, &t.ExecutedAt, &t.CompletedAt, &t.UpdatedAt)
+		&t.CreatedBy, &t.Source, &t.TriggeredBy, &t.Notes,
+		&t.CreatedAt, &t.ExecutedAt, &t.CompletedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -1016,7 +1498,8 @@ func (r *OTARepository) ListUpgradeTasks(ctx context.Context, page, pageSize int
 		SELECT id, COALESCE(name,''), task_type, firmware_id, package_id, model,
 		       COALESCE(target_version,''), status, execute_mode, scheduled_at,
 		       rollout_percent, total_devices, success_count, failed_count,
-		       created_by, created_at, executed_at, completed_at, updated_at
+		       created_by, COALESCE(source,'admin'), triggered_by, COALESCE(notes,''),
+		       created_at, executed_at, completed_at, updated_at
 		FROM upgrade_tasks
 	`
 	args := []interface{}{}
@@ -1035,7 +1518,8 @@ func (r *OTARepository) ListUpgradeTasks(ctx context.Context, page, pageSize int
 
 	query += " ORDER BY created_at DESC"
 	offset := (page - 1) * pageSize
-	query += fmt.Sprintf(" LIMIT %d OFFSET %d", pageSize, offset)
+	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+	args = append(args, pageSize, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -1049,7 +1533,8 @@ func (r *OTARepository) ListUpgradeTasks(ctx context.Context, page, pageSize int
 		if err := rows.Scan(&t.ID, &t.Name, &t.TaskType, &t.FirmwareID, &t.PackageID, &t.Model,
 			&t.TargetVersion, &t.Status, &t.ExecuteMode, &t.ScheduledAt,
 			&t.RolloutPercent, &t.TotalDevices, &t.SuccessCount, &t.FailedCount,
-			&t.CreatedBy, &t.CreatedAt, &t.ExecutedAt, &t.CompletedAt, &t.UpdatedAt); err != nil {
+			&t.CreatedBy, &t.Source, &t.TriggeredBy, &t.Notes,
+			&t.CreatedAt, &t.ExecutedAt, &t.CompletedAt, &t.UpdatedAt); err != nil {
 			continue
 		}
 		result = append(result, t)

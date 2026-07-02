@@ -27,17 +27,22 @@ type OTAService struct {
 	rdb          *redis.Client
 	deviceServer string
 	internalKey  string
+	uploadDir    string // 固件上传存储目录
 	serverURL    string // 外部访问地址，用于构造ESP32下载URL
 	httpClient   *http.Client
 	concurrency  int
 }
 
-func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, serverURL string) *OTAService {
+func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, uploadDir string, serverURL string) *OTAService {
+	if uploadDir == "" {
+		uploadDir = "/data/firmware"
+	}
 	return &OTAService{
 		repo:         repo,
 		rdb:          rdb,
 		deviceServer: deviceServer,
 		internalKey:  internalKey,
+		uploadDir:    uploadDir,
 		serverURL:    serverURL,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 		concurrency:  10,
@@ -116,6 +121,7 @@ type PushUpgradeReq struct {
 	DeviceSNs  []string
 	PushedBy   int64
 	Immediate  bool // true=立即执行升级, false=仅通知
+	TaskID     *int64 // 可选：已有任务ID，未传则自动创建 source='admin' 的任务
 }
 
 // PushUpgrade 管理员推送升级到设备（支持批量）
@@ -131,6 +137,31 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 	downloadURL := fw.FileURL
 	if s.serverURL != "" && strings.HasPrefix(fw.FileURL, "/") {
 		downloadURL = strings.TrimRight(s.serverURL, "/") + fw.FileURL
+	}
+
+	// 2.5 如果调用方未传 taskID，自动创建一个 source='admin' 的 upgrade_task
+	taskID := req.TaskID
+	if taskID == nil {
+		createdBy := req.PushedBy
+		task := &model.UpgradeTask{
+			Name:          fmt.Sprintf("管理员推送升级 %s", fw.Version),
+			TaskType:      model.TaskTypeSingle,
+			FirmwareID:    &fw.ID,
+			Model:         fw.Model,
+			TargetVersion: fw.Version,
+			Status:        model.TaskStatusPending,
+			ExecuteMode:   model.ExecuteModeImmediate,
+			TotalDevices:  len(req.DeviceSNs),
+			CreatedBy:     &createdBy,
+			Source:        model.OTASourceAdmin,
+		}
+		if err := s.repo.CreateUpgradeTask(ctx, task); err != nil {
+			return fmt.Errorf("创建升级任务失败: %w", err)
+		}
+		taskID = &task.ID
+		logger.Info("Auto-created admin upgrade task",
+			zap.Int64("task_id", task.ID),
+			zap.Int64("firmware_id", req.FirmwareID))
 	}
 
 	// 3. 对每个设备 UPSERT device_upgrades 记录并发送命令
@@ -162,7 +193,7 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 				}
 			}
 
-			// UPSERT 升级记录
+			// UPSERT 升级记录（带 task_id）
 			du := &model.DeviceUpgrade{
 				DeviceSN:        deviceSN,
 				FirmwareID:      fw.ID,
@@ -171,9 +202,11 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 				OldVersion:      oldVersion,
 				Status:          "pending",
 				PushedBy:        &req.PushedBy,
+				TaskID:          taskID,
+				Source:          model.OTASourceAdmin,
 			}
-			if err := s.repo.UpsertDeviceUpgrade(ctx, du); err != nil {
-				logger.Error("UpsertDeviceUpgrade failed",
+			if err := s.repo.UpsertDeviceUpgradeWithTask(ctx, du); err != nil {
+				logger.Error("UpsertDeviceUpgradeWithTask failed",
 					zap.String("sn", deviceSN), zap.Error(err))
 				return
 			}
@@ -570,11 +603,16 @@ func (s *OTAService) RestoreAppVersion(ctx context.Context, id int64, percentage
 // ========== 升级包管理 ==========
 
 type CreatePackageReq struct {
-	Model       string
-	FirmwareIDs []int64
-	Changelog   string
-	IsForce     bool
-	CreatedBy   int64
+	Model          string
+	FirmwareIDs    []int64
+	Changelog      string
+	IsForce        bool
+	UserVersion    string
+	UserChangelog  string
+	RolloutType    string
+	RolloutTargets string
+	IsPublished    bool
+	CreatedBy      int64
 }
 
 // CreateUpgradePackage 创建升级包
@@ -609,12 +647,17 @@ func (s *OTAService) CreateUpgradePackage(ctx context.Context, req *CreatePackag
 	}
 
 	pkg := &model.UpgradePackage{
-		Model:       req.Model,
-		MainVersion: mainVersion,
-		Changelog:   req.Changelog,
-		IsForce:     req.IsForce,
-		CreatedBy:   req.CreatedBy,
-		Items:       items,
+		Model:          req.Model,
+		MainVersion:    mainVersion,
+		Changelog:      req.Changelog,
+		IsForce:        req.IsForce,
+		UserVersion:    req.UserVersion,
+		UserChangelog:  req.UserChangelog,
+		RolloutType:    req.RolloutType,
+		RolloutTargets: req.RolloutTargets,
+		IsPublished:    req.IsPublished,
+		CreatedBy:      req.CreatedBy,
+		Items:          items,
 	}
 	return s.repo.CreateUpgradePackage(ctx, pkg)
 }
@@ -1329,8 +1372,19 @@ func (s *OTAService) GetTaskStats(ctx context.Context) (pending, running, todayC
 }
 
 // ReportLocalOTAResult 本地OTA完成后，更新设备固件版本并记录升级历史
-func (s *OTAService) ReportLocalOTAResult(ctx context.Context, sn string, targetChip string, newVersion string, mainVersion string) error {
-	return s.repo.ReportLocalOTAResult(ctx, sn, targetChip, newVersion, mainVersion)
+func (s *OTAService) ReportLocalOTAResult(ctx context.Context, userID int64, sn, targetChip, newVersion, mainVersion string) (int64, error) {
+	taskID, err := s.repo.CreateTaskFromLocalOTA(ctx, userID, sn, targetChip, newVersion, mainVersion)
+	if err != nil {
+		logger.Error("ReportLocalOTAResult: CreateTaskFromLocalOTA failed",
+			zap.String("sn", sn), zap.String("chip", targetChip), zap.Error(err))
+		return 0, err
+	}
+	logger.Info("Local OTA result reported",
+		zap.String("sn", sn),
+		zap.String("chip", targetChip),
+		zap.String("version", newVersion),
+		zap.Int64("task_id", taskID))
+	return taskID, nil
 }
 
 // GetDevicesByFirmwareVersion 按固件版本查询正在使用该版本的设备
@@ -1341,4 +1395,98 @@ func (s *OTAService) GetDevicesByFirmwareVersion(ctx context.Context, deviceMode
 // GetDevicesByUpgradePackage 按升级包查询已安装/正在安装该升级包的设备
 func (s *OTAService) GetDevicesByUpgradePackage(ctx context.Context, packageID int64, status string) ([]model.DeviceUpgrade, error) {
 	return s.repo.GetDevicesByUpgradePackage(ctx, packageID, status)
+}
+
+// ========== 统一升级入口（App / 本地 OTA / 回退） ==========
+
+// TriggerUpgradeFromApp App 端触发升级：创建任务并发送 MQTT 升级命令
+func (s *OTAService) TriggerUpgradeFromApp(ctx context.Context, userID int64, sn string, packageID int64) (int64, error) {
+	// 1. 校验设备归属
+	owned, err := s.repo.CheckDeviceOwnership(ctx, sn, userID)
+	if err != nil {
+		return 0, fmt.Errorf("校验设备归属失败: %w", err)
+	}
+	if !owned {
+		return 0, fmt.Errorf("设备不属于该用户")
+	}
+
+	// 2. 获取升级包信息，验证包存在且已发布
+	pkg, err := s.repo.GetUpgradePackage(ctx, packageID)
+	if err != nil || pkg == nil {
+		return 0, fmt.Errorf("升级包不存在")
+	}
+	if !pkg.IsPublished {
+		return 0, fmt.Errorf("升级包未发布")
+	}
+
+	// 3. 调用 repo.CreateTaskFromAppTrigger 创建任务与升级记录
+	taskID, err := s.repo.CreateTaskFromAppTrigger(ctx, userID, sn, 0, &packageID)
+	if err != nil {
+		return 0, fmt.Errorf("创建App升级任务失败: %w", err)
+	}
+
+	logger.Info("App upgrade task created",
+		zap.Int64("task_id", taskID),
+		zap.String("sn", sn),
+		zap.Int64("package_id", packageID))
+
+	// 4. 发送 MQTT 升级命令（获取包的第一个芯片固件，调用已有的发送逻辑）
+	devices, err := s.repo.ListUpgradeDevicesByTaskID(ctx, taskID)
+	if err != nil {
+		return taskID, nil
+	}
+	for _, du := range devices {
+		if du.Status != model.UpgradeStatusPending {
+			continue
+		}
+		fw, err := s.repo.GetFirmware(ctx, du.FirmwareID)
+		if err != nil || fw == nil {
+			continue
+		}
+		duCopy := du
+		go s.SendUpgradeCommand(context.Background(), &duCopy, fw, s.BuildDownloadURL(fw.FileURL))
+		break // 只发送第一个芯片，后续由 OnChipUpgradeComplete 触发
+	}
+
+	return taskID, nil
+}
+
+// RollbackUpgrade 回退到指定升级包版本：创建回退任务并发送升级命令
+func (s *OTAService) RollbackUpgrade(ctx context.Context, sn string, targetPackageID int64) (int64, error) {
+	// 1. 调用 repo.RollbackToPackage 创建回退任务
+	taskID, err := s.repo.RollbackToPackage(ctx, sn, targetPackageID)
+	if err != nil {
+		return 0, fmt.Errorf("创建回退任务失败: %w", err)
+	}
+
+	logger.Info("Rollback task created",
+		zap.Int64("task_id", taskID),
+		zap.String("sn", sn),
+		zap.Int64("package_id", targetPackageID))
+
+	// 2. 获取回退任务下的 pending 升级记录并发送命令
+	devices, err := s.repo.ListUpgradeDevicesByTaskID(ctx, taskID)
+	if err != nil {
+		return taskID, nil
+	}
+
+	for _, du := range devices {
+		if du.Status != model.UpgradeStatusPending {
+			continue
+		}
+		fw, err := s.repo.GetFirmware(ctx, du.FirmwareID)
+		if err != nil || fw == nil {
+			continue
+		}
+		duCopy := du
+		go s.SendUpgradeCommand(context.Background(), &duCopy, fw, s.BuildDownloadURL(fw.FileURL))
+		break // 只发送第一个芯片，后续由 OnChipUpgradeComplete 触发
+	}
+
+	return taskID, nil
+}
+
+// GetAvailablePackagesForDevice 查询设备可见的已发布升级包
+func (s *OTAService) GetAvailablePackagesForDevice(ctx context.Context, sn string, userID int64) ([]model.UpgradePackage, error) {
+	return s.repo.GetPublishedPackagesForDevice(ctx, sn, userID)
 }

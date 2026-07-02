@@ -63,7 +63,7 @@ class FirmwareListPage extends StatelessWidget {
 
   void _requestList(BuildContext context) {
     context.read<OtaBloc>().add(
-      OTAFirmwareListRequested(deviceModel: deviceModel, sn: sn),
+      LoadAvailablePackages(sn: sn),
     );
   }
 
@@ -97,14 +97,16 @@ class FirmwareListPage extends StatelessWidget {
         ),
       ).then((confirmed) {
         if (confirmed == true && context.mounted) {
+          // 使用 package_id 触发升级 (POST /ota/trigger)
           context.read<OtaBloc>().add(
-            OTAFirmwareInstallRequested(sn: sn, packageId: packageId),
+            OTATriggerRequested(sn: sn, packageId: packageId),
           );
         }
       });
     } else {
+      // 使用 package_id 触发升级 (POST /ota/trigger)
       context.read<OtaBloc>().add(
-        OTAFirmwareInstallRequested(sn: sn, packageId: packageId),
+        OTATriggerRequested(sn: sn, packageId: packageId),
       );
     }
   }
@@ -118,7 +120,7 @@ class FirmwareListPage extends StatelessWidget {
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
           title: Text(
-            '固件版本列表',
+            '升级包列表',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
           ),
           centerTitle: true,
@@ -142,9 +144,9 @@ class FirmwareListPage extends StatelessWidget {
           }
         },
         buildWhen: (prev, curr) =>
-            curr is OTAFirmwareListLoading ||
-            curr is OTAFirmwareListLoaded ||
-            curr is OTAFirmwareListError ||
+            curr is OTAAvailablePackagesLoading ||
+            curr is OTAAvailablePackagesLoaded ||
+            curr is OTAAvailablePackagesError ||
             curr is OTAFirmwareInstalling ||
             curr is OTATriggered,
         builder: (context, state) {
@@ -155,7 +157,7 @@ class FirmwareListPage extends StatelessWidget {
             });
           }
 
-          if (state is OTAFirmwareListLoading || state is OTAFirmwareInstalling) {
+          if (state is OTAAvailablePackagesLoading || state is OTAFirmwareInstalling) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -170,7 +172,7 @@ class FirmwareListPage extends StatelessWidget {
                   ),
                   SizedBox(height: 16.h),
                   Text(
-                    state is OTAFirmwareInstalling ? '正在安装固件...' : '正在加载固件列表...',
+                    state is OTAFirmwareInstalling ? '正在安装固件...' : '正在加载升级包列表...',
                     style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
                   ),
                 ],
@@ -178,7 +180,7 @@ class FirmwareListPage extends StatelessWidget {
             );
           }
 
-          if (state is OTAFirmwareListError) {
+          if (state is OTAAvailablePackagesError) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -203,7 +205,7 @@ class FirmwareListPage extends StatelessWidget {
             );
           }
 
-          if (state is OTAFirmwareListLoaded) {
+          if (state is OTAAvailablePackagesLoaded) {
             final packages = state.packages;
             if (packages.isEmpty) {
               return Center(
@@ -213,7 +215,7 @@ class FirmwareListPage extends StatelessWidget {
                     Icon(Icons.inventory_2_outlined, size: 56.sp, color: AppColors.textHint),
                     SizedBox(height: 12.h),
                     Text(
-                      '暂无可用的固件版本',
+                      '暂无可用的升级包',
                       style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
                     ),
                   ],
@@ -285,15 +287,22 @@ class FirmwareListPage extends StatelessWidget {
 
   Widget _buildPackageCard(BuildContext context, dynamic pkg) {
     final id = (pkg is Map) ? (pkg['id'] as int? ?? 0) : 0;
+    // 优先使用 user_version，回退到 main_version
+    final userVersion = (pkg is Map) ? (pkg['user_version'] as String? ?? '') : '';
     final mainVersion = (pkg is Map) ? (pkg['main_version'] as String? ?? '') : '';
+    final displayVersion = userVersion.isNotEmpty ? userVersion : mainVersion;
+    // 优先使用 user_changelog，回退到 changelog
+    final userChangelog = (pkg is Map) ? (pkg['user_changelog'] as String? ?? '') : '';
     final changelog = (pkg is Map) ? (pkg['changelog'] as String? ?? '') : '';
+    final displayChangelog = userChangelog.isNotEmpty ? userChangelog : changelog;
+    final isForce = (pkg is Map) ? (pkg['is_force'] as bool? ?? false) : false;
     final createdAtRaw = (pkg is Map) ? (pkg['created_at'] as String? ?? '') : '';
     final items = (pkg is Map && pkg['items'] is List)
         ? (pkg['items'] as List)
         : <dynamic>[];
 
-    final isCurrent = _isCurrentVersion(mainVersion);
-    final isRollbackVer = _isRollback(mainVersion);
+    final isCurrent = _isCurrentVersion(displayVersion);
+    final isRollbackVer = _isRollback(displayVersion);
 
     // Format date
     final dateStr = _formatDate(createdAtRaw);
@@ -320,12 +329,12 @@ class FirmwareListPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: version + current tag
+          // Header: version + badges
           Row(
             children: [
               Expanded(
                 child: Text(
-                  mainVersion.isNotEmpty ? mainVersion : 'Unknown',
+                  displayVersion.isNotEmpty ? displayVersion : 'Unknown',
                   style: TextStyle(
                     fontSize: 17.sp,
                     fontWeight: FontWeight.w700,
@@ -333,6 +342,23 @@ class FirmwareListPage extends StatelessWidget {
                   ),
                 ),
               ),
+              if (isForce)
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                  margin: EdgeInsets.only(right: 6.w),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20.r),
+                  ),
+                  child: Text(
+                    '强制升级',
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.error,
+                    ),
+                  ),
+                ),
               if (isCurrent)
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 3.h),
@@ -390,12 +416,12 @@ class FirmwareListPage extends StatelessWidget {
             ),
           ],
 
-          // Changelog
-          if (changelog.isNotEmpty) ...[
+          // Changelog (user_changelog)
+          if (displayChangelog.isNotEmpty) ...[
             SizedBox(height: 10.h),
             Text(
-              changelog,
-              maxLines: 2,
+              displayChangelog,
+              maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12.sp,
@@ -417,7 +443,7 @@ class FirmwareListPage extends StatelessWidget {
               ),
               const Spacer(),
               if (!isCurrent)
-                _buildInstallButton(context, id, mainVersion, isRollbackVer),
+                _buildInstallButton(context, id, displayVersion, isRollbackVer),
             ],
           ),
         ],

@@ -205,7 +205,6 @@ class _OTAPageState extends State<OTAPage> {
   }
 
   Widget _buildUpdateAvailable(OTAUpdateAvailable state) {
-    final l10n = AppLocalizations.of(context)!;
     final info = state.info;
     final upgradeMode = info['upgrade_mode'] as String? ?? 'single';
     if (upgradeMode == 'package') {
@@ -326,7 +325,8 @@ class _OTAPageState extends State<OTAPage> {
             child: ElevatedButton(
               onPressed: _triggering ? null : () {
                 setState(() => _triggering = true);
-                context.read<OtaBloc>().add(OTATriggerRequested(sn: widget.deviceSN, firmwareId: firmwareId));
+                // 使用 package_id 触发升级（后端已改为 package_id）
+                context.read<OtaBloc>().add(OTATriggerRequested(sn: widget.deviceSN, packageId: firmwareId));
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _triggering ? AppColors.textHint : AppColors.primary,
@@ -341,7 +341,7 @@ class _OTAPageState extends State<OTAPage> {
           ),
           SizedBox(height: 12.h),
           _buildPreDownloadButton(firmwareId, downloadUrl, fileName),
-          // 查看所有固件版本入口
+          // 查看可用升级包入口
           Padding(
             padding: EdgeInsets.only(top: 12.h),
             child: Center(
@@ -365,7 +365,7 @@ class _OTAPageState extends State<OTAPage> {
                   );
                 },
                 icon: Icon(Icons.history_rounded, size: 16.sp),
-                label: Text('查看所有固件版本', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500)),
+                label: Text('查看可用升级包', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500)),
                 style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
               ),
             ),
@@ -550,7 +550,7 @@ class _OTAPageState extends State<OTAPage> {
           ),
           SizedBox(height: 12.h),
           _buildPreDownloadButton(firmwareId, downloadUrl, fileName),
-          // 查看所有固件版本入口
+          // 查看可用升级包入口
           Padding(
             padding: EdgeInsets.only(top: 12.h),
             child: Center(
@@ -573,7 +573,7 @@ class _OTAPageState extends State<OTAPage> {
                   );
                 },
                 icon: Icon(Icons.history_rounded, size: 16.sp),
-                label: Text('查看所有固件版本', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500)),
+                label: Text('查看可用升级包', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500)),
                 style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
               ),
             ),
@@ -820,7 +820,7 @@ class _OTAPageState extends State<OTAPage> {
               ],
             ),
           ),
-          // 查看所有固件版本入口
+          // 查看可用升级包入口
           Padding(
             padding: EdgeInsets.only(top: 16.h),
             child: SizedBox(
@@ -845,7 +845,7 @@ class _OTAPageState extends State<OTAPage> {
                   );
                 },
                 icon: Icon(Icons.history_rounded, size: 18.sp),
-                label: Text('查看所有固件版本', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                label: Text('查看可用升级包', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary),

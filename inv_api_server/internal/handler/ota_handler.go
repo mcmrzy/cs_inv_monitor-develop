@@ -403,39 +403,25 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 	})
 }
 
-// TriggerOTA 触发设备OTA升级（兼容App调用，内部转调PushUpgrade）
+// TriggerOTA 触发设备OTA升级（App端调用，创建 source='app' 的升级任务）
 func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 	var req struct {
-		SN         string `json:"sn" binding:"required"`
-		FirmwareID int64  `json:"firmware_id" binding:"required"`
+		SN        string `json:"sn" binding:"required"`
+		PackageID int64  `json:"package_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
 		return
 	}
 
 	userID := c.GetInt64("user_id")
-	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), req.SN, userID)
+	taskID, err := h.otaService.TriggerUpgradeFromApp(c.Request.Context(), userID, req.SN, req.PackageID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询设备信息失败", err))
-		return
-	}
-	if !owned {
-		response.HandleError(c, apperr.Forbidden("设备不属于当前用户"))
-		return
-	}
-
-	err = h.otaService.PushUpgrade(c.Request.Context(), &service.PushUpgradeReq{
-		FirmwareID: req.FirmwareID,
-		DeviceSNs:  []string{req.SN},
-		Immediate:  true,
-	})
-	if err != nil {
-		log.Printf("[TriggerOTA] error: sn=%s, firmware_id=%d, err=%v", req.SN, req.FirmwareID, err)
+		log.Printf("[TriggerOTA] error: sn=%s, package_id=%d, err=%v", req.SN, req.PackageID, err)
 		response.HandleError(c, apperr.Internal("触发升级失败: "+err.Error(), err))
 		return
 	}
-	response.Success(c, gin.H{"message": "升级已触发"})
+	response.Success(c, gin.H{"task_id": taskID, "message": "升级已触发"})
 }
 
 // ResendUpgradeCommand 重新发送待执行升级的MQTT命令
@@ -664,23 +650,36 @@ func (h *OTAHandler) RestoreAppVersion(c *gin.Context) {
 // CreateUpgradePackage 创建升级包
 func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
 	var req struct {
-		Model       string  `json:"model" binding:"required"`
-		FirmwareIDs []int64 `json:"firmware_ids" binding:"required"`
-		Changelog   string  `json:"changelog"`
-		IsForce     bool    `json:"is_force"`
+		Model          string   `json:"model" binding:"required"`
+		FirmwareIDs    []int64  `json:"firmware_ids" binding:"required"`
+		Changelog      string   `json:"changelog"`
+		IsForce        bool     `json:"is_force"`
+		UserVersion    string   `json:"user_version"`
+		UserChangelog  string   `json:"user_changelog"`
+		RolloutType    string   `json:"rollout_type"`
+		RolloutTargets string   `json:"rollout_targets"`
+		IsPublished    bool     `json:"is_published"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
 		return
 	}
+	if req.RolloutType == "" {
+		req.RolloutType = "all"
+	}
 
 	userID := c.GetInt64("user_id")
 	if err := h.otaService.CreateUpgradePackage(c.Request.Context(), &service.CreatePackageReq{
-		Model:       req.Model,
-		FirmwareIDs: req.FirmwareIDs,
-		Changelog:   req.Changelog,
-		IsForce:     req.IsForce,
-		CreatedBy:   userID,
+		Model:          req.Model,
+		FirmwareIDs:    req.FirmwareIDs,
+		Changelog:      req.Changelog,
+		IsForce:        req.IsForce,
+		UserVersion:    req.UserVersion,
+		UserChangelog:  req.UserChangelog,
+		RolloutType:    req.RolloutType,
+		RolloutTargets: req.RolloutTargets,
+		IsPublished:    req.IsPublished,
+		CreatedBy:      userID,
 	}); err != nil {
 		log.Printf("[CreateUpgradePackage] error: %v", err)
 		response.HandleError(c, apperr.Internal("创建升级包失败: "+err.Error(), err))
@@ -1003,10 +1002,16 @@ func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	if req.Status == "success" && req.NewVersion != "" {
-		if err := h.otaService.ReportLocalOTAResult(ctx, sn, req.TargetChip, req.NewVersion, req.MainVersion); err != nil {
+		userID := c.GetInt64("user_id")
+		taskID, err := h.otaService.ReportLocalOTAResult(ctx, userID, sn, req.TargetChip, req.NewVersion, req.MainVersion)
+		if err != nil {
 			log.Printf("[ReportLocalOTAResult] error: sn=%s, chip=%s, err=%v", sn, req.TargetChip, err)
 			// 不返回错误给客户端，避免阻断 App 流程
+			response.Success(c, gin.H{"status": "ok"})
+			return
 		}
+		response.Success(c, gin.H{"status": "ok", "task_id": taskID})
+		return
 	}
 
 	response.Success(c, gin.H{"status": "ok"})
@@ -1254,4 +1259,76 @@ func (h *OTAHandler) GetUpgradePackageDevices(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"devices": devices, "total": len(devices)})
+}
+
+// GetAvailablePackages APP端获取设备可用的已发布升级包列表
+func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.HandleError(c, apperr.BadRequest("设备SN不能为空"))
+		return
+	}
+
+	userID := c.GetInt64("user_id")
+	packages, err := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, userID)
+	if err != nil {
+		log.Printf("[GetAvailablePackages] error: sn=%s, err=%v", sn, err)
+		response.HandleError(c, apperr.Internal("查询可用升级包失败: "+err.Error(), err))
+		return
+	}
+
+	// 过滤敏感字段，只返回 App 端需要的信息
+	type chipInfo struct {
+		TargetChip      string `json:"target_chip"`
+		FirmwareVersion string `json:"firmware_version"`
+	}
+	type availablePackage struct {
+		ID            int64      `json:"id"`
+		UserVersion   string     `json:"user_version"`
+		UserChangelog string     `json:"user_changelog"`
+		IsForce       bool       `json:"is_force"`
+		Model         string     `json:"model"`
+		Chips        []chipInfo `json:"chips"`
+	}
+
+	result := make([]availablePackage, 0, len(packages))
+	for _, pkg := range packages {
+		chips := make([]chipInfo, 0, len(pkg.Items))
+		for _, item := range pkg.Items {
+			chips = append(chips, chipInfo{
+				TargetChip:      item.TargetChip,
+				FirmwareVersion: item.FirmwareVersion,
+			})
+		}
+		result = append(result, availablePackage{
+			ID:            pkg.ID,
+			UserVersion:   pkg.UserVersion,
+			UserChangelog: pkg.UserChangelog,
+			IsForce:       pkg.IsForce,
+			Model:         pkg.Model,
+			Chips:        chips,
+		})
+	}
+
+	response.Success(c, gin.H{"packages": result})
+}
+
+// RollbackUpgrade 回退设备到指定升级包版本
+func (h *OTAHandler) RollbackUpgrade(c *gin.Context) {
+	var req struct {
+		SN        string `json:"sn" binding:"required"`
+		PackageID int64  `json:"package_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
+		return
+	}
+
+	taskID, err := h.otaService.RollbackUpgrade(c.Request.Context(), req.SN, req.PackageID)
+	if err != nil {
+		log.Printf("[RollbackUpgrade] error: sn=%s, package_id=%d, err=%v", req.SN, req.PackageID, err)
+		response.HandleError(c, apperr.Internal("回退升级失败: "+err.Error(), err))
+		return
+	}
+	response.Success(c, gin.H{"task_id": taskID, "message": "回退指令已发送"})
 }

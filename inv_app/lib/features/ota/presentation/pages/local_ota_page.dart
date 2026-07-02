@@ -418,7 +418,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
   }
 
-  /// 本地OTA成功后，通知后端更新版本号
+  /// 本地OTA成功后，上报结果到后端
+  /// POST /ota/devices/:sn/local-ota-result
+  /// 请求: {target_chip, new_version, main_version}
+  /// 响应: {code: 0, data: {task_id: int64}}
   Future<void> _reportLocalOTAResult(String sn, String targetChip, String newVersion, [String? mainVersion]) async {
     try {
       // 等待网络恢复（断开热点后需要几秒切回移动网络/普通WiFi）
@@ -427,7 +430,6 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       await getIt<Dio>().post(
         '/ota/devices/$sn/local-ota-result',
         data: {
-          'status': 'success',
           'target_chip': targetChip,
           'new_version': newVersion,
           if (mainVersion != null) 'main_version': mainVersion,

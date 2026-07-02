@@ -31,6 +31,7 @@ import {
   Descriptions,
   Divider,
   Checkbox,
+  Alert,
 } from 'antd'
 import {
   UploadOutlined,
@@ -369,6 +370,18 @@ const UpgradeTasksTab: React.FC = () => {
       render: (_: any, r: UpgradeTask) => {
         const modeMap: Record<string, string> = { immediate: t('ota.executeModeImmediate'), scheduled: t('ota.executeModeScheduled'), manual: t('ota.executeModeManual') }
         return modeMap[r.execute_mode] || r.execute_mode
+      },
+    },
+    {
+      title: '来源', key: 'source', width: 100,
+      render: (_: any, r: UpgradeTask) => {
+        const sourceMap: Record<string, { label: string; color: string }> = {
+          admin: { label: '管理员推送', color: 'blue' },
+          app: { label: 'APP触发', color: 'green' },
+          local: { label: '本地OTA', color: 'orange' },
+        }
+        const cfg = sourceMap[r.source || ''] || { label: r.source || '-', color: 'default' }
+        return <Tag color={cfg.color}>{cfg.label}</Tag>
       },
     },
     {
@@ -992,6 +1005,11 @@ const PackagesTab: React.FC = () => {
   const [pkgDevices, setPkgDevices] = useState<DeviceUpgrade[]>([])
   const [pkgDevicesLoading, setPkgDevicesLoading] = useState(false)
 
+  // 回退升级 Modal 状态
+  const [rollbackOpen, setRollbackOpen] = useState(false)
+  const [rollbackPkg, setRollbackPkg] = useState<UpgradePackage | null>(null)
+  const [rollbackSn, setRollbackSn] = useState('')
+
   const openPkgDevicesModal = async (record: UpgradePackage) => {
     setPkgDevicesTarget(record)
     setPkgDevicesOpen(true)
@@ -1045,6 +1063,37 @@ const PackagesTab: React.FC = () => {
     setInstallOpen(true)
   }
 
+  // 回退升级
+  const rollbackMutation = useMutation({
+    mutationFn: (data: { sn: string; package_id: number }) => otaApi.rollbackUpgrade(data),
+    onSuccess: () => {
+      message.success('回退指令已下发')
+      setRollbackOpen(false)
+      setRollbackPkg(null)
+      setRollbackSn('')
+      invalidate()
+    },
+    onError: (err: any) => {
+      message.error('回退失败: ' + (err?.response?.data?.message || err?.message || ''))
+    },
+  })
+
+  const handleRollbackSubmit = () => {
+    if (!rollbackPkg) return
+    const sn = rollbackSn.trim()
+    if (!sn) {
+      message.warning('请输入设备 SN')
+      return
+    }
+    rollbackMutation.mutate({ sn, package_id: Number(rollbackPkg.id) })
+  }
+
+  const openRollbackModal = (record: UpgradePackage) => {
+    setRollbackPkg(record)
+    setRollbackSn('')
+    setRollbackOpen(true)
+  }
+
   const { data: packagesRes, isLoading } = useQuery({
     queryKey: queryKeys.ota.packages(modelFilter ? { model: modelFilter } : undefined),
     queryFn: () => otaApi.listPackages(modelFilter ? { model: modelFilter } : {}).then((r) => r.data?.data ?? r.data ?? []),
@@ -1091,7 +1140,29 @@ const PackagesTab: React.FC = () => {
       if (values.firmware_dsp) firmwareIds.push(Number(values.firmware_dsp))
       if (values.firmware_bms) firmwareIds.push(Number(values.firmware_bms))
       if (firmwareIds.length === 0) { message.warning('请至少选择一个芯片固件'); return }
-      createMutation.mutate({ model: values.model, firmware_ids: firmwareIds, changelog: values.changelog, is_force: values.is_force || false })
+      
+      // 处理 rollout_targets
+      let rolloutTargets = undefined
+      if (values.rollout_type && values.rollout_type !== 'all' && values.rollout_targets) {
+        try {
+          rolloutTargets = JSON.parse(values.rollout_targets)
+        } catch (e) {
+          message.error('推送目标格式错误，请输入有效的 JSON')
+          return
+        }
+      }
+      
+      createMutation.mutate({
+        model: values.model,
+        firmware_ids: firmwareIds,
+        changelog: values.changelog,
+        is_force: values.is_force || false,
+        user_version: values.user_version || undefined,
+        user_changelog: values.user_changelog || undefined,
+        is_published: values.is_published || false,
+        rollout_type: values.rollout_type || 'all',
+        rollout_targets: rolloutTargets,
+      })
     } catch { /* validation error */ }
   }
 
@@ -1099,16 +1170,34 @@ const PackagesTab: React.FC = () => {
   const filteredFirmware = selectedModel ? firmwareList.filter((f: Firmware) => f.model === selectedModel) : firmwareList
 
   const columns: ColumnsType<UpgradePackage> = [
-    { title: t('ota.packageVersion'), dataIndex: 'main_version', key: 'main_version', width: 180, render: (v: string) => <Tag color="blue">{v}</Tag> },
-    { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 120 },
+    { title: t('ota.packageVersion'), dataIndex: 'main_version', key: 'main_version', width: 140, render: (v: string) => <Tag color="blue">{v}</Tag> },
+    { 
+      title: '用户版本号', dataIndex: 'user_version', key: 'user_version', width: 110,
+      render: (v: string) => v ? <Tag color="cyan">{v}</Tag> : <span style={{ color: '#bbb' }}>自动生成</span>,
+    },
+    { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
     {
-      title: t('ota.chipFirmware'), key: 'chips', width: 300,
+      title: t('ota.chipFirmware'), key: 'chips', width: 260,
       render: (_: any, record: UpgradePackage) => <Space wrap>{record.items?.map((item) => <Tag key={item.target_chip}>{item.target_chip.toUpperCase()}: {item.firmware_version}</Tag>)}</Space>,
     },
-    { title: t('ota.packageChangelog'), dataIndex: 'changelog', key: 'changelog', width: 200, ellipsis: true },
-    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 160, render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-' },
+    { 
+      title: '发布状态', key: 'is_published', width: 90,
+      render: (_: any, record: UpgradePackage) => {
+        return record.is_published 
+          ? <Tag color="green">已发布</Tag> 
+          : <Tag color="default">草稿</Tag>
+      },
+    },
+    { 
+      title: '推送方式', key: 'rollout_type', width: 90,
+      render: (_: any, record: UpgradePackage) => {
+        const typeMap: Record<string, string> = { all: '全量', model: '按型号', user: '指定用户', device: '指定设备' }
+        return typeMap[record.rollout_type || ''] || (record.rollout_type || '-')
+      },
+    },
+    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-' },
     {
-      title: t('ota.action'), key: 'action', width: 260,
+      title: t('ota.action'), key: 'action', width: 300,
       render: (_: any, record: UpgradePackage) => (
         <Space size={4}>
           <Button
@@ -1126,6 +1215,14 @@ const PackagesTab: React.FC = () => {
             onClick={() => openInstallModal(record)}
           >
             安装到设备
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<RollbackOutlined />}
+            onClick={() => openRollbackModal(record)}
+          >
+            回退到此版本
           </Button>
           <Popconfirm title={t('ota.confirmDeletePackage')} onConfirm={() => deleteMutation.mutate(Number(record.id))}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('ota.delete')}</Button>
@@ -1149,7 +1246,7 @@ const PackagesTab: React.FC = () => {
           </Col>
         </Row>
       </Card>
-      <Table<UpgradePackage> dataSource={packages} columns={columns} rowKey="id" loading={isLoading} scroll={{ x: 900 }}
+      <Table<UpgradePackage> dataSource={packages} columns={columns} rowKey="id" loading={isLoading} scroll={{ x: 1200 }}
         pagination={{ pageSize: 20 }} locale={{ emptyText: <Empty description={t('ota.noPackages')} /> }} />
 
       <Modal title={t('ota.createPackage')} open={createOpen} onOk={handleCreate}
@@ -1177,6 +1274,76 @@ const PackagesTab: React.FC = () => {
           </Form.Item>
           <Form.Item name="changelog" label={t('ota.packageChangelog')}><TextArea rows={3} /></Form.Item>
           <Form.Item name="is_force" label={t('ota.forceUpdate')} valuePropName="checked"><Switch /></Form.Item>
+          
+          <Divider orientation="left" style={{ margin: '16px 0 12px' }}>用户可见信息</Divider>
+          
+          <Form.Item 
+            name="user_version" 
+            label="用户可见版本号"
+            help="留空则自动生成，也可手动填写（如 V1.0.2）"
+          >
+            <Input placeholder="例如：V1.0.2" />
+          </Form.Item>
+          
+          <Form.Item 
+            name="user_changelog" 
+            label="用户可见更新说明"
+          >
+            <TextArea rows={3} placeholder="例如：修复了XX问题，优化了XX功能" />
+          </Form.Item>
+          
+          <Divider orientation="left" style={{ margin: '16px 0 12px' }}>推送设置</Divider>
+          
+          <Form.Item 
+            name="is_published" 
+            label="是否发布推送" 
+            valuePropName="checked"
+            help="开启后，设备将收到升级推送通知"
+          >
+            <Switch checkedChildren="发布" unCheckedChildren="草稿" />
+          </Form.Item>
+          
+          <Form.Item 
+            name="rollout_type" 
+            label="推送方式"
+            initialValue="all"
+          >
+            <Select>
+              <Select.Option value="all">全量推送</Select.Option>
+              <Select.Option value="model">按型号推送</Select.Option>
+              <Select.Option value="user">按指定用户</Select.Option>
+              <Select.Option value="device">按指定设备</Select.Option>
+            </Select>
+          </Form.Item>
+          
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.rollout_type !== cur.rollout_type}>
+            {({ getFieldValue }) => {
+              const rolloutType = getFieldValue('rollout_type')
+              if (rolloutType === 'all') return null
+              return (
+                <Form.Item 
+                  name="rollout_targets" 
+                  label="推送目标"
+                  rules={[{ required: true, message: '请输入推送目标' }]}
+                  help={
+                    rolloutType === 'model' ? '输入型号列表，JSON格式，例如：["INV-5K", "INV-10K"]' :
+                    rolloutType === 'user' ? '输入用户ID列表，JSON格式，例如：[1, 2, 3]' :
+                    '输入设备SN列表，JSON格式，例如：["SN001", "SN002"]'
+                  }
+                >
+                  <TextArea 
+                    rows={4} 
+                    placeholder={
+                      rolloutType === 'model' ? '["INV-5K", "INV-10K"]' :
+                      rolloutType === 'user' ? '[1, 2, 3]' :
+                      '["SN001", "SN002"]'
+                    }
+                  />
+                </Form.Item>
+              )
+            }}
+          </Form.Item>
+          
           <div style={{ color: '#999', fontSize: 12 }}>{t('ota.selectFirmwareHint')}</div>
         </Form>
       </Modal>
@@ -1287,6 +1454,60 @@ const PackagesTab: React.FC = () => {
                 },
               ]}
             />
+          </div>
+        )}
+      </Modal>
+
+      {/* 回退升级 Modal */}
+      <Modal
+        title="回退到此版本"
+        open={rollbackOpen}
+        onCancel={() => { setRollbackOpen(false); setRollbackPkg(null); setRollbackSn('') }}
+        width={520}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => { setRollbackOpen(false); setRollbackPkg(null); setRollbackSn('') }}>
+            {t('ota.cancel')}
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            danger
+            icon={<RollbackOutlined />}
+            loading={rollbackMutation.isPending}
+            onClick={handleRollbackSubmit}
+          >
+            确认回退
+          </Button>,
+        ]}
+      >
+        {rollbackPkg && (
+          <div>
+            <Descriptions column={2} size="small" bordered style={{ marginBottom: 20 }}>
+              <Descriptions.Item label="升级包版本">
+                <Tag color="blue">{rollbackPkg.main_version}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="型号">{rollbackPkg.model}</Descriptions.Item>
+            </Descriptions>
+            <Alert
+              message="警告"
+              description="回退操作将把设备固件恢复到该升级包版本，请确认目标设备当前已安装该版本。"
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            <Form.Item
+              label="设备 SN"
+              required
+              help="输入需要回退的设备 SN"
+              style={{ marginBottom: 0 }}
+            >
+              <Input
+                placeholder="例如：SN001"
+                value={rollbackSn}
+                onChange={(e) => setRollbackSn(e.target.value)}
+              />
+            </Form.Item>
           </div>
         )}
       </Modal>

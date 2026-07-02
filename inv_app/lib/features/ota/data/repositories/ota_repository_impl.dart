@@ -113,9 +113,43 @@ class OtaRepositoryImpl implements OtaRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> triggerOTA(String sn, int firmwareId) async {
+  Future<Either<Failure, Map<String, dynamic>>> triggerOTA(String sn, int packageId) async {
     try {
-      final response = await remoteDataSource.triggerOTA(sn, firmwareId);
+      final response = await remoteDataSource.triggerOTA(sn, packageId);
+      return _parseData(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<dynamic>>> getAvailablePackages(String sn) async {
+    try {
+      final response = await remoteDataSource.getAvailablePackages(sn);
+      return _parsePackageListResponse(response);
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> reportLocalOTAResult({
+    required String sn,
+    required String targetChip,
+    required String newVersion,
+    String? mainVersion,
+  }) async {
+    try {
+      final response = await remoteDataSource.reportLocalOTAResult(
+        sn: sn,
+        targetChip: targetChip,
+        newVersion: newVersion,
+        mainVersion: mainVersion,
+      );
       return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));
