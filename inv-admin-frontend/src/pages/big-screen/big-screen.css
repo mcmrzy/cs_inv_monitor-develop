@@ -1,0 +1,616 @@
+/* ============================================================
+   Big Screen Dashboard — Dark Tech Theme
+   ============================================================ */
+
+/* 1. CSS Variables ---------------------------------------- */
+:root {
+  --bs-bg-primary: #0a0f1e;
+  --bs-bg-secondary: #0d1b2a;
+  --bs-bg-tertiary: #1b2838;
+  --bs-primary: #00d4ff;
+  --bs-text: #e0e0e0;
+  --bs-text-secondary: #aab;
+  --bs-text-muted: #889;
+  --bs-border: rgba(255, 255, 255, 0.06);
+  --bs-panel-bg: rgba(255, 255, 255, 0.03);
+  --bs-success: #52c41a;
+  --bs-danger: #ff4d4f;
+  --bs-warning: #fa8c16;
+}
+
+/* 2. Layout Classes --------------------------------------- */
+.bs-container {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 60px 1fr 32px;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 8px;
+  padding: 8px;
+  background: 
+    radial-gradient(ellipse at top, rgba(0, 212, 255, 0.03) 0%, transparent 50%),
+    linear-gradient(135deg, #0a1128 0%, var(--bs-bg-secondary) 50%, #0a1128 100%);
+  color: var(--bs-text);
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.bs-header {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  position: relative;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.05) 0%, transparent 50%, rgba(0, 212, 255, 0.05) 100%);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 4px;
+}
+
+/* Header glowing separator line */
+.bs-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--bs-primary) 50%, transparent);
+  box-shadow: 0 0 8px var(--bs-primary);
+  pointer-events: none;
+}
+
+.bs-header-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(90deg, var(--bs-primary), #60efff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+}
+
+.bs-header-time {
+  font-size: 14px;
+  color: var(--bs-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.bs-left {
+  grid-row: 2;
+  grid-column: 1 / 7;
+  display: grid;
+  grid-template-rows: auto 1fr 1fr;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.bs-center {
+  grid-row: 2;
+  grid-column: 7 / 18;
+  overflow: hidden;
+}
+
+.bs-right {
+  grid-row: 2;
+  grid-column: 18 / -1;
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+  overflow: hidden;
+}
+
+.bs-footer {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--bs-text-muted);
+  border-top: 1px solid rgba(0, 212, 255, 0.15);
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.03) 0%, transparent 50%, rgba(0, 212, 255, 0.03) 100%);
+  border-radius: 4px;
+}
+
+/* 3. Panel ------------------------------------------------ */
+.bs-panel {
+  position: relative;
+  background: rgba(10, 17, 40, 0.4);
+  border-radius: 6px;
+  border: 1px solid rgba(0, 212, 255, 0.1);
+  padding: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(2px);
+}
+
+/* L-shaped corner decoration — top-left */
+.bs-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--bs-primary);
+  border-left: 2px solid var(--bs-primary);
+  border-radius: 2px 0 0 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* L-shaped corner decoration — bottom-right */
+.bs-panel::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-bottom: 2px solid var(--bs-primary);
+  border-right: 2px solid var(--bs-primary);
+  border-radius: 0 0 2px 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bs-panel-title {
+  color: var(--bs-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  border-left: 3px solid var(--bs-primary);
+  padding: 6px 8px 6px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  position: relative;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.15) 0%, transparent 100%);
+  border-radius: 2px;
+}
+
+/* Title right decorative gradient line */
+.bs-panel-title::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.3));
+  pointer-events: none;
+}
+
+.bs-panel-title-icon {
+  font-size: 13px;
+  color: var(--bs-primary);
+}
+
+.bs-panel-title-extra {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--bs-text-muted);
+}
+
+.bs-panel-glow {
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Scan line animation for glow panels */
+.bs-panel-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--bs-primary), transparent);
+  animation: bs-scan 3s ease-in-out infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@keyframes bs-scan {
+  0%   { left: -100%; }
+  100% { left: 100%; }
+}
+
+.bs-panel-body {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* 4. KPI Stat Card ---------------------------------------- */
+.bs-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.05) inset;
+}
+
+.bs-stat-card:hover {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-color: rgba(0, 212, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.1);
+}
+
+.bs-stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px currentColor;
+  opacity: 0.9;
+  /* background set inline via style prop for per-card color */
+}
+
+.bs-stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-stat-label {
+  color: var(--bs-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bs-stat-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.bs-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--bs-text);
+  font-variant-numeric: tabular-nums;
+  transition: all 0.3s ease;
+}
+
+.bs-stat-unit {
+  font-size: 11px;
+  color: var(--bs-text-muted);
+}
+
+.bs-stat-trend {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.bs-stat-trend--up {
+  color: var(--bs-success);
+}
+
+.bs-stat-trend--down {
+  color: var(--bs-danger);
+}
+
+/* 5. Animations ------------------------------------------- */
+@keyframes bs-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+
+@keyframes bs-scroll-up {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+@keyframes bs-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bs-glow-line {
+  0%, 100% { box-shadow: 0 0 5px var(--bs-primary); }
+  50%       { box-shadow: 0 0 20px var(--bs-primary); }
+}
+
+.bs-animate-fade-in {
+  animation: bs-fade-in 0.5s ease forwards;
+}
+
+.bs-animate-pulse {
+  animation: bs-pulse 2s ease-in-out infinite;
+}
+
+.bs-animate-glow {
+  animation: bs-glow-line 2s ease-in-out infinite;
+}
+
+/* 6. Ant Design Dark Overrides (scoped) ------------------- */
+.bs-container .ant-table {
+  background: transparent;
+  color: var(--bs-text);
+}
+
+.bs-container .ant-table-thead > tr > th {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--bs-text-secondary);
+  border-bottom: 1px solid var(--bs-border);
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+.bs-container .ant-table-tbody > tr > td {
+  background: transparent !important;
+  color: var(--bs-text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.bs-container .ant-table-tbody > tr:hover > td {
+  background: rgba(0, 212, 255, 0.06) !important;
+}
+
+.bs-container .ant-table-cell::before {
+  display: none;
+}
+
+.bs-container .ant-tag {
+  font-size: 10px;
+  padding: 0 4px;
+  line-height: 18px;
+  border-radius: 2px;
+}
+
+.bs-container .ant-progress-text {
+  font-size: 11px !important;
+  color: var(--bs-text-muted) !important;
+}
+
+/* 7. Leaflet Dark Overrides -------------------------------- */
+.bs-container .leaflet-container {
+  background: var(--bs-bg-primary) !important;
+  border-radius: 6px;
+}
+
+.bs-container .leaflet-popup-content-wrapper {
+  background: rgba(13, 27, 42, 0.95) !important;
+  color: var(--bs-text) !important;
+  border: 1px solid var(--bs-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.bs-container .leaflet-popup-tip {
+  background: rgba(13, 27, 42, 0.95) !important;
+  border: 1px solid var(--bs-border);
+}
+
+.bs-container .leaflet-control-zoom a {
+  background: rgba(13, 27, 42, 0.9) !important;
+  color: var(--bs-text) !important;
+  border-color: var(--bs-border) !important;
+}
+
+/* 8. Alert Scrolling List ---------------------------------- */
+.bs-alert-scroll {
+  overflow: hidden;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.bs-alert-scroll-inner {
+  animation: bs-scroll-up linear infinite;
+  will-change: transform;
+}
+
+.bs-alert-scroll:hover .bs-alert-scroll-inner {
+  animation-play-state: paused;
+}
+
+.bs-alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.03) 0%, transparent 100%);
+  border: 1px solid var(--bs-border);
+  border-left: 2px solid transparent;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--bs-text);
+  transition: all 0.2s;
+}
+
+.bs-alert-item:hover {
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.08) 0%, transparent 100%);
+  border-left-color: var(--bs-primary);
+}
+
+.bs-alert-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.bs-alert-item-dot--danger  { background: var(--bs-danger);  box-shadow: 0 0 6px var(--bs-danger); }
+.bs-alert-item-dot--warning { background: var(--bs-warning); box-shadow: 0 0 6px var(--bs-warning); }
+.bs-alert-item-dot--info   { background: var(--bs-primary); box-shadow: 0 0 6px var(--bs-primary); }
+
+.bs-alert-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-alert-item-title {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bs-alert-item-time {
+  font-size: 10px;
+  color: var(--bs-text-muted);
+  margin-top: 2px;
+}
+
+.bs-alert-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--bs-text-muted);
+  font-size: 12px;
+}
+
+/* 9. Ranking List ----------------------------------------- */
+.bs-rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.bs-rank-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.bs-rank-index {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: var(--bs-text-muted);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.bs-rank-index--1 { background: rgba(255, 215, 0, 0.2);  color: #ffd700; box-shadow: 0 0 8px rgba(255, 215, 0, 0.4); }
+.bs-rank-index--2 { background: rgba(192, 192, 192, 0.2); color: #c0c0c0; box-shadow: 0 0 8px rgba(192, 192, 192, 0.4); }
+.bs-rank-index--3 { background: rgba(205, 127, 50, 0.2);  color: #cd7f32; box-shadow: 0 0 8px rgba(205, 127, 50, 0.4); }
+
+.bs-rank-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--bs-text);
+}
+
+.bs-rank-bar {
+  width: 80px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.bs-rank-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--bs-primary), #60efff);
+  transition: width 0.5s ease;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+}
+
+.bs-rank-value {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  min-width: 50px;
+  text-align: right;
+  color: var(--bs-text);
+}
+
+.bs-rank-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--bs-text-muted);
+  font-size: 12px;
+}
+
+/* Custom scrollbar for ranking list */
+.bs-rank-list::-webkit-scrollbar {
+  width: 4px;
+}
+.bs-rank-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.bs-rank-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+.bs-rank-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 10. Responsive Breakpoints ------------------------------ */
+@media (max-width: 1440px) {
+  .bs-header-title { font-size: 18px; }
+  .bs-stat-value   { font-size: 18px; }
+  .bs-stat-label   { font-size: 10px; }
+  .bs-panel-title  { font-size: 11px; padding: 4px 6px 4px 10px; }
+  .bs-rank-item    { font-size: 11px; }
+  .bs-rank-bar     { width: 60px; }
+  .bs-alert-item   { font-size: 11px; padding: 4px 6px; }
+  .bs-panel::before, .bs-panel::after { width: 10px; height: 10px; }
+}
+
+@media (max-width: 1280px) {
+  .bs-container    { gap: 4px; padding: 4px; }
+  .bs-header-title { font-size: 16px; letter-spacing: 1px; }
+  .bs-stat-value   { font-size: 16px; }
+  .bs-stat-icon    { width: 32px; height: 32px; font-size: 14px; }
+  .bs-stat-label   { font-size: 10px; }
+  .bs-panel        { padding: 6px; }
+  .bs-panel-title  { font-size: 10px; margin-bottom: 4px; padding: 3px 4px 3px 8px; }
+  .bs-rank-item    { font-size: 10px; gap: 4px; }
+  .bs-rank-bar     { width: 50px; height: 4px; }
+  .bs-rank-value   { font-size: 10px; min-width: 40px; }
+  .bs-alert-item   { font-size: 10px; padding: 3px 4px; gap: 4px; }
+  .bs-panel::before, .bs-panel::after { width: 8px; height: 8px; }
+  .bs-panel-title::after { display: none; }
+}
