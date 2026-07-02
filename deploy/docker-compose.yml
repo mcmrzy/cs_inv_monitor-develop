@@ -66,6 +66,7 @@ services:
       EMAIL_FROM: ${EMAIL_FROM}
     volumes:
       - firmware_data:/data/firmware
+      - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     expose:
       - "8080"
     depends_on:

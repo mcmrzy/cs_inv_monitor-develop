@@ -10,16 +10,17 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	SMS      SMSConfig      `mapstructure:"sms"`
-	Email    EmailConfig    `mapstructure:"email"`
-	CORS     CORSConfig     `mapstructure:"cors"`
-	Log      LogConfig      `mapstructure:"log"`
-	Timezone string         `mapstructure:"timezone"`
-	Backends BackendsConfig `mapstructure:"backends"`
+	Server    ServerConfig     `mapstructure:"server"`
+	Database DatabaseConfig   `mapstructure:"database"`
+	Redis     RedisConfig      `mapstructure:"redis"`
+	JWT       JWTConfig        `mapstructure:"jwt"`
+	SMS       SMSConfig        `mapstructure:"sms"`
+	Email     EmailConfig      `mapstructure:"email"`
+	CORS      CORSConfig       `mapstructure:"cors"`
+	Log       LogConfig        `mapstructure:"log"`
+	Timezone  string           `mapstructure:"timezone"`
+	Backends  BackendsConfig   `mapstructure:"backends"`
+	Migration MigrationConfig `mapstructure:"migration"`
 }
 
 type CORSConfig struct {
@@ -33,6 +34,16 @@ type BackendsConfig struct {
 	WeatherAPI    string `mapstructure:"weather_api"`    // 天气API地址
 	AmapAPIKey    string `mapstructure:"amap_api_key"`   // 高德地图API Key
 	WeatherSource string `mapstructure:"weather_source"` // 天气数据源: open-meteo 或 amap
+}
+
+// MigrationConfig 控制启动时的自动数据库迁移行为
+//   - Dir:        存放编号迁移文件 (001_*.sql, 002_*.sql, ...) 的目录
+//   - SchemaFile: 基线 schema.sql 路径，仅在首次运行时执行 (version 0)
+//   - AutoRun:    是否启用自动迁移 (默认 true，设为 false 可跳过)
+type MigrationConfig struct {
+	Dir        string `mapstructure:"dir"`         // 迁移文件目录，空则跳过
+	SchemaFile string `mapstructure:"schema_file"` // 基线 schema.sql 路径，空则跳过
+	AutoRun    bool   `mapstructure:"auto_run"`    // 默认 true
 }
 
 type ServerConfig struct {
@@ -150,6 +161,10 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("server.read_timeout", 30*time.Second)
 	viper.SetDefault("server.write_timeout", 0*time.Second) // SSE 长连接需要无写超时
 	viper.SetDefault("server.mode", "release")
+
+	viper.SetDefault("migration.dir", "")
+	viper.SetDefault("migration.schema_file", "")
+	viper.SetDefault("migration.auto_run", true)
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {

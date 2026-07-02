@@ -131,6 +131,7 @@ services:
       INTERNAL_KEY: ${INTERNAL_KEY}
     volumes:
       - ./configs/api-server.yaml:/app/config.yaml:ro
+      - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     networks:
       - inv-prod-network
     restart: unless-stopped

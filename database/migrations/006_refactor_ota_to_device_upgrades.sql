@@ -34,33 +34,42 @@ CREATE INDEX IF NOT EXISTS idx_du_device_status ON device_upgrades(device_sn, st
 
 -- 2. 数据迁移: 从 ota_task_devices 迁移最近的升级记录
 -- 对每个 device_sn + firmware_id 组合, 只保留最新的一条记录
-INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
-    old_version, status, progress, error_message, retry_count,
-    started_at, completed_at, created_at, updated_at)
-SELECT DISTINCT ON (td.device_sn, t.firmware_id)
-    td.device_sn,
-    t.firmware_id,
-    COALESCE(t.firmware_version, ''),
-    COALESCE(f.target_chip, ''),
-    COALESCE(td.old_version, ''),
-    CASE
-        WHEN td.status = 'success' THEN 'success'
-        WHEN td.status = 'failed' THEN 'failed'
-        WHEN td.status IN ('running', 'upgrading') THEN 'upgrading'
-        ELSE 'pending'
-    END,
-    COALESCE(td.progress, 0),
-    COALESCE(td.error_message, ''),
-    0,
-    td.started_at,
-    td.completed_at,
-    td.created_at,
-    td.created_at
-FROM ota_task_devices td
-JOIN ota_tasks t ON td.task_id = t.id
-LEFT JOIN firmware_versions f ON t.firmware_id = f.id
-ORDER BY td.device_sn, t.firmware_id, td.id DESC
-ON CONFLICT (device_sn, firmware_id) DO NOTHING;
+-- 使用 DO $$ 块包裹，确保源表被重命名后不会报错（幂等）
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ota_task_devices') THEN
+        INSERT INTO device_upgrades (device_sn, firmware_id, firmware_version, target_chip,
+            old_version, status, progress, error_message, retry_count,
+            started_at, completed_at, created_at, updated_at)
+        SELECT DISTINCT ON (td.device_sn, t.firmware_id)
+            td.device_sn,
+            t.firmware_id,
+            COALESCE(t.firmware_version, ''),
+            COALESCE(f.target_chip, ''),
+            COALESCE(td.old_version, ''),
+            CASE
+                WHEN td.status = 'success' THEN 'success'
+                WHEN td.status = 'failed' THEN 'failed'
+                WHEN td.status IN ('running', 'upgrading') THEN 'upgrading'
+                ELSE 'pending'
+            END,
+            COALESCE(td.progress, 0),
+            COALESCE(td.error_message, ''),
+            0,
+            td.started_at,
+            td.completed_at,
+            td.created_at,
+            td.created_at
+        FROM ota_task_devices td
+        JOIN ota_tasks t ON td.task_id = t.id
+        LEFT JOIN firmware_versions f ON t.firmware_id = f.id
+        ORDER BY td.device_sn, t.firmware_id, td.id DESC
+        ON CONFLICT (device_sn, firmware_id) DO NOTHING;
+        RAISE NOTICE 'Data migrated from ota_task_devices to device_upgrades';
+    ELSE
+        RAISE NOTICE 'ota_task_devices not found, skipping data migration';
+    END IF;
+END $$;
 
 -- 3. 重命名旧表(保留备份, 不立即删除)
 DO $$

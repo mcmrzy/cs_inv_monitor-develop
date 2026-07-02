@@ -28,6 +28,7 @@ import (
 	"inv-api-server/internal/config"
 	"inv-api-server/internal/handler"
 	"inv-api-server/internal/middleware"
+	"inv-api-server/internal/migration"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/jwt"
@@ -79,6 +80,17 @@ func main() {
 		logger.Warn("Failed to init database, running without DB", zap.Error(err))
 	} else {
 		defer db.Close()
+
+		// 在服务器启动前执行数据库自动迁移
+		if cfg.Migration.AutoRun {
+			logger.Info("Running database migrations...",
+				zap.String("dir", cfg.Migration.Dir),
+				zap.String("schema_file", cfg.Migration.SchemaFile))
+			if err := migration.Run(context.Background(), db, cfg.Migration.Dir, cfg.Migration.SchemaFile); err != nil {
+				logger.Error("Database migration failed, server will start anyway — check /health",
+					zap.Error(err))
+			}
+		}
 	}
 
 	rdb, err := initRedis(cfg)

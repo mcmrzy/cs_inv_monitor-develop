@@ -290,7 +290,8 @@ INSERT INTO system_configs (config_key, config_value, description) VALUES
 ('verify_code_expire_minutes', '5', '验证码过期时间(分钟)'),
 ('data_retention_days', '365', '数据保留天数'),
 ('max_devices_per_user', '100', '每用户最大设备数'),
-('max_stations_per_user', '20', '每用户最大电站数');
+('max_stations_per_user', '20', '每用户最大电站数')
+ON CONFLICT (config_key) DO NOTHING;
 
 -- ============================================
 -- 10. 视图
@@ -312,11 +313,23 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- 为需要的表创建触发器（已移除 device_params 和 user_notify_settings 的触发器）
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_stations_updated_at BEFORE UPDATE ON stations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_devices_updated_at BEFORE UPDATE ON devices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_system_configs_updated_at BEFORE UPDATE ON system_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- 为需要的表创建触发器（使用 DROP IF EXISTS 保证幂等，可安全重复执行）
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+    CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+END $$;
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_stations_updated_at ON stations;
+    CREATE TRIGGER update_stations_updated_at BEFORE UPDATE ON stations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+END $$;
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_devices_updated_at ON devices;
+    CREATE TRIGGER update_devices_updated_at BEFORE UPDATE ON devices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+END $$;
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_system_configs_updated_at ON system_configs;
+    CREATE TRIGGER update_system_configs_updated_at BEFORE UPDATE ON system_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+END $$;
 
 -- ============================================
 -- 12. 清理过期数据函数
@@ -398,6 +411,41 @@ CREATE TABLE IF NOT EXISTS device_models (
 COMMENT ON TABLE device_models IS '设备型号注册表 - 新型号只需在此配置，无需改代码';
 COMMENT ON COLUMN device_models.data_fields IS 'JSON格式: {"total_active_power":{"type":"float","unit":"W","label":"总有功功率"}}';
 COMMENT ON COLUMN device_models.field_mapping IS 'JSON格式: {"data/status":{"work_state":"work_state_1","temp":"internal_temperature"}}';
+
+-- ============================================
+-- 设备型号字段表（模块化字段定义）
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS device_model_field (
+    id          BIGSERIAL PRIMARY KEY,
+    model_id    INT NOT NULL REFERENCES device_models(id) ON DELETE CASCADE,
+    field_key   VARCHAR(64) NOT NULL,
+    field_name  VARCHAR(128) NOT NULL,
+    field_type  VARCHAR(32) NOT NULL,
+    unit        VARCHAR(32),
+    sort        INT NOT NULL DEFAULT 0,
+    is_show     BOOLEAN NOT NULL DEFAULT true,
+    is_control  BOOLEAN NOT NULL DEFAULT false,
+    parse_rule  TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(model_id, field_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_model_field_model ON device_model_field(model_id);
+
+CREATE TABLE IF NOT EXISTS device_model_protocol (
+    id            BIGSERIAL PRIMARY KEY,
+    model_id      INT NOT NULL REFERENCES device_models(id) ON DELETE CASCADE,
+    topic_pattern VARCHAR(200) NOT NULL,
+    parse_type    VARCHAR(32) NOT NULL DEFAULT 'json',
+    parse_config  JSONB,
+    is_active     BOOLEAN NOT NULL DEFAULT true,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(model_id, topic_pattern)
+);
+
+CREATE INDEX IF NOT EXISTS idx_model_protocol_model ON device_model_protocol(model_id);
 
 -- 预置一些常见型号
 INSERT INTO device_models (model_code, model_name, manufacturer, category, rated_power_kw, data_fields, field_mapping, mqtt_topics) VALUES
