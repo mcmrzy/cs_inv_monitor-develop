@@ -13,6 +13,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { deviceApi } from '@/services/deviceApi'
 import { modelApi } from '@/services/modelApi'
 import dayjs from 'dayjs'
+import { formatInTimezone } from '@/utils/timezone'
 import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 import useTranslation from '@/hooks/useTranslation'
 
@@ -166,7 +167,7 @@ const DeviceMonitorPage: React.FC = () => {
       dataIndex: 'lastOnlineAt',
       key: 'lastOnlineAt',
       width: 160,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (v: string, record: any) => formatInTimezone(v, record.timezone, 'YYYY-MM-DD HH:mm:ss'),
     },
     {
       title: t('common.operation'),

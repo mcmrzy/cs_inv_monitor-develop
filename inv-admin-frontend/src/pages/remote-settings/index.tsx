@@ -13,6 +13,7 @@ import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
 import useTranslation from '@/hooks/useTranslation'
+import { formatInTimezone } from '@/utils/timezone'
 
 const { Title, Text } = Typography
 
@@ -24,6 +25,7 @@ interface DeviceItem {
   model: string
   status: number
   last_online_at?: string
+  timezone?: string
   [key: string]: any
 }
 
@@ -508,7 +510,7 @@ const RemoteSettingsPage: React.FC = () => {
                 {selectedDevice.last_online_at && (
                   <Tooltip title={t('remote.lastCommunication')}>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {t('remote.lastOnline')}: {selectedDevice.last_online_at}
+                      {t('remote.lastOnline')}: {formatInTimezone(selectedDevice.last_online_at, selectedDevice.timezone)}
                     </Text>
                   </Tooltip>
                 )}

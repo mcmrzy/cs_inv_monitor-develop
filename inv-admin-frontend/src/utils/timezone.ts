@@ -56,7 +56,8 @@ export function formatInTimezone(
   const targetTz = tz || 'Asia/Shanghai'
   try {
     return dayjs.utc(utcTime).tz(targetTz).format(format)
-  } catch {
+  } catch (e) {
+    console.warn('[formatInTimezone] 时区转换失败:', { utcTime, targetTz, error: e })
     return dayjs(utcTime).format(format)
   }
 }

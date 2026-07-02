@@ -20,6 +20,7 @@ import { alertApi } from '@/services/alertApi'
 import { DEVICE_STATUS_MAP, ALARM_LEVEL_MAP, CHART_COLORS, HERO_GRADIENTS, getAlarmLevelDisplay } from '@/utils/constants'
 import { safeNum, fmt } from '@/utils/format'
 import useTranslation from '@/hooks/useTranslation'
+import { formatInTimezone } from '@/utils/timezone'
 import { useModelFields } from '@/components/dyna/useModelFields'
 import type { DeviceModelFieldItem } from '@/services/modelApi'
 import type { ColumnsType } from 'antd/es/table'
@@ -286,7 +287,7 @@ const MonitoringPage: React.FC = () => {
             <Col>
               <Badge status={deviceStatus === 1 ? 'processing' : deviceStatus === 2 ? 'error' : 'default'}
                 text={                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('mon.lastCommunication')}: {selectedDevice?.last_online_at ? dayjs(selectedDevice.last_online_at).format('MM-DD HH:mm:ss') : '--'}
+                  {t('mon.lastCommunication')}: {formatInTimezone(selectedDevice?.last_online_at, selectedStation?.timezone, 'MM-DD HH:mm:ss')}
                 </Text>}
               />
             </Col>

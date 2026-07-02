@@ -25,6 +25,7 @@ import { DEVICE_STATUS_MAP } from '@/utils/constants'
 import useTranslation from '@/hooks/useTranslation'
 import StatusBadge from '@/components/StatusBadge'
 import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
+import { formatInTimezone } from '@/utils/timezone'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -41,6 +42,7 @@ interface DeviceRecord {
   lastOnlineAt: string
   userId: string
   installerId: string
+  timezone?: string
   owner?: { phone: string; nickname: string }
   installer?: { nickname: string; phone: string }
 }
@@ -985,7 +987,7 @@ const DevicesPage: React.FC = () => {
       dataIndex: 'last_online_at',
       key: 'last_online_at',
       width: 170,
-      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (v: string, record: DeviceRecord) => formatInTimezone(v, record.timezone, 'YYYY-MM-DD HH:mm:ss'),
     },
     {
       title: t('common.actions'),
@@ -1306,9 +1308,7 @@ const DevicesPage: React.FC = () => {
                 {deviceDetail.installer?.nickname || deviceDetail.installer?.phone || '-'}
               </Descriptions.Item>
               <Descriptions.Item label={t('common.lastOnline')}>
-                {(deviceDetail as any).last_online_at
-                  ? dayjs((deviceDetail as any).last_online_at).format('YYYY-MM-DD HH:mm:ss')
-                  : '-'}
+                {formatInTimezone((deviceDetail as any).last_online_at, (deviceDetail as any).timezone, 'YYYY-MM-DD HH:mm:ss')}
               </Descriptions.Item>
             </Descriptions>
           </Card>

@@ -459,7 +459,7 @@ const StationsPage: React.FC = () => {
       title: t('station.lastComm'),
       dataIndex: 'last_online_at',
       width: 150,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-',
+      render: (v: string, record: any) => formatInTimezone(v, record.timezone, 'YYYY-MM-DD HH:mm'),
     },
     {
       title: t('station.realtimePower_W'),
