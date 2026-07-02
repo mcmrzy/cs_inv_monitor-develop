@@ -56,7 +56,7 @@ services:
       DEVICE_SERVER_URL: http://inv-device-server:8081
       INTERNAL_KEY: ${INTERNAL_KEY}
       INTERNAL_API_SECRET: ${INTERNAL_KEY}
-      SERVER_URL: ${SERVER_URL:-http://192.168.8.248}
+      SERVER_URL: ${SERVER_URL:-http://192.168.8.248:8888}
       AMAP_API_KEY: a1747dbd3566aa8883fffde623290cd9
       WEATHER_SOURCE: amap
       EMAIL_HOST: ${EMAIL_HOST}
