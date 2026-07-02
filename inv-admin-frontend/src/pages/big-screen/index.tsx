@@ -32,20 +32,11 @@ interface AlarmItem {
   occurred_at: string
 }
 
-interface CarbonReduction {
-  co2: number
-  trees: number
-}
-
 interface BigScreenData {
   deviceStats: DeviceStats
   todayEnergy: number
   totalEnergy: number
   recentAlarms: AlarmItem[]
-  stationRanking: unknown[]
-  trendData: TrendPoint[]
-  onlineRate: number
-  carbonReduction: CarbonReduction
 }
 
 interface StationListItem {
@@ -104,17 +95,24 @@ const BigScreenPage: React.FC = () => {
     return () => document.removeEventListener('fullscreenchange', handler)
   }, [])
 
-  // 4. 数据查询
+  // 4. 数据查询（API 返回 { code, data } 包装，需取 r.data.data）
   const { data: mainData } = useQuery<BigScreenData>({
     queryKey: ['big-screen'],
-    queryFn: () => dashboardApi.getBigScreen().then(r => r.data),
+    queryFn: () => dashboardApi.getBigScreen().then(r => r.data.data),
     refetchInterval: 10000,
   })
 
   const { data: stationsRes } = useQuery<StationSummary>({
     queryKey: ['big-screen-stations'],
-    queryFn: () => api.get('/stations/summary').then(r => r.data),
+    queryFn: () => api.get('/stations/summary').then(r => r.data.data),
     refetchInterval: 30000,
+  })
+
+  // 发电趋势数据（独立接口）
+  const { data: trendRes } = useQuery<{ date: string; energy: number; load: number }[]>({
+    queryKey: ['big-screen-trend'],
+    queryFn: () => dashboardApi.getTrend('day').then(r => r.data.data),
+    refetchInterval: 60000,
   })
 
   // 5. 全屏切换
@@ -129,11 +127,15 @@ const BigScreenPage: React.FC = () => {
   // 6. 数据提取（安全取值）
   const deviceStats = mainData?.deviceStats ?? { total: 0, online: 0, offline: 0, fault: 0 }
   const todayEnergy = mainData?.todayEnergy ?? 0
-  const onlineRate = mainData?.onlineRate ?? 0
+  const totalDevices = deviceStats.total || 1
+  const onlineRate = (deviceStats.online / totalDevices) * 100
   const alarmCount = mainData?.recentAlarms?.length ?? 0
-  const trendData = mainData?.trendData ?? []
+  const trendData: TrendPoint[] = (trendRes ?? []).map((d) => ({
+    timeLabel: d.date,
+    energy: d.energy,
+    loadEnergy: d.load,
+  }))
   const recentAlarms = mainData?.recentAlarms ?? []
-  const totalCapacity = mainData?.totalEnergy ?? 0
 
   const stations = stationsRes?.stations?.map((s) => ({
     id: s.station_id ?? s.id,
@@ -143,6 +145,9 @@ const BigScreenPage: React.FC = () => {
     capacity: s.total_power ?? s.capacity ?? 0,
     status: (s.fault_count ?? 0) > 0 ? 2 : (s.online_count ?? 0) > 0 ? 1 : 0,
   })) ?? []
+
+  // 总装机容量 = 各电站 capacity 之和
+  const totalCapacity = stations.reduce((sum, s) => sum + (s.capacity || 0), 0)
 
   const summary = stationsRes?.summary ?? {
     totalStations: 0,
