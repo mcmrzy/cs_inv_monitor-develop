@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CS-INV 光伏逆变器物联网监控系统</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";font-size:16px;line-height:1.6;color:#24292e;background:#fff}
+.container{max-width:980px;margin:0 auto;padding:24px 32px}
+h1,h2,h3,h4{margin-top:24px;margin-bottom:16px;font-weight:600;line-height:1.25}
+h1{font-size:2em;padding-bottom:0.3em;border-bottom:1px solid #eaecef}
+h2{font-size:1.5em;padding-bottom:0.3em;border-bottom:1px solid #eaecef}
+h3{font-size:1.25em}
+h4{font-size:1em}
+p{margin-top:0;margin-bottom:16px}
+a{color:#0366d6;text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:85%;background:#f6f8fa;padding:0.2em 0.4em;border-radius:3px}
+pre{background:#f6f8fa;padding:16px;overflow:auto;font-size:85%;line-height:1.45;border-radius:6px;margin-bottom:16px}
+pre code{background:transparent;padding:0;font-size:100%}
+table{border-collapse:collapse;width:100%;margin-bottom:16px}
+th,td{padding:8px 13px;border:1px solid #dfe2e5}
+th{background:#f6f8fa;font-weight:600}
+tr:nth-child(2n){background:#f6f8fa}
+ul,ol{padding-left:2em;margin-bottom:16px}
+li{margin-bottom:4px}
+li+li{margin-top:4px}
+blockquote{margin:0 0 16px;padding:0 1em;color:#6a737d;border-left:0.25em solid #dfe2e5}
+hr{height:0.25em;padding:0;margin:24px 0;background:#e1e4e8;border:0}
+strong{font-weight:600}
+
+/* Header banner */
+.header-banner{background:#24292e;color:#fff;padding:40px 32px;text-align:center;margin-bottom:0}
+.header-banner h1{color:#fff;border:none;font-size:2.2em;margin-top:0}
+.header-banner p{color:#b0b8c1;font-size:1.1em;margin-bottom:0}
+
+/* TOC */
+.toc{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:20px 28px;margin-bottom:24px}
+.toc h3{margin-top:0;margin-bottom:12px;font-size:1.1em}
+.toc ul{list-style:none;padding-left:0;margin:0}
+.toc li{margin-bottom:6px}
+.toc li ul{padding-left:1.2em;margin-top:4px}
+.toc a{color:#0366d6;font-size:0.95em}
+
+/* Badges */
+.badge-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.badge{display:inline-block;padding:4px 12px;border-radius:12px;font-size:0.8em;font-weight:500;color:#fff}
+.badge-go{background:#00ADD8}
+.badge-flutter{background:#02569B}
+.badge-react{background:#61DAFB;color:#24292e}
+.badge-docker{background:#2496ED}
+.badge-pg{background:#336791}
+.badge-redis{background:#DC382D}
+.badge-emqx{background:#FF6B35}
+
+/* Feature grid */
+.feature-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+.feature-card{border:1px solid #e1e4e8;border-radius:8px;padding:16px 20px;background:#fafbfc}
+.feature-card h4{margin-top:0;margin-bottom:8px;color:#24292e}
+.feature-card p{margin-bottom:0;font-size:0.92em;color:#586069}
+
+/* Module cards */
+.module-card{border:1px solid #e1e4e8;border-radius:8px;padding:20px;margin-bottom:16px;background:#fff}
+.module-card h3{margin-top:0;display:flex;align-items:center;gap:8px}
+.module-card .tech-tag{font-size:0.75em;background:#e8f4f8;color:#0366d6;padding:2px 8px;border-radius:10px;font-weight:500}
+
+/* Responsive */
+@media(max-width:768px){
+  .container{padding:16px}
+  .header-banner{padding:24px 16px}
+  .header-banner h1{font-size:1.5em}
+  pre{padding:12px;font-size:80%}
+  .feature-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="header-banner">
+  <h1>CS-INV 光伏逆变器物联网监控系统</h1>
+  <p>CS-INV IoT Monitoring Platform — 基于 MQTT 协议的光伏逆变器远程监控平台</p>
+</div>
+
+<div class="container">
+
+<!-- 概述 -->
+<p style="font-size:1.05em;color:#586069;">
+支持万级设备接入、实时数据监控、告警管理、OTA 固件升级、多端协同（移动端 APP + Web 管理后台）。
+</p>
+
+<div class="badge-row">
+  <span class="badge badge-go">Go 1.25</span>
+  <span class="badge badge-flutter">Flutter 3.x</span>
+  <span class="badge badge-react">React 18</span>
+  <span class="badge badge-docker">Docker Compose</span>
+  <span class="badge badge-pg">PostgreSQL 16</span>
+  <span class="badge badge-redis">Redis 7</span>
+  <span class="badge badge-emqx">EMQX</span>
+</div>
+
+<!-- 目录 -->
+<nav class="toc" id="toc">
+  <h3>目录</h3>
+  <ul>
+    <li><a href="#architecture">系统架构</a></li>
+    <li><a href="#modules">子模块详情</a></li>
+    <li><a href="#tech-stack">技术栈</a></li>
+    <li><a href="#features">核心特性</a></li>
+    <li><a href="#quick-start">快速开始</a>
+      <ul>
+        <li><a href="#env-requirements">环境要求</a></li>
+        <li><a href="#db-init">初始化数据库</a></li>
+        <li><a href="#emqx-config">配置 EMQX JWT 认证</a></li>
+        <li><a href="#backend-start">启动后端服务</a></li>
+        <li><a href="#app-start">启动 Flutter 应用</a></li>
+        <li><a href="#docker-start">Docker Compose 一键启动</a></li>
+      </ul>
+    </li>
+    <li><a href="#ports">服务端口</a></li>
+    <li><a href="#design">核心设计</a>
+      <ul>
+        <li><a href="#realtime-link">实时数据链路</a></li>
+        <li><a href="#history-link">历史/统计数据链路</a></li>
+        <li><a href="#sn-validation">SN 编号校验</a></li>
+        <li><a href="#ha-design">高可用设计</a></li>
+        <li><a href="#ota-upgrade">OTA 固件升级</a></li>
+      </ul>
+    </li>
+    <li><a href="#functions">主要功能</a></li>
+    <li><a href="#project-structure">项目结构</a></li>
+    <li><a href="#makefile">Makefile 常用命令</a></li>
+    <li><a href="#docs">文档索引</a></li>
+  </ul>
+</nav>
+
+<!-- 系统架构 -->
+<h2 id="architecture">系统架构</h2>
+
+<pre><code>                              ┌── JWT 认证（HS256）──┐
+                              │   Secret 统一         │
+                              ▼                       ▼
+  Flutter App ── MQTT (password=JWT) ──→ EMQX Broker ←── 设备(ESP32-C3+ARM) 数据上报
+    │                                       │
+    │                                 内置 JWT 验签
+    │                                 过期自动断连
+    │                                 共享订阅分发
+    │                                       │
+    │                                  ┌────┼────┐
+    │                                  ▼    ▼    ▼
+    │                           $share/inv-group/   ← EMQX 共享订阅
+    │                           inv_device_server-1 / 2 （Go 多实例）
+    │                                  │    │
+    │                                  ▼    ▼
+    │                        PostgreSQL + Redis + Redis Streams
+    │
+    └── HTTP REST ──→ api-gateway ──→ inv_api_server (Go :8080)
+                     (Go :8080)              │
+                                             ▼
+                                       Admin Frontend (React)
+                                       + WebSocket（管理后台推送）
+</code></pre>
+
+<p><strong>原则</strong>：实时走 MQTT 直连 EMQX（低延迟），历史/统计走 HTTP API（按需查询），安全靠 EMQX 内置 JWT 认证。API Gateway 作为统一 HTTP 入口，集中处理认证、权限控制与限流。</p>
+
+<!-- 子模块详情 -->
+<h2 id="modules">子模块详情</h2>
+
+<div class="module-card">
+  <h3><span>1. api-gateway</span> <span class="tech-tag">Go 1.25 · Gin</span></h3>
+  <p>API 网关与反向代理。统一处理 JWT 认证、RBAC 权限控制、限流（令牌桶），将管理面请求反向代理至 <code>inv_api_server</code>。</p>
+  <p><strong>端口：</strong>8080（内部） → 80（外部映射）</p>
+</div>
+
+<div class="module-card">
+  <h3><span>2. inv_api_server</span> <span class="tech-tag">Go 1.25 · Gin</span></h3>
+  <p>运维 API 服务。负责用户认证与授权、电站/设备 CRUD、告警管理、WebSocket 实时推送、OTA 固件管理、邮件服务等。</p>
+  <p><strong>端口：</strong>8080</p>
+</div>
+
+<div class="module-card">
+  <h3><span>3. inv_device_server</span> <span class="tech-tag">Go 1.25 · Gin</span></h3>
+  <p>设备通信服务。MQTT 共享订阅、设备数据解析、Redis Streams 消费、Kafka 消费、OTA 命令下发、设备在线状态管理。</p>
+  <p><strong>端口：</strong>8081</p>
+</div>
+
+<div class="module-card">
+  <h3><span>4. mqtt-kafka-bridge</span> <span class="tech-tag">Go 1.25</span></h3>
+  <p>EMQX Webhook → Kafka 消息桥接服务。将 EMQX 的 Webhook 事件桥接至 Kafka，为高吞吐场景提供异步消息缓冲。</p>
+</div>
+
+<div class="module-card">
+  <h3><span>5. inv-admin-frontend</span> <span class="tech-tag">React 18 · TypeScript · Vite 5</span></h3>
+  <p>Web 管理后台。基于 Ant Design v5 + ECharts + Socket.IO + Leaflet，提供设备/用户/电站/告警/型号/OTA 等管理功能。</p>
+  <p><strong>端口：</strong>80（内部） → 3000（外部映射）</p>
+</div>
+
+<div class="module-card">
+  <h3><span>6. inv_app</span> <span class="tech-tag">Flutter 3.x · Dart ≥3.4.0</span></h3>
+  <p>跨平台移动端 APP（Android / iOS）。采用 BLoC 状态管理 + go_router 路由 + Dio HTTP 客户端 + mqtt_client 设备直连。</p>
+</div>
+
+<!-- 技术栈 -->
+<h2 id="tech-stack">技术栈</h2>
+
+<table>
+  <thead>
+    <tr><th>组件</th><th>技术</th><th>说明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>移动端</td><td>Flutter 3.x, Dart</td><td>跨平台 App（Android / iOS / Web / Desktop）</td></tr>
+    <tr><td>状态管理</td><td>flutter_bloc (BLoC)</td><td>事件驱动状态管理</td></tr>
+    <tr><td>路由</td><td>go_router + AuthGuard</td><td>声明式路由 + 鉴权守卫</td></tr>
+    <tr><td>HTTP 客户端</td><td>Dio</td><td>REST API 调用 + 拦截器</td></tr>
+    <tr><td>MQTT 客户端</td><td>mqtt_client / paho.mqtt.golang</td><td>Flutter 端与 Go 端 MQTT 通信</td></tr>
+    <tr><td>Web 前端</td><td>React 18, TypeScript, Vite 5</td><td>管理后台 SPA</td></tr>
+    <tr><td>UI 组件库</td><td>Ant Design v5</td><td>管理后台 UI 组件</td></tr>
+    <tr><td>图表</td><td>ECharts / fl_chart</td><td>Web 端与 Flutter 端图表渲染</td></tr>
+    <tr><td>状态管理 (Web)</td><td>Zustand, React Query</td><td>前端状态管理与数据请求</td></tr>
+    <tr><td>实时推送 (Web)</td><td>Socket.IO</td><td>Web 管理后台实时数据推送</td></tr>
+    <tr><td>地图</td><td>Leaflet</td><td>电站地理信息展示</td></tr>
+    <tr><td>后端 API</td><td>Go 1.25 + Gin</td><td>REST API + WebSocket</td></tr>
+    <tr><td>数据库驱动</td><td>pgx/v5</td><td>PostgreSQL 高性能驱动</td></tr>
+    <tr><td>缓存客户端</td><td>go-redis/v9</td><td>Redis 连接与操作</td></tr>
+    <tr><td>配置管理</td><td>Viper</td><td>YAML 配置加载</td></tr>
+    <tr><td>日志</td><td>Zap</td><td>结构化日志输出</td></tr>
+    <tr><td>MQTT Broker</td><td>EMQX</td><td>生产级 MQTT Broker，内置 JWT 认证</td></tr>
+    <tr><td>共享订阅</td><td>EMQX <code>$share</code></td><td>多实例自动负载均衡</td></tr>
+    <tr><td>数据库</td><td>PostgreSQL 16</td><td>关系型数据 + 元数据 + JSONB</td></tr>
+    <tr><td>时序数据库</td><td>TimescaleDB</td><td>PG 插件，超表 + 自动压缩 + 连续聚合</td></tr>
+    <tr><td>缓存/消息</td><td>Redis 7</td><td>设备影子 + Pub/Sub + Streams</td></tr>
+    <tr><td>消息缓冲</td><td>Redis Streams</td><td>消费组 + ACK + 死信队列</td></tr>
+    <tr><td>消息队列</td><td>Kafka（可选）</td><td>高吞吐消息缓冲</td></tr>
+    <tr><td>认证</td><td>JWT（HS256）</td><td>API Server 签发，EMQX 验签</td></tr>
+    <tr><td>可观测性</td><td>OpenTelemetry, Prometheus</td><td>链路追踪 + 指标采集</td></tr>
+    <tr><td>部署</td><td>Docker Compose, Nginx</td><td>容器化部署 + 反向代理</td></tr>
+    <tr><td>编排</td><td>K8s HPA</td><td>自动扩缩 2~10 副本</td></tr>
+  </tbody>
+</table>
+
+<!-- 核心特性 -->
+<h2 id="features">核心特性</h2>
+
+<div class="feature-grid">
+  <div class="feature-card">
+    <h4>⚡ 实时数据</h4>
+    <p>MQTT 直连 EMQX + 共享订阅多实例负载均衡，设备数据毫秒级推送到 APP 端。</p>
+  </div>
+  <div class="feature-card">
+    <h4>📡 OTA 升级</h4>
+    <p>支持 ARM / ESP 双芯片固件远程升级，实时进度跟踪，失败自动标记。</p>
+  </div>
+  <div class="feature-card">
+    <h4>🔐 SN 校验</h4>
+    <p>16 位设备编码 + CRC16-Modbus 校验位，所有入库入口强制校验，无效 SN 自动拒绝。</p>
+  </div>
+  <div class="feature-card">
+    <h4>🏗️ 高可用</h4>
+    <p>EMQX 共享订阅、Redis 共享状态、K8s HPA 自动扩缩 2~10 副本。</p>
+  </div>
+  <div class="feature-card">
+    <h4>📊 数据生命周期</h4>
+    <p>TimescaleDB 自动压缩与连续聚合，配置保留策略自动清理过期数据。</p>
+  </div>
+  <div class="feature-card">
+    <h4>🔒 统一认证</h4>
+    <p>JWT HS256 统一认证：API Server 签发、EMQX 验签，共用同一 Secret。</p>
+  </div>
+</div>
+
+<!-- 快速开始 -->
+<h2 id="quick-start">快速开始</h2>
+
+<h3 id="env-requirements">环境要求</h3>
+<ul>
+  <li>Flutter 3.x（Dart ≥ 3.4.0）</li>
+  <li>Go 1.25+</li>
+  <li>PostgreSQL 16 + TimescaleDB</li>
+  <li>Redis 7</li>
+  <li>EMQX 5.x</li>
+  <li>Docker &amp; Docker Compose（可选，用于容器化部署）</li>
+</ul>
+
+<h3 id="db-init">1. 初始化数据库</h3>
+
+<pre><code># 创建数据库
+psql -U postgres -c "CREATE DATABASE inv_mqtt;"
+
+# 导入基础表结构（20+ 表、视图、触发器）
+psql -U postgres -d inv_mqtt -f database/schema.sql
+
+# 执行增量迁移（按序号顺序执行）
+psql -U postgres -d inv_mqtt -f database/migrations/001_init_schema.up.sql
+# ... 依次执行后续迁移文件
+
+# 可选：启用 TimescaleDB 时序优化
+psql -U postgres -d inv_mqtt -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
+psql -U postgres -d inv_mqtt -f database/migration_timescaledb.sql</code></pre>
+
+<h3 id="emqx-config">2. 配置 EMQX JWT 认证</h3>
+
+<p>在 EMQX Dashboard 中配置 JWT 认证：</p>
+
+<table>
+  <thead>
+    <tr><th>字段</th><th>值</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>认证方式</td><td>JWT</td></tr>
+    <tr><td>JWT 来自于</td><td>password</td></tr>
+    <tr><td>加密方式</td><td>hmac-based</td></tr>
+    <tr><td>Secret</td><td><code>&lt;YOUR_JWT_SECRET&gt;</code></td></tr>
+    <tr><td>Secret 使用 Base64 编码</td><td>不勾选</td></tr>
+    <tr><td>过期后断开连接</td><td>✅</td></tr>
+  </tbody>
+</table>
+
+<h3 id="backend-start">3. 启动后端服务</h3>
+
+<pre><code># API Gateway（端口 8080，对外映射 80）
+cd api-gateway &amp;&amp; go run main.go
+
+# API Server（端口 8080）
+cd inv_api_server &amp;&amp; go run cmd/main.go
+
+# Device Server（端口 8081）
+# MQTT_PASSWORD 需设为有效的 JWT token（由 API Server 签发，Secret 与 EMQX 一致）
+export MQTT_PASSWORD="&lt;your_jwt_token&gt;"
+cd inv_device_server &amp;&amp; go run cmd/main.go</code></pre>
+
+<h3 id="app-start">4. 启动 Flutter 应用</h3>
+
+<pre><code>cd inv_app
+flutter pub get
+flutter run</code></pre>
+
+<h3 id="docker-start">5. Docker Compose 一键启动</h3>
+
+<pre><code>cd deploy
+docker compose -f docker-compose.yml up -d</code></pre>
+
+<p>这将启动 EMQX、inv_device_server（×2 实例）、inv_api_server、PostgreSQL、Redis 等全部服务。</p>
+
+<!-- 服务端口 -->
+<h2 id="ports">服务端口</h2>
+
+<table>
+  <thead>
+    <tr><th>服务</th><th>内部端口</th><th>映射端口</th><th>说明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>API Gateway</td><td>8080</td><td>80</td><td>统一 HTTP 入口，反向代理</td></tr>
+    <tr><td>API Server</td><td>8080</td><td>—</td><td>REST API + WebSocket</td></tr>
+    <tr><td>Device Server</td><td>8081</td><td>—</td><td>设备 MQTT 数据桥接 + <code>/metrics</code></td></tr>
+    <tr><td>Admin Frontend</td><td>80</td><td>3000</td><td>Web 管理后台</td></tr>
+    <tr><td>PostgreSQL</td><td>5432</td><td>5432</td><td>数据库</td></tr>
+    <tr><td>Redis</td><td>6379</td><td>6379</td><td>缓存 + Pub/Sub + Streams</td></tr>
+    <tr><td>EMQX MQTT</td><td>8883</td><td>8883</td><td>MQTT SSL 端口</td></tr>
+    <tr><td>EMQX Dashboard</td><td>18083</td><td>18083</td><td>EMQX 管理后台</td></tr>
+  </tbody>
+</table>
+
+<!-- 核心设计 -->
+<h2 id="design">核心设计</h2>
+
+<h3 id="realtime-link">实时数据链路</h3>
+
+<pre><code>设备(ESP32+ARM) → EMQX → $share/inv-group/ → inv_device_server(Go)
+                                                        ├→ PostgreSQL（时序 + 元数据）
+                                                        ├→ Redis（缓存 + Pub/Sub + Streams）
+                                                        └→ Kafka（可选，高吞吐缓冲）
+
+Flutter App ← MQTT 直连 EMQX（JWT 认证，订阅 cs_inv/{sn}/#）</code></pre>
+
+<p>App 设备详情页实时数据<strong>完全走 MQTT 推送</strong>，不通过 HTTP API 轮询。进入页面后 MQTT 订阅即开始推送，下拉刷新不触发额外网络请求。</p>
+
+<h3 id="history-link">历史/统计数据链路</h3>
+
+<pre><code>App / Web 后台 → HTTP REST → api-gateway → inv_api_server → PostgreSQL 查询返回</code></pre>
+
+<p>电站统计 <code>today_energy</code> 从 <code>device_day_data</code> 实时聚合，确保即使 <code>device_realtime_data</code> 或 <code>station_day_data</code> 数据不完整也能返回正确值。</p>
+
+<h3 id="sn-validation">SN 编号校验</h3>
+
+<p>设备 SN 为 16 位编码（例 <code>H1CNA00135000014</code>），<strong>所有设备入库入口均强制校验</strong>，无效 SN 自动拒绝写入数据库。</p>
+
+<p><strong>校验入口：</strong></p>
+<ul>
+  <li><code>device_repository.UpsertDeviceInfo</code>（设备信息入库）</li>
+  <li><code>InternalDeviceStatus</code>（设备状态上报）</li>
+  <li><code>InternalDeviceData</code>（设备数据上报）</li>
+</ul>
+
+<p><strong>SN 编码结构：</strong></p>
+<table>
+  <thead>
+    <tr><th>位置</th><th>含义</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>0-1</td><td>制造商（H/O/S + 0-9/A-Z）</td></tr>
+    <tr><td>2-3</td><td>国家代码</td></tr>
+    <tr><td>4-7</td><td>客户等级 + 数字编号</td></tr>
+    <tr><td>8-9</td><td>年月（自定义编码）</td></tr>
+    <tr><td>10-14</td><td>5 位序列号</td></tr>
+    <tr><td>15</td><td>CRC16-Modbus 校验位</td></tr>
+  </tbody>
+</table>
+
+<h3 id="ha-design">高可用设计</h3>
+
+<ul>
+  <li><strong>共享订阅</strong>：<code>$share/inv-group/</code> 前缀，EMQX 轮询分发消息给多个 inv_device_server 实例</li>
+  <li><strong>Redis 共享状态</strong>：多实例通过 Redis HSET 共享设备在线状态</li>
+  <li><strong>Session 清理</strong>：<code>SetCleanSession(true)</code> 断开即清理</li>
+  <li><strong>K8s HPA</strong>：基于 CPU / 内存自动扩缩 2~10 副本</li>
+  <li><strong>Redis Streams</strong>：消费组 + ACK + 死信队列，确保消息不丢失</li>
+</ul>
+
+<h3 id="ota-upgrade">OTA 固件升级</h3>
+
+<p>OTA（Over-The-Air）支持通过管理后台远程升级设备固件，支持 ARM 和 ESP 双芯片独立升级。</p>
+
+<p><strong>升级流程：</strong></p>
+
+<pre><code>管理后台上传固件 → 创建升级任务 → API Server 分发命令
+                                      │
+                                      ▼
+                              inv_device_server（转发 MQTT 命令）
+                                      │
+                                      ▼
+                              cs_inv/{sn}/ota/cmd → 设备
+                                      │
+                                      ▼
+                              设备下载固件 → 升级 → 上报进度
+                                      │
+                                      ▼
+                              cs_inv/{sn}/ota/status → inv_device_server
+                                      │
+                                      ▼
+                              转换格式 → API Server（更新数据库）
+                                      │
+                                      ▼
+                              APP / 管理后台显示进度</code></pre>
+
+<p><strong>MQTT 主题：</strong></p>
+<table>
+  <thead>
+    <tr><th>主题</th><th>方向</th><th>说明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>cs_inv/{sn}/ota/cmd</code></td><td>下行</td><td>升级命令（command: start）</td></tr>
+    <tr><td><code>cs_inv/{sn}/ota/status</code></td><td>上行</td><td>状态上报（progress / success / failed）</td></tr>
+  </tbody>
+</table>
+
+<p><strong>OTA 命令格式：</strong></p>
+<pre><code>{
+  "command": "start",
+  "target": "esp",
+  "url": "http://server:8080/firmware/filename.bin",
+  "version": "1.0.0",
+  "file_size": 1081216,
+  "file_md5": "&lt;md5_checksum&gt;",
+  "task_id": "73"
+}</code></pre>
+
+<p><strong>设备状态上报格式：</strong></p>
+<pre><code>{
+  "device_id": "H1CNA00135000014",
+  "current_version": "1.1.0",
+  "state": "upgrading",
+  "progress": 45,
+  "status_message": "正在下载固件...",
+  "error_message": ""
+}</code></pre>
+
+<p><strong>功能特性：</strong></p>
+<ul>
+  <li>支持 ARM / ESP 双芯片独立升级</li>
+  <li>固件文件自动计算 MD5 和 SHA256</li>
+  <li>升级失败自动标记任务状态</li>
+  <li>重复升级自动复用已有任务（避免重复创建）</li>
+  <li>实时进度跟踪（设备上报 → 数据库 → APP/后台显示）</li>
+</ul>
+
+<!-- 主要功能 -->
+<h2 id="functions">主要功能</h2>
+
+<h3>Flutter APP</h3>
+<ul>
+  <li>用户登录 / 注册 / 密码重置（手机 + 邮箱）</li>
+  <li>电站概览与设备详情</li>
+  <li>设备实时数据监控（电压、电流、功率、电量、温度）</li>
+  <li>告警管理与推送</li>
+  <li>数据统计与图表分析</li>
+  <li>设备分享与权限管理</li>
+  <li>设备 Wi-Fi 配网（ESP32）</li>
+  <li>QR 码扫码添加设备</li>
+  <li>OTA 固件升级（支持 ARM/ESP 芯片，实时进度显示）</li>
+</ul>
+
+<h3>API Server</h3>
+<ul>
+  <li>用户认证与授权（JWT HS256）</li>
+  <li>电站与设备 CRUD</li>
+  <li>告警记录查询与处理</li>
+  <li>WebSocket 实时推送（管理后台用）</li>
+  <li>OTA 固件管理（上传固件、创建升级任务、推送/分发、进度跟踪）</li>
+  <li>OTA 状态接收（接收设备上报的升级进度，自动更新任务状态）</li>
+  <li>邮件服务（注册验证、告警通知）</li>
+</ul>
+
+<h3>Device Server</h3>
+<ul>
+  <li>EMQX 共享订阅连接（<code>$share/inv-group/</code>）</li>
+  <li>设备数据解析（AC / Battery / PV / Status / Energy / Cells / Alarm）</li>
+  <li>旧字段兼容映射（remapLegacyPV / Energy）</li>
+  <li>Redis Pub/Sub 实时推送</li>
+  <li>Redis Streams 消息缓冲 + 死信队列</li>
+  <li>设备在线状态管理与离线检测</li>
+  <li>Prometheus <code>/metrics</code> 端点</li>
+  <li>OTA 命令下发（转发升级命令到设备 MQTT 主题）</li>
+  <li>OTA 状态转发（接收设备 OTA 状态上报，转换格式后转发给 API Server）</li>
+</ul>
+
+<h3>Web 管理后台</h3>
+<ul>
+  <li>设备管理（列表、详情、控制命令、参数配置）</li>
+  <li>用户管理（CRUD、角色分配）</li>
+  <li>电站管理（CRUD、设备绑定）</li>
+  <li>告警管理（列表、处理、统计）</li>
+  <li>设备型号管理（参数模板配置）</li>
+  <li>OTA 固件管理（上传、任务创建、进度跟踪）</li>
+  <li>命令日志查看</li>
+  <li>电站地图展示（Leaflet）</li>
+  <li>实时数据推送（Socket.IO / WebSocket）</li>
+</ul>
+
+<!-- 项目结构 -->
+<h2 id="project-structure">项目结构</h2>
+
+<pre><code>CS-INV/
+├── api-gateway/                      # Go API 网关（端口 8080 → 映射 80）
+│   ├── internal/
+│   │   ├── config/                   # 配置管理（YAML）
+│   │   ├── middleware/               # JWT 认证、RBAC、限流、CORS 中间件
+│   │   ├── proxy/                    # 反向代理
+│   │   └── routes/                   # 路由注册
+│   └── main.go                       # 入口文件
+│
+├── inv_api_server/                   # Go REST API 服务（端口 8080）
+│   ├── cmd/                          # 入口文件
+│   ├── internal/
+│   │   ├── config/                   # 配置管理（Viper + YAML）
+│   │   ├── handler/                  # HTTP 路由处理（Auth/Device/Station/Alarm/Admin/WS/OTA）
+│   │   ├── middleware/               # JWT 认证中间件
+│   │   ├── model/                    # 数据模型
+│   │   ├── repository/               # 数据库操作（pgx/v5）
+│   │   └── service/                  # 业务逻辑（邮件、OTA 等）
+│   └── pkg/
+│       ├── apperr/                   # 统一错误定义
+│       ├── jwt/                      # JWT 签发与验证（HS256）
+│       ├── logger/                   # 结构化日志（Zap）
+│       ├── response/                 # 统一响应格式
+│       ├── sn/                       # SN 编号规则与 CRC16 校验
+│       ├── telemetry/                # 遥测数据处理
+│       └── timezone/                 # 时区工具
+│
+├── inv_device_server/                # Go 设备通信服务（端口 8081）
+│   ├── cmd/                          # 入口文件
+│   ├── internal/
+│   │   ├── config/                   # 配置管理（环境变量注入）
+│   │   ├── mqtt/                     # MQTT 客户端 + 共享订阅 + Redis Streams 消费者
+│   │   ├── model/                    # 设备实时数据模型
+│   │   ├── repository/               # 数据持久化（SN 校验门禁）
+│   │   └── service/                  # 数据处理 + Redis Pub/Sub + Streams 发布
+│   └── pkg/
+│       ├── logger/                   # 日志
+│       └── sn/                       # SN 编号生成与校验
+│
+├── mqtt-kafka-bridge/                # EMQX Webhook → Kafka 桥接
+│   └── main.go                       # 桥接入口
+│
+├── inv-admin-frontend/               # React Web 管理后台（端口 3000）
+│   ├── src/
+│   │   ├── components/               # 通用组件
+│   │   ├── hooks/                    # 自定义 Hooks
+│   │   ├── layouts/                  # 布局组件
+│   │   ├── locales/                  # 国际化（i18n）
+│   │   ├── pages/                    # 页面模块
+│   │   ├── services/                 # API 服务层
+│   │   ├── stores/                   # Zustand 状态管理
+│   │   ├── types/                    # TypeScript 类型定义
+│   │   └── utils/                    # 工具函数
+│   ├── package.json                  # Node.js 依赖
+│   └── vite.config.ts                # Vite 构建配置
+│
+├── inv_app/                          # Flutter 移动端应用
+│   ├── lib/
+│   │   ├── core/                     # 核心模块（配置、路由、服务、主题）
+│   │   │   ├── config/               # 应用配置（MQTT Broker / API 地址）
+│   │   │   ├── entities/             # 逆变器数据模型
+│   │   │   ├── router/               # go_router + AuthGuard 路由守卫
+│   │   │   ├── services/             # MQTT / API / Storage / Provision 服务
+│   │   │   ├── theme/                # 亮色/暗色主题
+│   │   │   ├── utils/                # SN 校验工具（CRC16-Modbus）
+│   │   │   └── widgets/              # 通用组件（仪表盘、状态灯、相位条）
+│   │   └── features/                 # 功能模块（BLoC 模式）
+│   │       ├── alarm/                # 告警管理
+│   │       ├── auth/                 # 用户认证（登录/注册/找回密码）
+│   │       ├── dashboard/            # 仪表盘
+│   │       ├── device/               # 设备管理（详情/控制/参数/WiFi配网）
+│   │       ├── profile/              # 个人中心/设置/设备分享
+│   │       ├── station/              # 电站管理
+│   │       └── statistics/           # 数据统计/图表分析
+│   └── pubspec.yaml                  # Flutter 依赖
+│
+├── database/                         # 数据库脚本
+│   ├── schema.sql                    # 初始化建表（20+ 表、视图、触发器、清理函数）
+│   ├── migration_timescaledb.sql     # TimescaleDB 超表 + 压缩 + 连续聚合
+│   └── migrations/                   # 增量迁移脚本（001~011）
+│
+├── deploy/                           # 部署与运维
+│   ├── docker-compose.yml            # 一键部署（EMQX + device×2 + api + PG + Redis）
+│   ├── docker-compose.full.yml       # 完整部署（含 Kafka、Bridge）
+│   ├── docker-compose.prod.yml       # 生产环境部署
+│   ├── k8s-device-server.yaml        # K8s Deployment + HPA（2~10 副本自动扩缩）
+│   ├── nginx.conf                    # Nginx 反向代理配置
+│   ├── prometheus.yml                # Prometheus 采集配置
+│   ├── prometheus_alerts.yml         # Prometheus 告警规则
+│   ├── grafana-dashboard.json        # Grafana 仪表盘配置
+│   └── .env / .env.prod              # 环境变量配置
+│
+├── docs/                             # 文档
+│   ├── MQTT接口文档.md                # MQTT 通信协议规范
+│   ├── ARM_ESP32_UART_Protocol.md    # ARM ↔ ESP32 UART 帧协议
+│   ├── 系统参数规范_48V离网逆变器.md    # 逆变器参数定义
+│   ├── emqx_rule_engine_sql.md       # EMQX Rule Engine SQL 参考
+│   ├── 架构升级任务清单.md             # 架构升级执行手册
+│   └── 设备端OTA程序开发指南.md         # 设备端 OTA 开发指南
+│
+├── Makefile                          # 构建与开发命令
+├── start_all.bat                     # Windows 一键启动脚本
+└── README.md</code></pre>
+
+<!-- Makefile -->
+<h2 id="makefile">Makefile 常用命令</h2>
+
+<table>
+  <thead>
+    <tr><th>命令</th><th>说明</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>make build-go</code></td><td>构建所有 Go 服务（api-gateway, api-server, device-server, bridge）</td></tr>
+    <tr><td><code>make build-app</code></td><td>构建 Flutter APK</td></tr>
+    <tr><td><code>make build-web</code></td><td>构建 Web 管理后台生产包</td></tr>
+    <tr><td><code>make docker-up</code></td><td>Docker Compose 启动所有服务</td></tr>
+    <tr><td><code>make test-go</code></td><td>运行 Go 单元测试</td></tr>
+    <tr><td><code>make dev-web</code></td><td>启动前端开发服务器（Vite HMR）</td></tr>
+    <tr><td><code>make install-hooks</code></td><td>安装 Git hooks（commit-msg, pre-commit）</td></tr>
+  </tbody>
+</table>
+
+<!-- 文档索引 -->
+<h2 id="docs">文档索引</h2>
+
+<ul>
+  <li><a href="docs/MQTT接口文档.md">MQTT 接口文档</a> — 完整的 MQTT 主题定义和数据格式</li>
+  <li><a href="docs/系统参数规范_48V离网逆变器.md">系统参数规范</a> — 逆变器参数定义</li>
+  <li><a href="docs/ARM_ESP32_UART_Protocol.md">ARM ESP32 UART 协议</a> — ARM ↔ ESP32 帧协议</li>
+  <li><a href="docs/emqx_rule_engine_sql.md">EMQX Rule Engine SQL</a> — 规则引擎 SQL 参考</li>
+  <li><a href="docs/架构升级任务清单.md">架构升级任务清单</a> — 架构升级执行手册</li>
+  <li><a href="docs/设备端OTA程序开发指南.md">设备端 OTA 开发指南</a> — 设备固件 OTA 开发说明</li>
+  <li><a href="光伏逆变器物联网监控系统 — 流程文档.md">架构流程文档</a> — 系统架构与数据流程说明</li>
+</ul>
+
+<h2>适用的逆变器型号</h2>
+<ul>
+  <li><strong>CS-I10-6k2</strong> — 48V 单相离网逆变器（ESP32-C3 WiFi 通讯模块）</li>
+</ul>
+
+<hr>
+
+<p style="text-align:center;color:#586069;font-size:0.9em;margin-top:32px;">
+  CS-INV 光伏逆变器物联网监控系统 · CS-INV IoT Monitoring Platform
+</p>
+
+</div>
+</body>
+</html>
