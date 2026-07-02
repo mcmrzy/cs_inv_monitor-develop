@@ -62,6 +62,14 @@ class ServiceLocator {
     final sharedPreferences = await SharedPreferences.getInstance();
     getIt.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
 
+    // 启动时清理可能存在的破旧 serverUrl，确保 Dio 始终使用最新的 AppConfig.apiBaseUrl
+    final savedUrl = sharedPreferences.getString('server_url');
+    if (savedUrl != null && savedUrl != AppConfig.apiBaseUrl) {
+      // 清除与 AppConfig 不同的破旧值（如缺少端口的旧 URL）
+      // 用户如果需要自定义 URL，可以在设置页重新设置
+      await sharedPreferences.remove('server_url');
+    }
+
     const secureStorage = FlutterSecureStorage(
       aOptions: AndroidOptions(encryptedSharedPreferences: true),
     );
@@ -74,6 +82,7 @@ class ServiceLocator {
       sendTimeout: const Duration(milliseconds: AppConfig.sendTimeout),
     ));
 
+    // 拦截器1：Token 注入 + 自动刷新
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         final token = await getIt<StorageService>().getToken();
