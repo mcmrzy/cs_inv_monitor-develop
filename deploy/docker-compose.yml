@@ -129,7 +129,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-inv_mqtt}
     ports:
-      - "80:8080"
+      - "8888:8080"
     depends_on:
       inv-api-server:
         condition: service_healthy
