@@ -94,7 +94,7 @@ func main() {
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:      router,
-		ReadTimeout:  30 * time.Second,
+		ReadTimeout:  0, // SSE 长连接需要无读取超时
 		WriteTimeout: 0, // SSE 长连接需要无写超时
 		IdleTimeout:  120 * time.Second,
 	}

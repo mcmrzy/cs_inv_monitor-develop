@@ -70,6 +70,7 @@ func (rp *ReverseProxy) Handler() gin.HandlerFunc {
 
 func (rp *ReverseProxy) RewriteHandler(targetPath string) gin.HandlerFunc {
 	rewriteProxy := &httputil.ReverseProxy{
+		FlushInterval: -1, // 立即刷新，SSE 流式数据不缓冲
 		Director: func(req *http.Request) {
 			req.URL.Scheme = rp.targetURL.Scheme
 			req.URL.Host = rp.targetURL.Host

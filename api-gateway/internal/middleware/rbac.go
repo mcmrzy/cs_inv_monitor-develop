@@ -68,7 +68,7 @@ func (r *RBACMiddleware) getUserRole(ctx context.Context, userID string) (int, e
 	}
 
 	if r.rdb != nil && role >= 0 {
-		r.rdb.Set(ctx, "gw:user_role:"+userID, role, r.cacheTTL)
+		r.rdb.Set(ctx, "gw:user_roles:"+userID, role, r.cacheTTL)
 	}
 
 	return role, nil
