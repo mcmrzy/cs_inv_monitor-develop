@@ -26,6 +26,7 @@ var publicPaths = map[string]bool{
 
 var publicPrefixes = []string{
 	"/uploads/",
+	"/firmware/",
 	"/ws/",
 }
 

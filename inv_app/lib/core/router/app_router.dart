@@ -516,7 +516,7 @@ class _MainShellState extends State<MainShell> {
           child: widget.child,
         ),
       ),
-      bottomNavigationBar: BottomNavBar(child: widget.child),
+      bottomNavigationBar: const BottomNavBar(),
     );
   }
 }
@@ -529,9 +529,7 @@ String _dash(dynamic val) {
 }
 
 class BottomNavBar extends StatelessWidget {
-  final Widget child;
-
-  const BottomNavBar({super.key, required this.child});
+  const BottomNavBar({super.key});
 
   @override
   Widget build(BuildContext context) {

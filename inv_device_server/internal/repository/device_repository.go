@@ -55,7 +55,7 @@ func (r *DeviceRepository) GetAllActiveModels(ctx context.Context) ([]model.Devi
 
 func (r *DeviceRepository) GetModelFields(ctx context.Context, modelID int32) ([]model.DeviceModelField, error) {
 	query := `SELECT id, model_id, field_key, field_name, field_type, COALESCE(unit, ''), sort,
-		is_show, is_control, COALESCE(parse_rule, ''), created_at, updated_at
+		is_show, is_control, COALESCE(parse_rule, ''), COALESCE(group_name, ''), control_params, created_at, updated_at
 		FROM device_model_field WHERE model_id = $1 ORDER BY sort, field_key`
 
 	rows, err := r.db.Query(ctx, query, modelID)
@@ -67,11 +67,15 @@ func (r *DeviceRepository) GetModelFields(ctx context.Context, modelID int32) ([
 	var fields []model.DeviceModelField
 	for rows.Next() {
 		var f model.DeviceModelField
+		var controlParamsJSON []byte
 		err := rows.Scan(&f.ID, &f.ModelID, &f.FieldKey, &f.FieldName, &f.FieldType,
 			&f.Unit, &f.Sort, &f.IsShow, &f.IsControl, &f.ParseRule,
-			&f.CreatedAt, &f.UpdatedAt)
+			&f.GroupName, &controlParamsJSON, &f.CreatedAt, &f.UpdatedAt)
 		if err != nil {
 			return nil, err
+		}
+		if controlParamsJSON != nil {
+			_ = json.Unmarshal(controlParamsJSON, &f.ControlParams)
 		}
 		fields = append(fields, f)
 	}

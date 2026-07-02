@@ -2,6 +2,7 @@
 
 <cite>
 **本文档引用的文件**
+- [.github/workflows/ci.yml](file://.github/workflows/ci.yml)
 - [deploy/README.md](file://deploy/README.md)
 - [deploy/git-poll-deploy.sh](file://deploy/git-poll-deploy.sh)
 - [deploy/deploy.sh](file://deploy/deploy.sh)
@@ -25,13 +26,27 @@
 - [inv_device_server/cmd/main.go](file://inv_device_server/cmd/main.go)
 - [inv_device_server/Dockerfile](file://inv_device_server/Dockerfile)
 - [inv-admin-frontend/Dockerfile](file://inv-admin-frontend/Dockerfile)
+- [inv-admin-frontend/package.json](file://inv-admin-frontend/package.json)
+- [inv-admin-frontend/tsconfig.json](file://inv-admin-frontend/tsconfig.json)
+- [inv-admin-frontend/vite.config.ts](file://inv-admin-frontend/vite.config.ts)
+- [inv_app/pubspec.yaml](file://inv_app/pubspec.yaml)
+- [inv_app/analysis_options.yaml](file://inv_app/analysis_options.yaml)
 - [mqtt-kafka-bridge/Dockerfile](file://mqtt-kafka-bridge/Dockerfile)
 - [database/migrations/001_init_schema.up.sql](file://database/migrations/001_init_schema.up.sql)
 - [database/migrations/002_add_performance_indexes.up.sql](file://database/migrations/002_add_performance_indexes.up.sql)
 - [database/migrations/003_timescaledb_compression.up.sql](file://database/migrations/003_timescaledb_compression.up.sql)
 - [database/migrations/004_add_energy_columns.up.sql](file://database/migrations/004_add_energy_columns.up.sql)
 - [database/migrations/005_device_day_data_jsonb.up.sql](file://database/migrations/005_device_day_data_jsonb.up.sql)
+- [Makefile](file://Makefile)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 新增GitHub Actions CI工作流配置章节
+- 更新持续集成配置，包含Go模块测试、前端编译和Flutter分析
+- 新增Flutter应用分析和测试流程
+- 更新前端TypeScript类型检查配置
+- 新增Makefile中的CI相关命令
 
 ## 目录
 1. [简介](#简介)
@@ -56,8 +71,10 @@
 - 失败回滚策略与应急处理流程
 - Jenkins、GitHub Actions等工具的集成示例
 
+**更新** 新增GitHub Actions CI/CD流水线配置，支持Go模块测试、前端编译和Flutter分析
+
 ## 项目结构
-该仓库采用多模块微服务架构，包含网关、API服务、设备数据服务、前端管理界面、消息桥接、数据库迁移与部署脚本等。CI/CD相关能力主要集中在deploy目录中，配合各子项目的Dockerfile与docker-compose编排文件。
+该仓库采用多模块微服务架构，包含网关、API服务、设备数据服务、前端管理界面、Flutter移动应用、消息桥接、数据库迁移与部署脚本等。CI/CD相关能力主要集中在deploy目录中，配合各子项目的Dockerfile与docker-compose编排文件。
 
 ```mermaid
 graph TB
@@ -74,6 +91,7 @@ API["inv_api_server"]
 DEV["inv_device_server"]
 BRG["mqtt-kafka-bridge"]
 FE["inv-admin-frontend"]
+FL["inv_app(Flutter)"]
 end
 subgraph "基础设施"
 DB["TimescaleDB"]
@@ -86,11 +104,13 @@ DC --> API
 DC --> DEV
 DC --> BRG
 DC --> FE
+DC --> FL
 DCP --> GW
 DCP --> API
 DCP --> DEV
 DCP --> BRG
 DCP --> FE
+DCP --> FL
 SVC1 --> DC
 SVC2 --> DC
 SVC3 --> DC
@@ -100,17 +120,18 @@ API --> DB
 DEV --> MQ
 BRG --> MQ
 FE --> GW
+FL --> GW
 PROM --> DC
 ```
 
-图表来源
+**图表来源**
 - [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
 - [deploy/docker-compose.prod.yml](file://deploy/docker-compose.prod.yml)
 - [deploy/inv-git-poll.service](file://deploy/inv-git-poll.service)
 - [deploy/inv-monitor.service](file://deploy/inv-monitor.service)
 - [deploy/inv-webhook.service](file://deploy/inv-webhook.service)
 
-章节来源
+**章节来源**
 - [deploy/README.md](file://deploy/README.md)
 - [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
 - [deploy/docker-compose.prod.yml](file://deploy/docker-compose.prod.yml)
@@ -121,8 +142,9 @@ PROM --> DC
 - docker-compose编排：定义服务拓扑、网络、卷与环境变量，支持开发与生产环境差异化配置。
 - 监控与告警：Prometheus指标采集与告警规则，结合Nginx与应用日志进行健康度评估。
 - 回滚与维护：备份脚本与数据库维护脚本，保障部署失败时的快速恢复与数据一致性。
+- **新增** GitHub Actions CI工作流：自动化执行Go模块测试、前端编译和Flutter分析。
 
-章节来源
+**章节来源**
 - [deploy/git-poll-deploy.sh](file://deploy/git-poll-deploy.sh)
 - [deploy/deploy.sh](file://deploy/deploy.sh)
 - [deploy/deploy-prod.sh](file://deploy/deploy-prod.sh)
@@ -131,6 +153,7 @@ PROM --> DC
 - [deploy/prometheus_alerts.yml](file://deploy/prometheus_alerts.yml)
 - [deploy/scripts/backup.sh](file://deploy/scripts/backup.sh)
 - [deploy/scripts/db_maintenance.sh](file://deploy/scripts/db_maintenance.sh)
+- [.github/workflows/ci.yml](file://.github/workflows/ci.yml)
 
 ## 架构总览
 下图展示了从代码变更到服务上线的完整流水线，涵盖触发、构建、测试、部署与监控环节。
@@ -139,12 +162,16 @@ PROM --> DC
 sequenceDiagram
 participant Dev as "开发者"
 participant Repo as "Git仓库"
+participant GH as "GitHub Actions"
 participant Poll as "Git轮询服务"
 participant Script as "部署脚本"
 participant Compose as "docker-compose"
 participant Registry as "镜像仓库"
 participant K8s as "Kubernetes/编排"
 Dev->>Repo : 推送代码
+GH->>Repo : 触发CI工作流
+GH->>GH : 执行Go测试/前端编译/Flutter分析
+GH-->>Dev : CI结果通知
 Poll->>Repo : 定时拉取最新变更
 Poll->>Script : 触发部署流程
 Script->>Registry : 构建并推送镜像
@@ -154,12 +181,56 @@ K8s-->>Script : 返回部署结果
 Script-->>Poll : 输出状态与日志
 ```
 
-图表来源
+**图表来源**
+- [.github/workflows/ci.yml](file://.github/workflows/ci.yml)
 - [deploy/git-poll-deploy.sh](file://deploy/git-poll-deploy.sh)
 - [deploy/deploy.sh](file://deploy/deploy.sh)
 - [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
 
 ## 详细组件分析
+
+### GitHub Actions CI工作流
+- **工作流概述**：完整的CI流水线，包含三个主要作业：Go构建测试、前端构建和Flutter分析测试。
+- **触发条件**：支持push到main和develop分支，以及pull_request到main分支。
+- **Go模块测试作业(go-check)**：
+  - 并行矩阵测试四个Go模块：inv_api_server、inv_device_server、api-gateway、mqtt-kafka-bridge
+  - 使用Go 1.25版本，执行构建、go vet静态分析和单元测试
+  - 支持竞态条件检测和测试计数控制
+- **前端构建作业(frontend-check)**：
+  - Node.js 20环境，使用npm ci安装依赖
+  - 执行TypeScript类型检查和构建
+  - 缓存package-lock.json以提高性能
+- **Flutter分析作业(flutter-check)**：
+  - Flutter 3.27稳定版环境
+  - 执行flutter pub get、analyze和test命令
+  - 支持跨平台Flutter应用的静态分析和测试
+
+```mermaid
+flowchart TD
+Start(["代码推送"]) --> Trigger["触发GitHub Actions"]
+Trigger --> GoTest["Go模块测试矩阵"]
+Trigger --> Frontend["前端构建检查"]
+Trigger --> Flutter["Flutter分析测试"]
+GoTest --> GoBuild["构建Go模块"]
+GoBuild --> GoVet["静态分析"]
+GoVet --> GoUnit["单元测试"]
+Frontend --> NodeInstall["安装Node依赖"]
+NodeInstall --> TypeCheck["TypeScript检查"]
+TypeCheck --> FrontendBuild["前端构建"]
+Flutter --> FlutterGet["获取Flutter依赖"]
+FlutterGet --> FlutterAnalyze["静态分析"]
+FlutterAnalyze --> FlutterTest["Flutter测试"]
+GoUnit --> Success["CI通过"]
+FrontendBuild --> Success
+FlutterTest --> Success
+Success --> End(["完成"])
+```
+
+**图表来源**
+- [.github/workflows/ci.yml](file://.github/workflows/ci.yml)
+
+**章节来源**
+- [.github/workflows/ci.yml](file://.github/workflows/ci.yml)
 
 ### Git轮询部署系统
 - 工作原理：systemd服务定时执行轮询脚本，检测远程仓库HEAD变化；若发现新提交则拉取代码并调用部署脚本。
@@ -186,12 +257,12 @@ Notify --> End(["完成"])
 Sleep --> Start
 ```
 
-图表来源
+**图表来源**
 - [deploy/inv-git-poll.service](file://deploy/inv-git-poll.service)
 - [deploy/git-poll-deploy.sh](file://deploy/git-poll-deploy.sh)
 - [deploy/deploy.sh](file://deploy/deploy.sh)
 
-章节来源
+**章节来源**
 - [deploy/inv-git-poll.service](file://deploy/inv-git-poll.service)
 - [deploy/git-poll-deploy.sh](file://deploy/git-poll-deploy.sh)
 
@@ -216,24 +287,27 @@ Done --> End["结束"]
 Fail --> End
 ```
 
-图表来源
+**图表来源**
 - [deploy/deploy.sh](file://deploy/deploy.sh)
 - [deploy/deploy-prod.sh](file://deploy/deploy-prod.sh)
 - [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
 
-章节来源
+**章节来源**
 - [deploy/deploy.sh](file://deploy/deploy.sh)
 - [deploy/deploy-prod.sh](file://deploy/deploy-prod.sh)
 
 ### 持续集成配置
-- 代码检查：建议在CI中集成静态分析与格式化校验（如golangci-lint、ESLint），在PR阶段拦截问题。
-- 单元测试：Go后端服务与设备解析器应包含单元测试，确保核心逻辑稳定。
-- 集成测试：通过compose启动最小化环境，验证服务间通信与数据流。
-- 测试报告与覆盖率：输出测试报告并在CI平台展示，作为质量门禁依据。
+- **Go模块测试**：使用Go 1.25版本，针对四个核心模块执行构建、静态分析和单元测试，支持竞态条件检测。
+- **前端类型检查**：使用TypeScript 5.7.3，执行noEmit模式的类型检查，确保类型安全。
+- **Flutter静态分析**：使用Flutter 3.27稳定版，执行静态分析和单元测试，确保代码质量。
+- **测试报告与覆盖率**：输出测试报告并在CI平台展示，作为质量门禁依据。
 
-章节来源
+**章节来源**
+- [.github/workflows/ci.yml](file://.github/workflows/ci.yml)
 - [inv_device_server/internal/service/protocol_parser_test.go](file://inv_device_server/internal/service/protocol_parser_test.go)
 - [inv_api_server/internal/handler/internal_handler_test.go](file://inv_api_server/internal/handler/internal_handler_test.go)
+- [inv-admin-frontend/tsconfig.json](file://inv-admin-frontend/tsconfig.json)
+- [inv_app/analysis_options.yaml](file://inv_app/analysis_options.yaml)
 
 ### 持续部署策略
 - 蓝绿部署：准备两套完全相同的环境，通过流量切换实现零停机发布。
@@ -241,7 +315,7 @@ Fail --> End
 - 滚动更新：逐批替换实例，保持整体可用性与一致性。
 - 实施要点：版本标签管理、健康探针、灰度路由与回滚预案。
 
-章节来源
+**章节来源**
 - [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
 - [deploy/docker-compose.prod.yml](file://deploy/docker-compose.prod.yml)
 
@@ -250,7 +324,7 @@ Fail --> End
 - 分支策略：采用Git Flow或GitHub Flow，hotfix与release分支直连生产部署。
 - 权限控制：仅授权人员可直接推送至受保护分支。
 
-章节来源
+**章节来源**
 - [deploy/README.md](file://deploy/README.md)
 
 ### 部署状态监控与通知
@@ -268,12 +342,12 @@ Alert --> Notify["通知通道"]
 Logs --> Dash["可视化面板"]
 ```
 
-图表来源
+**图表来源**
 - [deploy/prometheus.yml](file://deploy/prometheus.yml)
 - [deploy/prometheus_alerts.yml](file://deploy/prometheus_alerts.yml)
 - [deploy/webhook_server.py](file://deploy/webhook_server.py)
 
-章节来源
+**章节来源**
 - [deploy/monitor.sh](file://deploy/monitor.sh)
 - [deploy/webhook_server.py](file://deploy/webhook_server.py)
 - [deploy/prometheus.yml](file://deploy/prometheus.yml)
@@ -297,21 +371,22 @@ Resume --> FEnd["结束"]
 Escalate --> FEnd
 ```
 
-图表来源
+**图表来源**
 - [deploy/scripts/backup.sh](file://deploy/scripts/backup.sh)
 - [deploy/scripts/db_maintenance.sh](file://deploy/scripts/db_maintenance.sh)
 - [deploy/deploy.sh](file://deploy/deploy.sh)
 
-章节来源
+**章节来源**
 - [deploy/scripts/backup.sh](file://deploy/scripts/backup.sh)
 - [deploy/scripts/db_maintenance.sh](file://deploy/scripts/db_maintenance.sh)
 
 ### CI/CD工具集成示例
+- **GitHub Actions**：完整的CI工作流配置，支持Go模块测试、前端编译和Flutter分析，使用矩阵策略并行执行多个任务。
 - Jenkins：配置Git轮询或Webhook触发Job，执行构建、测试与部署脚本；使用Blue Ocean可视化流水线。
-- GitHub Actions：通过workflow在push/PR事件触发，使用matrix测试多版本Go与Node.js；构建并推送镜像至私有仓库；部署到Kubernetes。
 - GitLab CI：利用.gitlab-ci.yml定义 stages: lint/test/build/deploy，共享缓存与制品库。
 
-章节来源
+**章节来源**
+- [.github/workflows/ci.yml](file://.github/workflows/ci.yml)
 - [deploy/git-poll-deploy.sh](file://deploy/git-poll-deploy.sh)
 - [deploy/deploy.sh](file://deploy/deploy.sh)
 
@@ -328,18 +403,19 @@ API --> DB["TimescaleDB"]
 DEV["inv_device_server"] --> MQ
 BRG["mqtt-kafka-bridge"] --> MQ
 FE["inv-admin-frontend"] --> GW
+FL["inv_app(Flutter)"] --> GW
 MON["Prometheus/Nginx"] --> GW
 MON --> API
 MON --> DEV
 ```
 
-图表来源
+**图表来源**
 - [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
 - [api-gateway/main.go](file://api-gateway/main.go)
 - [inv_api_server/cmd/main.go](file://inv_api_server/cmd/main.go)
 - [inv_device_server/cmd/main.go](file://inv_device_server/cmd/main.go)
 
-章节来源
+**章节来源**
 - [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
 
 ## 性能考虑
@@ -348,7 +424,7 @@ MON --> DEV
 - 监控指标：CPU、内存、请求延迟、错误率、数据库连接数与队列长度。
 - 数据库迁移：在低峰期执行，使用事务与索引重建计划，避免阻塞。
 
-章节来源
+**章节来源**
 - [database/migrations/001_init_schema.up.sql](file://database/migrations/001_init_schema.up.sql)
 - [database/migrations/002_add_performance_indexes.up.sql](file://database/migrations/002_add_performance_indexes.up.sql)
 - [database/migrations/003_timescaledb_compression.up.sql](file://database/migrations/003_timescaledb_compression.up.sql)
@@ -360,21 +436,25 @@ MON --> DEV
 - 服务不可达：验证Nginx配置、网关路由与健康探针；查看Prometheus告警。
 - 数据库异常：执行维护脚本、检查压缩策略与索引；必要时回滚到备份。
 - 回滚操作：使用备份脚本恢复数据库，重启对应服务容器。
+- **新增** CI工作流失败：检查GitHub Actions日志，确认Go版本、Node版本和Flutter版本兼容性。
 
-章节来源
+**章节来源**
 - [deploy/monitor.sh](file://deploy/monitor.sh)
 - [deploy/scripts/backup.sh](file://deploy/scripts/backup.sh)
 - [deploy/scripts/db_maintenance.sh](file://deploy/scripts/db_maintenance.sh)
+- [.github/workflows/ci.yml](file://.github/workflows/ci.yml)
 
 ## 结论
-本项目已具备完善的部署脚本与编排基础，建议在此基础上引入Webhook触发、自动化测试与灰度发布策略，进一步提升交付效率与稳定性。通过标准化的CI/CD流程与监控告警体系，可有效降低风险并加速迭代。
+本项目已具备完善的部署脚本与编排基础，并新增了完整的GitHub Actions CI/CD流水线。通过Go模块测试、前端编译和Flutter分析的自动化执行，显著提升了代码质量和交付效率。建议在此基础上继续优化构建性能，完善测试覆盖率，并考虑引入更高级的部署策略如蓝绿部署和金丝雀发布。
 
 ## 附录
 - Nginx配置：用于反向代理与静态资源服务。
 - Prometheus配置：采集应用与系统指标，定义告警规则。
 - 数据库迁移：按版本顺序执行SQL脚本，确保Schema一致性。
+- **新增** Flutter应用配置：包含依赖管理和分析选项配置。
+- **新增** 前端TypeScript配置：确保类型安全和代码质量。
 
-章节来源
+**章节来源**
 - [deploy/nginx.conf](file://deploy/nginx.conf)
 - [deploy/prometheus.yml](file://deploy/prometheus.yml)
 - [deploy/prometheus_alerts.yml](file://deploy/prometheus_alerts.yml)
@@ -383,3 +463,7 @@ MON --> DEV
 - [database/migrations/003_timescaledb_compression.up.sql](file://database/migrations/003_timescaledb_compression.up.sql)
 - [database/migrations/004_add_energy_columns.up.sql](file://database/migrations/004_add_energy_columns.up.sql)
 - [database/migrations/005_device_day_data_jsonb.up.sql](file://database/migrations/005_device_day_data_jsonb.up.sql)
+- [inv_app/pubspec.yaml](file://inv_app/pubspec.yaml)
+- [inv_app/analysis_options.yaml](file://inv_app/analysis_options.yaml)
+- [inv-admin-frontend/package.json](file://inv-admin-frontend/package.json)
+- [inv-admin-frontend/tsconfig.json](file://inv-admin-frontend/tsconfig.json)

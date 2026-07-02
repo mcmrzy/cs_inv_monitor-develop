@@ -16,6 +16,15 @@ type Config struct {
 	Backends        BackendsConfig   `yaml:"backends"`
 	Redis           RedisConfig      `yaml:"redis"`
 	RBAC            RBACConfig       `yaml:"rbac"`
+	Database        DatabaseConfig   `yaml:"database"`
+}
+
+type DatabaseConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Name     string `yaml:"name"`
 }
 
 type ServerConfig struct {
@@ -75,6 +84,10 @@ func Load(path string) (*Config, error) {
 	cfg.Redis.DB = 0
 	cfg.RBAC.Enabled = true
 	cfg.RBAC.CacheTTLSec = 300
+	cfg.Database.Host = "localhost"
+	cfg.Database.Port = 5432
+	cfg.Database.User = "postgres"
+	cfg.Database.Name = "inv_mqtt"
 
 	if err := yaml.Unmarshal([]byte(expanded), cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
@@ -84,6 +97,11 @@ func Load(path string) (*Config, error) {
 
 func (c *Config) RedisAddr() string {
 	return fmt.Sprintf("%s:%d", c.Redis.Host, c.Redis.Port)
+}
+
+func (c *Config) DatabaseDSN() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		c.Database.User, c.Database.Password, c.Database.Host, c.Database.Port, c.Database.Name)
 }
 
 // Validate 校验关键配置项

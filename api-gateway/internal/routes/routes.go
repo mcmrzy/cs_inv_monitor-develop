@@ -103,6 +103,7 @@ func registerAPIRoutes(r *gin.Engine, p *proxy.ReverseProxy) {
 	r.Any("/api/v1/internal/*action", p.Handler())
 	r.Any("/ws/*action", p.Handler())
 	r.Any("/uploads/*action", p.Handler())
+	r.GET("/firmware/*action", p.Handler())
 }
 
 func registerDeviceRoutes(r *gin.Engine, p *proxy.ReverseProxy) {

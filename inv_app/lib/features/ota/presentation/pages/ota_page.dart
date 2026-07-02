@@ -8,6 +8,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
+import 'package:inv_app/features/ota/presentation/pages/firmware_list_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -291,6 +292,33 @@ class _OTAPageState extends State<OTAPage> {
               ],
             ),
           ),
+          // 芯片固件版本明细
+          if ((info['firmware_esp'] as String? ?? '').isNotEmpty ||
+              (info['firmware_dsp'] as String? ?? '').isNotEmpty ||
+              (info['firmware_bms'] as String? ?? '').isNotEmpty) ...[  SizedBox(height: 12.h),
+            Container(
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10.r),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 4.h),
+                    child: Text('芯片固件版本', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint, fontWeight: FontWeight.w500)),
+                  ),
+                  _buildChipVersionRow('ESP', info['firmware_esp'] as String? ?? ''),
+                  if ((info['firmware_dsp'] as String? ?? '').isNotEmpty)
+                    _buildChipVersionRow('DSP', info['firmware_dsp'] as String? ?? ''),
+                  if ((info['firmware_bms'] as String? ?? '').isNotEmpty)
+                    _buildChipVersionRow('BMS', info['firmware_bms'] as String? ?? ''),
+                ],
+              ),
+            ),
+          ],
           SizedBox(height: 24.h),
           SizedBox(
             width: double.infinity,
@@ -313,6 +341,32 @@ class _OTAPageState extends State<OTAPage> {
           ),
           SizedBox(height: 12.h),
           _buildPreDownloadButton(firmwareId, downloadUrl, fileName),
+          // 查看所有固件版本入口
+          Padding(
+            padding: EdgeInsets.only(top: 12.h),
+            child: Center(
+              child: TextButton.icon(
+                onPressed: () {
+                  final deviceModel = info['device_model'] as String? ?? '';
+                  final mainVer = info['current_main_version'] as String? ??
+                      info['current_version'] as String? ?? '';
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FirmwareListPage(
+                        sn: widget.deviceSN,
+                        deviceModel: deviceModel,
+                        currentMainVersion: mainVer,
+                      ),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.history_rounded, size: 16.sp),
+                label: Text('查看所有固件版本', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500)),
+                style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -425,6 +479,33 @@ class _OTAPageState extends State<OTAPage> {
               ),
             ),
           ],
+          // 当前固件版本摘要
+          if ((info['firmware_esp'] as String? ?? '').isNotEmpty ||
+              (info['firmware_dsp'] as String? ?? '').isNotEmpty ||
+              (info['firmware_bms'] as String? ?? '').isNotEmpty) ...[  SizedBox(height: 12.h),
+            Container(
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10.r),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 4.h),
+                    child: Text('当前固件版本', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint, fontWeight: FontWeight.w500)),
+                  ),
+                  _buildChipVersionRow('ESP', info['firmware_esp'] as String? ?? ''),
+                  if ((info['firmware_dsp'] as String? ?? '').isNotEmpty)
+                    _buildChipVersionRow('DSP', info['firmware_dsp'] as String? ?? ''),
+                  if ((info['firmware_bms'] as String? ?? '').isNotEmpty)
+                    _buildChipVersionRow('BMS', info['firmware_bms'] as String? ?? ''),
+                ],
+              ),
+            ),
+          ],
           // Changelog
           if (changelog.isNotEmpty) ...[  SizedBox(height: 12.h),
             Container(
@@ -466,6 +547,31 @@ class _OTAPageState extends State<OTAPage> {
           ),
           SizedBox(height: 12.h),
           _buildPreDownloadButton(firmwareId, downloadUrl, fileName),
+          // 查看所有固件版本入口
+          Padding(
+            padding: EdgeInsets.only(top: 12.h),
+            child: Center(
+              child: TextButton.icon(
+                onPressed: () {
+                  final deviceModel = info['device_model'] as String? ?? '';
+                  final mainVer = info['current_main_version'] as String? ?? '';
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FirmwareListPage(
+                        sn: widget.deviceSN,
+                        deviceModel: deviceModel,
+                        currentMainVersion: mainVer,
+                      ),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.history_rounded, size: 16.sp),
+                label: Text('查看所有固件版本', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500)),
+                style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -587,6 +693,27 @@ class _OTAPageState extends State<OTAPage> {
     );
   }
 
+  Widget _buildChipVersionRow(String chipName, String version) {
+    if (version.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.only(top: 4.h),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4.r),
+            ),
+            child: Text(chipName, style: TextStyle(fontSize: 11.sp, color: AppColors.primary, fontWeight: FontWeight.w600)),
+          ),
+          SizedBox(width: 8.w),
+          Text(version, style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildUpToDate(OTAUpToDate state) {
     final l10n = AppLocalizations.of(context)!;
     // Prefer current_main_version (from CheckUpdate no-update response);
@@ -644,6 +771,33 @@ class _OTAPageState extends State<OTAPage> {
                   style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
             ),
           ],
+          // 芯片固件版本明细
+          if ((state.info['firmware_esp'] as String? ?? '').isNotEmpty ||
+              (state.info['firmware_dsp'] as String? ?? '').isNotEmpty ||
+              (state.info['firmware_bms'] as String? ?? '').isNotEmpty) ...[  SizedBox(height: 12.h),
+            Container(
+              padding: EdgeInsets.all(12.w),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10.r),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(bottom: 4.h),
+                    child: Text('芯片固件版本', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint, fontWeight: FontWeight.w500)),
+                  ),
+                  _buildChipVersionRow('ESP', state.info['firmware_esp'] as String? ?? ''),
+                  if ((state.info['firmware_dsp'] as String? ?? '').isNotEmpty)
+                    _buildChipVersionRow('DSP', state.info['firmware_dsp'] as String? ?? ''),
+                  if ((state.info['firmware_bms'] as String? ?? '').isNotEmpty)
+                    _buildChipVersionRow('BMS', state.info['firmware_bms'] as String? ?? ''),
+                ],
+              ),
+            ),
+          ],
           SizedBox(height: 16.h),
           Container(
             padding: EdgeInsets.all(16.w),
@@ -658,6 +812,38 @@ class _OTAPageState extends State<OTAPage> {
                 SizedBox(width: 8.w),
                 Text(l10n.alreadyLatest, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.successLight)),
               ],
+            ),
+          ),
+          // 查看所有固件版本入口
+          Padding(
+            padding: EdgeInsets.only(top: 16.h),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  final deviceModel = state.info['device_model'] as String? ?? '';
+                  final mainVer = state.info['current_main_version'] as String? ??
+                      state.info['current_version'] as String? ?? '';
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FirmwareListPage(
+                        sn: widget.deviceSN,
+                        deviceModel: deviceModel,
+                        currentMainVersion: mainVer,
+                      ),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.history_rounded, size: 18.sp),
+                label: Text('查看所有固件版本', style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  padding: EdgeInsets.symmetric(vertical: 12.h),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                ),
+              ),
             ),
           ),
         ],

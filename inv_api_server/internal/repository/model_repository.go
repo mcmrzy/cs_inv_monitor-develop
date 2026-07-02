@@ -144,14 +144,14 @@ func (r *ModelRepository) GetFieldsByModelID(ctx context.Context, modelID int64)
 
 func (r *ModelRepository) CreateField(ctx context.Context, f *model.DeviceModelField) error {
 	return r.db.QueryRow(ctx, `
-		INSERT INTO device_model_field (model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO device_model_field (model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule, group_name)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id`,
-		f.ModelID, f.FieldKey, f.FieldName, f.FieldType, f.Unit, f.Sort, f.IsShow, f.IsControl, f.ParseRule).Scan(&f.ID)
+		f.ModelID, f.FieldKey, f.FieldName, f.FieldType, f.Unit, f.Sort, f.IsShow, f.IsControl, f.ParseRule, f.GroupName).Scan(&f.ID)
 }
 
 func (r *ModelRepository) UpdateField(ctx context.Context, fieldID int64, name *string, fieldType *string,
-	unit *string, sort *int, isShow *bool, isControl *bool, parseRule *string) error {
+	unit *string, sort *int, isShow *bool, isControl *bool, parseRule *string, groupName *string) error {
 
 	if name != nil {
 		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET field_name = $1 WHERE id = $2`, *name, fieldID); err != nil {
@@ -188,6 +188,11 @@ func (r *ModelRepository) UpdateField(ctx context.Context, fieldID int64, name *
 			return err
 		}
 	}
+	if groupName != nil {
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET group_name = $1 WHERE id = $2`, *groupName, fieldID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -206,6 +211,7 @@ type BatchFieldItem struct {
 	IsShow    *bool   `json:"is_show"`
 	IsControl *bool   `json:"is_control"`
 	ParseRule *string `json:"parse_rule"`
+	GroupName string  `json:"group_name"`
 }
 
 func (r *ModelRepository) GetModelIDByDeviceSN(ctx context.Context, sn string) (int64, error) {
@@ -363,9 +369,9 @@ func (r *ModelRepository) BatchUpsertFields(ctx context.Context, modelID int64, 
 		}
 
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO device_model_field (model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-			modelID, f.FieldKey, f.FieldName, f.FieldType, f.Unit, f.Sort, isShow, isControl, f.ParseRule); err != nil {
+			INSERT INTO device_model_field (model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule, group_name)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+			modelID, f.FieldKey, f.FieldName, f.FieldType, f.Unit, f.Sort, isShow, isControl, f.ParseRule, f.GroupName); err != nil {
 			return err
 		}
 	}

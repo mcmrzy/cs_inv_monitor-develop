@@ -42,6 +42,7 @@ type CreateFieldRequest struct {
 	IsShow    *bool   `json:"is_show"`
 	IsControl *bool   `json:"is_control"`
 	ParseRule *string `json:"parse_rule"`
+	GroupName string  `json:"group_name"`
 }
 
 type UpdateFieldRequest struct {
@@ -52,6 +53,7 @@ type UpdateFieldRequest struct {
 	IsShow     *bool   `json:"is_show"`
 	IsControl  *bool   `json:"is_control"`
 	ParseRule  *string `json:"parse_rule"`
+	GroupName  *string `json:"group_name"`
 }
 
 type BatchUpdateFieldsRequest struct {
@@ -134,6 +136,7 @@ func (s *ModelService) CreateField(ctx context.Context, modelID int64, req *Crea
 		IsShow:    isShow,
 		IsControl: isControl,
 		ParseRule: req.ParseRule,
+		GroupName: req.GroupName,
 	}
 
 	if err := s.modelRepo.CreateField(ctx, f); err != nil {
@@ -145,7 +148,7 @@ func (s *ModelService) CreateField(ctx context.Context, modelID int64, req *Crea
 
 func (s *ModelService) UpdateField(ctx context.Context, fieldID int64, req *UpdateFieldRequest) error {
 	return s.modelRepo.UpdateField(ctx, fieldID, req.FieldName, req.FieldType,
-		req.Unit, req.Sort, req.IsShow, req.IsControl, req.ParseRule)
+		req.Unit, req.Sort, req.IsShow, req.IsControl, req.ParseRule, req.GroupName)
 }
 
 func (s *ModelService) DeleteField(ctx context.Context, fieldID int64) error {

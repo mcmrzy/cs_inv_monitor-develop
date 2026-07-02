@@ -351,6 +351,8 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 				"manufacturer":    info.Manufacturer,
 				"firmware_arm":    info.FirmwareARM,
 				"firmware_esp":    info.FirmwareESP,
+				"firmware_dsp":    info.FirmwareDSP,
+				"firmware_bms":    info.FirmwareBMS,
 				"type":            info.Type,
 				"rated_power":     info.RatedPower,
 				"rated_voltage":   info.RatedVoltage,
@@ -382,7 +384,9 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 		zap.String("sn", raw.SN),
 		zap.String("model", info.Model),
 		zap.String("firmware_arm", info.FirmwareARM),
-		zap.String("firmware_esp", info.FirmwareESP))
+		zap.String("firmware_esp", info.FirmwareESP),
+		zap.String("firmware_dsp", info.FirmwareDSP),
+		zap.String("firmware_bms", info.FirmwareBMS))
 	return nil
 }
 

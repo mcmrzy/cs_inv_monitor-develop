@@ -201,8 +201,7 @@ check_service() {
 
 FAILED=0
 
-check_service "inv-api-server"    "18080" || FAILED=$((FAILED + 1))
-check_service "inv-device-server" "8081"  || FAILED=$((FAILED + 1))
+# api-server 和 device-server 不再暴露端口，只通过 Gateway 访问
 check_service "api-gateway"       "8080"  || FAILED=$((FAILED + 1))
 check_service "inv-admin-frontend" "3000" "" || FAILED=$((FAILED + 1))
 
@@ -238,9 +237,8 @@ echo "============================================================"
 echo " Service Access Points"
 echo "============================================================"
 echo "  API Gateway:      http://jiuxiaoyw.online:8080"
-echo "  API Server:       http://jiuxiaoyw.online:18080"
-echo "  Device Server:    http://jiuxiaoyw.online:8081"
 echo "  Admin Frontend:   http://jiuxiaoyw.online:3000"
+echo "  (api-server / device-server 仅内部网络可达，所有请求走 Gateway)"
 echo "  PostgreSQL:       localhost:5432"
 echo "  Redis:            localhost:6379"
 echo ""

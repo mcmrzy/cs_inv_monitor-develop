@@ -579,20 +579,22 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     final isStep0 = !deviceConnected;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        _stepIndicator(1, isStep0 ? '⭕' : '✓', _provisionStep >= 1),
-        Expanded(child: Container(height: 2, color: _provisionStep >= 2 ? AppColors.successLight : const Color(0xFFE5E7EB))),
-        _stepIndicator(2, _provisionStep >= 2 ? '✓' : '2', _provisionStep >= 2),
-        Expanded(child: Container(height: 2, color: _provisionStep >= 3 ? AppColors.successLight : const Color(0xFFE5E7EB))),
-        _stepIndicator(3, _provisionOk ? '✓' : '3', _provisionOk),
-      ]),
-      SizedBox(height: 8.h),
-      Row(children: [
-        SizedBox(width: 30.w, child: Text(AppLocalizations.of(context)!.connectDeviceHotspot, textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionStep>=1?AppColors.successLight:AppColors.textHint))),
-        Expanded(child: Container()),
-        SizedBox(width: 30.w, child: Text(AppLocalizations.of(context)!.selectWifi, textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionStep>=2?AppColors.successLight:AppColors.textHint))),
-        Expanded(child: Container()),
-        SizedBox(width: 30.w, child: Text(AppLocalizations.of(context)!.finish, textAlign: TextAlign.center, style: TextStyle(fontSize: 9.sp, color: _provisionOk?AppColors.successLight:AppColors.textHint))),
+      _buildStepIndicatorRow([
+        _StepData(
+          label: AppLocalizations.of(context)!.connectDeviceHotspot,
+          isCompleted: _provisionStep > 1,
+          isCurrent: _provisionStep == 1 || (_provisionStep == 0 && !deviceConnected),
+        ),
+        _StepData(
+          label: AppLocalizations.of(context)!.selectWifi,
+          isCompleted: _provisionStep > 2 || _provisionOk,
+          isCurrent: _provisionStep == 2 && !_provisionOk,
+        ),
+        _StepData(
+          label: AppLocalizations.of(context)!.finish,
+          isCompleted: _provisionOk,
+          isCurrent: false,
+        ),
       ]),
       SizedBox(height: 24.h),
 
@@ -918,14 +920,86 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     ]);
   }
 
-  Widget _stepIndicator(int num, String label, bool active) {
+ Widget _buildStepIndicatorRow(List<_StepData> steps) {
     return Container(
-      width: 30.w, height: 30.w,
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
       decoration: BoxDecoration(
-        color: active ? AppColors.successLight : const Color(0xFFE5E7EB),
-        shape: BoxShape.circle,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14.r),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
       ),
-      child: Center(child: Text(label, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700, color: active ? Colors.white : AppColors.textHint))),
+      child: Row(
+        children: steps.asMap().entries.map((entry) {
+          final index = entry.key;
+          final step = entry.value;
+
+          Color stepColor;
+          if (step.isCompleted) {
+            stepColor = AppColors.successLight;
+          } else if (step.isCurrent) {
+            stepColor = AppColors.primary;
+          } else {
+            stepColor = AppColors.textHint;
+          }
+
+          return Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 28.w,
+                        height: 28.w,
+                        decoration: BoxDecoration(
+                          color: stepColor.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: stepColor, width: 2),
+                        ),
+                        child: step.isCompleted
+                            ? Icon(Icons.check, size: 14.sp, color: stepColor)
+                            : Center(
+                                child: Text(
+                                  '${index + 1}',
+                                  style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: stepColor),
+                                ),
+                              ),
+                      ),
+                      SizedBox(height: 4.h),
+                      Text(
+                        step.label,
+                        style: TextStyle(
+                          fontSize: 10.sp,
+                          color: step.isCurrent || step.isCompleted ? AppColors.textPrimary : AppColors.textHint,
+                          fontWeight: step.isCurrent ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (index < steps.length - 1)
+                  Container(
+                    width: 16.w,
+                    height: 2,
+                    color: step.isCompleted ? AppColors.successLight : const Color(0xFFE5E7EB),
+                  ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
+}
+
+class _StepData {
+  final String label;
+  final bool isCompleted;
+  final bool isCurrent;
+  const _StepData({required this.label, required this.isCompleted, required this.isCurrent});
 }

@@ -3,7 +3,12 @@ module_path: ""
 title: 光伏逆变器物联网监控平台
 scope:
     - .claude\settings.local.json
+    - .cursorrules
+    - .editorconfig
     - .env.example
+    - .githooks\commit-msg
+    - .githooks\pre-commit
+    - .github\workflows\ci.yml
     - .gitignore
     - .qoder\plan-ota-upgrade-redesign.md
     - .qoder\repowiki\knowledge\zh\API网关与反向代理\_module.yaml
@@ -22,6 +27,7 @@ scope:
     - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\技术栈.md
     - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\架构设计.md
     - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\概述.md
+    - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\特殊配置与命令.md
     - .qoder\repowiki\knowledge\zh\光伏逆变器物联网监控平台\编码规范.md
     - .qoder\repowiki\knowledge\zh\光伏逆变器监控数据库架构\_module.yaml
     - .qoder\repowiki\knowledge\zh\光伏逆变器监控数据库架构\技术栈.md
@@ -33,73 +39,52 @@ scope:
     - .qoder\repowiki\knowledge\zh\光伏逆变器监控移动应用\架构设计.md
     - .qoder\repowiki\knowledge\zh\光伏逆变器监控移动应用\概述.md
     - .qoder\repowiki\knowledge\zh\光伏逆变器监控移动应用\编码规范.md
-    - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\_module.yaml
-    - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\技术栈.md
-    - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\架构设计.md
-    - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\概述.md
-    - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\特殊配置与命令.md
-    - .qoder\repowiki\knowledge\zh\应用部署与运维自动化\编码规范.md
-    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\_module.yaml
-    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\技术栈.md
-    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\架构设计.md
-    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\概述.md
-    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据桥接服务\编码规范.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\OTA升级与版本管理\_module.yaml
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\OTA升级与版本管理\技术栈.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\OTA升级与版本管理\架构设计.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\OTA升级与版本管理\概述.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\OTA升级与版本管理\特殊配置与命令.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\OTA升级与版本管理\编码规范.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\_module.yaml
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\技术栈.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\架构设计.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\概述.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\编码规范.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\设备型号与协议配置管理\_module.yaml
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\设备型号与协议配置管理\架构设计.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\设备型号与协议配置管理\概述.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\设备型号与协议配置管理\编码规范.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\运维遥测与监控接口\_module.yaml
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\运维遥测与监控接口\技术栈.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\运维遥测与监控接口\架构设计.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\运维遥测与监控接口\概述.md
+    - .qoder\repowiki\knowledge\zh\物联网设备监控与管理平台 API 网关\运维遥测与监控接口\编码规范.md
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\_module.yaml
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\前端应用入口与全局配置\_module.yaml
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\前端应用入口与全局配置\技术栈.md
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\前端应用入口与全局配置\架构设计.md
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\前端应用入口与全局配置\概述.md
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\前端应用入口与全局配置\编码规范.md
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\技术栈.md
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\架构设计.md
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\概述.md
+    - .qoder\repowiki\knowledge\zh\管理后台前端应用\编码规范.md
+    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据解析服务\_module.yaml
+    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据解析服务\技术栈.md
+    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据解析服务\架构设计.md
+    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据解析服务\概述.md
+    - .qoder\repowiki\knowledge\zh\设备接入与遥测数据解析服务\编码规范.md
     - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\_module.yaml
     - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\技术栈.md
     - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\架构设计.md
     - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\概述.md
     - .qoder\repowiki\knowledge\zh\设备通信协议与系统架构规范\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\仪表盘与监控数据服务及国际化\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\仪表盘与监控数据服务及国际化\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\仪表盘与监控数据服务及国际化\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\仪表盘与监控数据服务及国际化\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\告警与规则管理\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\告警与规则管理\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\告警与规则管理\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\告警与规则管理\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\国际化配置管理\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\国际化配置管理\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\国际化配置管理\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\国际化配置管理\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\工单与OTA升级管理\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\工单与OTA升级管理\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\工单与OTA升级管理\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\工单与OTA升级管理\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\技术栈.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\管理后台设置与用户管理\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\管理后台设置与用户管理\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\管理后台设置与用户管理\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\管理后台设置与用户管理\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备与电站管理模块\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备与电站管理模块\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备与电站管理模块\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备与电站管理模块\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备型号与并机管理接口及国际化\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备型号与并机管理接口及国际化\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备型号与并机管理接口及国际化\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器物联网管理后台前端\设备型号与并机管理接口及国际化\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\OTA升级与版本管理\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\OTA升级与版本管理\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\OTA升级与版本管理\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\OTA升级与版本管理\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\技术栈.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\设备型号与协议配置管理\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\设备型号与协议配置管理\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\设备型号与协议配置管理\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\设备型号与协议配置管理\编码规范.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\_module.yaml
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\技术栈.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\架构设计.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\概述.md
-    - .qoder\repowiki\knowledge\zh\逆变器监控API服务\运维遥测与监控接口\编码规范.md
+    - .qoder\repowiki\knowledge\zh\部署编排与运维自动化\_module.yaml
+    - .qoder\repowiki\knowledge\zh\部署编排与运维自动化\技术栈.md
+    - .qoder\repowiki\knowledge\zh\部署编排与运维自动化\架构设计.md
+    - .qoder\repowiki\knowledge\zh\部署编排与运维自动化\概述.md
+    - .qoder\repowiki\knowledge\zh\部署编排与运维自动化\特殊配置与命令.md
+    - .qoder\repowiki\knowledge\zh\部署编排与运维自动化\编码规范.md
     - .qoder\repowiki\zh\content\API参考文档\API参考文档.md
     - .qoder\repowiki\zh\content\API参考文档\OTA升级API.md
     - .qoder\repowiki\zh\content\API参考文档\WebSocket实时通信API.md
@@ -232,6 +217,9 @@ scope:
     - .qoder\repowiki\zh\content\项目概述\项目概述.md
     - .qoder\repowiki\zh\meta\repowiki-metadata.json
     - .qoder\skills\auto-git-commit\SKILL.md
+    - .qoder\templates\new-api-endpoint.md
+    - .qoder\templates\new-device-model.md
+    - Makefile
     - README.md
     - api-gateway\.dockerignore
     - api-gateway\Dockerfile
@@ -448,6 +436,7 @@ scope:
     - inv_api_server\inv-api-server.exe
     - inv_api_server\inv_api_server.exe
     - inv_api_server\inv_device_server.exe
+    - inv_api_server\pkg\apperr\errors.go
     - inv_api_server\pkg\jwt\jwt.go
     - inv_api_server\pkg\logger\logger.go
     - inv_api_server\pkg\response\response.go

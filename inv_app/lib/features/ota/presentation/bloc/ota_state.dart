@@ -64,4 +64,33 @@ class OTAError extends OtaState {
   List<Object?> get props => [message];
 }
 
+class OTAFirmwareListLoading extends OtaState {}
+
+class OTAFirmwareListLoaded extends OtaState {
+  final List<dynamic> packages;
+
+  const OTAFirmwareListLoaded({required this.packages});
+
+  @override
+  List<Object?> get props => [packages];
+}
+
+class OTAFirmwareListError extends OtaState {
+  final String message;
+
+  const OTAFirmwareListError({required this.message});
+
+  @override
+  List<Object?> get props => [message];
+}
+
+class OTAFirmwareInstalling extends OtaState {
+  final int packageId;
+
+  const OTAFirmwareInstalling({required this.packageId});
+
+  @override
+  List<Object?> get props => [packageId];
+}
+
 

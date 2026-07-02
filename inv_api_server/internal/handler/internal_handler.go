@@ -31,6 +31,8 @@ type internalDeviceInfoRequest struct {
 	Manufacturer   string  `json:"manufacturer"`
 	FirmwareARM    string  `json:"firmware_arm"`
 	FirmwareESP    string  `json:"firmware_esp"`
+	FirmwareDSP    string  `json:"firmware_dsp"`
+	FirmwareBMS    string  `json:"firmware_bms"`
 	Type           string  `json:"type"`
 	RatedPower     int     `json:"rated_power"`
 	RatedVoltage   int     `json:"rated_voltage"`
@@ -262,16 +264,18 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 
 	_, err := h.db.Exec(ctx, `
 		INSERT INTO devices (
-			sn, model, manufacturer, firmware_arm, firmware_esp, device_type,
+			sn, model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
 			rated_power, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count,
 			user_id, status, last_online_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, 1, NOW(), NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, 1, NOW(), NOW(), NOW())
 		ON CONFLICT (sn) DO UPDATE SET
 			model = COALESCE(NULLIF(EXCLUDED.model, ''), devices.model),
 			manufacturer = COALESCE(NULLIF(EXCLUDED.manufacturer, ''), devices.manufacturer),
 			firmware_arm = COALESCE(NULLIF(EXCLUDED.firmware_arm, ''), devices.firmware_arm),
 			firmware_esp = COALESCE(NULLIF(EXCLUDED.firmware_esp, ''), devices.firmware_esp),
+			firmware_dsp = COALESCE(NULLIF(EXCLUDED.firmware_dsp, ''), devices.firmware_dsp),
+			firmware_bms = COALESCE(NULLIF(EXCLUDED.firmware_bms, ''), devices.firmware_bms),
 			device_type = COALESCE(NULLIF(EXCLUDED.device_type, ''), devices.device_type),
 			rated_power = CASE WHEN EXCLUDED.rated_power > 0 THEN EXCLUDED.rated_power ELSE devices.rated_power END,
 			rated_voltage = CASE WHEN EXCLUDED.rated_voltage > 0 THEN EXCLUDED.rated_voltage ELSE devices.rated_voltage END,
@@ -284,7 +288,7 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 			) THEN 2 ELSE 1 END,
 			last_online_at = NOW(),
 			updated_at = NOW()
-	`, req.SN, req.Model, req.Manufacturer, req.FirmwareARM, req.FirmwareESP, req.Type,
+	`, req.SN, req.Model, req.Manufacturer, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS, req.Type,
 		req.RatedPower, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount)
 	if err != nil {
 		logger.Error("InternalDeviceInfo failed", zap.String("sn", req.SN), zap.Error(err))
@@ -656,6 +660,10 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 				updateCol = "firmware_arm"
 			case "esp":
 				updateCol = "firmware_esp"
+			case "dsp":
+				updateCol = "firmware_dsp"
+			case "bms":
+				updateCol = "firmware_bms"
 			}
 			if updateCol != "" {
 				h.db.Exec(ctx, fmt.Sprintf(

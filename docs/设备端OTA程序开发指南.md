@@ -1121,3 +1121,75 @@ void process_debug_command(const char* cmd) {
 - `系统参数规范_48V离网逆变器.md` - 数据字段定义
 - ESP-IDF 官方文档: https://docs.espressif.com/projects/esp-idf/
 - GD32 固件库: https://www.gigadevice.com/
+
+---
+
+## 九、本地 HTTP 接口响应格式规范
+
+设备在 AP 模式下通过 HTTP 提供本地接口，供 App 直接访问查询 OTA 状态和设备信息。
+
+### /ota/progress 响应格式
+
+设备在处理 OTA 升级期间和完成后，通过此接口返回升级状态。
+
+**升级中响应**：
+```json
+{
+  "status": "uploading",
+  "progress": 45,
+  "message": "固件推送中"
+}
+```
+
+**升级完成响应**（status=done）：
+```json
+{
+  "status": "done",
+  "progress": 100,
+  "message": "Upgrade successful",
+  "version": "V3.0.2.20260701",
+  "target_chip": "esp",
+  "firmware_esp": "V3.0.2.20260701",
+  "firmware_arm": "V1.2.3.20240510",
+  "firmware_dsp": "V1.1.0.20240508",
+  "firmware_bms": "V2.0.1.20240415",
+  "main_version": "V3.0.2.20260701"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| status | string | 是 | 状态：uploading/verifying/done/error |
+| progress | int | 是 | 进度百分比 0-100 |
+| message | string | 否 | 状态描述信息 |
+| version | string | 建议 | 当前升级芯片的新版本号 |
+| target_chip | string | 建议 | 本次升级的目标芯片 |
+| firmware_esp | string | 建议 | ESP32 固件版本号 |
+| firmware_arm | string | 建议 | ARM 固件版本号 |
+| firmware_dsp | string | 可选 | DSP 固件版本号 |
+| firmware_bms | string | 可选 | BMS 固件版本号 |
+| main_version | string | 建议 | 设备主版本号（升级包版本） |
+
+### /ota/info 响应格式
+
+设备信息查询接口，返回设备基本信息和各芯片固件版本。
+
+```json
+{
+  "model": "CS-I10-6k2",
+  "sn": "CS1234567890123456",
+  "manufacturer": "CSKJ",
+  "firmware_esp": "V3.0.2.20260701",
+  "firmware_arm": "V1.2.3.20240510",
+  "firmware_dsp": "V1.1.0.20240508",
+  "firmware_bms": "V2.0.1.20240415",
+  "main_version": "V3.0.2.20260701",
+  "hardware_version": "V1.0",
+  "protocol_version": 2
+}
+```
+
+**重要说明**：
+- `main_version` 字段表示设备当前所属升级包的版本号（格式：`Va.b.c.YYYYMMDD`）
+- 每次升级完成后，ESP32 应将新的 `main_version` 持久化到 NVS
+- `firmware_dsp` 和 `firmware_bms` 字段如设备不支持可省略或返回空字符串

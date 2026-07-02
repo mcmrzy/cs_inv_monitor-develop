@@ -11,6 +11,7 @@
 - [inv_device_server/internal/mqtt/client.go](file://inv_device_server/internal/mqtt/client.go)
 - [inv_device_server/internal/service/protocol_parser.go](file://inv_device_server/internal/service/protocol_parser.go)
 - [inv_device_server/internal/model/device.go](file://inv_device_server/internal/model/device.go)
+- [inv_device_server/internal/service/data_service.go](file://inv_device_server/internal/service/data_service.go)
 - [inv-admin-frontend/src/pages/ota/index.tsx](file://inv-admin-frontend/src/pages/ota/index.tsx)
 - [inv-admin-frontend/src/pages/portal/DeviceMonitorPage.tsx](file://inv-admin-frontend/src/pages/portal/DeviceMonitorPage.tsx)
 - [tools/stress_test/main.go](file://tools/stress_test/main.go)
@@ -19,15 +20,20 @@
 - [database/migrations/009_upgrade_tasks.up.sql](file://database/migrations/009_upgrade_tasks.up.sql)
 - [inv-admin-frontend/src/services/otaApi.ts](file://inv-admin-frontend/src/services/otaApi.ts)
 - [inv_app/lib/features/ota/presentation/bloc/ota_bloc.dart](file://inv_app/lib/features/ota/presentation/bloc/ota_bloc.dart)
+- [inv_app/lib/features/ota/presentation/pages/local_ota_page.dart](file://inv_app/lib/features/ota/presentation/pages/local_ota_page.dart)
+- [inv_app/lib/features/ota/presentation/bloc/ota_state.dart](file://inv_app/lib/features/ota/presentation/bloc/ota_state.dart)
+- [inv_app/lib/features/ota/presentation/bloc/ota_event.dart](file://inv_app/lib/features/ota/presentation/bloc/ota_event.dart)
+- [inv_app/lib/features/ota/data/repositories/ota_repository_impl.dart](file://inv_app/lib/features/ota/data/repositories/ota_repository_impl.dart)
+- [inv_app/lib/features/ota/domain/repositories/ota_repository.dart](file://inv_app/lib/features/ota/domain/repositories/ota_repository.dart)
 </cite>
 
 ## 更新摘要
 **所做更改**
-- 更新了从任务级别跟踪转向设备级别跟踪的核心架构说明
-- 新增了设备升级记录表和升级任务表的数据模型说明
-- 更新了API接口以支持设备级别的进度跟踪
-- 修改了前端界面以反映设备级别的进度展示
-- 新增了设备升级状态管理和进度查询的实现细节
+- 新增了版本检测能力的详细说明，支持多种版本字段格式的解析
+- 更新了数据库事务处理的实现细节，包括升级包创建和应用版本管理的事务保证
+- 增强了设备状态上报的数据格式支持，改进了JSON字段解析的兼容性
+- 完善了版本比较和升级包主版本号生成的算法说明
+- 新增了设备版本信息查询和对比的实现细节
 
 ## 目录
 1. [简介](#简介)
@@ -44,7 +50,7 @@
 ## 简介
 本文档面向OTA进度跟踪系统，系统化阐述重构后的设备级别进度跟踪算法与逻辑（总体进度、设备级别进度、完成率）、进度数据的采集与聚合机制、实时性保障（WebSocket推送与轮询）、进度数据存储结构与查询优化、异常处理策略（设备离线、进度丢失等）、可视化展示与数据导出、性能监控与优化建议，以及相关API接口与使用示例。
 
-**更新** 系统已从传统的任务级别跟踪重构为设备级别跟踪，每个设备都有独立的升级状态和进度记录，提供更精确的升级监控能力。
+**更新** 系统已从传统的任务级别跟踪重构为设备级别跟踪，并增强了版本检测能力，支持多种版本字段格式的解析和兼容处理，改进了数据库事务处理机制，确保数据一致性和完整性。
 
 ## 项目结构
 系统采用前后端分离架构，主要模块包括：
@@ -99,19 +105,19 @@ Dev_Server --> Redis
 
 ## 核心组件
 - OTA处理器（API层）：负责OTA任务的创建、推送、重试、取消与仪表盘查询
-- OTA服务（业务层）：封装OTA命令构建、HTTP分发、并发控制与错误处理
-- OTA仓储（数据层）：负责OTA任务、设备升级记录与进度状态的持久化与查询
+- OTA服务（业务层）：封装OTA命令构建、HTTP分发、并发控制与错误处理，支持版本检测和升级包管理
+- OTA仓储（数据层）：负责OTA任务、设备升级记录与进度状态的持久化与查询，实现数据库事务处理
 - 设备服务（设备侧）：负责MQTT连接、OTA命令下发、状态变更处理与在线状态维护
-- 协议解析器（设备侧）：负责消息解包、payload解析与状态防抖
+- 协议解析器（设备侧）：负责消息解包、payload解析与状态防抖，支持多种版本字段格式
 - WebSocket处理器（后端）：负责实时推送与鉴权
 - 前端页面：负责进度展示、操作按钮与轮询刷新
 - 移动端APP：提供设备OTA状态查询和进度跟踪功能
 
-**更新** 新增了移动端APP的设备状态查询功能，支持直接查询单个设备的OTA升级状态。
+**更新** 新增了移动端APP的设备状态查询功能，支持直接查询单个设备的OTA升级状态，并增强了版本检测能力。
 
 **章节来源**
 - [inv_api_server/internal/handler/ota_handler.go](file://inv_api_server/internal/handler/ota_handler.go)
-- [inv_api_server/internal/service/ota_service.go:1-231](file://inv_api_server/internal/service/ota_service.go#L1-L231)
+- [inv_api_server/internal/service/ota_service.go:1-800](file://inv_api_server/internal/service/ota_service.go#L1-L800)
 - [inv_api_server/internal/repository/ota_repository.go](file://inv_api_server/internal/repository/ota_repository.go)
 - [inv_device_server/internal/mqtt/client.go:1-283](file://inv_device_server/internal/mqtt/client.go#L1-L283)
 - [inv_device_server/internal/service/protocol_parser.go:242-287](file://inv_device_server/internal/service/protocol_parser.go#L242-L287)
@@ -162,18 +168,17 @@ API-->>Mobile : "设备状态查询接口"
 
 ```mermaid
 flowchart TD
-Start(["开始"]) --> Load["加载任务详情<br/>total_devices, success_count, failed_count"]
+Start["开始"] --> Load["加载任务详情<br/>total_devices, success_count, failed_count"]
 Load --> CalcDone["done = success + failed"]
 CalcDone --> CheckTotal{"total > 0 ?"}
 CheckTotal --> |否| PctZero["pct = 0"]
 CheckTotal --> |是| PctCalc["pct = round(done/total*100)"]
 PctZero --> Render["渲染进度条"]
 PctCalc --> Render
-Render --> End(["结束"])
-flowchart TD
-DeviceStart(["设备状态"]) --> DeviceProgress["设备进度<br/>progress: 0-100"]
+Render --> End["结束"]
+DeviceStart["设备状态"] --> DeviceProgress["设备进度<br/>progress: 0-100"]
 DeviceProgress --> DeviceStatus["设备状态<br/>pending/notifying/notified/pushing/upgrading/completed/failed/cancelled"]
-DeviceStatus --> DeviceEnd(["设备完成"])
+DeviceStatus --> DeviceEnd["设备完成"]
 ```
 
 **图示来源**
@@ -349,6 +354,75 @@ K --> M["更新任务统计"]
 - [inv_device_server/internal/service/protocol_parser.go:242-287](file://inv_device_server/internal/service/protocol_parser.go#L242-L287)
 - [inv_api_server/internal/repository/repositories.go:1689-1694](file://inv_api_server/internal/repository/repositories.go#L1689-L1694)
 
+### 版本检测与兼容性处理
+**更新** 系统新增了增强的版本检测能力，支持多种版本字段格式的解析和兼容处理：
+
+- **版本字段格式支持**：支持Vx.y.z格式、Va.b.c.YYYYMMDD格式等多种版本号格式
+- **JSON字段解析**：通过getJSONInt和getJSONBool函数处理不同类型的JSON字段值
+- **版本比较算法**：实现版本号的智能比较和升级包主版本号生成
+- **设备版本查询**：支持查询设备当前各芯片版本并进行对比
+
+```mermaid
+flowchart TD
+Payload["设备上报版本信息"] --> Parse["JSON字段解析<br/>getJSONInt/getJSONBool"]
+Parse --> Format{"版本格式识别"}
+Format --> |Vx.y.z| Simple["简单版本格式"]
+Format --> |Va.b.c.YYYYMMDD| Complex["复杂版本格式"]
+Format --> |未知格式| Fallback["默认格式处理"]
+Simple --> Compare["版本比较"]
+Complex --> Extract["提取主版本号"]
+Fallback --> Compare
+Extract --> Generate["生成升级包主版本号"]
+Compare --> Result["返回比较结果"]
+Generate --> Result
+```
+
+**图示来源**
+- [inv_api_server/internal/repository/repositories.go:1990-2035](file://inv_api_server/internal/repository/repositories.go#L1990-L2035)
+- [inv_api_server/internal/service/ota_service.go:754-793](file://inv_api_server/internal/service/ota_service.go#L754-L793)
+
+**章节来源**
+- [inv_api_server/internal/repository/repositories.go:1990-2035](file://inv_api_server/internal/repository/repositories.go#L1990-L2035)
+- [inv_api_server/internal/service/ota_service.go:754-793](file://inv_api_server/internal/service/ota_service.go#L754-L793)
+
+### 数据库事务处理增强
+**更新** 系统改进了数据库事务处理机制，确保数据一致性和完整性：
+
+- **升级包创建事务**：使用BEGIN/COMMIT/ROLLBACK确保升级包及其子项的一致性
+- **应用版本管理事务**：支持应用版本的创建、回滚和恢复操作的事务保证
+- **批量操作事务**：支持批量UPSERT操作的事务处理
+- **错误回滚机制**：任何步骤失败都会自动回滚，保持数据一致性
+
+```mermaid
+sequenceDiagram
+participant Service as "OTA服务"
+participant Repo as "OTA仓储"
+participant Tx as "数据库事务"
+participant DB as "PostgreSQL"
+Service->>Repo : "CreateUpgradePackage"
+Repo->>Tx : "BEGIN"
+Tx->>DB : "插入upgrade_packages"
+DB-->>Tx : "成功"
+Tx->>DB : "插入upgrade_package_items"
+DB-->>Tx : "成功或失败"
+alt 成功
+Tx->>DB : "COMMIT"
+DB-->>Repo : "提交成功"
+else 失败
+Tx->>DB : "ROLLBACK"
+DB-->>Repo : "回滚"
+end
+Repo-->>Service : "返回结果"
+```
+
+**图示来源**
+- [inv_api_server/internal/repository/ota_repository.go:542-573](file://inv_api_server/internal/repository/ota_repository.go#L542-L573)
+- [inv_api_server/internal/service/ota_service.go:423-431](file://inv_api_server/internal/service/ota_service.go#L423-L431)
+
+**章节来源**
+- [inv_api_server/internal/repository/ota_repository.go:542-573](file://inv_api_server/internal/repository/ota_repository.go#L542-L573)
+- [inv_api_server/internal/service/ota_service.go:423-431](file://inv_api_server/internal/service/ota_service.go#L423-L431)
+
 ### 可视化展示与数据导出
 - 管理后台：展示任务进度条、重试/取消操作入口、设备列表详情
 - 门户页面：定时轮询实时数据，生成图表（如功率曲线）
@@ -413,7 +487,7 @@ MobileApp["移动端APP"] --> API
 ```
 
 **图示来源**
-- [inv_api_server/internal/service/ota_service.go:1-231](file://inv_api_server/internal/service/ota_service.go#L1-L231)
+- [inv_api_server/internal/service/ota_service.go:1-800](file://inv_api_server/internal/service/ota_service.go#L1-L800)
 - [inv_device_server/internal/mqtt/client.go:1-283](file://inv_device_server/internal/mqtt/client.go#L1-283)
 
 ## 性能考虑
@@ -447,7 +521,7 @@ MobileApp["移动端APP"] --> API
 ## 结论
 本系统通过清晰的职责划分与成熟的中间件选型，实现了从任务创建、命令分发、状态上报、数据聚合到实时展示的完整闭环。重构后的设备级别跟踪提供了更精确的升级监控能力，通过合理的并发控制、缓存与查询优化，以及完善的异常处理与可视化能力，能够满足大规模设备OTA进度跟踪的需求。
 
-**更新** 系统重构为设备级别跟踪后，提供了更细粒度的升级监控和控制能力，支持对单个设备的精确管理。
+**更新** 系统重构为设备级别跟踪后，提供了更细粒度的升级监控和控制能力，支持对单个设备的精确管理。同时增强了版本检测能力和数据库事务处理，确保了系统的稳定性和数据一致性。
 
 ## 附录
 - MQTT主题规范与命令格式详见项目说明

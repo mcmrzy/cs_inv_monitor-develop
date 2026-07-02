@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -27,6 +28,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   String? _error;
   String? _modelName;
   StreamSubscription? _statusSub;
+  StreamSubscription? _realtimeSub;
+  bool _hasMqttData = false;
 
   // 分组定义（颜色和图标）
   static const _groupStyles = {
@@ -65,8 +68,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   @override
   void initState() {
     super.initState();
-    _fetchDeviceDetail();
+    _subscribeMqttData();
     _listenOnlineStatus();
+    _fetchDeviceDetail();
   }
 
   void _listenOnlineStatus() {
@@ -89,13 +93,19 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   @override
   void dispose() {
     _statusSub?.cancel();
+    _realtimeSub?.cancel();
+    try {
+      getIt<MQTTService>().unsubscribeDeviceTopics(widget.sn);
+    } catch (_) {}
     super.dispose();
   }
 
   Future<void> _fetchDeviceDetail() async {
     try {
       final dio = getIt<Dio>();
-      final res = await dio.get('/devices/${widget.sn}');
+      final res = await dio
+          .get('/devices/${widget.sn}')
+          .timeout(const Duration(seconds: 5));
       if (res.statusCode == 200 && mounted) {
         final data = res.data['data'] as Map<String, dynamic>? ?? {};
 
@@ -130,25 +140,293 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         final fieldsRaw = data['model_fields'] as List<dynamic>? ?? [];
         final fields = fieldsRaw
             .map((e) => DeviceModelField.fromJson(e as Map<String, dynamic>))
-            .where((f) => f.isShow) // 只显示 is_show=true 的字段
+            .where((f) => f.isShow)
             .toList();
 
         setState(() {
-          _realtimeData = flatData;
-          _modelFields = fields;
+          // 仅当 MQTT 尚未填充数据时才使用 API 数据（避免覆盖实时数据）
+          if (!_hasMqttData) {
+            _realtimeData = flatData;
+          }
+          // 始终使用 API 返回的字段配置（比默认更完整）
+          if (fields.isNotEmpty) {
+            _modelFields = fields;
+          }
           _online = data['online_status']?['online'] == true || data['device']?['status'] == 1;
           _modelName = data['device']?['model'] as String?;
           _loading = false;
+          _error = null;
         });
       }
     } catch (e) {
       if (mounted) {
+        // API 调用失败（网络不可用等）：使用 MQTT 数据 + 默认字段配置降级显示
         setState(() {
-          _error = AppLocalizations.of(context)!.failedToLoad;
+          // 仅在 MQTT 也没有数据时才构建默认字段
+          if (_modelFields.isEmpty) {
+            _modelFields = _buildDefaultModelFields();
+          }
           _loading = false;
+          // 不设置 _error，让页面以 MQTT 实时数据模式展示
+          _error = null;
         });
       }
     }
+  }
+
+  /// 订阅 MQTT 实时数据流，本地直连场景下替代云端 API 获取实时数据
+  void _subscribeMqttData() {
+    try {
+      final mqtt = getIt<MQTTService>();
+      mqtt.subscribeDeviceTopics(widget.sn);
+      _realtimeSub = mqtt.realtimeDataStream
+          .where((rt) => rt.deviceSN == widget.sn)
+          .listen((rt) {
+        if (mounted) {
+          setState(() {
+            _realtimeData = _inverterToFlatMap(rt);
+            _hasMqttData = true;
+            if (rt.onlineStatus != null) {
+              _online = rt.onlineStatus!.online;
+            }
+            if (rt.deviceInfo?.model != null && rt.deviceInfo!.model.isNotEmpty) {
+              _modelName = rt.deviceInfo!.model;
+            }
+            // API 未成功获取字段配置时，使用默认配置
+            if (_modelFields.isEmpty) {
+              _modelFields = _buildDefaultModelFields();
+            }
+            // 首次收到 MQTT 数据时取消 loading 状态
+            if (_loading) {
+              _loading = false;
+              _error = null;
+            }
+          });
+        }
+      });
+    } catch (_) {
+      // MQTT 服务不可用时忽略
+    }
+  }
+
+  /// 将 InverterRealtime 转为与云端 API 一致的扁平 Map，
+  /// key 与 _fieldNameMap 中的键保持一致
+  Map<String, dynamic> _inverterToFlatMap(InverterRealtime rt) {
+    final map = <String, dynamic>{};
+    // AC
+    if (rt.ac != null) {
+      map['ac_voltage'] = rt.ac!.voltage;
+      map['ac_current'] = rt.ac!.current;
+      map['ac_power'] = rt.ac!.power;
+      map['ac_frequency'] = rt.ac!.frequency;
+      map['ac_load_percent'] = rt.ac!.loadPercent;
+      map['ac_pf'] = rt.ac!.pf;
+    }
+    // Battery
+    if (rt.battery != null) {
+      map['batt_soc'] = rt.battery!.soc;
+      map['batt_soh'] = rt.battery!.soh;
+      map['batt_voltage'] = rt.battery!.voltage;
+      map['batt_current'] = rt.battery!.current;
+      map['batt_charge_state'] = rt.battery!.chargeState;
+    }
+    // PV
+    if (rt.pv != null) {
+      map['pv_voltage'] = rt.pv!.pvVoltage;
+      map['pv_current'] = rt.pv!.pvCurrent;
+      map['pv_power'] = rt.pv!.pvPower;
+      map['mppt_state'] = rt.pv!.mpptState;
+    }
+    // System Status
+    if (rt.sysStatus != null) {
+      map['state'] = rt.sysStatus!.state;
+      map['fault_code'] = rt.sysStatus!.faultCode;
+      map['alarm_code'] = rt.sysStatus!.alarmCode;
+      map['temp_inv'] = rt.sysStatus!.tempInv;
+      map['temp_mos'] = rt.sysStatus!.tempMos;
+      map['efficiency'] = rt.sysStatus!.efficiency;
+    }
+    // Energy
+    if (rt.energy != null) {
+      map['daily_pv'] = rt.energy!.dailyPV;
+      map['total_pv'] = rt.energy!.totalPV;
+      map['runtime_hours'] = rt.energy!.runtimeHours;
+      map['daily_feed_energy'] = rt.energy!.dailyFeedEnergy;
+      map['total_feed_energy'] = rt.energy!.totalFeedEnergy;
+      map['daily_grid_import'] = rt.energy!.dailyGridImport;
+      map['total_grid_import'] = rt.energy!.totalGridImport;
+    }
+    // Cells
+    if (rt.cells != null && rt.cells!.voltages.isNotEmpty) {
+      map['cell_count'] = rt.cells!.cellCount;
+    }
+    // Device Info
+    if (rt.deviceInfo != null) {
+      map['model'] = rt.deviceInfo!.model;
+    }
+    if (rt.loadPower != 0) {
+      map['load_power'] = rt.loadPower;
+    }
+    return map;
+  }
+
+  /// 构建默认字段配置（API 不可用时的兜底），
+  /// 仅包含 _fieldNameMap 中有对应数据且值非零的字段
+  List<DeviceModelField> _buildDefaultModelFields() {
+    final fields = <DeviceModelField>[];
+    int sortIdx = 0;
+    _fieldNameMap.forEach((key, _) {
+      // 只展示当前有数据且非零值的字段
+      final value = _realtimeData[key];
+      if (value != null && value != 0 && value != '' && value != 0.0) {
+        final idx = sortIdx++;
+        final fType = value is int ? 'int' : (value is num ? 'float' : 'string');
+        fields.add(
+          DeviceModelField(
+            id: idx,
+            modelId: 0,
+            fieldKey: key,
+            fieldName: '',
+            fieldType: fType,
+            sort: idx,
+          ),
+        );
+      }
+    });
+    return fields;
+  }
+
+  // field_key → 中文名称映射（后端 field_name 缺失时的兜底）
+  // 与 admin 前端 DEFAULT_FIELD_LABELS 保持一致（不含单位，单位由 field.unit 单独显示）
+  static const _fieldNameMap = {
+    // 交流参数
+    'ac_voltage': '输出电压',
+    'ac_current': '输出电流',
+    'ac_power': '有功功率',
+    'ac_frequency': '输出频率',
+    'power_factor': '功率因数',
+    'apparent_power': '视在功率',
+    'load_rate': '负载率',
+    'voltage_thd': '电压THD',
+    'ac_load_percent': '负载率',
+    'ac_pf': '功率因数',
+    'load_power': '负载功率',
+    // 电池参数
+    'battery_soc': '电池SOC',
+    'battery_voltage': '电池电压',
+    'battery_current': '电池电流',
+    'battery_capacity': '电池容量',
+    'battery_health': '电池健康度',
+    'charge_discharge_power': '充放电功率',
+    'remaining_capacity': '剩余容量',
+    'rated_capacity': '额定容量',
+    'cycle_count': '循环次数',
+    'cell_max_temp': '电芯最高温度',
+    'cell_min_temp': '电芯最低温度',
+    'cell_max_voltage': '单体最高电压',
+    'cell_min_voltage': '单体最低电压',
+    'cell_voltage_diff': '电芯压差',
+    'charge_status': '充放电状态',
+    'battery_avg_temp': '电池平均温度',
+    'bms_fault_code': 'BMS故障码',
+    'protect_status': '保护状态',
+    'max_chg_current': '最大充电电流',
+    'max_dischg_current': '最大放电电流',
+    'charge_volt_ref': '充电参考电压',
+    'dischg_cut_volt': '放电截止电压',
+    'batt_soc': '电池SOC',
+    'batt_soh': '电池SOH',
+    'batt_voltage': '电池电压',
+    'batt_current': '电池电流',
+    'batt_charge_state': '充放电状态',
+    // 光伏参数
+    'pv1_voltage': 'PV1电压',
+    'pv2_voltage': 'PV2电压',
+    'pv1_current': 'PV1电流',
+    'pv2_current': 'PV2电流',
+    'pv1_power': 'PV1功率',
+    'pv2_power': 'PV2功率',
+    'pv_total_power': 'PV总功率',
+    'mppt_status': 'MPPT状态',
+    'mppt_state': 'MPPT状态',
+    'pv1_voltage_max': 'PV1历史最高电压',
+    'pv1_power_max': 'PV1历史最高功率',
+    'pv2_voltage_max': 'PV2历史最高电压',
+    'pv2_power_max': 'PV2历史最高功率',
+    'pv_voltage': '光伏电压',
+    'pv_current': '光伏电流',
+    'pv_power': '光伏功率',
+    // 系统状态
+    'run_status': '运行状态',
+    'state': '工作状态',
+    'fault_code': '故障码',
+    'alarm_code': '告警码',
+    'inverter_temp': '逆变器温度',
+    'heatsink_temp': '散热器温度',
+    'ambient_temp': '环境温度',
+    'dc_bus_voltage': '直流母线电压',
+    'vbus1': '母线电压1',
+    'vbus2': '母线电压2',
+    'efficiency': '转换效率',
+    'total_run_time': '累计运行时长',
+    'fan_speed': '风扇转速',
+    'temp_inv': '逆变器温度',
+    'temp_mos': 'MOS温度',
+    'internal_temperature': '内部温度',
+    'bus_voltage': '母线电压',
+    'work_state_1': '工作状态',
+    'work_state_1_code': '状态码',
+    'output_type': '输出类型',
+    'nominal_active_power': '额定有功功率',
+    // 能量统计
+    'energy': '当日发电量',
+    'total_energy': '累计发电量',
+    'daily_charge': '当日充电量',
+    'total_charge': '累计充电量',
+    'discharge': '当日放电量',
+    'total_discharge': '累计放电量',
+    'daily_consumption': '当日用电量',
+    'total_consumption': '累计用电量',
+    'run_time': '运行时间',
+    'daily_pv': '日发电量',
+    'total_pv': '累计发电量',
+    'runtime_hours': '运行时长',
+    'daily_feed_energy': '日馈网电量',
+    'total_feed_energy': '累计馈网电量',
+    'daily_grid_import': '日购电量',
+    'total_grid_import': '累计购电量',
+    'daily_power_yields': '日发电量',
+    'total_power_yields': '累计发电量',
+    'grid_frequency': '电网频率',
+    // 电表参数
+    'meter_total_power': '电表总功率',
+    'meter_phase_a_power': 'A相功率',
+    'meter_phase_b_power': 'B相功率',
+    'meter_phase_c_power': 'C相功率',
+    // 控制参数
+    'power_limit': '功率上限',
+    'charge_enable': '充电使能',
+    'discharge_enable': '放电使能',
+    'grid_charge_enable': '电网充电使能',
+    'max_charge_current': '最大充电电流',
+    'max_discharge_current': '最大放电电流',
+    // 设备信息
+    'serial_number': '序列号',
+    'total_active_power': '总有功功率',
+  };
+
+  /// 字段显示名称：优先使用 fieldName，若为空或与 fieldKey 相同则查中文映射
+  String _displayName(DeviceModelField field) {
+    if (field.fieldName.isNotEmpty && field.fieldName != field.fieldKey) {
+      return field.fieldName;
+    }
+    // 查静态中文映射
+    final mapped = _fieldNameMap[field.fieldKey];
+    if (mapped != null) return mapped;
+    // 最终兜底：格式化 field_key 为可读文本
+    final key = field.fieldKey;
+    if (key.isEmpty) return '--';
+    return key[0].toUpperCase() + key.substring(1).replaceAll('_', ' ');
   }
 
   /// 根据 field_key 前缀推断分组名（当数据库 group_name 为空时使用）
@@ -390,7 +668,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(field.fieldName, style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
+          Text(_displayName(field), style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [

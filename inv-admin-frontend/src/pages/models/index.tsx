@@ -74,11 +74,17 @@ const ModelsPage: React.FC = () => {
   }
 
   const getGroupConfig = (groupName: string) => {
-    const key = GROUP_NAME_MAP[groupName]
+    const key = GROUP_CONFIG_KEYS.includes(groupName) ? groupName : GROUP_NAME_MAP[groupName]
     return {
       color: (key ? GROUP_COLOR_MAP[key] : null) || '#999',
       icon: (key ? GROUP_ICON_MAP[key] : null) || '\ud83d\udcc1',
     }
+  }
+
+  // 将 group_name 转为显示文本（英文key翻译，中文文本原样显示）
+  const getGroupDisplayName = (groupName: string) => {
+    if (GROUP_CONFIG_KEYS.includes(groupName)) return t(groupName)
+    return groupName
   }
 
   const FIELD_TYPE_OPTIONS = [
@@ -231,14 +237,24 @@ const ModelsPage: React.FC = () => {
   const handleCreateField = (groupName?: string) => {
     setEditingField(null)
     fieldForm.resetFields()
-    fieldForm.setFieldsValue({ field_type: 'float', sort: 0, is_show: true, is_control: false, group_name: groupName || '' })
+    // 兼容旧数据：将中文 group_name 转换为英文 key
+    let resolvedGroup = groupName || ''
+    if (resolvedGroup && !GROUP_CONFIG_KEYS.includes(resolvedGroup) && GROUP_NAME_MAP[resolvedGroup]) {
+      resolvedGroup = GROUP_NAME_MAP[resolvedGroup]
+    }
+    fieldForm.setFieldsValue({ field_type: 'float', sort: 0, is_show: true, is_control: false, group_name: resolvedGroup })
     setIsControl(false)
     setFieldModalOpen(true)
   }
 
   const handleEditField = (record: DeviceModelFieldItem) => {
     setEditingField(record)
-    fieldForm.setFieldsValue(record)
+    const values = { ...record }
+    // 兼容旧数据：将中文 group_name 转换为英文 key
+    if (values.group_name && !GROUP_CONFIG_KEYS.includes(values.group_name) && GROUP_NAME_MAP[values.group_name]) {
+      values.group_name = GROUP_NAME_MAP[values.group_name]
+    }
+    fieldForm.setFieldsValue(values)
     setIsControl(record.is_control)
     setFieldModalOpen(true)
   }
@@ -347,7 +363,7 @@ const ModelsPage: React.FC = () => {
                 label: (
                   <Space>
                     <span>{getGroupConfig(groupName).icon}</span>
-                    <Text strong>{groupName}</Text>
+                    <Text strong>{getGroupDisplayName(groupName)}</Text>
                     <Badge count={groupedFields[groupName].length} style={{ backgroundColor: getGroupConfig(groupName).color }} />
                   </Space>
                 ),
@@ -403,7 +419,7 @@ const ModelsPage: React.FC = () => {
                 label: (
                   <Space>
                     <span>{getGroupConfig(groupName).icon}</span>
-                    <Text strong>{groupName}</Text>
+                    <Text strong>{getGroupDisplayName(groupName)}</Text>
                     <Badge count={groupedFields[groupName].length} style={{ backgroundColor: '#ef4444' }} />
                   </Space>
                 ),
@@ -575,7 +591,7 @@ const ModelsPage: React.FC = () => {
               showSearch
               allowClear
               placeholder={t('models.selectOrInputGroup')}
-              options={GROUP_CONFIG_KEYS.map(key => ({ label: `${GROUP_ICON_MAP[key] || ''} ${t(key)}`, value: t(key) }))}
+              options={GROUP_CONFIG_KEYS.map(key => ({ label: `${GROUP_ICON_MAP[key] || ''} ${t(key)}`, value: key }))}
               dropdownRender={(menu) => menu}
             />
           </Form.Item>

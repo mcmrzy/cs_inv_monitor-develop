@@ -25,6 +25,7 @@ func NewReverseProxy(target string) *ReverseProxy {
 	}
 
 	proxy := &httputil.ReverseProxy{
+		FlushInterval: -1, // 立即刷新，SSE 流式数据不缓冲
 		Director: func(req *http.Request) {
 			req.URL.Scheme = targetURL.Scheme
 			req.URL.Host = targetURL.Host

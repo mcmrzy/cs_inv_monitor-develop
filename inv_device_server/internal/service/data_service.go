@@ -243,6 +243,8 @@ func (s *DataService) notifyAPIServerInfo(info *model.DeviceInfo) {
 		"model":        info.Model,
 		"firmware_arm": info.FirmwareARM,
 		"firmware_esp": info.FirmwareESP,
+		"firmware_dsp": info.FirmwareDSP,
+		"firmware_bms": info.FirmwareBMS,
 		"rated_power":  info.RatedPower,
 	}
 	body, err := json.Marshal(bodyData)
