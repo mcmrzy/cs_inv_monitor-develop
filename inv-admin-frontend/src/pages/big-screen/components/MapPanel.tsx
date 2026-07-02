@@ -87,7 +87,7 @@ const MapPanel: React.FC<MapPanelProps> = ({
           attributionControl={false}
         >
           <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-          {stations.map((s) => (
+          {stations.filter(s => s.latitude !== 0 && s.longitude !== 0).map((s) => (
             <Marker
               key={s.id}
               position={[s.latitude, s.longitude]}

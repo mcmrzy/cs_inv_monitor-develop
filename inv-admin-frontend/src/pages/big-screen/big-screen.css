@@ -120,6 +120,13 @@
   pointer-events: none;
 }
 
+.bs-header-icon {
+  font-size: 22px;
+  color: var(--bs-primary);
+  filter: drop-shadow(0 0 8px var(--bs-primary-glow));
+  margin-right: 8px;
+}
+
 .bs-header-title {
   font-size: 24px;
   font-weight: 700;
@@ -983,6 +990,36 @@
   color: var(--bs-text);
   font-size: 14px;
   margin-right: 4px;
+}
+
+/* ==========================================================
+   21. 地图 Marker 标记
+   ========================================================== */
+.bs-map-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bs-success);
+  border: 2px solid rgba(0, 255, 136, 0.6);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.5), 0 0 20px rgba(0, 255, 136, 0.2);
+}
+
+.bs-map-marker-offline {
+  background: var(--bs-text-muted);
+  border-color: rgba(74, 106, 138, 0.6);
+  box-shadow: 0 0 6px rgba(74, 106, 138, 0.3);
+}
+
+.bs-map-marker-fault {
+  background: var(--bs-danger);
+  border-color: rgba(255, 71, 87, 0.6);
+  box-shadow: 0 0 8px rgba(255, 71, 87, 0.5), 0 0 20px rgba(255, 71, 87, 0.2);
+  animation: bs-marker-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes bs-marker-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 71, 87, 0.5); }
+  50% { box-shadow: 0 0 16px rgba(255, 71, 87, 0.8), 0 0 30px rgba(255, 71, 87, 0.3); }
 }
 
 .bs-map-panel {
