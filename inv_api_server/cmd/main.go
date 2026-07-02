@@ -477,7 +477,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		c.JSON(http.StatusOK, status)
 	})
 
-	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService)
+	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, nil, nil)
 
 	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth())
 	{
