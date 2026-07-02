@@ -482,6 +482,12 @@ func (r *StationRepository) Create(ctx context.Context, station *model.Station) 
 }
 
 func (r *StationRepository) Update(ctx context.Context, station *model.Station) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
 	query := `
 		UPDATE stations SET name = $1, province = $2, city = $3, district = $4, address = $5,
 							 capacity = $6, panel_count = $7,
@@ -490,13 +496,23 @@ func (r *StationRepository) Update(ctx context.Context, station *model.Station) 
 		WHERE id = $13
 	`
 
-	_, err := r.db.Exec(ctx, query,
+	_, err = tx.Exec(ctx, query,
 		station.Name, station.Province, station.City, station.District, station.Address,
 		station.Capacity, station.PanelCount,
 		station.PeakPrice, station.ValleyPrice,
 		station.Latitude, station.Longitude, station.Timezone, station.ID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// 级联更新该电站下所有设备的 timezone
+	_, err = tx.Exec(ctx, `UPDATE devices SET timezone = $1 WHERE station_id = $2 AND deleted_at IS NULL`, station.Timezone, station.ID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *StationRepository) Delete(ctx context.Context, id int64) error {
@@ -853,7 +869,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 			   COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
-			   d.station_id, d.user_id, d.status,
+			   d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
 			   d.last_online_at, d.created_at, d.updated_at
 		FROM devices d
@@ -872,7 +888,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 		&device.DeviceType,
 		&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
 		&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
-		&stationID, &device.UserID, &device.Status,
+		&stationID, &device.UserID, &device.Status, &device.Timezone,
 		&device.CurrentPower, &device.DailyEnergy,
 		&lastOnlineAt,
 		&device.CreatedAt, &device.UpdatedAt,
@@ -902,7 +918,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 		COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
-		d.station_id, d.user_id, d.status,
+		d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 		COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
 		d.last_online_at, d.created_at, d.updated_at`
 
@@ -964,7 +980,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 			&device.DeviceType,
 			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
 			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
-			&stationID, &device.UserID, &device.Status,
+			&stationID, &device.UserID, &device.Status, &device.Timezone,
 			&device.CurrentPower, &device.DailyEnergy,
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
@@ -990,7 +1006,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 		COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 		COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
-		d.station_id, d.user_id, d.status,
+		d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 		COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
 		d.last_online_at, d.created_at, d.updated_at`
 
@@ -1050,7 +1066,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 			&device.DeviceType,
 			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
 			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
-			&stationID, &device.UserID, &device.Status,
+			&stationID, &device.UserID, &device.Status, &device.Timezone,
 			&device.CurrentPower, &device.DailyEnergy,
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
@@ -1075,7 +1091,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 			   COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
-			   d.station_id, d.user_id, d.status,
+			   d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
 			   d.last_online_at, d.created_at, d.updated_at
 		FROM devices d
@@ -1101,7 +1117,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 			&device.DeviceType,
 			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
 			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
-			&stationID, &device.UserID, &device.Status,
+			&stationID, &device.UserID, &device.Status, &device.Timezone,
 			&device.CurrentPower, &device.DailyEnergy,
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
@@ -1590,7 +1606,7 @@ func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
 }
 
 func (r *DeviceRepository) Bind(ctx context.Context, sn string, userID, stationID int64) error {
-	query := `UPDATE devices SET user_id = $1, station_id = $2, updated_at = NOW() WHERE sn = $3 AND user_id = 0`
+	query := `UPDATE devices SET user_id = $1, station_id = $2, timezone = COALESCE((SELECT timezone FROM stations WHERE id = $2), 'Asia/Shanghai'), updated_at = NOW() WHERE sn = $3 AND user_id = 0`
 	tag, err := r.db.Exec(ctx, query, userID, stationID, sn)
 	if err != nil {
 		return err
@@ -1607,7 +1623,7 @@ func (r *DeviceRepository) Unbind(ctx context.Context, sn string) error {
 	var stationID int64
 	_ = r.db.QueryRow(ctx, `SELECT COALESCE(station_id, 0) FROM devices WHERE sn = $1`, sn).Scan(&stationID)
 
-	query := `UPDATE devices SET user_id = 0, station_id = NULL, updated_at = NOW() WHERE sn = $1`
+	query := `UPDATE devices SET user_id = 0, station_id = NULL, timezone = 'Asia/Shanghai', updated_at = NOW() WHERE sn = $1`
 	_, err := r.db.Exec(ctx, query, sn)
 	if err == nil {
 		r.invalidateDeviceCache(ctx, sn)
@@ -1620,7 +1636,7 @@ func (r *DeviceRepository) Unbind(ctx context.Context, sn string) error {
 }
 
 func (r *DeviceRepository) AddToStation(ctx context.Context, sn string, stationID int64) error {
-	query := `UPDATE devices SET station_id = $1, updated_at = NOW() WHERE sn = $2`
+	query := `UPDATE devices SET station_id = $1, timezone = COALESCE((SELECT timezone FROM stations WHERE id = $1), 'Asia/Shanghai'), updated_at = NOW() WHERE sn = $2`
 	_, err := r.db.Exec(ctx, query, stationID, sn)
 	if err == nil {
 		r.invalidateDeviceCache(ctx, sn)
