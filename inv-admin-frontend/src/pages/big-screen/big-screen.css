@@ -162,6 +162,30 @@
   z-index: 1;
 }
 
+/* 确保三栏内的面板填满可用高度 */
+.bs-left,
+.bs-right {
+  flex: 1;
+  min-height: 0;
+}
+
+.bs-left > .bs-panel,
+.bs-right > .bs-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.bs-center > .bs-panel {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.bs-center > .bs-panel > .bs-map-container {
+  flex: 1;
+  min-height: 0;
+}
+
 .bs-right {
   grid-row: 2;
   grid-column: 3;
@@ -886,7 +910,119 @@
 }
 
 /* ==========================================================
-   18. 滚动条隐藏 & 美化
+   18. 组件缺失样式补充
+   ========================================================== */
+
+/* KPI 卡片网格 */
+.bs-kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.bs-kpi-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+/* 设备状态区域 */
+.bs-device-status {
+  margin-top: 8px;
+}
+
+.bs-status-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--bs-text-secondary);
+  margin-top: 6px;
+}
+
+.bs-status-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 兼容 KPIPanel 中使用的 bs-status-online/offline/fault 类名 */
+.bs-status-online {
+  background: linear-gradient(90deg, var(--bs-success), #00cc6a);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+  transition: width 0.6s ease;
+  height: 100%;
+}
+
+.bs-status-offline {
+  background: var(--bs-text-muted);
+  transition: width 0.6s ease;
+  height: 100%;
+}
+
+.bs-status-fault {
+  background: linear-gradient(90deg, var(--bs-danger), #ff6b7a);
+  box-shadow: 0 0 8px rgba(255, 71, 87, 0.3);
+  transition: width 0.6s ease;
+  height: 100%;
+}
+
+/* 地图面板统计条 */
+.bs-map-stats {
+  display: flex;
+  gap: 16px;
+  padding: 4px 0 8px;
+  flex-shrink: 0;
+}
+
+.bs-map-stat {
+  font-size: 12px;
+  color: var(--bs-text-secondary);
+}
+
+.bs-map-stat strong {
+  color: var(--bs-text);
+  font-size: 14px;
+  margin-right: 4px;
+}
+
+.bs-map-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 告警列表布局 */
+.bs-alert-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.bs-alert-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-alert-msg {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bs-alert-time {
+  font-size: 10px;
+  color: var(--bs-text-muted);
+  margin-top: 2px;
+}
+
+.bs-alert-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  color: var(--bs-primary);
+}
+
+/* ==========================================================
+   19. 滚动条隐藏 & 美化
    ========================================================== */
 .bs-container ::-webkit-scrollbar {
   width: 4px;
