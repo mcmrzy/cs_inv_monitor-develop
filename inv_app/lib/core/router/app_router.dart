@@ -512,7 +512,8 @@ class _MainShellState extends State<MainShell> {
           return FadeTransition(opacity: animation, child: child);
         },
         layoutBuilder: (currentChild, previousChildren) {
-          // 仅显示当前子组件，避免新旧页面同时存在导致 GlobalKey 冲突
+          // 完全丢弃 previousChildren，避免新旧页面同时存在于 widget 树导致 GlobalKey 冲突
+          // 注意：不能通过 allChildren 列表包含 previousChildren，否则它们仍会被构建
           return currentChild ?? const SizedBox.shrink();
         },
         child: KeyedSubtree(
