@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -420,7 +421,199 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 		WHERE devices.sn = $1 AND dm.model_code = $2 AND devices.model_id IS NULL
 	`, req.SN, req.Model)
 
+	// OTA 升级状态校验：设备上报新固件版本后，检查是否有进行中的升级
+	h.reconcileOTAStatus(ctx, req.SN, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS)
+
 	response.Success(c, gin.H{"status": "ok"})
+}
+
+// reconcileOTAStatus 设备上线时自动校验 OTA 升级状态（best-effort，不阻塞正常响应）
+func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwARM, fwESP, fwDSP, fwBMS string) {
+	// 先读取 devices 表中更新前的旧版本，用于判断版本是否发生变化
+	var oldARM, oldESP, oldDSP, oldBMS string
+	err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(firmware_arm,''), COALESCE(firmware_esp,''), COALESCE(firmware_dsp,''), COALESCE(firmware_bms,'')
+		FROM devices WHERE sn = $1`, sn,
+	).Scan(&oldARM, &oldESP, &oldDSP, &oldBMS)
+	if err != nil {
+		logger.Warn("reconcileOTAStatus: failed to query old firmware versions",
+			zap.String("sn", sn), zap.Error(err))
+		return
+	}
+
+	// 查询该设备所有 status='upgrading' 的升级记录
+	rows, err := h.db.Query(ctx, `
+		SELECT du.id, du.target_chip, COALESCE(fw.version, ''), du.started_at, COALESCE(du.upgrade_package_id, 0)
+		FROM device_upgrades du
+		LEFT JOIN firmware_versions fw ON du.firmware_id = fw.id
+		WHERE du.device_sn = $1 AND du.status = 'upgrading'
+	`, sn)
+	if err != nil {
+		logger.Warn("reconcileOTAStatus: query upgrading records failed",
+			zap.String("sn", sn), zap.Error(err))
+		return
+	}
+	defer rows.Close()
+
+	type upgradeRecord struct {
+		id          int64
+		targetChip  string
+		version     string
+		startedAt   time.Time
+		packageID   int64
+	}
+
+	var records []upgradeRecord
+	for rows.Next() {
+		var r upgradeRecord
+		if err := rows.Scan(&r.id, &r.targetChip, &r.version, &r.startedAt, &r.packageID); err != nil {
+			continue
+		}
+		records = append(records, r)
+	}
+
+	if len(records) == 0 {
+		return
+	}
+
+	for _, rec := range records {
+		reported := chipVersion(rec.targetChip, fwARM, fwESP, fwDSP, fwBMS)
+		oldVersion := chipVersion(rec.targetChip, oldARM, oldESP, oldDSP, oldBMS)
+
+		var result string // "success", "failed", or "" (uncertain)
+
+		if reported != "" && rec.version != "" && matchFirmwareVersion(reported, rec.version) {
+			result = "success"
+		} else if reported != "" && oldVersion != "" && reported != oldVersion {
+			// 版本发生变化但无法精确匹配目标版本 → 大概率升级成功
+			result = "success"
+		} else if (reported == oldVersion || reported == "") && time.Since(rec.startedAt) > 5*time.Minute {
+			// 版本未变化且已超过 5 分钟 → 升级可能失败
+			result = "failed"
+		}
+
+		switch result {
+		case "success":
+			_, err := h.db.Exec(ctx, `
+				UPDATE device_upgrades SET
+					status = 'success', progress = 100, completed_at = NOW(), updated_at = NOW()
+				WHERE id = $1 AND status = 'upgrading'
+			`, rec.id)
+			if err != nil {
+				logger.Warn("reconcileOTAStatus: update to success failed",
+					zap.String("sn", sn), zap.Int64("id", rec.id), zap.Error(err))
+				continue
+			}
+			logger.Info("reconcileOTAStatus: upgrade marked as success",
+				zap.String("sn", sn), zap.String("chip", rec.targetChip),
+				zap.String("reported", reported), zap.String("target", rec.version))
+
+			// 更新设备对应芯片的固件版本
+			h.updateDeviceFirmwareVersion(ctx, sn, rec.targetChip, reported)
+
+			// 升级包模式：触发下一个芯片的级联升级
+			if h.otaService != nil && rec.packageID > 0 {
+				go func(pkgID int64) {
+					bgCtx := context.Background()
+					h.otaService.OnChipUpgradeComplete(bgCtx, sn, pkgID)
+				}(rec.packageID)
+			}
+
+		case "failed":
+			_, err := h.db.Exec(ctx, `
+				UPDATE device_upgrades SET
+					status = 'failed', error_message = $2, updated_at = NOW()
+				WHERE id = $1 AND status = 'upgrading'
+			`, rec.id, "固件版本未更新，升级可能失败")
+			if err != nil {
+				logger.Warn("reconcileOTAStatus: update to failed failed",
+					zap.String("sn", sn), zap.Int64("id", rec.id), zap.Error(err))
+				continue
+			}
+			logger.Info("reconcileOTAStatus: upgrade marked as failed",
+				zap.String("sn", sn), zap.String("chip", rec.targetChip),
+				zap.String("reported", reported), zap.String("old", oldVersion))
+
+		default:
+			logger.Warn("reconcileOTAStatus: unable to determine upgrade status",
+				zap.String("sn", sn), zap.String("chip", rec.targetChip),
+				zap.String("reported", reported), zap.String("target", rec.version),
+				zap.String("old", oldVersion))
+		}
+	}
+}
+
+// chipVersion 根据芯片类型返回对应的上报固件版本
+func chipVersion(chip, arm, esp, dsp, bms string) string {
+	switch chip {
+	case "arm":
+		return arm
+	case "esp":
+		return esp
+	case "dsp":
+		return dsp
+	case "bms":
+		return bms
+	default:
+		return ""
+	}
+}
+
+// matchFirmwareVersion 检查设备上报的固件版本是否与目标版本匹配
+// 支持多种格式：V1.3.0.20260701、3.1.3、V3.1.3 等
+func matchFirmwareVersion(reported, target string) bool {
+	if reported == target {
+		return true
+	}
+	reportedNum := extractVersionNumbers(reported)
+	targetNum := extractVersionNumbers(target)
+	if reportedNum != "" && targetNum != "" {
+		if reportedNum == targetNum {
+			return true
+		}
+		// 检查上报版本号中是否包含目标版本号
+		if strings.Contains(reportedNum, targetNum) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractVersionNumbers 从固件版本字符串中提取数字和点号部分
+// 例如 "V1.3.0.20260701" → "1.3.0.20260701"
+func extractVersionNumbers(s string) string {
+	var b strings.Builder
+	for _, c := range s {
+		if (c >= '0' && c <= '9') || c == '.' {
+			b.WriteRune(c)
+		}
+	}
+	result := strings.Trim(b.String(), ".")
+	// 至少包含一个数字才算有效
+	if result == "" || !strings.ContainsAny(result, "0123456789") {
+		return ""
+	}
+	return result
+}
+
+// updateDeviceFirmwareVersion 更新设备对应芯片的固件版本
+func (h *InternalHandler) updateDeviceFirmwareVersion(ctx context.Context, sn, chip, version string) {
+	var col string
+	switch chip {
+	case "arm":
+		col = "firmware_arm"
+	case "esp":
+		col = "firmware_esp"
+	case "dsp":
+		col = "firmware_dsp"
+	case "bms":
+		col = "firmware_bms"
+	default:
+		return
+	}
+	_, _ = h.db.Exec(ctx, fmt.Sprintf(
+		"UPDATE devices SET %s = $2, updated_at = NOW() WHERE sn = $1", col,
+	), sn, version)
 }
 
 func (h *InternalHandler) DeviceData(c *gin.Context) {
