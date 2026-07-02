@@ -18,12 +18,12 @@ class OTACheckRequested extends OtaEvent {
 
 class OTATriggerRequested extends OtaEvent {
   final String sn;
-  final int firmwareId;
+  final int packageId;
 
-  const OTATriggerRequested({required this.sn, required this.firmwareId});
+  const OTATriggerRequested({required this.sn, required this.packageId});
 
   @override
-  List<Object?> get props => [sn, firmwareId];
+  List<Object?> get props => [sn, packageId];
 }
 
 class OTAProgressPollRequested extends OtaEvent {
@@ -56,6 +56,18 @@ class OTAFirmwareListRequested extends OtaEvent {
 
   @override
   List<Object?> get props => [deviceModel, sn];
+}
+
+/// 加载设备可用升级包列表
+/// 调用 GET /ota/packages/available/:sn 获取设备专属可用升级包
+/// 响应格式: {code: 0, data: [{id, user_version, user_changelog, is_force, model, main_version, ...}]}
+class LoadAvailablePackages extends OtaEvent {
+  final String sn;
+
+  const LoadAvailablePackages({required this.sn});
+
+  @override
+  List<Object?> get props => [sn];
 }
 
 class OTAFirmwareInstallRequested extends OtaEvent {

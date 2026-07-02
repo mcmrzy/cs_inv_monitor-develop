@@ -7,8 +7,26 @@ class OtaRemoteDataSource {
 
   Future<Response> checkUpdate(String sn) async => dio.get('/ota/check/$sn');
 
-  Future<Response> triggerOTA(String sn, int firmwareId) async =>
-      dio.post('/ota/trigger', data: {'sn': sn, 'firmware_id': firmwareId});
+  /// POST /ota/trigger — APP端触发升级，使用 package_id
+  Future<Response> triggerOTA(String sn, int packageId) async =>
+      dio.post('/ota/trigger', data: {'sn': sn, 'package_id': packageId});
+
+  /// GET /ota/packages/available/:sn — 获取设备可用升级包列表
+  Future<Response> getAvailablePackages(String sn) async =>
+      dio.get('/ota/packages/available/$sn');
+
+  /// POST /ota/devices/:sn/local-ota-result — 本地OTA结果上报
+  Future<Response> reportLocalOTAResult({
+    required String sn,
+    required String targetChip,
+    required String newVersion,
+    String? mainVersion,
+  }) async =>
+      dio.post('/ota/devices/$sn/local-ota-result', data: {
+        'target_chip': targetChip,
+        'new_version': newVersion,
+        if (mainVersion != null) 'main_version': mainVersion,
+      },);
 
   Future<Response> getDeviceOTAStatus(String sn) async => dio.get('/ota/devices/$sn/status');
 

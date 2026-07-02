@@ -19,6 +19,7 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     on<OTAProgressStopPoll>(_onProgressStopPoll);
     on<OTAFirmwareListRequested>(_onFirmwareListRequested);
     on<OTAFirmwareInstallRequested>(_onFirmwareInstallRequested);
+    on<LoadAvailablePackages>(_onLoadAvailablePackages);
   }
 
   Future<void> _onCheckRequested(
@@ -46,14 +47,16 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     OTATriggerRequested event,
     Emitter<OtaState> emit,
   ) async {
-    final result = await repository.triggerOTA(event.sn, event.firmwareId);
+    final result = await repository.triggerOTA(event.sn, event.packageId);
     result.fold(
       (failure) {
         if (state is OTAUpdateAvailable || state is OTAUpToDate || state is OTATriggered) return;
         emit(OTAError(message: failure.message));
       },
       (data) {
-        emit(OTATriggered(taskId: 0));
+        // 从响应中提取 task_id 并保存到状态中
+        final taskId = (data['task_id'] as num?)?.toInt() ?? 0;
+        emit(OTATriggered(taskId: taskId));
         _startProgressPoll(event.sn);
       },
     );
@@ -132,10 +135,26 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     final result = await repository.installPackage(event.sn, event.packageId);
     result.fold(
       (failure) => emit(OTAError(message: failure.message)),
-      (_) {
-        emit(OTATriggered(taskId: 0));
+      (data) {
+        final taskId = (data['task_id'] as num?)?.toInt() ?? 0;
+        emit(OTATriggered(taskId: taskId));
         _startProgressPoll(event.sn);
       },
+    );
+  }
+
+  /// 加载设备可用升级包列表
+  /// 调用 GET /ota/packages/available/:sn
+  /// 响应: {code: 0, data: [{id, user_version, user_changelog, is_force, model, main_version, ...}]}
+  Future<void> _onLoadAvailablePackages(
+    LoadAvailablePackages event,
+    Emitter<OtaState> emit,
+  ) async {
+    emit(OTAAvailablePackagesLoading());
+    final result = await repository.getAvailablePackages(event.sn);
+    result.fold(
+      (failure) => emit(OTAAvailablePackagesError(message: failure.message)),
+      (packages) => emit(OTAAvailablePackagesLoaded(packages: packages)),
     );
   }
 

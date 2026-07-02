@@ -93,4 +93,28 @@ class OTAFirmwareInstalling extends OtaState {
   List<Object?> get props => [packageId];
 }
 
+/// 可用升级包列表加载中
+class OTAAvailablePackagesLoading extends OtaState {}
+
+/// 可用升级包列表加载成功
+/// packages 结构: [{id, user_version, user_changelog, is_force, model, main_version, ...}]
+class OTAAvailablePackagesLoaded extends OtaState {
+  final List<dynamic> packages;
+
+  const OTAAvailablePackagesLoaded({required this.packages});
+
+  @override
+  List<Object?> get props => [packages];
+}
+
+/// 可用升级包列表加载失败
+class OTAAvailablePackagesError extends OtaState {
+  final String message;
+
+  const OTAAvailablePackagesError({required this.message});
+
+  @override
+  List<Object?> get props => [message];
+}
+
 

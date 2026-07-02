@@ -142,7 +142,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	permChecker := service.NewPermChecker(rdb, userRepo)
 
 	otaRepo := repository.NewOTARepository(db)
-	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.ServerURL)
+	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL)
 
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache)
 	stationHandler := handler.NewStationHandler(stationService, deviceService)
@@ -794,6 +794,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/app/packages/install", deps.OTAHandler.AppInstallPackage)
 			otaGroup.GET("/devices/:sn/package-upgrade/:packageId", deps.OTAHandler.GetDevicePackageUpgradeInfo)
 			otaGroup.GET("/devices/:sn/upgrade-packages", deps.OTAHandler.ListDeviceUpgradePackages)
+			otaGroup.GET("/packages/available/:sn", deps.OTAHandler.GetAvailablePackages)
+			otaGroup.POST("/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackUpgrade)
 
 			// App版本管理
 			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP检查更新（无需额外权限）

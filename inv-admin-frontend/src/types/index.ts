@@ -107,6 +107,8 @@ export interface UpgradeTask {
   firmware_target_chip?: string
   package_main_version?: string
   package_items?: UpgradePackageItem[]
+  // 来源（新增）
+  source?: 'admin' | 'app' | 'local'
 }
 
 export interface UpgradePackage {
@@ -120,6 +122,12 @@ export interface UpgradePackage {
   created_at: string
   updated_at: string
   items?: UpgradePackageItem[]
+  // 新增字段
+  user_version?: string
+  user_changelog?: string
+  is_published?: boolean
+  rollout_type?: 'all' | 'model' | 'user' | 'device'
+  rollout_targets?: any
 }
 
 export interface UpgradePackageItem {

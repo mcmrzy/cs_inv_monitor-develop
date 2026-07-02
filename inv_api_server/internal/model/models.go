@@ -313,6 +313,7 @@ type DeviceUpgrade struct {
 	ErrorMessage    string     `json:"error_message"`
 	RetryCount      int        `json:"retry_count"`
 	PushedBy        *int64     `json:"pushed_by"`
+	Source          string     `json:"source"` // admin/app/local
 	StartedAt       *time.Time `json:"started_at"`
 	CompletedAt     *time.Time `json:"completed_at"`
 	CreatedAt       time.Time  `json:"created_at"`
@@ -354,6 +355,9 @@ type UpgradeTask struct {
 	SuccessCount   int        `json:"success_count"`
 	FailedCount    int        `json:"failed_count"`
 	CreatedBy      *int64     `json:"created_by"`
+	Source         string     `json:"source"`           // admin/app/local
+	TriggeredBy    *int64     `json:"triggered_by"`
+	Notes          string     `json:"notes"`
 	CreatedAt      time.Time  `json:"created_at"`
 	ExecutedAt     *time.Time `json:"executed_at"`
 	CompletedAt    *time.Time `json:"completed_at"`
@@ -368,16 +372,21 @@ type UpgradeTask struct {
 
 // UpgradePackage 升级包 - 包含多个芯片固件的组合版本
 type UpgradePackage struct {
-	ID          int64                `json:"id"`
-	Model       string               `json:"model"`
-	MainVersion string               `json:"main_version"`
-	Changelog   string               `json:"changelog"`
-	IsForce     bool                 `json:"is_force"`
-	Status      int                  `json:"status"`
-	CreatedBy   int64                `json:"created_by"`
-	CreatedAt   time.Time            `json:"created_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-	Items       []UpgradePackageItem `json:"items,omitempty"`
+	ID             int64                `json:"id"`
+	Model          string               `json:"model"`
+	MainVersion    string               `json:"main_version"`
+	Changelog      string               `json:"changelog"`
+	UserVersion    string               `json:"user_version"`    // 面向 App 用户的版本号
+	UserChangelog  string               `json:"user_changelog"`  // 面向 App 用户的更新说明
+	RolloutType    string               `json:"rollout_type"`    // all/model/user/device
+	RolloutTargets string               `json:"rollout_targets"` // 逗号分隔的 model/user_id/sn
+	IsPublished    bool                 `json:"is_published"`
+	IsForce        bool                 `json:"is_force"`
+	Status         int                  `json:"status"`
+	CreatedBy      int64                `json:"created_by"`
+	CreatedAt      time.Time            `json:"created_at"`
+	UpdatedAt      time.Time            `json:"updated_at"`
+	Items          []UpgradePackageItem `json:"items,omitempty"`
 }
 
 // UpgradePackageItem 升级包明细
