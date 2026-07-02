@@ -956,8 +956,73 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	if tag.RowsAffected() > 0 && (dbStatus == "success" || dbStatus == "failed" || dbStatus == "upgrading") {
 		go func() {
 			bgCtx := context.Background()
+
+			// ── 超时检测：将卡住超过 15 分钟的 upgrading 记录标记为 failed ──
+			timeoutRows, err := h.db.Query(bgCtx, `
+				SELECT id, COALESCE(task_id, 0), started_at
+				FROM device_upgrades
+				WHERE device_sn = $1 AND status = 'upgrading' AND started_at IS NOT NULL
+			`, req.DeviceSN)
+			if err == nil {
+				var timedOutTaskIDs []int64
+				for timeoutRows.Next() {
+					var id, taskID int64
+					var startedAt time.Time
+					if err := timeoutRows.Scan(&id, &taskID, &startedAt); err != nil {
+						continue
+					}
+					if time.Since(startedAt) > 15*time.Minute {
+						h.db.Exec(bgCtx, `
+							UPDATE device_upgrades SET status = 'failed', error_message = '升级超时，设备可能已断连', updated_at = NOW()
+							WHERE id = $1`, id)
+						logger.Info("OTA upgrade timed out",
+							zap.String("sn", req.DeviceSN),
+							zap.Int64("upgrade_id", id),
+							zap.Time("started_at", startedAt))
+						if taskID > 0 {
+							timedOutTaskIDs = append(timedOutTaskIDs, taskID)
+						}
+					}
+				}
+				timeoutRows.Close()
+
+				// 更新因超时受影响的关联任务统计
+				seen := map[int64]bool{}
+				for _, tid := range timedOutTaskIDs {
+					if seen[tid] {
+						continue
+					}
+					seen[tid] = true
+					h.db.Exec(bgCtx, `
+						UPDATE upgrade_tasks SET
+							success_count = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'success'),
+							failed_count  = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'failed'),
+							updated_at = NOW()
+						WHERE id = $1`, tid)
+
+					var totalDevices, successCount, failedCount int
+					if err := h.db.QueryRow(bgCtx, `
+						SELECT total_devices, success_count, failed_count FROM upgrade_tasks WHERE id = $1
+					`, tid).Scan(&totalDevices, &successCount, &failedCount); err == nil && totalDevices > 0 {
+						if successCount+failedCount >= totalDevices {
+							newStatus := "partial_success"
+							if failedCount == 0 {
+								newStatus = "completed"
+							}
+							h.db.Exec(bgCtx, `
+								UPDATE upgrade_tasks SET status = $2, completed_at = NOW(), updated_at = NOW()
+								WHERE id = $1`, tid, newStatus)
+							logger.Info("Upgrade task auto-completed after timeout",
+								zap.Int64("task_id", tid), zap.String("status", newStatus))
+						}
+					}
+				}
+			} else {
+				timeoutRows.Close()
+			}
+
 			var taskID int64
-			err := h.db.QueryRow(bgCtx, `
+			err = h.db.QueryRow(bgCtx, `
 				SELECT COALESCE(task_id, 0)
 				FROM device_upgrades
 				WHERE device_sn = $1
