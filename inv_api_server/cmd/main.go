@@ -165,6 +165,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	// 兜底：每 5 分钟全量扫描一次，处理监听器可能遗漏的情况
 	go runHeartbeatCheck(deviceRepo, heartbeatDone)
 
+	// OTA 升级超时清理：每 5 分钟扫描卡住的升级记录并更新关联任务统计
+	go runOTATimeoutCleanup(db, heartbeatDone)
+
 	router := setupRouter(cfg, &RouterDeps{
 		DB:                  db,
 		RDB:                 rdb,
@@ -290,6 +293,89 @@ func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, done chan struct
 					zap.Int("count", len(sns)), zap.Strings("sns", sns))
 				deviceRepo.SyncStationStatus(context.Background())
 			}
+		}
+	}
+}
+
+// runOTATimeoutCleanup 定期清理卡住的 OTA 升级记录。
+// 每 5 分钟扫描一次 status='upgrading' 且 started_at 超过 15 分钟的记录，
+// 将其标记为 failed，并更新关联 upgrade_tasks 的统计数据与状态。
+func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			logger.Info("OTA timeout cleanup stopped")
+			return
+		case <-ticker.C:
+			// 1. 查找所有 status='upgrading' 且 started_at 超过 15 分钟的记录
+			rows, err := db.Query(context.Background(), `
+				SELECT id, COALESCE(task_id, 0)
+				FROM device_upgrades
+				WHERE status = 'upgrading' AND started_at IS NOT NULL AND started_at < NOW() - INTERVAL '15 minutes'
+			`)
+			if err != nil {
+				logger.Warn("OTA timeout cleanup query failed", zap.Error(err))
+				continue
+			}
+
+			type staleRecord struct{ id, taskID int64 }
+			var staleRecords []staleRecord
+			for rows.Next() {
+				var r staleRecord
+				rows.Scan(&r.id, &r.taskID)
+				staleRecords = append(staleRecords, r)
+			}
+			rows.Close()
+
+			if len(staleRecords) == 0 {
+				continue
+			}
+
+			// 2. 批量标记为 failed
+			for _, r := range staleRecords {
+				db.Exec(context.Background(), `
+					UPDATE device_upgrades SET status = 'failed', error_message = '升级超时，设备可能已断连', updated_at = NOW()
+					WHERE id = $1 AND status = 'upgrading'`, r.id)
+				logger.Info("OTA upgrade marked as timed out", zap.Int64("id", r.id))
+			}
+
+			// 3. 更新关联任务统计
+			taskIDs := map[int64]bool{}
+			for _, r := range staleRecords {
+				if r.taskID > 0 {
+					taskIDs[r.taskID] = true
+				}
+			}
+			for taskID := range taskIDs {
+				db.Exec(context.Background(), `
+					UPDATE upgrade_tasks SET
+						success_count = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'success'),
+						failed_count  = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'failed'),
+						updated_at = NOW()
+					WHERE id = $1`, taskID)
+
+				// 检查是否全部完成
+				var total, success, failed int
+				if err := db.QueryRow(context.Background(), `
+					SELECT total_devices, success_count, failed_count FROM upgrade_tasks WHERE id = $1
+				`, taskID).Scan(&total, &success, &failed); err == nil && total > 0 {
+					if success+failed >= total {
+						newStatus := "completed"
+						if failed > 0 {
+							newStatus = "partial_success"
+						}
+						db.Exec(context.Background(), `
+							UPDATE upgrade_tasks SET status = $2, completed_at = NOW(), updated_at = NOW()
+							WHERE id = $1`, taskID, newStatus)
+						logger.Info("Upgrade task auto-completed after timeout",
+							zap.Int64("task_id", taskID), zap.String("status", newStatus))
+					}
+				}
+			}
+
+			logger.Info("OTA timeout cleanup completed", zap.Int("stale_records", len(staleRecords)))
 		}
 	}
 }
