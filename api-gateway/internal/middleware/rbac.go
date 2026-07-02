@@ -196,6 +196,7 @@ var appAllowedPaths = []string{
 	"/api/v1/ota/devices/",
 	"/api/v1/ota/app/check",
 	"/api/v1/ota/app/packages",
+	"/api/v1/ota/packages/available/",
 }
 
 func isAppAllowedPath(path string) bool {
