@@ -318,19 +318,28 @@ func (r *OTARepository) GetLatestTaskDevice(ctx context.Context, sn string) (*mo
 // GetDeviceUpgradeBySN 获取设备最新的升级记录
 func (r *OTARepository) GetDeviceUpgradeBySN(ctx context.Context, sn string) (*model.DeviceUpgrade, error) {
 	var du model.DeviceUpgrade
+	var taskID, pkgID int64
 	err := r.db.QueryRow(ctx, `
 		SELECT id, device_sn, firmware_id, firmware_version, COALESCE(target_chip,''),
 		       COALESCE(old_version,''), status, COALESCE(progress,0), COALESCE(error_message,''),
-		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at
+		       COALESCE(retry_count,0), pushed_by, started_at, completed_at, created_at, updated_at,
+		       COALESCE(task_id, 0), COALESCE(upgrade_package_id, 0)
 		FROM device_upgrades
 		WHERE device_sn = $1
 		ORDER BY updated_at DESC
 		LIMIT 1
 	`, sn).Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 		&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
-		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt)
+		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
+		&taskID, &pkgID)
 	if err != nil {
 		return nil, err
+	}
+	if taskID > 0 {
+		du.TaskID = &taskID
+	}
+	if pkgID > 0 {
+		du.UpgradePackageID = &pkgID
 	}
 	return &du, nil
 }
