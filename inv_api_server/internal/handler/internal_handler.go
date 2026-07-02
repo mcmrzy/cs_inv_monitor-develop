@@ -952,6 +952,65 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 		zap.Int("progress", req.Progress),
 		zap.Int64("rows_affected", tag.RowsAffected()))
 
+	// 更新关联升级任务的统计（best-effort，不阻塞主流程）
+	if tag.RowsAffected() > 0 && (dbStatus == "success" || dbStatus == "failed" || dbStatus == "upgrading") {
+		go func() {
+			bgCtx := context.Background()
+			var taskID int64
+			err := h.db.QueryRow(bgCtx, `
+				SELECT COALESCE(task_id, 0)
+				FROM device_upgrades
+				WHERE device_sn = $1
+				ORDER BY updated_at DESC LIMIT 1
+			`, req.DeviceSN).Scan(&taskID)
+			if err != nil || taskID <= 0 {
+				return
+			}
+
+			// 自动将 pending/scheduled/draft 任务转为 running
+			var taskStatus string
+			if err := h.db.QueryRow(bgCtx, `SELECT status FROM upgrade_tasks WHERE id = $1`, taskID).Scan(&taskStatus); err != nil {
+				return
+			}
+			if taskStatus == "pending" || taskStatus == "scheduled" || taskStatus == "draft" {
+				h.db.Exec(bgCtx, `
+					UPDATE upgrade_tasks SET status = 'running', executed_at = NOW(), updated_at = NOW()
+					WHERE id = $1`, taskID)
+				taskStatus = "running"
+			}
+
+			// 设备升级完成时，更新任务统计计数
+			if dbStatus == "success" || dbStatus == "failed" {
+				h.db.Exec(bgCtx, `
+					UPDATE upgrade_tasks SET
+						success_count = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'success'),
+						failed_count  = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'failed'),
+						updated_at = NOW()
+					WHERE id = $1`, taskID)
+
+				// 检查是否所有设备都已完成
+				var totalDevices, successCount, failedCount int
+				if err := h.db.QueryRow(bgCtx, `
+					SELECT total_devices, success_count, failed_count FROM upgrade_tasks WHERE id = $1
+				`, taskID).Scan(&totalDevices, &successCount, &failedCount); err == nil && totalDevices > 0 {
+					if successCount+failedCount >= totalDevices {
+						var newStatus string
+						if failedCount > 0 {
+							newStatus = "partial_success"
+						} else {
+							newStatus = "completed"
+						}
+						h.db.Exec(bgCtx, `
+							UPDATE upgrade_tasks SET status = $2, completed_at = NOW(), updated_at = NOW()
+							WHERE id = $1`, taskID, newStatus)
+						logger.Info("Upgrade task status auto-updated",
+							zap.Int64("task_id", taskID), zap.String("status", newStatus))
+					}
+				}
+			}
+		}()
+	}
+
 	// 单芯片升级成功时，更新设备固件版本并触发下一个芯片
 	if dbStatus == "success" && tag.RowsAffected() > 0 {
 		// 查询升级记录的目标芯片和固件版本
