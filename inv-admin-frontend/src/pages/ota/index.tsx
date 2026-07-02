@@ -208,8 +208,9 @@ const UpgradeTasksTab: React.FC = () => {
   const { data: taskDevices = [], isLoading: devicesLoading } = useQuery({
     queryKey: queryKeys.ota.taskDevices(detailTaskId ?? 0),
     queryFn: () => otaApi.getTaskDevices(detailTaskId!).then((r) => {
-      const d = r.data?.data ?? r.data ?? []
-      return (Array.isArray(d) ? d : []) as DeviceUpgrade[]
+      const payload = r.data?.data ?? r.data ?? {}
+      const d = payload?.items ?? (Array.isArray(payload) ? payload : [])
+      return d as DeviceUpgrade[]
     }),
     enabled: detailOpen && !!detailTaskId,
     refetchInterval: 5000,
