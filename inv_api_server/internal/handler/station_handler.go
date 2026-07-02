@@ -526,6 +526,8 @@ type StationSummary struct {
 	Province    string  `json:"province"`
 	City        string  `json:"city"`
 	District    string  `json:"district"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
 	Capacity    float64 `json:"capacity"`
 	DeviceCount int     `json:"device_count"`
 	OnlineCount int     `json:"online_count"`
@@ -600,6 +602,8 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 			Province:    station.Province,
 			City:        station.City,
 			District:    station.District,
+			Latitude:    station.Latitude,
+			Longitude:   station.Longitude,
 			Capacity:    station.Capacity,
 			DeviceCount: deviceCount,
 			OnlineCount: onlineCount,

@@ -1,7 +1,7 @@
 import './big-screen.css'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FullscreenOutlined, FullscreenExitOutlined } from '@ant-design/icons'
+import { FullscreenOutlined, FullscreenExitOutlined, RocketOutlined } from '@ant-design/icons'
 import { dashboardApi } from '@/services/dashboardApi'
 import api from '@/services/api'
 import { KPIPanel, MapPanel, TrendPanel } from './components'
@@ -163,7 +163,7 @@ const BigScreenPage: React.FC = () => {
       {/* Header */}
       <header className="bs-header">
         <div className="bs-header-left">
-          <img src="/csergylogo.png" className="bs-logo" alt="logo" />
+          <RocketOutlined className="bs-header-icon" />
           <span className="bs-header-title">光伏监控大屏</span>
         </div>
         <div className="bs-header-center">
