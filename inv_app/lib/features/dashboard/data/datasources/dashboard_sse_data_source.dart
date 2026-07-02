@@ -44,6 +44,7 @@ class DashboardSSEDataSource {
         '/dashboard/sse',
         options: Options(
           responseType: ResponseType.stream,
+          receiveTimeout: null, // SSE 长连接不设超时
           headers: {
             'Accept': 'text/event-stream',
             'Cache-Control': 'no-cache',

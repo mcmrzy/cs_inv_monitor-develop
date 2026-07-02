@@ -552,22 +552,22 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/devices/unbind-requests/:id/reject", deps.DeviceHandler.RejectUnbind)
 
 			auth.GET("/alarms", deps.AlarmHandler.List)
+			auth.DELETE("/alarms/clear", deps.AlarmHandler.ClearAll)
+			auth.PUT("/alarms/read", deps.AlarmHandler.MarkRead)
+			auth.GET("/alarms/stats", deps.AlarmHandler.GetStats)
 			auth.GET("/alarms/:id", deps.AlarmHandler.GetByID)
 			auth.PUT("/alarms/:id/handle", deps.AlarmHandler.MarkHandled)
 			auth.POST("/alarms/:id/acknowledge", deps.AlarmHandler.Acknowledge)
 			auth.POST("/alarms/:id/ignore", deps.AlarmHandler.Ignore)
-			auth.DELETE("/alarms/clear", deps.AlarmHandler.ClearAll)
 			auth.DELETE("/alarms/:id", deps.AlarmHandler.Delete)
-			auth.PUT("/alarms/read", deps.AlarmHandler.MarkRead)
-			auth.GET("/alarms/stats", deps.AlarmHandler.GetStats)
 
 			// 通知管理
 			auth.GET("/notifications", deps.NotificationHandler.List)
 			auth.GET("/notifications/stats", deps.NotificationHandler.GetStats)
+			// SSE 实时推送端点（必须在参数路由之前注册）
+			auth.GET("/notifications/stream", internalHandler.NotificationStream)
 			auth.DELETE("/notifications/clear", deps.NotificationHandler.ClearAll)
 			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
-			// SSE 实时推送端点
-			auth.GET("/notifications/stream", internalHandler.NotificationStream)
 
 			auth.GET("/models", deps.ModelHandler.ListModels)
 			auth.POST("/models", deps.ModelHandler.CreateModel)
@@ -604,9 +604,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/alert-rules/:id", deps.AlertRuleHandler.Delete)
 
 			auth.GET("/work-orders", deps.WorkOrderHandler.List)
-			auth.GET("/work-orders/:id", deps.WorkOrderHandler.GetByID)
 			auth.GET("/work-orders/stats", deps.WorkOrderHandler.GetStatistics)
 			auth.POST("/work-orders", deps.WorkOrderHandler.Create)
+			auth.GET("/work-orders/:id", deps.WorkOrderHandler.GetByID)
 			auth.PUT("/work-orders/:id", deps.WorkOrderHandler.Update)
 			auth.DELETE("/work-orders/:id", deps.WorkOrderHandler.Delete)
 		}
