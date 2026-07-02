@@ -682,6 +682,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.DELETE("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradeTask)
 			otaGroup.GET("/tasks/:id/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeTaskDevices)
 
+			otaGroup.GET("/firmware/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetDevicesByFirmware)
+			otaGroup.GET("/firmware/package-devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackageDevices)
+
 			// APP端接口（所有登录用户可访问）
 			otaGroup.GET("/check/:sn", deps.OTAHandler.CheckUpdate)
 			otaGroup.POST("/trigger", deps.OTAHandler.TriggerOTA)
@@ -691,6 +694,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/devices/:sn/local-ota-result", deps.OTAHandler.ReportLocalOTAResult)
 			otaGroup.GET("/app/packages", deps.OTAHandler.AppListUpgradePackages)
 			otaGroup.POST("/app/packages/install", deps.OTAHandler.AppInstallPackage)
+			otaGroup.GET("/devices/:sn/package-upgrade/:packageId", deps.OTAHandler.GetDevicePackageUpgradeInfo)
+			otaGroup.GET("/devices/:sn/upgrade-packages", deps.OTAHandler.ListDeviceUpgradePackages)
 
 			// App版本管理
 			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP检查更新（无需额外权限）

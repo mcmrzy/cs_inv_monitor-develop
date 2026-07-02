@@ -53,6 +53,7 @@ import {
   ClockCircleOutlined,
   FileOutlined,
   AppstoreOutlined,
+  DesktopOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { UploadProps } from 'antd'
@@ -714,6 +715,29 @@ const FirmwareTab: React.FC = () => {
   const [, setComputingHash] = useState(false)
   const [form] = Form.useForm<FirmwareFormValues>()
 
+  // 查看使用该固件的设备 Modal 状态
+  const [fwDevicesOpen, setFwDevicesOpen] = useState(false)
+  const [fwDevicesTarget, setFwDevicesTarget] = useState<Firmware | null>(null)
+  const [fwDevices, setFwDevices] = useState<any[]>([])
+  const [fwDevicesLoading, setFwDevicesLoading] = useState(false)
+
+  const openFwDevicesModal = async (record: Firmware) => {
+    setFwDevicesTarget(record)
+    setFwDevicesOpen(true)
+    setFwDevicesLoading(true)
+    try {
+      const res = await otaApi.getDevicesByFirmware(record.model, record.target_chip, record.version)
+      const d = res.data?.data ?? res.data ?? {}
+      const list = d?.devices ?? []
+      setFwDevices(Array.isArray(list) ? list : [])
+    } catch (err: any) {
+      message.error('查询设备列表失败: ' + (err?.response?.data?.message || err?.message || ''))
+      setFwDevices([])
+    } finally {
+      setFwDevicesLoading(false)
+    }
+  }
+
   const queryParams = { page, pageSize, model: modelFilter || undefined }
 
   const { data: firmwareRes, isLoading, refetch } = useQuery({
@@ -825,11 +849,18 @@ const FirmwareTab: React.FC = () => {
     { title: t('ota.forceUpdate'), dataIndex: 'is_force', key: 'is_force', width: 110, render: (val: boolean) => val ? <Tag color="red">{t('ota.force')}</Tag> : <Tag>{t('common.no')}</Tag> },
     { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss') },
     {
-      title: t('common.operation'), key: 'action', width: 80,
+      title: t('common.operation'), key: 'action', width: 140,
       render: (_: any, record: Firmware) => (
-        <Popconfirm title={t('ota.confirmDeleteFirmware')} onConfirm={() => deleteMutation.mutate(record.id)}>
-          <Button type="link" danger icon={<DeleteOutlined />} size="small" />
-        </Popconfirm>
+        <Space size={4}>
+          <Tooltip title="查看使用该固件的设备">
+            <Button type="link" size="small" icon={<DesktopOutlined />} onClick={() => openFwDevicesModal(record)}>
+              查看设备
+            </Button>
+          </Tooltip>
+          <Popconfirm title={t('ota.confirmDeleteFirmware')} onConfirm={() => deleteMutation.mutate(record.id)}>
+            <Button type="link" danger icon={<DeleteOutlined />} size="small" />
+          </Popconfirm>
+        </Space>
       ),
     },
   ]
@@ -893,6 +924,49 @@ const FirmwareTab: React.FC = () => {
           {fileList.length > 0 && <Form.Item label={t('ota.fileSizeLabel')}><span>{formatFileSize(fileList[0]?.originFileObj?.size || 0)}</span></Form.Item>}
         </Form>
       </Modal>
+
+      {/* 查看使用该固件的设备 Modal */}
+      <Modal
+        title="使用该固件的设备"
+        open={fwDevicesOpen}
+        onCancel={() => { setFwDevicesOpen(false); setFwDevicesTarget(null); setFwDevices([]) }}
+        width={780}
+        destroyOnClose
+        footer={[
+          <Button key="close" onClick={() => { setFwDevicesOpen(false); setFwDevicesTarget(null); setFwDevices([]) }}>
+            关闭
+          </Button>,
+        ]}
+      >
+        {fwDevicesTarget && (
+          <div>
+            <Descriptions column={3} size="small" bordered style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="型号">{fwDevicesTarget.model}</Descriptions.Item>
+              <Descriptions.Item label="芯片">
+                <Tag color="blue">{(fwDevicesTarget.target_chip || '').toUpperCase()}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="版本">{fwDevicesTarget.version}</Descriptions.Item>
+            </Descriptions>
+            <Table
+              rowKey="sn"
+              size="small"
+              loading={fwDevicesLoading}
+              dataSource={fwDevices}
+              pagination={{ pageSize: 10 }}
+              locale={{ emptyText: <Empty description="暂无设备使用该固件版本" /> }}
+              columns={[
+                { title: '设备 SN', dataIndex: 'sn', key: 'sn', width: 140 },
+                { title: '型号', dataIndex: 'model', key: 'model', width: 100 },
+                { title: '主版本', dataIndex: 'main_version', key: 'main_version', width: 120, render: (v: string) => v || '-' },
+                { title: 'ARM', dataIndex: 'firmware_arm', key: 'firmware_arm', width: 110, render: (v: string) => v || '-' },
+                { title: 'ESP', dataIndex: 'firmware_esp', key: 'firmware_esp', width: 110, render: (v: string) => v || '-' },
+                { title: 'DSP', dataIndex: 'firmware_dsp', key: 'firmware_dsp', width: 110, render: (v: string) => v || '-' },
+                { title: 'BMS', dataIndex: 'firmware_bms', key: 'firmware_bms', width: 110, render: (v: string) => v || '-' },
+              ]}
+            />
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
@@ -910,6 +984,29 @@ const PackagesTab: React.FC = () => {
   const [installOpen, setInstallOpen] = useState(false)
   const [installPkg, setInstallPkg] = useState<UpgradePackage | null>(null)
   const [installSnInput, setInstallSnInput] = useState('')
+
+  // 查看已安装该升级包的设备 Modal 状态
+  const [pkgDevicesOpen, setPkgDevicesOpen] = useState(false)
+  const [pkgDevicesTarget, setPkgDevicesTarget] = useState<UpgradePackage | null>(null)
+  const [pkgDevices, setPkgDevices] = useState<DeviceUpgrade[]>([])
+  const [pkgDevicesLoading, setPkgDevicesLoading] = useState(false)
+
+  const openPkgDevicesModal = async (record: UpgradePackage) => {
+    setPkgDevicesTarget(record)
+    setPkgDevicesOpen(true)
+    setPkgDevicesLoading(true)
+    try {
+      const res = await otaApi.getUpgradePackageDevices(Number(record.id))
+      const d = res.data?.data ?? res.data ?? {}
+      const list = d?.devices ?? []
+      setPkgDevices(Array.isArray(list) ? list : [])
+    } catch (err: any) {
+      message.error('查询设备列表失败: ' + (err?.response?.data?.message || err?.message || ''))
+      setPkgDevices([])
+    } finally {
+      setPkgDevicesLoading(false)
+    }
+  }
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
 
@@ -1010,9 +1107,17 @@ const PackagesTab: React.FC = () => {
     { title: t('ota.packageChangelog'), dataIndex: 'changelog', key: 'changelog', width: 200, ellipsis: true },
     { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 160, render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-' },
     {
-      title: t('ota.action'), key: 'action', width: 180,
+      title: t('ota.action'), key: 'action', width: 260,
       render: (_: any, record: UpgradePackage) => (
         <Space size={4}>
+          <Button
+            type="link"
+            size="small"
+            icon={<DesktopOutlined />}
+            onClick={() => openPkgDevicesModal(record)}
+          >
+            安装设备
+          </Button>
           <Button
             type="link"
             size="small"
@@ -1119,6 +1224,68 @@ const PackagesTab: React.FC = () => {
                 onPressEnter={(e) => e.preventDefault()}
               />
             </Form.Item>
+          </div>
+        )}
+      </Modal>
+
+      {/* 查看已安装该升级包的设备 Modal */}
+      <Modal
+        title="已安装该升级包的设备"
+        open={pkgDevicesOpen}
+        onCancel={() => { setPkgDevicesOpen(false); setPkgDevicesTarget(null); setPkgDevices([]) }}
+        width={780}
+        destroyOnClose
+        footer={[
+          <Button key="close" onClick={() => { setPkgDevicesOpen(false); setPkgDevicesTarget(null); setPkgDevices([]) }}>
+            关闭
+          </Button>,
+        ]}
+      >
+        {pkgDevicesTarget && (
+          <div>
+            <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="升级包版本">
+                <Tag color="blue">{pkgDevicesTarget.main_version}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="型号">{pkgDevicesTarget.model}</Descriptions.Item>
+            </Descriptions>
+            <Table<DeviceUpgrade>
+              rowKey={(r) => `${r.device_sn}-${r.id}`}
+              size="small"
+              loading={pkgDevicesLoading}
+              dataSource={pkgDevices}
+              pagination={{ pageSize: 10 }}
+              locale={{ emptyText: <Empty description="暂无设备安装该升级包" /> }}
+              columns={[
+                { title: '设备 SN', dataIndex: 'device_sn', key: 'device_sn', width: 140 },
+                { title: '型号', dataIndex: 'device_model', key: 'device_model', width: 100, render: (v: string) => v || '-' },
+                {
+                  title: '安装状态',
+                  dataIndex: 'status',
+                  key: 'status',
+                  width: 100,
+                  render: (s: string) => {
+                    const statusMap: Record<string, { label: string; color: string }> = {
+                      success: { label: '成功', color: 'success' },
+                      pending: { label: '待执行', color: 'processing' },
+                      upgrading: { label: '升级中', color: 'warning' },
+                      downloading: { label: '下载中', color: 'cyan' },
+                      failed: { label: '失败', color: 'error' },
+                      cancelled: { label: '已取消', color: 'default' },
+                    }
+                    const cfg = statusMap[s] || { label: s, color: 'default' }
+                    return <Tag color={cfg.color}>{cfg.label}</Tag>
+                  },
+                },
+                {
+                  title: '安装时间',
+                  dataIndex: 'created_at',
+                  key: 'created_at',
+                  width: 170,
+                  render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+                },
+              ]}
+            />
           </div>
         )}
       </Modal>

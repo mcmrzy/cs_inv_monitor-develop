@@ -1099,3 +1099,159 @@ func (h *OTAHandler) AppInstallPackage(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "升级包已推送", nil)
 }
+
+// GetDevicePackageUpgradeInfo 获取设备在指定升级包下的各芯片升级进度
+func (h *OTAHandler) GetDevicePackageUpgradeInfo(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.HandleError(c, apperr.BadRequest("设备SN不能为空"))
+		return
+	}
+	packageID := parseID(c.Param("packageId"))
+	if packageID <= 0 {
+		response.HandleError(c, apperr.BadRequest("无效的升级包ID"))
+		return
+	}
+
+	userID := c.GetInt64("user_id")
+	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), sn, userID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询设备信息失败", err))
+		return
+	}
+	if !owned {
+		response.HandleError(c, apperr.Forbidden("设备不属于当前用户"))
+		return
+	}
+
+	info, err := h.otaService.GetDevicePackageUpgradeInfo(c.Request.Context(), sn, int64(packageID))
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询升级进度失败: "+err.Error(), err))
+		return
+	}
+	response.Success(c, info)
+}
+
+// ListDeviceUpgradePackages 通过设备SN查询可用的升级包列表
+func (h *OTAHandler) ListDeviceUpgradePackages(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.HandleError(c, apperr.BadRequest("设备SN不能为空"))
+		return
+	}
+
+	userID := c.GetInt64("user_id")
+	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), sn, userID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询设备信息失败", err))
+		return
+	}
+	if !owned {
+		response.HandleError(c, apperr.Forbidden("设备不属于当前用户"))
+		return
+	}
+
+	// 获取设备信息以确定型号和当前芯片版本
+	device, err := h.otaService.GetDeviceBySN(c.Request.Context(), sn)
+	if err != nil || device == nil {
+		response.HandleError(c, apperr.NotFound("设备不存在"))
+		return
+	}
+
+	list, err := h.otaService.ListUpgradePackages(c.Request.Context(), device.Model)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询升级包列表失败", err))
+		return
+	}
+
+	// 获取设备当前各芯片版本用于对比
+	chipVersions := device.ChipVersions()
+
+	type chipItem struct {
+		TargetChip      string `json:"target_chip"`
+		FirmwareVersion string `json:"firmware_version"`
+		CurrentVersion  string `json:"current_version"`
+	}
+	type packageInfo struct {
+		ID          int64      `json:"id"`
+		MainVersion string     `json:"main_version"`
+		Model       string     `json:"model"`
+		Changelog   string     `json:"changelog"`
+		CreatedAt   string     `json:"created_at"`
+		Items       []chipItem `json:"items"`
+	}
+
+	packages := make([]packageInfo, 0, len(list))
+	for _, pkg := range list {
+		items := make([]chipItem, 0, len(pkg.Items))
+		for _, item := range pkg.Items {
+			items = append(items, chipItem{
+				TargetChip:      item.TargetChip,
+				FirmwareVersion: item.FirmwareVersion,
+				CurrentVersion:  chipVersions[item.TargetChip],
+			})
+		}
+		packages = append(packages, packageInfo{
+			ID:          pkg.ID,
+			MainVersion: pkg.MainVersion,
+			Model:       pkg.Model,
+			Changelog:   pkg.Changelog,
+			CreatedAt:   pkg.CreatedAt.Format(time.RFC3339),
+			Items:       items,
+		})
+	}
+
+	response.Success(c, gin.H{
+		"device_sn":             sn,
+		"device_model":          device.Model,
+		"current_main_version":  device.MainVersion,
+		"packages":              packages,
+	})
+}
+
+// GetDevicesByFirmware 按固件版本查询正在使用该版本的设备（管理端）
+func (h *OTAHandler) GetDevicesByFirmware(c *gin.Context) {
+	deviceModel := c.Query("model")
+	targetChip := c.Query("target_chip")
+	version := c.Query("version")
+	if deviceModel == "" || targetChip == "" || version == "" {
+		response.HandleError(c, apperr.BadRequest("model, target_chip, version 均为必填参数"))
+		return
+	}
+
+	validChips := map[string]bool{"arm": true, "esp": true, "dsp": true, "bms": true}
+	if !validChips[targetChip] {
+		response.HandleError(c, apperr.BadRequest("invalid target_chip"))
+		return
+	}
+
+	devices, err := h.otaService.GetDevicesByFirmwareVersion(c.Request.Context(), deviceModel, targetChip, version)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询设备列表失败", err))
+		return
+	}
+	response.Success(c, gin.H{"devices": devices, "total": len(devices)})
+}
+
+// GetUpgradePackageDevices 按升级包查询已安装/正在安装该升级包的设备（管理端）
+func (h *OTAHandler) GetUpgradePackageDevices(c *gin.Context) {
+	packageIDStr := c.Query("package_id")
+	if packageIDStr == "" {
+		response.HandleError(c, apperr.BadRequest("package_id 必填"))
+		return
+	}
+	packageID := parseID(packageIDStr)
+	if packageID <= 0 {
+		response.HandleError(c, apperr.BadRequest("invalid package_id"))
+		return
+	}
+
+	status := c.Query("status")
+
+	devices, err := h.otaService.GetDevicesByUpgradePackage(c.Request.Context(), packageID, status)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询设备列表失败", err))
+		return
+	}
+	response.Success(c, gin.H{"devices": devices, "total": len(devices)})
+}

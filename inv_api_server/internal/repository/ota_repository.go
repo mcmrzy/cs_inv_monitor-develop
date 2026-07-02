@@ -1237,3 +1237,79 @@ func (r *OTARepository) ReportLocalOTAResult(ctx context.Context, sn string, tar
 
 	return nil
 }
+
+// GetDevicesByFirmwareVersion 按固件版本查询正在使用该版本的设备
+func (r *OTARepository) GetDevicesByFirmwareVersion(ctx context.Context, deviceModel string, targetChip string, firmwareVersion string) ([]DeviceInfo, error) {
+	colMap := map[string]string{
+		"arm": "firmware_arm", "esp": "firmware_esp",
+		"dsp": "firmware_dsp", "bms": "firmware_bms",
+	}
+	col, ok := colMap[targetChip]
+	if !ok {
+		return nil, fmt.Errorf("invalid target_chip: %s", targetChip)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,'')
+		FROM devices
+		WHERE model = $1 AND %s = $2 AND deleted_at IS NULL
+		ORDER BY sn
+	`, col)
+
+	rows, err := r.db.Query(ctx, query, deviceModel, firmwareVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []DeviceInfo
+	for rows.Next() {
+		var d DeviceInfo
+		if err := rows.Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp,
+			&d.FirmwareDSP, &d.FirmwareBMS, &d.MainVersion); err != nil {
+			continue
+		}
+		result = append(result, d)
+	}
+	return result, nil
+}
+
+// GetDevicesByUpgradePackage 按升级包查询已安装/正在安装该升级包的设备
+func (r *OTARepository) GetDevicesByUpgradePackage(ctx context.Context, packageID int64, status string) ([]model.DeviceUpgrade, error) {
+	query := `
+		SELECT du.id, du.device_sn, du.firmware_id, du.firmware_version, COALESCE(du.target_chip,''),
+		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
+		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
+		       COALESCE(du.upgrade_package_id, 0)
+		FROM device_upgrades du
+		WHERE du.upgrade_package_id = $1
+	`
+	args := []interface{}{packageID}
+	if status != "" {
+		query += " AND du.status = $2"
+		args = append(args, status)
+	}
+	query += " ORDER BY du.device_sn, du.target_chip"
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []model.DeviceUpgrade
+	for rows.Next() {
+		var du model.DeviceUpgrade
+		var pkgID int64
+		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
+			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
+			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
+			&pkgID); err != nil {
+			continue
+		}
+		du.UpgradePackageID = &pkgID
+		result = append(result, du)
+	}
+	return result, nil
+}

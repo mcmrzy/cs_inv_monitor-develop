@@ -61,4 +61,10 @@ export const otaApi = {
   retryTask: (id: number | string) => api.post(`/ota/tasks/${id}/retry`),
   deleteTask: (id: number | string) => api.delete(`/ota/tasks/${id}`),
   getTaskStats: () => api.get('/ota/tasks/stats'),
+
+  // 固件-设备关联查询
+  getDevicesByFirmware: (model: string, targetChip: string, version: string) =>
+    api.get('/ota/firmware/devices', { params: { model, target_chip: targetChip, version } }),
+  getUpgradePackageDevices: (packageId: number, status?: string) =>
+    api.get('/ota/firmware/package-devices', { params: { package_id: packageId, status } }),
 }
