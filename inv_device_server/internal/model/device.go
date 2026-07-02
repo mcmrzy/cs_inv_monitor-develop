@@ -12,6 +12,8 @@ type DeviceInfo struct {
 	Manufacturer   string  `json:"manufacturer"`
 	FirmwareARM    string  `json:"firmware_arm"`
 	FirmwareESP    string  `json:"firmware_esp"`
+	FirmwareDSP    string  `json:"firmware_dsp"`
+	FirmwareBMS    string  `json:"firmware_bms"`
 	Type           string  `json:"type"`
 	RatedPower     int     `json:"rated_power"`
 	RatedVoltage   int     `json:"rated_voltage"`
@@ -157,6 +159,8 @@ type Device struct {
 	RatedPower     float64    `json:"rated_power"`
 	FirmwareARM    string     `json:"firmware_arm"`
 	FirmwareESP    string     `json:"firmware_esp"`
+	FirmwareDSP    string     `json:"firmware_dsp"`
+	FirmwareBMS    string     `json:"firmware_bms"`
 	Timezone       string     `json:"timezone"`
 	Status         int        `json:"status"`
 	LastOnlineAt   *time.Time `json:"last_online_at"`

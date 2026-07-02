@@ -153,6 +153,10 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 					oldVersion = device.FirmwareArm
 				case "esp":
 					oldVersion = device.FirmwareEsp
+				case "dsp":
+					oldVersion = device.FirmwareDSP
+				case "bms":
+					oldVersion = device.FirmwareBMS
 				default:
 					oldVersion = device.VersionSummary()
 				}
@@ -373,6 +377,11 @@ func (s *OTAService) GetDeviceBySN(ctx context.Context, sn string) (*repository.
 	return s.repo.GetDeviceBySN(ctx, sn)
 }
 
+// CheckDeviceOwnership 检查设备是否属于指定用户
+func (s *OTAService) CheckDeviceOwnership(ctx context.Context, sn string, userID int64) (bool, error) {
+	return s.repo.CheckDeviceOwnership(ctx, sn, userID)
+}
+
 // GetLatestFirmware 获取指定型号的最新固件
 func (s *OTAService) GetLatestFirmware(ctx context.Context, deviceModel string, targetChip string) (*model.Firmware, error) {
 	return s.repo.GetLatestFirmware(ctx, deviceModel, targetChip)
@@ -552,6 +561,8 @@ func (s *OTAService) PushPackageUpgrade(ctx context.Context, req *PushPackageUpg
 			chipVersions := map[string]string{
 				"arm": device.FirmwareArm,
 				"esp": device.FirmwareEsp,
+				"dsp": device.FirmwareDSP,
+				"bms": device.FirmwareBMS,
 			}
 
 			var firstPendingDU *model.DeviceUpgrade
@@ -916,6 +927,10 @@ func (s *OTAService) CreateUpgradeTask(ctx context.Context, req *CreateUpgradeTa
 						oldVersion = device.FirmwareArm
 					case "esp":
 						oldVersion = device.FirmwareEsp
+					case "dsp":
+						oldVersion = device.FirmwareDSP
+					case "bms":
+						oldVersion = device.FirmwareBMS
 					default:
 						oldVersion = device.VersionSummary()
 					}
@@ -945,6 +960,8 @@ func (s *OTAService) CreateUpgradeTask(ctx context.Context, req *CreateUpgradeTa
 				chipVersions := map[string]string{
 					"arm": device.FirmwareArm,
 					"esp": device.FirmwareEsp,
+					"dsp": device.FirmwareDSP,
+					"bms": device.FirmwareBMS,
 				}
 				taskID := task.ID
 				pkgID := pkg.ID
@@ -1181,4 +1198,9 @@ func (s *OTAService) DeleteUpgradeTask(ctx context.Context, taskID int64) error 
 // GetTaskStats 获取任务统计
 func (s *OTAService) GetTaskStats(ctx context.Context) (pending, running, todayCompleted, failed int, err error) {
 	return s.repo.GetTaskStats(ctx)
+}
+
+// ReportLocalOTAResult 本地OTA完成后，更新设备固件版本并记录升级历史
+func (s *OTAService) ReportLocalOTAResult(ctx context.Context, sn string, targetChip string, newVersion string, mainVersion string) error {
+	return s.repo.ReportLocalOTAResult(ctx, sn, targetChip, newVersion, mainVersion)
 }

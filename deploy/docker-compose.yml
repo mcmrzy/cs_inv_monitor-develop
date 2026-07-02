@@ -123,6 +123,11 @@ services:
       REDIS_PORT: "6379"
       API_SERVER_URL: http://inv-api-server:8080
       DEVICE_SERVER_URL: http://inv-device-server:8081
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-inv_mqtt}
     ports:
       - "80:8080"
     depends_on:

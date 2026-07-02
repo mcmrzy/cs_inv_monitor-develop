@@ -259,7 +259,7 @@ src/
 
 每次代码变更后，按顺序检查：
 
-1. **编译**：`go build ./...`（Go）/ `tsc --noEmit`（TS）/ `flutter analyze`（Dart）
+1. **编译**：`使用docker`（Go）/ `使用docker`（TS）/ `flutter analyze`（Dart）
 2. **错误处理**：所有 Handler 错误使用 `apperr` + `response.HandleError`
 3. **输入校验**：用户输入均已校验
 4. **SQL 安全**：无字符串拼接 SQL

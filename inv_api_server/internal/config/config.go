@@ -148,7 +148,7 @@ func Load(configPath string) (*Config, error) {
 	
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.read_timeout", 30*time.Second)
-	viper.SetDefault("server.write_timeout", 30*time.Second)
+	viper.SetDefault("server.write_timeout", 0*time.Second) // SSE 长连接需要无写超时
 	viper.SetDefault("server.mode", "release")
 
 	data, err := os.ReadFile(configPath)

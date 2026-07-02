@@ -335,8 +335,9 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		response.Success(c, gin.H{
 			"has_update":             true,
 			"upgrade_mode":           "package",
-			"main_version":           pkg.MainVersion,
+			"device_model":           device.Model,
 			"current_main_version":   device.MainVersion,
+			"main_version":           pkg.MainVersion,
 			"firmware_id":            firstFW.FirmwareID,
 			"version":                firstFW.FirmwareVersion,
 			"target_chip":            firstFW.TargetChip,
@@ -360,33 +361,44 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			currentChipVersion = device.FirmwareArm
 		case "esp":
 			currentChipVersion = device.FirmwareEsp
+		case "dsp":
+			currentChipVersion = device.FirmwareDSP
+		case "bms":
+			currentChipVersion = device.FirmwareBMS
 		}
 		if currentChipVersion == "" {
 			currentChipVersion = du.OldVersion
 		}
 		response.Success(c, gin.H{
-			"has_update":        true,
-			"upgrade_mode":      "single",
-			"firmware_id":       fw.ID,
-			"main_version":      fw.MainVersion,
-			"version":           fw.Version,
-			"target_chip":       fw.TargetChip,
-			"current_version":   currentChipVersion,
-			"download_url":      h.otaService.BuildDownloadURL(fw.FileURL),
-			"file_name":         fw.Model + "_" + fw.Version + ".bin",
-			"file_size":         fw.FileSize,
-			"file_md5":          fw.FileMD5,
-			"changelog":         fw.Changelog,
-			"is_force":          fw.IsForce,
-			"upgrade_id":        du.ID,
-			"is_admin_push":     true,
+			"has_update":             true,
+			"upgrade_mode":           "single",
+			"device_model":           device.Model,
+			"current_main_version":   device.MainVersion,
+			"firmware_id":            fw.ID,
+			"main_version":           fw.MainVersion,
+			"version":                fw.Version,
+			"target_chip":            fw.TargetChip,
+			"current_version":        currentChipVersion,
+			"download_url":           h.otaService.BuildDownloadURL(fw.FileURL),
+			"file_name":              fw.Model + "_" + fw.Version + ".bin",
+			"file_size":              fw.FileSize,
+			"file_md5":               fw.FileMD5,
+			"changelog":              fw.Changelog,
+			"is_force":               fw.IsForce,
+			"upgrade_id":             du.ID,
+			"is_admin_push":          true,
 		})
 		return
 	}
 
 	response.Success(c, gin.H{
 		"has_update":             false,
+		"device_model":           device.Model,
 		"current_main_version":   device.MainVersion,
+		"firmware_arm":           device.FirmwareArm,
+		"firmware_esp":           device.FirmwareEsp,
+		"firmware_dsp":           device.FirmwareDSP,
+		"firmware_bms":           device.FirmwareBMS,
 		"message":                "暂无可用更新",
 	})
 }
@@ -402,7 +414,18 @@ func (h *OTAHandler) TriggerOTA(c *gin.Context) {
 		return
 	}
 
-	err := h.otaService.PushUpgrade(c.Request.Context(), &service.PushUpgradeReq{
+	userID := c.GetInt64("user_id")
+	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), req.SN, userID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询设备信息失败", err))
+		return
+	}
+	if !owned {
+		response.HandleError(c, apperr.Forbidden("设备不属于当前用户"))
+		return
+	}
+
+	err = h.otaService.PushUpgrade(c.Request.Context(), &service.PushUpgradeReq{
 		FirmwareID: req.FirmwareID,
 		DeviceSNs:  []string{req.SN},
 		Immediate:  true,
@@ -423,7 +446,18 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 		return
 	}
 
-	err := h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
+	userID := c.GetInt64("user_id")
+	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), sn, userID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询设备信息失败", err))
+		return
+	}
+	if !owned {
+		response.HandleError(c, apperr.Forbidden("设备不属于当前用户"))
+		return
+	}
+
+	err = h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
 	if err != nil {
 		log.Printf("[ResendUpgradeCommand] error: sn=%s, err=%v", sn, err)
 		response.HandleError(c, apperr.Internal("重新发送升级命令失败: "+err.Error(), err))
@@ -939,4 +973,129 @@ func (h *OTAHandler) GetTaskStats(c *gin.Context) {
 		"today_completed": todayCompleted,
 		"failed":          failed,
 	})
+}
+
+// ReportLocalOTAResult 本地OTA完成后，App上报新版本号
+func (h *OTAHandler) ReportLocalOTAResult(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.HandleError(c, apperr.BadRequest("设备SN不能为空"))
+		return
+	}
+
+	var req struct {
+		Status      string `json:"status" binding:"required"`      // "success" or "failed"
+		TargetChip  string `json:"target_chip" binding:"required"` // "esp", "arm", "dsp", "bms"
+		NewVersion  string `json:"new_version"`
+		MainVersion string `json:"main_version"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	validChips := map[string]bool{"arm": true, "esp": true, "dsp": true, "bms": true}
+	if !validChips[req.TargetChip] {
+		response.HandleError(c, apperr.BadRequest("invalid target_chip"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	if req.Status == "success" && req.NewVersion != "" {
+		if err := h.otaService.ReportLocalOTAResult(ctx, sn, req.TargetChip, req.NewVersion, req.MainVersion); err != nil {
+			log.Printf("[ReportLocalOTAResult] error: sn=%s, chip=%s, err=%v", sn, req.TargetChip, err)
+			// 不返回错误给客户端，避免阻断 App 流程
+		}
+	}
+
+	response.Success(c, gin.H{"status": "ok"})
+}
+
+// AppListUpgradePackages APP端查询升级包列表（过滤敏感字段）
+func (h *OTAHandler) AppListUpgradePackages(c *gin.Context) {
+	modelFilter := c.Query("model")
+	if modelFilter == "" {
+		response.HandleError(c, apperr.BadRequest("model is required"))
+		return
+	}
+
+	list, err := h.otaService.ListUpgradePackages(c.Request.Context(), modelFilter)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询升级包列表失败", err))
+		return
+	}
+
+	// 过滤敏感字段，只返回 App 端需要的信息
+	type safeItem struct {
+		TargetChip      string `json:"target_chip"`
+		FirmwareVersion string `json:"firmware_version"`
+	}
+	type safePackage struct {
+		ID          int64      `json:"id"`
+		MainVersion string     `json:"main_version"`
+		Model       string     `json:"model"`
+		Changelog   string     `json:"changelog"`
+		CreatedAt   string     `json:"created_at"`
+		Items       []safeItem `json:"items"`
+	}
+
+	packages := make([]safePackage, 0, len(list))
+	for _, pkg := range list {
+		items := make([]safeItem, 0, len(pkg.Items))
+		for _, item := range pkg.Items {
+			items = append(items, safeItem{
+				TargetChip:      item.TargetChip,
+				FirmwareVersion: item.FirmwareVersion,
+			})
+		}
+		packages = append(packages, safePackage{
+			ID:          pkg.ID,
+			MainVersion: pkg.MainVersion,
+			Model:       pkg.Model,
+			Changelog:   pkg.Changelog,
+			CreatedAt:   pkg.CreatedAt.Format(time.RFC3339),
+			Items:       items,
+		})
+	}
+
+	response.Success(c, gin.H{"packages": packages})
+}
+
+// AppInstallPackage APP端安装指定升级包
+func (h *OTAHandler) AppInstallPackage(c *gin.Context) {
+	var req struct {
+		SN        string `json:"sn" binding:"required"`
+		PackageID int64  `json:"package_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
+		return
+	}
+
+	userID := c.GetInt64("user_id")
+
+	// 安全校验：确认设备属于当前用户
+	owned, err := h.otaService.CheckDeviceOwnership(c.Request.Context(), req.SN, userID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询设备信息失败", err))
+		return
+	}
+	if !owned {
+		response.HandleError(c, apperr.Forbidden("设备不属于当前用户"))
+		return
+	}
+
+	if err := h.otaService.PushPackageUpgrade(c.Request.Context(), &service.PushPackageUpgradeReq{
+		PackageID: req.PackageID,
+		DeviceSNs: []string{req.SN},
+		PushedBy:  userID,
+		Immediate: true,
+	}); err != nil {
+		log.Printf("[AppInstallPackage] error: sn=%s, package_id=%d, err=%v", req.SN, req.PackageID, err)
+		response.HandleError(c, apperr.Internal("安装升级包失败: "+err.Error(), err))
+		return
+	}
+
+	response.SuccessWithMessage(c, "升级包已推送", nil)
 }

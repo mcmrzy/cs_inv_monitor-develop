@@ -27,6 +27,7 @@ import (
 	"api-gateway/internal/middleware"
 	"api-gateway/internal/routes"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -53,13 +54,22 @@ func main() {
 		defer rdb.Close()
 	}
 
+	var pgPool *pgxpool.Pool
+	pgPool, err = initDB(cfg)
+	if err != nil {
+		log.Printf("[GW] PostgreSQL 连接失败，RBAC 数据库回退不可用: %v", err)
+	}
+	if pgPool != nil {
+		defer pgPool.Close()
+	}
+
 	var rbac *middleware.RBACMiddleware
 	if cfg.RBAC.Enabled && rdb != nil {
-		rbac = middleware.NewRBACMiddleware(rdb, nil, cfg.RBAC.CacheTTLSec)
-		log.Printf("[GW] RBAC 权限控制已启用 (Redis缓存模式, TTL=%ds)", cfg.RBAC.CacheTTLSec)
+		rbac = middleware.NewRBACMiddleware(rdb, pgPool, cfg.RBAC.CacheTTLSec)
+		log.Printf("[GW] RBAC 权限控制已启用 (Redis缓存+DB回退, TTL=%ds)", cfg.RBAC.CacheTTLSec)
 	} else if cfg.RBAC.Enabled {
 		log.Println("[GW] RBAC 已启用但 Redis 不可用，权限校验将降级为仅角色检查")
-		rbac = middleware.NewRBACMiddleware(nil, nil, cfg.RBAC.CacheTTLSec)
+		rbac = middleware.NewRBACMiddleware(nil, pgPool, cfg.RBAC.CacheTTLSec)
 	}
 
 	routeLimits := make([]middleware.RouteRateLimitConfig, 0, len(cfg.RouteRateLimits))
@@ -85,7 +95,7 @@ func main() {
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler:      router,
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 0, // SSE 长连接需要无写超时
 		IdleTimeout:  120 * time.Second,
 	}
 
@@ -121,6 +131,23 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 
 	log.Println("[GW] Redis 连接成功")
 	return rdb, nil
+}
+
+func initDB(cfg *config.Config) (*pgxpool.Pool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	pool, err := pgxpool.New(ctx, cfg.DatabaseDSN())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pool.Ping(ctx); err != nil {
+		return nil, err
+	}
+
+	log.Printf("[GW] PostgreSQL 连接成功 (%s:%d/%s)", cfg.Database.Host, cfg.Database.Port, cfg.Database.Name)
+	return pool, nil
 }
 
 func gracefulShutdown(srv *http.Server) {

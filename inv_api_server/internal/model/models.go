@@ -47,6 +47,8 @@ type Device struct {
 	Manufacturer   string     `json:"manufacturer"`
 	FirmwareArm    string     `json:"firmware_arm"`
 	FirmwareEsp    string     `json:"firmware_esp"`
+	FirmwareDSP    string     `json:"firmware_dsp"`
+	FirmwareBMS    string     `json:"firmware_bms"`
 	MainVersion    string     `json:"main_version"`
 	DeviceType     string     `json:"device_type"`
 	RatedPower     float64    `json:"rated_power"`
@@ -328,6 +330,8 @@ type DeviceUpgrade struct {
 	// 设备当前芯片版本（详情查询用）
 	CurrentArmVersion string `json:"current_arm_version,omitempty"`
 	CurrentEspVersion string `json:"current_esp_version,omitempty"`
+	CurrentDspVersion string `json:"current_dsp_version,omitempty"`
+	CurrentBmsVersion string `json:"current_bms_version,omitempty"`
 
 	// 升级包相关
 	PackageMainVersion string `json:"package_main_version,omitempty"`

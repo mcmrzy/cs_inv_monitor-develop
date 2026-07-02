@@ -11,6 +11,13 @@
 - [README.md](file://README.md)
 </cite>
 
+## 更新摘要
+**变更内容**
+- 新增升级任务取消功能，包括改进的CancelTask方法实现
+- 支持active状态过滤的任务查询接口
+- 增强的错误处理机制，统一业务错误类型处理
+- 优化的任务状态管理，支持更精确的状态转换
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -25,6 +32,8 @@
 
 ## 简介
 本文件为OTA升级API的完整技术文档，覆盖固件管理、升级任务创建与管理、进度查询、回滚与失败处理、统计报表以及设备端集成协议。系统采用后端API服务器与设备侧服务分离的架构，通过MQTT通道实现设备与云端的双向通信。
+
+**更新** 本次更新反映了后端OTA服务和仓库层的可靠性增强，包括改进的CancelTask方法、支持active状态过滤的任务查询、增强的错误处理机制。
 
 ## 项目结构
 - API网关：统一入口与中间件（鉴权、CORS、限流等）
@@ -71,6 +80,8 @@ MQTT --> APP
 - OTA服务（Service）：协调固件信息、设备升级任务、MQTT命令下发与状态更新
 - OTA仓库（Repository）：数据库访问层，提供固件、设备升级任务的CRUD与聚合查询
 - 设备侧MQTT客户端：根据命令类型选择对应MQTT主题并发送升级命令
+
+**更新** 新增了增强的错误处理机制，统一使用AppError类型进行业务错误处理，提供更精确的错误信息和状态码。
 
 **章节来源**
 - [inv_api_server/internal/handler/ota_handler.go:20-26](file://inv_api_server/internal/handler/ota_handler.go#L20-L26)
@@ -160,6 +171,8 @@ AutoMainVer --> Done(["完成"])
   - 为每个设备UPSERT升级记录并发送MQTT命令
   - immediate=true时直接下发升级命令，否则仅创建任务
 
+**更新** 新增了任务取消功能，支持对进行中的任务进行精确控制。取消任务时会检查任务状态，防止对已完成或已取消的任务进行重复操作。
+
 ```mermaid
 sequenceDiagram
 participant Admin as "管理员"
@@ -199,6 +212,8 @@ API-->>Admin : "返回推送结果"
 - 内部接口行为
   - 解析上报内容，更新数据库中的任务状态与进度
 
+**更新** 新增了支持active状态过滤的任务查询功能，允许用户查询正在进行中的任务（排除已完成和已取消的任务）。
+
 ```mermaid
 sequenceDiagram
 participant Device as "设备"
@@ -230,6 +245,8 @@ API-->>DevSvc : "确认"
   - 取消待执行任务：POST /api/v1/ota/upgrades/cancel
   - 任务状态自动标记为失败并保留错误信息
 
+**更新** 增强了错误处理机制，所有API调用都经过统一的错误处理层，提供更精确的错误信息和状态码。新增的CancelTask方法实现了可靠的取消逻辑，包括状态检查和原子性更新。
+
 ```mermaid
 flowchart TD
 Fail["升级失败"] --> Retry["POST /api/v1/ota/upgrades/retry"]
@@ -255,6 +272,8 @@ ReSend --> Pending["状态回到pending"]
   - 成功率：成功/失败/进行中任务数
   - 设备分布：按型号、区域、时间窗口统计
   - 性能分析：平均升级耗时、失败原因分布
+
+**更新** 新增了任务统计功能，支持查询不同状态的任务数量，包括进行中、已完成、失败等状态的统计。
 
 **章节来源**
 - [inv_api_server/internal/handler/ota_handler.go:216-244](file://inv_api_server/internal/handler/ota_handler.go#L216-L244)
@@ -351,6 +370,8 @@ OTAService --> Firmware : "操作"
 - 存储依赖：PostgreSQL存储固件与升级任务，Redis用于缓存（在服务初始化中注入）
 - 外部依赖：设备侧服务通过HTTP接口接收命令，MQTT用于设备与云端通信
 
+**更新** 新增了统一的错误处理机制，所有业务错误都通过AppError类型进行包装，提供标准的HTTP状态码和业务码。
+
 ```mermaid
 graph LR
 Routes["路由层<br/>/api/v1/ota/*"] --> Handler["OTA处理器"]
@@ -376,7 +397,7 @@ Repo --> PG["PostgreSQL"]
 - 缓存与索引：Redis用于会话与临时状态，数据库建立必要索引以提升查询性能
 - 超时与重试：HTTP客户端设置超时，MQTT发送失败时记录错误便于后续重试
 
-[本节为通用指导，无需具体文件引用]
+**更新** 优化了任务取消的性能，通过原子性的数据库更新操作确保状态一致性，避免竞态条件。
 
 ## 故障排除指南
 - 常见问题
@@ -384,20 +405,23 @@ Repo --> PG["PostgreSQL"]
   - 推送升级无响应：确认设备在线、MQTT主题正确、设备侧服务运行正常
   - 进度不更新：检查内部状态上报接口是否被调用、数据库连接是否正常
   - 权限不足：确认JWT令牌有效且具备相应权限（ota:view/create/control）
+  - 任务取消失败：检查任务状态是否允许取消（已完成或已取消的任务无法取消）
 - 排查步骤
   - 查看API服务器日志与错误码
   - 使用内部健康检查接口确认数据库与Redis连通性
   - 在设备侧服务中检查MQTT订阅与命令转发状态
   - 核对设备上报的主题与格式是否符合规范
 
+**更新** 新增了任务取消相关的故障排除指南，包括状态检查和错误处理的最佳实践。
+
 **章节来源**
 - [inv_api_server/cmd/main.go:356-377](file://inv_api_server/cmd/main.go#L356-L377)
 - [README.md:281-313](file://README.md#L281-L313)
 
 ## 结论
-本OTA升级API提供了从固件管理到任务执行、进度跟踪与回滚的全链路能力。通过清晰的接口设计与严格的权限控制，结合MQTT的可靠通信，能够满足大规模设备的远程升级需求。建议在生产环境中配合完善的监控与告警体系，确保升级过程的可观测性与可追溯性。
+本OTA升级API提供了从固件管理到任务执行、进度跟踪与回滚的全链路能力。通过清晰的接口设计与严格的权限控制，结合MQTT的可靠通信，能够满足大规模设备的远程升级需求。最新的可靠性增强包括改进的任务取消机制、增强的错误处理和active状态过滤功能，进一步提升了系统的稳定性和用户体验。
 
-[本节为总结性内容，无需具体文件引用]
+**更新** 本次更新显著增强了系统的可靠性，新的CancelTask方法提供了精确的任务控制能力，增强的错误处理机制确保了更好的错误诊断和恢复能力。
 
 ## 附录
 
@@ -409,7 +433,7 @@ Repo --> PG["PostgreSQL"]
   - DELETE /api/v1/ota/firmware/:id
 - 升级任务
   - POST /api/v1/ota/upgrades/push
-  - GET /api/v1/ota/upgrades/dashboard
+  - GET /api/v1/ota/upgrades/dashboard?status=active
   - GET /api/v1/ota/upgrades/firmware/:firmwareId
   - POST /api/v1/ota/upgrades/retry
   - POST /api/v1/ota/upgrades/cancel
@@ -420,6 +444,8 @@ Repo --> PG["PostgreSQL"]
   - GET /api/v1/ota/devices/:sn/history
 - 内部接口
   - POST /api/v1/internal/ota-status
+
+**更新** 新增了支持active状态过滤的任务查询接口，允许用户查询正在进行中的任务。
 
 **章节来源**
 - [inv_api_server/cmd/main.go:549-564](file://inv_api_server/cmd/main.go#L549-L564)
@@ -434,3 +460,16 @@ Repo --> PG["PostgreSQL"]
 **章节来源**
 - [README.md:281-313](file://README.md#L281-L313)
 - [inv_device_server/internal/mqtt/client.go:264-283](file://inv_device_server/internal/mqtt/client.go#L264-L283)
+
+### 错误处理机制
+- 统一错误类型：AppError提供标准的HTTP状态码和业务码
+- 自动错误映射：HandleError函数自动识别业务错误类型
+- 未知错误处理：默认返回500状态码和系统错误消息
+- 业务场景错误：提供详细的错误描述和业务码
+
+**更新** 新增了统一的错误处理机制，确保所有API调用都有标准化的错误响应格式。
+
+**章节来源**
+- [inv_api_server/internal/handler/ota_handler.go:1-200](file://inv_api_server/internal/handler/ota_handler.go#L1-L200)
+- [inv_api_server/pkg/response/response.go:96-117](file://inv_api_server/pkg/response/response.go#L96-L117)
+- [inv_api_server/pkg/apperr/errors.go:1-49](file://inv_api_server/pkg/apperr/errors.go#L1-L49)

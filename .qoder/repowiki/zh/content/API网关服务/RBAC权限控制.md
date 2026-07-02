@@ -3,23 +3,24 @@
 <cite>
 **本文档引用的文件**
 - [api-gateway/internal/middleware/rbac.go](file://api-gateway/internal/middleware/rbac.go)
+- [api-gateway/internal/middleware/jwt.go](file://api-gateway/internal/middleware/jwt.go)
+- [api-gateway/internal/routes/routes.go](file://api-gateway/internal/routes/routes.go)
+- [api-gateway/main.go](file://api-gateway/main.go)
 - [inv_api_server/internal/middleware/permission.go](file://inv_api_server/internal/middleware/permission.go)
 - [inv_api_server/internal/service/rbac_cache.go](file://inv_api_server/internal/service/rbac_cache.go)
 - [inv_api_server/internal/service/perm_checker.go](file://inv_api_server/internal/service/perm_checker.go)
 - [inv_api_server/internal/service/data_permission.go](file://inv_api_server/internal/service/data_permission.go)
 - [inv_api_server/internal/repository/repositories.go](file://inv_api_server/internal/repository/repositories.go)
 - [inv_api_server/internal/model/models.go](file://inv_api_server/internal/model/models.go)
-- [api-gateway/main.go](file://api-gateway/main.go)
-- [inv_api_server/cmd/main.go](file://inv_api_server/cmd/main.go)
 </cite>
 
 ## 更新摘要
 **所做更改**
-- 移除了RBAC权限控制系统的完整文档内容
-- 删除了所有关于RBAC中间件、缓存服务和权限检查器的详细说明
-- 移除了Redis缓存集成、权限降级机制等相关章节
-- 更新了项目结构图以反映权限控制系统的重构状态
-- 移除了所有具体的RBAC实现细节和配置示例
+- 新增APP端OTA接口白名单功能的详细说明
+- 更新中间件执行顺序和权限检查流程
+- 添加JWT认证与RBAC权限检查的协作机制
+- 更新架构图以反映新的白名单检查流程
+- 补充APP端OTA接口的权限控制策略
 
 ## 目录
 1. [简介](#简介)
@@ -27,11 +28,13 @@
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
-6. [依赖关系分析](#依赖关系分析)
-7. [性能考虑](#性能考虑)
-8. [故障排查指南](#故障排查指南)
-9. [结论](#结论)
-10. [附录](#附录)
+6. [APP端OTA接口白名单机制](#app端ota接口白名单机制)
+7. [JWT认证与RBAC协作](#jwt认证与rbac协作)
+8. [依赖关系分析](#依赖关系分析)
+9. [性能考虑](#性能考虑)
+10. [故障排查指南](#故障排查指南)
+11. [结论](#结论)
+12. [附录](#附录)
 
 ## 简介
 本文件系统性阐述本项目的RBAC（基于角色的权限控制）中间件与服务实现，涵盖以下要点：
@@ -39,22 +42,23 @@
 - 权限检查机制：静态权限匹配、动态权限计算与缓存策略
 - Redis缓存集成：权限数据存储、缓存更新与失效处理
 - 权限降级机制：在Redis不可用时的网关角色检查模式
+- **新增** APP端OTA接口白名单机制：支持OTA相关接口的JWT认证但跳过RBAC检查
 - 权限配置示例：角色定义、权限分配与访问规则设置
 - 与用户认证的集成方式与权限验证流程
 - 权限调试工具与常见问题解决方案
 
-**重要说明**：由于RBAC权限控制系统已在代码中移除，本文档中的大部分内容已不再适用当前架构。请参考更新后的项目结构和新的权限控制实现。
-
 ## 项目结构
 本项目在两个服务中实现了RBAC能力：
-- API网关层（api-gateway）：提供轻量级RBAC中间件，支持Redis缓存与降级模式
+- API网关层（api-gateway）：提供轻量级RBAC中间件，支持Redis缓存与降级模式，包含APP端OTA接口白名单
 - API服务层（inv_api_server）：提供更完整的权限检查器、缓存服务与数据权限过滤
 
 ```mermaid
 graph TB
 subgraph "API网关"
 GWMain["api-gateway/main.go<br/>启动与配置"]
+JWTMW["api-gateway/internal/middleware/jwt.go<br/>JWT认证中间件"]
 RBACMW["api-gateway/internal/middleware/rbac.go<br/>RBAC中间件"]
+Routes["api-gateway/internal/routes/routes.go<br/>路由配置"]
 end
 subgraph "API服务"
 APIMain["inv_api_server/cmd/main.go<br/>启动与路由装配"]
@@ -64,7 +68,10 @@ DataPerm["inv_api_server/internal/service/data_permission.go<br/>数据权限过
 Repo["inv_api_server/internal/repository/repositories.go<br/>仓库层"]
 Model["inv_api_server/internal/model/models.go<br/>模型定义"]
 end
+GWMain --> JWTMW
 GWMain --> RBACMW
+JWTMW --> RBACMW
+RBACMW --> Routes
 APIMain --> PermChecker
 APIMain --> RBACCache
 APIMain --> DataPerm
@@ -75,50 +82,48 @@ Repo --> Model
 ```
 
 **图表来源**
-- [api-gateway/main.go:21-94](file://api-gateway/main.go#L21-L94)
-- [api-gateway/internal/middleware/rbac.go:1-285](file://api-gateway/internal/middleware/rbac.go#L1-L285)
-- [inv_api_server/cmd/main.go:88-163](file://inv_api_server/cmd/main.go#L88-L163)
-- [inv_api_server/internal/service/perm_checker.go:1-173](file://inv_api_server/internal/service/perm_checker.go#L1-L173)
-- [inv_api_server/internal/service/rbac_cache.go:1-89](file://inv_api_server/internal/service/rbac_cache.go#L1-L89)
-- [inv_api_server/internal/service/data_permission.go:1-96](file://inv_api_server/internal/service/data_permission.go#L1-L96)
-- [inv_api_server/internal/repository/repositories.go:1-800](file://inv_api_server/internal/repository/repositories.go#L1-L800)
-- [inv_api_server/internal/model/models.go:1-379](file://inv_api_server/internal/model/models.go#L1-L379)
-
-**章节来源**
-- [api-gateway/main.go:21-94](file://api-gateway/main.go#L21-L94)
-- [inv_api_server/cmd/main.go:88-163](file://inv_api_server/cmd/main.go#L88-L163)
+- [api-gateway/main.go:34-116](file://api-gateway/main.go#L34-L116)
+- [api-gateway/internal/middleware/jwt.go:45-122](file://api-gateway/internal/middleware/jwt.go#L45-L122)
+- [api-gateway/internal/middleware/rbac.go:209-264](file://api-gateway/internal/middleware/rbac.go#L209-L264)
+- [api-gateway/internal/routes/routes.go:25-55](file://api-gateway/internal/routes/routes.go#L25-L55)
+- [inv_api_server/internal/service/perm_checker.go:17-173](file://inv_api_server/internal/service/perm_checker.go#L17-L173)
 
 ## 核心组件
+- JWT认证中间件：负责验证JWT令牌，提取用户身份信息并注入到请求头中
 - 网关RBAC中间件：负责根据请求路径与HTTP方法推断资源与动作，结合用户角色与权限进行快速判定，并支持Redis缓存与降级
+- **新增** APP端OTA接口白名单：专门针对APP端OTA相关接口的路径前缀列表，这些接口已通过JWT认证保护，对所有登录用户开放，跳过RBAC权限检查
 - API服务权限检查器：提供细粒度的权限检查逻辑，支持内存缓存与Redis持久化缓存
 - RBAC缓存服务：批量写入用户角色与角色权限到Redis，便于后续快速读取
 - 数据权限过滤：基于用户角色与设备访问视图生成SQL过滤条件，限制用户可见设备范围
 - 仓库层与模型：提供用户角色、角色权限等数据结构与查询接口
 
-**重要说明**：由于RBAC系统已被移除，上述组件可能已不存在或经过重大重构。请检查实际代码以获取最新实现。
-
 **章节来源**
-- [api-gateway/internal/middleware/rbac.go:24-176](file://api-gateway/internal/middleware/rbac.go#L24-L176)
-- [inv_api_server/internal/service/perm_checker.go:24-74](file://inv_api_server/internal/service/perm_checker.go#L24-L74)
-- [inv_api_server/internal/service/rbac_cache.go:16-53](file://inv_api_server/internal/service/rbac_cache.go#L16-L53)
-- [inv_api_server/internal/service/data_permission.go:14-96](file://inv_api_server/internal/service/data_permission.go#L14-L96)
-- [inv_api_server/internal/repository/repositories.go:18-459](file://inv_api_server/internal/repository/repositories.go#L18-L459)
-- [inv_api_server/internal/model/models.go:5-20](file://inv_api_server/internal/model/models.go#L5-L20)
+- [api-gateway/internal/middleware/jwt.go:45-122](file://api-gateway/internal/middleware/jwt.go#L45-L122)
+- [api-gateway/internal/middleware/rbac.go:190-207](file://api-gateway/internal/middleware/rbac.go#L190-L207)
+- [api-gateway/internal/middleware/rbac.go:209-264](file://api-gateway/internal/middleware/rbac.go#L209-L264)
+- [inv_api_server/internal/service/perm_checker.go:17-173](file://inv_api_server/internal/service/perm_checker.go#L17-L173)
 
 ## 架构总览
-RBAC在两个层面协同工作：
+RBAC在两个层面协同工作，包含新的APP端OTA接口白名单机制：
 - 网关层：对公共API入口进行快速权限拦截，减少无效请求进入后端
+- **新增** APP端OTA接口：通过JWT认证保护，对所有登录用户开放，跳过RBAC权限检查
 - 服务层：对具体业务接口进行细粒度权限校验，并提供数据级权限过滤
 
 ```mermaid
 sequenceDiagram
 participant Client as "客户端"
+participant JWT as "JWT认证中间件"
 participant Gateway as "API网关中间件"
-participant API as "API服务"
 participant Checker as "权限检查器"
 participant Cache as "Redis缓存"
 participant DB as "PostgreSQL"
-Client->>Gateway : 请求受控资源
+Client->>JWT : 发送JWT令牌
+JWT->>JWT : 验证令牌有效性
+JWT->>Gateway : 注入用户身份信息
+Gateway->>Gateway : 检查是否为APP端OTA白名单接口
+alt 属于白名单
+Gateway->>Gateway : 跳过RBAC检查，直接放行
+else 非白名单接口
 Gateway->>Gateway : 解析路径与方法<br/>推断资源与动作
 alt Redis可用
 Gateway->>Cache : 查询用户角色/角色权限
@@ -129,8 +134,12 @@ DB-->>Gateway : 返回角色
 end
 Gateway->>Gateway : 判断超级管理员/匹配权限
 alt 通过
-Gateway->>API : 放行请求
-API->>Checker : 服务内权限校验
+Gateway->>Gateway : 放行请求
+else 拒绝
+Gateway-->>Client : 403 Forbidden
+end
+end
+Gateway->>Checker : 服务内权限校验
 alt Redis可用
 Checker->>Cache : 读取/写入角色权限缓存
 Cache-->>Checker : 返回权限列表
@@ -138,23 +147,46 @@ else Redis不可用
 Checker->>DB : 查询角色权限
 DB-->>Checker : 返回权限列表
 end
-Checker-->>API : 校验结果
-API-->>Client : 正常响应
-else 拒绝
-Gateway-->>Client : 403 Forbidden
-end
+Checker-->>Gateway : 校验结果
+Gateway-->>Client : 正常响应
 ```
 
 **图表来源**
-- [api-gateway/internal/middleware/rbac.go:190-239](file://api-gateway/internal/middleware/rbac.go#L190-L239)
+- [api-gateway/internal/middleware/jwt.go:45-122](file://api-gateway/internal/middleware/jwt.go#L45-L122)
+- [api-gateway/internal/middleware/rbac.go:209-264](file://api-gateway/internal/middleware/rbac.go#L209-L264)
 - [inv_api_server/internal/service/perm_checker.go:41-74](file://inv_api_server/internal/service/perm_checker.go#L41-L74)
-- [inv_api_server/internal/service/rbac_cache.go:30-53](file://inv_api_server/internal/service/rbac_cache.go#L30-L53)
 
 ## 详细组件分析
+
+### JWT认证中间件（api-gateway）
+- 令牌验证：解析Authorization头，验证JWT令牌的有效性和签名
+- 用户信息注入：从JWT令牌中提取user_id、phone、role等信息，注入到请求头中
+- 公共接口放行：对健康检查、登录注册等公共接口跳过认证
+- **新增** OTA接口保护：APP端OTA接口通过JWT认证保护，确保只有登录用户才能访问
+
+```mermaid
+flowchart TD
+Start(["进入JWTAuth中间件"]) --> CheckPublic["检查是否为公共接口"]
+CheckPublic --> PublicOK{"是公共接口？"}
+PublicOK --> |是| Allow["直接放行"]
+PublicOK --> |否| CheckToken["验证JWT令牌"]
+CheckToken --> TokenValid{"令牌有效？"}
+TokenValid --> |否| Deny["返回401 Unauthorized"]
+TokenValid --> |是| InjectClaims["注入用户身份信息"]
+InjectClaims --> Allow
+```
+
+**图表来源**
+- [api-gateway/internal/middleware/jwt.go:45-122](file://api-gateway/internal/middleware/jwt.go#L45-L122)
+
+**章节来源**
+- [api-gateway/internal/middleware/jwt.go:13-43](file://api-gateway/internal/middleware/jwt.go#L13-L43)
+- [api-gateway/internal/middleware/jwt.go:45-122](file://api-gateway/internal/middleware/jwt.go#L45-L122)
 
 ### 网关RBAC中间件（api-gateway）
 - 资源映射：通过前缀映射将路径转换为资源标识，如/admin/映射为admin资源
 - 动作映射：GET/POST/PUT/PATCH/DELETE分别映射为view/create/edit/delete
+- **新增** 白名单检查：在权限检查前先检查是否为APP端OTA接口白名单
 - 用户角色获取：优先从Redis读取用户角色缓存；若不可用则回退至数据库查询并写入Redis
 - 角色权限获取：优先从Redis读取角色权限缓存；若不可用则查询数据库并写入Redis
 - 权限判定：超级管理员（role==0）直接放行；否则遍历角色权限匹配资源与动作
@@ -191,124 +223,85 @@ Found --> |否| Deny
 - [api-gateway/internal/middleware/rbac.go:178-254](file://api-gateway/internal/middleware/rbac.go#L178-L254)
 - [api-gateway/internal/middleware/rbac.go:256-285](file://api-gateway/internal/middleware/rbac.go#L256-L285)
 
-### API服务权限检查器（inv_api_server）
-- 内存缓存：以键 gw:role_perms:{roleID} 的形式在内存中缓存角色权限，带过期时间
-- Redis缓存：优先从Redis读取用户角色与角色权限；若不可用则回退至数据库
-- 降级策略：当Redis不可用时，直接查询数据库；当数据库也失败时记录错误并拒绝
-- 缓存失效：提供按用户与按角色的缓存删除接口
+## APP端OTA接口白名单机制
 
-```mermaid
-classDiagram
-class PermChecker {
--rdb : redis.Client
--userRepo : UserRepository
--cacheTTL : time.Duration
--memCache : map[string]permCacheEntry
-+CheckPermission(userID, resource, action) bool
--loadUserRoles(ctx, userID) ([]int64, error)
--loadRolePerms(ctx, roleID) ([]PermissionEntry, error)
-+InvalidateUser(userID)
-+InvalidateRole(roleID)
-}
-class UserRepository {
-+GetUserRoleIDs(ctx, userID) []int64
-+GetRolePermissions(ctx, roleID) []PermissionEntry
-+UpdateRole(ctx, userID, role)
-+UpsertPermission(ctx, role, resource, action, isAllowed)
-}
-PermChecker --> UserRepository : "依赖"
-```
+### 白名单设计原理
+APP端OTA接口白名单机制是为了支持APP应用的OTA升级功能而设计的特殊权限策略：
+- **JWT认证保护**：所有白名单接口都已通过JWT认证保护，确保只有合法登录用户才能访问
+- **跳过RBAC检查**：由于这些接口面向所有登录用户，无需进行细粒度的RBAC权限检查
+- **简化访问流程**：减少不必要的权限验证开销，提升APP端OTA功能的响应速度
 
-**图表来源**
-- [inv_api_server/internal/service/perm_checker.go:24-173](file://inv_api_server/internal/service/perm_checker.go#L24-L173)
-- [inv_api_server/internal/repository/repositories.go:410-459](file://inv_api_server/internal/repository/repositories.go#L410-L459)
+### 白名单接口列表
+APP端OTA接口白名单包含以下路径前缀：
+- `/api/v1/ota/check/` - OTA版本检查接口
+- `/api/v1/ota/trigger` - OTA升级触发接口  
+- `/api/v1/ota/resend/` - OTA重新发送接口
+- `/api/v1/ota/devices/` - OTA设备相关接口
+- `/api/v1/ota/app/check` - APP端OTA版本检查接口
 
-**章节来源**
-- [inv_api_server/internal/service/perm_checker.go:17-173](file://inv_api_server/internal/service/perm_checker.go#L17-L173)
-- [inv_api_server/internal/repository/repositories.go:410-459](file://inv_api_server/internal/repository/repositories.go#L410-L459)
-
-### RBAC缓存服务（inv_api_server）
-- 批量写入：将用户的所有角色ID与每个角色对应的权限集合写入Redis，键名采用 gw:user_roles:{userID} 与 gw:role_perms:{roleID}
-- 用户权限聚合：遍历用户所有角色，合并去重得到用户最终权限集合
-- 缓存失效：提供按用户与按角色的缓存删除接口
-
-```mermaid
-sequenceDiagram
-participant Svc as "RBAC缓存服务"
-participant Repo as "UserRepository"
-participant RDB as "Redis"
-participant DB as "PostgreSQL"
-Svc->>Repo : GetUserRoleIDs(userID)
-Repo-->>Svc : roleIDs[]
-loop 对每个角色
-Svc->>Repo : GetRolePermissions(roleID)
-Repo-->>Svc : permissions[]
-Svc->>RDB : Set gw : user_roles : {userID}, roleIDs[]
-Svc->>RDB : Set gw : role_perms : {roleID}, permissions[]
-end
-```
-
-**图表来源**
-- [inv_api_server/internal/service/rbac_cache.go:30-53](file://inv_api_server/internal/service/rbac_cache.go#L30-L53)
-- [inv_api_server/internal/repository/repositories.go:410-459](file://inv_api_server/internal/repository/repositories.go#L410-L459)
-
-**章节来源**
-- [inv_api_server/internal/service/rbac_cache.go:16-89](file://inv_api_server/internal/service/rbac_cache.go#L16-L89)
-- [inv_api_server/internal/repository/repositories.go:410-459](file://inv_api_server/internal/repository/repositories.go#L410-L459)
-
-### 数据权限过滤（inv_api_server）
-- 设备可见性：通过视图与设备表联合查询，返回用户被授权的设备序列号集合
-- 访问判定：判断指定设备是否在用户可见范围内
-- SQL构建：根据用户角色与可见设备集合生成IN子句与参数数组，用于SQL过滤
-
+### 白名单检查流程
 ```mermaid
 flowchart TD
-DPStart["进入BuildSNFilter"] --> GetUserRole["查询用户角色"]
-GetUserRole --> IsAdmin{"是否管理员？"}
-IsAdmin --> |是| ReturnEmpty["返回空过滤条件"]
-IsAdmin --> |否| GetAllowedSNs["查询用户可见设备SN"]
-GetAllowedSNs --> HasSNs{"是否有可见设备？"}
-HasSNs --> |否| ReturnFalse["返回 1=0 过滤条件"]
-HasSNs --> |是| BuildIN["构造IN占位符与参数"]
-BuildIN --> ReturnIN["返回IN过滤条件与参数"]
+Start(["进入RBACGuard"]) --> CheckPublic["检查是否为公共接口"]
+CheckPublic --> PublicOK{"是公共接口？"}
+PublicOK --> |是| Next["继续下一个中间件"]
+PublicOK --> |否| CheckAppAllowed["检查是否为APP端OTA白名单接口"]
+CheckAppAllowed --> IsAppAllowed{"是APP端OTA白名单？"}
+IsAppAllowed --> |是| SkipRBAC["跳过RBAC检查，直接放行"]
+IsAppAllowed --> |否| CheckUserID["检查用户ID"]
+CheckUserID --> UserIDOK{"用户ID有效？"}
+UserIDOK --> |否| Next
+UserIDOK --> |是| CheckResource["推断资源与动作"]
+CheckResource --> ResourceOK{"资源识别成功？"}
+ResourceOK --> |否| Next
+ResourceOK --> |是| CheckPermission["执行权限检查"]
+CheckPermission --> PermissionOK{"权限通过？"}
+PermissionOK --> |是| Allow["放行请求"]
+PermissionOK --> |否| Deny["返回403 Forbidden"]
 ```
 
 **图表来源**
-- [inv_api_server/internal/service/data_permission.go:63-86](file://inv_api_server/internal/service/data_permission.go#L63-L86)
+- [api-gateway/internal/middleware/rbac.go:209-264](file://api-gateway/internal/middleware/rbac.go#L209-L264)
+- [api-gateway/internal/middleware/rbac.go:190-207](file://api-gateway/internal/middleware/rbac.go#L190-L207)
 
 **章节来源**
-- [inv_api_server/internal/service/data_permission.go:14-96](file://inv_api_server/internal/service/data_permission.go#L14-L96)
+- [api-gateway/internal/middleware/rbac.go:190-207](file://api-gateway/internal/middleware/rbac.go#L190-L207)
+- [api-gateway/internal/middleware/rbac.go:209-264](file://api-gateway/internal/middleware/rbac.go#L209-L264)
 
-### 权限中间件（inv_api_server）
-- 自动权限中间件：根据请求路径自动推断资源与动作，调用权限检查器进行校验
-- 强制权限中间件：对指定资源与动作强制校验，不依赖路径推断
+## JWT认证与RBAC协作
 
-```mermaid
-sequenceDiagram
-participant Handler as "业务处理器"
-participant AutoMW as "AutoPermission中间件"
-participant Checker as "权限检查器"
-participant Resp as "响应"
-Handler->>AutoMW : 进入中间件
-AutoMW->>AutoMW : 解析路径前缀映射
-AutoMW->>Checker : CheckPermission(userID, resource, action)
-alt 通过
-Checker-->>AutoMW : true
-AutoMW-->>Handler : 放行
-else 拒绝
-Checker-->>AutoMW : false
-AutoMW-->>Resp : 403 Forbidden
-end
-```
+### 中间件执行顺序
+API网关中的中间件按照以下顺序执行：
+1. **TrailingSlashHandler** - 处理路径斜杠
+2. **Recovery** - 错误恢复
+3. **CORS** - 跨域处理
+4. **RequestLogger** - 请求日志
+5. **Prometheus** - 指标收集
+6. **RateLimit** - 全局限流
+7. **JWTAuth** - JWT认证
+8. **RBACGuard** - RBAC权限检查
 
-**图表来源**
-- [inv_api_server/internal/middleware/permission.go:40-89](file://inv_api_server/internal/middleware/permission.go#L40-L89)
+### 协作机制
+- **JWT认证前置**：所有请求必须先通过JWT认证，提取用户身份信息
+- **白名单优先**：在RBAC检查前先检查APP端OTA白名单
+- **用户信息传递**：JWT中间件将user_id、role等信息注入到请求头中
+- **RBAC利用信息**：RBAC中间件从请求头中读取用户身份信息进行权限检查
+
+### 用户身份信息注入
+JWT中间件会将以下信息注入到请求头中：
+- `X-User-ID`：用户ID
+- `X-User-Phone`：用户手机号
+- `X-User-Role`：用户角色
+- `X-User-Sub`：用户子标识
 
 **章节来源**
-- [inv_api_server/internal/middleware/permission.go:12-89](file://inv_api_server/internal/middleware/permission.go#L12-L89)
+- [api-gateway/internal/routes/routes.go:25-55](file://api-gateway/internal/routes/routes.go#L25-L55)
+- [api-gateway/internal/middleware/jwt.go:104-115](file://api-gateway/internal/middleware/jwt.go#L104-L115)
+- [api-gateway/internal/middleware/rbac.go:246](file://api-gateway/internal/middleware/rbac.go#L246)
 
 ## 依赖关系分析
 - 网关启动与配置：根据配置决定是否启用RBAC以及Redis可用性，选择不同降级策略
+- **新增** 中间件装配：JWT认证中间件在RBAC中间件之前执行，确保用户身份信息可用
 - API服务启动与装配：同时初始化权限检查器与缓存服务，确保服务内权限校验与缓存同步
 - 仓库层提供统一的数据访问接口，权限检查器与缓存服务均依赖其查询用户角色与权限
 
@@ -316,9 +309,12 @@ end
 graph LR
 Config["配置文件"] --> GWMain["网关启动"]
 Config --> APIMain["API服务启动"]
+GWMain --> JWTMW["JWT认证中间件"]
 GWMain --> RBACMW["网关RBAC中间件"]
 APIMain --> PermChecker["权限检查器"]
 APIMain --> RBACCache["RBAC缓存服务"]
+JWTMW --> RBACMW
+RBACMW --> Routes["路由配置"]
 PermChecker --> Repo["UserRepository"]
 RBACCache --> Repo
 Repo --> DB["PostgreSQL"]
@@ -328,18 +324,19 @@ RBACCache --> Redis
 ```
 
 **图表来源**
-- [api-gateway/main.go:21-94](file://api-gateway/main.go#L21-L94)
-- [inv_api_server/cmd/main.go:88-163](file://inv_api_server/cmd/main.go#L88-L163)
-- [inv_api_server/internal/repository/repositories.go:18-459](file://inv_api_server/internal/repository/repositories.go#L18-L459)
+- [api-gateway/main.go:34-116](file://api-gateway/main.go#L34-L116)
+- [api-gateway/internal/routes/routes.go:25-55](file://api-gateway/internal/routes/routes.go#L25-L55)
+- [inv_api_server/internal/service/perm_checker.go:17-173](file://inv_api_server/internal/service/perm_checker.go#L17-L173)
 
 **章节来源**
-- [api-gateway/main.go:21-94](file://api-gateway/main.go#L21-L94)
-- [inv_api_server/cmd/main.go:88-163](file://inv_api_server/cmd/main.go#L88-L163)
+- [api-gateway/main.go:34-116](file://api-gateway/main.go#L34-L116)
+- [api-gateway/internal/routes/routes.go:25-55](file://api-gateway/internal/routes/routes.go#L25-L55)
 
 ## 性能考虑
 - 缓存策略
   - 网关层：用户角色缓存键 gw:user_roles:{userID}，角色权限缓存键 gw:role_perms:{roleID}，TTL可配置
   - 服务层：角色权限内存缓存带过期时间，Redis持久化缓存提升热路径性能
+- **新增** 白名单优化：APP端OTA接口白名单跳过RBAC检查，减少不必要的权限验证开销
 - 并发与一致性
   - 网关层使用互斥锁保护内存缓存，避免并发写入竞争
   - 服务层使用互斥锁保护内存缓存，Redis作为最终一致性的外部存储
@@ -348,35 +345,38 @@ RBACCache --> Redis
 - 查询优化
   - 数据权限过滤通过预计算的可见设备集合，避免复杂联表查询
 
-**重要说明**：由于RBAC系统已被移除，上述性能优化策略可能已不再适用。请检查实际代码实现。
+**章节来源**
+- [api-gateway/internal/middleware/rbac.go:281-300](file://api-gateway/internal/middleware/rbac.go#L281-L300)
+- [inv_api_server/internal/service/perm_checker.go:154-173](file://inv_api_server/internal/service/perm_checker.go#L154-L173)
 
 ## 故障排查指南
 - 常见问题
   - 403权限不足：检查请求路径是否正确映射到资源与动作；确认用户角色与权限是否正确配置
+  - **新增** OTA接口访问失败：检查是否为APP端OTA白名单接口，确认JWT令牌是否有效
+  - JWT认证失败：检查Authorization头格式是否正确，确认JWT密钥配置是否正确
   - Redis连接失败：查看网关与API服务启动日志中的Redis连接提示；确认Redis服务状态
   - 权限未生效：确认缓存是否已失效或过期；必要时手动触发缓存失效
 - 调试建议
-  - 网关：开启DEBUG日志，观察RBAC中间件的资源推断与权限判定过程
+  - 网关：开启DEBUG日志，观察RBAC中间件的资源推断与权限判定过程，特别是白名单检查
   - 服务：启用Zap日志，关注权限检查器的缓存命中与数据库回退情况
+  - **新增** OTA接口：检查JWT认证日志，确认用户身份信息是否正确注入
 - 缓存失效
   - 网关：调用用户缓存失效接口清除用户角色缓存，或调用角色缓存失效接口清除角色权限缓存
   - 服务：调用权限检查器或缓存服务提供的失效接口
 
-**重要说明**：由于RBAC系统已被移除，上述故障排查指南可能已不适用当前架构。
-
 **章节来源**
 - [api-gateway/internal/middleware/rbac.go:256-285](file://api-gateway/internal/middleware/rbac.go#L256-L285)
+- [api-gateway/internal/middleware/jwt.go:52-101](file://api-gateway/internal/middleware/jwt.go#L52-L101)
 - [inv_api_server/internal/service/perm_checker.go:154-173](file://inv_api_server/internal/service/perm_checker.go#L154-L173)
-- [inv_api_server/internal/service/rbac_cache.go:82-89](file://inv_api_server/internal/service/rbac_cache.go#L82-L89)
 
 ## 结论
-本项目在网关与服务两层实现了完善的RBAC能力：
+本项目在网关与服务两层实现了完善的RBAC能力，包含新的APP端OTA接口白名单机制：
 - 通过清晰的资源/动作映射与缓存策略，兼顾性能与一致性
+- **新增** APP端OTA接口白名单机制：支持OTA相关接口的JWT认证但跳过RBAC检查，提升APP端用户体验
+- **新增** JWT认证与RBAC协作：中间件有序执行，确保用户身份信息正确传递
 - 在Redis不可用时提供可靠的降级方案，保障系统稳定性
 - 提供数据级权限过滤，进一步细化访问边界
 - 完整的缓存失效与调试手段，便于运维与排障
-
-**重要说明**：由于RBAC权限控制系统已被移除，上述结论已不再适用于当前架构。请参考更新后的项目结构和新的权限控制实现。
 
 ## 附录
 
@@ -458,4 +458,19 @@ PC-->>C : 返回true/false
 - [inv_api_server/internal/service/perm_checker.go:41-74](file://inv_api_server/internal/service/perm_checker.go#L41-L74)
 - [inv_api_server/internal/repository/repositories.go:410-459](file://inv_api_server/internal/repository/repositories.go#L410-L459)
 
-**重要说明**：由于RBAC系统已被移除，上述流程图可能已不反映当前架构。请检查实际代码实现。
+### APP端OTA接口白名单配置
+APP端OTA接口白名单配置位于RBAC中间件中，包含以下接口前缀：
+- `/api/v1/ota/check/` - OTA版本检查
+- `/api/v1/ota/trigger` - OTA升级触发
+- `/api/v1/ota/resend/` - OTA重新发送
+- `/api/v1/ota/devices/` - OTA设备相关
+- `/api/v1/ota/app/check` - APP端OTA版本检查
+
+这些接口的特点：
+- **JWT认证保护**：所有接口都已通过JWT认证
+- **跳过RBAC**：无需进行RBAC权限检查
+- **面向所有登录用户**：任何登录用户都可以访问
+
+**章节来源**
+- [api-gateway/internal/middleware/rbac.go:190-207](file://api-gateway/internal/middleware/rbac.go#L190-L207)
+- [api-gateway/internal/middleware/rbac.go:209-264](file://api-gateway/internal/middleware/rbac.go#L209-L264)

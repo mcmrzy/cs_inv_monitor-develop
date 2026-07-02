@@ -1,7 +1,7 @@
 server:
   port: 8080
   read_timeout: 30s
-  write_timeout: 30s
+  write_timeout: 0s # SSE 长连接需要无写超时
   mode: release
 
 database:

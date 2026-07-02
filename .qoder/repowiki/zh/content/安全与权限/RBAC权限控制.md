@@ -4,14 +4,24 @@
 **本文档引用的文件**
 - [rbac.go](file://api-gateway/internal/middleware/rbac.go)
 - [permission.go](file://inv_api_server/internal/middleware/permission.go)
-- [rbac_cache.go](file://inv_api_server/internal/service/rbac_cache.go)
+- [auth.go](file://inv_api_server/internal/middleware/auth.go)
+- [station_handler.go](file://inv_api_server/internal/handler/station_handler.go)
+- [weather_handler.go](file://inv_api_server/internal/handler/weather_handler.go)
 - [perm_checker.go](file://inv_api_server/internal/service/perm_checker.go)
+- [rbac_cache.go](file://inv_api_server/internal/service/rbac_cache.go)
 - [data_permission.go](file://inv_api_server/internal/service/data_permission.go)
 - [repositories.go](file://inv_api_server/internal/repository/repositories.go)
 - [models.go](file://inv_api_server/internal/model/models.go)
 - [main.go](file://api-gateway/main.go)
 - [main.go](file://inv_api_server/cmd/main.go)
 </cite>
+
+## 更新摘要
+**所做更改**
+- 增强了超级管理员（role=0）在电站和天气API端点的访问控制逻辑
+- 修复了station_handler.go和weather_handler.go中的授权逻辑，正确处理超级管理员特权
+- 更新了数据权限控制章节，详细说明超级管理员的跨资源访问能力
+- 完善了角色权限检查流程，体现role=0用户的特殊处理机制
 
 ## 目录
 1. [引言](#引言)
@@ -29,7 +39,7 @@
 
 本项目实现了完整的RBAC（基于角色的权限控制）系统，采用多层架构设计，在API网关和后端服务中分别实现了权限控制机制。系统支持用户、角色、权限和资源四个核心概念，通过静态权限配置和动态权限计算相结合的方式，提供了灵活而强大的权限管理能力。
 
-RBAC系统的核心目标是确保用户只能访问其被授权的资源和执行相应的操作，同时提供高性能的权限检查机制和完善的审计功能。系统支持多种权限检查方式，包括API网关中间件、后端服务权限检查器和数据权限控制。
+RBAC系统的核心目标是确保用户只能访问其被授权的资源和执行相应的操作，同时提供高性能的权限检查机制和完善的审计功能。系统支持多种权限检查方式，包括API网关中间件、后端服务权限检查器和数据权限控制。**特别地，系统对超级管理员（role=0）提供了特殊的访问控制机制，允许其跨所有资源进行无限制访问。**
 
 ## 项目结构
 
@@ -82,6 +92,19 @@ RBAC系统基于以下四个核心概念构建：
 3. **权限（Permission）**: 对特定资源执行特定操作的能力
 4. **资源（Resource）**: 系统中受保护的对象或功能
 
+### 角色层级与超级管理员特权
+
+系统实现了明确的角色层级结构，其中**超级管理员（role=0）**拥有最高权限：
+
+| 角色ID | 角色名称 | 权限级别 | 描述 |
+|--------|----------|----------|------|
+| 0 | 超级管理员 | 完全访问 | 可访问所有资源，不受任何所有权限制 |
+| 1 | 代理商 | 高级访问 | 可管理多个用户的设备 |
+| 2 | 安装商 | 中级访问 | 可管理指定设备的运维操作 |
+| 3 | 终端用户 | 基础访问 | 仅能访问自己的设备 |
+
+**更新** 超级管理员（role=0）在所有处理器中都获得了统一的跨资源访问权限，无需检查资源所有权。
+
 ### 权限映射机制
 
 系统实现了两种权限映射机制：
@@ -95,10 +118,12 @@ RBAC系统基于以下四个核心概念构建：
 - 基于用户角色动态计算有效权限
 - 支持角色继承和权限叠加
 - 实时权限验证和缓存管理
+- **超级管理员自动获得所有权限，无需显式配置**
 
 **章节来源**
 - [rbac.go:178-188](file://api-gateway/internal/middleware/rbac.go#L178-L188)
 - [permission.go:12-18](file://inv_api_server/internal/middleware/permission.go#L12-L18)
+- [auth.go:120-130](file://inv_api_server/internal/middleware/auth.go#L120-L130)
 
 ## 架构概览
 
@@ -119,10 +144,13 @@ subgraph "后端服务层"
 PERM_CHECK[权限检查器]
 DATA_PERM[数据权限服务]
 HANDLER[业务处理器]
+SUPER_ADMIN[超级管理员检查]
 end
 subgraph "数据访问层"
 USER_REPO[用户仓库]
 DEVICE_REPO[设备仓库]
+STATION_REPO[电站仓库]
+WEATHER_REPO[天气服务]
 end
 subgraph "存储层"
 CACHE[(Redis缓存)]
@@ -132,10 +160,15 @@ CLIENT --> AUTH
 AUTH --> RBAC_MW
 RBAC_MW --> PERM_CHECK
 RBAC_MW --> DATA_PERM
+RBAC_MW --> SUPER_ADMIN
 PERM_CHECK --> USER_REPO
 DATA_PERM --> DEVICE_REPO
+SUPER_ADMIN --> STATION_REPO
+SUPER_ADMIN --> WEATHER_REPO
 USER_REPO --> DB
 DEVICE_REPO --> DB
+STATION_REPO --> DB
+WEATHER_REPO --> CACHE
 RBAC_MW --> CACHE
 PERM_CHECK --> CACHE
 ```
@@ -199,8 +232,8 @@ RBAC->>DB : 查询用户角色
 DB-->>RBAC : 返回角色信息
 RBAC->>Redis : 缓存角色信息
 end
-alt 角色为超级管理员
-RBAC-->>Gateway : 授权通过
+alt 角色为超级管理员 (role=0)
+RBAC-->>Gateway : 授权通过直接放行
 else 普通用户
 RBAC->>RBAC : 获取角色权限
 alt 权限在内存缓存中
@@ -280,8 +313,8 @@ InputValid --> |否| Deny["拒绝访问"]
 InputValid --> |是| LoadRoles["加载用户角色"]
 LoadRoles --> RolesLoaded{"角色加载成功?"}
 RolesLoaded --> |否| LogError["记录错误"] --> Deny
-RolesLoaded --> |是| CheckAdmin{"是否超级管理员?"}
-CheckAdmin --> |是| Allow["允许访问"]
+RolesLoaded --> |是| CheckAdmin{"是否超级管理员 (role=0)?"}
+CheckAdmin --> |是| Allow["允许访问直接放行"]
 CheckAdmin --> |否| IterateRoles["遍历用户角色"]
 IterateRoles --> RoleLoop{"还有角色吗?"}
 RoleLoop --> |有| LoadRolePerms["加载角色权限"]
@@ -301,6 +334,71 @@ RoleLoop --> |没有| Deny
 **章节来源**
 - [perm_checker.go:1-173](file://inv_api_server/internal/service/perm_checker.go#L1-L173)
 - [rbac_cache.go:1-89](file://inv_api_server/internal/service/rbac_cache.go#L1-L89)
+
+### 超级管理员访问控制增强
+
+**新增** 系统在后端处理器中实现了对超级管理员（role=0）的统一访问控制逻辑：
+
+#### 电站处理器超级管理员支持
+
+```mermaid
+sequenceDiagram
+participant Client as 客户端
+participant Handler as 电站处理器
+participant Auth as 认证中间件
+participant DB as 数据库
+Client->>Handler : 请求访问电站资源
+Handler->>Auth : 获取用户角色
+Auth-->>Handler : 返回role值
+alt role == 0 (超级管理员)
+Handler-->>Client : 直接允许访问跳过所有权检查
+else role != 0 (普通用户)
+Handler->>DB : 检查电站所有权
+DB-->>Handler : 返回所有权信息
+alt 用户是电站所有者
+Handler-->>Client : 允许访问
+else 用户不是所有者
+Handler-->>Client : 拒绝访问权限不足
+end
+end
+```
+
+**图表来源**
+- [station_handler.go:104-129](file://inv_api_server/internal/handler/station_handler.go#L104-L129)
+- [station_handler.go:186-211](file://inv_api_server/internal/handler/station_handler.go#L186-L211)
+- [station_handler.go:268-293](file://inv_api_server/internal/handler/station_handler.go#L268-L293)
+
+#### 天气处理器超级管理员支持
+
+```mermaid
+sequenceDiagram
+participant Client as 客户端
+participant WeatherHandler as 天气处理器
+participant StationService as 电站服务
+participant Auth as 认证中间件
+Client->>WeatherHandler : 请求获取电站天气
+WeatherHandler->>Auth : 获取用户角色
+Auth-->>WeatherHandler : 返回role值
+WeatherHandler->>StationService : 获取电站信息
+alt role == 0 (超级管理员)
+WeatherHandler-->>Client : 直接返回天气数据
+else role != 0 (普通用户)
+WeatherHandler->>WeatherHandler : 检查电站所有权
+alt 用户是电站所有者
+WeatherHandler-->>Client : 返回天气数据
+else 用户不是所有者
+WeatherHandler-->>Client : 拒绝访问
+end
+end
+```
+
+**图表来源**
+- [weather_handler.go:48-67](file://inv_api_server/internal/handler/weather_handler.go#L48-L67)
+
+**章节来源**
+- [station_handler.go:1-691](file://inv_api_server/internal/handler/station_handler.go#L1-L691)
+- [weather_handler.go:1-318](file://inv_api_server/internal/handler/weather_handler.go#L1-L318)
+- [auth.go:120-130](file://inv_api_server/internal/middleware/auth.go#L120-L130)
 
 ### 数据权限控制
 
@@ -338,7 +436,7 @@ Service->>DataPerm : 获取用户允许的设备序列号
 DataPerm->>DB : 查询用户设备视图
 DB-->>DataPerm : 返回设备序列号列表
 alt 用户是超级管理员
-DataPerm-->>Service : 返回空过滤条件
+DataPerm-->>Service : 返回空过滤条件无限制
 else 普通用户
 DataPerm->>DB : 查询用户直接拥有的设备
 DB-->>DataPerm : 返回用户设备列表
@@ -367,6 +465,8 @@ subgraph "路由定义"
 ADMIN_ROUTE[管理员路由组]
 USERS_ROUTE[用户路由组]
 OTA_ROUTE[OTA路由组]
+STATION_ROUTE[电站路由组]
+WEATHER_ROUTE[天气路由组]
 end
 subgraph "权限中间件"
 REQUIRE_ADMIN[RequirePermission(admin, manage)]
@@ -374,26 +474,34 @@ REQUIRE_USERS_VIEW[RequirePermission(users, view)]
 REQUIRE_USERS_EDIT[RequirePermission(users, edit)]
 REQUIRE_OTA_VIEW[RequirePermission(ota, view)]
 REQUIRE_OTA_CREATE[RequirePermission(ota, create)]
+SUPER_ADMIN_CHECK[超级管理员检查]
 end
 subgraph "业务处理器"
 ADMIN_HANDLER[管理员处理器]
 USER_HANDLER[用户处理器]
 OTA_HANDLER[OTA处理器]
+STATION_HANDLER[电站处理器]
+WEATHER_HANDLER[天气处理器]
 end
 ADMIN_ROUTE --> REQUIRE_ADMIN
 USERS_ROUTE --> REQUIRE_USERS_VIEW
 USERS_ROUTE --> REQUIRE_USERS_EDIT
 OTA_ROUTE --> REQUIRE_OTA_VIEW
 OTA_ROUTE --> REQUIRE_OTA_CREATE
+STATION_ROUTE --> SUPER_ADMIN_CHECK
+WEATHER_ROUTE --> SUPER_ADMIN_CHECK
 REQUIRE_ADMIN --> ADMIN_HANDLER
 REQUIRE_USERS_VIEW --> USER_HANDLER
 REQUIRE_USERS_EDIT --> USER_HANDLER
 REQUIRE_OTA_VIEW --> OTA_HANDLER
 REQUIRE_OTA_CREATE --> OTA_HANDLER
+SUPER_ADMIN_CHECK --> STATION_HANDLER
+SUPER_ADMIN_CHECK --> WEATHER_HANDLER
 ```
 
 **图表来源**
 - [main.go:508-572](file://inv_api_server/cmd/main.go#L508-L572)
+- [permission.go:12-18](file://inv_api_server/internal/middleware/permission.go#L12-L18)
 
 **章节来源**
 - [main.go:508-572](file://inv_api_server/cmd/main.go#L508-L572)
@@ -502,12 +610,17 @@ MemoryCache --> DB
    - 验证权限配置是否正确
    - 查看Redis缓存状态
 
-2. **缓存失效问题**:
+2. **超级管理员访问问题**:
+   - 确认用户role字段是否为0
+   - 检查JWT token中的role声明
+   - 验证中间件是否正确传递role信息
+
+3. **缓存失效问题**:
    - 确认缓存键格式正确
    - 检查TTL设置是否合理
    - 验证缓存清理逻辑
 
-3. **数据库连接问题**:
+4. **数据库连接问题**:
    - 检查PostgreSQL连接参数
    - 验证连接池配置
    - 查看连接超时设置
@@ -529,6 +642,9 @@ MemoryCache --> DB
 3. **灵活配置**: 支持静态配置和动态权限计算
 4. **完整审计**: 记录详细的权限访问日志
 5. **数据隔离**: 细粒度的数据权限控制
+6. **超级管理员特权**: 统一的role=0用户跨资源访问控制
+
+**更新** 最新的增强确保了超级管理员（role=0）在所有处理器中获得一致的跨资源访问权限，无需检查资源所有权，大大简化了管理操作并提高了系统效率。
 
 系统为管理员提供了完整的权限管理界面，支持批量权限操作和实时权限验证，能够满足复杂的企业级权限管理需求。
 
@@ -538,19 +654,29 @@ MemoryCache --> DB
 
 系统支持的权限矩阵包括：
 
-| 资源(Resource) | 动作(Action) | 描述 |
-|---------------|-------------|------|
-| admin | manage | 管理员管理权限 |
-| users | view | 查看用户信息 |
-| users | edit | 编辑用户信息 |
-| ota | view | 查看固件信息 |
-| ota | create | 创建固件 |
-| ota | delete | 删除固件 |
-| ota | control | 控制OTA操作 |
-| devices | view | 查看设备信息 |
-| devices | edit | 编辑设备信息 |
-| alerts | view | 查看告警信息 |
-| stations | view | 查看电站信息 |
+| 资源(Resource) | 动作(Action) | 描述 | 超级管理员 |
+|---------------|-------------|------|------------|
+| admin | manage | 管理员管理权限 | ✓ 完全访问 |
+| users | view | 查看用户信息 | ✓ 完全访问 |
+| users | edit | 编辑用户信息 | ✓ 完全访问 |
+| ota | view | 查看固件信息 | ✓ 完全访问 |
+| ota | create | 创建固件 | ✓ 完全访问 |
+| ota | delete | 删除固件 | ✓ 完全访问 |
+| ota | control | 控制OTA操作 | ✓ 完全访问 |
+| devices | view | 查看设备信息 | ✓ 完全访问 |
+| devices | edit | 编辑设备信息 | ✓ 完全访问 |
+| alerts | view | 查看告警信息 | ✓ 完全访问 |
+| stations | view | 查看电站信息 | ✓ 完全访问 |
+| weather | access | 访问天气数据 | ✓ 完全访问 |
+
+### 角色权限对照表
+
+| 角色ID | 角色名称 | 电站访问 | 天气访问 | 设备管理 | 用户管理 | 系统配置 |
+|--------|----------|----------|----------|----------|----------|----------|
+| 0 | 超级管理员 | 任意电站 | 任意电站 | 全部设备 | 全部用户 | 完全控制 |
+| 1 | 代理商 | 所属用户电站 | 所属用户电站 | 所属用户设备 | 只读 | 受限 |
+| 2 | 安装商 | 指定电站 | 指定电站 | 指定设备 | 受限 | 受限 |
+| 3 | 终端用户 | 自有电站 | 自有电站 | 自有设备 | 无 | 无 |
 
 ### 权限配置示例
 
@@ -559,6 +685,7 @@ MemoryCache --> DB
 1. **数据库配置**: 直接在role_permissions表中配置
 2. **API调用**: 通过管理员接口动态更新权限
 3. **批量操作**: 支持批量分配和撤销权限
+4. **超级管理员**: 自动获得所有权限，无需显式配置
 
 ### 管理员界面功能
 
@@ -569,3 +696,4 @@ MemoryCache --> DB
 - 批量权限操作
 - 权限审计日志查看
 - 系统健康监控
+- 超级管理员账户管理

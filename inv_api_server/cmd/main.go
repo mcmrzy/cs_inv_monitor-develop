@@ -688,6 +688,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/resend/:sn", deps.OTAHandler.ResendUpgradeCommand)
 			otaGroup.GET("/devices/:sn/status", deps.OTAHandler.GetDeviceOTAStatus)
 			otaGroup.GET("/devices/:sn/history", deps.OTAHandler.GetDeviceOTAHistory)
+			otaGroup.POST("/devices/:sn/local-ota-result", deps.OTAHandler.ReportLocalOTAResult)
+			otaGroup.GET("/app/packages", deps.OTAHandler.AppListUpgradePackages)
+			otaGroup.POST("/app/packages/install", deps.OTAHandler.AppInstallPackage)
 
 			// App版本管理
 			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP检查更新（无需额外权限）

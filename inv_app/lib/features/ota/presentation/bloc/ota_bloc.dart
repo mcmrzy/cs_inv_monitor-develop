@@ -10,7 +10,6 @@ part 'ota_state.dart';
 class OtaBloc extends Bloc<OtaEvent, OtaState> {
   final OtaRepository repository;
   Timer? _progressTimer;
-  String? _pollingDeviceSn;
 
   OtaBloc({required this.repository}) : super(OTAInitial()) {
     on<OTACheckRequested>(_onCheckRequested);
@@ -18,6 +17,8 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     on<OTAPackageTriggerRequested>(_onPackageTriggerRequested);
     on<OTAProgressPollRequested>(_onProgressPollRequested);
     on<OTAProgressStopPoll>(_onProgressStopPoll);
+    on<OTAFirmwareListRequested>(_onFirmwareListRequested);
+    on<OTAFirmwareInstallRequested>(_onFirmwareInstallRequested);
   }
 
   Future<void> _onCheckRequested(
@@ -71,7 +72,6 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
   }
 
   void _startProgressPoll(String deviceSn) {
-    _pollingDeviceSn = deviceSn;
     _progressTimer?.cancel();
     _progressTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       add(OTAProgressPollRequested(deviceSn: deviceSn));
@@ -110,6 +110,33 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
   ) async {
     _progressTimer?.cancel();
     emit(OTAInitial());
+  }
+
+  Future<void> _onFirmwareListRequested(
+    OTAFirmwareListRequested event,
+    Emitter<OtaState> emit,
+  ) async {
+    emit(OTAFirmwareListLoading());
+    final result = await repository.listUpgradePackages(model: event.deviceModel);
+    result.fold(
+      (failure) => emit(OTAFirmwareListError(message: failure.message)),
+      (packages) => emit(OTAFirmwareListLoaded(packages: packages)),
+    );
+  }
+
+  Future<void> _onFirmwareInstallRequested(
+    OTAFirmwareInstallRequested event,
+    Emitter<OtaState> emit,
+  ) async {
+    emit(OTAFirmwareInstalling(packageId: event.packageId));
+    final result = await repository.installPackage(event.sn, event.packageId);
+    result.fold(
+      (failure) => emit(OTAError(message: failure.message)),
+      (_) {
+        emit(OTATriggered(taskId: 0));
+        _startProgressPoll(event.sn);
+      },
+    );
   }
 
   @override

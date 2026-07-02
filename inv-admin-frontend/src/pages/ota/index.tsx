@@ -46,6 +46,7 @@ import {
   AndroidOutlined,
   SafetyOutlined,
   RocketOutlined,
+  SendOutlined,
   PlayCircleOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -905,6 +906,47 @@ const PackagesTab: React.FC = () => {
   const [createForm] = Form.useForm()
   const [modelFilter, setModelFilter] = useState<string>()
 
+  // 安装到设备 Modal 状态
+  const [installOpen, setInstallOpen] = useState(false)
+  const [installPkg, setInstallPkg] = useState<UpgradePackage | null>(null)
+  const [installSnInput, setInstallSnInput] = useState('')
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
+
+  const installMutation = useMutation({
+    mutationFn: (data: { package_id: number; device_sns: string[]; immediate?: boolean }) =>
+      otaApi.pushPackageUpgrade({ ...data, rollout_percent: 100 }),
+    onSuccess: () => {
+      message.success('升级指令已下发')
+      setInstallOpen(false)
+      setInstallPkg(null)
+      setInstallSnInput('')
+      invalidate()
+    },
+    onError: (err: any) => {
+      message.error('升级指令下发失败: ' + (err?.response?.data?.message || err?.message || ''))
+    },
+  })
+
+  const handleInstallSubmit = () => {
+    if (!installPkg) return
+    const sns = installSnInput
+      .split(/[,，\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (sns.length === 0) {
+      message.warning('请输入设备 SN')
+      return
+    }
+    installMutation.mutate({ package_id: Number(installPkg.id), device_sns: sns, immediate: true })
+  }
+
+  const openInstallModal = (record: UpgradePackage) => {
+    setInstallPkg(record)
+    setInstallSnInput('')
+    setInstallOpen(true)
+  }
+
   const { data: packagesRes, isLoading } = useQuery({
     queryKey: queryKeys.ota.packages(modelFilter ? { model: modelFilter } : undefined),
     queryFn: () => otaApi.listPackages(modelFilter ? { model: modelFilter } : {}).then((r) => r.data?.data ?? r.data ?? []),
@@ -922,8 +964,6 @@ const PackagesTab: React.FC = () => {
     queryFn: () => modelApi.listModels().then((r) => r.data?.data ?? r.data ?? []),
   })
   const modelList = (Array.isArray(modelsRes) ? modelsRes : (modelsRes as any)?.items ?? []) as any[]
-
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
 
   const createMutation = useMutation({
     mutationFn: (data: any) => otaApi.createPackage(data),
@@ -950,6 +990,8 @@ const PackagesTab: React.FC = () => {
       const firmwareIds: number[] = []
       if (values.firmware_arm) firmwareIds.push(Number(values.firmware_arm))
       if (values.firmware_esp) firmwareIds.push(Number(values.firmware_esp))
+      if (values.firmware_dsp) firmwareIds.push(Number(values.firmware_dsp))
+      if (values.firmware_bms) firmwareIds.push(Number(values.firmware_bms))
       if (firmwareIds.length === 0) { message.warning('请至少选择一个芯片固件'); return }
       createMutation.mutate({ model: values.model, firmware_ids: firmwareIds, changelog: values.changelog, is_force: values.is_force || false })
     } catch { /* validation error */ }
@@ -968,11 +1010,21 @@ const PackagesTab: React.FC = () => {
     { title: t('ota.packageChangelog'), dataIndex: 'changelog', key: 'changelog', width: 200, ellipsis: true },
     { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 160, render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-' },
     {
-      title: t('ota.action'), key: 'action', width: 100,
+      title: t('ota.action'), key: 'action', width: 180,
       render: (_: any, record: UpgradePackage) => (
-        <Popconfirm title={t('ota.confirmDeletePackage')} onConfirm={() => deleteMutation.mutate(Number(record.id))}>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('ota.delete')}</Button>
-        </Popconfirm>
+        <Space size={4}>
+          <Button
+            type="link"
+            size="small"
+            icon={<SendOutlined />}
+            onClick={() => openInstallModal(record)}
+          >
+            安装到设备
+          </Button>
+          <Popconfirm title={t('ota.confirmDeletePackage')} onConfirm={() => deleteMutation.mutate(Number(record.id))}>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('ota.delete')}</Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ]
@@ -1009,10 +1061,66 @@ const PackagesTab: React.FC = () => {
             <Select allowClear placeholder="选择 ESP 固件"
               options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'esp').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
           </Form.Item>
+          <Form.Item name="firmware_dsp" label="DSP 固件">
+            <Select allowClear placeholder="选择 DSP 固件（可选）"
+              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'dsp').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
+          </Form.Item>
+          <Form.Item name="firmware_bms" label="BMS 固件">
+            <Select allowClear placeholder="选择 BMS 固件（可选）"
+              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'bms').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
+          </Form.Item>
           <Form.Item name="changelog" label={t('ota.packageChangelog')}><TextArea rows={3} /></Form.Item>
           <Form.Item name="is_force" label={t('ota.forceUpdate')} valuePropName="checked"><Switch /></Form.Item>
           <div style={{ color: '#999', fontSize: 12 }}>{t('ota.selectFirmwareHint')}</div>
         </Form>
+      </Modal>
+
+      {/* 安装到设备 Modal */}
+      <Modal
+        title="安装升级包到设备"
+        open={installOpen}
+        onCancel={() => { setInstallOpen(false); setInstallPkg(null); setInstallSnInput('') }}
+        width={520}
+        destroyOnClose
+        footer={[
+          <Button key="cancel" onClick={() => { setInstallOpen(false); setInstallPkg(null); setInstallSnInput('') }}>
+            {t('ota.cancel')}
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            icon={<SendOutlined />}
+            loading={installMutation.isPending}
+            onClick={handleInstallSubmit}
+          >
+            立即安装
+          </Button>,
+        ]}
+      >
+        {installPkg && (
+          <div>
+            <Descriptions column={2} size="small" bordered style={{ marginBottom: 20 }}>
+              <Descriptions.Item label="升级包版本">
+                <Tag color="blue">{installPkg.main_version}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="型号">{installPkg.model}</Descriptions.Item>
+            </Descriptions>
+            <Form.Item
+              label="设备 SN"
+              required
+              help="输入设备 SN，多个 SN 用逗号或空格分隔"
+              style={{ marginBottom: 0 }}
+            >
+              <TextArea
+                rows={4}
+                placeholder="例如：SN001, SN002, SN003"
+                value={installSnInput}
+                onChange={(e) => setInstallSnInput(e.target.value)}
+                onPressEnter={(e) => e.preventDefault()}
+              />
+            </Form.Item>
+          </div>
+        )}
       </Modal>
     </div>
   )

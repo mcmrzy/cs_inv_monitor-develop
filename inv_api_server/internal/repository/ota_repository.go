@@ -201,7 +201,9 @@ func (r *OTARepository) ListUpgradesByFirmwareID(ctx context.Context, firmwareID
 		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(dev.firmware_arm,'') AS current_arm_version,
-		       COALESCE(dev.firmware_esp,'') AS current_esp_version
+		       COALESCE(dev.firmware_esp,'') AS current_esp_version,
+		       COALESCE(dev.firmware_dsp,'') AS current_dsp_version,
+		       COALESCE(dev.firmware_bms,'') AS current_bms_version
 		FROM device_upgrades du
 		LEFT JOIN devices dev ON du.device_sn = dev.sn
 		WHERE du.firmware_id = $1
@@ -218,7 +220,7 @@ func (r *OTARepository) ListUpgradesByFirmwareID(ctx context.Context, firmwareID
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
-			&du.CurrentArmVersion, &du.CurrentEspVersion); err != nil {
+			&du.CurrentArmVersion, &du.CurrentEspVersion, &du.CurrentDspVersion, &du.CurrentBmsVersion); err != nil {
 			continue
 		}
 		result = append(result, du)
@@ -344,6 +346,8 @@ type DeviceInfo struct {
 	Model         string `json:"model"`
 	FirmwareArm   string `json:"firmware_arm"`
 	FirmwareEsp   string `json:"firmware_esp"`
+	FirmwareDSP   string `json:"firmware_dsp"`
+	FirmwareBMS   string `json:"firmware_bms"`
 	MainVersion   string `json:"main_version"`
 }
 
@@ -355,6 +359,12 @@ func (d *DeviceInfo) VersionSummary() string {
 	}
 	if d.FirmwareEsp != "" {
 		parts = append(parts, d.FirmwareEsp)
+	}
+	if d.FirmwareDSP != "" {
+		parts = append(parts, d.FirmwareDSP)
+	}
+	if d.FirmwareBMS != "" {
+		parts = append(parts, d.FirmwareBMS)
 	}
 	if len(parts) == 0 {
 		return ""
@@ -371,6 +381,12 @@ func (d *DeviceInfo) ChipVersions() map[string]string {
 	if d.FirmwareEsp != "" {
 		m["esp"] = d.FirmwareEsp
 	}
+	if d.FirmwareDSP != "" {
+		m["dsp"] = d.FirmwareDSP
+	}
+	if d.FirmwareBMS != "" {
+		m["bms"] = d.FirmwareBMS
+	}
 	return m
 }
 
@@ -378,13 +394,33 @@ func (d *DeviceInfo) ChipVersions() map[string]string {
 func (r *OTARepository) GetDeviceBySN(ctx context.Context, sn string) (*DeviceInfo, error) {
 	var d DeviceInfo
 	err := r.db.QueryRow(ctx, `
-		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''), COALESCE(main_version,'')
+		SELECT sn, COALESCE(model,''), COALESCE(firmware_arm,''), COALESCE(firmware_esp,''),
+		       COALESCE(firmware_dsp,''), COALESCE(firmware_bms,''), COALESCE(main_version,'')
 		FROM devices WHERE sn = $1
-	`, sn).Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp, &d.MainVersion)
+	`, sn).Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp, &d.FirmwareDSP, &d.FirmwareBMS, &d.MainVersion)
 	if err != nil {
 		return nil, err
 	}
 	return &d, nil
+}
+
+// CheckDeviceOwnership 检查设备是否属于指定用户
+func (r *OTARepository) CheckDeviceOwnership(ctx context.Context, sn string, userID int64) (bool, error) {
+	var deviceUserID int64
+	err := r.db.QueryRow(ctx, `SELECT COALESCE(user_id, 0) FROM devices WHERE sn = $1 AND deleted_at IS NULL`, sn).Scan(&deviceUserID)
+	if err != nil {
+		return false, err
+	}
+	if deviceUserID == userID {
+		return true, nil
+	}
+	// 同时检查 user_device_rel 关联表
+	var count int
+	err = r.db.QueryRow(ctx, `SELECT COUNT(*) FROM user_device_rel WHERE user_id = $1 AND device_sn = $2`, userID, sn).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // GetLatestFirmware 获取指定型号的最新固件
@@ -1062,7 +1098,9 @@ func (r *OTARepository) ListUpgradeDevicesByTaskID(ctx context.Context, taskID i
 		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       COALESCE(dev.firmware_arm,'') AS current_arm_version,
-		       COALESCE(dev.firmware_esp,'') AS current_esp_version
+		       COALESCE(dev.firmware_esp,'') AS current_esp_version,
+		       COALESCE(dev.firmware_dsp,'') AS current_dsp_version,
+		       COALESCE(dev.firmware_bms,'') AS current_bms_version
 		FROM device_upgrades du
 		LEFT JOIN devices dev ON du.device_sn = dev.sn
 		WHERE du.task_id = $1
@@ -1079,7 +1117,7 @@ func (r *OTARepository) ListUpgradeDevicesByTaskID(ctx context.Context, taskID i
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
 			&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
 			&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
-			&du.CurrentArmVersion, &du.CurrentEspVersion); err != nil {
+			&du.CurrentArmVersion, &du.CurrentEspVersion, &du.CurrentDspVersion, &du.CurrentBmsVersion); err != nil {
 			continue
 		}
 		result = append(result, du)
@@ -1153,4 +1191,49 @@ func (r *OTARepository) GetTaskStats(ctx context.Context) (pending, running, tod
 		FROM upgrade_tasks
 	`).Scan(&pending, &running, &todayCompleted, &failed)
 	return
+}
+
+// ReportLocalOTAResult 本地OTA完成后，更新设备固件版本并记录升级历史
+func (r *OTARepository) ReportLocalOTAResult(ctx context.Context, sn string, targetChip string, newVersion string, mainVersion string) error {
+	// 1. 更新设备对应芯片的固件版本
+	var updateCol string
+	switch targetChip {
+	case "arm":
+		updateCol = "firmware_arm"
+	case "esp":
+		updateCol = "firmware_esp"
+	case "dsp":
+		updateCol = "firmware_dsp"
+	case "bms":
+		updateCol = "firmware_bms"
+	}
+	if updateCol != "" && newVersion != "" {
+		if _, err := r.db.Exec(ctx, fmt.Sprintf(
+			"UPDATE devices SET %s = $2, updated_at = NOW() WHERE sn = $1",
+			updateCol,
+		), sn, newVersion); err != nil {
+			return fmt.Errorf("update firmware version: %w", err)
+		}
+	}
+
+	// 2. 如果有 mainVersion，更新设备主版本号
+	if mainVersion != "" {
+		if _, err := r.db.Exec(ctx,
+			"UPDATE devices SET main_version = $2, updated_at = NOW() WHERE sn = $1",
+			sn, mainVersion); err != nil {
+			return fmt.Errorf("update main version: %w", err)
+		}
+	}
+
+	// 3. 记录一条 device_upgrades 历史记录（标记为本地升级）
+	if newVersion != "" {
+		if _, err := r.db.Exec(ctx, `
+			INSERT INTO device_upgrades (device_sn, firmware_version, target_chip, old_version, status, completed_at, created_at, updated_at)
+			VALUES ($1, $2, $3, '', 'success', NOW(), NOW(), NOW())
+		`, sn, newVersion, targetChip); err != nil {
+			return fmt.Errorf("insert upgrade record: %w", err)
+		}
+	}
+
+	return nil
 }

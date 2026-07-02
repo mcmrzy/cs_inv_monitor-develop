@@ -113,8 +113,8 @@ services:
   inv-api-server:
     build: ../inv_api_server
     container_name: inv-api-server
-    ports:
-      - "18080:8080"
+    expose:
+      - "8080"
     volumes:
       - ../inv_api_server/config.docker.yaml:/app/config.yaml:ro
     networks:
@@ -133,8 +133,8 @@ services:
   inv-device-server:
     build: ../inv_device_server
     container_name: inv-device-server
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
     volumes:
       - ../inv_device_server/config.docker.yaml:/app/config.yaml:ro
       - device-logs:/app/logs

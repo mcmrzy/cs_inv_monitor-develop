@@ -30,7 +30,9 @@ type DeviceModelField struct {
 	Sort        int       `json:"sort"`
 	IsShow      bool      `json:"is_show"`
 	IsControl   bool      `json:"is_control"`
-	ParseRule   string    `json:"parse_rule"`
+	ParseRule     string                 `json:"parse_rule"`
+	GroupName     string                 `json:"group_name" db:"group_name"`
+	ControlParams map[string]interface{} `json:"control_params,omitempty" db:"control_params"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

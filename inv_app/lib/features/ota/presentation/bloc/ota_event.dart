@@ -48,3 +48,23 @@ class OTAPackageTriggerRequested extends OtaEvent {
   List<Object?> get props => [sn];
 }
 
+class OTAFirmwareListRequested extends OtaEvent {
+  final String deviceModel;
+  final String sn;
+
+  const OTAFirmwareListRequested({required this.deviceModel, required this.sn});
+
+  @override
+  List<Object?> get props => [deviceModel, sn];
+}
+
+class OTAFirmwareInstallRequested extends OtaEvent {
+  final String sn;
+  final int packageId;
+
+  const OTAFirmwareInstallRequested({required this.sn, required this.packageId});
+
+  @override
+  List<Object?> get props => [sn, packageId];
+}
+

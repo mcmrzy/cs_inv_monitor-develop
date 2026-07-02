@@ -418,6 +418,27 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     WiFiForIoTPlugin.forceWifiUsage(false).catchError((_) => false);
   }
 
+  /// 本地OTA成功后，通知后端更新版本号
+  Future<void> _reportLocalOTAResult(String sn, String targetChip, String newVersion, [String? mainVersion]) async {
+    try {
+      // 等待网络恢复（断开热点后需要几秒切回移动网络/普通WiFi）
+      await Future.delayed(const Duration(seconds: 3));
+
+      await getIt<Dio>().post(
+        '/ota/devices/$sn/local-ota-result',
+        data: {
+          'status': 'success',
+          'target_chip': targetChip,
+          'new_version': newVersion,
+          if (mainVersion != null) 'main_version': mainVersion,
+        },
+      );
+    } catch (e) {
+      print('Report local OTA result failed: $e');
+      // 上报失败不影响用户体验，静默处理
+    }
+  }
+
   /// 检测当前 WiFi 是否仍连接到设备热点
   Future<bool> _isDeviceHotspotConnected() async {
     try {
@@ -471,6 +492,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     final l10n = AppLocalizations.of(context)!;
     final isEsp = (widget.targetChip ?? 'esp') == 'esp';
     final versionKey = isEsp ? 'esp_version' : 'arm_version';
+    final firmwareKey = isEsp ? 'firmware_esp' : 'firmware_arm';
 
     int totalWaitSeconds = 0;
     int offlineCount = 0; // 连续离线计数
@@ -525,12 +547,16 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         final status = progress['status'] as String? ?? '';
         final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
         final message = progress['message'] as String? ?? '';
-        // 兼容设备返回版本号的多种字段名
-        final version = (progress['version'] as String? ?? '')
-            .isNotEmpty
+        // 版本获取优先级：main_version > version > 芯片专属字段
+        final mainVer = progress['main_version'] as String? ?? '';
+        final chipVer = (progress['version'] as String? ?? '').isNotEmpty
             ? (progress['version'] as String)
             : (progress[versionKey] as String? ?? '');
-        print('OTA progress: status=$status, version=$version, raw=$progress');
+
+        // 优先使用 main_version 作为展示版本
+        final displayVersion = mainVer.isNotEmpty ? mainVer : chipVer;
+
+        print('OTA progress: status=$status, main_version=$mainVer, chip_version=$chipVer, raw=$progress');
 
         if (mounted) {
           setState(() {
@@ -540,25 +566,32 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         }
 
         if (status == 'done') {
-          // 优先从 /ota/progress 的 version 字段获取新版本号
-          // 如果为空，再从 /ota/info 获取
-          String? newVersion = version.isNotEmpty ? version : null;
+          // 优先使用 main_version，回退到芯片版本号
+          String? newVersion = displayVersion.isNotEmpty ? displayVersion : null;
+          // 保存芯片版本用于后端上报（优先固件专属字段，回退到旧字段名）
+          final chipNewVersion = (progress[firmwareKey] as String? ?? '').isNotEmpty
+              ? (progress[firmwareKey] as String)
+              : chipVer.isNotEmpty
+                  ? chipVer
+                  : (progress[versionKey] as String? ?? '');
           if (newVersion == null) {
             try {
               final info = await _firmwareService.getDeviceInfo(
                   deviceIP: widget.deviceIP);
               print('Device info response: $info');
-              newVersion = info[versionKey] as String? ?? '';
-              // 兑底尝试其他常见版本号字段
-              if (newVersion!.isEmpty) {
-                newVersion = info['version'] as String? ?? '';
-              }
-              if (newVersion!.isEmpty) newVersion = null;
+              // 同样优先 main_version
+              final infoMainVer = info['main_version'] as String? ?? '';
+              final infoChipVer = (info[firmwareKey] as String? ?? '').isNotEmpty
+                  ? (info[firmwareKey] as String)
+                  : (info[versionKey] as String? ?? '').isNotEmpty
+                      ? (info[versionKey] as String)
+                      : (info['version'] as String? ?? '');
+              newVersion = infoMainVer.isNotEmpty ? infoMainVer : (infoChipVer.isNotEmpty ? infoChipVer : null);
             } catch (e) {
               print('Failed to get device info: $e');
             }
           }
-          print('Final newVersion: $newVersion');
+          print('Final newVersion: $newVersion, chipNewVersion: $chipNewVersion');
           if (mounted) {
             setState(() {
               _isProcessing = false;
@@ -568,6 +601,15 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             });
           }
           _disconnectDeviceHotspot();
+          // 本地OTA成功后，通知后端更新版本号
+          if (newVersion != null) {
+            _reportLocalOTAResult(
+              widget.deviceSN,
+              widget.targetChip ?? 'esp',
+              chipNewVersion.isNotEmpty ? chipNewVersion : '',
+              mainVer,
+            );
+          }
           return;
         }
 
