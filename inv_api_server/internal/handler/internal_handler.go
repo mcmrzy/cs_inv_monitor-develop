@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"inv-api-server/internal/service"
@@ -76,20 +77,137 @@ type internalDeviceAlarmRequest struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
+// NotificationService 通知服务接口，由 service 层实现。
+// 在真实实现就绪前可传入 nil 以禁用通知回填和已读追踪。
+type NotificationService interface {
+	ListUnread(ctx context.Context, userID int64, limit int) ([]map[string]interface{}, error)
+	MarkRead(ctx context.Context, userID int64, notificationID int64) error
+}
+
+// NotificationConfig SSE 推送配置
+type NotificationConfig struct {
+	SSEBufferSize  int // 每个客户端 channel 缓冲区大小
+	MaxClientsPerUser int // 每用户最大连接数，超出时踢掉最早的
+	CatchupLimit   int // 历史通知回填条数
+}
+
+// defaultNotificationConfig 默认配置
+func defaultNotificationConfig() *NotificationConfig {
+	return &NotificationConfig{
+		SSEBufferSize:     32,
+		MaxClientsPerUser: 10,
+		CatchupLimit:      20,
+	}
+}
+
+// sseHubEvent SSE Hub 内部事件
+type sseHubEvent struct {
+	subscribe   bool
+	userID      int64
+	clientID    string
+	ch          chan<- string
+}
+
+// sseClientEntry SSE 客户端条目
+type sseClientEntry struct {
+	id string
+	ch chan<- string
+}
+
+// sseNotification SSE 通知载荷
+type sseNotification struct {
+	ID        int64                  `json:"id,omitempty"`
+	Type      string                 `json:"type"`
+	Title     string                 `json:"title"`
+	Content   string                 `json:"content"`
+	DeviceSN  string                 `json:"deviceSn,omitempty"`
+	CreatedAt string                 `json:"createdAt"`
+	Data      map[string]interface{} `json:"data,omitempty"`
+}
+
 type InternalHandler struct {
 	db         *pgxpool.Pool
 	rdb        *redis.Client
 	otaService *service.OTAService
-	// SSE broadcast channel: map[user_id]chan<- NotificationEvent
-	sseClients map[int64]chan<- string
+	// SSE multi-client broadcast: map[user_id][]sseClientEntry
+	sseClientsByUser map[int64][]sseClientEntry
+	sseClientsMu     sync.RWMutex
+	sseHub           chan sseHubEvent
+	notifySvc        NotificationService
+	notifyCfg        *NotificationConfig
 }
 
-func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService) *InternalHandler {
-	return &InternalHandler{
-		db:         db,
-		rdb:        rdb,
-		otaService: otaService,
-		sseClients: make(map[int64]chan<- string),
+func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService, notifySvc NotificationService, notifyCfg *NotificationConfig) *InternalHandler {
+	if notifyCfg == nil {
+		notifyCfg = defaultNotificationConfig()
+	}
+	h := &InternalHandler{
+		db:               db,
+		rdb:              rdb,
+		otaService:       otaService,
+		sseClientsByUser: make(map[int64][]sseClientEntry),
+		sseHub:           make(chan sseHubEvent, 256),
+		notifySvc:        notifySvc,
+		notifyCfg:        notifyCfg,
+	}
+	go h.runSSEHub()
+	return h
+}
+
+// runSSEHub SSE Hub 主循环，单 goroutine 串行处理订阅/退订，避免 map 并发竞争
+func (h *InternalHandler) runSSEHub() {
+	for event := range h.sseHub {
+		h.sseClientsMu.Lock()
+		if event.subscribe {
+			clients := h.sseClientsByUser[event.userID]
+
+			// 踢掉最早的同类型客户端（防止僵尸连接堆积）
+			if len(clients) >= h.notifyCfg.MaxClientsPerUser {
+				evicted := clients[0]
+				clients = clients[1:]
+				// 向被踢掉的客户端发送断开信号（非阻塞）
+				select {
+				case evicted.ch <- "event: disconnect\ndata: {\"reason\":\"too_many_connections\"}\n\n":
+				default:
+				}
+			}
+
+			h.sseClientsByUser[event.userID] = append(clients, sseClientEntry{
+				id: event.clientID,
+				ch: event.ch,
+			})
+		} else {
+			clients := h.sseClientsByUser[event.userID]
+			for i, c := range clients {
+				if c.id == event.clientID {
+					clients[i] = clients[len(clients)-1]
+					h.sseClientsByUser[event.userID] = clients[:len(clients)-1]
+					break
+				}
+			}
+			if len(h.sseClientsByUser[event.userID]) == 0 {
+				delete(h.sseClientsByUser, event.userID)
+			}
+		}
+		h.sseClientsMu.Unlock()
+	}
+}
+
+// subscribeSSE 向 Hub 注册客户端（非阻塞）
+func (h *InternalHandler) subscribeSSE(userID int64, clientID string, ch chan<- string) {
+	select {
+	case h.sseHub <- sseHubEvent{subscribe: true, userID: userID, clientID: clientID, ch: ch}:
+	default:
+		log.Printf("[SSE] Hub channel full, dropping subscribe for user %d", userID)
+	}
+}
+
+// unsubscribeSSE 从 Hub 移除客户端（非阻塞）
+func (h *InternalHandler) unsubscribeSSE(userID int64, clientID string) {
+	select {
+	case h.sseHub <- sseHubEvent{subscribe: false, userID: userID, clientID: clientID}:
+	default:
+		log.Printf("[SSE] Hub channel full, dropping unsubscribe for user %d", userID)
 	}
 }
 
@@ -905,6 +1023,7 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 }
 
 // NotificationStream SSE endpoint for real-time notifications
+// 支持同一用户多客户端（多浏览器标签）并行推送
 func (h *InternalHandler) NotificationStream(c *gin.Context) {
 	userID := c.GetInt64("user_id")
 	if userID == 0 {
@@ -918,28 +1037,55 @@ func (h *InternalHandler) NotificationStream(c *gin.Context) {
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no") // Disable nginx buffering
 
+	clientID := c.GetHeader("X-Client-ID") // 客户端生成唯一标识
+	if clientID == "" {
+		clientID = fmt.Sprintf("auto-%d", time.Now().UnixNano())
+	}
+
 	// Create channel for this client
-	clientChan := make(chan string, 10)
-	h.sseClients[userID] = clientChan
+	clientChan := make(chan string, h.notifyCfg.SSEBufferSize)
+
+	// 向 Hub 注册（非阻塞）
+	h.subscribeSSE(userID, clientID, clientChan)
+	// 连接退出时向 Hub 退订（非阻塞）
 	defer func() {
-		delete(h.sseClients, userID)
+		h.unsubscribeSSE(userID, clientID)
 		close(clientChan)
 	}()
 
-	// Send initial connection event
+	log.Printf("[SSE] Client connected: userID=%d, clientID=%s", userID, clientID)
+
+	// Send initial connected event
 	c.SSEvent("connected", map[string]interface{}{
-		"user_id": userID,
-		"time":    time.Now().Unix(),
+		"userID":   userID,
+		"clientID": clientID,
+		"time":     time.Now().Unix(),
 	})
 	c.Writer.Flush()
+
+	// 历史通知回填（从 NotificationService 获取未读通知）
+	if h.notifySvc != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+		defer cancel()
+		if notifications, err := h.notifySvc.ListUnread(ctx, userID, h.notifyCfg.CatchupLimit); err == nil && len(notifications) > 0 {
+			for _, n := range notifications {
+				data, _ := json.Marshal(n)
+				_, _ = c.Writer.WriteString(fmt.Sprintf("event: notification\ndata: %s\n\n", string(data)))
+			}
+			c.Writer.Flush()
+			log.Printf("[SSE] Sent %d catchup notifications to user %d", len(notifications), userID)
+		}
+	}
 
 	// Keep connection alive with periodic ping and send events
 	pingTicker := time.NewTicker(15 * time.Second)
 	defer pingTicker.Stop()
 	for {
 		select {
-		case msg := <-clientChan:
-			// msg 已经是完整的 SSE 格式，直接写入
+		case msg, ok := <-clientChan:
+			if !ok {
+				return // channel closed by hub (e.g. kicked)
+			}
 			_, _ = c.Writer.WriteString(msg)
 			c.Writer.Flush()
 		case <-pingTicker.C:
@@ -947,41 +1093,62 @@ func (h *InternalHandler) NotificationStream(c *gin.Context) {
 			_, _ = c.Writer.WriteString(": ping\n\n")
 			c.Writer.Flush()
 		case <-c.Request.Context().Done():
+			log.Printf("[SSE] Client disconnected: userID=%d, clientID=%s", userID, clientID)
 			return
 		}
 	}
 }
 
-// broadcastNotification sends notification to all connected clients of a user
+// broadcastNotification 向指定用户的所有已连接 SSE 客户端广播通知
+// 使用读锁遍历 + 非阻塞写入，单客户端 channel 满时丢弃不影响其他客户端
 func (h *InternalHandler) broadcastNotification(userID int64, notifyType, title, content, deviceSn string) {
-	if h.sseClients == nil {
-		return
-	}
+	h.sseClientsMu.RLock()
+	clients := h.sseClientsByUser[userID]
+	// 复制 slice 头部，避免在锁外遍历时数据竞争
+	clientsCopy := make([]sseClientEntry, len(clients))
+	copy(clientsCopy, clients)
+	h.sseClientsMu.RUnlock()
 
-	clientChan, exists := h.sseClients[userID]
-	if !exists {
+	if len(clientsCopy) == 0 {
 		log.Printf("[SSE] No connected client for user %d, notification not sent: %s - %s", userID, notifyType, title)
 		return
 	}
 
-	log.Printf("[SSE] Broadcasting notification to user %d: %s - %s", userID, notifyType, title)
+	log.Printf("[SSE] Broadcasting notification to user %d (%d clients): %s - %s", userID, len(clientsCopy), notifyType, title)
 
-	notification := map[string]interface{}{
-		"notify_type": notifyType,
-		"title":       title,
-		"content":     content,
-		"device_sn":   deviceSn,
-		"created_at":  time.Now().Format(time.RFC3339),
+	notification := sseNotification{
+		Type:      notifyType,
+		Title:     title,
+		Content:   content,
+		DeviceSN:  deviceSn,
+		CreatedAt: time.Now().Format(time.RFC3339),
 	}
 
 	data, _ := json.Marshal(notification)
-	// SSE 格式: event: notification\ndata: {...}\n\n
 	sseMessage := fmt.Sprintf("event: notification\ndata: %s\n\n", string(data))
-	select {
-	case clientChan <- sseMessage:
-		log.Printf("[SSE] Notification sent successfully to user %d", userID)
-	default:
-		// Channel full, skip
-		log.Printf("Warning: SSE channel full for user %d, dropping notification", userID)
+
+	// safeSend 非阻塞写入，带 recover 防止客户端断开后 channel 被关闭导致 panic
+	safeSend := func(ch chan<- string, msg string) (ok bool) {
+		defer func() {
+			if recover() != nil {
+				ok = false
+			}
+		}()
+		select {
+		case ch <- msg:
+			return true
+		default:
+			return false
+		}
 	}
+
+	sentCount := 0
+	for _, client := range clientsCopy {
+		if safeSend(client.ch, sseMessage) {
+			sentCount++
+		} else {
+			log.Printf("[SSE] Channel full or closed for user %d client %s, dropping notification", userID, client.id)
+		}
+	}
+	log.Printf("[SSE] Notification sent to %d/%d clients for user %d", sentCount, len(clientsCopy), userID)
 }
