@@ -10,14 +10,15 @@
 - [api-gateway/internal/middleware/rbac.go](file://api-gateway/internal/middleware/rbac.go)
 - [inv_device_server/internal/mqtt/client.go](file://inv_device_server/internal/mqtt/client.go)
 - [README.md](file://README.md)
+- [database/migrations/010_add_dsp_bms_versions.up.sql](file://database/migrations/010_add_dsp_bms_versions.up.sql)
 </cite>
 
 ## 更新摘要
 **变更内容**
-- 新增两个面向App的OTA端点：GET /ota/app/packages用于列出升级包（过滤敏感字段），POST /ota/app/packages/install用于安全安装升级包（设备所有权验证）
-- 增强了设备所有权验证机制，确保用户只能操作自己拥有的设备
-- 优化了升级包列表接口，为App端提供精简的安全数据格式
-- 更新了权限控制配置，允许已认证用户对特定App端接口进行访问
+- 新增四个管理端设备-固件关系查询API：GET /ota/firmware/devices、GET /ota/firmware/package-devices、GET /ota/devices/:sn/package-upgrade/:packageId、GET /ota/devices/:sn/upgrade-packages
+- 增强多芯片固件版本跟踪，支持DSP和BMS芯片版本管理
+- 完善设备升级包详情查询功能，提供各芯片升级进度跟踪
+- 优化设备所有权验证机制，确保移动端接口安全性
 
 ## 目录
 1. [简介](#简介)
@@ -34,7 +35,7 @@
 ## 简介
 本文件为OTA升级API的完整技术文档，覆盖固件管理、升级任务创建与管理、进度查询、回滚与失败处理、统计报表以及设备端集成协议。系统采用后端API服务器与设备侧服务分离的架构，通过MQTT通道实现设备与云端的双向通信。
 
-**更新** 本次更新新增了面向App端的OTA升级包管理功能，包括安全的升级包列表查询和基于设备所有权的升级包安装功能，进一步丰富了系统的移动端支持能力。
+**更新** 本次更新新增了四个面向管理端的设备-固件关系查询API，增强了多芯片固件版本跟踪能力（支持DSP和BMS），并完善了设备升级包详情查询功能，进一步提升了系统的可观测性和管理能力。
 
 ## 项目结构
 - API网关：统一入口与中间件（鉴权、CORS、限流等）
@@ -82,7 +83,7 @@ MQTT --> APP
 - OTA仓库（Repository）：数据库访问层，提供固件、设备升级任务的CRUD与聚合查询
 - 设备侧MQTT客户端：根据命令类型选择对应MQTT主题并发送升级命令
 
-**更新** 新增了面向App端的OTA处理器方法，包括升级包列表查询和设备所有权验证功能，提供了更安全的移动端升级体验。
+**更新** 新增了设备-固件关系查询处理器方法，包括按固件版本查询设备列表、按升级包查询设备列表、获取设备升级包详情等功能，提供了更强大的设备管理能力。
 
 **章节来源**
 - [inv_api_server/internal/handler/ota_handler.go:20-26](file://inv_api_server/internal/handler/ota_handler.go#L20-L26)
@@ -120,10 +121,10 @@ API-->>App : "升级面板/详情"
 ```
 
 **图示来源**
-- [inv_api_server/cmd/main.go:548-558](file://inv_api_server/cmd/main.go#L548-L558)
-- [inv_api_server/internal/service/ota_service.go:118-181](file://inv_api_server/internal/service/ota_service.go#L118-L181)
+- [inv_api_server/cmd/main.go:548-558](file://inv_api_server/cmd/main.go#L548-558)
+- [inv_api_server/internal/service/ota_service.go:118-181](file://inv_api_server/internal/service/ota_service.go#L118-181)
 - [inv_device_server/internal/mqtt/client.go:264-283](file://inv_device_server/internal/mqtt/client.go#L264-283)
-- [README.md:257-279](file://README.md#L257-L279)
+- [README.md:257-279](file://README.md#L257-279)
 
 ## 详细组件分析
 
@@ -206,6 +207,55 @@ API-->>Admin : "返回推送结果"
 **章节来源**
 - [inv_api_server/internal/handler/ota_handler.go:189-278](file://inv_api_server/internal/handler/ota_handler.go#L189-L278)
 - [inv_api_server/internal/service/ota_service.go:111-181](file://inv_api_server/internal/service/ota_service.go#L111-L181)
+
+### 设备-固件关系查询接口（新增）
+- 接口列表
+  - GET /ota/firmware/devices：按固件版本查询使用该版本的设备（管理端）
+  - GET /ota/firmware/package-devices：按升级包查询已安装/正在安装的设备（管理端）
+  - GET /ota/devices/:sn/package-upgrade/:packageId：获取设备在指定升级包下的各芯片升级进度
+  - GET /ota/devices/:sn/upgrade-packages：通过设备SN查询可用的升级包列表
+- 请求参数与行为
+  - 按固件版本查询：需要model、target_chip、version参数，支持arm/esp/dsp/bms四种芯片类型
+  - 按升级包查询：需要package_id参数，可选status参数过滤状态
+  - 设备升级包详情：需要设备SN和升级包ID，返回各芯片的详细升级状态
+  - 设备可用升级包：需要设备SN，返回该设备型号对应的所有可用升级包
+- 安全机制
+  - 管理端接口：需要ota:view权限
+  - 设备端接口：需要JWT认证和设备所有权验证
+  - 芯片类型验证：只允许arm、esp、dsp、bms四种有效芯片类型
+
+**更新** 新增了四个强大的设备-固件关系查询接口，支持按固件版本和升级包维度查询设备分布，提供详细的设备升级包信息和各芯片升级进度跟踪。
+
+```mermaid
+sequenceDiagram
+participant Admin as "管理端"
+participant API as "API服务器"
+participant Service as "OTA服务"
+participant Repo as "OTA仓库"
+Admin->>API : "GET /ota/firmware/devices?model=X1&target_chip=dsp&version=V1.0"
+API->>Service : "GetDevicesByFirmwareVersion"
+Service->>Repo : "查询使用指定固件版本的设备"
+Repo-->>Service : "返回设备列表"
+Service-->>API : "返回设备信息"
+API-->>Admin : "设备列表及总数"
+Admin->>API : "GET /ota/devices/ : sn/package-upgrade/ : packageId"
+API->>Service : "GetDevicePackageUpgradeInfo"
+Service->>Repo : "获取设备信息和升级包详情"
+Repo-->>Service : "返回设备升级记录"
+Service-->>API : "组装各芯片升级详情"
+API-->>Admin : "设备在各芯片的升级状态"
+```
+
+**图示来源**
+- [inv_api_server/cmd/main.go:685-698](file://inv_api_server/cmd/main.go#L685-L698)
+- [inv_api_server/internal/handler/ota_handler.go:1103-1257](file://inv_api_server/internal/handler/ota_handler.go#L1103-L1257)
+- [inv_api_server/internal/service/ota_service.go:407-511](file://inv_api_server/internal/service/ota_service.go#L407-L511)
+- [inv_api_server/internal/repository/ota_repository.go:1240-1315](file://inv_api_server/internal/repository/ota_repository.go#L1240-L1315)
+
+**章节来源**
+- [inv_api_server/cmd/main.go:685-698](file://inv_api_server/cmd/main.go#L685-L698)
+- [inv_api_server/internal/handler/ota_handler.go:1103-1257](file://inv_api_server/internal/handler/ota_handler.go#L1103-L1257)
+- [inv_api_server/internal/service/ota_service.go:407-511](file://inv_api_server/internal/service/ota_service.go#L407-L511)
 
 ### App端升级包管理接口
 - 接口列表
@@ -335,6 +385,61 @@ ReSend --> Pending["状态回到pending"]
 - [inv_api_server/internal/handler/ota_handler.go:216-244](file://inv_api_server/internal/handler/ota_handler.go#L216-L244)
 - [inv_api_server/internal/service/ota_service.go:274-287](file://inv_api_server/internal/service/ota_service.go#L274-L287)
 
+### 多芯片固件版本管理（新增）
+- 支持的芯片类型
+  - ARM：主控芯片固件版本
+  - ESP：WiFi/蓝牙模块固件版本
+  - DSP：数字信号处理器固件版本（新增）
+  - BMS：电池管理系统固件版本（新增）
+- 版本跟踪机制
+  - 设备表增加firmware_dsp和firmware_bms字段
+  - ChipVersions()方法返回结构化芯片版本映射
+  - MainVersion自动生成规则包含所有芯片版本
+- 升级包管理
+  - 支持多芯片固件组合成升级包
+  - 每个芯片独立版本管理和升级
+  - 整体升级状态由各芯片状态综合计算
+
+**更新** 增强了多芯片固件版本跟踪能力，新增了对DSP和BMS芯片的支持，提供了完整的四芯片版本管理体系。
+
+```mermaid
+classDiagram
+class Device {
++firmware_arm : string
++firmware_esp : string
++firmware_dsp : string
++firmware_bms : string
++main_version : string
+}
+class ChipVersions {
++map[string]string
++arm : string
++esp : string
++dsp : string
++bms : string
+}
+class UpgradePackage {
++items : []ChipItem
++main_version : string
+}
+class ChipItem {
++target_chip : string
++firmware_version : string
+}
+Device --> ChipVersions : "ChipVersions()"
+UpgradePackage --> ChipItem : "包含多个芯片项"
+```
+
+**图示来源**
+- [inv_api_server/internal/repository/ota_repository.go:375-391](file://inv_api_server/internal/repository/ota_repository.go#L375-L391)
+- [database/migrations/010_add_dsp_bms_versions.up.sql:1-3](file://database/migrations/010_add_dsp_bms_versions.up.sql#L1-L3)
+- [inv_api_server/internal/model/models.go:286-302](file://inv_api_server/internal/model/models.go#L286-L302)
+
+**章节来源**
+- [inv_api_server/internal/repository/ota_repository.go:375-391](file://inv_api_server/internal/repository/ota_repository.go#L375-L391)
+- [database/migrations/010_add_dsp_bms_versions.up.sql:1-3](file://database/migrations/010_add_dsp_bms_versions.up.sql#L1-L3)
+- [inv_api_server/internal/model/models.go:286-302](file://inv_api_server/internal/model/models.go#L286-L302)
+
 ### 设备端集成与协议
 - MQTT主题
   - 下行：cs_inv/{sn}/ota/cmd（升级命令）
@@ -363,6 +468,10 @@ class OTAHandler {
 +GetDeviceOTAHistory()
 +AppListUpgradePackages()
 +AppInstallPackage()
++GetDevicesByFirmware()
++GetUpgradePackageDevices()
++GetDevicePackageUpgradeInfo()
++ListDeviceUpgradePackages()
 }
 class OTAService {
 +CreateFirmware()
@@ -377,6 +486,9 @@ class OTAService {
 +CheckDeviceOwnership()
 +ListUpgradePackages()
 +PushPackageUpgrade()
++GetDevicePackageUpgradeInfo()
++GetDevicesByFirmwareVersion()
++GetDevicesByUpgradePackage()
 }
 class DeviceUpgrade {
 +id
@@ -468,14 +580,17 @@ Repo --> PG["PostgreSQL"]
   - 权限不足：确认JWT令牌有效且具备相应权限（ota:view/create/control）
   - 任务取消失败：检查任务状态是否允许取消（已完成或已取消的任务无法取消）
   - App端升级包安装失败：检查设备所有权验证是否通过、用户是否有设备访问权限
+  - 设备-固件关系查询失败：检查芯片类型参数是否有效（arm/esp/dsp/bms）
+  - 升级包详情查询失败：确认设备SN和升级包ID是否正确
 - 排查步骤
   - 查看API服务器日志与错误码
   - 使用内部健康检查接口确认数据库与Redis连通性
   - 在设备侧服务中检查MQTT订阅与命令转发状态
   - 核对设备上报的主题与格式是否符合规范
   - 验证App端请求的设备SN是否与当前用户关联
+  - 检查数据库中设备的芯片版本字段是否正确填充
 
-**更新** 新增了App端升级包相关的故障排除指南，包括设备所有权验证失败的常见原因和解决方案。
+**更新** 新增了设备-固件关系查询相关的故障排除指南，包括芯片类型验证失败的常见原因和解决方案。
 
 **章节来源**
 - [inv_api_server/cmd/main.go:356-377](file://inv_api_server/cmd/main.go#L356-L377)
@@ -484,7 +599,7 @@ Repo --> PG["PostgreSQL"]
 ## 结论
 本OTA升级API提供了从固件管理到任务执行、进度跟踪与回滚的全链路能力。通过清晰的接口设计与严格的权限控制，结合MQTT的可靠通信，能够满足大规模设备的远程升级需求。最新的可靠性增强包括改进的任务取消机制、增强的错误处理和active状态过滤功能，进一步提升了系统的稳定性和用户体验。
 
-**更新** 本次更新显著增强了系统的移动端支持能力，新增的App端升级包管理接口提供了安全的设备所有权验证和敏感数据过滤，为用户提供了更加便捷和安全的移动端升级体验。
+**更新** 本次更新显著增强了系统的设备管理能力，新增的四个设备-固件关系查询API和多芯片固件版本跟踪功能，为管理员提供了更强大的设备监控和管理工具，同时保持了良好的向后兼容性。
 
 ## 附录
 
@@ -500,6 +615,11 @@ Repo --> PG["PostgreSQL"]
   - GET /api/v1/ota/upgrades/firmware/:firmwareId
   - POST /api/v1/ota/upgrades/retry
   - POST /api/v1/ota/upgrades/cancel
+- 设备-固件关系查询（新增）
+  - GET /ota/firmware/devices?model=&target_chip=&version=
+  - GET /ota/firmware/package-devices?package_id=&status=
+  - GET /ota/devices/:sn/package-upgrade/:packageId
+  - GET /ota/devices/:sn/upgrade-packages
 - App端接口
   - GET /ota/check/:sn
   - POST /ota/trigger
@@ -511,18 +631,20 @@ Repo --> PG["PostgreSQL"]
 - 内部接口
   - POST /api/v1/internal/ota-status
 
-**更新** 新增了面向App端的升级包管理接口，包括升级包列表查询和安全安装功能。
+**更新** 新增了四个设备-固件关系查询API，增强了系统的设备管理能力。
 
 **章节来源**
 - [inv_api_server/cmd/main.go:549-564](file://inv_api_server/cmd/main.go#L549-L564)
 - [inv_api_server/cmd/main.go:389](file://inv_api_server/cmd/main.go#L389)
 - [inv_api_server/cmd/main.go:692-693](file://inv_api_server/cmd/main.go#L692-L693)
+- [inv_api_server/cmd/main.go:685-698](file://inv_api_server/cmd/main.go#L685-L698)
 
 ### 设备端协议要点
 - 命令主题：cs_inv/{sn}/ota/cmd
 - 状态主题：cs_inv/{sn}/ota/status
 - 必填字段：command、target、url、version、file_size、file_md5、file_sha256、upgrade_id
 - 状态字段：state（如upgrading）、progress（0-100）、status_message、error_message
+- 多芯片支持：支持ARM、ESP、DSP、BMS四种芯片类型的固件版本管理
 
 **章节来源**
 - [README.md:281-313](file://README.md#L281-L313)
@@ -555,3 +677,31 @@ Repo --> PG["PostgreSQL"]
 **章节来源**
 - [inv_api_server/internal/handler/ota_handler.go:1015-1101](file://inv_api_server/internal/handler/ota_handler.go#L1015-L1101)
 - [api-gateway/internal/middleware/rbac.go:197-199](file://api-gateway/internal/middleware/rbac.go#L197-L199)
+
+### 设备-固件关系查询接口详细说明
+- GET /ota/firmware/devices
+  - 请求参数：model（必需）、target_chip（必需，arm/esp/dsp/bms）、version（必需）
+  - 响应格式：设备列表及总数，包含设备SN、型号、主版本和各芯片版本
+  - 权限要求：ota:view权限
+  - 芯片类型验证：只允许arm、esp、dsp、bms四种有效芯片类型
+- GET /ota/firmware/package-devices
+  - 请求参数：package_id（必需）、status（可选）
+  - 响应格式：使用该升级包的设备及升级状态
+  - 权限要求：ota:view权限
+  - 状态过滤：支持按升级状态筛选设备
+- GET /ota/devices/:sn/package-upgrade/:packageId
+  - 路径参数：sn（设备SN）、packageId（升级包ID）
+  - 响应格式：设备在指定升级包下各芯片的详细升级状态
+  - 安全验证：设备所有权检查
+  - 升级状态：idle/pending/upgrading/success/failed/partial
+- GET /ota/devices/:sn/upgrade-packages
+  - 路径参数：sn（设备SN）
+  - 响应格式：设备型号对应的所有可用升级包列表
+  - 安全验证：设备所有权检查
+  - 版本对比：显示目标版本与当前版本的差异
+
+**章节来源**
+- [inv_api_server/cmd/main.go:685-698](file://inv_api_server/cmd/main.go#L685-L698)
+- [inv_api_server/internal/handler/ota_handler.go:1103-1257](file://inv_api_server/internal/handler/ota_handler.go#L1103-L1257)
+- [inv_api_server/internal/service/ota_service.go:407-511](file://inv_api_server/internal/service/ota_service.go#L407-L511)
+- [inv_api_server/internal/repository/ota_repository.go:1240-1315](file://inv_api_server/internal/repository/ota_repository.go#L1240-L1315)

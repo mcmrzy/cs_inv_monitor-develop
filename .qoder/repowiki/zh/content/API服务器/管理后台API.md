@@ -20,6 +20,13 @@
 - [api-gateway/internal/routes/routes.go](file://api-gateway/internal/routes/routes.go)
 </cite>
 
+## 更新摘要
+**所做更改**
+- 新增固件版本设备查询功能，支持查看使用特定固件版本的设备列表
+- 新增升级包设备安装功能，支持查看已安装升级包的设备和管理设备安装操作
+- 增强OTA管理界面，添加"查看设备"和"安装设备"按钮及相关模态对话框
+- 完善固件管理和升级包管理的设备关联查询能力
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -87,7 +94,7 @@ DEV --> RDS
 - 告警管理：告警列表、详情、处理与忽略、统计分析
 - 仪表板：设备分布、趋势分析、能量统计、站点排名、大屏展示
 - 通知系统：站内通知、统计与清理
-- OTA升级：固件管理、推送升级、设备状态跟踪
+- OTA升级：固件管理、推送升级、设备状态跟踪、**固件版本设备查询、升级包设备管理**
 - 系统配置：系统配置读写、租户管理、指标监控
 
 **章节来源**
@@ -96,7 +103,7 @@ DEV --> RDS
 - [inv_api_server/internal/handler/alarm_handler.go:1-256](file://inv_api_server/internal/handler/alarm_handler.go#L1-L256)
 - [inv_api_server/internal/handler/dashboard_handler.go:1-1241](file://inv_api_server/internal/handler/dashboard_handler.go#L1-L1241)
 - [inv_api_server/internal/handler/notification_handler.go:1-211](file://inv_api_server/internal/handler/notification_handler.go#L1-L211)
-- [inv_api_server/internal/handler/ota_handler.go:1-536](file://inv_api_server/internal/handler/ota_handler.go#L1-L536)
+- [inv_api_server/internal/handler/ota_handler.go:1-1258](file://inv_api_server/internal/handler/ota_handler.go#L1-L1258)
 
 ## 架构总览
 系统采用分层架构：
@@ -265,12 +272,17 @@ REPO --> TS
 - [inv_api_server/internal/handler/notification_handler.go:24-135](file://inv_api_server/internal/handler/notification_handler.go#L24-L135)
 
 ### OTA升级管理API
+
+**更新** 新增固件版本设备查询和升级包设备管理功能
+
 - 端点规范
   - 管理端（需ota:view/create/delete/control）
     - GET /api/v1/ota/firmware
     - GET /api/v1/ota/firmware/:id
     - POST /api/v1/ota/firmware
     - DELETE /api/v1/ota/firmware/:id
+    - **GET /api/v1/ota/firmware/devices?model=&target_chip=&version=** (新增)
+    - **GET /api/v1/ota/firmware/package-devices?package_id=&status=** (新增)
     - GET /api/v1/ota/upgrades/dashboard
     - POST /api/v1/ota/upgrades/push
     - GET /api/v1/ota/upgrades/firmware/:firmwareId
@@ -291,11 +303,17 @@ REPO --> TS
 - 功能特性
   - 固件上传与管理、推送升级、重试与取消
   - 设备升级状态查询与历史记录
+  - **固件版本设备查询：根据型号、芯片类型和版本号查询使用该固件的设备列表**
+  - **升级包设备管理：查询已安装或正在安装指定升级包的设备，支持按状态筛选**
   - APP版本管理与灰度发布
+- 权限控制
+  - 新增的固件设备查询接口需要ota:view权限
 
 **章节来源**
 - [inv_api_server/cmd/main.go:546-574](file://inv_api_server/cmd/main.go#L546-L574)
-- [inv_api_server/internal/handler/ota_handler.go:151-377](file://inv_api_server/internal/handler/ota_handler.go#L151-L377)
+- [inv_api_server/cmd/main.go:684-685](file://inv_api_server/cmd/main.go#L684-L685)
+- [inv_api_server/internal/handler/ota_handler.go:151-377](file://inv_api_server/internal/handler/ota_handler.go#L151-377)
+- [inv_api_server/internal/handler/ota_handler.go:1212-1258](file://inv_api_server/internal/handler/ota_handler.go#L1212-L1258)
 
 ### 系统配置与权限管理API
 - 端点规范
@@ -427,6 +445,7 @@ DEVICE_SVC --> DEV_SRV["设备服务"]
   - JWT黑名单、刷新令牌、权限缓存、设备命令队列
 - 数据库优化
   - TimescaleDB压缩与索引、设备日数据JSONB存储
+  - **固件版本查询优化：针对设备固件字段的索引优化**
 - 并发与优雅停机
   - HTTP服务优雅关闭、心跳检测与设备离线标记
 
@@ -441,6 +460,8 @@ DEVICE_SVC --> DEV_SRV["设备服务"]
   - Redis连接失败：确认地址、密码与Ping测试
   - JWT密钥未设置：启动前必须设置安全密钥
   - 设备离线命令队列：设备离线时命令进入Redis队列，上线后自动重试
+  - **固件设备查询失败：检查model、target_chip、version参数是否正确**
+  - **升级包设备查询失败：确认package_id参数有效且存在**
 - 日志与监控
   - Zap结构化日志输出
   - Prometheus指标暴露与Grafana仪表板
@@ -452,7 +473,7 @@ DEVICE_SVC --> DEV_SRV["设备服务"]
 - [api-gateway/internal/routes/routes.go:57-71](file://api-gateway/internal/routes/routes.go#L57-L71)
 
 ## 结论
-本管理后台API提供了完善的用户、设备、告警、仪表板与系统管理能力，具备良好的权限控制、可观测性与扩展性。建议后续完善工单管理、增强数据导入导出与系统维护功能，并持续优化数据库与缓存策略以提升性能。
+本管理后台API提供了完善的用户、设备、告警、仪表板与系统管理能力，具备良好的权限控制、可观测性与扩展性。**最新增强包括固件版本设备查询和升级包设备管理功能，显著提升了OTA管理的用户体验和操作效率**。建议后续完善工单管理、增强数据导入导出与系统维护功能，并持续优化数据库与缓存策略以提升性能。
 
 ## 附录
 
@@ -495,7 +516,10 @@ DEVICE_SVC --> DEV_SRV["设备服务"]
   - POST /api/v1/ota/upgrades/push
   - GET /api/v1/ota/devices/:sn/status
   - GET /api/v1/ota/app/versions
+  - **GET /api/v1/ota/firmware/devices?model=&target_chip=&version=** (新增)
+  - **GET /api/v1/ota/firmware/package-devices?package_id=&status=** (新增)
 
 **章节来源**
 - [inv_api_server/cmd/main.go:397-574](file://inv_api_server/cmd/main.go#L397-L574)
+- [inv_api_server/cmd/main.go:684-685](file://inv_api_server/cmd/main.go#L684-L685)
 - [api-gateway/internal/routes/routes.go:143-194](file://api-gateway/internal/routes/routes.go#L143-L194)
