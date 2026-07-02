@@ -353,10 +353,13 @@ class _OTAPageState extends State<OTAPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => FirmwareListPage(
-                        sn: widget.deviceSN,
-                        deviceModel: deviceModel,
-                        currentMainVersion: mainVer,
+                      builder: (_) => BlocProvider.value(
+                        value: context.read<OtaBloc>(),
+                        child: FirmwareListPage(
+                          sn: widget.deviceSN,
+                          deviceModel: deviceModel,
+                          currentMainVersion: mainVer,
+                        ),
                       ),
                     ),
                   );
@@ -558,10 +561,13 @@ class _OTAPageState extends State<OTAPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => FirmwareListPage(
-                        sn: widget.deviceSN,
-                        deviceModel: deviceModel,
-                        currentMainVersion: mainVer,
+                      builder: (_) => BlocProvider.value(
+                        value: context.read<OtaBloc>(),
+                        child: FirmwareListPage(
+                          sn: widget.deviceSN,
+                          deviceModel: deviceModel,
+                          currentMainVersion: mainVer,
+                        ),
                       ),
                     ),
                   );
@@ -827,10 +833,13 @@ class _OTAPageState extends State<OTAPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => FirmwareListPage(
-                        sn: widget.deviceSN,
-                        deviceModel: deviceModel,
-                        currentMainVersion: mainVer,
+                      builder: (_) => BlocProvider.value(
+                        value: context.read<OtaBloc>(),
+                        child: FirmwareListPage(
+                          sn: widget.deviceSN,
+                          deviceModel: deviceModel,
+                          currentMainVersion: mainVer,
+                        ),
                       ),
                     ),
                   );
