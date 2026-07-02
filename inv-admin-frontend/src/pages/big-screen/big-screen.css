@@ -1,195 +1,286 @@
 /* ============================================================
-   Big Screen Dashboard — Dark Tech Theme
+   Big Screen Dashboard — Deep Blue Sci-Fi Theme
+   完全重写：对标深蓝科技感数据大屏视觉系统
    ============================================================ */
 
-/* 1. CSS Variables ---------------------------------------- */
+/* ==========================================================
+   1. CSS Variables — 颜色系统与设计令牌
+   ========================================================== */
 :root {
-  --bs-bg-primary: #0a0f1e;
-  --bs-bg-secondary: #0d1b2a;
-  --bs-bg-tertiary: #1b2838;
+  /* 背景层级 */
+  --bs-bg-primary: #050a1a;
+  --bs-bg-secondary: #0a1628;
+  --bs-bg-panel: rgba(6, 20, 50, 0.75);
+
+  /* 主色系 */
   --bs-primary: #00d4ff;
-  --bs-text: #e0e0e0;
-  --bs-text-secondary: #aab;
-  --bs-text-muted: #889;
-  --bs-border: rgba(255, 255, 255, 0.06);
-  --bs-panel-bg: rgba(255, 255, 255, 0.03);
-  --bs-success: #52c41a;
-  --bs-danger: #ff4d4f;
-  --bs-warning: #fa8c16;
+  --bs-primary-dim: rgba(0, 212, 255, 0.3);
+  --bs-primary-glow: rgba(0, 212, 255, 0.6);
+  --bs-accent: #00ff88;
+
+  /* 文字层级 */
+  --bs-text: #e8f4ff;
+  --bs-text-secondary: #8ba4c4;
+  --bs-text-muted: #4a6a8a;
+
+  /* 边框与分割 */
+  --bs-border: rgba(0, 212, 255, 0.2);
+  --bs-border-dim: rgba(0, 212, 255, 0.08);
+
+  /* 功能色 */
+  --bs-success: #00ff88;
+  --bs-danger: #ff4757;
+  --bs-warning: #ffa502;
+
+  /* 阴影 */
+  --bs-shadow-panel: 0 0 20px rgba(0, 212, 255, 0.05), inset 0 1px 0 rgba(0, 212, 255, 0.1);
+  --bs-shadow-glow: 0 0 30px rgba(0, 212, 255, 0.15);
 }
 
-/* 2. Layout Classes --------------------------------------- */
+/* ==========================================================
+   2. 全屏容器 — 深蓝渐变 + 网格布局
+   ========================================================== */
 .bs-container {
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-rows: 60px 1fr 32px;
-  grid-template-columns: repeat(24, 1fr);
-  gap: 8px;
-  padding: 8px;
-  background: 
-    radial-gradient(ellipse at top, rgba(0, 212, 255, 0.03) 0%, transparent 50%),
-    linear-gradient(135deg, #0a1128 0%, var(--bs-bg-secondary) 50%, #0a1128 100%);
-  color: var(--bs-text);
-  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  grid-template-rows: 64px 1fr;
+  grid-template-columns: 280px 1fr 320px;
+  gap: 12px;
+  padding: 12px;
+  background:
+    radial-gradient(ellipse at top center, #0a1628 0%, #050a1a 70%);
   overflow: hidden;
+  font-family: 'Inter', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--bs-text);
   box-sizing: border-box;
+  position: relative;
 }
 
+/* 扫描线叠加层 */
+.bs-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 212, 255, 0.008) 2px,
+    rgba(0, 212, 255, 0.008) 4px
+  );
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* 微粒点背景纹理 */
+.bs-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(0, 212, 255, 0.12) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ==========================================================
+   3. 顶部标题栏
+   ========================================================== */
 .bs-header {
-  grid-row: 1;
   grid-column: 1 / -1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 24px;
   position: relative;
-  background: linear-gradient(90deg, rgba(0, 212, 255, 0.05) 0%, transparent 50%, rgba(0, 212, 255, 0.05) 100%);
-  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  z-index: 1;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 212, 255, 0.04) 0%,
+    rgba(6, 20, 50, 0.6) 50%,
+    rgba(0, 212, 255, 0.04) 100%
+  );
+  border-bottom: 1px solid var(--bs-border);
   border-radius: 4px;
 }
 
-/* Header glowing separator line */
+/* 标题栏底部发光分割线 */
 .bs-header::after {
   content: '';
   position: absolute;
-  bottom: 0;
-  left: 10%;
-  right: 10%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--bs-primary) 50%, transparent);
-  box-shadow: 0 0 8px var(--bs-primary);
+  bottom: -1px;
+  left: 15%;
+  right: 15%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--bs-primary), transparent);
+  box-shadow: 0 0 12px var(--bs-primary-glow), 0 0 30px var(--bs-primary-dim);
   pointer-events: none;
 }
 
 .bs-header-title {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: 2px;
-  background: linear-gradient(90deg, var(--bs-primary), #60efff);
+  letter-spacing: 3px;
+  background: linear-gradient(90deg, var(--bs-primary), #60efff, var(--bs-primary));
+  background-size: 200% 100%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+  text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
 }
 
 .bs-header-time {
   font-size: 14px;
   color: var(--bs-text-secondary);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
 }
 
+/* ==========================================================
+   4. 三栏布局区域
+   ========================================================== */
 .bs-left {
   grid-row: 2;
-  grid-column: 1 / 7;
-  display: grid;
-  grid-template-rows: auto 1fr 1fr;
-  gap: 8px;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   overflow: hidden;
+  z-index: 1;
 }
 
 .bs-center {
   grid-row: 2;
-  grid-column: 7 / 18;
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   overflow: hidden;
+  z-index: 1;
 }
 
 .bs-right {
   grid-row: 2;
-  grid-column: 18 / -1;
-  display: grid;
-  grid-template-rows: repeat(4, 1fr);
-  gap: 8px;
-  overflow: hidden;
-}
-
-.bs-footer {
-  grid-row: 3;
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  font-size: 11px;
-  color: var(--bs-text-muted);
-  border-top: 1px solid rgba(0, 212, 255, 0.15);
-  background: linear-gradient(90deg, rgba(0, 212, 255, 0.03) 0%, transparent 50%, rgba(0, 212, 255, 0.03) 100%);
-  border-radius: 4px;
-}
-
-/* 3. Panel ------------------------------------------------ */
-.bs-panel {
-  position: relative;
-  background: rgba(10, 17, 40, 0.4);
-  border-radius: 6px;
-  border: 1px solid rgba(0, 212, 255, 0.1);
-  padding: 8px;
-  overflow: hidden;
+  grid-column: 3;
   display: flex;
   flex-direction: column;
-  backdrop-filter: blur(2px);
+  gap: 12px;
+  overflow: hidden;
+  z-index: 1;
 }
 
-/* L-shaped corner decoration — top-left */
+/* ==========================================================
+   5. 通用面板 — 半透明背景 + 发光边框 + L形角标
+   ========================================================== */
+.bs-panel {
+  position: relative;
+  background: var(--bs-bg-panel);
+  border: 1px solid var(--bs-border);
+  border-radius: 4px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  box-shadow: var(--bs-shadow-panel);
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.bs-panel:hover {
+  box-shadow: var(--bs-shadow-glow);
+  border-color: rgba(0, 212, 255, 0.35);
+}
+
+/* L形角标 — 左上 */
 .bs-panel::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
   border-top: 2px solid var(--bs-primary);
   border-left: 2px solid var(--bs-primary);
-  border-radius: 2px 0 0 0;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
 }
 
-/* L-shaped corner decoration — bottom-right */
+/* L形角标 — 右下 */
 .bs-panel::after {
   content: '';
   position: absolute;
   bottom: 0;
   right: 0;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
   border-bottom: 2px solid var(--bs-primary);
   border-right: 2px solid var(--bs-primary);
-  border-radius: 0 0 2px 0;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
 }
 
+/* L形角标 — 右上（需内嵌元素） */
+.bs-corner-tr {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  border-top: 2px solid var(--bs-primary);
+  border-right: 2px solid var(--bs-primary);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* L形角标 — 左下（需内嵌元素） */
+.bs-corner-bl {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-bottom: 2px solid var(--bs-primary);
+  border-left: 2px solid var(--bs-primary);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ==========================================================
+   6. 面板标题 — 左侧竖线装饰
+   ========================================================== */
 .bs-panel-title {
-  color: var(--bs-text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  color: var(--bs-text);
+  padding: 6px 12px;
+  margin-bottom: 12px;
   border-left: 3px solid var(--bs-primary);
-  padding: 6px 8px 6px 12px;
-  margin-bottom: 8px;
+  background: linear-gradient(90deg, rgba(0, 212, 255, 0.12) 0%, transparent 70%);
+  border-radius: 2px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
   position: relative;
-  background: linear-gradient(90deg, rgba(0, 212, 255, 0.15) 0%, transparent 100%);
-  border-radius: 2px;
 }
 
-/* Title right decorative gradient line */
+/* 标题装饰线 */
 .bs-panel-title::after {
   content: '';
   position: absolute;
-  right: 8px;
+  right: 12px;
   top: 50%;
-  width: 40%;
+  width: 35%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.3));
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.25));
   pointer-events: none;
 }
 
 .bs-panel-title-icon {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--bs-primary);
 }
 
@@ -200,268 +291,196 @@
   color: var(--bs-text-muted);
 }
 
-.bs-panel-glow {
-  box-shadow: 0 0 15px rgba(0, 212, 255, 0.1);
-  position: relative;
-  overflow: hidden;
-}
-
-/* Scan line animation for glow panels */
-.bs-panel-glow::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--bs-primary), transparent);
-  animation: bs-scan 3s ease-in-out infinite;
-  z-index: 2;
-  pointer-events: none;
-}
-
-@keyframes bs-scan {
-  0%   { left: -100%; }
-  100% { left: 100%; }
-}
-
 .bs-panel-body {
   flex: 1;
   overflow: hidden;
   min-height: 0;
 }
 
-/* 4. KPI Stat Card ---------------------------------------- */
-.bs-stat-card {
+/* ==========================================================
+   7. KPI 卡片 — 大号数字 + 霓虹发光
+   ========================================================== */
+.bs-kpi-card {
+  position: relative;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.06) 0%, rgba(6, 20, 50, 0.5) 100%);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.bs-kpi-card:hover {
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.1), inset 0 0 30px rgba(0, 212, 255, 0.03);
+}
+
+/* KPI卡片微型角标 */
+.bs-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--bs-primary);
+  border-left: 2px solid var(--bs-primary);
+  pointer-events: none;
+}
+
+.bs-kpi-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-bottom: 2px solid var(--bs-primary);
+  border-right: 2px solid var(--bs-primary);
+  pointer-events: none;
+}
+
+.bs-kpi-value {
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    0 0 10px var(--bs-primary-glow),
+    0 0 20px var(--bs-primary-dim),
+    0 0 40px rgba(0, 212, 255, 0.15),
+    0 0 80px rgba(0, 212, 255, 0.05);
+  transition: text-shadow 0.3s ease;
+}
+
+.bs-kpi-label {
+  font-size: 12px;
+  color: var(--bs-text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.bs-kpi-unit {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--bs-text-muted);
+  margin-left: 4px;
+}
+
+/* ==========================================================
+   8. 地图容器
+   ========================================================== */
+.bs-map-container {
+  flex: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--bs-border-dim);
+}
+
+/* 地图边缘渐变遮罩 */
+.bs-map-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(5, 10, 26, 0.4) 0%, transparent 10%),
+    linear-gradient(to top, rgba(5, 10, 26, 0.4) 0%, transparent 10%),
+    linear-gradient(to right, rgba(5, 10, 26, 0.3) 0%, transparent 5%),
+    linear-gradient(to left, rgba(5, 10, 26, 0.3) 0%, transparent 5%);
+  pointer-events: none;
+  z-index: 10;
+  border-radius: 8px;
+}
+
+/* ==========================================================
+   9. 图表容器
+   ========================================================== */
+.bs-chart-container {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  padding: 4px 0;
+}
+
+/* 图表区域光晕 */
+.bs-chart-container::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(ellipse, rgba(0, 212, 255, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ==========================================================
+   10. 告警条目
+   ========================================================== */
+.bs-alert-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
-  border: 1px solid rgba(0, 212, 255, 0.15);
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.05) inset;
-}
-
-.bs-stat-card:hover {
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  border-color: rgba(0, 212, 255, 0.3);
-  box-shadow: 0 0 15px rgba(0, 212, 255, 0.1);
-}
-
-.bs-stat-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
-  box-shadow: 0 0 12px currentColor;
-  opacity: 0.9;
-  /* background set inline via style prop for per-card color */
-}
-
-.bs-stat-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.bs-stat-label {
-  color: var(--bs-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bs-stat-value-row {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-}
-
-.bs-stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--bs-text);
-  font-variant-numeric: tabular-nums;
-  transition: all 0.3s ease;
-}
-
-.bs-stat-unit {
-  font-size: 11px;
-  color: var(--bs-text-muted);
-}
-
-.bs-stat-trend {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 11px;
-  flex-shrink: 0;
-}
-
-.bs-stat-trend--up {
-  color: var(--bs-success);
-}
-
-.bs-stat-trend--down {
-  color: var(--bs-danger);
-}
-
-/* 5. Animations ------------------------------------------- */
-@keyframes bs-pulse {
-  0%, 100% { opacity: 0.6; }
-  50%       { opacity: 1; }
-}
-
-@keyframes bs-scroll-up {
-  0%   { transform: translateY(0); }
-  100% { transform: translateY(-50%); }
-}
-
-@keyframes bs-fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes bs-glow-line {
-  0%, 100% { box-shadow: 0 0 5px var(--bs-primary); }
-  50%       { box-shadow: 0 0 20px var(--bs-primary); }
-}
-
-.bs-animate-fade-in {
-  animation: bs-fade-in 0.5s ease forwards;
-}
-
-.bs-animate-pulse {
-  animation: bs-pulse 2s ease-in-out infinite;
-}
-
-.bs-animate-glow {
-  animation: bs-glow-line 2s ease-in-out infinite;
-}
-
-/* 6. Ant Design Dark Overrides (scoped) ------------------- */
-.bs-container .ant-table {
-  background: transparent;
-  color: var(--bs-text);
-}
-
-.bs-container .ant-table-thead > tr > th {
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: var(--bs-text-secondary);
-  border-bottom: 1px solid var(--bs-border);
-  font-size: 12px;
-  padding: 6px 8px;
-}
-
-.bs-container .ant-table-tbody > tr > td {
-  background: transparent !important;
-  color: var(--bs-text);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  font-size: 12px;
-  padding: 5px 8px;
-}
-
-.bs-container .ant-table-tbody > tr:hover > td {
-  background: rgba(0, 212, 255, 0.06) !important;
-}
-
-.bs-container .ant-table-cell::before {
-  display: none;
-}
-
-.bs-container .ant-tag {
-  font-size: 10px;
-  padding: 0 4px;
-  line-height: 18px;
-  border-radius: 2px;
-}
-
-.bs-container .ant-progress-text {
-  font-size: 11px !important;
-  color: var(--bs-text-muted) !important;
-}
-
-/* 7. Leaflet Dark Overrides -------------------------------- */
-.bs-container .leaflet-container {
-  background: var(--bs-bg-primary) !important;
-  border-radius: 6px;
-}
-
-.bs-container .leaflet-popup-content-wrapper {
-  background: rgba(13, 27, 42, 0.95) !important;
-  color: var(--bs-text) !important;
-  border: 1px solid var(--bs-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-
-.bs-container .leaflet-popup-tip {
-  background: rgba(13, 27, 42, 0.95) !important;
-  border: 1px solid var(--bs-border);
-}
-
-.bs-container .leaflet-control-zoom a {
-  background: rgba(13, 27, 42, 0.9) !important;
-  color: var(--bs-text) !important;
-  border-color: var(--bs-border) !important;
-}
-
-/* 8. Alert Scrolling List ---------------------------------- */
-.bs-alert-scroll {
-  overflow: hidden;
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-
-.bs-alert-scroll-inner {
-  animation: bs-scroll-up linear infinite;
-  will-change: transform;
-}
-
-.bs-alert-scroll:hover .bs-alert-scroll-inner {
-  animation-play-state: paused;
-}
-
-.bs-alert-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 8px;
-  margin-bottom: 4px;
-  background: linear-gradient(90deg, rgba(0, 212, 255, 0.03) 0%, transparent 100%);
-  border: 1px solid var(--bs-border);
-  border-left: 2px solid transparent;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  background: rgba(6, 20, 50, 0.5);
+  border: 1px solid var(--bs-border-dim);
+  border-left: 3px solid var(--bs-primary);
   border-radius: 4px;
   font-size: 12px;
   color: var(--bs-text);
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .bs-alert-item:hover {
-  background: linear-gradient(90deg, rgba(0, 212, 255, 0.08) 0%, transparent 100%);
+  background: rgba(0, 212, 255, 0.06);
+  border-color: var(--bs-border);
+}
+
+/* 严重告警 — 红色闪烁 */
+.bs-alert-critical {
+  border-left-color: var(--bs-danger);
+  background: rgba(255, 71, 87, 0.06);
+  animation: bs-alert-flash 1s ease-in-out infinite;
+}
+
+.bs-alert-critical .bs-alert-item-dot {
+  background: var(--bs-danger);
+  box-shadow: 0 0 8px var(--bs-danger);
+}
+
+/* 警告 — 橙色 */
+.bs-alert-warning {
+  border-left-color: var(--bs-warning);
+  background: rgba(255, 165, 2, 0.04);
+}
+
+.bs-alert-warning .bs-alert-item-dot {
+  background: var(--bs-warning);
+  box-shadow: 0 0 8px var(--bs-warning);
+}
+
+/* 信息 — 蓝色 */
+.bs-alert-info {
   border-left-color: var(--bs-primary);
 }
 
-.bs-alert-item-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  margin-top: 5px;
+.bs-alert-info .bs-alert-item-dot {
+  background: var(--bs-primary);
+  box-shadow: 0 0 8px var(--bs-primary);
 }
 
-.bs-alert-item-dot--danger  { background: var(--bs-danger);  box-shadow: 0 0 6px var(--bs-danger); }
-.bs-alert-item-dot--warning { background: var(--bs-warning); box-shadow: 0 0 6px var(--bs-warning); }
-.bs-alert-item-dot--info   { background: var(--bs-primary); box-shadow: 0 0 6px var(--bs-primary); }
+.bs-alert-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
 .bs-alert-item-content {
   flex: 1;
@@ -490,7 +509,212 @@
   font-size: 12px;
 }
 
-/* 9. Ranking List ----------------------------------------- */
+/* ==========================================================
+   11. 设备状态横条
+   ========================================================== */
+.bs-status-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 8px 0;
+}
+
+.bs-status-bar-online {
+  background: linear-gradient(90deg, var(--bs-success), #00cc6a);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+  transition: width 0.6s ease;
+}
+
+.bs-status-bar-offline {
+  background: var(--bs-text-muted);
+  transition: width 0.6s ease;
+}
+
+.bs-status-bar-fault {
+  background: linear-gradient(90deg, var(--bs-danger), #ff6b7a);
+  box-shadow: 0 0 8px rgba(255, 71, 87, 0.3);
+  transition: width 0.6s ease;
+}
+
+/* ==========================================================
+   12. 动画 Keyframes
+   ========================================================== */
+
+/* 水平扫描线 */
+@keyframes bs-scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* 边框发光呼吸 */
+@keyframes bs-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(0, 212, 255, 0.1), inset 0 0 5px rgba(0, 212, 255, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.25), inset 0 0 15px rgba(0, 212, 255, 0.08);
+  }
+}
+
+/* 严重告警闪烁 */
+@keyframes bs-alert-flash {
+  0%, 100% {
+    background: rgba(255, 71, 87, 0.06);
+    border-left-color: var(--bs-danger);
+  }
+  50% {
+    background: rgba(255, 71, 87, 0.15);
+    border-left-color: #ff6b7a;
+  }
+}
+
+/* 淡入动画 */
+@keyframes bs-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 滚动动画 */
+@keyframes bs-scroll-up {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+/* 动画工具类 */
+.bs-animate-fade-in {
+  animation: bs-fade-in 0.5s ease forwards;
+}
+
+.bs-animate-glow-pulse {
+  animation: bs-glow-pulse 2s ease-in-out infinite;
+}
+
+/* 扫描线面板装饰 */
+.bs-panel-scan {
+  position: relative;
+  overflow: hidden;
+}
+
+.bs-panel-scan::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--bs-primary), transparent);
+  animation: bs-scan 3s linear infinite;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* ==========================================================
+   13. 统计卡片（兼容旧版布局）
+   ========================================================== */
+.bs-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.05) 0%, rgba(6, 20, 50, 0.4) 100%);
+  border: 1px solid rgba(0, 212, 255, 0.12);
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.bs-stat-card:hover {
+  border-color: rgba(0, 212, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.08);
+}
+
+.bs-stat-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px currentColor;
+  opacity: 0.9;
+}
+
+.bs-stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.bs-stat-label {
+  color: var(--bs-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bs-stat-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.bs-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 10px var(--bs-primary-dim);
+}
+
+.bs-stat-unit {
+  font-size: 11px;
+  color: var(--bs-text-muted);
+}
+
+.bs-stat-trend {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.bs-stat-trend--up { color: var(--bs-success); }
+.bs-stat-trend--down { color: var(--bs-danger); }
+
+/* ==========================================================
+   14. 告警滚动列表
+   ========================================================== */
+.bs-alert-scroll {
+  overflow: hidden;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.bs-alert-scroll-inner {
+  animation: bs-scroll-up linear infinite;
+  will-change: transform;
+}
+
+.bs-alert-scroll:hover .bs-alert-scroll-inner {
+  animation-play-state: paused;
+}
+
+/* ==========================================================
+   15. 排行列表
+   ========================================================== */
 .bs-rank-list {
   display: flex;
   flex-direction: column;
@@ -506,12 +730,12 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  padding: 4px 0;
+  padding: 5px 0;
 }
 
 .bs-rank-index {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -520,12 +744,30 @@
   font-weight: 700;
   flex-shrink: 0;
   color: var(--bs-text-muted);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 212, 255, 0.06);
+  border: 1px solid var(--bs-border-dim);
 }
 
-.bs-rank-index--1 { background: rgba(255, 215, 0, 0.2);  color: #ffd700; box-shadow: 0 0 8px rgba(255, 215, 0, 0.4); }
-.bs-rank-index--2 { background: rgba(192, 192, 192, 0.2); color: #c0c0c0; box-shadow: 0 0 8px rgba(192, 192, 192, 0.4); }
-.bs-rank-index--3 { background: rgba(205, 127, 50, 0.2);  color: #cd7f32; box-shadow: 0 0 8px rgba(205, 127, 50, 0.4); }
+.bs-rank-index--1 {
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
+}
+
+.bs-rank-index--2 {
+  background: rgba(192, 192, 192, 0.12);
+  color: #c0c0c0;
+  border-color: rgba(192, 192, 192, 0.3);
+  box-shadow: 0 0 6px rgba(192, 192, 192, 0.2);
+}
+
+.bs-rank-index--3 {
+  background: rgba(205, 127, 50, 0.12);
+  color: #cd7f32;
+  border-color: rgba(205, 127, 50, 0.3);
+  box-shadow: 0 0 6px rgba(205, 127, 50, 0.2);
+}
 
 .bs-rank-name {
   flex: 1;
@@ -539,7 +781,7 @@
 .bs-rank-bar {
   width: 80px;
   height: 6px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 212, 255, 0.08);
   border-radius: 3px;
   overflow: hidden;
   flex-shrink: 0;
@@ -549,8 +791,8 @@
   height: 100%;
   border-radius: 3px;
   background: linear-gradient(90deg, var(--bs-primary), #60efff);
-  transition: width 0.5s ease;
   box-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+  transition: width 0.6s ease;
 }
 
 .bs-rank-value {
@@ -572,45 +814,160 @@
   font-size: 12px;
 }
 
-/* Custom scrollbar for ranking list */
-.bs-rank-list::-webkit-scrollbar {
-  width: 4px;
-}
-.bs-rank-list::-webkit-scrollbar-track {
+/* ==========================================================
+   16. Ant Design 暗色覆盖（作用域内）
+   ========================================================== */
+.bs-container .ant-table {
   background: transparent;
-}
-.bs-rank-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-.bs-rank-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  color: var(--bs-text);
 }
 
-/* 10. Responsive Breakpoints ------------------------------ */
+.bs-container .ant-table-thead > tr > th {
+  background: rgba(0, 212, 255, 0.04) !important;
+  color: var(--bs-text-secondary);
+  border-bottom: 1px solid var(--bs-border-dim);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.bs-container .ant-table-tbody > tr > td {
+  background: transparent !important;
+  color: var(--bs-text);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.05);
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.bs-container .ant-table-tbody > tr:hover > td {
+  background: rgba(0, 212, 255, 0.06) !important;
+}
+
+.bs-container .ant-table-cell::before {
+  display: none;
+}
+
+.bs-container .ant-tag {
+  font-size: 10px;
+  padding: 0 6px;
+  line-height: 20px;
+  border-radius: 3px;
+}
+
+.bs-container .ant-progress-text {
+  font-size: 11px !important;
+  color: var(--bs-text-muted) !important;
+}
+
+/* ==========================================================
+   17. Leaflet 地图暗色覆盖
+   ========================================================== */
+.bs-container .leaflet-container {
+  background: transparent !important;
+  border-radius: 8px;
+}
+
+.bs-container .leaflet-popup-content-wrapper {
+  background: rgba(6, 20, 50, 0.95) !important;
+  color: var(--bs-text) !important;
+  border: 1px solid var(--bs-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 212, 255, 0.1);
+}
+
+.bs-container .leaflet-popup-tip {
+  background: rgba(6, 20, 50, 0.95) !important;
+  border: 1px solid var(--bs-border);
+}
+
+.bs-container .leaflet-control-zoom a {
+  background: rgba(6, 20, 50, 0.9) !important;
+  color: var(--bs-text) !important;
+  border-color: var(--bs-border) !important;
+}
+
+/* ==========================================================
+   18. 滚动条隐藏 & 美化
+   ========================================================== */
+.bs-container ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.bs-container ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bs-container ::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.15);
+  border-radius: 2px;
+}
+
+.bs-container ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.3);
+}
+
+/* 面板内容区完全隐藏滚动条 */
+.bs-panel-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* ==========================================================
+   19. 响应式断点
+   ========================================================== */
 @media (max-width: 1440px) {
-  .bs-header-title { font-size: 18px; }
-  .bs-stat-value   { font-size: 18px; }
-  .bs-stat-label   { font-size: 10px; }
-  .bs-panel-title  { font-size: 11px; padding: 4px 6px 4px 10px; }
-  .bs-rank-item    { font-size: 11px; }
-  .bs-rank-bar     { width: 60px; }
-  .bs-alert-item   { font-size: 11px; padding: 4px 6px; }
-  .bs-panel::before, .bs-panel::after { width: 10px; height: 10px; }
+  .bs-container {
+    grid-template-columns: 260px 1fr 290px;
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .bs-header-title { font-size: 20px; letter-spacing: 2px; }
+  .bs-kpi-value { font-size: 30px; }
+  .bs-stat-value { font-size: 20px; }
+  .bs-panel-title { font-size: 12px; padding: 5px 10px; }
+  .bs-panel { padding: 12px; }
+  .bs-rank-bar { width: 60px; }
+  .bs-alert-item { font-size: 11px; padding: 6px 10px; }
+  .bs-panel::before, .bs-panel::after,
+  .bs-corner-tr, .bs-corner-bl { width: 16px; height: 16px; }
 }
 
 @media (max-width: 1280px) {
-  .bs-container    { gap: 4px; padding: 4px; }
-  .bs-header-title { font-size: 16px; letter-spacing: 1px; }
-  .bs-stat-value   { font-size: 16px; }
-  .bs-stat-icon    { width: 32px; height: 32px; font-size: 14px; }
-  .bs-stat-label   { font-size: 10px; }
-  .bs-panel        { padding: 6px; }
-  .bs-panel-title  { font-size: 10px; margin-bottom: 4px; padding: 3px 4px 3px 8px; }
-  .bs-rank-item    { font-size: 10px; gap: 4px; }
-  .bs-rank-bar     { width: 50px; height: 4px; }
-  .bs-rank-value   { font-size: 10px; min-width: 40px; }
-  .bs-alert-item   { font-size: 10px; padding: 3px 4px; gap: 4px; }
-  .bs-panel::before, .bs-panel::after { width: 8px; height: 8px; }
+  .bs-container {
+    grid-template-columns: 220px 1fr 240px;
+    gap: 8px;
+    padding: 8px;
+    grid-template-rows: 56px 1fr;
+  }
+
+  .bs-header-title { font-size: 18px; letter-spacing: 1px; }
+  .bs-kpi-value { font-size: 26px; }
+  .bs-kpi-card { padding: 10px 12px; }
+  .bs-stat-value { font-size: 18px; }
+  .bs-stat-icon { width: 34px; height: 34px; font-size: 15px; }
+  .bs-panel { padding: 10px; }
+  .bs-panel-title { font-size: 11px; margin-bottom: 8px; padding: 4px 8px; }
   .bs-panel-title::after { display: none; }
+  .bs-rank-item { font-size: 11px; gap: 6px; }
+  .bs-rank-bar { width: 50px; height: 5px; }
+  .bs-rank-value { font-size: 11px; min-width: 40px; }
+  .bs-alert-item { font-size: 10px; padding: 5px 8px; gap: 6px; }
+  .bs-panel::before, .bs-panel::after,
+  .bs-corner-tr, .bs-corner-bl { width: 12px; height: 12px; }
+}
+
+/* ==========================================================
+   20. 底部状态栏（可选）
+   ========================================================== */
+.bs-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--bs-text-muted);
+  border-top: 1px solid var(--bs-border-dim);
+  background: rgba(6, 20, 50, 0.4);
+  border-radius: 4px;
 }
