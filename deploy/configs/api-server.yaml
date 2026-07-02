@@ -57,3 +57,10 @@ timezone: Asia/Shanghai
 backends:
   device_server: http://inv-device-server:8081
   internal_key: ""
+
+# 数据库自动迁移配置
+# Docker 环境中通过 docker-compose.yml 挂载 database 目录
+migration:
+  dir: /app/database/migrations
+  schema_file: /app/database/schema.sql
+  auto_run: true

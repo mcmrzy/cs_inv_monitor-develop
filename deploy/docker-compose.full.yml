@@ -117,6 +117,7 @@ services:
       - "8080"
     volumes:
       - ../inv_api_server/config.docker.yaml:/app/config.yaml:ro
+      - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     networks:
       - inv-network
     restart: unless-stopped
