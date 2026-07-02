@@ -850,6 +850,7 @@ func (r *DeviceRepository) GetAllowedDeviceSNs(ctx context.Context, userID int64
 func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Device, error) {
 	query := `
 		SELECT d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+			   COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 			   d.station_id, d.user_id, d.status,
@@ -866,7 +867,9 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 
 	err := r.db.QueryRow(ctx, query, sn).Scan(
 		&device.ID, &device.SN, &device.Model, &device.Manufacturer,
-		&device.FirmwareArm, &device.FirmwareEsp, &device.DeviceType,
+		&device.FirmwareArm, &device.FirmwareEsp,
+		&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
+		&device.DeviceType,
 		&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
 		&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
 		&stationID, &device.UserID, &device.Status,
@@ -896,6 +899,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 	offset := (page - 1) * pageSize
 
 	selectCols := `d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+		COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 		COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 		d.station_id, d.user_id, d.status,
@@ -955,7 +959,9 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
 			&device.ID, &device.SN, &device.Model, &device.Manufacturer,
-			&device.FirmwareArm, &device.FirmwareEsp, &device.DeviceType,
+			&device.FirmwareArm, &device.FirmwareEsp,
+			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
+			&device.DeviceType,
 			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
 			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
 			&stationID, &device.UserID, &device.Status,
@@ -981,6 +987,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 	offset := (page - 1) * pageSize
 
 	selectCols := `d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+		COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 		COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 		d.station_id, d.user_id, d.status,
@@ -1038,7 +1045,9 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
 			&device.ID, &device.SN, &device.Model, &device.Manufacturer,
-			&device.FirmwareArm, &device.FirmwareEsp, &device.DeviceType,
+			&device.FirmwareArm, &device.FirmwareEsp,
+			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
+			&device.DeviceType,
 			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
 			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
 			&stationID, &device.UserID, &device.Status,
@@ -1063,6 +1072,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) ([]*model.Device, error) {
 	query := `
 		SELECT d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+			   COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 			   d.station_id, d.user_id, d.status,
@@ -1086,7 +1096,9 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
 			&device.ID, &device.SN, &device.Model, &device.Manufacturer,
-			&device.FirmwareArm, &device.FirmwareEsp, &device.DeviceType,
+			&device.FirmwareArm, &device.FirmwareEsp,
+			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
+			&device.DeviceType,
 			&device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
 			&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
 			&stationID, &device.UserID, &device.Status,

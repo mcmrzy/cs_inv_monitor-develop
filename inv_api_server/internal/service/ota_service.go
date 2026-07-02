@@ -382,6 +382,134 @@ func (s *OTAService) CheckDeviceOwnership(ctx context.Context, sn string, userID
 	return s.repo.CheckDeviceOwnership(ctx, sn, userID)
 }
 
+// DevicePackageUpgradeInfo 设备在某升级包下的各芯片升级详情
+type DevicePackageUpgradeInfo struct {
+	DeviceSN       string                    `json:"device_sn"`
+	DeviceModel    string                    `json:"device_model"`
+	MainVersion    string                    `json:"main_version"`
+	PackageID      int64                     `json:"package_id"`
+	PackageVersion string                    `json:"package_version"`
+	Chips          []ChipUpgradeDetail       `json:"chips"`
+	OverallStatus  string                    `json:"overall_status"`  // idle/pending/upgrading/success/failed/partial
+	OverallProgress int                      `json:"overall_progress"`
+}
+
+// ChipUpgradeDetail 单个芯片的升级详情
+type ChipUpgradeDetail struct {
+	Chip            string `json:"chip"`
+	CurrentVersion  string `json:"current_version"`
+	TargetVersion   string `json:"target_version"`
+	Status          string `json:"status"`     // pending/downloading/upgrading/success/failed/cancelled
+	Progress        int    `json:"progress"`
+	ErrorMessage    string `json:"error_message,omitempty"`
+}
+
+// GetDevicePackageUpgradeInfo 获取设备在指定升级包下的各芯片升级进度
+func (s *OTAService) GetDevicePackageUpgradeInfo(ctx context.Context, sn string, packageID int64) (*DevicePackageUpgradeInfo, error) {
+	// 1. 获取设备信息
+	device, err := s.repo.GetDeviceBySN(ctx, sn)
+	if err != nil || device == nil {
+		return nil, fmt.Errorf("设备不存在")
+	}
+
+	// 2. 获取升级包信息
+	pkg, err := s.repo.GetUpgradePackage(ctx, packageID)
+	if err != nil || pkg == nil {
+		return nil, fmt.Errorf("升级包不存在")
+	}
+
+	// 3. 获取该设备在该升级包下的所有升级记录
+	upgrades, err := s.repo.GetUpgradeBySNAndPackage(ctx, sn, packageID)
+	if err != nil {
+		return nil, fmt.Errorf("查询升级记录失败: %w", err)
+	}
+
+	// 4. 构造各芯片当前版本 map
+	chipCurrentVersions := device.ChipVersions()
+
+	// 5. 构造升级记录 map（按芯片）
+	upgradeMap := map[string]*model.DeviceUpgrade{}
+	for i := range upgrades {
+		upgradeMap[upgrades[i].TargetChip] = &upgrades[i]
+	}
+
+	// 6. 遍历升级包中的芯片项，组装详情
+	var chips []ChipUpgradeDetail
+	totalProgress := 0
+	chipCount := 0
+	allSuccess := true
+	anyFailed := false
+	anyInProgress := false
+
+	for _, item := range pkg.Items {
+		currentVer := chipCurrentVersions[item.TargetChip]
+		detail := ChipUpgradeDetail{
+			Chip:           item.TargetChip,
+			CurrentVersion: currentVer,
+			TargetVersion:  item.FirmwareVersion,
+			Status:         "success", // 默认已完成（版本一致时）
+			Progress:       100,
+		}
+
+		if du, ok := upgradeMap[item.TargetChip]; ok {
+			detail.Status = du.Status
+			detail.Progress = du.Progress
+			if du.ErrorMessage != "" {
+				detail.ErrorMessage = du.ErrorMessage
+			}
+		}
+
+		totalProgress += detail.Progress
+		chipCount++
+
+		switch detail.Status {
+		case "success":
+			// ok
+		case "failed":
+			allSuccess = false
+			anyFailed = true
+		case "pending", "downloading", "upgrading":
+			allSuccess = false
+			anyInProgress = true
+		default:
+			allSuccess = false
+		}
+
+		chips = append(chips, detail)
+	}
+
+	// 7. 计算整体状态和进度
+	overallStatus := "idle"
+	overallProgress := 0
+	if chipCount > 0 {
+		overallProgress = totalProgress / chipCount
+	}
+	if chipCount == 0 {
+		overallStatus = "idle"
+	} else if allSuccess {
+		overallStatus = "success"
+	} else if anyFailed && !anyInProgress {
+		overallStatus = "failed"
+	} else if anyFailed && anyInProgress {
+		overallStatus = "partial"
+	} else if anyInProgress {
+		overallStatus = "upgrading"
+	} else {
+		overallStatus = "pending"
+	}
+
+	return &DevicePackageUpgradeInfo{
+		DeviceSN:        sn,
+		DeviceModel:     device.Model,
+		MainVersion:     device.MainVersion,
+		PackageID:       packageID,
+		PackageVersion:  pkg.MainVersion,
+		Chips:           chips,
+		OverallStatus:   overallStatus,
+		OverallProgress: overallProgress,
+	}, nil
+}
+
 // GetLatestFirmware 获取指定型号的最新固件
 func (s *OTAService) GetLatestFirmware(ctx context.Context, deviceModel string, targetChip string) (*model.Firmware, error) {
 	return s.repo.GetLatestFirmware(ctx, deviceModel, targetChip)
@@ -1203,4 +1331,14 @@ func (s *OTAService) GetTaskStats(ctx context.Context) (pending, running, todayC
 // ReportLocalOTAResult 本地OTA完成后，更新设备固件版本并记录升级历史
 func (s *OTAService) ReportLocalOTAResult(ctx context.Context, sn string, targetChip string, newVersion string, mainVersion string) error {
 	return s.repo.ReportLocalOTAResult(ctx, sn, targetChip, newVersion, mainVersion)
+}
+
+// GetDevicesByFirmwareVersion 按固件版本查询正在使用该版本的设备
+func (s *OTAService) GetDevicesByFirmwareVersion(ctx context.Context, deviceModel string, targetChip string, firmwareVersion string) ([]repository.DeviceInfo, error) {
+	return s.repo.GetDevicesByFirmwareVersion(ctx, deviceModel, targetChip, firmwareVersion)
+}
+
+// GetDevicesByUpgradePackage 按升级包查询已安装/正在安装该升级包的设备
+func (s *OTAService) GetDevicesByUpgradePackage(ctx context.Context, packageID int64, status string) ([]model.DeviceUpgrade, error) {
+	return s.repo.GetDevicesByUpgradePackage(ctx, packageID, status)
 }

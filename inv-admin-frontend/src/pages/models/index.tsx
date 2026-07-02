@@ -139,7 +139,7 @@ const ModelsPage: React.FC = () => {
     }),
   })
 
-  const { data: fieldList = [], refetch: refetchFields } = useQuery({
+  const { data: fieldList = [] } = useQuery({
     queryKey: ['modelFields', currentModelId],
     queryFn: () => modelApi.getFields(currentModelId!).then((res) => {
       const d = res.data
@@ -194,19 +194,19 @@ const ModelsPage: React.FC = () => {
 
   const createFieldMut = useMutation({
     mutationFn: ({ modelId, data }: { modelId: number; data: any }) => modelApi.createField(modelId, data),
-    onSuccess: () => { messageApi.success(t('models.fieldAddSuccess')); setFieldModalOpen(false); fieldForm.resetFields(); refetchFields() },
+    onSuccess: () => { messageApi.success(t('models.fieldAddSuccess')); setFieldModalOpen(false); fieldForm.resetFields(); queryClient.invalidateQueries({ queryKey: ['modelFields', currentModelId] }) },
     onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.fieldAddFailed')),
   })
 
   const updateFieldMut = useMutation({
     mutationFn: ({ modelId, fieldId, data }: { modelId: number; fieldId: number; data: any }) => modelApi.updateField(modelId, fieldId, data),
-    onSuccess: () => { messageApi.success(t('models.fieldUpdateSuccess')); setFieldModalOpen(false); fieldForm.resetFields(); refetchFields() },
+    onSuccess: () => { messageApi.success(t('models.fieldUpdateSuccess')); setFieldModalOpen(false); fieldForm.resetFields(); queryClient.invalidateQueries({ queryKey: ['modelFields', currentModelId] }) },
     onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.fieldUpdateFailed')),
   })
 
   const deleteFieldMut = useMutation({
     mutationFn: ({ modelId, fieldId }: { modelId: number; fieldId: number }) => modelApi.deleteField(modelId, fieldId),
-    onSuccess: () => { messageApi.success(t('models.fieldDeleteSuccess')); refetchFields() },
+    onSuccess: () => { messageApi.success(t('models.fieldDeleteSuccess')); queryClient.invalidateQueries({ queryKey: ['modelFields', currentModelId] }) },
     onError: (err: any) => messageApi.error(err?.response?.data?.message || t('models.fieldDeleteFailed')),
   })
 
@@ -254,8 +254,11 @@ const ModelsPage: React.FC = () => {
     if (values.group_name && !GROUP_CONFIG_KEYS.includes(values.group_name) && GROUP_NAME_MAP[values.group_name]) {
       values.group_name = GROUP_NAME_MAP[values.group_name]
     }
+    // 确保 is_show / is_control 为严格布尔值，避免 Switch 组件因类型不匹配而显示异常
+    values.is_show = Boolean(values.is_show)
+    values.is_control = Boolean(values.is_control)
     fieldForm.setFieldsValue(values)
-    setIsControl(record.is_control)
+    setIsControl(Boolean(record.is_control))
     setFieldModalOpen(true)
   }
 
