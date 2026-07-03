@@ -105,52 +105,45 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>%s</title>
+    <title>CSERGY 验证码</title>
 </head>
-<body style="margin:0; padding:0; background:#f0f2f5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;">
-    <div style="max-width:480px; margin:40px auto; padding:0 16px;">
-        <!-- 主卡片 -->
-        <div style="background:#ffffff; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,0.08); overflow:hidden;">
+<body style="margin:0; padding:0; background-color:#f5f7fa; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;">
+    <div style="max-width:500px; margin:40px auto; padding:0 20px;">
+        <div style="background:#ffffff; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,0.08); overflow:hidden;">
             
-            <!-- 顶部装饰条 -->
-            <div style="height:4px; background:linear-gradient(90deg,#4f6ef7,#6366f1,#818cf8);"></div>
+            <!-- 顶部装饰 -->
+            <div style="height:4px; background:linear-gradient(90deg,#4f6ef7,#6366f1);"></div>
             
-            <!-- 内容区域 -->
             <div style="padding:40px 32px;">
                 
-                <!-- Logo 区域 -->
-                <div style="text-align:center; margin-bottom:32px;">
-                    <div style="display:inline-block; width:56px; height:56px; background:linear-gradient(135deg,#4f6ef7,#6366f1); border-radius:14px; line-height:56px; text-align:center; margin-bottom:16px;">
-                        <span style="font-size:28px; color:#fff;">⚡</span>
+                <!-- 品牌 -->
+                <div style="text-align:center; margin-bottom:28px;">
+                    <div style="display:inline-block; width:48px; height:48px; background:linear-gradient(135deg,#4f6ef7,#6366f1); border-radius:12px; line-height:48px; margin-bottom:12px;">
+                        <span style="font-size:24px; color:#fff;">☀️</span>
                     </div>
-                    <h1 style="margin:0; font-size:24px; font-weight:700; color:#1a1a2e;">CSERGY</h1>
-                    <p style="margin:4px 0 0; font-size:13px; color:#94a3b8; letter-spacing:1px;">光伏逆变器智能运维平台</p>
+                    <h1 style="margin:0; font-size:22px; font-weight:700; color:#1a1a2e;">CSERGY</h1>
+                    <p style="margin:4px 0 0; font-size:13px; color:#94a3b8;">光伏逆变器智能运维平台</p>
                 </div>
                 
-                <!-- 验证码标题 -->
-                <div style="text-align:center; margin-bottom:24px;">
-                    <h2 style="margin:0; font-size:20px; font-weight:600; color:#1e293b;">%s</h2>
-                    <p style="margin:8px 0 0; font-size:14px; color:#64748b;">请使用以下验证码完成操作</p>
+                <!-- 标题 -->
+                <h2 style="text-align:center; margin:0 0 24px; font-size:18px; font-weight:600; color:#333;">%s</h2>
+                
+                <!-- 验证码 -->
+                <div style="background:#f8f9fb; border-radius:10px; padding:24px; margin:0 0 24px; text-align:center;">
+                    <div style="font-size:36px; font-weight:800; letter-spacing:6px; color:#4f6ef7; font-family:monospace;">%s</div>
                 </div>
                 
-                <!-- 验证码展示区 -->
-                <div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9); border:1px dashed #cbd5e1; border-radius:12px; padding:24px; margin:24px 0; text-align:center;">
-                    <div style="font-size:42px; font-weight:800; letter-spacing:8px; color:#4f6ef7; font-family:'SF Mono','JetBrains Mono',monospace;">
-                        %s
-                    </div>
-                </div>
-                
-                <!-- 提示信息 -->
-                <div style="background:#fffbeb; border-left:3px solid #f59e0b; border-radius:0 8px 8px 0; padding:12px 16px; margin:24px 0;">
-                    <p style="margin:0; font-size:13px; color:#92400e; line-height:1.6;">
-                        <strong>🔒 安全提示：</strong>验证码 5 分钟内有效，请勿泄露给他人。如非本人操作，请忽略此邮件。
+                <!-- 提示 -->
+                <div style="background:#fff8e1; border-radius:8px; padding:14px 16px; margin:0 0 24px;">
+                    <p style="margin:0; font-size:13px; color:#856404; line-height:1.5;">
+                        🔒 验证码 5 分钟内有效，请勿泄露给他人
                     </p>
                 </div>
                 
-                <!-- 底部信息 -->
-                <div style="margin-top:32px; padding-top:24px; border-top:1px solid #e2e8f0; text-align:center;">
-                    <p style="margin:0 0 8px; font-size:12px; color:#94a3b8;">此邮件由系统自动发送，请勿回复</p>
-                    <p style="margin:0; font-size:12px; color:#cbd5e1;">© 2024 CSERGY · 智慧光伏解决方案</p>
+                <!-- 底部 -->
+                <div style="text-align:center; padding-top:20px; border-top:1px solid #eee;">
+                    <p style="margin:0; font-size:12px; color:#999;">此邮件由系统自动发送，请勿回复</p>
+                    <p style="margin:8px 0 0; font-size:12px; color:#ccc;">© 2024 CSERGY</p>
                 </div>
             </div>
         </div>
