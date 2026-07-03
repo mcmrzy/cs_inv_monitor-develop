@@ -624,10 +624,13 @@ func (r *OTARepository) GetUpgradePackage(ctx context.Context, id int64) (*model
 	var pkg model.UpgradePackage
 	err := r.db.QueryRow(ctx, `
 		SELECT id, model, main_version, COALESCE(changelog,''), is_force, status,
-		       COALESCE(created_by,0), created_at, updated_at
+		       COALESCE(created_by,0), created_at, updated_at,
+		       COALESCE(user_version,''), COALESCE(user_changelog,''),
+		       COALESCE(rollout_type,'all'), COALESCE(rollout_targets,''), COALESCE(is_published,FALSE)
 		FROM upgrade_packages WHERE id = $1 AND status = 1
 	`, id).Scan(&pkg.ID, &pkg.Model, &pkg.MainVersion, &pkg.Changelog, &pkg.IsForce,
-		&pkg.Status, &pkg.CreatedBy, &pkg.CreatedAt, &pkg.UpdatedAt)
+		&pkg.Status, &pkg.CreatedBy, &pkg.CreatedAt, &pkg.UpdatedAt,
+		&pkg.UserVersion, &pkg.UserChangelog, &pkg.RolloutType, &pkg.RolloutTargets, &pkg.IsPublished)
 	if err != nil {
 		return nil, err
 	}
