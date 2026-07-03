@@ -904,13 +904,9 @@ func (s *OTAService) PushPackageUpgrade(ctx context.Context, req *PushPackageUpg
 			var firstPendingDU *model.DeviceUpgrade
 			var firstPendingFW *model.Firmware
 
-			// 3. 对比每个芯片，确定需要升级的
+			// 3. 为每个芯片创建升级记录（不再比较版本，让用户自己决定是否升级）
 			for _, item := range pkg.Items {
 				currentVer := chipVersions[item.TargetChip]
-				if currentVer == item.FirmwareVersion {
-					// 版本相同，跳过
-					continue
-				}
 
 				// 获取固件详情
 				fw, err := s.repo.GetFirmware(ctx, item.FirmwareID)

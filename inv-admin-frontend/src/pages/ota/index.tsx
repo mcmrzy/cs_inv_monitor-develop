@@ -1259,7 +1259,13 @@ const PackagesTab: React.FC = () => {
             </Button>
           )}
           {record.is_published && (
-            <Tag color="green" style={{ marginLeft: 4 }}>已发布</Tag>
+            <Button
+              type="link"
+              size="small"
+              onClick={() => { setPublishPkg(record); setPublishOpen(true) }}
+            >
+              推送管理
+            </Button>
           )}
           <Popconfirm title={t('ota.confirmDeletePackage')} onConfirm={() => deleteMutation.mutate(Number(record.id))}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('ota.delete')}</Button>
