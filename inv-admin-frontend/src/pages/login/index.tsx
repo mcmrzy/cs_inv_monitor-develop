@@ -6,6 +6,7 @@ import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import api from '@/services/api'
 import type { User } from '@/types'
+import SliderCaptchaModal from '@/components/SliderCaptcha/SliderCaptchaModal'
 
 type ActiveTab = 'login' | 'register' | 'reset'
 type Lang = 'zh' | 'en'
@@ -70,6 +71,9 @@ const LoginPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('login')
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [captchaOpen, setCaptchaOpen] = useState(false)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const loginValuesRef = useRef<{ account: string; password: string } | null>(null)
   const { lang, setLang } = useLocaleStore()
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const navigate = useNavigate()
@@ -91,10 +95,15 @@ const LoginPage: React.FC = () => {
 
   const showError = (msg: string) => { setError(msg); setTimeout(() => setError(null), 6000) }
 
-  const onLogin = async (values: { account: string; password: string }) => {
+  // 执行实际登录请求
+  const performLogin = async (values: { account: string; password: string }, captchaToken?: string) => {
     setLoading(true); setError(null)
     try {
-      const res = await api.post('/auth/login', { account: values.account, password: values.password })
+      const headers: Record<string, string> = {}
+      if (captchaToken) {
+        headers['X-Captcha-Token'] = captchaToken
+      }
+      const res = await api.post('/auth/login', { account: values.account, password: values.password }, { headers })
       const d = res.data as Record<string, unknown>
       if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errLogin); return }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
@@ -104,6 +113,27 @@ const LoginPage: React.FC = () => {
       navigate('/dashboard', { replace: true })
     } catch (err: any) { showError(err?.response?.data?.message || t.errLogin) }
     finally { setLoading(false) }
+  }
+
+  // 登录按钮点击 - 显示验证码
+  const onLogin = async (values: { account: string; password: string }) => {
+    loginValuesRef.current = values
+    setCaptchaOpen(true)
+  }
+
+  // 验证码验证成功
+  const onCaptchaSuccess = (token: string) => {
+    setCaptchaToken(token)
+    setCaptchaOpen(false)
+    if (loginValuesRef.current) {
+      performLogin(loginValuesRef.current, token)
+    }
+  }
+
+  // 验证码取消
+  const onCaptchaCancel = () => {
+    setCaptchaOpen(false)
+    loginValuesRef.current = null
   }
 
   const onRegister = async (values: { phone: string; email: string; password: string; nickname: string; code: string }) => {
@@ -353,6 +383,13 @@ const LoginPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 滑块验证码弹窗 */}
+      <SliderCaptchaModal
+        open={captchaOpen}
+        onCancel={onCaptchaCancel}
+        onSuccess={onCaptchaSuccess}
+      />
     </div>
   )
 }
