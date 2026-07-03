@@ -42,28 +42,81 @@ func (h *CaptchaHandler) GenerateCaptcha(c *gin.Context) {
 	bgHeight := 160
 	puzzleSize := 50
 
-	// 随机生成缺口位置
-	xRange := bgWidth - puzzleSize - 60
+	// 随机生成缺口位置 (x: 60~220)
+	xRange := bgWidth - puzzleSize - 80
 	xRand, _ := rand.Int(rand.Reader, big.NewInt(int64(xRange)))
-	offsetX := int(xRand.Int64()) + 30
+	offsetX := int(xRand.Int64()) + 40
 
-	// 生成背景图
+	logger.Info("GenerateCaptcha",
+		zap.Int("bgWidth", bgWidth),
+		zap.Int("bgHeight", bgHeight),
+		zap.Int("puzzleSize", puzzleSize),
+		zap.Int("offsetX", offsetX))
+
+	// 创建背景图
 	bgImg := image.NewRGBA(image.Rect(0, 0, bgWidth, bgHeight))
-	drawBackground(bgImg, bgWidth, bgHeight)
 
-	// 从背景图截取拼图
-	puzzleImg := image.NewRGBA(image.Rect(0, 0, puzzleSize, puzzleSize))
-	for y := 0; y < puzzleSize; y++ {
-		for x := 0; x < puzzleSize; x++ {
-			bgX := offsetX + x
-			if bgX < bgWidth {
-				puzzleImg.Set(x, y, bgImg.At(bgX, y))
+	// 填充蓝色背景
+	for y := 0; y < bgHeight; y++ {
+		for x := 0; x < bgWidth; x++ {
+			bgImg.Set(x, y, color.RGBA{70, 130, 200, 255})
+		}
+	}
+
+	// 绘制一些装饰
+	for i := 0; i < 8; i++ {
+		cx := 20 + i*38
+		cy := 80
+		for dy := -15; dy <= 15; dy++ {
+			for dx := -15; dx <= 15; dx++ {
+				if dx*dx+dy*dy <= 15*15 {
+					px, py := cx+dx, cy+dy
+					if px >= 0 && px < bgWidth && py >= 0 && py < bgHeight {
+						bgImg.Set(px, py, color.RGBA{100, 160, 220, 255})
+					}
+				}
 			}
 		}
 	}
 
-	// 在背景图上绘制缺口
-	drawHole(bgImg, offsetX, 0, puzzleSize, bgHeight)
+	// 从背景图截取拼图块（在绘制缺口之前）
+	puzzleImg := image.NewRGBA(image.Rect(0, 0, puzzleSize, puzzleSize))
+	for y := 0; y < puzzleSize; y++ {
+		for x := 0; x < puzzleSize; x++ {
+			srcX := offsetX + x
+			srcY := y
+			if srcX < bgWidth && srcY < bgHeight {
+				puzzleImg.Set(x, y, bgImg.At(srcX, srcY))
+			}
+		}
+	}
+
+	// 给拼图块添加白色边框
+	for i := 0; i < puzzleSize; i++ {
+		puzzleImg.Set(i, 0, color.RGBA{255, 255, 255, 200})
+		puzzleImg.Set(i, puzzleSize-1, color.RGBA{255, 255, 255, 200})
+		puzzleImg.Set(0, i, color.RGBA{255, 255, 255, 200})
+		puzzleImg.Set(puzzleSize-1, i, color.RGBA{255, 255, 255, 200})
+	}
+
+	// 在背景图上绘制缺口（变暗的区域）
+	for y := 0; y < puzzleSize; y++ {
+		for x := 0; x < puzzleSize; x++ {
+			px := offsetX + x
+			if px < bgWidth && y < bgHeight {
+				// 变暗
+				bgImg.Set(px, y, color.RGBA{30, 60, 100, 255})
+			}
+		}
+	}
+
+	// 给缺口添加白色边框
+	for i := 0; i < puzzleSize; i++ {
+		bgImg.Set(offsetX+i, 0, color.RGBA{255, 255, 255, 200})
+		bgImg.Set(offsetX+i, puzzleSize-1, color.RGBA{255, 255, 255, 200})
+		bgImg.Set(offsetX, i, color.RGBA{255, 255, 255, 200})
+		bgImg.Set(offsetX+puzzleSize-1, i, color.RGBA{255, 255, 255, 200})
+	}
 
 	// 转换为 base64
 	bgBase64 := imageToBase64(bgImg)
@@ -81,6 +134,10 @@ func (h *CaptchaHandler) GenerateCaptcha(c *gin.Context) {
 	jsonData, _ := json.Marshal(captchaData)
 	h.rdb.Set(ctx, captchaRedisKey(captchaKey), string(jsonData), 300)
 
+	logger.Info("验证码生成成功",
+		zap.String("captchaKey", captchaKey),
+		zap.Int("offsetX", offsetX))
+
 	response.Success(c, gin.H{
 		"bgUrl":      "data:image/png;base64," + bgBase64,
 		"puzzleUrl":  "data:image/png;base64," + puzzleBase64,
@@ -91,10 +148,10 @@ func (h *CaptchaHandler) GenerateCaptcha(c *gin.Context) {
 // VerifyCaptcha 验证滑块位置
 func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 	var req struct {
-		CaptchaKey string    `json:"captchaKey"`
-		X          float64   `json:"x"`
-		Y          float64   `json:"y"`
-		Duration   int64     `json:"duration"`
+		CaptchaKey string      `json:"captchaKey"`
+		X          float64     `json:"x"`
+		Y          float64     `json:"y"`
+		Duration   int64       `json:"duration"`
 		Trail      [][]float64 `json:"trail"`
 	}
 
@@ -167,72 +224,6 @@ func (h *CaptchaHandler) CheckCaptchaVerified(c *gin.Context) bool {
 	}
 
 	return false
-}
-
-// drawBackground 绘制背景
-func drawBackground(img *image.RGBA, width, height int) {
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			r := uint8(60 + x*40/width)
-			g := uint8(120 + y*60/height)
-			b := uint8(180 + (x+y)*40/(width+height))
-			img.Set(x, y, color.RGBA{r, g, b, 255})
-		}
-	}
-
-	// 绘制装饰圆形
-	for i := 0; i < 5; i++ {
-		cx := 30 + i*60
-		cy := 80
-		radius := 20
-		for y := -radius; y <= radius; y++ {
-			for x := -radius; x <= radius; x++ {
-				if x*x+y*y <= radius*radius {
-					px, py := cx+x, cy+y
-					if px >= 0 && px < width && py >= 0 && py < height {
-						img.Set(px, py, color.RGBA{100, 150, 200, 100})
-					}
-				}
-			}
-		}
-	}
-}
-
-// drawHole 绘制缺口
-func drawHole(img *image.RGBA, x, y, width, height int) {
-	for dy := 0; dy < height; dy++ {
-		for dx := 0; dx < width; dx++ {
-			px := x + dx
-			if px < img.Bounds().Dx() {
-				original := img.RGBAAt(px, dy)
-				img.Set(px, dy, color.RGBA{
-					uint8(float64(original.R) * 0.3),
-					uint8(float64(original.G) * 0.3),
-					uint8(float64(original.B) * 0.3),
-					255,
-				})
-			}
-		}
-	}
-
-	// 绘制边框
-	borderColor := color.RGBA{255, 255, 255, 200}
-	for i := 0; i < width; i++ {
-		if x+i < img.Bounds().Dx() {
-			img.Set(x+i, y, borderColor)
-			if y+height-1 < img.Bounds().Dy() {
-				img.Set(x+i, y+height-1, borderColor)
-			}
-		}
-	}
-	for i := 0; i < height; i++ {
-		if x < img.Bounds().Dx() {
-			img.Set(x, y+i, borderColor)
-		}
-		if x+width-1 < img.Bounds().Dx() {
-			img.Set(x+width-1, y+i, borderColor)
-		}
-	}
 }
 
 // imageToBase64 图片转 base64
