@@ -1,6 +1,5 @@
 import React, { useRef } from 'react'
 import SliderCaptcha from 'rc-slider-captcha'
-import { createPuzzle } from 'create-puzzle'
 import { Modal, App } from 'antd'
 import {
   LoadingOutlined,
@@ -17,9 +16,6 @@ interface SliderCaptchaModalProps {
   apiUrl?: string
 }
 
-// 背景图片 URL（使用国内可访问的图片）
-const BG_IMAGE = 'https://picsum.photos/640/360'
-
 const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   open,
   onCancel,
@@ -27,31 +23,26 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   apiUrl = '/api/v1',
 }) => {
   const { message } = App.useApp()
-  const xRef = useRef(0)
+  const captchaKeyRef = useRef<string>('')
 
-  // 请求拼图数据（使用 create-puzzle 在前端生成）
+  // 请求验证码数据（从后端获取）
   const request = async () => {
     try {
-      const result = await createPuzzle(BG_IMAGE, {
-        width: 60,
-        height: 60,
-        bgWidth: 320,
-        bgHeight: 160,
-        bgOffset: [0, 0],
-        imageWidth: 640,
-        imageHeight: 360,
-      })
+      const response = await fetch(`${apiUrl}/captcha/generate`)
+      const result = await response.json()
 
-      // 保存 x 位置用于验证
-      xRef.current = result.x
-
-      return {
-        bgUrl: result.bgUrl,
-        puzzleUrl: result.puzzleUrl,
+      if (result.code === 0 && result.data) {
+        captchaKeyRef.current = result.data.captchaKey
+        return {
+          bgUrl: result.data.bgUrl,
+          puzzleUrl: result.data.puzzleUrl,
+        }
       }
+
+      throw new Error('获取验证码失败')
     } catch (error) {
-      console.error('生成拼图失败:', error)
-      message.error('生成验证码失败，请重试')
+      console.error('获取验证码失败:', error)
+      message.error('获取验证码失败，请重试')
       throw error
     }
   }
@@ -59,46 +50,32 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   // 验证滑块位置
   const onVerify = async (data: { x: number; y: number; duration: number; trail: [number, number][] }) => {
     try {
-      const tolerance = 5
-      const diff = Math.abs(data.x - xRef.current)
+      console.log('验证参数:', { x: data.x, captchaKey: captchaKeyRef.current })
 
-      console.log('验证参数:', {
-        userX: data.x,
-        expectedX: xRef.current,
-        diff,
-        duration: data.duration,
-        trailLength: data.trail?.length,
+      const response = await fetch(`${apiUrl}/captcha/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          captchaKey: captchaKeyRef.current,
+          x: data.x,
+          y: data.y,
+          duration: data.duration,
+          trail: data.trail,
+        }),
       })
 
-      // 前端验证位置
-      if (diff <= tolerance) {
-        // 前端验证通过，发送到后端存储 token
-        const response = await fetch(`${apiUrl}/captcha/verify`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            x: data.x,
-            duration: data.duration,
-            trail: data.trail,
-          }),
-        })
+      const result = await response.json()
 
-        const result = await response.json()
-
-        if (result.code === 0 && result.data?.verified) {
-          onSuccess(result.data.verifyToken)
-          message.success('验证成功')
-          return Promise.resolve()
-        }
-
-        message.error(result.message || '验证失败，请重试')
-        return Promise.reject(new Error(result.message || '验证失败'))
+      if (result.code === 0 && result.data?.verified) {
+        onSuccess(result.data.verifyToken)
+        message.success('验证成功')
+        return Promise.resolve()
       }
 
-      message.error('验证失败，请重试')
-      return Promise.reject(new Error('位置不正确'))
+      message.error(result.message || '验证失败，请重试')
+      return Promise.reject(new Error(result.message || '验证失败'))
     } catch (error) {
       console.error('验证失败:', error)
       message.error('验证失败，请重试')
@@ -137,6 +114,7 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
           showRefreshIcon
           autoRefreshOnError
           errorHoldDuration={1000}
+          limitErrorCount={3}
           tipText={{
             default: '请拖动滑块完成验证',
             loading: '加载中...',
