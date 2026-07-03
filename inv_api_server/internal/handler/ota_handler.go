@@ -395,49 +395,33 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 	packages, _ := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, 0)
 	if len(packages) > 0 {
 		// 有已发布的升级包，返回给 App 端显示
-		type chipInfo struct {
-			TargetChip      string `json:"target_chip"`
-			FirmwareVersion string `json:"firmware_version"`
-		}
-		type availablePkg struct {
-			ID            int64      `json:"id"`
-			UserVersion   string     `json:"user_version"`
-			UserChangelog string     `json:"user_changelog"`
-			IsForce       bool       `json:"is_force"`
-			Model         string     `json:"model"`
-			Chips         []chipInfo `json:"chips"`
-		}
-
-		result := make([]availablePkg, 0, len(packages))
-		for _, pkg := range packages {
-			chips := make([]chipInfo, 0, len(pkg.Items))
-			for _, item := range pkg.Items {
-				chips = append(chips, chipInfo{
-					TargetChip:      item.TargetChip,
-					FirmwareVersion: item.FirmwareVersion,
-				})
-			}
-			result = append(result, availablePkg{
-				ID:            pkg.ID,
-				UserVersion:   pkg.UserVersion,
-				UserChangelog: pkg.UserChangelog,
-				IsForce:       pkg.IsForce,
-				Model:         pkg.Model,
-				Chips:         chips,
+		// 使用第一个升级包的信息作为主信息
+		firstPkg := packages[0]
+		chipsToUpgrade := []map[string]interface{}{}
+		for _, item := range firstPkg.Items {
+			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
+				"chip":         item.TargetChip,
+				"target":       item.FirmwareVersion,
+				"firmware_id":  item.FirmwareID,
+				"firmware_version": item.FirmwareVersion,
 			})
 		}
 
 		response.Success(c, gin.H{
-			"has_update":           true,
-			"upgrade_mode":         "available",
-			"device_model":         device.Model,
-			"current_main_version": device.MainVersion,
-			"firmware_arm":         device.FirmwareArm,
-			"firmware_esp":         device.FirmwareEsp,
-			"firmware_dsp":         device.FirmwareDSP,
-			"firmware_bms":         device.FirmwareBMS,
-			"available_packages":   result,
-			"message":              "有可用的升级包",
+			"has_update":             true,
+			"upgrade_mode":           "package",
+			"device_model":           device.Model,
+			"current_main_version":   device.MainVersion,
+			"main_version":           firstPkg.UserVersion, // 使用用户可见版本号
+			"changelog":              firstPkg.UserChangelog,
+			"is_force":               firstPkg.IsForce,
+			"firmware_arm":           device.FirmwareArm,
+			"firmware_esp":           device.FirmwareEsp,
+			"firmware_dsp":           device.FirmwareDSP,
+			"firmware_bms":           device.FirmwareBMS,
+			"chips_to_upgrade":       chipsToUpgrade,
+			"available_packages":     packages, // 同时返回所有可用升级包
+			"message":                "有可用的升级包",
 		})
 		return
 	}
