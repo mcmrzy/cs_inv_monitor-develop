@@ -72,8 +72,8 @@ const LoginPage: React.FC = () => {
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [captchaOpen, setCaptchaOpen] = useState(false)
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  const loginValuesRef = useRef<{ account: string; password: string } | null>(null)
+  const captchaResolveRef = useRef<((token: string) => void) | null>(null)
+  const captchaRejectRef = useRef<((reason?: any) => void) | null>(null)
   const { lang, setLang } = useLocaleStore()
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const navigate = useNavigate()
@@ -95,7 +95,36 @@ const LoginPage: React.FC = () => {
 
   const showError = (msg: string) => { setError(msg); setTimeout(() => setError(null), 6000) }
 
-  // 执行实际登录请求
+  // 显示验证码弹窗，返回 Promise
+  const showCaptcha = (): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      captchaResolveRef.current = resolve
+      captchaRejectRef.current = reject
+      setCaptchaOpen(true)
+    })
+  }
+
+  // 验证码验证成功
+  const onCaptchaSuccess = (token: string) => {
+    setCaptchaOpen(false)
+    if (captchaResolveRef.current) {
+      captchaResolveRef.current(token)
+      captchaResolveRef.current = null
+      captchaRejectRef.current = null
+    }
+  }
+
+  // 验证码取消
+  const onCaptchaCancel = () => {
+    setCaptchaOpen(false)
+    if (captchaRejectRef.current) {
+      captchaRejectRef.current(new Error('用户取消验证'))
+      captchaResolveRef.current = null
+      captchaRejectRef.current = null
+    }
+  }
+
+  // 执行登录请求
   const performLogin = async (values: { account: string; password: string }, captchaToken?: string) => {
     setLoading(true); setError(null)
     try {
@@ -105,35 +134,47 @@ const LoginPage: React.FC = () => {
       }
       const res = await api.post('/auth/login', { account: values.account, password: values.password }, { headers })
       const d = res.data as Record<string, unknown>
-      if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errLogin); return }
+      if (d?.code !== undefined && d.code !== 0) {
+        // 如果需要验证码（错误码 4032），弹出验证码
+        if (d.code === 4032) {
+          try {
+            const token = await showCaptcha()
+            await performLogin(values, token)
+            return
+          } catch {
+            showError('请完成验证后重试')
+            return
+          }
+        }
+        showError((d.message as string) || t.errLogin)
+        return
+      }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
       login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', data.user, data.permissions ?? [])
       message.success(t.successLogin)
       navigate('/dashboard', { replace: true })
-    } catch (err: any) { showError(err?.response?.data?.message || t.errLogin) }
+    } catch (err: any) {
+      const errData = err?.response?.data
+      // 如果需要验证码，弹出验证码
+      if (errData?.code === 4032) {
+        try {
+          const token = await showCaptcha()
+          await performLogin(values, token)
+          return
+        } catch {
+          showError('请完成验证后重试')
+          return
+        }
+      }
+      showError(errData?.message || t.errLogin)
+    }
     finally { setLoading(false) }
   }
 
-  // 登录按钮点击 - 显示验证码
+  // 登录按钮点击
   const onLogin = async (values: { account: string; password: string }) => {
-    loginValuesRef.current = values
-    setCaptchaOpen(true)
-  }
-
-  // 验证码验证成功
-  const onCaptchaSuccess = (token: string) => {
-    setCaptchaToken(token)
-    setCaptchaOpen(false)
-    if (loginValuesRef.current) {
-      performLogin(loginValuesRef.current, token)
-    }
-  }
-
-  // 验证码取消
-  const onCaptchaCancel = () => {
-    setCaptchaOpen(false)
-    loginValuesRef.current = null
+    await performLogin(values)
   }
 
   const onRegister = async (values: { phone: string; email: string; password: string; nickname: string; code: string }) => {
@@ -158,15 +199,22 @@ const LoginPage: React.FC = () => {
     finally { setLoading(false) }
   }
 
+  // 发送邮箱验证码（需要先完成滑块验证）
   const sendEmailCode = async (email: string, type: 'register' | 'reset') => {
     if (countdown > 0) return
     try {
+      // 先弹出滑块验证
+      const captchaToken = await showCaptcha()
       const apiType = type === 'reset' ? 'reset_password' : type
-      const res = await api.post('/auth/send-email-code', { email, type: apiType })
+      const headers = { 'X-Captcha-Token': captchaToken }
+      const res = await api.post('/auth/send-email-code', { email, type: apiType }, { headers })
       const d = res.data as Record<string, unknown>
       if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errSendCode); return }
       message.success(t.successCodeSent); setCountdown(60)
-    } catch (err: any) { showError(err?.response?.data?.message || t.errSendCode) }
+    } catch (err: any) {
+      if (err?.message === '用户取消验证') return
+      showError(err?.response?.data?.message || t.errSendCode)
+    }
   }
 
   const inputStyle = { borderRadius: 10, height: 56, fontSize: 17 }

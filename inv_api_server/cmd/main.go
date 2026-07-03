@@ -144,8 +144,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	otaRepo := repository.NewOTARepository(db)
 	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL)
 
-	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache)
 	captchaHandler := handler.NewCaptchaHandler(rdb)
+	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache, captchaHandler)
 	stationHandler := handler.NewStationHandler(stationService, deviceService)
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService)
