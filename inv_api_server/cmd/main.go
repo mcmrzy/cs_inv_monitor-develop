@@ -606,6 +606,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.POST("/auth/email-login", deps.AuthHandler.EmailLogin)
 		api.POST("/auth/send-email-code", deps.AuthHandler.SendEmailCode)
 		api.POST("/auth/refresh", deps.AuthHandler.RefreshToken)
+		api.POST("/auth/phone-code-login", deps.AuthHandler.PhoneCodeLogin)
+		api.POST("/auth/email-code-login", deps.AuthHandler.EmailCodeLogin)
 
 		// 公共参考数据 (无需认证)
 		api.GET("/timezones", func(c *gin.Context) {
