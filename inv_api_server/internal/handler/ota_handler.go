@@ -487,6 +487,19 @@ func (h *OTAHandler) ResendUpgradeCommand(c *gin.Context) {
 
 	err = h.otaService.ResendPendingUpgradeCommand(c.Request.Context(), sn)
 	if err != nil {
+		// 没有待执行的升级任务，尝试获取可用升级包并创建新任务
+		packages, _ := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, userID)
+		if len(packages) > 0 {
+			// 使用第一个可用升级包创建升级任务
+			taskID, triggerErr := h.otaService.TriggerUpgradeFromApp(c.Request.Context(), userID, sn, packages[0].ID)
+			if triggerErr != nil {
+				log.Printf("[ResendUpgradeCommand] trigger error: sn=%s, err=%v", sn, triggerErr)
+				response.HandleError(c, apperr.Internal("创建升级任务失败: "+triggerErr.Error(), triggerErr))
+				return
+			}
+			response.Success(c, gin.H{"message": "升级任务已创建", "task_id": taskID})
+			return
+		}
 		log.Printf("[ResendUpgradeCommand] error: sn=%s, err=%v", sn, err)
 		response.HandleError(c, apperr.Internal("重新发送升级命令失败: "+err.Error(), err))
 		return
