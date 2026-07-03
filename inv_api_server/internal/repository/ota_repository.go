@@ -759,13 +759,6 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 		return nil, nil
 	}
 
-	chipVersions := map[string]string{
-		"arm": device.FirmwareArm,
-		"esp": device.FirmwareEsp,
-		"dsp": device.FirmwareDSP,
-		"bms": device.FirmwareBMS,
-	}
-
 	var result []model.UpgradePackage
 	for i := range candidates {
 		pkgRows, err := r.db.Query(ctx, `
