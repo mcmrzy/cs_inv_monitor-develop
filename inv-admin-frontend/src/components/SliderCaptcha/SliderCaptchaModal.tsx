@@ -1,5 +1,6 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef } from 'react'
 import SliderCaptcha from 'rc-slider-captcha'
+import { createPuzzle } from 'create-puzzle'
 import { Modal, App } from 'antd'
 import {
   LoadingOutlined,
@@ -9,57 +10,44 @@ import {
   SafetyOutlined,
 } from '@ant-design/icons'
 
-interface CaptchaResult {
-  verified: boolean
-  verifyToken: string
-}
-
 interface SliderCaptchaModalProps {
   open: boolean
   onCancel: () => void
   onSuccess: (token: string) => void
-  request?: () => Promise<{ bgUrl: string; puzzleUrl: string; captchaKey: string }>
   apiUrl?: string
 }
+
+// 默认背景图片（可以替换为实际的图片URL）
+const DEFAULT_BG_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=640&h=360&fit=crop'
 
 const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   open,
   onCancel,
   onSuccess,
-  request,
   apiUrl = '/api/v1',
 }) => {
   const { message } = App.useApp()
-  const [loading, setLoading] = useState(false)
   const captchaKeyRef = useRef<string>('')
 
-  // 请求验证码数据
+  // 请求验证码数据（在前端生成拼图）
   const fetchCaptcha = async () => {
     try {
-      if (request) {
-        const data = await request()
-        captchaKeyRef.current = data.captchaKey
-        return {
-          bgUrl: data.bgUrl,
-          puzzleUrl: data.puzzleUrl,
-        }
+      // 使用 create-puzzle 在前端生成拼图
+      const result = await createPuzzle(DEFAULT_BG_IMAGE, {
+        width: 60,
+        height: 60,
+      })
+
+      // 保存 x 位置用于验证
+      captchaKeyRef.current = String(result.x)
+
+      return {
+        bgUrl: result.bgUrl,
+        puzzleUrl: result.puzzleUrl,
       }
-
-      const response = await fetch(`${apiUrl}/captcha/generate`)
-      const result = await response.json()
-
-      if (result.code === 0 && result.data) {
-        captchaKeyRef.current = result.data.captchaKey
-        return {
-          bgUrl: result.data.bgUrl,
-          puzzleUrl: result.data.puzzleUrl,
-        }
-      }
-
-      throw new Error('获取验证码失败')
     } catch (error) {
-      console.error('获取验证码失败:', error)
-      message.error('获取验证码失败，请重试')
+      console.error('生成验证码失败:', error)
+      message.error('生成验证码失败，请重试')
       throw error
     }
   }
@@ -67,80 +55,40 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   // 验证滑块位置
   const verifyCaptcha = async (data: { x: number; y: number }) => {
     try {
-      setLoading(true)
+      const expectedX = Number(captchaKeyRef.current)
+      const tolerance = 5 // 允许 ±5 像素的误差
 
-      if (request) {
-        // 使用自定义验证逻辑
-        const result = await verifyWithCustomLogic(data)
-        if (result.verified) {
-          onSuccess(result.verifyToken)
+      console.log('验证:', { userX: data.x, expectedX, diff: Math.abs(data.x - expectedX) })
+
+      if (Math.abs(data.x - expectedX) <= tolerance) {
+        // 验证成功，生成一个简单的 token
+        const verifyToken = `captcha_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+        // 将 token 发送到后端存储
+        const response = await fetch(`${apiUrl}/captcha/store-token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token: verifyToken }),
+        })
+
+        if (response.ok) {
+          onSuccess(verifyToken)
+          message.success('验证成功')
           return Promise.resolve()
+        } else {
+          message.error('验证失败，请重试')
+          return Promise.reject(new Error('验证失败'))
         }
-        return Promise.reject(new Error('验证失败'))
+      } else {
+        message.error('验证失败，请重试')
+        return Promise.reject(new Error('位置不正确'))
       }
-
-      const response = await fetch(`${apiUrl}/captcha/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          captchaKey: captchaKeyRef.current,
-          x: data.x,
-          y: data.y,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (result.code === 0 && result.data?.verified) {
-        onSuccess(result.data.verifyToken)
-        message.success('验证成功')
-        return Promise.resolve()
-      }
-
-      message.error(result.message || '验证失败，请重试')
-      return Promise.reject(new Error(result.message || '验证失败'))
     } catch (error) {
       console.error('验证失败:', error)
       message.error('验证失败，请重试')
       return Promise.reject(error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // 自定义验证逻辑（用于支持自定义 request）
-  const verifyWithCustomLogic = async (data: {
-    x: number
-    y: number
-  }): Promise<CaptchaResult> => {
-    // 这里可以实现自定义的验证逻辑
-    // 例如：直接调用后端验证接口
-    const response = await fetch(`${apiUrl}/captcha/verify`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        captchaKey: captchaKeyRef.current,
-        x: data.x,
-        y: data.y,
-      }),
-    })
-
-    const result = await response.json()
-
-    if (result.code === 0 && result.data?.verified) {
-      return {
-        verified: true,
-        verifyToken: result.data.verifyToken,
-      }
-    }
-
-    return {
-      verified: false,
-      verifyToken: '',
     }
   }
 
@@ -170,7 +118,7 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
           mode="embed"
           request={fetchCaptcha}
           onVerify={verifyCaptcha}
-          bgSize={{ width: 340, height: 170 }}
+          bgSize={{ width: 320, height: 180 }}
           puzzleSize={{ width: 60 }}
           showRefreshIcon
           autoRefreshOnError

@@ -617,6 +617,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		// 验证码 API（无需认证）
 		api.GET("/captcha/generate", deps.CaptchaHandler.GenerateCaptcha)
 		api.POST("/captcha/verify", deps.CaptchaHandler.VerifyCaptcha)
+		api.POST("/captcha/store-token", deps.CaptchaHandler.StoreToken)
 
 		auth := api.Group("").Use(middleware.Auth(deps.JWTService))
 		{
