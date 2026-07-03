@@ -779,7 +779,6 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 			continue
 		}
 
-		allUpToDate := true
 		hasItem := false
 		for pkgRows.Next() {
 			var item model.UpgradePackageItem
@@ -789,13 +788,11 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 			}
 			candidates[i].Items = append(candidates[i].Items, item)
 			hasItem = true
-			if currentVer := chipVersions[item.TargetChip]; currentVer != item.FirmwareVersion {
-				allUpToDate = false
-			}
 		}
 		pkgRows.Close()
 
-		if hasItem && !allUpToDate {
+		// 显示所有已发布的升级包，让用户自己选择是否升级
+		if hasItem {
 			result = append(result, candidates[i])
 		}
 	}
