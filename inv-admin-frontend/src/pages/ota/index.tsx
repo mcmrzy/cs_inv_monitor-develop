@@ -1195,10 +1195,6 @@ const PackagesTab: React.FC = () => {
       createMutation.mutate({
         model: values.model,
         firmware_ids: firmwareIds,
-        changelog: values.changelog,
-        is_force: values.is_force || false,
-        user_version: values.user_version || undefined,
-        user_changelog: values.user_changelog || undefined,
       })
     } catch { /* validation error */ }
   }
@@ -1297,6 +1293,9 @@ const PackagesTab: React.FC = () => {
           <Form.Item name="model" label={t('ota.model')} rules={[{ required: true, message: t('ota.selectModel') }]}>
             <Select placeholder={t('ota.selectModel')} options={modelList.map((m: any) => ({ label: m.model_name || m.model_code, value: m.model_code }))} />
           </Form.Item>
+          
+          <Divider orientation="left" style={{ margin: '16px 0 12px' }}>选择固件（至少选择一个芯片）</Divider>
+          
           <Form.Item name="firmware_arm" label="ARM 固件">
             <Select allowClear placeholder="选择 ARM 固件"
               options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'arm').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
@@ -1313,28 +1312,8 @@ const PackagesTab: React.FC = () => {
             <Select allowClear placeholder="选择 BMS 固件（可选）"
               options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'bms').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
           </Form.Item>
-          <Form.Item name="changelog" label={t('ota.packageChangelog')}><TextArea rows={3} /></Form.Item>
-          <Form.Item name="is_force" label={t('ota.forceUpdate')} valuePropName="checked"><Switch /></Form.Item>
           
-          <Divider orientation="left" style={{ margin: '16px 0 12px' }}>用户可见信息</Divider>
-          
-          <Form.Item 
-            name="user_version" 
-            label="用户可见版本号"
-            help="留空则自动生成，也可手动填写（如 V1.0.2）"
-          >
-            <Input placeholder="例如：V1.0.2" />
-          </Form.Item>
-          
-          <Form.Item 
-            name="user_changelog" 
-            label="用户可见更新说明"
-            help="留空则自动从各固件更新说明汇总"
-          >
-            <TextArea rows={3} placeholder="例如：修复了XX问题，优化了XX功能（留空自动生成）" />
-          </Form.Item>
-          
-          <div style={{ color: '#999', fontSize: 12 }}>{t('ota.selectFirmwareHint')}</div>
+          <div style={{ color: '#999', fontSize: 12 }}>创建后可在发布时设置用户可见信息和推送方式</div>
         </Form>
       </Modal>
 
