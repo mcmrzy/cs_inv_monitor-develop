@@ -402,7 +402,12 @@ class _HomePageState extends State<HomePage> {
                       end: Alignment.bottomRight,
                     ),
                   ),
-                  child: Icon(Icons.solar_power_rounded, size: 36.sp, color: AppColors.primary),
+                  child: Image.asset(
+                    'assets/images/solar_panel.png',
+                    width: 36.sp,
+                    height: 36.sp,
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 SizedBox(width: 14.w),
                 Expanded(
