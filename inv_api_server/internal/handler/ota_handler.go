@@ -728,6 +728,30 @@ func (h *OTAHandler) DeleteUpgradePackage(c *gin.Context) {
 	response.SuccessWithMessage(c, "升级包已删除", nil)
 }
 
+// UpdateUpgradePackage 更新升级包（用户可见信息）
+func (h *OTAHandler) UpdateUpgradePackage(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.HandleError(c, apperr.BadRequest("invalid id"))
+		return
+	}
+	var req struct {
+		UserVersion   *string `json:"user_version"`
+		UserChangelog *string `json:"user_changelog"`
+		Changelog     *string `json:"changelog"`
+		IsForce       *bool   `json:"is_force"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("参数错误"))
+		return
+	}
+	if err := h.otaService.UpdateUpgradePackage(c.Request.Context(), id, req.UserVersion, req.UserChangelog, req.Changelog, req.IsForce); err != nil {
+		response.HandleError(c, apperr.Internal("更新失败", err))
+		return
+	}
+	response.SuccessWithMessage(c, "更新成功", nil)
+}
+
 // PublishPackage 发布升级包
 func (h *OTAHandler) PublishPackage(c *gin.Context) {
 	id := parseID(c.Param("id"))
@@ -1306,6 +1330,7 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 		ID            int64      `json:"id"`
 		UserVersion   string     `json:"user_version"`
 		UserChangelog string     `json:"user_changelog"`
+		MainVersion   string     `json:"main_version"` // 新增：供 App 端回退
 		IsForce       bool       `json:"is_force"`
 		Model         string     `json:"model"`
 		Chips        []chipInfo `json:"chips"`
@@ -1324,6 +1349,7 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 			ID:            pkg.ID,
 			UserVersion:   pkg.UserVersion,
 			UserChangelog: pkg.UserChangelog,
+			MainVersion:   pkg.MainVersion, // 新增
 			IsForce:       pkg.IsForce,
 			Model:         pkg.Model,
 			Chips:        chips,
