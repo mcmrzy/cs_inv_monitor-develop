@@ -487,6 +487,7 @@ const UpgradeTasksTab: React.FC = () => {
               value={statusFilter}
               onChange={(val) => { setStatusFilter(val); setPage(1) }}
               options={[
+                { label: '全部', value: '' },
                 { label: t('ota.taskStatusActive') || '进行中', value: 'active' },
                 { label: t('ota.taskStatusPending'), value: 'pending' },
                 { label: t('ota.taskStatusRunning'), value: 'running' },
@@ -995,11 +996,6 @@ const PackagesTab: React.FC = () => {
   const [createForm] = Form.useForm()
   const [modelFilter, setModelFilter] = useState<string>()
 
-  // 安装到设备 Modal 状态
-  const [installOpen, setInstallOpen] = useState(false)
-  const [installPkg, setInstallPkg] = useState<UpgradePackage | null>(null)
-  const [installSnInput, setInstallSnInput] = useState('')
-
   // 发布升级包 Modal 状态
   const [publishOpen, setPublishOpen] = useState(false)
   const [publishPkg, setPublishPkg] = useState<UpgradePackage | null>(null)
@@ -1028,40 +1024,6 @@ const PackagesTab: React.FC = () => {
   }
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
-
-  const installMutation = useMutation({
-    mutationFn: (data: { package_id: number; device_sns: string[]; immediate?: boolean }) =>
-      otaApi.pushPackageUpgrade({ ...data, rollout_percent: 100 }),
-    onSuccess: () => {
-      message.success('升级指令已下发')
-      setInstallOpen(false)
-      setInstallPkg(null)
-      setInstallSnInput('')
-      invalidate()
-    },
-    onError: (err: any) => {
-      message.error('升级指令下发失败: ' + (err?.response?.data?.message || err?.message || ''))
-    },
-  })
-
-  const handleInstallSubmit = () => {
-    if (!installPkg) return
-    const sns = installSnInput
-      .split(/[,，\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (sns.length === 0) {
-      message.warning('请输入设备 SN')
-      return
-    }
-    installMutation.mutate({ package_id: Number(installPkg.id), device_sns: sns, immediate: true })
-  }
-
-  const openInstallModal = (record: UpgradePackage) => {
-    setInstallPkg(record)
-    setInstallSnInput('')
-    setInstallOpen(true)
-  }
 
   const { data: packagesRes, isLoading } = useQuery({
     queryKey: queryKeys.ota.packages(modelFilter ? { model: modelFilter } : undefined),
@@ -1152,7 +1114,7 @@ const PackagesTab: React.FC = () => {
     },
     { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-' },
     {
-      title: t('ota.action'), key: 'action', width: 350,
+      title: t('ota.action'), key: 'action', width: 250,
       render: (_: any, record: UpgradePackage) => (
         <Space size={4}>
           <Button
@@ -1161,15 +1123,7 @@ const PackagesTab: React.FC = () => {
             icon={<DesktopOutlined />}
             onClick={() => openPkgDevicesModal(record)}
           >
-            安装设备
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<SendOutlined />}
-            onClick={() => openInstallModal(record)}
-          >
-            安装到设备
+            查看设备
           </Button>
           {!record.is_published && (
             <Button
@@ -1255,54 +1209,6 @@ const PackagesTab: React.FC = () => {
           
           <div style={{ color: '#999', fontSize: 12 }}>{t('ota.selectFirmwareHint')}</div>
         </Form>
-      </Modal>
-
-      {/* 安装到设备 Modal */}
-      <Modal
-        title="安装升级包到设备"
-        open={installOpen}
-        onCancel={() => { setInstallOpen(false); setInstallPkg(null); setInstallSnInput('') }}
-        width={520}
-        destroyOnClose
-        footer={[
-          <Button key="cancel" onClick={() => { setInstallOpen(false); setInstallPkg(null); setInstallSnInput('') }}>
-            {t('ota.cancel')}
-          </Button>,
-          <Button
-            key="submit"
-            type="primary"
-            icon={<SendOutlined />}
-            loading={installMutation.isPending}
-            onClick={handleInstallSubmit}
-          >
-            立即安装
-          </Button>,
-        ]}
-      >
-        {installPkg && (
-          <div>
-            <Descriptions column={2} size="small" bordered style={{ marginBottom: 20 }}>
-              <Descriptions.Item label="升级包版本">
-                <Tag color="blue">{installPkg.main_version}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="型号">{installPkg.model}</Descriptions.Item>
-            </Descriptions>
-            <Form.Item
-              label="设备 SN"
-              required
-              help="输入设备 SN，多个 SN 用逗号或空格分隔"
-              style={{ marginBottom: 0 }}
-            >
-              <TextArea
-                rows={4}
-                placeholder="例如：SN001, SN002, SN003"
-                value={installSnInput}
-                onChange={(e) => setInstallSnInput(e.target.value)}
-                onPressEnter={(e) => e.preventDefault()}
-              />
-            </Form.Item>
-          </div>
-        )}
       </Modal>
 
       {/* 查看已安装该升级包的设备 Modal */}
