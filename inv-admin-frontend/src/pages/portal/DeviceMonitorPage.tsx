@@ -30,6 +30,7 @@ const DeviceMonitorPage: React.FC = () => {
   const [devices, setDevices] = useState<any[]>([])
   const [selectedSn, setSelectedSn] = useState<string>(highlightSn)
   const [realtime, setRealtime] = useState<any>(null)
+  const [deviceDetail, setDeviceDetail] = useState<any>(null)
   const [telemetry, setTelemetry] = useState<any[]>([])
   const [detailOpen, setDetailOpen] = useState(false)
 
@@ -55,6 +56,14 @@ const DeviceMonitorPage: React.FC = () => {
     } catch { setRealtime(null) }
   }, [])
 
+  const fetchDeviceDetail = useCallback(async (sn: string) => {
+    try {
+      const res = await deviceApi.getDeviceBySn(sn)
+      const d = res.data?.data ?? res.data ?? {}
+      setDeviceDetail(d.device ?? d)
+    } catch { setDeviceDetail(null) }
+  }, [])
+
   const fetchTelemetry = useCallback(async (sn: string) => {
     try {
       const res = await deviceApi.getTelemetry(sn, { pageSize: 100 })
@@ -72,13 +81,14 @@ const DeviceMonitorPage: React.FC = () => {
   useEffect(() => {
     if (selectedSn) {
       fetchRealtime(selectedSn)
+      fetchDeviceDetail(selectedSn)
       fetchTelemetry(selectedSn)
       const timer = setInterval(() => {
         fetchRealtime(selectedSn)
       }, 5000)
       return () => clearInterval(timer)
     }
-  }, [selectedSn, fetchRealtime, fetchTelemetry])
+  }, [selectedSn, fetchRealtime, fetchDeviceDetail, fetchTelemetry])
 
   useEffect(() => {
     if (devices.length > 0) setLoading(false)
@@ -186,6 +196,22 @@ const DeviceMonitorPage: React.FC = () => {
   const sys = rt?.sys_status ?? rt?.sys ?? {}
   const energy = rt?.energy ?? {}
 
+  // 合并设备详情数据到rt中（设备信息存储在数据库，不在Redis实时数据中）
+  const mergedData = {
+    ...rt,
+    ...(deviceDetail ? {
+      model: deviceDetail.model || rt.model,
+      manufacturer: deviceDetail.manufacturer || rt.manufacturer,
+      firmware_arm: deviceDetail.firmware_arm || rt.firmware_arm,
+      firmware_esp: deviceDetail.firmware_esp || rt.firmware_esp,
+      rated_power: deviceDetail.rated_power || rt.rated_power,
+      rated_voltage: deviceDetail.rated_voltage || rt.rated_voltage,
+      battery_voltage: deviceDetail.battery_voltage || rt.battery_voltage,
+      battery_type: deviceDetail.battery_type || rt.battery_type,
+      cell_count: deviceDetail.cell_count || rt.cell_count,
+    } : {}),
+  }
+
   return (
     <div style={{ padding: '0 0 24px' }}>
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
@@ -221,11 +247,11 @@ const DeviceMonitorPage: React.FC = () => {
               <>
                 <DynamicStatCards
                   fields={modelFields.cache.showFields.slice(0, 6)}
-                  data={rt}
+                  data={mergedData}
                 />
                 <DynamicFieldRenderer
                   fields={modelFields.cache.showFields}
-                  data={rt}
+                  data={mergedData}
                   column={2}
                   size="small"
                 />
