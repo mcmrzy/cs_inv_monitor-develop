@@ -273,7 +273,7 @@ const LoginPage: React.FC = () => {
   const CodeButton = ({ emailField, type, form }: { emailField: string; type: 'register' | 'reset'; form: any }) => (
     <Button disabled={countdown > 0}
       onClick={() => { const val = form.getFieldValue(emailField); if (val) sendEmailCode(val, type); else showError(t.errEmailFirst) }}
-      style={{ height: 56, borderRadius: '0 10px 10px 0', borderColor: '#d9d9d9', minWidth: 110, fontSize: 15, color: countdown > 0 ? '#94a3b8' : '#4f6ef7' }}>
+      style={{ height: 56, borderRadius: '0 10px 10px 0', borderColor: '#d9d9d9', minWidth: 110, fontSize: 15, color: countdown > 0 ? '#6b7280' : '#4f6ef7', background: countdown > 0 ? '#f3f4f6' : 'transparent' }}>
       {countdown > 0 ? `${countdown}${t.resendCode}` : t.sendCode}
     </Button>
   )
