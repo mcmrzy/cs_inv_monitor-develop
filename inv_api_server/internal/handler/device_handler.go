@@ -224,6 +224,42 @@ func (h *DeviceHandler) GetDetail(c *gin.Context) {
 				online = false
 			}
 		}
+
+		// 从嵌套的 info 对象读取设备信息（支持 {"info": {...}} 和 {"info": {"data": {...}}} 两种格式）
+		var info map[string]interface{}
+		if v, ok := realtimeData["info"].(map[string]interface{}); ok {
+			info = v
+			if innerData, ok := v["data"].(map[string]interface{}); ok {
+				info = innerData
+			}
+		}
+		if info != nil {
+			if v, ok := info["model"]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" && device.Model == "" {
+					device.Model = s
+				}
+			}
+			if v, ok := info["manufacturer"]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" && device.Manufacturer == "" {
+					device.Manufacturer = s
+				}
+			}
+			if v, ok := info["firmware_arm"]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" && device.FirmwareArm == "" {
+					device.FirmwareArm = s
+				}
+			}
+			if v, ok := info["firmware_esp"]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" && device.FirmwareEsp == "" {
+					device.FirmwareEsp = s
+				}
+			}
+			if v, ok := info["rated_power"]; ok && v != nil {
+				if f, ok := toFloat64(v); ok && f > 0 && device.RatedPower == 0 {
+					device.RatedPower = f
+				}
+			}
+		}
 	}
 
 	result := map[string]interface{}{
