@@ -398,9 +398,16 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		// 使用第一个升级包的信息作为主信息
 		firstPkg := packages[0]
 		chipsToUpgrade := []map[string]interface{}{}
+		chipVersions := map[string]string{
+			"arm": device.FirmwareArm,
+			"esp": device.FirmwareEsp,
+			"dsp": device.FirmwareDSP,
+			"bms": device.FirmwareBMS,
+		}
 		for _, item := range firstPkg.Items {
 			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
 				"chip":         item.TargetChip,
+				"current":      chipVersions[item.TargetChip],
 				"target":       item.FirmwareVersion,
 				"firmware_id":  item.FirmwareID,
 				"firmware_version": item.FirmwareVersion,
