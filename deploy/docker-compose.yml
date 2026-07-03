@@ -9,8 +9,12 @@ services:
       POSTGRES_DB: ${DB_NAME:-inv_mqtt}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
+    # 生产环境不暴露端口，仅通过Docker内部网络访问
+    # 如需本地调试，取消注释下面的行
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    expose:
+      - "5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,9 +29,13 @@ services:
     image: redis:7-alpine
     container_name: inv-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
-    ports:
-      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
+    # 生产环境不暴露端口，仅通过Docker内部网络访问
+    # 如需本地调试，取消注释下面的行
+    # ports:
+    #   - "127.0.0.1:6379:6379"
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -52,6 +60,7 @@ services:
       DB_NAME: ${DB_NAME:-inv_mqtt}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       DEVICE_SERVER_URL: http://inv-device-server:8081
       INTERNAL_KEY: ${INTERNAL_KEY}
@@ -92,6 +101,7 @@ services:
       DB_NAME: ${DB_NAME:-inv_mqtt}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       MQTT_BROKER: ${MQTT_BROKER:-jiuxiaoyw.online}
       MQTT_PORT: ${MQTT_PORT:-8883}
       MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-CSKJ-INV-SERVER-DEVICE}
@@ -122,6 +132,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       API_SERVER_URL: http://inv-api-server:8080
       DEVICE_SERVER_URL: http://inv-device-server:8081
       DB_HOST: postgres

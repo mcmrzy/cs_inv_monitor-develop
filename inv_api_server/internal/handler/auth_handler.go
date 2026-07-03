@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -20,16 +21,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// isProduction 检查是否为生产环境
+func isProduction() bool {
+	return os.Getenv("GIN_MODE") == "release" || os.Getenv("APP_ENV") == "production"
+}
+
 // setAuthCookies 设置 httpOnly cookie 存储 token（防 XSS）
+// 生产环境设置 Secure=true，SameSite=Strict
 func setAuthCookies(c *gin.Context, accessToken, refreshToken string, accessExpire, refreshExpire time.Duration) {
-	c.SetCookie("access_token", accessToken, int(accessExpire.Seconds()), "/", "", false, true)
-	c.SetCookie("refresh_token", refreshToken, int(refreshExpire.Seconds()), "/", "", false, true)
+	secure := isProduction()
+	c.SetCookie("access_token", accessToken, int(accessExpire.Seconds()), "/", "", secure, true)
+	c.SetCookie("refresh_token", refreshToken, int(refreshExpire.Seconds()), "/", "", secure, true)
 }
 
 // clearAuthCookies 清除认证 cookie
 func clearAuthCookies(c *gin.Context) {
-	c.SetCookie("access_token", "", -1, "/", "", false, true)
-	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+	secure := isProduction()
+	c.SetCookie("access_token", "", -1, "/", "", secure, true)
+	c.SetCookie("refresh_token", "", -1, "/", "", secure, true)
 }
 
 type AuthHandler struct {

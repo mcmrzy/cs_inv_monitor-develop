@@ -82,13 +82,14 @@ func main() {
 	}
 
 	router := routes.Setup(routes.Config{
-		APIServer:    cfg.Backends.APIServer,
-		DeviceServer: cfg.Backends.DeviceServer,
-		JWTSecret:    cfg.JWT.Secret,
-		GlobalRate:   cfg.RateLimit.Rate,
-		GlobalBurst:  cfg.RateLimit.Burst,
-		RouteLimits:  routeLimits,
-		RBAC:         rbac,
+		APIServer:      cfg.Backends.APIServer,
+		DeviceServer:   cfg.Backends.DeviceServer,
+		JWTSecret:      cfg.JWT.Secret,
+		GlobalRate:     cfg.RateLimit.Rate,
+		GlobalBurst:    cfg.RateLimit.Burst,
+		RouteLimits:    routeLimits,
+		RBAC:           rbac,
+		AllowedOrigins: cfg.CORS.AllowedOrigins,
 	})
 
 	srv := &http.Server{
