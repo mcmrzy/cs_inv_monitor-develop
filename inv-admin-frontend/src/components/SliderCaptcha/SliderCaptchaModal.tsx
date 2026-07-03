@@ -35,6 +35,8 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
       const result = await createPuzzle(BG_IMAGE, {
         width: 60,
         height: 60,
+        bgWidth: 320,
+        bgHeight: 160,
       })
 
       // 保存 x 位置用于验证
