@@ -1203,6 +1203,25 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 			AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
 		`, req.SN)
 
+		// 将该设备的未处理严重告警标记为已恢复（status=2）
+		h.db.Exec(ctx, `
+			UPDATE alarms SET status = 2, recovered_at = NOW()
+			WHERE device_sn = $1 AND alarm_level = 3 AND status = 0
+		`, req.SN)
+
+		// 检查是否还有未恢复的严重告警，有则不发送恢复通知（防止与故障告警同时到达时乱序）
+		var activeAlarmCount int
+		_ = h.db.QueryRow(ctx,
+			`SELECT COUNT(*) FROM alarms WHERE device_sn = $1 AND alarm_level = 3 AND status = 0`,
+			req.SN,
+		).Scan(&activeAlarmCount)
+		if activeAlarmCount > 0 {
+			logger.Info("Skipping alarm_cleared notification - device still has active alarms",
+				zap.String("sn", req.SN), zap.Int("active_alarms", activeAlarmCount))
+			response.Success(c, gin.H{"status": "ok", "skipped": true, "reason": "active_alarms"})
+			return
+		}
+
 		// 插入故障恢复通知（带 60 秒冷却期）
 		var clearUserID int64
 		var clearStationID sql.NullInt64

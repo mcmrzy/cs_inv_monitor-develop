@@ -198,9 +198,22 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 		return
 	}
 
-	// 有 alarms 数组时，逐个上报
+	// 有 alarms 数组时，逐个上报（过滤掉 code=0 的清除条目，避免与故障告警在同一消息中同时发送导致乱序）
 	if len(alarmPayload.Alarms) > 0 {
+		hasActiveFault := false
 		for _, item := range alarmPayload.Alarms {
+			if c, ok := toInt(item["code"]); ok && c != 0 {
+				hasActiveFault = true
+				break
+			}
+		}
+		for _, item := range alarmPayload.Alarms {
+			// 如果消息中同时包含故障和清除条目，过滤掉清除条目
+			// 清除通知应由设备单独发送空 payload 或 code=0 消息触发
+			if c, ok := toInt(item["code"]); ok && c == 0 && hasActiveFault {
+				logger.Info("Skipping alarm clear in mixed message", zap.String("sn", raw.SN))
+				continue
+			}
 			code := 0
 			level := ""
 			message := ""
