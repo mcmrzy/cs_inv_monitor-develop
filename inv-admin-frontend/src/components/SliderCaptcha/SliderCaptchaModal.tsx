@@ -116,14 +116,14 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={380}
+      width={360}
       centered
       destroyOnClose
       styles={{
-        body: { padding: '24px 16px' },
+        body: { padding: '16px 20px' },
       }}
     >
-      <div style={{ textAlign: 'center' }}>
+      <div>
         <p style={{ color: '#666', marginBottom: 16, fontSize: 14 }}>
           请拖动滑块完成验证
         </p>
