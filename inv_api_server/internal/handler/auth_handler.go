@@ -42,20 +42,22 @@ func clearAuthCookies(c *gin.Context) {
 }
 
 type AuthHandler struct {
-	userService  *service.UserService
-	jwtService   *service.JWTService
-	smsService   *service.SMSService
-	emailService *service.EmailService
-	rbacCache    *service.RBACCacheService
+	userService     *service.UserService
+	jwtService      *service.JWTService
+	smsService      *service.SMSService
+	emailService    *service.EmailService
+	rbacCache       *service.RBACCacheService
+	captchaHandler  *CaptchaHandler
 }
 
-func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService, rbacCache *service.RBACCacheService) *AuthHandler {
+func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService, rbacCache *service.RBACCacheService, captchaHandler *CaptchaHandler) *AuthHandler {
 	return &AuthHandler{
-		userService:  userService,
-		jwtService:   jwtService,
-		smsService:   smsService,
-		emailService: emailService,
-		rbacCache:    rbacCache,
+		userService:     userService,
+		jwtService:      jwtService,
+		smsService:      smsService,
+		emailService:    emailService,
+		rbacCache:       rbacCache,
+		captchaHandler:  captchaHandler,
 	}
 }
 
@@ -86,6 +88,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		ttl, _ := h.userService.Cache().TTL(c.Request.Context(), failKey).Result()
 		response.Error(c, 4029, fmt.Sprintf("登录失败次数过多，请 %d 分钟后再试", int(ttl.Minutes())+1))
 		return
+	}
+
+	// 失败次数 >= 3 时需要验证码
+	if failCount >= 3 {
+		captchaToken := c.GetHeader("X-Captcha-Token")
+		if captchaToken == "" || !h.captchaHandler.CheckCaptchaVerified(c) {
+			response.Error(c, 4032, "需要验证码验证")
+			return
+		}
 	}
 
 	var user *model.User
@@ -252,6 +263,13 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	var req SendCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	// 检查滑块验证码
+	captchaToken := c.GetHeader("X-Captcha-Token")
+	if captchaToken == "" || !h.captchaHandler.CheckCaptchaVerified(c) {
+		response.Error(c, 4032, "请先完成滑块验证")
 		return
 	}
 
@@ -593,6 +611,13 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 	var req SendEmailCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	// 检查滑块验证码
+	captchaToken := c.GetHeader("X-Captcha-Token")
+	if captchaToken == "" || !h.captchaHandler.CheckCaptchaVerified(c) {
+		response.Error(c, 4032, "请先完成滑块验证")
 		return
 	}
 
