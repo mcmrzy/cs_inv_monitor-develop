@@ -1381,6 +1381,10 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 			    old_version = EXCLUDED.old_version,
 			    firmware_version = EXCLUDED.firmware_version,
 			    source = EXCLUDED.source,
+			    progress = 0,
+			    error_message = '',
+			    started_at = NULL,
+			    completed_at = NULL,
 			    updated_at = NOW()
 		`, sn, firmwareIDVal, item.FirmwareVersion, item.TargetChip, currentVer,
 			model.UpgradeStatusPending, 0, "", 0, userID, pkgID, task.ID, model.OTASourceApp)
