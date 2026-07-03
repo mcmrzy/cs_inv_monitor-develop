@@ -42,10 +42,12 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     'control_cmd': {'icon': Icons.tune_rounded, 'color': Color(0xFFEF4444)},
   };
 
-  // 英文 key 到 l10n 显示名的映射
+  // 英文 key 到 l10n 显示名的映射（支持多种 group_name 格式）
   String _localizedGroupName(String groupName) {
     final l10n = AppLocalizations.of(context)!;
-    switch (groupName) {
+    // 将不同格式的 group_name 统一规范化为内部 key
+    final normalized = _normalizeGroupName(groupName);
+    switch (normalized) {
       case 'ac_params':
         return l10n.groupAcParams;
       case 'pv_params':
@@ -63,6 +65,47 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       default:
         return l10n.groupOther;
     }
+  }
+
+  /// 将后端返回的各种 group_name 格式统一规范化为内部 key
+  /// 支持格式：
+  ///   - 内部 key: ac_params, pv_params, ...
+  ///   - Admin 前端格式: models.acParams, models.batteryParams, ...
+  ///   - 中文显示名: 交流参数, 光伏参数, ...
+  static String _normalizeGroupName(String raw) {
+    // 已经是内部 key，直接返回
+    const internalKeys = {'ac_params', 'pv_params', 'battery_params', 'system_status', 'energy_stats', 'device_info', 'control_cmd'};
+    if (internalKeys.contains(raw)) return raw;
+    // Admin 前端格式 models.xxx → 内部 key
+    const adminKeyMap = {
+      'models.acParams': 'ac_params',
+      'models.batteryParams': 'battery_params',
+      'models.pvParams': 'pv_params',
+      'models.systemStatus': 'system_status',
+      'models.energyStats': 'energy_stats',
+      'models.deviceInfo': 'device_info',
+      'models.controlStatus': 'control_cmd',
+      'models.inverterControl': 'control_cmd',
+      'models.bmsControl': 'control_cmd',
+      'models.mpptControl': 'control_cmd',
+      'models.epsControl': 'control_cmd',
+      'models.parallelControl': 'control_cmd',
+    };
+    if (adminKeyMap.containsKey(raw)) return adminKeyMap[raw]!;
+    // 中文显示名 → 内部 key
+    const chineseMap = {
+      '交流参数': 'ac_params',
+      '光伏参数': 'pv_params',
+      '电池参数': 'battery_params',
+      '系统状态': 'system_status',
+      '能量统计': 'energy_stats',
+      '设备信息': 'device_info',
+      '控制参数': 'control_cmd',
+      '控制指令': 'control_cmd',
+    };
+    if (chineseMap.containsKey(raw)) return chineseMap[raw]!;
+    // 无法识别，原样返回
+    return raw;
   }
 
   @override
@@ -184,7 +227,10 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           .listen((rt) {
         if (mounted) {
           setState(() {
-            _realtimeData = _inverterToFlatMap(rt);
+            // 合并 MQTT 新数据到现有数据，而非完全替换
+            // 这样 API 返回的字段不会因 MQTT 数据缺失而丢失
+            final newMqttData = _inverterToFlatMap(rt);
+            _realtimeData.addAll(newMqttData);
             _hasMqttData = true;
             if (rt.onlineStatus != null) {
               _online = rt.onlineStatus!.online;
@@ -445,7 +491,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   Map<String, List<DeviceModelField>> _groupByField() {
     final groups = <String, List<DeviceModelField>>{};
     for (final field in _modelFields) {
-      final group = field.groupName.isNotEmpty ? field.groupName : _inferGroupFromFieldKey(field.fieldKey);
+      // 先规范化 group_name，再用于分组
+      final rawGroup = field.groupName.isNotEmpty ? field.groupName : '';
+      final group = rawGroup.isNotEmpty ? _normalizeGroupName(rawGroup) : _inferGroupFromFieldKey(field.fieldKey);
       groups.putIfAbsent(group, () => []).add(field);
     }
     // 按 sort 排序每个组内的字段
