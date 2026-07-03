@@ -17,8 +17,8 @@ interface SliderCaptchaModalProps {
   apiUrl?: string
 }
 
-// 背景图片 URL（可以替换为本地图片）
-const BG_IMAGE = 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=640&h=360&fit=crop'
+// 背景图片 URL（使用国内可访问的图片）
+const BG_IMAGE = 'https://picsum.photos/640/360'
 
 const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   open,
@@ -37,6 +37,9 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
         height: 60,
         bgWidth: 320,
         bgHeight: 160,
+        bgOffset: [0, 0],
+        imageWidth: 640,
+        imageHeight: 360,
       })
 
       // 保存 x 位置用于验证
