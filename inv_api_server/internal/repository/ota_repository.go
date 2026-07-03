@@ -136,6 +136,37 @@ func (r *OTARepository) GetPendingUpgradeForDevice(ctx context.Context, sn strin
 	return &du, &fw, nil
 }
 
+// GetActiveUpgradeBySN 获取设备当前活跃的升级记录（pending 或 upgrading 状态）
+func (r *OTARepository) GetActiveUpgradeBySN(ctx context.Context, deviceSN string) (*model.DeviceUpgrade, error) {
+	var du model.DeviceUpgrade
+	err := r.db.QueryRow(ctx, `
+		SELECT id, device_sn, firmware_id, firmware_version, target_chip, old_version,
+		       status, progress, COALESCE(error_message,''), retry_count
+		FROM device_upgrades
+		WHERE device_sn = $1 AND status IN ('pending', 'upgrading')
+		ORDER BY updated_at DESC LIMIT 1
+	`, deviceSN).Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion,
+		&du.TargetChip, &du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage, &du.RetryCount)
+	if err != nil {
+		return nil, err
+	}
+	return &du, nil
+}
+
+// UpdateUpgradeStatusByID 按升级记录ID更新状态
+func (r *OTARepository) UpdateUpgradeStatusByID(ctx context.Context, upgradeID int64, status string, progress int, errMsg string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE device_upgrades SET
+			status = $2::varchar,
+			progress = $3,
+			error_message = CASE WHEN $2::varchar = 'failed' THEN $4 ELSE error_message END,
+			completed_at = CASE WHEN $2::varchar IN ('success', 'failed') THEN NOW() ELSE completed_at END,
+			updated_at = NOW()
+		WHERE id = $1
+	`, upgradeID, status, progress, errMsg)
+	return err
+}
+
 // UpdateUpgradeStatus 更新升级状态（设备上报进度用）
 func (r *OTARepository) UpdateUpgradeStatus(ctx context.Context, deviceSN string, status string, progress int, errMsg string) (int64, error) {
 	tag, err := r.db.Exec(ctx, `

@@ -229,6 +229,19 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 
 // SendUpgradeCommand 发送MQTT升级命令到设备
 func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpgrade, fw *model.Firmware, downloadURL string) {
+	// 检查设备是否已经在升级中
+	activeUpgrade, _ := s.repo.GetActiveUpgradeBySN(ctx, du.DeviceSN)
+	if activeUpgrade != nil && activeUpgrade.ID != du.ID {
+		logger.Warn("Device already has active upgrade, skipping",
+			zap.String("sn", du.DeviceSN),
+			zap.Int64("active_upgrade_id", activeUpgrade.ID),
+			zap.Int64("new_upgrade_id", du.ID))
+		// 更新当前升级记录状态为 failed
+		errorMsg := "已有 OTA 操作进行中"
+		_ = s.repo.UpdateUpgradeStatusByID(ctx, du.ID, model.UpgradeStatusFailed, 0, errorMsg)
+		return
+	}
+
 	cmdBody := map[string]interface{}{
 		"command":     "start",
 		"action":      "start",
