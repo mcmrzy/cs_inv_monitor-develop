@@ -513,6 +513,7 @@ class _OTAPageState extends State<OTAPage> {
           if (changelog.isNotEmpty) ...[  SizedBox(height: 12.h),
             Container(
               padding: EdgeInsets.all(12.w),
+              width: double.infinity, // 确保占满宽度
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10.r),

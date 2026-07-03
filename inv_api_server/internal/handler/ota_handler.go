@@ -23,6 +23,16 @@ type OTAHandler struct {
 	otaService *service.OTAService
 }
 
+// toUserVersion 将 main_version (V1.0.0.20260703) 转换为 user_version 格式 (V1.0.0)
+func toUserVersion(mainVersion string) string {
+	re := regexp.MustCompile(`^(V\d+\.\d+\.\d+)\.\d{8}$`)
+	matches := re.FindStringSubmatch(mainVersion)
+	if len(matches) == 2 {
+		return matches[1]
+	}
+	return mainVersion
+}
+
 func NewOTAHandler(otaService *service.OTAService) *OTAHandler {
 	return &OTAHandler{otaService: otaService}
 }
@@ -418,7 +428,7 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			"has_update":             true,
 			"upgrade_mode":           "package",
 			"device_model":           device.Model,
-			"current_main_version":   device.MainVersion,
+			"current_main_version":   toUserVersion(device.MainVersion), // 统一格式
 			"main_version":           firstPkg.UserVersion, // 使用用户可见版本号
 			"changelog":              firstPkg.UserChangelog,
 			"is_force":               firstPkg.IsForce,
