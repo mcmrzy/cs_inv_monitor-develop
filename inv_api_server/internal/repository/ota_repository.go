@@ -1343,6 +1343,14 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 			    old_version, status, progress, error_message, retry_count, pushed_by,
 			    upgrade_package_id, task_id, source, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+			ON CONFLICT (device_sn, firmware_id, COALESCE(upgrade_package_id, 0))
+			DO UPDATE SET
+			    status = EXCLUDED.status,
+			    task_id = EXCLUDED.task_id,
+			    old_version = EXCLUDED.old_version,
+			    firmware_version = EXCLUDED.firmware_version,
+			    source = EXCLUDED.source,
+			    updated_at = NOW()
 		`, sn, firmwareIDVal, item.FirmwareVersion, item.TargetChip, currentVer,
 			model.UpgradeStatusPending, 0, "", 0, userID, pkgID, task.ID, model.OTASourceApp)
 		if err != nil {
