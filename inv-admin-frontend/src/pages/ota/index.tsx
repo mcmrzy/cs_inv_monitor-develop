@@ -165,7 +165,7 @@ const UpgradeTasksTab: React.FC = () => {
   const [rollbackTaskId, setRollbackTaskId] = useState<number | string | null>(null)
   const [rollbackSn, setRollbackSn] = useState('')
   const [rollbackPackageId, setRollbackPackageId] = useState<number | null>(null)
-  const [packageList, setPackageList] = useState<any[]>([])
+  const [rollbackPackageList, setRollbackPackageList] = useState<any[]>([])
 
   // 查询任务列表
   const queryParams: any = { page, pageSize }
@@ -275,9 +275,9 @@ const UpgradeTasksTab: React.FC = () => {
     try {
       const res = await otaApi.listPackages()
       const d = res.data?.data ?? res.data ?? []
-      setPackageList(Array.isArray(d) ? d : [])
+      setRollbackPackageList(Array.isArray(d) ? d : [])
     } catch {
-      setPackageList([])
+      setRollbackPackageList([])
     }
   }
 
@@ -781,7 +781,7 @@ const UpgradeTasksTab: React.FC = () => {
               placeholder="选择要回退到的升级包"
               value={rollbackPackageId}
               onChange={setRollbackPackageId}
-              options={packageList.map((pkg: any) => ({
+              options={rollbackPackageList.map((pkg: any) => ({
                 label: `${pkg.model} - ${pkg.user_version || pkg.main_version}`,
                 value: Number(pkg.id),
               }))}
