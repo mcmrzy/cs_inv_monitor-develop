@@ -391,6 +391,57 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		return
 	}
 
+	// 没有待执行的升级任务，检查是否有已发布的升级包
+	packages, _ := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, 0)
+	if len(packages) > 0 {
+		// 有已发布的升级包，返回给 App 端显示
+		type chipInfo struct {
+			TargetChip      string `json:"target_chip"`
+			FirmwareVersion string `json:"firmware_version"`
+		}
+		type availablePkg struct {
+			ID            int64      `json:"id"`
+			UserVersion   string     `json:"user_version"`
+			UserChangelog string     `json:"user_changelog"`
+			IsForce       bool       `json:"is_force"`
+			Model         string     `json:"model"`
+			Chips         []chipInfo `json:"chips"`
+		}
+
+		result := make([]availablePkg, 0, len(packages))
+		for _, pkg := range packages {
+			chips := make([]chipInfo, 0, len(pkg.Items))
+			for _, item := range pkg.Items {
+				chips = append(chips, chipInfo{
+					TargetChip:      item.TargetChip,
+					FirmwareVersion: item.FirmwareVersion,
+				})
+			}
+			result = append(result, availablePkg{
+				ID:            pkg.ID,
+				UserVersion:   pkg.UserVersion,
+				UserChangelog: pkg.UserChangelog,
+				IsForce:       pkg.IsForce,
+				Model:         pkg.Model,
+				Chips:         chips,
+			})
+		}
+
+		response.Success(c, gin.H{
+			"has_update":           true,
+			"upgrade_mode":         "available",
+			"device_model":         device.Model,
+			"current_main_version": device.MainVersion,
+			"firmware_arm":         device.FirmwareArm,
+			"firmware_esp":         device.FirmwareEsp,
+			"firmware_dsp":         device.FirmwareDSP,
+			"firmware_bms":         device.FirmwareBMS,
+			"available_packages":   result,
+			"message":              "有可用的升级包",
+		})
+		return
+	}
+
 	response.Success(c, gin.H{
 		"has_update":             false,
 		"device_model":           device.Model,
