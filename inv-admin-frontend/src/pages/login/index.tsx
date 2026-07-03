@@ -8,7 +8,7 @@ import api from '@/services/api'
 import type { User } from '@/types'
 import SliderCaptchaModal from '@/components/SliderCaptcha/SliderCaptchaModal'
 
-type ActiveTab = 'login' | 'register' | 'reset'
+type ActiveTab = 'login' | 'loginByCode' | 'register' | 'reset'
 type Lang = 'zh' | 'en'
 
 const i18n: Record<Lang, Record<string, string>> = {
@@ -21,10 +21,12 @@ const i18n: Record<Lang, Record<string, string>> = {
     stat1: '接入设备', stat2: '平台可用率', stat3: '实时监控',
     welcome: '欢迎回来', createAcc: '创建账号', resetPwd: '重置密码',
     welcomeSub: '登录您的账户以继续', createSub: '注册新账户开始使用', resetSub: '通过邮箱重置密码',
-    login: '登录', register: '注册', reset: '重置密码',
+    login: '密码登录', loginByCode: '验证码登录', register: '注册', reset: '重置密码',
     account: '手机号 / 邮箱', password: '密码', remember: '记住我', forgot: '忘记密码？',
     submitLogin: '登 录', noAccount: '还没有账号？', goRegister: '立即注册',
-    phone: '手机号', email: '邮箱', code: '邮箱验证码', sendCode: '发送验证码', resendCode: 's 后重发',
+    phone: '手机号', email: '邮箱', code: '验证码', sendCode: '发送验证码', resendCode: 's 后重发',
+    phoneCodeLogin: '手机号验证码登录', emailCodeLogin: '邮箱验证码登录',
+    loginByPhoneCode: '手机号登录', loginByEmailCode: '邮箱登录',
     nickname: '昵称', confirmPassword: '确认密码', newPassword: '新密码', confirmNewPwd: '确认新密码',
     submitRegister: '注 册', hasAccount: '已有账号？', goLogin: '立即登录',
     submitReset: '重置密码', goBack: '返回登录', emailPlaceholder: '注册时使用的邮箱',
@@ -47,10 +49,12 @@ const i18n: Record<Lang, Record<string, string>> = {
     stat1: 'Devices', stat2: 'Uptime', stat3: 'Monitoring',
     welcome: 'Welcome Back', createAcc: 'Create Account', resetPwd: 'Reset Password',
     welcomeSub: 'Sign in to your account', createSub: 'Register a new account', resetSub: 'Reset via email',
-    login: 'Login', register: 'Register', reset: 'Reset',
+    login: 'Password Login', loginByCode: 'Code Login', register: 'Register', reset: 'Reset',
     account: 'Phone / Email', password: 'Password', remember: 'Remember me', forgot: 'Forgot password?',
     submitLogin: 'Sign In', noAccount: "Don't have an account? ", goRegister: 'Register',
-    phone: 'Phone', email: 'Email', code: 'Verification code', sendCode: 'Send Code', resendCode: 's',
+    phone: 'Phone', email: 'Email', code: 'Verification Code', sendCode: 'Send Code', resendCode: 's',
+    phoneCodeLogin: 'Phone Code Login', emailCodeLogin: 'Email Code Login',
+    loginByPhoneCode: 'Phone Login', loginByEmailCode: 'Email Login',
     nickname: 'Nickname', confirmPassword: 'Confirm Password', newPassword: 'New Password', confirmNewPwd: 'Confirm New Password',
     submitRegister: 'Sign Up', hasAccount: 'Already have an account? ', goLogin: 'Sign In',
     submitReset: 'Reset Password', goBack: 'Back to Login', emailPlaceholder: 'Your registered email',
@@ -199,8 +203,40 @@ const LoginPage: React.FC = () => {
     finally { setLoading(false) }
   }
 
+  // 手机号验证码登录
+  const onPhoneCodeLogin = async (values: { phone: string; code: string }) => {
+    setLoading(true); setError(null)
+    try {
+      const res = await api.post('/auth/phone-code-login', values)
+      const d = res.data as Record<string, unknown>
+      if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errLogin); return }
+      const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
+      if (!data.user) { showError(t.errLogin); return }
+      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', data.user, data.permissions ?? [])
+      message.success(t.successLogin)
+      navigate('/dashboard', { replace: true })
+    } catch (err: any) { showError(err?.response?.data?.message || t.errLogin) }
+    finally { setLoading(false) }
+  }
+
+  // 邮箱验证码登录
+  const onEmailCodeLogin = async (values: { email: string; code: string }) => {
+    setLoading(true); setError(null)
+    try {
+      const res = await api.post('/auth/email-code-login', values)
+      const d = res.data as Record<string, unknown>
+      if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errLogin); return }
+      const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
+      if (!data.user) { showError(t.errLogin); return }
+      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', data.user, data.permissions ?? [])
+      message.success(t.successLogin)
+      navigate('/dashboard', { replace: true })
+    } catch (err: any) { showError(err?.response?.data?.message || t.errLogin) }
+    finally { setLoading(false) }
+  }
+
   // 发送邮箱验证码（需要先完成滑块验证）
-  const sendEmailCode = async (email: string, type: 'register' | 'reset') => {
+  const sendEmailCode = async (email: string, type: 'register' | 'reset' | 'login') => {
     if (countdown > 0) return
     try {
       // 先弹出滑块验证
@@ -310,10 +346,10 @@ const LoginPage: React.FC = () => {
               {/* Header */}
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 30, fontWeight: 700, color: '#0f172a', marginBottom: 6 }}>
-                  {activeTab === 'login' ? t.welcome : activeTab === 'register' ? t.createAcc : t.resetPwd}
+                  {activeTab === 'login' || activeTab === 'loginByCode' ? t.welcome : activeTab === 'register' ? t.createAcc : t.resetPwd}
                 </div>
                 <div style={{ color: '#475569', fontSize: 17 }}>
-                  {activeTab === 'login' ? t.welcomeSub : activeTab === 'register' ? t.createSub : t.resetSub}
+                  {activeTab === 'login' || activeTab === 'loginByCode' ? t.welcomeSub : activeTab === 'register' ? t.createSub : t.resetSub}
                 </div>
               </div>
 
@@ -325,10 +361,10 @@ const LoginPage: React.FC = () => {
 
               {/* Tab switcher */}
               <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 3, marginBottom: 24 }}>
-                {([['login', t.login], ['register', t.register], ['reset', t.reset]] as const).map(([tab, label]) => (
+                {([['login', t.login], ['loginByCode', t.loginByCode], ['register', t.register], ['reset', t.reset]] as const).map(([tab, label]) => (
                   <button key={tab} onClick={() => { setActiveTab(tab as ActiveTab); setCountdown(0); setError(null) }} style={{
                     flex: 1, padding: '10px 0', border: 'none', borderRadius: 8, cursor: 'pointer',
-                    fontSize: 16, fontWeight: 500, transition: 'all 0.2s ease',
+                    fontSize: 14, fontWeight: 500, transition: 'all 0.2s ease',
                     background: activeTab === tab ? '#fff' : 'transparent',
                     color: activeTab === tab ? '#4f6ef7' : '#475569',
                     boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
@@ -359,6 +395,39 @@ const LoginPage: React.FC = () => {
                     <a onClick={() => setActiveTab('register')} style={{ color: '#4f6ef7', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goRegister}</a>
                   </div>
                 </Form>
+              )}
+
+              {/* LoginByCode */}
+              {activeTab === 'loginByCode' && (
+                <div>
+                  <Form name="phoneCodeLogin" onFinish={onPhoneCodeLogin} size="large">
+                    <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
+                      <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder={t.phone} style={inputStyle} />
+                    </Form.Item>
+                    <Form.Item>
+                      <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', border: 'none', boxShadow: '0 2px 8px rgba(79,110,247,0.25)' }}>{t.loginByPhoneCode}</Button>
+                    </Form.Item>
+                  </Form>
+                  <div style={{ textAlign: 'center', margin: '16px 0', color: '#94a3b8' }}>───────── 或 ─────────</div>
+                  <Form name="emailCodeLogin" onFinish={onEmailCodeLogin} size="large">
+                    <Form.Item name="email" rules={[{ required: true, message: lang === 'zh' ? '请输入邮箱' : 'Email required' }, { type: 'email', message: t.errEmailFormat }]}>
+                      <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.email} style={inputStyle} />
+                    </Form.Item>
+                    <Form.Item name="code" rules={[{ required: true, message: lang === 'zh' ? '请输入验证码' : 'Code required' }]}>
+                      <Space.Compact style={{ width: '100%' }}>
+                        <Input prefix={<MailOutlined style={{ color: '#94a3b8' }} />} placeholder={t.code} style={{ ...inputStyle, borderRadius: '10px 0 0 10px' }} />
+                        <CodeButton emailField="email" type="login" form={registerForm} />
+                      </Space.Compact>
+                    </Form.Item>
+                    <Form.Item>
+                      <Button type="primary" htmlType="submit" loading={loading} block style={{ height: 56, borderRadius: 10, fontSize: 18, fontWeight: 600, background: 'linear-gradient(135deg, #4f6ef7 0%, #6366f1 100%)', border: 'none', boxShadow: '0 2px 8px rgba(79,110,247,0.25)' }}>{t.loginByEmailCode}</Button>
+                    </Form.Item>
+                  </Form>
+                  <div style={{ textAlign: 'center' }}>
+                    <span style={{ color: '#475569', fontSize: 17 }}>{t.noAccount}</span>
+                    <a onClick={() => setActiveTab('register')} style={{ color: '#4f6ef7', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goRegister}</a>
+                  </div>
+                </div>
               )}
 
               {/* Register */}

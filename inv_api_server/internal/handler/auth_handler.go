@@ -846,3 +846,160 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 		ExpiresIn:    7200,
 	})
 }
+
+// PhoneCodeLogin 手机号验证码登录
+type PhoneCodeLoginRequest struct {
+	Phone string `json:"phone" binding:"required"`
+	Code  string `json:"code" binding:"required"`
+}
+
+func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
+	var req PhoneCodeLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	// 验证短信验证码
+	if !h.smsService.VerifyCode(c.Request.Context(), req.Phone, req.Code, "login") {
+		response.Error(c, 4005, "验证码错误或已过期")
+		return
+	}
+
+	user, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("system error", err))
+		return
+	}
+
+	if user == nil {
+		response.Error(c, 4001, "该手机号未注册")
+		return
+	}
+
+	if user.Status != 1 {
+		response.Error(c, 4002, "account disabled")
+		return
+	}
+
+	// 生成 token
+	token, refreshToken, err := h.jwtService.GenerateToken(user.ID, user.Phone, user.Role)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("generate token failed", err))
+		return
+	}
+
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, refreshToken, 7*24*time.Hour); err != nil {
+		logger.Warn("Failed to store refresh token", zap.Error(err))
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := h.userService.UpdateLoginInfo(ctx, user.ID, c.ClientIP()); err != nil {
+			logger.Warn("UpdateLoginInfo failed", zap.Error(err))
+		}
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "login_by_sms", "auth", "", "{}", c.ClientIP())
+	}()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+	}()
+
+	permissions, _ := h.rbacCache.GetUserPermissions(c.Request.Context(), user.ID)
+
+	setAuthCookies(c, token, refreshToken, 2*time.Hour, 7*24*time.Hour)
+
+	user.PasswordHash = ""
+	response.Success(c, LoginResponse{
+		AccessToken:  token,
+		RefreshToken: refreshToken,
+		User:         user,
+		ExpiresIn:    7200,
+		Permissions:  permissions,
+	})
+}
+
+// EmailCodeLogin 邮箱验证码登录
+type EmailCodeLoginRequest struct {
+	Email string `json:"email" binding:"required"`
+	Code  string `json:"code" binding:"required"`
+}
+
+func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
+	var req EmailCodeLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	if !emailRegex.MatchString(req.Email) {
+		response.Error(c, 4008, "invalid email format")
+		return
+	}
+
+	// 验证邮箱验证码
+	if !h.emailService.VerifyCode(c.Request.Context(), req.Email, req.Code, "login") {
+		response.Error(c, 4005, "验证码错误或已过期")
+		return
+	}
+
+	user, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("system error", err))
+		return
+	}
+
+	if user == nil {
+		response.Error(c, 4001, "该邮箱未注册")
+		return
+	}
+
+	if user.Status != 1 {
+		response.Error(c, 4002, "account disabled")
+		return
+	}
+
+	identifier := user.Email
+	if identifier == "" {
+		identifier = user.Phone
+	}
+
+	token, refreshToken, err := h.jwtService.GenerateToken(user.ID, identifier, user.Role)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("generate token failed", err))
+		return
+	}
+
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, refreshToken, 7*24*time.Hour); err != nil {
+		logger.Warn("Failed to store refresh token", zap.Error(err))
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := h.userService.UpdateLoginInfo(ctx, user.ID, c.ClientIP()); err != nil {
+			logger.Warn("UpdateLoginInfo failed", zap.Error(err))
+		}
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "login_by_email", "auth", "", "{}", c.ClientIP())
+	}()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+	}()
+
+	permissions, _ := h.rbacCache.GetUserPermissions(c.Request.Context(), user.ID)
+
+	setAuthCookies(c, token, refreshToken, 2*time.Hour, 7*24*time.Hour)
+
+	user.PasswordHash = ""
+	response.Success(c, LoginResponse{
+		AccessToken:  token,
+		RefreshToken: refreshToken,
+		User:         user,
+		ExpiresIn:    7200,
+		Permissions:  permissions,
+	})
+}
