@@ -91,7 +91,6 @@ interface FirmwareFormValues {
   targetChip: string
   version: string
   changelog: string
-  forceUpdate: boolean
 }
 
 // =================== 任务状态映射 ===================
@@ -902,7 +901,6 @@ const FirmwareTab: React.FC = () => {
       formData.append('target_chip', values.targetChip)
       formData.append('version', values.version)
       formData.append('changelog', values.changelog || '')
-      formData.append('is_force', String(values.forceUpdate || false))
       uploadMutation.mutate(formData)
     } catch { setUploading(false) }
   }
@@ -952,7 +950,6 @@ const FirmwareTab: React.FC = () => {
     { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (size: number) => formatFileSize(size) },
     { title: 'MD5', dataIndex: 'file_md5', key: 'file_md5', width: 180, ellipsis: true, render: (val: string) => <Tooltip title={val}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span></Tooltip> },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (val: string) => <Tooltip title={val}><span>{val || '-'}</span></Tooltip> },
-    { title: t('ota.forceUpdate'), dataIndex: 'is_force', key: 'is_force', width: 110, render: (val: boolean) => val ? <Tag color="red">{t('ota.force')}</Tag> : <Tag>{t('common.no')}</Tag> },
     { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.operation'), key: 'action', width: 140,
@@ -1019,7 +1016,6 @@ const FirmwareTab: React.FC = () => {
             <Input placeholder={t('ota.autoFillVersion')} />
           </Form.Item>
           <Form.Item name="changelog" label={t('ota.changelog')}><TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>
-          <Form.Item name="forceUpdate" label={t('ota.forceUpdate')} valuePropName="checked"><Switch /></Form.Item>
           <Form.Item label={t('ota.firmwareFile')}>
             <Dragger {...uploadProps}>
               <p className="ant-upload-drag-icon"><InboxOutlined /></p>
