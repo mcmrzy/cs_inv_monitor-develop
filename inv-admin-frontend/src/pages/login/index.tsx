@@ -44,7 +44,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     nickname: '昵称', confirmPassword: '确认密码', newPassword: '新密码', confirmNewPwd: '确认新密码',
     submitRegister: '注 册', hasAccount: '已有账号？', goLogin: '立即登录',
     submitReset: '重置密码', goBack: '返回登录', emailPlaceholder: '注册时使用的邮箱',
-    footer: '© 2024 辰烁科技 · 光伏逆变器智能运维平台',
+    footer: '© 2026 辰烁科技 · 光伏逆变器智能运维平台',
     errLogin: '登录失败，请检查手机号/邮箱和密码是否正确',
     errRegister: '注册失败，请检查信息后重试',
     errReset: '重置失败，请检查邮箱和验证码是否正确',
@@ -72,7 +72,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     nickname: 'Nickname', confirmPassword: 'Confirm Password', newPassword: 'New Password', confirmNewPwd: 'Confirm New Password',
     submitRegister: 'Sign Up', hasAccount: 'Already have an account? ', goLogin: 'Sign In',
     submitReset: 'Reset Password', goBack: 'Back to Login', emailPlaceholder: 'Your registered email',
-    footer: '© 2024 CSERGY · Solar Inverter Smart O&M Platform',
+    footer: '© 2026 CSERGY · Solar Inverter Smart O&M Platform',
     errLogin: 'Login failed. Please check your phone/email and password.',
     errRegister: 'Registration failed. Please check your info and try again.',
     errReset: 'Reset failed. Please check your email and verification code.',
@@ -509,7 +509,7 @@ const LoginPage: React.FC = () => {
               )}
 
               <div style={{ textAlign: 'center', marginTop: 24 }}>
-                <span style={{ color: '#cbd5e1', fontSize: 12 }}>{t.footer}</span>
+                <span style={{ color: '#1f2937', fontSize: 12 }}>{t.footer}</span>
               </div>
             </div>
           </div>
