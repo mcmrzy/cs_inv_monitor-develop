@@ -3,11 +3,11 @@ schema_version: 1
 locale: zh-CN
 branch: develop
 nodes_managed: true
-exported_at: "2026-07-02T02:58:19Z"
+exported_at: "2026-07-02T09:48:51Z"
 modules:
     "":
-        dir_name: CS-INV 光伏逆变器物联网监控系统
-        title: CS-INV 光伏逆变器物联网监控系统
+        dir_name: CS-INV 光伏逆变器物联网监控系统（根仓库）
+        title: CS-INV 光伏逆变器物联网监控系统（根仓库）
         scope:
             - .claude\settings.local.json
             - .cursorrules
@@ -811,8 +811,8 @@ modules:
         depends_on: []
         related_to: []
     admin_frontend:
-        dir_name: 运维监控平台管理端前端
-        title: 运维监控平台管理端前端
+        dir_name: 运维管理平台前端应用
+        title: 运维管理平台前端应用
         scope:
             - inv-admin-frontend/
         source_files: []
@@ -845,8 +845,8 @@ modules:
             - path: api_server
             - path: device_server
     api_server:
-        dir_name: 设备运维 API 网关服务
-        title: 设备运维 API 网关服务
+        dir_name: 设备运维 API 网关（单进程聚合）
+        title: 设备运维 API 网关（单进程聚合）
         scope:
             - inv_api_server/
         source_files: []
@@ -925,8 +925,8 @@ modules:
         depends_on: []
         related_to: []
     database:
-        dir_name: 光伏逆变器监控数据库架构
-        title: 光伏逆变器监控数据库架构
+        dir_name: 光伏逆变器监控系统数据库层（PostgreSQL + TimescaleDB）
+        title: 光伏逆变器监控系统数据库层（PostgreSQL + TimescaleDB）
         scope:
             - database/
         source_files: []
@@ -954,8 +954,8 @@ modules:
         depends_on: []
         related_to: []
     deploy:
-        dir_name: 部署与运维自动化
-        title: 部署与运维自动化
+        dir_name: INV-MQTT 多环境部署与运维编排
+        title: INV-MQTT 多环境部署与运维编排
         scope:
             - deploy/
         source_files: []
@@ -1041,8 +1041,8 @@ modules:
         depends_on: []
         related_to: []
     mobile_app:
-        dir_name: 光伏逆变器监控移动应用
-        title: 光伏逆变器监控移动应用
+        dir_name: 光伏逆变器监控 Flutter 移动应用
+        title: 光伏逆变器监控 Flutter 移动应用
         scope:
             - inv_app/
         source_files: []

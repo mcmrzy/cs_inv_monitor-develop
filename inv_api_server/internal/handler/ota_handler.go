@@ -728,6 +728,26 @@ func (h *OTAHandler) DeleteUpgradePackage(c *gin.Context) {
 	response.SuccessWithMessage(c, "升级包已删除", nil)
 }
 
+// PublishPackage 发布升级包
+func (h *OTAHandler) PublishPackage(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if id <= 0 {
+		response.HandleError(c, apperr.BadRequest("invalid id"))
+		return
+	}
+	var req service.PublishPackageReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("参数错误"))
+		return
+	}
+	if err := h.otaService.PublishPackage(c.Request.Context(), id, req); err != nil {
+		log.Printf("[PublishPackage] error: package_id=%d, err=%v", id, err)
+		response.HandleError(c, apperr.Internal("发布失败: "+err.Error(), err))
+		return
+	}
+	response.Success(c, gin.H{"message": "发布成功"})
+}
+
 // PushPackageUpgrade 推送升级包
 func (h *OTAHandler) PushPackageUpgrade(c *gin.Context) {
 	var req struct {

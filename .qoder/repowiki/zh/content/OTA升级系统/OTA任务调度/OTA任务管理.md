@@ -6,7 +6,10 @@
 - [inv_api_server/internal/handler/ota_handler.go](file://inv_api_server/internal/handler/ota_handler.go)
 - [inv_api_server/internal/service/ota_service.go](file://inv_api_server/internal/service/ota_service.go)
 - [inv_api_server/internal/repository/ota_repository.go](file://inv_api_server/internal/repository/ota_repository.go)
+- [inv_api_server/internal/model/models.go](file://inv_api_server/internal/model/models.go)
 - [database/migrations/006_refactor_ota_to_device_upgrades.sql](file://database/migrations/006_refactor_ota_to_device_upgrades.sql)
+- [database/migrations/008_upgrade_packages.up.sql](file://database/migrations/008_upgrade_packages.up.sql)
+- [database/migrations/009_upgrade_tasks.up.sql](file://database/migrations/009_upgrade_tasks.up.sql)
 - [api-gateway/internal/middleware/rbac.go](file://api-gateway/internal/middleware/rbac.go)
 - [api-gateway/internal/middleware/prometheus.go](file://api-gateway/internal/middleware/prometheus.go)
 - [api-gateway/internal/routes/routes.go](file://api-gateway/internal/routes/routes.go)
@@ -15,10 +18,10 @@
 
 ## 更新摘要
 **所做更改**
-- 更新了系统架构以反映从任务管理到设备升级管理的重构
-- 重新组织了核心组件以适应新的设备升级管理模式
-- 更新了数据库架构和API接口以支持设备升级管理
-- 调整了权限控制和批量管理功能以符合新的业务流程
+- 增强了设备升级记录查询功能，在GetDeviceUpgradeBySN函数中新增task_id和upgrade_package_id字段支持
+- 提升了设备级操作与任务级操作之间的可追溯性和上下文关联能力
+- 完善了升级包管理和升级任务的关联关系追踪
+- 优化了设备升级状态查询的完整性和准确性
 
 ## 目录
 1. [简介](#简介)
@@ -34,6 +37,8 @@
 
 ## 简介
 本技术文档围绕OTA任务管理功能的重构进行全面梳理，重点反映从传统任务管理向设备升级管理的系统性转变。重构后的系统采用"设备升级管理"的新架构，涵盖设备升级任务的生命周期管理、权限控制、批量管理、搜索与过滤、排序与分页、批量操作优化策略、用户体验优化以及相关API接口与操作示例。文档基于最新的代码实现，结合前端设备升级管理界面、后端服务、网关中间件与设备侧MQTT通道，形成完整的设备升级管理链路说明。
+
+**最新更新**：系统已增强设备升级记录的查询能力，通过task_id和upgrade_package_id字段的加入，显著提升了设备级操作与任务级操作之间的可追溯性。
 
 ## 项目结构
 OTA任务管理系统重构后涉及以下关键模块：
@@ -151,6 +156,37 @@ Cleanup --> Report["生成升级报告"]
 - [inv_api_server/internal/handler/ota_handler.go](file://inv_api_server/internal/handler/ota_handler.go)
 - [inv_api_server/internal/service/ota_service.go](file://inv_api_server/internal/service/ota_service.go)
 
+### 增强的设备升级记录查询功能
+**更新**：系统已增强设备升级记录的查询能力，特别是在GetDeviceUpgradeBySN函数中新增了task_id和upgrade_package_id字段的支持。
+
+- **设备升级记录模型增强**
+  - DeviceUpgrade结构体新增TaskID和UpgradePackageID字段
+  - 支持设备级操作与任务级操作的关联追踪
+  - 提升升级记录的完整性和可追溯性
+
+- **查询功能增强**
+  - GetDeviceUpgradeBySN函数现在能够返回完整的任务关联信息
+  - 支持按任务ID和升级包ID进行精确查询
+  - 提供更好的上下文关联能力
+
+```mermaid
+flowchart LR
+DeviceSN["设备序列号"] --> Query["查询设备升级记录"]
+Query --> EnhancedRecord["增强的升级记录"]
+EnhancedRecord --> TaskInfo["任务信息(task_id)"]
+EnhancedRecord --> PackageInfo["升级包信息(upgrade_package_id)"]
+TaskInfo --> Traceability["可追溯性"]
+PackageInfo --> Context["上下文关联"]
+```
+
+**图表来源**
+- [inv_api_server/internal/repository/ota_repository.go:319-345](file://inv_api_server/internal/repository/ota_repository.go#L319-L345)
+- [inv_api_server/internal/model/models.go:304-338](file://inv_api_server/internal/model/models.go#L304-L338)
+
+**章节来源**
+- [inv_api_server/internal/repository/ota_repository.go:319-345](file://inv_api_server/internal/repository/ota_repository.go#L319-L345)
+- [inv_api_server/internal/model/models.go:304-338](file://inv_api_server/internal/model/models.go#L304-L338)
+
 ### 权限控制机制
 重构后的权限控制机制保持原有RBAC架构，但针对设备升级管理进行了优化：
 
@@ -242,7 +278,8 @@ Update --> Refresh["前端刷新列表"]
 - **搜索与过滤**
   - 设备升级任务支持按设备型号、升级状态、升级包版本等维度过滤
   - 支持按设备分组、区域、安装位置等业务维度筛选
-  
+  - **新增**：支持按任务ID和升级包ID进行精确过滤
+
 - **排序与分页**
   - 支持按升级时间、设备名称、升级状态等多维度排序
   - 后端接口限制最大页大小，防止过大请求
@@ -297,7 +334,8 @@ Update --> Refresh["前端刷新列表"]
   
 - **设备升级详情接口**
   - 设备升级历史记录、升级统计报表、升级成功率分析
-  
+  - **增强**：包含任务ID和升级包ID的完整上下文信息
+
 - **设备侧命令**
   - 使用OTA专用主题下发升级命令
   - 设备上报状态并回传至服务端
@@ -320,6 +358,7 @@ Update --> Refresh["前端刷新列表"]
 - **数据库架构**
   - 新的设备升级表结构支持更灵活的升级任务管理
   - 支持设备与升级任务的多对多关系
+  - **增强**：task_id和upgrade_package_id字段提供更好的关联追踪
 
 ```mermaid
 graph LR
@@ -356,6 +395,7 @@ MQ --> DEV["设备"]
 - **分页与查询**
   - 后端限制最大页大小，前端合理分页减少一次性渲染压力
   - 支持索引优化和查询条件缓存
+  - **优化**：task_id和upgrade_package_id字段的索引提升查询效率
 
 **章节来源**
 - [api-gateway/internal/middleware/prometheus.go](file://api-gateway/internal/middleware/prometheus.go)
@@ -376,17 +416,24 @@ MQ --> DEV["设备"]
   - 检查设备状态上报是否正常
   - 确认服务端状态转换和数据库更新逻辑
 
+- **关联查询问题**
+  - **新增**：检查task_id和upgrade_package_id字段是否正确填充
+  - 验证设备升级记录与任务、升级包的关联关系
+
 **章节来源**
 - [api-gateway/internal/middleware/rbac.go](file://api-gateway/internal/middleware/rbac.go)
 - [inv_device_server/internal/mqtt/client.go](file://inv_device_server/internal/mqtt/client.go)
 - [inv_api_server/internal/service/ota_service.go](file://inv_api_server/internal/service/ota_service.go)
 
 ## 结论
-OTA任务管理系统重构后，从传统的任务管理转向设备升级管理，提供了更加专注和高效的设备升级管理能力。新架构通过前后端协同、权限中间件与MQTT通道实现了从设备升级任务创建到设备执行的完整闭环。现有实现覆盖了设备升级管理的关键节点与批量管理能力，建议后续在升级策略定制、更精细的权限控制与事务一致性方面进一步增强，以提升系统的可控性与可靠性。
+OTA任务管理系统重构后，从传统的任务管理转向设备升级管理，提供了更加专注和高效的设备升级管理能力。新架构通过前后端协同、权限中间件与MQTT通道实现了从设备升级任务创建到设备执行的完整闭环。现有实现覆盖了设备升级管理的关键节点与批量管理能力，并通过增强的设备升级记录查询功能，显著提升了设备级操作与任务级操作之间的可追溯性。建议后续在升级策略定制、更精细的权限控制与事务一致性方面进一步增强，以提升系统的可控性与可靠性。
 
 ## 附录
 - 设备升级管理流程概览与MQTT主题说明
 - 数据库设备升级表结构说明
+- **新增**：task_id和upgrade_package_id字段的使用说明
 
 **章节来源**
 - [database/migrations/006_refactor_ota_to_device_upgrades.sql](file://database/migrations/006_refactor_ota_to_device_upgrades.sql)
+- [database/migrations/008_upgrade_packages.up.sql](file://database/migrations/008_upgrade_packages.up.sql)
+- [database/migrations/009_upgrade_tasks.up.sql](file://database/migrations/009_upgrade_tasks.up.sql)

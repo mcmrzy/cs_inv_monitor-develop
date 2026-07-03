@@ -677,6 +677,101 @@ func (s *OTAService) DeleteUpgradePackage(ctx context.Context, id int64) error {
 	return s.repo.DeleteUpgradePackage(ctx, id)
 }
 
+type PublishPackageReq struct {
+	IsPublished    bool   `json:"is_published"`
+	RolloutType    string `json:"rollout_type"`     // 'all' | 'model' | 'user' | 'device'
+	RolloutTargets string `json:"rollout_targets"`  // JSON string or comma-separated
+	AutoPush       bool   `json:"auto_push"`        // 是否立即推送
+	RolloutPercent int    `json:"rollout_percent"`  // 灰度百分比
+}
+
+// PublishPackage 发布升级包：更新发布状态，可选自动推送
+func (s *OTAService) PublishPackage(ctx context.Context, packageID int64, req PublishPackageReq) error {
+	// 1. 校验升级包存在且 status=1
+	pkg, err := s.repo.GetUpgradePackage(ctx, packageID)
+	if err != nil || pkg == nil {
+		return fmt.Errorf("升级包不存在")
+	}
+
+	// 2. 更新发布状态
+	if err := s.repo.PublishPackage(ctx, packageID, req.IsPublished, req.RolloutType, req.RolloutTargets); err != nil {
+		return fmt.Errorf("更新发布状态失败: %w", err)
+	}
+
+	// 3. 如果 AutoPush=true 且已发布，自动推送升级
+	if req.AutoPush && req.IsPublished {
+		var deviceSNs []string
+
+		switch req.RolloutType {
+		case "all", "model":
+			// 查询该型号所有设备SN
+			deviceSNs, err = s.repo.GetDeviceSNsByModel(ctx, pkg.Model)
+			if err != nil {
+				return fmt.Errorf("查询设备列表失败: %w", err)
+			}
+		case "device":
+			// 从 RolloutTargets 解析 SN 列表
+			deviceSNs = s.parseRolloutTargets(req.RolloutTargets)
+		case "user":
+			// user 类型暂不自动推送
+			logger.Info("PublishPackage: rollout_type=user, skip auto push",
+				zap.Int64("package_id", packageID))
+			return nil
+		default:
+			// 默认按 all 处理
+			deviceSNs, err = s.repo.GetDeviceSNsByModel(ctx, pkg.Model)
+			if err != nil {
+				return fmt.Errorf("查询设备列表失败: %w", err)
+			}
+		}
+
+		if len(deviceSNs) == 0 {
+			logger.Info("PublishPackage: no devices found for auto push",
+				zap.Int64("package_id", packageID), zap.String("rollout_type", req.RolloutType))
+			return nil
+		}
+
+		// 调用已有的 PushPackageUpgrade 方法执行推送
+		pushReq := &PushPackageUpgradeReq{
+			PackageID:      packageID,
+			DeviceSNs:      deviceSNs,
+			Immediate:      true,
+			RolloutPercent: req.RolloutPercent,
+		}
+		if err := s.PushPackageUpgrade(ctx, pushReq); err != nil {
+			return fmt.Errorf("自动推送失败: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// parseRolloutTargets 解析 RolloutTargets 为 SN 列表
+// 支持 JSON 数组和逗号分隔两种格式
+func (s *OTAService) parseRolloutTargets(targets string) []string {
+	if targets == "" {
+		return nil
+	}
+
+	// 尝试 JSON 解析
+	var sns []string
+	if err := json.Unmarshal([]byte(targets), &sns); err == nil {
+		return sns
+	}
+
+	// 回退到逗号分隔
+	parts := strings.Split(targets, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		sn := strings.TrimSpace(p)
+		if sn != "" {
+			result = append(result, sn)
+		}
+	}
+	return result
+}
+
+
 type PushPackageUpgradeReq struct {
 	PackageID      int64
 	DeviceSNs      []string

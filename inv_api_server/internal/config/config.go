@@ -33,6 +33,7 @@ type BackendsConfig struct {
 	ServerURL     string `mapstructure:"server_url"`     // 外部访问地址，用于ESP32下载固件
 	WeatherAPI    string `mapstructure:"weather_api"`    // 天气API地址
 	AmapAPIKey    string `mapstructure:"amap_api_key"`   // 高德地图API Key
+	UploadDir     string `mapstructure:"upload_dir"`      // 固件上传存储目录
 	WeatherSource string `mapstructure:"weather_source"` // 天气数据源: open-meteo 或 amap
 }
 
@@ -115,6 +116,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("backends.weather_api", "http://api.open-meteo.com/v1/forecast")
 	viper.SetDefault("backends.amap_api_key", "")
 	viper.SetDefault("backends.weather_source", "open-meteo")
+	viper.SetDefault("backends.upload_dir", "/data/firmware")
 	
 	viper.SetDefault("database.host", "postgres")
 	viper.SetDefault("database.port", 5432)
@@ -203,6 +205,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("backends.server_url", "SERVER_URL")
 	viper.BindEnv("backends.weather_api", "WEATHER_API_URL")
 	viper.BindEnv("backends.amap_api_key", "AMAP_API_KEY")
+	viper.BindEnv("backends.upload_dir", "UPLOAD_DIR")
 	viper.BindEnv("backends.weather_source", "WEATHER_SOURCE")
 
 	var config Config
