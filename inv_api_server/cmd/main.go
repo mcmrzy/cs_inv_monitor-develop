@@ -145,6 +145,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL)
 
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache)
+	captchaHandler := handler.NewCaptchaHandler(rdb)
 	stationHandler := handler.NewStationHandler(stationService, deviceService)
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService)
@@ -174,6 +175,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		JWTInstance:         jwtInstance,
 		JWTService:          jwtService,
 		AuthHandler:         authHandler,
+		CaptchaHandler:      captchaHandler,
 		StationHandler:      stationHandler,
 		DeviceHandler:       deviceHandler,
 		AlarmHandler:        alarmHandler,
@@ -525,6 +527,7 @@ type RouterDeps struct {
 	JWTInstance         *jwt.JWT
 	JWTService          *service.JWTService
 	AuthHandler         *handler.AuthHandler
+	CaptchaHandler      *handler.CaptchaHandler
 	StationHandler      *handler.StationHandler
 	DeviceHandler       *handler.DeviceHandler
 	AlarmHandler        *handler.AlarmHandler
@@ -608,6 +611,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.GET("/timezones", func(c *gin.Context) {
 			response.Success(c, timezone.GetTimezoneList())
 		})
+
+		// 验证码 API（无需认证）
+		api.GET("/captcha/generate", deps.CaptchaHandler.GenerateCaptcha)
+		api.POST("/captcha/verify", deps.CaptchaHandler.VerifyCaptcha)
 
 		auth := api.Group("").Use(middleware.Auth(deps.JWTService))
 		{
