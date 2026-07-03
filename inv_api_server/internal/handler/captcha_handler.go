@@ -108,12 +108,22 @@ func (h *CaptchaHandler) CheckCaptchaToken(c *gin.Context) bool {
 		verifyToken = c.Query("captchaToken")
 	}
 
+	logger.Info("CheckCaptchaToken",
+		zap.String("token", verifyToken),
+		zap.String("header", c.GetHeader("X-Captcha-Token")))
+
 	if verifyToken == "" {
+		logger.Warn("CheckCaptchaToken: token is empty")
 		return false
 	}
 
 	ctx := c.Request.Context()
-	exists, _ := h.rdb.Exists(ctx, captchaRedisKey("verified:"+verifyToken)).Result()
+	key := captchaRedisKey("verified:" + verifyToken)
+	exists, err := h.rdb.Exists(ctx, key).Result()
+	logger.Info("CheckCaptchaToken result",
+		zap.String("key", key),
+		zap.Int64("exists", exists),
+		zap.Error(err))
 	return exists > 0
 }
 
