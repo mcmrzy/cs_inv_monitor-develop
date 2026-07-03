@@ -116,11 +116,11 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
       open={open}
       onCancel={onCancel}
       footer={null}
-      width={360}
+      width={400}
       centered
       destroyOnClose
       styles={{
-        body: { padding: '16px 20px' },
+        body: { padding: '16px 24px' },
       }}
     >
       <div>
