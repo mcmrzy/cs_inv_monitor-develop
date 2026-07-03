@@ -735,7 +735,7 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 		      OR (rollout_type = 'device' AND $4 = ANY(string_to_array(rollout_targets, ',')))
 		  )
 		ORDER BY created_at DESC
-	`, device.Model, device.Model, userID, sn)
+	`, device.Model, device.Model, fmt.Sprintf("%d", userID), sn)
 	if err != nil {
 		return nil, err
 	}
