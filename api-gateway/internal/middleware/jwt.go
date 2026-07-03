@@ -28,6 +28,7 @@ var publicPrefixes = []string{
 	"/uploads/",
 	"/firmware/",
 	"/ws/",
+	"/api/v1/captcha/",
 }
 
 func isPublicPath(path string) bool {
