@@ -388,11 +388,26 @@ class _HomePageState extends State<HomePage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Image.asset(
-                  'assets/images/solar_panel.png',
+                Container(
                   width: 72.w,
                   height: 72.w,
-                  fit: BoxFit.contain,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14.r),
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.08),
+                        AppColors.primary.withValues(alpha: 0.15),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Image.asset(
+                    'assets/images/solar_panel.png',
+                    width: 56.w,
+                    height: 56.w,
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 SizedBox(width: 14.w),
                 Expanded(
