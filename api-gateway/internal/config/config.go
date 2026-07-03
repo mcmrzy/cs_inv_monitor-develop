@@ -17,6 +17,7 @@ type Config struct {
 	Redis           RedisConfig      `yaml:"redis"`
 	RBAC            RBACConfig       `yaml:"rbac"`
 	Database        DatabaseConfig   `yaml:"database"`
+	CORS            CORSConfig       `yaml:"cors"`
 }
 
 type DatabaseConfig struct {
@@ -64,6 +65,10 @@ type RBACConfig struct {
 	CacheTTLSec int  `yaml:"cache_ttl_sec"`
 }
 
+type CORSConfig struct {
+	AllowedOrigins []string `yaml:"allowed_origins"`
+}
+
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -88,6 +93,7 @@ func Load(path string) (*Config, error) {
 	cfg.Database.Port = 5432
 	cfg.Database.User = "postgres"
 	cfg.Database.Name = "inv_mqtt"
+	cfg.CORS.AllowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
 
 	if err := yaml.Unmarshal([]byte(expanded), cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)

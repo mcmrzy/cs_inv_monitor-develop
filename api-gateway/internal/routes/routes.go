@@ -13,13 +13,14 @@ import (
 )
 
 type Config struct {
-	APIServer    string
-	DeviceServer string
-	JWTSecret    string
-	GlobalRate   float64
-	GlobalBurst  int
-	RouteLimits  []middleware.RouteRateLimitConfig
-	RBAC         *middleware.RBACMiddleware
+	APIServer      string
+	DeviceServer   string
+	JWTSecret      string
+	GlobalRate     float64
+	GlobalBurst    int
+	RouteLimits    []middleware.RouteRateLimitConfig
+	RBAC           *middleware.RBACMiddleware
+	AllowedOrigins []string
 }
 
 func Setup(cfg Config) *gin.Engine {
@@ -31,7 +32,8 @@ func Setup(cfg Config) *gin.Engine {
 
 	r.Use(middleware.TrailingSlashHandler())
 	r.Use(gin.Recovery())
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(cfg.AllowedOrigins))
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.Prometheus())
 	r.Use(middleware.RateLimit(cfg.GlobalRate, cfg.GlobalBurst))
