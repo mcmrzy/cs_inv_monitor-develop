@@ -395,6 +395,7 @@ class _OTAPageState extends State<OTAPage> {
           // Device info card
           Container(
             padding: EdgeInsets.all(16.w),
+            width: double.infinity, // 确保占满宽度
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14.r),
@@ -427,6 +428,7 @@ class _OTAPageState extends State<OTAPage> {
           // Version update card
           Container(
             padding: EdgeInsets.all(16.w),
+            width: double.infinity, // 确保占满宽度
             decoration: BoxDecoration(
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(14.r),
