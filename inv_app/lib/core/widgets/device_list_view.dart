@@ -274,8 +274,8 @@ class DeviceCard extends StatelessWidget {
     return [
       _deviceInfoRow(l10n.batterySocLabel, soc > 0 ? '${soc.toStringAsFixed(0)}%' : '--%'),
       _deviceInfoRow(l10n.batteryHealthLabel, soh > 0 ? '${soh.toStringAsFixed(0)}%' : '--%'),
-      _deviceInfoRow(l10n.dailyChargeLabel, chargeEnergy > 0 ? '${chargeEnergy.toStringAsFixed(2)} kWh' : '-- kWh'),
-      _deviceInfoRow(l10n.dailyDischargeLabel, dischargeEnergy > 0 ? '${dischargeEnergy.toStringAsFixed(2)} kWh' : '-- kWh'),
+      _deviceInfoRow(l10n.dailyChargeLabel, '${chargeEnergy.toStringAsFixed(2)} kWh'),
+      _deviceInfoRow(l10n.dailyDischargeLabel, '${dischargeEnergy.toStringAsFixed(2)} kWh'),
     ];
   }
 
@@ -286,11 +286,15 @@ class DeviceCard extends StatelessWidget {
     final dailyPV = _extractNum('daily_pv');
 
     final powerValue = acPower > 0 ? acPower : (currentPower > 0 ? currentPower : 0);
+    // 日发电量：优先使用 daily_pv，其次 daily_energy；即使设备离线也显示（数据来自后端统计）
     final energyValue = dailyPV > 0 ? dailyPV : (dailyEnergy > 0 ? dailyEnergy : 0);
+    // 离线设备不显示当前功率（无实时数据），但日发电量始终显示（有历史统计数据）
+    final status = device['status'] ?? 0;
+    final isOnline = status == 1;
 
     return [
-      _deviceInfoRow(l10n.currentPower, powerValue > 0 ? '${powerValue.toStringAsFixed(1)} W' : '--'),
-      _deviceInfoRow(l10n.dailyGenerationLabel, energyValue > 0 ? '${energyValue.toStringAsFixed(2)} kWh' : '--'),
+      _deviceInfoRow(l10n.currentPower, isOnline && powerValue > 0 ? '${powerValue.toStringAsFixed(1)} W' : '--'),
+      _deviceInfoRow(l10n.dailyGenerationLabel, '${energyValue.toStringAsFixed(2)} kWh'),
     ];
   }
 }
