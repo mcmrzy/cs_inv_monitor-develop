@@ -8,6 +8,20 @@ import api from '@/services/api'
 import type { User } from '@/types'
 import SliderCaptchaModal from '@/components/SliderCaptcha/SliderCaptchaModal'
 
+// 导入登录背景图片
+import loginBg1 from '@/assets/images/login/login-bg-1.jpg'
+import loginBg2 from '@/assets/images/login/login-bg-2.jpg'
+import loginBg3 from '@/assets/images/login/login-bg-3.jpg'
+import loginBg4 from '@/assets/images/login/login-bg-4.jpg'
+import loginBg5 from '@/assets/images/login/login-bg-5.jpg'
+import loginBg6 from '@/assets/images/login/login-bg-6.png'
+import loginBg7 from '@/assets/images/login/login-bg-7.png'
+import loginBg8 from '@/assets/images/login/login-bg-8.jpg'
+import loginBg9 from '@/assets/images/login/login-bg-9.jpg'
+
+const loginBackgrounds = [loginBg1, loginBg2, loginBg3, loginBg4, loginBg5, loginBg6, loginBg7, loginBg8, loginBg9]
+const getRandomBg = () => loginBackgrounds[Math.floor(Math.random() * loginBackgrounds.length)]
+
 type ActiveTab = 'login' | 'loginByCode' | 'register' | 'reset'
 type Lang = 'zh' | 'en'
 
@@ -76,6 +90,7 @@ const LoginPage: React.FC = () => {
   const [countdown, setCountdown] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [captchaOpen, setCaptchaOpen] = useState(false)
+  const [bgImage] = useState(() => getRandomBg())
   const captchaResolveRef = useRef<((token: string) => void) | null>(null)
   const captchaRejectRef = useRef<((reason?: any) => void) | null>(null)
   const { lang, setLang } = useLocaleStore()
@@ -271,7 +286,7 @@ const LoginPage: React.FC = () => {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      backgroundImage: 'url(https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=1920&q=80), linear-gradient(135deg, #1a1f36 0%, #2d3561 100%)',
+      backgroundImage: `url(${bgImage}), linear-gradient(135deg, #1a1f36 0%, #2d3561 100%)`,
       backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
       padding: '40px 20px', position: 'relative',
     }}>
