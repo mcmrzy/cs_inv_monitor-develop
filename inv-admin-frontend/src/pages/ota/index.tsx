@@ -160,6 +160,13 @@ const UpgradeTasksTab: React.FC = () => {
   const [detailTaskId, setDetailTaskId] = useState<number | string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
 
+  // 回退 Modal 状态
+  const [rollbackOpen, setRollbackOpen] = useState(false)
+  const [rollbackTaskId, setRollbackTaskId] = useState<number | string | null>(null)
+  const [rollbackSn, setRollbackSn] = useState('')
+  const [rollbackPackageId, setRollbackPackageId] = useState<number | null>(null)
+  const [packageList, setPackageList] = useState<any[]>([])
+
   // 查询任务列表
   const queryParams: any = { page, pageSize }
   if (statusFilter) queryParams.status = statusFilter
@@ -253,6 +260,34 @@ const UpgradeTasksTab: React.FC = () => {
     onSuccess: () => { message.success(t('ota.taskDeleted')); invalidate() },
     onError: () => message.error(t('ota.taskDeleteError')),
   })
+
+  const rollbackMutation = useMutation({
+    mutationFn: (data: { sn: string; package_id: number }) => otaApi.rollbackUpgrade(data),
+    onSuccess: () => { message.success('回退指令已下发'); setRollbackOpen(false); setRollbackSn(''); setRollbackPackageId(null); invalidate() },
+    onError: (err: any) => message.error('回退失败: ' + (err?.response?.data?.message || err?.message || '')),
+  })
+
+  const openRollbackModal = async (taskId: number | string, sn: string) => {
+    setRollbackTaskId(taskId)
+    setRollbackSn(sn)
+    setRollbackOpen(true)
+    // 加载升级包列表
+    try {
+      const res = await otaApi.listPackages()
+      const d = res.data?.data ?? res.data ?? []
+      setPackageList(Array.isArray(d) ? d : [])
+    } catch {
+      setPackageList([])
+    }
+  }
+
+  const handleRollback = () => {
+    if (!rollbackSn || !rollbackPackageId) {
+      message.warning('请选择目标升级包')
+      return
+    }
+    rollbackMutation.mutate({ sn: rollbackSn, package_id: rollbackPackageId })
+  }
 
   const resetCreateForm = () => {
     setCreateOpen(false)
@@ -386,12 +421,32 @@ const UpgradeTasksTab: React.FC = () => {
       },
     },
     {
-      title: t('common.operation'), key: 'action', width: 220, fixed: 'right',
+      title: t('common.operation'), key: 'action', width: 280, fixed: 'right',
       render: (_: any, r: UpgradeTask) => (
         <Space size={4}>
           <Button type="link" size="small" onClick={() => { setDetailTaskId(r.id); setDetailOpen(true) }}>
             {t('ota.detail')}
           </Button>
+          {r.status === 'completed' && r.package_id && (
+            <Button
+              type="link"
+              size="small"
+              icon={<RollbackOutlined />}
+              onClick={() => {
+                // 获取任务关联的设备 SN
+                otaApi.getTaskDevices(r.id).then((res) => {
+                  const devices = res.data?.data?.items ?? []
+                  if (devices.length > 0) {
+                    openRollbackModal(r.id, devices[0].device_sn)
+                  } else {
+                    message.warning('该任务没有设备记录')
+                  }
+                })
+              }}
+            >
+              回退
+            </Button>
+          )}
           {(r.status === 'pending' || r.status === 'draft') && (
             <Popconfirm title={t('ota.confirmExecuteTask')} onConfirm={() => executeMutation.mutate(r.id)}>
               <Button type="link" size="small" icon={<PlayCircleOutlined />}>{t('ota.execute')}</Button>
@@ -699,6 +754,41 @@ const UpgradeTasksTab: React.FC = () => {
           pagination={false}
         />
       </Drawer>
+
+      {/* 回退 Modal */}
+      <Modal
+        title="回退到指定版本"
+        open={rollbackOpen}
+        onCancel={() => { setRollbackOpen(false); setRollbackSn(''); setRollbackPackageId(null) }}
+        onOk={handleRollback}
+        confirmLoading={rollbackMutation.isPending}
+        width={500}
+        destroyOnClose
+      >
+        <Alert
+          message="回退说明"
+          description="回退操作将把设备固件恢复到指定升级包版本，请确认目标升级包版本正确。"
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Form layout="vertical">
+          <Form.Item label="设备 SN">
+            <Input value={rollbackSn} disabled />
+          </Form.Item>
+          <Form.Item label="目标升级包" required>
+            <Select
+              placeholder="选择要回退到的升级包"
+              value={rollbackPackageId}
+              onChange={setRollbackPackageId}
+              options={packageList.map((pkg: any) => ({
+                label: `${pkg.model} - ${pkg.user_version || pkg.main_version}`,
+                value: Number(pkg.id),
+              }))}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }
@@ -1000,6 +1090,11 @@ const PackagesTab: React.FC = () => {
   const [publishOpen, setPublishOpen] = useState(false)
   const [publishPkg, setPublishPkg] = useState<UpgradePackage | null>(null)
 
+  // 编辑升级包 Modal 状态
+  const [editOpen, setEditOpen] = useState(false)
+  const [editPkg, setEditPkg] = useState<UpgradePackage | null>(null)
+  const [editForm] = Form.useForm()
+
   // 查看已安装该升级包的设备 Modal 状态
   const [pkgDevicesOpen, setPkgDevicesOpen] = useState(false)
   const [pkgDevicesTarget, setPkgDevicesTarget] = useState<UpgradePackage | null>(null)
@@ -1062,6 +1157,35 @@ const PackagesTab: React.FC = () => {
     onError: () => message.error(t('ota.deleteFailed')),
   })
 
+  const editMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => otaApi.updatePackage(id, data),
+    onSuccess: () => { message.success('更新成功'); setEditOpen(false); setEditPkg(null); editForm.resetFields(); invalidate() },
+    onError: (err: any) => message.error('更新失败: ' + (err?.response?.data?.message || err?.message || '')),
+  })
+
+  const openEditModal = (record: UpgradePackage) => {
+    setEditPkg(record)
+    editForm.setFieldsValue({
+      user_version: record.user_version,
+      user_changelog: record.user_changelog,
+    })
+    setEditOpen(true)
+  }
+
+  const handleEdit = async () => {
+    try {
+      const values = await editForm.validateFields()
+      if (!editPkg) return
+      editMutation.mutate({
+        id: Number(editPkg.id),
+        data: {
+          user_version: values.user_version,
+          user_changelog: values.user_changelog,
+        },
+      })
+    } catch { /* validation error */ }
+  }
+
   const handleCreate = async () => {
     try {
       const values = await createForm.validateFields()
@@ -1114,7 +1238,7 @@ const PackagesTab: React.FC = () => {
     },
     { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-' },
     {
-      title: t('ota.action'), key: 'action', width: 250,
+      title: t('ota.action'), key: 'action', width: 300,
       render: (_: any, record: UpgradePackage) => (
         <Space size={4}>
           <Button
@@ -1124,6 +1248,13 @@ const PackagesTab: React.FC = () => {
             onClick={() => openPkgDevicesModal(record)}
           >
             查看设备
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => openEditModal(record)}
+          >
+            编辑
           </Button>
           {!record.is_published && (
             <Button
@@ -1270,6 +1401,39 @@ const PackagesTab: React.FC = () => {
               ]}
             />
           </div>
+        )}
+      </Modal>
+
+      {/* 编辑升级包 Modal */}
+      <Modal
+        title="编辑升级包"
+        open={editOpen}
+        onCancel={() => { setEditOpen(false); setEditPkg(null); editForm.resetFields() }}
+        onOk={handleEdit}
+        confirmLoading={editMutation.isPending}
+        width={500}
+        destroyOnClose
+      >
+        {editPkg && (
+          <Form form={editForm} layout="vertical">
+            <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="型号">{editPkg.model}</Descriptions.Item>
+              <Descriptions.Item label="内部版本">{editPkg.main_version}</Descriptions.Item>
+            </Descriptions>
+            <Form.Item
+              name="user_version"
+              label="用户可见版本号"
+              help="留空则自动生成（如 V1.0.0）"
+            >
+              <Input placeholder="例如：V1.0.2" />
+            </Form.Item>
+            <Form.Item
+              name="user_changelog"
+              label="用户可见更新说明"
+            >
+              <TextArea rows={4} placeholder="例如：修复了XX问题，优化了XX功能" />
+            </Form.Item>
+          </Form>
         )}
       </Modal>
 
