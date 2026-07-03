@@ -160,6 +160,23 @@ func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 	}
 }
 
+// StoreToken 存储前端验证成功的 token
+func (h *CaptchaHandler) StoreToken(c *gin.Context) {
+	var req struct {
+		Token string `json:"token" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	ctx := c.Request.Context()
+	// 存储验证成功的 token，有效期 10 分钟
+	h.rdb.Set(ctx, captchaRedisKey("verified:"+req.Token), "1", 600)
+
+	response.SuccessWithMessage(c, "token stored", nil)
+}
+
 // CheckCaptchaVerified 检查验证码是否已验证（用于登录接口）
 func (h *CaptchaHandler) CheckCaptchaVerified(c *gin.Context) bool {
 	verifyToken := c.GetHeader("X-Captcha-Token")
