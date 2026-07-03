@@ -35,7 +35,7 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
       // 使用 create-puzzle 生成拼图
       const result = await createPuzzle(BG_IMAGE, {
         width: 60,
-        height: 160,  // 高度与背景图一致
+        height: 60,   // 拼图块高度应该是正方形
         bgWidth: 320,
         bgHeight: 160,
       })
@@ -132,7 +132,7 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
           request={request}
           onVerify={onVerify}
           bgSize={{ width: 320, height: 160 }}
-          puzzleSize={{ width: 60, height: 160 }}
+          puzzleSize={{ width: 60 }}
           showRefreshIcon
           autoRefreshOnError
           errorHoldDuration={1000}
