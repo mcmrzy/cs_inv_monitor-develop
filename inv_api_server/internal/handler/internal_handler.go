@@ -303,34 +303,36 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			title = "设备故障"
 			content = "设备 " + req.SN + " 发生故障"
 		} else if newStatus == 1 && oldStatus == 2 {
-			// 从故障状态恢复到在线状态 → 生成告警清除通知
-			notifyType = "alarm_cleared"
-			title = "故障恢复"
-			content = "设备 " + req.SN + " 已恢复正常"
+			// 从故障状态恢复到在线状态
+			// 故障恢复通知由 DeviceAlarm 路径统一生成，此处只更新状态，避免两条路径并发导致通知乱序
+			notifyType = ""
 		}
 
-		// 冷却期检查：120 秒内同一设备同类型通知不重复写入
-		var exists bool
-		_ = h.db.QueryRow(ctx,
-			`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type=$2 AND created_at > NOW() - INTERVAL '120 seconds')`,
-			req.SN, notifyType,
-		).Scan(&exists)
-		if exists {
-			response.Success(c, gin.H{"status": "ok", "notify_dedup": true})
-			return
-		}
+		// notifyType 为空时表示不生成通知（如故障恢复由 DeviceAlarm 路径统一处理）
+		if notifyType != "" {
+			// 冷却期检查：120 秒内同一设备同类型通知不重复写入
+			var exists bool
+			_ = h.db.QueryRow(ctx,
+				`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type=$2 AND created_at > NOW() - INTERVAL '120 seconds')`,
+				req.SN, notifyType,
+			).Scan(&exists)
+			if exists {
+				response.Success(c, gin.H{"status": "ok", "notify_dedup": true})
+				return
+			}
 
-		var sid int64
-		if stationID.Valid {
-			sid = stationID.Int64
-		}
-		_, _ = h.db.Exec(ctx, `
-			INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, NOW())
-		`, req.SN, sid, userID, notifyType, title, content)
+			var sid int64
+			if stationID.Valid {
+				sid = stationID.Int64
+			}
+			_, _ = h.db.Exec(ctx, `
+				INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6, NOW())
+			`, req.SN, sid, userID, notifyType, title, content)
 
-		// 通过 SSE 实时推送通知给前端
-		h.broadcastNotification(userID, notifyType, title, content, req.SN)
+			// 通过 SSE 实时推送通知给前端
+			h.broadcastNotification(userID, notifyType, title, content, req.SN)
+		}
 	}
 
 	response.Success(c, gin.H{"status": "ok"})
