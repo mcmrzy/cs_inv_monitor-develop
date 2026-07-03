@@ -298,13 +298,9 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			notifyType = "device_offline"
 			title = "设备离线"
 			content = "设备 " + req.SN + " 已离线"
-		} else if newStatus == 2 {
-			notifyType = "device_fault"
-			title = "设备故障"
-			content = "设备 " + req.SN + " 发生故障"
-		} else if newStatus == 1 && oldStatus == 2 {
-			// 从故障状态恢复到在线状态
-			// 故障恢复通知由 DeviceAlarm 路径统一生成，此处只更新状态，避免两条路径并发导致通知乱序
+		} else if newStatus == 2 || (newStatus == 1 && oldStatus == 2) {
+			// 故障和故障恢复通知由 DeviceAlarm 路径统一生成（通过 alarms 表 + SSE 广播）
+			// 此处只更新设备状态，不插入 notifications 表，避免与 DeviceAlarm 路径重复
 			notifyType = ""
 		}
 
