@@ -266,9 +266,9 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	// 检查滑块验证码
+	// 检查滑块验证码（发送验证码时不删除 token，登录时再删除）
 	captchaToken := c.GetHeader("X-Captcha-Token")
-	if captchaToken == "" || !h.captchaHandler.CheckCaptchaVerified(c) {
+	if captchaToken == "" || !h.captchaHandler.CheckCaptchaToken(c) {
 		response.Error(c, 4032, "请先完成滑块验证")
 		return
 	}
@@ -614,9 +614,9 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 		return
 	}
 
-	// 检查滑块验证码
+	// 检查滑块验证码（发送验证码时不删除 token，登录时再删除）
 	captchaToken := c.GetHeader("X-Captcha-Token")
-	if captchaToken == "" || !h.captchaHandler.CheckCaptchaVerified(c) {
+	if captchaToken == "" || !h.captchaHandler.CheckCaptchaToken(c) {
 		response.Error(c, 4032, "请先完成滑块验证")
 		return
 	}

@@ -78,7 +78,7 @@ func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 	})
 }
 
-// CheckCaptchaVerified 检查验证码是否已验证
+// CheckCaptchaVerified 检查验证码是否已验证（登录时使用，验证后删除 token）
 func (h *CaptchaHandler) CheckCaptchaVerified(c *gin.Context) bool {
 	verifyToken := c.GetHeader("X-Captcha-Token")
 	if verifyToken == "" {
@@ -92,11 +92,28 @@ func (h *CaptchaHandler) CheckCaptchaVerified(c *gin.Context) bool {
 	ctx := c.Request.Context()
 	exists, _ := h.rdb.Exists(ctx, captchaRedisKey("verified:"+verifyToken)).Result()
 	if exists > 0 {
+		// 登录时删除 token（一次性使用）
 		h.rdb.Del(ctx, captchaRedisKey("verified:"+verifyToken))
 		return true
 	}
 
 	return false
+}
+
+// CheckCaptchaToken 检查验证码 token 是否有效（发送验证码时使用，不删除 token）
+func (h *CaptchaHandler) CheckCaptchaToken(c *gin.Context) bool {
+	verifyToken := c.GetHeader("X-Captcha-Token")
+	if verifyToken == "" {
+		verifyToken = c.Query("captchaToken")
+	}
+
+	if verifyToken == "" {
+		return false
+	}
+
+	ctx := c.Request.Context()
+	exists, _ := h.rdb.Exists(ctx, captchaRedisKey("verified:"+verifyToken)).Result()
+	return exists > 0
 }
 
 // generateRandomKey 生成随机 key
