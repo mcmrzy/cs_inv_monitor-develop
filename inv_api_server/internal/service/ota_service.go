@@ -646,13 +646,44 @@ func (s *OTAService) CreateUpgradePackage(ctx context.Context, req *CreatePackag
 		return fmt.Errorf("生成主版本号失败: %w", err)
 	}
 
+	// 自动生成 user_version: 从 mainVersion (如 V1.0.0.20260703) 提取 (如 V1.0.0)
+	userVersion := req.UserVersion
+	if userVersion == "" {
+		re := regexp.MustCompile(`^(V\d+\.\d+\.\d+)\.\d{8}$`)
+		matches := re.FindStringSubmatch(mainVersion)
+		if len(matches) == 2 {
+			userVersion = matches[1]
+		} else {
+			userVersion = mainVersion
+		}
+	}
+
+	// 自动生成 user_changelog: 如果为空，从各固件的 changelog 汇总
+	userChangelog := req.UserChangelog
+	if userChangelog == "" && req.Changelog != "" {
+		userChangelog = req.Changelog
+	} else if userChangelog == "" {
+		var changelogs []string
+		for _, item := range items {
+			fw, _ := s.repo.GetFirmware(ctx, item.FirmwareID)
+			if fw != nil && fw.Changelog != "" {
+				changelogs = append(changelogs, fmt.Sprintf("[%s] %s", strings.ToUpper(fw.TargetChip), fw.Changelog))
+			}
+		}
+		if len(changelogs) > 0 {
+			userChangelog = strings.Join(changelogs, "\n")
+		} else {
+			userChangelog = fmt.Sprintf("型号 %s 固件升级", req.Model)
+		}
+	}
+
 	pkg := &model.UpgradePackage{
 		Model:          req.Model,
 		MainVersion:    mainVersion,
 		Changelog:      req.Changelog,
 		IsForce:        req.IsForce,
-		UserVersion:    req.UserVersion,
-		UserChangelog:  req.UserChangelog,
+		UserVersion:    userVersion,
+		UserChangelog:  userChangelog,
 		RolloutType:    req.RolloutType,
 		RolloutTargets: req.RolloutTargets,
 		IsPublished:    req.IsPublished,
@@ -677,6 +708,35 @@ func (s *OTAService) DeleteUpgradePackage(ctx context.Context, id int64) error {
 	return s.repo.DeleteUpgradePackage(ctx, id)
 }
 
+// UpdateUpgradePackage 更新升级包（用户可见信息）
+func (s *OTAService) UpdateUpgradePackage(ctx context.Context, id int64, userVersion, userChangelog, changelog *string, isForce *bool) error {
+	// 先查询升级包是否存在
+	pkg, err := s.repo.GetUpgradePackage(ctx, id)
+	if err != nil || pkg == nil {
+		return fmt.Errorf("升级包不存在")
+	}
+
+	updates := map[string]interface{}{}
+	if userVersion != nil {
+		updates["user_version"] = *userVersion
+	}
+	if userChangelog != nil {
+		updates["user_changelog"] = *userChangelog
+	}
+	if changelog != nil {
+		updates["changelog"] = *changelog
+	}
+	if isForce != nil {
+		updates["is_force"] = *isForce
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return s.repo.UpdateUpgradePackage(ctx, id, updates)
+}
+
 type PublishPackageReq struct {
 	IsPublished    bool   `json:"is_published"`
 	RolloutType    string `json:"rollout_type"`     // 'all' | 'model' | 'user' | 'device'
@@ -691,6 +751,16 @@ func (s *OTAService) PublishPackage(ctx context.Context, packageID int64, req Pu
 	pkg, err := s.repo.GetUpgradePackage(ctx, packageID)
 	if err != nil || pkg == nil {
 		return fmt.Errorf("升级包不存在")
+	}
+
+	// 1.5 校验用户可见信息是否完整
+	if req.IsPublished {
+		if pkg.UserVersion == "" {
+			return fmt.Errorf("请先编辑升级包的用户版本号再发布")
+		}
+		if pkg.UserChangelog == "" {
+			return fmt.Errorf("请先编辑升级包的用户更新说明再发布")
+		}
 	}
 
 	// 2. 更新发布状态

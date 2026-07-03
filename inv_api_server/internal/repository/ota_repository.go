@@ -1838,3 +1838,32 @@ func (r *OTARepository) GetDeviceSNsByModel(ctx context.Context, deviceModel str
 	}
 	return sns, nil
 }
+
+// UpdateUpgradePackage 更新升级包字段
+func (r *OTARepository) UpdateUpgradePackage(ctx context.Context, id int64, updates map[string]interface{}) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	for col, val := range updates {
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", col, argIdx))
+		args = append(args, val)
+		argIdx++
+	}
+
+	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argIdx))
+	args = append(args, time.Now())
+	argIdx++
+
+	args = append(args, id)
+
+	query := fmt.Sprintf("UPDATE upgrade_packages SET %s WHERE id = $%d",
+		strings.Join(setClauses, ", "), argIdx)
+
+	_, err := r.db.Exec(ctx, query, args...)
+	return err
+}
