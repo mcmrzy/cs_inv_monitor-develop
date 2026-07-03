@@ -122,7 +122,19 @@ CREATE TABLE devices (
     id BIGSERIAL PRIMARY KEY,
     sn VARCHAR(50) NOT NULL UNIQUE,
     model VARCHAR(100),
-    rated_power DECIMAL(10,2), -- 额定功率(kW)
+    manufacturer VARCHAR(100) DEFAULT '',       -- 制造商
+    firmware_arm VARCHAR(50) DEFAULT '',        -- ARM固件版本
+    firmware_esp VARCHAR(50) DEFAULT '',        -- ESP固件版本
+    firmware_dsp VARCHAR(50) DEFAULT '',        -- DSP固件版本
+    firmware_bms VARCHAR(50) DEFAULT '',        -- BMS固件版本
+    main_version VARCHAR(50) DEFAULT '',        -- 主版本号
+    device_type VARCHAR(50) DEFAULT '',         -- 设备类型
+    rated_power DECIMAL(10,2),                  -- 额定功率(kW)
+    rated_voltage DECIMAL(10,2) DEFAULT 0,      -- 额定电压(V)
+    rated_freq DECIMAL(5,2) DEFAULT 0,          -- 额定频率(Hz)
+    battery_voltage DECIMAL(10,2) DEFAULT 0,    -- 电池电压(V)
+    battery_type VARCHAR(50) DEFAULT '',        -- 电池类型
+    cell_count INTEGER DEFAULT 0,               -- 电池节数
     firmware_version VARCHAR(50),
     hardware_version VARCHAR(50),
     mac_address VARCHAR(17),

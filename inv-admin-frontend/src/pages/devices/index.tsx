@@ -1268,13 +1268,20 @@ const DevicesPage: React.FC = () => {
     if (!base) return undefined
     const rt = deviceDetailRaw?.realtime_data ?? realtimeData
     if (!rt) return base
+
+    // 从嵌套的 info 对象中提取设备信息（支持 {info: {...}} 和 {info: {data: {...}}} 两种格式）
+    let rtInfo: any = rt.info
+    if (rtInfo && typeof rtInfo === 'object' && rtInfo.data && typeof rtInfo.data === 'object') {
+      rtInfo = rtInfo.data
+    }
+
     return {
       ...base,
-      model: base.model || rt.model || '',
-      rated_power: (base as any).rated_power || rt.rated_power || 0,
-      firmware_version: (base as any).firmware_arm || rt.firmware_arm || '',
-      hardware_version: (base as any).firmware_esp || rt.firmware_esp || '',
-      manufacturer: (base as any).manufacturer || rt.manufacturer || '',
+      model: base.model || rtInfo?.model || rt.model || '',
+      rated_power: (base as any).rated_power || rtInfo?.rated_power || rt.rated_power || 0,
+      firmware_version: (base as any).firmware_arm || rtInfo?.firmware_arm || (base as any).firmware_version || '',
+      hardware_version: (base as any).firmware_esp || rtInfo?.firmware_esp || (base as any).hardware_version || '',
+      manufacturer: (base as any).manufacturer || rtInfo?.manufacturer || '',
     }
   }, [deviceDetailRaw, detailDevice, realtimeData])
   const currentStatus = deviceDetail?.status ?? 0
