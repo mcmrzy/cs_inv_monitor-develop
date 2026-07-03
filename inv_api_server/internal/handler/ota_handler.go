@@ -404,9 +404,14 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 	// 没有待执行的升级任务，检查是否有已发布的升级包
 	packages, _ := h.otaService.GetAvailablePackagesForDevice(c.Request.Context(), sn, 0)
 	if len(packages) > 0 {
-		// 有已发布的升级包，返回给 App 端显示
-		// 使用第一个升级包的信息作为主信息
+		// 有已发布的升级包，使用第一个升级包的信息
 		firstPkg := packages[0]
+		currentVersion := toUserVersion(device.MainVersion)
+		latestVersion := firstPkg.UserVersion
+
+		// 比较版本，如果相同则不需要升级
+		hasUpdate := currentVersion != latestVersion
+
 		chipsToUpgrade := []map[string]interface{}{}
 		chipVersions := map[string]string{
 			"arm": device.FirmwareArm,
@@ -416,20 +421,20 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		}
 		for _, item := range firstPkg.Items {
 			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
-				"chip":         item.TargetChip,
-				"current":      chipVersions[item.TargetChip],
-				"target":       item.FirmwareVersion,
-				"firmware_id":  item.FirmwareID,
+				"chip":             item.TargetChip,
+				"current":          chipVersions[item.TargetChip],
+				"target":           item.FirmwareVersion,
+				"firmware_id":      item.FirmwareID,
 				"firmware_version": item.FirmwareVersion,
 			})
 		}
 
 		response.Success(c, gin.H{
-			"has_update":             true,
+			"has_update":             hasUpdate,
 			"upgrade_mode":           "package",
 			"device_model":           device.Model,
-			"current_main_version":   toUserVersion(device.MainVersion), // 统一格式
-			"main_version":           firstPkg.UserVersion, // 使用用户可见版本号
+			"current_main_version":   currentVersion,
+			"main_version":           latestVersion,
 			"changelog":              firstPkg.UserChangelog,
 			"is_force":               firstPkg.IsForce,
 			"firmware_arm":           device.FirmwareArm,
@@ -437,8 +442,8 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			"firmware_dsp":           device.FirmwareDSP,
 			"firmware_bms":           device.FirmwareBMS,
 			"chips_to_upgrade":       chipsToUpgrade,
-			"available_packages":     packages, // 同时返回所有可用升级包
-			"message":                "有可用的升级包",
+			"available_packages":     packages,
+			"message":                hasUpdate ? "有可用的升级包" : "当前已是最新版本",
 		})
 		return
 	}
