@@ -75,6 +75,7 @@ func registerGatewayEndpoints(r *gin.Engine) {
 func registerAPIRoutes(r *gin.Engine, p *proxy.ReverseProxy) {
 	r.Any("/api/v1/auth/*action", p.Handler())
 	r.GET("/api/v1/timezones", p.Handler())
+	r.Any("/api/v1/captcha/*action", p.Handler())
 	r.Any("/api/v1/stations/*action", p.Handler())
 	r.Any("/api/v1/stations", p.Handler())
 	r.Any("/api/v1/devices/*action", p.Handler())
@@ -162,6 +163,9 @@ func buildAPIDoc() APIDoc {
 			{Path: "/api/v1/auth/email-login", Method: "POST", Description: "邮箱登录", Auth: false, Backend: "api-server"},
 			{Path: "/api/v1/auth/send-email-code", Method: "POST", Description: "发送邮箱验证码", Auth: false, Backend: "api-server"},
 			{Path: "/api/v1/auth/logout", Method: "POST", Description: "用户登出", Auth: true, Backend: "api-server"},
+
+			{Path: "/api/v1/captcha/generate", Method: "GET", Description: "生成验证码图片", Auth: false, Backend: "api-server"},
+			{Path: "/api/v1/captcha/verify", Method: "POST", Description: "验证滑块位置", Auth: false, Backend: "api-server"},
 			{Path: "/api/v1/auth/change-password", Method: "POST", Description: "修改密码", Auth: true, Backend: "api-server"},
 			{Path: "/api/v1/auth/profile", Method: "GET", Description: "获取用户资料", Auth: true, Backend: "api-server"},
 			{Path: "/api/v1/auth/profile", Method: "PUT", Description: "更新用户资料", Auth: true, Backend: "api-server"},
