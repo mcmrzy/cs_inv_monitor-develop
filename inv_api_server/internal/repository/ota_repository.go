@@ -1807,3 +1807,34 @@ func (r *OTARepository) GetDevicesByUpgradePackage(ctx context.Context, packageI
 	}
 	return result, nil
 }
+
+// PublishPackage 更新升级包发布状态
+func (r *OTARepository) PublishPackage(ctx context.Context, packageID int64, isPublished bool, rolloutType string, rolloutTargets string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE upgrade_packages
+		SET is_published = $1, rollout_type = $2, rollout_targets = $3, updated_at = NOW()
+		WHERE id = $4
+	`, isPublished, rolloutType, rolloutTargets, packageID)
+	return err
+}
+
+// GetDeviceSNsByModel 查询指定型号的所有设备SN
+func (r *OTARepository) GetDeviceSNsByModel(ctx context.Context, deviceModel string) ([]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT sn FROM devices WHERE model = $1 AND deleted_at IS NULL ORDER BY sn
+	`, deviceModel)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sns []string
+	for rows.Next() {
+		var sn string
+		if err := rows.Scan(&sn); err != nil {
+			continue
+		}
+		sns = append(sns, sn)
+	}
+	return sns, nil
+}

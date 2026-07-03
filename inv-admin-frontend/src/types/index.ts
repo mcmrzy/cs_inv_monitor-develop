@@ -172,6 +172,14 @@ export interface PaginatedResponse<T> {
   pageSize: number
 }
 
+export interface PublishPackageRequest {
+  is_published: boolean
+  rollout_type: 'all' | 'model' | 'user' | 'device'
+  rollout_targets?: string
+  auto_push?: boolean
+  rollout_percent?: number
+}
+
 export interface ApiResponse<T> {
   code: number;      // 后端返回 0=成功，非0=错误
   message: string;

@@ -10,7 +10,16 @@
 - [inv_device_server/internal/mqtt/stream_consumer.go](file://inv_device_server/internal/mqtt/stream_consumer.go)
 - [inv-admin-frontend/src/services/otaApi.ts](file://inv-admin-frontend/src/services/otaApi.ts)
 - [inv-admin-frontend/src/pages/ota/index.tsx](file://inv-admin-frontend/src/pages/ota/index.tsx)
+- [inv_api_server/cmd/main.go](file://inv_api_server/cmd/main.go)
+- [inv_device_server/pkg/logger/logger.go](file://inv_device_server/pkg/logger/logger.go)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增自动超时检测机制（15分钟阈值）
+- 增强设备断开场景的优雅失败处理
+- 改进结构化日志记录，集成zap logger
+- 完善OTA升级任务的自动完成逻辑
 
 ## 目录
 1. [简介](#简介)
@@ -26,6 +35,8 @@
 
 ## 简介
 本文件为OTA状态跟踪系统的完整技术文档，围绕设备固件升级的状态实时跟踪机制展开，涵盖设备状态上报、任务进度汇总、异常状态检测、状态数据的采集与聚合、状态同步机制（WebSocket推送、轮询查询、事件通知）、异常处理（超时检测、失败重试、人工干预）、状态历史记录的存储与查询、状态监控与告警方案以及性能优化与数据一致性保障。
+
+**最新更新**：系统已增强自动超时检测功能，支持15分钟升级超时自动标记为失败，并改进了设备断连场景的优雅处理机制。
 
 ## 项目结构
 系统采用前后端分离与微服务架构：
@@ -45,6 +56,7 @@ API["OTA接口层<br/>ota_handler.go"]
 SVC["OTA服务层<br/>ota_service.go"]
 REPO["OTA仓储层<br/>ota_repository.go"]
 DB["PostgreSQL"]
+TIMEOUT["超时检测器<br/>main.go:310-381"]
 end
 subgraph "设备侧"
 DS["设备数据服务<br/>data_service.go"]
@@ -52,22 +64,21 @@ PP["协议解析器<br/>protocol_parser.go"]
 MQTT["MQTT Hub/Stream"]
 REDIS["Redis"]
 KAFKA["Kafka"]
+LOGGER["结构化日志<br/>zap logger"]
 end
 FE --> GW --> API --> SVC --> REPO --> DB
+TIMEOUT --> DB
 DS --> MQTT
 DS --> REDIS
 DS --> KAFKA
 PP --> DS
 DS --> API
+LOGGER --> DS
 ```
 
-图表来源
-- [inv_api_server/internal/handler/ota_handler.go:1-536](file://inv_api_server/internal/handler/ota_handler.go#L1-L536)
-- [inv_api_server/internal/service/ota_service.go:1-355](file://inv_api_server/internal/service/ota_service.go#L1-L355)
-- [inv_api_server/internal/repository/ota_repository.go:1-497](file://inv_api_server/internal/repository/ota_repository.go#L1-L497)
-- [inv_device_server/internal/service/data_service.go:1-416](file://inv_device_server/internal/service/data_service.go#L1-L416)
-- [inv_device_server/internal/service/protocol_parser.go:1-800](file://inv_device_server/internal/service/protocol_parser.go#L1-L800)
-- [inv_device_server/internal/mqtt/stream_consumer.go:1-30](file://inv_device_server/internal/mqtt/stream_consumer.go#L1-L30)
+**图表来源**
+- [inv_api_server/cmd/main.go:310-381](file://inv_api_server/cmd/main.go#L310-L381)
+- [inv_device_server/pkg/logger/logger.go:1-72](file://inv_device_server/pkg/logger/logger.go#L1-L72)
 
 章节来源
 - [inv_api_server/internal/handler/ota_handler.go:1-536](file://inv_api_server/internal/handler/ota_handler.go#L1-L536)
@@ -84,6 +95,8 @@ DS --> API
 - 设备数据服务（Device Service）：负责设备状态与OTA状态上报的转发、ACK处理、离线命令队列下发、Redis缓存与故障检测。
 - 协议解析器（Protocol Parser）：消费Kafka消息，解析设备上报，处理故障状态、防抖、字段映射与缓存写入。
 - MQTT流消费者（Stream Consumer）：向Redis Stream发布设备数据，支撑实时推送与事件通知。
+- **超时检测器（Timeout Detector）**：定时扫描超时的OTA升级任务，自动标记为失败并更新任务状态。
+- **结构化日志器（Structured Logger）**：基于zap logger提供高性能结构化日志记录。
 
 章节来源
 - [inv_api_server/internal/handler/ota_handler.go:20-536](file://inv_api_server/internal/handler/ota_handler.go#L20-L536)
@@ -92,12 +105,15 @@ DS --> API
 - [inv_device_server/internal/service/data_service.go:23-416](file://inv_device_server/internal/service/data_service.go#L23-L416)
 - [inv_device_server/internal/service/protocol_parser.go:29-800](file://inv_device_server/internal/service/protocol_parser.go#L29-L800)
 - [inv_device_server/internal/mqtt/stream_consumer.go:10-30](file://inv_device_server/internal/mqtt/stream_consumer.go#L10-L30)
+- [inv_api_server/cmd/main.go:310-381](file://inv_api_server/cmd/main.go#L310-L381)
+- [inv_device_server/pkg/logger/logger.go:1-72](file://inv_device_server/pkg/logger/logger.go#L1-L72)
 
 ## 架构总览
-OTA状态跟踪系统通过“设备上报—服务转发—仓储持久化—前端展示”的闭环实现：
+OTA状态跟踪系统通过"设备上报—服务转发—仓储持久化—前端展示"的闭环实现：
 - 设备侧通过MQTT/Kafka上报OTA状态，设备数据服务将其转换为API期望格式并转发至API服务器。
 - API服务器更新数据库中的设备升级记录，同时提供REST接口供前端查询与管理。
 - 前端通过React Query进行轮询与状态刷新，结合后台聚合接口展示升级仪表盘与历史记录。
+- **超时检测器**每60秒扫描一次，自动处理超过15分钟的升级任务。
 
 ```mermaid
 sequenceDiagram
@@ -105,20 +121,27 @@ participant Dev as "设备"
 participant DS as "设备数据服务"
 participant API as "API服务器"
 participant Repo as "仓储层"
+participant Timeout as "超时检测器"
 participant FE as "前端管理界面"
 Dev->>DS : 上报OTA状态(JSON)
 DS->>DS : 解析/转换状态格式
 DS->>API : POST /api/v1/internal/ota-status
 API->>Repo : UpdateUpgradeStatus(状态, 进度, 错误信息)
 Repo-->>API : 影响行数
+Note over Timeout : 每60秒执行一次
+Timeout->>Repo : 查询超时的升级任务
+Repo-->>Timeout : 返回超时记录
+Timeout->>Repo : 标记为failed并更新任务统计
+Repo-->>Timeout : 更新完成
 API-->>FE : 轮询/刷新后的升级面板数据
 FE-->>FE : 展示进度与异常状态
 ```
 
-图表来源
+**图表来源**
 - [inv_device_server/internal/service/data_service.go:297-393](file://inv_device_server/internal/service/data_service.go#L297-L393)
 - [inv_api_server/internal/service/ota_service.go:242-244](file://inv_api_server/internal/service/ota_service.go#L242-L244)
 - [inv_api_server/internal/repository/ota_repository.go:137-153](file://inv_api_server/internal/repository/ota_repository.go#L137-L153)
+- [inv_api_server/cmd/main.go:310-381](file://inv_api_server/cmd/main.go#L310-L381)
 - [inv-admin-frontend/src/pages/ota/index.tsx:561-569](file://inv-admin-frontend/src/pages/ota/index.tsx#L561-L569)
 
 ## 详细组件分析
@@ -160,7 +183,7 @@ Next --> LoopSN
 LoopSN --> |结束| Done(["完成"])
 ```
 
-图表来源
+**图表来源**
 - [inv_api_server/internal/service/ota_service.go:118-181](file://inv_api_server/internal/service/ota_service.go#L118-L181)
 - [inv_api_server/internal/service/ota_service.go:183-234](file://inv_api_server/internal/service/ota_service.go#L183-L234)
 
@@ -187,12 +210,14 @@ LoopSN --> |结束| Done(["完成"])
 - OTA状态处理：解析设备上报的OTA状态，转换为API格式，携带firmware_id与错误信息，失败时附带错误码。
 - 重试机制：对内部API调用失败进行指数退避重试，最多3次。
 - 故障检测：当payload中state=fault或fault_code!=0时，上报故障状态并设置Redis防抖键，避免被后续在线状态覆盖。
+- **优雅失败处理**：在设备断连场景下，通过心跳检测机制识别离线设备，避免重复上报。
 
 章节来源
 - [inv_device_server/internal/service/data_service.go:297-393](file://inv_device_server/internal/service/data_service.go#L297-L393)
 - [inv_device_server/internal/service/data_service.go:77-125](file://inv_device_server/internal/service/data_service.go#L77-L125)
 - [inv_device_server/internal/service/data_service.go:127-168](file://inv_device_server/internal/service/data_service.go#L127-L168)
-- [inv_device_server/internal/service/data_service.go:190-235](file://inv_device_server/internal/service/data_service.go#L190-L235)
+- [inv_device_server/internal/service/data_service.go:190-235](file://inv_device_server/internal/service/data_service.go#L190-235)
+- [inv_device_server/internal/service/data_service.go:418-495](file://inv_device_server/internal/service/data_service.go#L418-L495)
 
 ### 协议解析器（Protocol Parser）
 - 职责：消费Kafka消息，解析设备上报，处理故障状态、防抖、字段映射与缓存写入。
@@ -201,7 +226,7 @@ LoopSN --> |结束| Done(["完成"])
 - 字段映射：根据设备模型元数据应用解析规则与类型转换，确保入库字段规范。
 
 章节来源
-- [inv_device_server/internal/service/protocol_parser.go:267-309](file://inv_device_server/internal/service/protocol_parser.go#L267-L309)
+- [inv_device_server/internal/service/protocol_parser.go:267-309](file://inv_device_server/internal/service/protocol_parser.go#L267-309)
 - [inv_device_server/internal/service/protocol_parser.go:447-696](file://inv_device_server/internal/service/protocol_parser.go#L447-L696)
 - [inv_device_server/internal/service/protocol_parser.go:698-741](file://inv_device_server/internal/service/protocol_parser.go#L698-L741)
 
@@ -222,31 +247,64 @@ LoopSN --> |结束| Done(["完成"])
 - [inv-admin-frontend/src/pages/ota/index.tsx:575-598](file://inv-admin-frontend/src/pages/ota/index.tsx#L575-L598)
 - [inv-admin-frontend/src/pages/ota/index.tsx:600-607](file://inv-admin-frontend/src/pages/ota/index.tsx#L600-L607)
 
+### 超时检测器（Timeout Detector）
+- 职责：定时扫描数据库中超过15分钟的OTA升级任务，自动标记为失败并更新相关任务统计。
+- 超时阈值：15分钟（900秒），适用于大多数固件升级场景。
+- 自动处理流程：
+  1. 查询所有status='upgrading'且started_at超过15分钟的记录
+  2. 批量标记为failed，错误消息设置为"升级超时，设备可能已断连"
+  3. 更新关联任务的success_count和failed_count统计
+  4. 检查任务是否全部完成，自动更新任务状态为completed或partial_success
+- 执行频率：每60秒执行一次，确保及时清理超时任务。
+
+**更新** 新增超时检测功能，增强了系统的健壮性和自动化处理能力。
+
+章节来源
+- [inv_api_server/cmd/main.go:310-381](file://inv_api_server/cmd/main.go#L310-L381)
+
+### 结构化日志器（Structured Logger）
+- 职责：基于zap logger提供高性能结构化日志记录，支持JSON格式输出和日志级别配置。
+- 日志格式：包含时间戳、日志级别、调用者信息、消息内容和结构化字段。
+- 配置选项：支持控制台输出和文件输出，可配置日志级别和编码器格式。
+- 性能优化：使用异步写入和缓冲机制，减少I/O开销。
+
+**更新** 集成zap logger，提供更强大的日志记录和调试能力。
+
+章节来源
+- [inv_device_server/pkg/logger/logger.go:1-72](file://inv_device_server/pkg/logger/logger.go#L1-L72)
+
 ## 依赖关系分析
 - Handler依赖Service，Service依赖Repository，形成清晰的分层依赖。
 - 设备侧服务依赖MQTT Hub、Redis与Kafka，通过内部HTTP接口与API服务器通信。
 - 前端通过API服务调用后端接口，使用React Query进行状态管理与缓存。
+- **超时检测器**直接依赖数据库连接，独立于主要业务逻辑运行。
+- **结构化日志器**被各个组件引用，提供统一的日志记录能力。
 
 ```mermaid
 graph LR
 H["ota_handler.go"] --> S["ota_service.go"]
 S --> R["ota_repository.go"]
 R --> DB["PostgreSQL"]
+TIMEOUT["timeout_detector.go"] --> DB
 DS["data_service.go"] --> API["/api/v1/internal/*"]
 PP["protocol_parser.go"] --> DS
 DS --> API
 FE["otaApi.ts"] --> H
 FE --> UI["OTA页面(index.tsx)"]
+LOGGER["zap_logger.go"] --> DS
+LOGGER --> PP
 ```
 
-图表来源
+**图表来源**
 - [inv_api_server/internal/handler/ota_handler.go:20-26](file://inv_api_server/internal/handler/ota_handler.go#L20-L26)
 - [inv_api_server/internal/service/ota_service.go:22-42](file://inv_api_server/internal/service/ota_service.go#L22-L42)
 - [inv_api_server/internal/repository/ota_repository.go:12-18](file://inv_api_server/internal/repository/ota_repository.go#L12-L18)
 - [inv_device_server/internal/service/data_service.go:33-50](file://inv_device_server/internal/service/data_service.go#L33-L50)
 - [inv_device_server/internal/service/protocol_parser.go:55-91](file://inv_device_server/internal/service/protocol_parser.go#L55-L91)
-- [inv-admin-frontend/src/services/otaApi.ts:1-33](file://inv-admin-frontend/src/services/otaApi.ts#L1-L33)
-- [inv-admin-frontend/src/pages/ota/index.tsx:1-106](file://inv-admin-frontend/src/pages/ota/index.tsx#L1-L106)
+- [inv_admin_frontend/src/services/otaApi.ts:1-33](file://inv_admin_frontend/src/services/otaApi.ts#L1-L33)
+- [inv_admin_frontend/src/pages/ota/index.tsx:1-106](file://inv_admin_frontend/src/pages/ota/index.tsx#L1-L106)
+- [inv_api_server/cmd/main.go:310-381](file://inv_api_server/cmd/main.go#L310-L381)
+- [inv_device_server/pkg/logger/logger.go:1-72](file://inv_device_server/pkg/logger/logger.go#L1-L72)
 
 ## 性能考虑
 - 并发控制：服务层使用信号量限制同时向设备发送命令的数量，避免网络拥塞与设备压力过大。
@@ -254,6 +312,8 @@ FE --> UI["OTA页面(index.tsx)"]
 - 防抖与缓存：设备侧对状态与故障上报设置Redis防抖键，减少重复通知；实时数据写入Redis缓存，降低数据库压力。
 - 聚合查询：仓储层使用SQL聚合统计，减少多次查询开销；前端对升级详情启用短周期轮询，兼顾实时性与性能。
 - 超时与重试：HTTP客户端设置合理超时与指数退避重试，提高可靠性。
+- **超时检测优化**：使用批量更新和事务处理，减少数据库锁竞争。
+- **日志性能**：zap logger使用异步写入和缓冲机制，最小化对主流程的影响。
 
 章节来源
 - [inv_api_server/internal/service/ota_service.go:134-175](file://inv_api_server/internal/service/ota_service.go#L134-L175)
@@ -261,13 +321,19 @@ FE --> UI["OTA页面(index.tsx)"]
 - [inv_device_server/internal/service/protocol_parser.go:284-308](file://inv_device_server/internal/service/protocol_parser.go#L284-L308)
 - [inv_device_server/internal/service/protocol_parser.go:40-85](file://inv_device_server/internal/service/protocol_parser.go#L40-L85)
 - [inv_api_server/internal/repository/ota_repository.go:155-193](file://inv_api_server/internal/repository/ota_repository.go#L155-L193)
+- [inv_api_server/cmd/main.go:310-381](file://inv_api_server/cmd/main.go#L310-L381)
+- [inv_device_server/pkg/logger/logger.go:27-72](file://inv_device_server/pkg/logger/logger.go#L27-L72)
 
 ## 故障排查指南
-- 设备无升级任务：接口返回空任务，前端显示“无升级任务”。
-- 升级失败重试：通过“重试失败”按钮或接口触发，仓储层将失败记录重置为待执行并增加重试次数。
+- 设备无升级任务：接口返回空任务，前端显示"无升级任务"。
+- 升级失败重试：通过"重试失败"按钮或接口触发，仓储层将失败记录重置为待执行并增加重试次数。
 - 取消待执行升级：对状态为待执行的记录进行取消，更新完成时间与状态。
 - 异常状态检测：设备上报故障时，服务层识别并上报故障状态，前端以红色标签展示失败设备。
 - 超时与重试：内部API调用失败时进行最多3次指数退避重试，若仍失败，记录错误日志以便排查。
+- **超时检测问题**：检查超时检测器是否正常运行，确认数据库连接正常，查看超时任务的处理日志。
+- **日志记录问题**：验证zap logger配置是否正确，检查日志输出路径和权限设置。
+
+**更新** 新增超时检测和日志相关的故障排查指导。
 
 章节来源
 - [inv_api_server/internal/handler/ota_handler.go:344-353](file://inv_api_server/internal/handler/ota_handler.go#L344-L353)
@@ -276,9 +342,15 @@ FE --> UI["OTA页面(index.tsx)"]
 - [inv_api_server/internal/repository/ota_repository.go:271-278](file://inv_api_server/internal/repository/ota_repository.go#L271-L278)
 - [inv_device_server/internal/service/data_service.go:324-328](file://inv_device_server/internal/service/data_service.go#L324-L328)
 - [inv_device_server/internal/service/protocol_parser.go:577-606](file://inv_device_server/internal/service/protocol_parser.go#L577-L606)
+- [inv_api_server/cmd/main.go:310-381](file://inv_api_server/cmd/main.go#L310-L381)
+- [inv_device_server/pkg/logger/logger.go:1-72](file://inv_device_server/pkg/logger/logger.go#L1-L72)
 
 ## 结论
-该OTA状态跟踪系统通过设备侧协议解析与状态上报、API侧业务编排与仓储聚合、前端轮询与可视化展示，实现了从固件管理到升级任务全生命周期的实时跟踪。系统具备良好的并发控制、防抖与重试机制，能够有效应对高并发场景下的稳定性与一致性挑战。建议持续完善监控告警与自动化运维能力，进一步提升系统的可观测性与可维护性。
+该OTA状态跟踪系统通过设备侧协议解析与状态上报、API侧业务编排与仓储聚合、前端轮询与可视化展示，实现了从固件管理到升级任务全生命周期的实时跟踪。系统具备良好的并发控制、防抖与重试机制，能够有效应对高并发场景下的稳定性与一致性挑战。
+
+**最新增强**：新增的自动超时检测机制和结构化日志记录功能，进一步提升了系统的健壮性和可观测性。15分钟超时阈值能够自动处理长时间挂起的升级任务，zap logger提供了更详细的调试信息，有助于快速定位和解决问题。
+
+建议持续完善监控告警与自动化运维能力，进一步提升系统的可观测性与可维护性。
 
 ## 附录
 - 状态数据收集与聚合
@@ -294,3 +366,14 @@ FE --> UI["OTA页面(index.tsx)"]
 - 监控与告警
   - 建议接入Prometheus/Grafana指标监控，关注升级成功率、失败率、平均耗时、并发数等关键指标。
   - 对异常状态与重试次数设置阈值告警，结合日志与链路追踪定位问题根因。
+- **超时检测配置**
+  - 超时阈值：15分钟（可根据固件大小和网络环境调整）
+  - 检测频率：每60秒执行一次
+  - 自动处理：标记失败、更新统计、完成任务状态
+- **日志配置选项**
+  - 日志级别：debug、info、warn、error
+  - 输出格式：JSON（生产环境）或Console（开发环境）
+  - 输出目标：stdout、文件路径
+  - 性能优化：异步写入、缓冲机制
+
+**更新** 新增超时检测和日志配置的详细说明。

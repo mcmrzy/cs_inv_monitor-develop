@@ -115,6 +115,9 @@ Main --> Build
 - **API服务器路由**：用户认证、设备管理、告警处理等
 - **设备服务器路由**：设备状态查询、实时数据获取
 - **静态资源路由**：文件上传目录
+- **固件管理路由**：OTA固件管理和设备固件下载
+
+**更新** 固件下载路由现已扩展支持所有HTTP方法，增强了固件管理操作的灵活性
 
 ### 中间件执行链
 
@@ -228,7 +231,7 @@ end
 
 #### 安全策略
 
-- **公共路径白名单**：包含健康检查、登录、注册等无需认证的接口
+- **公共路径白名单**：包含健康检查、登录、注册、固件下载等无需认证的接口
 - **Bearer Token格式**：要求Authorization头必须为"Bearer {token}"格式
 - **HMAC签名验证**：使用配置的安全密钥验证token签名
 - **声明提取**：从token中提取用户ID、手机号、角色等信息
@@ -299,6 +302,8 @@ RBACMiddleware --> User : "关联"
 | 设备管理 | `/api/v1/devices/` | 管理员 | devices |
 | 告警管理 | `/api/v1/alarms/` | 管理员 | alerts |
 | 电站管理 | `/api/v1/stations/` | 管理员 | stations |
+
+**更新** 固件管理路由现已支持所有HTTP方法，包括GET、POST、PUT、DELETE等操作
 
 #### 权限检查流程
 
@@ -673,3 +678,13 @@ docker run -d \
    - 定期备份配置
    - 监控日志分析
    - 容量规划和扩容
+
+### 固件管理API
+
+**更新** 固件管理相关API现已支持所有HTTP方法，提供更灵活的操作选项
+
+| 路径 | 方法 | 描述 | 权限 |
+|------|------|------|------|
+| `/api/v1/firmwares` | GET/POST/PUT/DELETE | 固件列表管理 | firmware |
+| `/api/v1/firmwares/:id` | GET/PUT/DELETE | 单个固件操作 | firmware |
+| `/firmware/*` | GET/POST/PUT/DELETE | 设备固件下载 | 无需认证 |

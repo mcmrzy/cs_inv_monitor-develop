@@ -54,6 +54,7 @@ timezone: Asia/Shanghai
 
 backends:
   device_server: http://inv-device-server:8081
+  upload_dir: /data/firmware
 
 # 数据库自动迁移配置
 # Docker 环境中通过 docker-compose.yml 挂载 database 目录

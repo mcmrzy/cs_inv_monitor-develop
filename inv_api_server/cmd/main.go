@@ -765,6 +765,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.GET("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackage)
 			otaGroup.POST("/packages", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateUpgradePackage)
 			otaGroup.DELETE("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradePackage)
+			otaGroup.PATCH("/packages/:id/publish", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.PublishPackage)
 			otaGroup.POST("/packages/push", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushPackageUpgrade)
 			otaGroup.POST("/packages/:id/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackPackageUpgrade)
 			otaGroup.GET("/packages/:id/details", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetPackageUpgradeDetails)

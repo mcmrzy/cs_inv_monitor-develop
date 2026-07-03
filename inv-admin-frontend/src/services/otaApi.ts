@@ -1,4 +1,5 @@
 import api from './api'
+import type { PublishPackageRequest } from '@/types'
 
 export const otaApi = {
   // 固件管理
@@ -88,4 +89,8 @@ export const otaApi = {
     api.get('/ota/firmware/devices', { params: { model, target_chip: targetChip, version } }),
   getUpgradePackageDevices: (packageId: number, status?: string) =>
     api.get('/ota/firmware/package-devices', { params: { package_id: packageId, status } }),
+
+  // 发布升级包
+  publishPackage: (id: number, data: PublishPackageRequest) =>
+    api.patch(`/ota/packages/${id}/publish`, data),
 }
