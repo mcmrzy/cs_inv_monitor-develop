@@ -1326,9 +1326,7 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 
 	for _, item := range items {
 		currentVer := chipVersions[item.TargetChip]
-		if currentVer == item.FirmwareVersion {
-			continue
-		}
+		// 不再比较版本，总是创建升级记录
 
 		var firmwareIDVal int64
 		if item.FirmwareID > 0 {
