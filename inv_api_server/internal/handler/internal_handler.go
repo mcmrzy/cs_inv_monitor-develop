@@ -1005,9 +1005,13 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 						SELECT total_devices, success_count, failed_count FROM upgrade_tasks WHERE id = $1
 					`, tid).Scan(&totalDevices, &successCount, &failedCount); err == nil && totalDevices > 0 {
 						if successCount+failedCount >= totalDevices {
-							newStatus := "partial_success"
-							if failedCount == 0 {
+							var newStatus string
+							if successCount == totalDevices {
 								newStatus = "completed"
+							} else if failedCount == totalDevices {
+								newStatus = "failed"
+							} else {
+								newStatus = "partial_success"
 							}
 							h.db.Exec(bgCtx, `
 								UPDATE upgrade_tasks SET status = $2, completed_at = NOW(), updated_at = NOW()
@@ -1060,10 +1064,12 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 				`, taskID).Scan(&totalDevices, &successCount, &failedCount); err == nil && totalDevices > 0 {
 					if successCount+failedCount >= totalDevices {
 						var newStatus string
-						if failedCount > 0 {
-							newStatus = "partial_success"
-						} else {
+						if successCount == totalDevices {
 							newStatus = "completed"
+						} else if failedCount == totalDevices {
+							newStatus = "failed"
+						} else {
+							newStatus = "partial_success"
 						}
 						h.db.Exec(bgCtx, `
 							UPDATE upgrade_tasks SET status = $2, completed_at = NOW(), updated_at = NOW()
