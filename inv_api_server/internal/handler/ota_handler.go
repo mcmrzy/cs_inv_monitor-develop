@@ -429,6 +429,12 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			})
 		}
 
+		// 构建返回消息
+		message := "有可用的升级包"
+		if !hasUpdate {
+			message = "当前已是最新版本"
+		}
+
 		response.Success(c, gin.H{
 			"has_update":             hasUpdate,
 			"upgrade_mode":           "package",
@@ -443,7 +449,7 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			"firmware_bms":           device.FirmwareBMS,
 			"chips_to_upgrade":       chipsToUpgrade,
 			"available_packages":     packages,
-			"message":                hasUpdate ? "有可用的升级包" : "当前已是最新版本",
+			"message":                message,
 		})
 		return
 	}
