@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/rand"
 	"fmt"
+	"time"
 
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
@@ -68,7 +69,7 @@ func (h *CaptchaHandler) VerifyCaptcha(c *gin.Context) {
 
 	// 存储验证成功的 token，有效期 10 分钟
 	ctx := c.Request.Context()
-	h.rdb.Set(ctx, captchaRedisKey("verified:"+verifyToken), "1", 600)
+	h.rdb.Set(ctx, captchaRedisKey("verified:"+verifyToken), "1", 10*time.Minute)
 
 	logger.Info("验证成功", zap.String("token", verifyToken))
 
