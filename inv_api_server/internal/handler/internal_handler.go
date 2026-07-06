@@ -1326,9 +1326,31 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		`, req.SN)
 	}
 
-	// 通过 SSE 实时推送告警信息给前端
+	// 插入告警通知到 notifications 表（带 60 秒冷却期，防止重复通知）
 	if userID > 0 {
-		h.broadcastNotification(userID, "alarm", faultMessage, fmt.Sprintf("设备 %s: %s", req.SN, faultMessage), req.SN)
+		notifyTitle := "设备告警"
+		notifyContent := fmt.Sprintf("设备 %s: %s", req.SN, faultMessage)
+		notifyType := "alarm"
+
+		// 冷却期检查：60 秒内同一设备同类型通知不重复写入
+		var notifyExists bool
+		_ = h.db.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type=$2 AND created_at > NOW() - INTERVAL '60 seconds')`,
+			req.SN, notifyType,
+		).Scan(&notifyExists)
+		if !notifyExists {
+			var sid int64
+			if stationID.Valid {
+				sid = stationID.Int64
+			}
+			_, _ = h.db.Exec(ctx, `
+				INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6, NOW())
+			`, req.SN, sid, userID, notifyType, notifyTitle, notifyContent)
+		}
+
+		// 通过 SSE 实时推送告警信息给前端
+		h.broadcastNotification(userID, notifyType, notifyTitle, notifyContent, req.SN)
 	}
 
 	logger.Info("Device alarm recorded",
