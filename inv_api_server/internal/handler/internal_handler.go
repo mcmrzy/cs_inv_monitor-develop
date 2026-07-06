@@ -1277,13 +1277,16 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		faultMessage = faultMessage[:200]
 	}
 
-	// 去重：同一设备+故障码+描述在 5 秒内不重复写入
+	// 去重：同一设备+告警级别在 10 秒内不重复写入
 	var exists bool
 	h.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM alarms WHERE device_sn=$1 AND fault_code=$2 AND fault_message=$3 AND occurred_at > NOW() - INTERVAL '5 seconds')`,
-		req.SN, faultCode, faultMessage,
+		`SELECT EXISTS(SELECT 1 FROM alarms WHERE device_sn=$1 AND alarm_level=$2 AND occurred_at > NOW() - INTERVAL '10 seconds')`,
+		req.SN, alarmLevel,
 	).Scan(&exists)
 	if exists {
+		logger.Info("Alarm dedup: same device+level within 10s",
+			zap.String("sn", req.SN),
+			zap.Int("alarm_level", alarmLevel))
 		response.Success(c, gin.H{"status": "ok", "dedup": true})
 		return
 	}
