@@ -21,12 +21,17 @@ type PermissionEntry struct {
 	Action   string `json:"action"`
 }
 
+type cacheEntry struct {
+	perms    []PermissionEntry
+	cachedAt time.Time
+}
+
 type RBACMiddleware struct {
 	rdb       *redis.Client
 	pg        *pgxpool.Pool
 	cacheTTL  time.Duration
 	mu        sync.RWMutex
-	roleCache map[string][]PermissionEntry
+	roleCache map[string]cacheEntry
 }
 
 func NewRBACMiddleware(rdb *redis.Client, pg *pgxpool.Pool, cacheTTLSec int) *RBACMiddleware {
@@ -37,7 +42,7 @@ func NewRBACMiddleware(rdb *redis.Client, pg *pgxpool.Pool, cacheTTLSec int) *RB
 		rdb:       rdb,
 		pg:        pg,
 		cacheTTL:  time.Duration(cacheTTLSec) * time.Second,
-		roleCache: make(map[string][]PermissionEntry),
+		roleCache: make(map[string]cacheEntry),
 	}
 }
 
@@ -78,9 +83,12 @@ func (r *RBACMiddleware) getRolePermissions(ctx context.Context, role int) ([]Pe
 	cacheKey := fmt.Sprintf("gw:role_perms:%d", role)
 
 	r.mu.RLock()
-	if cached, ok := r.roleCache[cacheKey]; ok {
-		r.mu.RUnlock()
-		return cached, nil
+	if entry, ok := r.roleCache[cacheKey]; ok {
+		// 检查内存缓存是否过期
+		if time.Since(entry.cachedAt) < r.cacheTTL {
+			r.mu.RUnlock()
+			return entry.perms, nil
+		}
 	}
 	r.mu.RUnlock()
 
@@ -90,7 +98,10 @@ func (r *RBACMiddleware) getRolePermissions(ctx context.Context, role int) ([]Pe
 			var perms []PermissionEntry
 			if err := json.Unmarshal([]byte(cached), &perms); err == nil {
 				r.mu.Lock()
-				r.roleCache[cacheKey] = perms
+				r.roleCache[cacheKey] = cacheEntry{
+					perms:    perms,
+					cachedAt: time.Now(),
+				}
 				r.mu.Unlock()
 				return perms, nil
 			}
@@ -126,7 +137,10 @@ func (r *RBACMiddleware) getRolePermissions(ctx context.Context, role int) ([]Pe
 	}
 
 	r.mu.Lock()
-	r.roleCache[cacheKey] = perms
+	r.roleCache[cacheKey] = cacheEntry{
+		perms:    perms,
+		cachedAt: time.Now(),
+	}
 	r.mu.Unlock()
 
 	return perms, nil
