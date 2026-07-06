@@ -1168,6 +1168,30 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	// code=0 或 level="normal" → 告警清除，恢复设备状态
 	if req.Code == 0 || req.Level == "normal" {
 		logger.Info("Device alarm cleared", zap.String("sn", req.SN))
+
+		// 将该设备的未处理严重告警标记为已恢复（status=2）
+		h.db.Exec(ctx, `
+			UPDATE alarms SET status = 2, recovered_at = NOW()
+			WHERE device_sn = $1 AND alarm_level = 3 AND status = 0
+		`, req.SN)
+
+		// 延迟检查：等待3秒确认没有新的告警到达，防止告警和恢复通知同时出现
+		time.Sleep(3 * time.Second)
+
+		// 检查是否还有未恢复的严重告警（包括延迟期间新到达的告警）
+		var activeAlarmCount int
+		_ = h.db.QueryRow(ctx,
+			`SELECT COUNT(*) FROM alarms WHERE device_sn = $1 AND alarm_level = 3 AND status = 0`,
+			req.SN,
+		).Scan(&activeAlarmCount)
+		if activeAlarmCount > 0 {
+			logger.Info("Skipping alarm_cleared - device still has active alarms",
+				zap.String("sn", req.SN), zap.Int("active_alarms", activeAlarmCount))
+			response.Success(c, gin.H{"status": "ok", "skipped": true, "reason": "active_alarms"})
+			return
+		}
+
+		// 确认没有未处理的严重告警后，才更新设备状态为在线
 		h.db.Exec(ctx, `
 			UPDATE devices SET status = 1, last_online_at = NOW(), updated_at = NOW() WHERE sn = $1 AND status = 2
 		`, req.SN)
@@ -1181,29 +1205,6 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 			WHERE deleted_at IS NULL
 			AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
 		`, req.SN)
-
-		// 将该设备的未处理严重告警标记为已恢复（status=2）
-		h.db.Exec(ctx, `
-			UPDATE alarms SET status = 2, recovered_at = NOW()
-			WHERE device_sn = $1 AND alarm_level = 3 AND status = 0
-		`, req.SN)
-
-		// 延迟检查：等待3秒确认没有新的告警到达，防止告警和恢复通知同时出现
-		// 这是为了处理设备端同时发送多个告警消息和恢复消息的情况
-		time.Sleep(3 * time.Second)
-
-		// 检查是否还有未恢复的严重告警（包括延迟期间新到达的告警）
-		var activeAlarmCount int
-		_ = h.db.QueryRow(ctx,
-			`SELECT COUNT(*) FROM alarms WHERE device_sn = $1 AND alarm_level = 3 AND status = 0`,
-			req.SN,
-		).Scan(&activeAlarmCount)
-		if activeAlarmCount > 0 {
-			logger.Info("Skipping alarm_cleared notification - device still has active alarms",
-				zap.String("sn", req.SN), zap.Int("active_alarms", activeAlarmCount))
-			response.Success(c, gin.H{"status": "ok", "skipped": true, "reason": "active_alarms"})
-			return
-		}
 
 		// 插入故障恢复通知（带 60 秒冷却期）
 		var clearUserID int64
