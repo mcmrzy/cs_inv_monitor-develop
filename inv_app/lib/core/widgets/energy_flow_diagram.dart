@@ -80,6 +80,7 @@ class _EnergyFlowDiagramState extends State<EnergyFlowDiagram>
             child: AnimatedBuilder(
               animation: Listenable.merge([_particleController, _pulseController]),
               builder: (context, _) {
+                final l10n = AppLocalizations.of(context)!;
                 return CustomPaint(
                   painter: _EnergyFlowPainter(
                     pvPower: widget.pvPower.isNaN ? 0 : widget.pvPower,
@@ -231,10 +232,10 @@ class _EnergyFlowPainter extends CustomPainter {
 
     // ── Labels ──
     _drawNodeLabel(canvas, pvCenter, 'PV', pvColor, below: true);
-    _drawNodeLabel(canvas, invCenter, l10n.inverterOutput, AppColors.primary, below: true);
-    _drawNodeLabel(canvas, battCenter, l10n.battery, battColor, below: true);
-    _drawNodeLabel(canvas, loadCenter, l10n.load, loadColor, below: true);
-    _drawNodeLabel(canvas, gridCenter, l10n.grid, gridColor, below: true);
+    _drawNodeLabel(canvas, invCenter, inverterLabel, AppColors.primary, below: true);
+    _drawNodeLabel(canvas, battCenter, batteryLabel, battColor, below: true);
+    _drawNodeLabel(canvas, loadCenter, loadLabel, loadColor, below: true);
+    _drawNodeLabel(canvas, gridCenter, gridLabel, gridColor, below: true);
 
     // ── Flow paths ──
     //
