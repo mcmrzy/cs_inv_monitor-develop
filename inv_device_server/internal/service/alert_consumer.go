@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -119,9 +120,11 @@ func (a *AlertConsumer) consume(ctx context.Context) {
 }
 
 func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
-	// 消息去重：使用 Kafka offset 作为唯一标识
+	// 消息去重：使用消息内容的 hash 作为唯一标识
 	if a.rdb != nil {
-		msgKey := fmt.Sprintf("alert:dedup:%s:%d:%d", m.Topic, m.Partition, m.Offset)
+		// 计算消息内容的 MD5 hash
+		hash := md5.Sum(m.Value)
+		msgKey := fmt.Sprintf("alert:dedup:%x", hash)
 		exists, _ := a.rdb.Exists(ctx, msgKey).Result()
 		if exists > 0 {
 			logger.Info("Alert message already processed, skipping",
