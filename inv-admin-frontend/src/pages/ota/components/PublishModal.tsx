@@ -103,7 +103,7 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       const reqData: PublishPackageRequest = {
         is_published: true,
         rollout_type: rolloutMode === 'gray' ? 'all' : rolloutMode,
-        auto_push: true, // 直接推送
+        auto_push: false, // 只发布，不自动推送升级
       }
       if (rolloutMode === 'gray') reqData.rollout_percent = rolloutPercent
       if (rolloutMode === 'model') reqData.rollout_targets = selectedModel
@@ -111,7 +111,7 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       
       // 3. 发布并推送
       await otaApi.publishPackage(Number(packageData.id), reqData)
-      message.success('已推送，用户将看到更新提示')
+      message.success('已发布，用户将在App中看到更新提示')
       invalidate()
       onSuccess()
     } catch (err: any) {

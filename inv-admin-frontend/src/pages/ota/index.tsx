@@ -1304,19 +1304,19 @@ const PackagesTab: React.FC = () => {
           
           <Form.Item name="firmware_arm" label="ARM 固件">
             <Select allowClear placeholder="选择 ARM 固件"
-              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'arm').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
+              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'arm').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))}
           </Form.Item>
           <Form.Item name="firmware_esp" label="ESP 固件">
             <Select allowClear placeholder="选择 ESP 固件"
-              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'esp').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
+              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'esp').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))}
           </Form.Item>
           <Form.Item name="firmware_dsp" label="DSP 固件">
             <Select allowClear placeholder="选择 DSP 固件（可选）"
-              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'dsp').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
+              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'dsp').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))}
           </Form.Item>
           <Form.Item name="firmware_bms" label="BMS 固件">
             <Select allowClear placeholder="选择 BMS 固件（可选）"
-              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'bms').map((f: Firmware) => ({ label: `${f.version} (${f.main_version})`, value: Number(f.id) }))} />
+              options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'bms').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))}
           </Form.Item>
           
           <div style={{ color: '#999', fontSize: 12 }}>创建后可在发布时设置用户可见信息和推送方式</div>
