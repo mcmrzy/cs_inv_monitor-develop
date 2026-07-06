@@ -1188,7 +1188,11 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 			WHERE device_sn = $1 AND alarm_level = 3 AND status = 0
 		`, req.SN)
 
-		// 检查是否还有未恢复的严重告警，有则不发送恢复通知（防止与故障告警同时到达时乱序）
+		// 延迟检查：等待3秒确认没有新的告警到达，防止告警和恢复通知同时出现
+		// 这是为了处理设备端同时发送多个告警消息和恢复消息的情况
+		time.Sleep(3 * time.Second)
+
+		// 检查是否还有未恢复的严重告警（包括延迟期间新到达的告警）
 		var activeAlarmCount int
 		_ = h.db.QueryRow(ctx,
 			`SELECT COUNT(*) FROM alarms WHERE device_sn = $1 AND alarm_level = 3 AND status = 0`,
