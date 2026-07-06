@@ -868,43 +868,45 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	// code=0 或 level="normal" → 告警清除，恢复设备状态
 	if req.Code == 0 || req.Level == "normal" {
 		logger.Info("Device alarm cleared", zap.String("sn", req.SN))
-		h.db.Exec(ctx, `
-			UPDATE devices SET status = 1, last_online_at = NOW(), updated_at = NOW() WHERE sn = $1 AND status = 2
-		`, req.SN)
-		h.db.Exec(ctx, `
-			UPDATE stations SET
-				status = CASE
-					WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status = 1 AND devices.deleted_at IS NULL) THEN 1
-					ELSE 0
-				END,
-				updated_at = NOW()
-			WHERE deleted_at IS NULL
-			AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
-		`, req.SN)
+		if h.db != nil {
+			h.db.Exec(ctx, `
+				UPDATE devices SET status = 1, last_online_at = NOW(), updated_at = NOW() WHERE sn = $1 AND status = 2
+			`, req.SN)
+			h.db.Exec(ctx, `
+				UPDATE stations SET
+					status = CASE
+						WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status = 1 AND devices.deleted_at IS NULL) THEN 1
+						ELSE 0
+					END,
+					updated_at = NOW()
+				WHERE deleted_at IS NULL
+				AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
+			`, req.SN)
 
-		// 插入故障恢复通知（带 60 秒冷却期）
-		var clearUserID int64
-		var clearStationID sql.NullInt64
-		if err := h.db.QueryRow(ctx,
-			`SELECT user_id, station_id FROM devices WHERE sn = $1`, req.SN,
-		).Scan(&clearUserID, &clearStationID); err == nil && clearUserID > 0 {
-			// 冷却期检查：60 秒内同一设备同类型通知不重复写入
-			var notifyExists bool
-			_ = h.db.QueryRow(ctx,
-				`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type='alarm_cleared' AND created_at > NOW() - INTERVAL '60 seconds')`,
-				req.SN,
-			).Scan(&notifyExists)
-			if !notifyExists {
-				var csid int64
-				if clearStationID.Valid {
-					csid = clearStationID.Int64
+			// 插入故障恢复通知（带 60 秒冷却期）
+			var clearUserID int64
+			var clearStationID sql.NullInt64
+			if err := h.db.QueryRow(ctx,
+				`SELECT user_id, station_id FROM devices WHERE sn = $1`, req.SN,
+			).Scan(&clearUserID, &clearStationID); err == nil && clearUserID > 0 {
+				// 冷却期检查：60 秒内同一设备同类型通知不重复写入
+				var notifyExists bool
+				_ = h.db.QueryRow(ctx,
+					`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type='alarm_cleared' AND created_at > NOW() - INTERVAL '60 seconds')`,
+					req.SN,
+				).Scan(&notifyExists)
+				if !notifyExists {
+					var csid int64
+					if clearStationID.Valid {
+						csid = clearStationID.Int64
+					}
+					clearContent := "设备 " + req.SN + " 已恢复正常"
+					_, _ = h.db.Exec(ctx, `
+						INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+						VALUES ($1, $2, $3, $4, $5, $6, NOW())
+					`, req.SN, csid, clearUserID, "alarm_cleared", "故障恢复", clearContent)
+					h.broadcastNotification(clearUserID, "alarm_cleared", "故障恢复", clearContent, req.SN)
 				}
-				clearContent := "设备 " + req.SN + " 已恢复正常"
-				_, _ = h.db.Exec(ctx, `
-					INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
-					VALUES ($1, $2, $3, $4, $5, $6, NOW())
-				`, req.SN, csid, clearUserID, "alarm_cleared", "故障恢复", clearContent)
-				h.broadcastNotification(clearUserID, "alarm_cleared", "故障恢复", clearContent, req.SN)
 			}
 		}
 
@@ -915,12 +917,14 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	// 查找设备所属用户和电站
 	var userID int64
 	var stationID sql.NullInt64
-	if err := h.db.QueryRow(ctx,
-		`SELECT user_id, station_id FROM devices WHERE sn = $1`, req.SN,
-	).Scan(&userID, &stationID); err != nil {
-		logger.Warn("DeviceAlarm device lookup failed, using user_id=0",
-			zap.String("sn", req.SN), zap.Error(err))
-		userID = 0
+	if h.db != nil {
+		if err := h.db.QueryRow(ctx,
+			`SELECT user_id, station_id FROM devices WHERE sn = $1`, req.SN,
+		).Scan(&userID, &stationID); err != nil {
+			logger.Warn("DeviceAlarm device lookup failed, using user_id=0",
+				zap.String("sn", req.SN), zap.Error(err))
+			userID = 0
+		}
 	}
 
 	// 确定告警级别：优先使用设备上报的 level，其次使用告警码映射
