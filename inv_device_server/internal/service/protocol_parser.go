@@ -36,9 +36,10 @@ type ProtocolParser struct {
 	internalKey string
 	httpClient  *http.Client
 
-	snModelCache map[string]int32
-	snCacheMu    sync.RWMutex
-	parseEngine  *ParseRuleEngine
+	snModelCache  map[string]int32
+	snCacheMu     sync.RWMutex
+	parseEngine   *ParseRuleEngine
+	stateManager  *DeviceStateManager // 集中式状态管理器
 
 	workerCount int
 	msgChan     chan *parsedMessage
@@ -85,6 +86,7 @@ func NewProtocolParser(
 		},
 		snModelCache: make(map[string]int32),
 		parseEngine:  NewParseRuleEngine(),
+		stateManager: NewDeviceStateManager(rdb, apiServer, internalKey),
 		workerCount:  10,
 		msgChan:      make(chan *parsedMessage, 5000),
 	}
@@ -265,54 +267,38 @@ func unwrapPayload(payload json.RawMessage) (map[string]interface{}, error) {
 }
 
 func (p *ProtocolParser) handleOnline(ctx context.Context, raw *RawMessage) error {
-	statusValue := 1
-
+	// 解析设备上报的状态
+	online := true
 	if p.rdb != nil {
 		payloadMap, err := unwrapPayload(raw.Payload)
 		if err == nil {
-			online, _ := payloadMap["online"].(bool)
-			if online {
-				p.hub.MarkDeviceOnline(raw.SN)
-				p.rdb.Set(ctx, "device:heartbeat:"+raw.SN, time.Now().Unix(), 120*time.Second)
-				statusValue = 1
-			} else {
-				// 设备上报离线：不刷新心跳 key，让 120s TTL 自然过期
-				// 不主动删除 key，避免设备短暂断连后重连导致状态抖动
-				statusValue = 0
+			if val, ok := payloadMap["online"]; ok {
+				if b, ok := val.(bool); ok {
+					online = b
+				}
 			}
-		} else {
-			// 解析失败，默认在线
-			p.hub.MarkDeviceOnline(raw.SN)
 		}
+	}
+
+	// 更新心跳（设备上报任何状态消息都刷新心跳）
+	if err := p.stateManager.UpdateHeartbeat(ctx, raw.SN); err != nil {
+		logger.Warn("Failed to update heartbeat", zap.String("sn", raw.SN), zap.Error(err))
+	}
+
+	// 确定状态转换事件
+	var event StateTransition
+	if online {
+		event = EventOnlineReport
 	} else {
-		p.hub.MarkDeviceOnline(raw.SN)
+		event = EventOfflineReport
 	}
 
-	// 防抖：10 秒内同一设备相同状态不上报，避免状态抖动产生大量通知
-	statusKey := "status_report:" + raw.SN
-	if p.rdb != nil {
-		lastVal, err := p.rdb.Get(ctx, statusKey).Result()
-		if err == nil && lastVal == fmt.Sprintf("%d", statusValue) {
-			return nil // 状态未变化，跳过上报
-		}
-		// 如果设备处于故障状态，不发送 status=1 覆盖故障
-		if statusValue == 1 {
-			faultKey := "fault_report:" + raw.SN
-			if faultVal, err := p.rdb.Get(ctx, faultKey).Result(); err == nil && faultVal == "2" {
-				return nil
-			}
-		}
-	}
-
-	err := p.postInternal("/api/v1/internal/device-status", map[string]interface{}{
-		"sn":     raw.SN,
-		"status": statusValue,
+	// 通过状态管理器处理状态变更（内置防抖和状态转换检查）
+	return p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
+		SN:        raw.SN,
+		Event:     event,
+		Timestamp: time.Now(),
 	})
-	if err == nil && p.rdb != nil {
-		p.rdb.Set(ctx, statusKey, fmt.Sprintf("%d", statusValue), 10*time.Second)
-	}
-	// 如果失败，不设防抖 key，下次会重试
-	return nil
 }
 
 func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error {
@@ -456,46 +442,24 @@ func (p *ProtocolParser) postInternal(path string, payload interface{}) error {
 }
 
 func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) error {
-	p.hub.MarkDeviceOnline(raw.SN)
-
-	if p.rdb != nil {
-		p.rdb.Set(ctx, "device:heartbeat:"+raw.SN, time.Now().Unix(), 120*time.Second)
+	// 更新心跳
+	if err := p.stateManager.UpdateHeartbeat(ctx, raw.SN); err != nil {
+		logger.Warn("Failed to update heartbeat", zap.String("sn", raw.SN), zap.Error(err))
 	}
 
-	// 诊断日志：记录所有进入 handleTelemetry 的消息类型
 	logger.Info("handleTelemetry called",
 		zap.String("sn", raw.SN),
 		zap.String("msg_type", raw.MsgType))
 
-	// 防抖：遥测数据频繁上报，仅在设备从离线恢复为在线时才通知 API Server
-	statusKey := "status_report:" + raw.SN
-	shouldReport := true
-	if p.rdb != nil {
-		lastVal, err := p.rdb.Get(ctx, statusKey).Result()
-		if err == nil && lastVal == "1" {
-			shouldReport = false // 已经上报过在线状态，跳过
-		}
-		// 如果设备处于故障状态，不发送 status=1 覆盖故障
-		faultKey := "fault_report:" + raw.SN
-		if faultVal, err := p.rdb.Get(ctx, faultKey).Result(); err == nil && faultVal == "2" {
-			shouldReport = false
-			logger.Info("Skipping status=1 report due to active fault",
-				zap.String("sn", raw.SN),
-				zap.String("msg_type", raw.MsgType))
-		}
-	}
-	if shouldReport {
-		logger.Info("Reporting status=1 to API server",
+	// 通过状态管理器处理在线状态（内置防抖）
+	if err := p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
+		SN:        raw.SN,
+		Event:     EventOnlineReport,
+		Timestamp: time.Now(),
+	}); err != nil {
+		logger.Warn("Failed to handle online state",
 			zap.String("sn", raw.SN),
-			zap.String("msg_type", raw.MsgType))
-		err := p.postInternal("/api/v1/internal/device-status", map[string]interface{}{
-			"sn":     raw.SN,
-			"status": 1,
-		})
-		if err == nil && p.rdb != nil {
-			p.rdb.Set(ctx, statusKey, "1", 10*time.Second)
-		}
-		// 如果失败，不设防抖 key，下次会重试
+			zap.Error(err))
 	}
 
 	modelID := p.getModelID(ctx, raw.SN)
@@ -536,83 +500,17 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 		parsedPayload = payloadMap
 	}
 
-	// data/status 故障检测：检查 state 和 fault_code，主动上报设备故障状态
+	// data/status 故障检测：通过状态管理器统一处理
 	if raw.MsgType == "data/status" && parsedPayload != nil {
-		// 添加诊断日志（Info 级别确保可见）
 		logger.Info("data/status payload received",
 			zap.String("sn", raw.SN),
 			zap.Any("payload", parsedPayload))
 
-		// 处理可能的嵌套格式：{"data": {"state": "fault", ...}, "timestamp": ...}
-		statusData := parsedPayload
-		if data, ok := parsedPayload["data"].(map[string]interface{}); ok {
-			statusData = data
-			logger.Info("Using nested data field for status",
+		// 通过状态管理器检测并处理故障状态
+		if err := p.stateManager.DetectAndHandleFault(ctx, raw.SN, parsedPayload); err != nil {
+			logger.Warn("Failed to detect/handle fault",
 				zap.String("sn", raw.SN),
-				zap.Any("data", data))
-		}
-
-		isFault := false
-		if state, ok := statusData["state"].(string); ok && state == "fault" {
-			isFault = true
-			logger.Info("Fault detected via state field",
-				zap.String("sn", raw.SN),
-				zap.String("state", state))
-		}
-		if !isFault {
-			if fc, ok := statusData["fault_code"]; ok {
-				logger.Info("fault_code found in payload",
-					zap.String("sn", raw.SN),
-					zap.Any("fault_code", fc),
-					zap.String("type", fmt.Sprintf("%T", fc)))
-				switch v := fc.(type) {
-				case float64:
-					isFault = v != 0
-				case int:
-					isFault = v != 0
-				case int64:
-					isFault = v != 0
-				}
-				if isFault {
-					logger.Info("Fault detected via fault_code field",
-						zap.String("sn", raw.SN),
-						zap.Any("fault_code", fc))
-				}
-			} else {
-				logger.Info("fault_code not found in payload",
-					zap.String("sn", raw.SN),
-					zap.Any("available_keys", getKeys(statusData)))
-			}
-		}
-
-		faultKey := "fault_report:" + raw.SN
-		if isFault {
-			shouldReportFault := true
-			if p.rdb != nil {
-				// 防抖检查：10 秒内不重复上报故障状态
-				lastVal, err := p.rdb.Get(ctx, faultKey).Result()
-				if err == nil && lastVal == "2" {
-					shouldReportFault = false
-				}
-				// 始终刷新故障标记 TTL，防止其他遥测数据的 status=1 覆盖故障状态
-				p.rdb.Set(ctx, faultKey, "2", 15*time.Second)
-			}
-			if shouldReportFault {
-				logger.Info("Reporting fault status to API server",
-					zap.String("sn", raw.SN),
-					zap.Int("status", 2))
-				p.postInternal("/api/v1/internal/device-status", map[string]interface{}{
-					"sn":     raw.SN,
-					"status": 2,
-				})
-			}
-		} else {
-			// 设备恢复正常，清除故障防抖 key，确保下次故障能及时上报
-			logger.Info("Device status normal, clearing fault key",
-				zap.String("sn", raw.SN))
-			if p.rdb != nil {
-				p.rdb.Del(ctx, faultKey)
-			}
+				zap.Error(err))
 		}
 	}
 
