@@ -7,6 +7,9 @@ on:
       - completed
     branches:
       - main
+  
+  # 手动触发（用于测试）
+  workflow_dispatch:
 
 jobs:
   deploy:
