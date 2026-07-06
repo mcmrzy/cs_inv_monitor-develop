@@ -1,12 +1,12 @@
 import api from './api'
 
 export const alertApi = {
-  list: (params?: any) => api.get('/alerts', { params }),
-  getStats: () => api.get('/alerts/stats'),
-  handle: (id: number) => api.post(`/alerts/${id}/acknowledge`),
-  ignore: (id: number) => api.post(`/alerts/${id}/ignore`),
-  delete: (id: number) => api.delete(`/alerts/${id}`),
-  clearAll: () => api.delete('/alerts/clear'),
+  list: (params?: any) => api.get('/alarms', { params }),
+  getStats: () => api.get('/alarms/stats'),
+  handle: (id: number) => api.post(`/alarms/${id}/acknowledge`),
+  ignore: (id: number) => api.post(`/alarms/${id}/ignore`),
+  delete: (id: number) => api.delete(`/alarms/${id}`),
+  clearAll: () => api.delete('/alarms/clear'),
 }
 
 export const notificationApi = {
