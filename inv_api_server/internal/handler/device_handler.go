@@ -139,8 +139,12 @@ func (h *DeviceHandler) List(c *gin.Context) {
 					energyData = innerData
 				}
 			}
+			// DEBUG
+			log.Printf("[DEBUG] sn=%s energyData=%v", device.SN, energyData)
 			if energyData != nil {
 				if v, ok := energyData["daily_pv"]; ok && v != nil {
+					// DEBUG
+					log.Printf("[DEBUG] sn=%s daily_pv=%v type=%T", device.SN, v, v)
 					if f, ok := toFloat64(v); ok {
 						device.DailyEnergy = f
 					}
@@ -155,8 +159,12 @@ func (h *DeviceHandler) List(c *gin.Context) {
 					acData = innerData
 				}
 			}
+			// DEBUG
+			log.Printf("[DEBUG] sn=%s acData=%v", device.SN, acData)
 			if acData != nil {
 				if v, ok := acData["power"]; ok && v != nil {
+					// DEBUG
+					log.Printf("[DEBUG] sn=%s power=%v type=%T", device.SN, v, v)
 					if f, ok := toFloat64(v); ok {
 						device.CurrentPower = f
 					}
