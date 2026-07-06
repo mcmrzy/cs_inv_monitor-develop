@@ -94,31 +94,8 @@ func (h *DeviceHandler) List(c *gin.Context) {
 				}
 			}
 
-			// 从嵌套的 info 对象读取设备信息（支持 {"info": {...}} 和 {"info": {"data": {...}}} 两种格式）
-			var info map[string]interface{}
-			if v, ok := rtData["info"].(map[string]interface{}); ok {
-				info = v
-				if innerData, ok := v["data"].(map[string]interface{}); ok {
-					info = innerData
-				}
-			}
-			if info != nil {
-				if v, ok := info["model"]; ok && v != nil {
-					if s, ok := v.(string); ok && s != "" && device.Model == "" {
-						device.Model = s
-					}
-				}
-				if v, ok := info["rated_power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok && f > 0 && device.RatedPower == 0 {
-						device.RatedPower = f
-					}
-				}
-				if v, ok := info["firmware_arm"]; ok && v != nil {
-					if s, ok := v.(string); ok && s != "" && device.FirmwareArm == "" {
-						device.FirmwareArm = s
-					}
-				}
-			}
+			// 注意：设备信息（model、manufacturer、firmware_arm等）已持久化在数据库中，
+			// 不再从Redis提取。设备连接时会通过info主题更新数据库。
 
 			// 从嵌套的 energy 对象读取日发电量（支持 {"energy": {...}} 和 {"energy": {"data": {...}}} 两种格式）
 			var energyData map[string]interface{}
