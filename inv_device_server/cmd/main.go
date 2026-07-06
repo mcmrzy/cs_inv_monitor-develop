@@ -148,7 +148,7 @@ func main() {
 		protocolParser.Start(ctx)
 
 		alertConsumer := service.NewAlertConsumer(
-			cfg.Kafka.Brokers, cfg.Kafka.AlarmTopic, "inv-device-server-alerts", cfg.Backends.APIServer, cfg.Backends.InternalKey)
+			cfg.Kafka.Brokers, cfg.Kafka.AlarmTopic, "inv-device-server-alerts", rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
 		alertConsumer.Start(ctx)
 
 		logger.Info("Kafka consumers started (protocol parser + alert consumer)",

@@ -12,12 +12,14 @@ import (
 	"inv-device-server/internal/model"
 	"inv-device-server/pkg/logger"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
 )
 
 type AlertConsumer struct {
 	consumer    *kafka.Reader
+	rdb         *redis.Client
 	apiServer   string
 	internalKey string
 	httpClient  *http.Client
@@ -43,7 +45,7 @@ type RawAlarmPayload struct {
 	Timestamp int64                  `json:"timestamp"`
 }
 
-func NewAlertConsumer(brokers []string, topic string, groupID string, apiServer string, internalKey string) *AlertConsumer {
+func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis.Client, apiServer string, internalKey string) *AlertConsumer {
 	return &AlertConsumer{
 		consumer: kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  brokers,
@@ -52,6 +54,7 @@ func NewAlertConsumer(brokers []string, topic string, groupID string, apiServer 
 			MinBytes: 10e3,
 			MaxBytes: 10e6,
 		}),
+		rdb:         rdb,
 		apiServer:   strings.TrimRight(apiServer, "/"),
 		internalKey: internalKey,
 		httpClient: &http.Client{
@@ -116,6 +119,24 @@ func (a *AlertConsumer) consume(ctx context.Context) {
 }
 
 func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
+	// 消息去重：使用 Kafka offset 作为唯一标识
+	if a.rdb != nil {
+		msgKey := fmt.Sprintf("alert:dedup:%s:%d:%d", m.Topic, m.Partition, m.Offset)
+		exists, _ := a.rdb.Exists(ctx, msgKey).Result()
+		if exists > 0 {
+			logger.Info("Alert message already processed, skipping",
+				zap.String("topic", m.Topic),
+				zap.Int("partition", m.Partition),
+				zap.Int64("offset", m.Offset))
+			if err := a.consumer.CommitMessages(ctx, m); err != nil {
+				logger.Warn("Failed to commit alert message", zap.Error(err))
+			}
+			return
+		}
+		// 标记消息已处理，TTL 60秒
+		a.rdb.Set(ctx, msgKey, "1", 60*time.Second)
+	}
+
 	var raw RawAlertMessage
 	if err := json.Unmarshal(m.Value, &raw); err != nil {
 		logger.Error("Failed to unmarshal alert", zap.Error(err), zap.String("raw", string(m.Value)))
