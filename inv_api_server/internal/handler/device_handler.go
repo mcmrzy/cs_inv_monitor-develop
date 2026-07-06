@@ -83,19 +83,8 @@ func (h *DeviceHandler) List(c *gin.Context) {
 
 	for _, device := range devices {
 		rtData, err := h.deviceService.GetRealtimeData(c.Request.Context(), device.SN)
-		// DEBUG: 临时调试日志
-		log.Printf("[DEBUG List] sn=%s err=%v hasData=%v", device.SN, err, rtData != nil)
-		if rtData != nil {
-			keys := make([]string, 0, len(rtData))
-			for k := range rtData {
-				keys = append(keys, k)
-			}
-			log.Printf("[DEBUG List] sn=%s keys=%v", device.SN, keys)
-			if ac, ok := rtData["ac"]; ok {
-				log.Printf("[DEBUG List] sn=%s ac=%v type=%T", device.SN, ac, ac)
-			}
-		}
 		if err == nil && rtData != nil {
+
 			// 使用实时数据的 online 字段修正设备状态：
 			// - Redis 说离线且数据库不是离线 → 快速标记为离线（比定时任务更快）
 			// - Redis 说在线 → 保持数据库状态（可能是 1=在线 或 2=故障）
@@ -139,12 +128,8 @@ func (h *DeviceHandler) List(c *gin.Context) {
 					energyData = innerData
 				}
 			}
-			// DEBUG
-			log.Printf("[DEBUG] sn=%s energyData=%v", device.SN, energyData)
 			if energyData != nil {
 				if v, ok := energyData["daily_pv"]; ok && v != nil {
-					// DEBUG
-					log.Printf("[DEBUG] sn=%s daily_pv=%v type=%T", device.SN, v, v)
 					if f, ok := toFloat64(v); ok {
 						device.DailyEnergy = f
 					}
@@ -159,12 +144,8 @@ func (h *DeviceHandler) List(c *gin.Context) {
 					acData = innerData
 				}
 			}
-			// DEBUG
-			log.Printf("[DEBUG] sn=%s acData=%v", device.SN, acData)
 			if acData != nil {
 				if v, ok := acData["power"]; ok && v != nil {
-					// DEBUG
-					log.Printf("[DEBUG] sn=%s power=%v type=%T", device.SN, v, v)
 					if f, ok := toFloat64(v); ok {
 						device.CurrentPower = f
 					}
