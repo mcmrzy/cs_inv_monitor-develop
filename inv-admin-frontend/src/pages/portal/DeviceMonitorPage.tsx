@@ -197,9 +197,11 @@ const DeviceMonitorPage: React.FC = () => {
   const energy = rt?.energy ?? {}
 
   // 合并设备详情数据到rt中（设备信息存储在数据库，不在Redis实时数据中）
+  // DynamicFieldRenderer使用field_key访问数据，设备信息的field_key带info_前缀
   const mergedData = {
     ...rt,
     ...(deviceDetail ? {
+      // 原始字段
       model: deviceDetail.model || rt.model,
       manufacturer: deviceDetail.manufacturer || rt.manufacturer,
       firmware_arm: deviceDetail.firmware_arm || rt.firmware_arm,
@@ -209,6 +211,17 @@ const DeviceMonitorPage: React.FC = () => {
       battery_voltage: deviceDetail.battery_voltage || rt.battery_voltage,
       battery_type: deviceDetail.battery_type || rt.battery_type,
       cell_count: deviceDetail.cell_count || rt.cell_count,
+      // info_ 前缀字段（用于DynamicFieldRenderer）
+      info_sn: deviceDetail.sn || rt.info_sn,
+      info_model: deviceDetail.model || rt.info_model,
+      info_manufacturer: deviceDetail.manufacturer || rt.info_manufacturer,
+      info_firmware_arm: deviceDetail.firmware_arm || rt.info_firmware_arm,
+      info_firmware_esp: deviceDetail.firmware_esp || rt.info_firmware_esp,
+      info_rated_power: deviceDetail.rated_power || rt.info_rated_power,
+      info_rated_voltage: deviceDetail.rated_voltage || rt.info_rated_voltage,
+      info_battery_voltage: deviceDetail.battery_voltage || rt.info_battery_voltage,
+      info_battery_type: deviceDetail.battery_type || rt.info_battery_type,
+      info_cell_count: deviceDetail.cell_count || rt.info_cell_count,
     } : {}),
   }
 
