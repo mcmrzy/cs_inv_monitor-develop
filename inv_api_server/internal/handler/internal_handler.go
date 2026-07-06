@@ -240,30 +240,9 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 		`SELECT COALESCE(status, 0), user_id, station_id FROM devices WHERE sn = $1`, req.SN,
 	).Scan(&oldStatus, &userID, &stationID)
 
-	// 当设备上报在线(status=1)且当前状态为故障(status=2)时，检查是否还有未处理的严重告警
-	// 如果没有未处理的严重告警，允许故障状态恢复为在线
+	// 状态转换决策已由 inv_device_server 的 DeviceStateManager 处理
+	// 此处直接使用请求中的状态值
 	newStatus := req.Status
-	if req.Status == 1 && oldStatus == 2 {
-		var activeAlarmCount int
-		_ = h.db.QueryRow(ctx,
-			`SELECT COUNT(*) FROM alarms WHERE device_sn = $1 AND alarm_level = 3 AND status = 0`, req.SN,
-		).Scan(&activeAlarmCount)
-		if activeAlarmCount > 0 {
-			newStatus = 2 // 仍有未处理的严重告警，保持故障状态
-		}
-	}
-
-	// 离线(status=0)来自 MQTT LWT 遗嘱消息
-	// 但设备数据可能仍通过 Kafka 路径正常上报（MQTT连接抖动不影响数据流）
-	// 通过 Redis device:heartbeat:{sn} key 检查实际数据活动：如果 key 仍存在，忽略 LWT 离线
-	if req.Status == 0 && h.rdb != nil {
-		if h.rdb.Exists(ctx, "device:heartbeat:"+req.SN).Val() > 0 {
-			logger.Info("Ignoring LWT offline - device heartbeat key still exists",
-				zap.String("sn", req.SN))
-			response.Success(c, gin.H{"status": "ok", "ignored": true, "reason": "data_active"})
-			return
-		}
-	}
 
 	_, err := h.db.Exec(ctx, `
 		UPDATE devices SET
