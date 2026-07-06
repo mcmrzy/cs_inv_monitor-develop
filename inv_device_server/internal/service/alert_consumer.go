@@ -167,6 +167,19 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 
 	// 空 payload 或空对象 → 告警清除
 	if len(payloadMap) == 0 {
+		// 防抖：检查是否刚刚发送过恢复通知（10秒内不重复）
+		if a.rdb != nil {
+			clearKey := fmt.Sprintf("alarm:clear:%s", raw.SN)
+			exists, _ := a.rdb.Exists(ctx, clearKey).Result()
+			if exists > 0 {
+				logger.Info("Alarm clear already sent recently, skipping", zap.String("sn", raw.SN))
+				if err := a.consumer.CommitMessages(ctx, m); err != nil {
+					logger.Warn("Failed to commit alert message", zap.Error(err))
+				}
+				return
+			}
+			a.rdb.Set(ctx, clearKey, "1", 10*time.Second)
+		}
 		logger.Info("Device alarm cleared (empty payload)", zap.String("sn", raw.SN))
 		alarm := &model.AlarmData{
 			SN:         raw.SN,
@@ -202,6 +215,19 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 
 	// code=0 且 level="normal" → 告警清除
 	if alarmPayload.Code == 0 && alarmPayload.Level == "normal" {
+		// 防抖：检查是否刚刚发送过恢复通知（10秒内不重复）
+		if a.rdb != nil {
+			clearKey := fmt.Sprintf("alarm:clear:%s", raw.SN)
+			exists, _ := a.rdb.Exists(ctx, clearKey).Result()
+			if exists > 0 {
+				logger.Info("Alarm clear already sent recently, skipping", zap.String("sn", raw.SN))
+				if err := a.consumer.CommitMessages(ctx, m); err != nil {
+					logger.Warn("Failed to commit alert message", zap.Error(err))
+				}
+				return
+			}
+			a.rdb.Set(ctx, clearKey, "1", 10*time.Second)
+		}
 		logger.Info("Device alarm cleared (code=0)", zap.String("sn", raw.SN))
 		alarm := &model.AlarmData{
 			SN:         raw.SN,
