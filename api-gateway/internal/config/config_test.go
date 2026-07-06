@@ -12,17 +12,17 @@ func TestLoad_ExpandsEnvVars(t *testing.T) {
 
 	yamlContent := `
 server:
-  port: ${GW_PORT:-8080}
+  port: ${GW_PORT}
   mode: release
 jwt:
   secret: "${JWT_SECRET}"
 backends:
-  api_server: "${API_SERVER_URL:-http://localhost:8080}"
-  device_server: "${DEVICE_SERVER_URL:-http://localhost:8081}"
+  api_server: "${API_SERVER_URL}"
+  device_server: "${DEVICE_SERVER_URL}"
 redis:
-  host: "${REDIS_HOST:-localhost}"
-  port: ${REDIS_PORT:-6379}
-  password: "${REDIS_PASSWORD:-}"
+  host: "${REDIS_HOST}"
+  port: ${REDIS_PORT}
+  password: "${REDIS_PASSWORD}"
   db: 0
 rbac:
   enabled: true
