@@ -313,6 +313,7 @@ func EventToString(event StateTransition) string {
 
 // DetectAndHandleFault 检测故障状态并处理状态变更
 // 用于 data/status 主题的故障检测
+// 注意：此函数只检测故障，不检测恢复。故障恢复由 alarm 主题的 code=0 触发
 func (m *DeviceStateManager) DetectAndHandleFault(ctx context.Context, sn string, payload map[string]interface{}) error {
 	// 处理可能的嵌套格式：{"data": {"state": "fault", ...}, "timestamp": ...}
 	statusData := payload
@@ -350,12 +351,12 @@ func (m *DeviceStateManager) DetectAndHandleFault(ctx context.Context, sn string
 		}
 	}
 
-	// 确定事件类型
-	var event StateTransition
-	if isFault {
-		event = EventFaultDetected
-	} else {
-		event = EventFaultRecovered
+	// 如果没有检测到故障，不触发任何事件
+	// 故障恢复由 alarm 主题的 code=0 触发，避免与告警消息乱序
+	if !isFault {
+		logger.Info("No fault detected in data/status, skipping (recovery handled by alarm topic)",
+			zap.String("sn", sn))
+		return nil
 	}
 
 	// 构建元数据
@@ -364,10 +365,10 @@ func (m *DeviceStateManager) DetectAndHandleFault(ctx context.Context, sn string
 		metadata["fault_code"] = faultCode
 	}
 
-	// 通过状态管理器处理状态变更
+	// 通过状态管理器处理故障事件
 	return m.HandleStateChange(ctx, &StateChangeRequest{
 		SN:        sn,
-		Event:     event,
+		Event:     EventFaultDetected,
 		Timestamp: time.Now(),
 		Metadata:  metadata,
 	})
