@@ -17,6 +17,8 @@ import { Role } from '@/types'
 import { ROLE_MAP, ROLE_COLORS } from '@/utils/constants'
 import { queryKeys } from '@/utils/queryKeys'
 import type { User } from '@/types'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 
 const { Title } = Typography
 
@@ -49,6 +51,7 @@ const UsersPage: React.FC = () => {
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const { t } = useTranslation()
+  const { timezone } = useTimezoneStore()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [keyword, setKeyword] = useState<string>()
@@ -156,8 +159,8 @@ const UsersPage: React.FC = () => {
         return <Tag color={cfg.color}>{cfg.label}</Tag>
       },
     },
-    { title: t('user.lastLogin'), dataIndex: 'last_login_at', key: 'last_login_at', width: 170, render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-' },
-    { title: t('user.registerTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss') },
+    { title: t('user.lastLogin'), dataIndex: 'last_login_at', key: 'last_login_at', width: 170, render: (val: string) => val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') : '-' },
+    { title: t('user.registerTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.operation'), key: 'action', width: 220,
       render: (_: any, record: User) => {

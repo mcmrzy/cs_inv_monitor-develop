@@ -369,7 +369,7 @@ func (m *DeviceStateManager) DetectAndHandleFault(ctx context.Context, sn string
 	return m.HandleStateChange(ctx, &StateChangeRequest{
 		SN:        sn,
 		Event:     EventFaultDetected,
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 		Metadata:  metadata,
 	})
 }

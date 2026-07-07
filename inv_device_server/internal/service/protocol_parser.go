@@ -297,7 +297,7 @@ func (p *ProtocolParser) handleOnline(ctx context.Context, raw *RawMessage) erro
 	return p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
 		SN:        raw.SN,
 		Event:     event,
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 	})
 }
 
@@ -348,7 +348,7 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 				"cell_count":      info.CellCount,
 				"sn":              info.SN,
 			},
-			"timestamp": time.Now().Unix(),
+			"timestamp": time.Now().UTC().Unix(),
 		}
 		cacheKey := "realtime:latest:" + raw.SN
 		existing, err := p.rdb.Get(ctx, cacheKey).Bytes()
@@ -361,7 +361,7 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 		}
 		rt["info"] = infoPayload
 		rt["_sn"] = raw.SN
-		rt["_updated_at"] = time.Now().Format(time.RFC3339)
+		rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 		mergedBytes, _ := json.Marshal(rt)
 		p.rdb.Set(ctx, cacheKey, mergedBytes, 120*time.Second)
 	}
@@ -455,7 +455,7 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 	if err := p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
 		SN:        raw.SN,
 		Event:     EventOnlineReport,
-		Timestamp: time.Now(),
+		Timestamp: time.Now().UTC(),
 	}); err != nil {
 		logger.Warn("Failed to handle online state",
 			zap.String("sn", raw.SN),
@@ -721,12 +721,12 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 	pipe := p.rdb.Pipeline()
 	// 存储单个字段到 Redis（用于按字段查询和订阅）
 	for k, v := range payload {
-		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": time.Now().Unix()})
+		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": time.Now().UTC().Unix()})
 		pipe.Set(ctx, fmt.Sprintf("realtime:latest:%s:%s", sn, k), fieldBytes, 120*time.Second)
 	}
 	rt["_sn"] = sn
 	rt["_msg_type"] = msgType
-	rt["_updated_at"] = time.Now().Format(time.RFC3339)
+	rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
 	mergedBytes, _ := json.Marshal(rt)
 	pipe.Set(ctx, cacheKey, mergedBytes, 120*time.Second)
