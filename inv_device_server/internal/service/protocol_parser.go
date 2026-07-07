@@ -731,6 +731,43 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 	mergedBytes, _ := json.Marshal(rt)
 	pipe.Set(ctx, cacheKey, mergedBytes, 120*time.Second)
 
+	// 有效数据缓存：如果当前数据包含有效值（非全0），同时更新有效数据缓存
+	if isValidRealtimeData(payload, topicCategory) {
+		validCacheKey := "realtime:last_valid:" + sn
+		// 合并现有有效数据
+		validExisting, err := p.rdb.Get(ctx, validCacheKey).Bytes()
+		var validRt map[string]interface{}
+		if err == nil {
+			_ = json.Unmarshal(validExisting, &validRt)
+		}
+		if validRt == nil {
+			validRt = make(map[string]interface{})
+		}
+		// 更新有效数据
+		if topicCategory != "" {
+			validNested := make(map[string]interface{})
+			if v, ok := validRt[topicCategory]; ok {
+				if nestedMap, ok := v.(map[string]interface{}); ok {
+					validNested = nestedMap
+				}
+			}
+			for k, v := range payload {
+				validNested[k] = v
+			}
+			validRt[topicCategory] = validNested
+		} else {
+			for k, v := range payload {
+				validRt[k] = v
+			}
+		}
+		validRt["_sn"] = sn
+		validRt["_msg_type"] = msgType
+		validRt["_updated_at"] = time.Now().Format(time.RFC3339)
+		validMergedBytes, _ := json.Marshal(validRt)
+		// 有效数据缓存7天过期
+		pipe.Set(ctx, validCacheKey, validMergedBytes, 7*24*time.Hour)
+	}
+
 	if _, err := pipe.Exec(ctx); err != nil {
 		return err
 	}
@@ -739,6 +776,55 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 	_ = p.rdb.Publish(ctx, pubChannel, string(mergedBytes)).Err()
 
 	return nil
+}
+
+// isValidRealtimeData 判断实时数据是否为有效数据（非全0）
+// 用于决定是否更新有效数据缓存
+func isValidRealtimeData(payload map[string]interface{}, topicCategory string) bool {
+	// 如果是info类型，始终认为是有效数据
+	if topicCategory == "info" {
+		return true
+	}
+
+	// 检查功率相关字段
+	powerFields := []string{"power", "pv_power", "pv_power_total", "active_power", "total_active_power"}
+	for _, field := range powerFields {
+		if v, ok := payload[field]; ok {
+			if f, ok := v.(float64); ok && f > 0 {
+				return true
+			}
+		}
+	}
+
+	// 检查电压相关字段（电压通常不为0表示设备在工作）
+	voltageFields := []string{"voltage", "ac_voltage", "pv_voltage", "pv1_voltage", "pv2_voltage"}
+	for _, field := range voltageFields {
+		if v, ok := payload[field]; ok {
+			if f, ok := v.(float64); ok && f > 0 {
+				return true
+			}
+		}
+	}
+
+	// 检查能量相关字段
+	energyFields := []string{"daily_pv", "total_pv", "daily_charge", "total_charge"}
+	for _, field := range energyFields {
+		if v, ok := payload[field]; ok {
+			if f, ok := v.(float64); ok && f > 0 {
+				return true
+			}
+		}
+	}
+
+	// 检查SOC字段
+	if v, ok := payload["soc"]; ok {
+		if f, ok := v.(float64); ok && f > 0 {
+			return true
+		}
+	}
+
+	// 所有关键字段都为0或不存在，认为是无效数据
+	return false
 }
 
 func (p *ProtocolParser) getTopicCategory(msgType string) string {
