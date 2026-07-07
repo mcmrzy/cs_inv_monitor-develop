@@ -731,6 +731,7 @@ class AppLocalizations {
 
   // 新增 getter（不与上面重复的）
   String get recent7DayTrend => _localizedStrings['recent_7day_trend'] ?? '7-Day Trend';
+  String get recent30DayTrend => _localizedStrings['recent_30day_trend'] ?? '30-Day Trend';
   String get powerConsumption => _localizedStrings['power_consumption'] ?? 'Consumption';
   String get unitDevices => _localizedStrings['unit_devices'] ?? '';
   String get noDevicesYet => _localizedStrings['no_devices_yet'] ?? 'No devices';

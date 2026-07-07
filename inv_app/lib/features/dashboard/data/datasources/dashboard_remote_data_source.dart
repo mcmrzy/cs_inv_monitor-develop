@@ -10,9 +10,10 @@ class DashboardRemoteDataSource {
     return await dio.get('/dashboard/statistics');
   }
 
-  /// 获取 7 日发电趋势
-  Future<Response> getTrendData() async {
-    return await dio.get('/dashboard/trend', queryParameters: {'type': 'day'});
+  /// 获取发电趋势数据
+  /// [type] 时间范围类型：'day'(7日)、'week'(28日)、'month'(12个月)
+  Future<Response> getTrendData({String type = 'day'}) async {
+    return await dio.get('/dashboard/trend', queryParameters: {'type': type});
   }
 
   /// 获取设备分布数据

@@ -81,9 +81,9 @@ class DashboardRepositoryImpl implements DashboardRepository {
   }
 
   @override
-  Future<Either<Failure, List<TrendDataPoint>>> getTrendData() async {
+  Future<Either<Failure, List<TrendDataPoint>>> getTrendData({String type = 'day'}) async {
     try {
-      final response = await remoteDataSource.getTrendData();
+      final response = await remoteDataSource.getTrendData(type: type);
       final list = _parseList(response);
       final points = list
           .whereType<Map<String, dynamic>>()

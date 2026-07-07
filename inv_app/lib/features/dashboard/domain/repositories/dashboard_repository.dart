@@ -7,8 +7,9 @@ abstract class DashboardRepository {
   /// 获取仪表盘统计数据（Hero 卡片 + 最近告警）
   Future<Either<Failure, Map<String, dynamic>>> getStatistics();
 
-  /// 获取 7 日发电趋势
-  Future<Either<Failure, List<TrendDataPoint>>> getTrendData();
+  /// 获取发电趋势数据
+  /// [type] 时间范围类型：'day'(7日)、'week'(28日)、'month'(12个月)
+  Future<Either<Failure, List<TrendDataPoint>>> getTrendData({String type = 'day'});
 
   /// 获取设备分布数据
   Future<Either<Failure, Map<String, dynamic>>> getDeviceDistribution();

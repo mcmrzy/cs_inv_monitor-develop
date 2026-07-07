@@ -55,7 +55,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
               ),
               SizedBox(width: 10.w),
               Text(
-                l10n.recent7DayTrend,
+                widget.data.length > 14 ? l10n.recent30DayTrend : l10n.recent7DayTrend,
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
@@ -283,7 +283,8 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
               }
               final shouldShow = index == 0 ||
                   index == widget.data.length - 1 ||
-                  (widget.data.length > 4 && index % 2 == 0);
+                  (widget.data.length > 14 && index % 3 == 0) ||
+                  (widget.data.length > 4 && widget.data.length <= 14 && index % 2 == 0);
               if (!shouldShow) {
                 return const SizedBox.shrink();
               }

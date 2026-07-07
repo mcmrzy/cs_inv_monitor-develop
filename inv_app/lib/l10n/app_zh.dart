@@ -720,6 +720,7 @@ const Map<String, String> zh = {
 
   // Dashboard widgets (新增不重复的)
   'recent_7day_trend': '近7日趋势',
+  'recent_30day_trend': '近30日趋势',
   'power_consumption': '用电',
   'unit_devices': '台',
   'no_devices_yet': '暂无设备',

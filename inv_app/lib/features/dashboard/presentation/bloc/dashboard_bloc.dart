@@ -288,7 +288,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
     // 根据时间范围重新加载趋势数据
     try {
-      final result = await repository.getTrendData();
+      final result = await repository.getTrendData(type: event.range);
       result.fold(
         (failure) => dev.log('Dashboard: getTrendData failed: ${failure.message}'),
         (data) {
