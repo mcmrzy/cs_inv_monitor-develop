@@ -145,7 +145,7 @@ const WorkOrdersPage: React.FC = () => {
     setSelectedTemplate(templateId)
     setTemplateOpen(false)
     setCreateOpen(true)
-    const template = templates?.find((t: WorkOrderTemplate) => t.templateId === templateId)
+    const template = Array.isArray(templates) ? templates.find((t: WorkOrderTemplate) => t.templateId === templateId) : undefined
     if (template) {
       form.setFieldsValue({ title: template.title, description: template.description, priority: String(template.priority), templateType: templateId })
     }
