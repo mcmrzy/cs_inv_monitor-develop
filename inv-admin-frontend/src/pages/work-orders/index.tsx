@@ -109,7 +109,13 @@ const WorkOrdersPage: React.FC = () => {
 
   const { data: installers } = useQuery({
     queryKey: ['users', 'installers'],
-    queryFn: () => userApi.getInstallers().then((r) => r.data?.data ?? [] as User[]),
+    queryFn: () => userApi.getInstallers().then((r) => {
+      const data = r.data?.data
+      // 兼容数组格式和分页格式
+      if (Array.isArray(data)) return data as User[]
+      if (data?.items && Array.isArray(data.items)) return data.items as User[]
+      return [] as User[]
+    }),
     enabled: createOpen,
   })
 
