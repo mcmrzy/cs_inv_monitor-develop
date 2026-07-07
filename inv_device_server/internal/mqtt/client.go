@@ -168,8 +168,8 @@ func (c *Client) Connect(ctx context.Context) error {
 		ServerUrls:                    []*url.URL{serverURL},
 		TlsCfg:                        tlsConfig,
 		KeepAlive:                     120,
-		CleanStartOnInitialConnection: false,
-		SessionExpiryInterval:         86400,
+		CleanStartOnInitialConnection: true,
+		SessionExpiryInterval:         0,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
 			logger.Info("MQTT connected (command channel only)")
 			if _, err := cm.Subscribe(ctx, &paho.Subscribe{
