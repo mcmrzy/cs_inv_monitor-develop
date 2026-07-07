@@ -4,7 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'package:inv_app/core/services/provision_service.dart';
-import 'package:inv_app/core/services/smartconfig_service.dart';
+import 'package:inv_app/core/services/ble_provisioning_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -13,7 +13,7 @@ import 'package:inv_app/core/widgets/wifi_switch_dialog.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-enum _ProvisionMode { softap, smartconfig }
+enum _ProvisionMode { softap, ble }
 
 class WifiConfigPage extends StatefulWidget {
   const WifiConfigPage({super.key});
@@ -24,10 +24,10 @@ class WifiConfigPage extends StatefulWidget {
 
 class _WifiConfigPageState extends State<WifiConfigPage> {
   final _provisionService = ProvisionService();
-  final _smartConfigService = SmartConfigService();
+  final _bleProvisioningService = BleProvisioningService();
   final _connectionModeService = ConnectionModeService(getIt<StorageService>());
 
-  _ProvisionMode _provisionMode = _ProvisionMode.smartconfig;
+  _ProvisionMode _provisionMode = _ProvisionMode.ble;
 
   bool _wifiScanning = false;
   List<WifiNetwork> _csInvNetworks = [];
@@ -49,28 +49,55 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   final _scSsidController = TextEditingController();
   final _scPasswordController = TextEditingController();
   bool _scShowPassword = false;
-  SmartConfigStatus _scStatus = SmartConfigStatus.idle;
-  StreamSubscription<SmartConfigStatus>? _scStatusSub;
-  bool _scConfiguring = false;
+  BleProvisioningStatus _bleStatus = BleProvisioningStatus.idle;
+  StreamSubscription<BleProvisioningStatus>? _bleStatusSub;
+  StreamSubscription<List<BleDeviceInfo>>? _bleDevicesSub;
+  StreamSubscription<String>? _bleResultSub;
+  List<BleDeviceInfo> _bleDevices = [];
+  BleDeviceInfo? _selectedBleDevice;
+  bool _bleScanning = false;
+  bool _bleConnecting = false;
   String? _originalSsid;
 
   @override
   void initState() {
     super.initState();
     _loadCurrentWifiSsid();
-    _scStatusSub = _smartConfigService.statusStream.listen((status) {
+    _initBleProvisioning();
+  }
+
+  void _initBleProvisioning() {
+    _bleStatusSub = _bleProvisioningService.statusStream.listen((status) {
       if (mounted) {
         setState(() {
-          _scStatus = status;
-          if (status == SmartConfigStatus.configuring || status == SmartConfigStatus.scanning) {
-            _scConfiguring = true;
-          } else {
-            _scConfiguring = false;
-          }
+          _bleStatus = status;
+          _bleScanning = status == BleProvisioningStatus.scanning;
+          _bleConnecting = status == BleProvisioningStatus.connecting ||
+                          status == BleProvisioningStatus.discoveringServices ||
+                          status == BleProvisioningStatus.readingDeviceInfo ||
+                          status == BleProvisioningStatus.subscribingNotifications;
         });
-        if (status == SmartConfigStatus.success) {
-          _onSmartConfigSuccess();
+
+        if (status == BleProvisioningStatus.connected) {
+          _onBleProvisionSuccess();
         }
+      }
+    });
+
+    _bleDevicesSub = _bleProvisioningService.devicesStream.listen((devices) {
+      if (mounted) {
+        setState(() {
+          _bleDevices = devices;
+        });
+      }
+    });
+
+    _bleResultSub = _bleProvisioningService.resultStream.listen((result) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result),
+          duration: const Duration(seconds: 3),
+        ));
       }
     });
   }
@@ -91,8 +118,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     _workingPasswordController.dispose();
     _scSsidController.dispose();
     _scPasswordController.dispose();
-    _scStatusSub?.cancel();
-    _smartConfigService.dispose();
+    _bleStatusSub?.cancel();
+    _bleDevicesSub?.cancel();
+    _bleResultSub?.cancel();
+    _bleProvisioningService.dispose();
     super.dispose();
   }
 
@@ -420,47 +449,88 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     }
   }
 
-  Future<void> _startSmartConfig() async {
-    final ssid = _scSsidController.text.trim();
-    final password = _scPasswordController.text.trim();
-    if (ssid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.pleaseInputWifiName)));
-      return;
-    }
+  Future<void> _startBleScan() async {
+    setState(() {
+      _bleDevices = [];
+      _selectedBleDevice = null;
+    });
 
-    setState(() => _scConfiguring = true);
-    final success = await _smartConfigService.startSmartConfig(
-      ssid: ssid,
-      password: password,
-      timeout: const Duration(seconds: 60),
-    );
+    await _bleProvisioningService.startScan();
+  }
 
-    if (!success && mounted && _scStatus != SmartConfigStatus.success) {
-      setState(() => _scConfiguring = false);
+  Future<void> _connectToBleDevice(BleDeviceInfo device) async {
+    setState(() {
+      _selectedBleDevice = device;
+      _bleConnecting = true;
+    });
+
+    final result = await _bleProvisioningService.connectToDevice(device);
+
+    if (!result.success && mounted) {
+      setState(() {
+        _bleConnecting = false;
+        _selectedBleDevice = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(AppLocalizations.of(context)!.smartConfigTimeoutHint),
+        content: Text(result.message ?? '连接失败'),
         backgroundColor: AppColors.errorLight,
       ));
     }
   }
 
-  void _stopSmartConfig() {
-    _smartConfigService.stopSmartConfig();
+  Future<void> _disconnectBleDevice() async {
+    await _bleProvisioningService.disconnectFromDevice();
     setState(() {
-      _scConfiguring = false;
-      _scStatus = SmartConfigStatus.idle;
+      _selectedBleDevice = null;
+      _bleConnecting = false;
     });
   }
 
-  Future<void> _onSmartConfigSuccess() async {
+  Future<void> _sendBleProvisionConfig() async {
+    final ssid = _workingSsidController.text.trim();
+    final password = _workingPasswordController.text.trim();
+
+    if (ssid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.pleaseInputWifiName)));
+      return;
+    }
+
+    setState(() {
+      _provisioning = true;
+    });
+
+    final result = await _bleProvisioningService.writeWiFiCredentials(
+      ssid: ssid,
+      password: password,
+    );
+
+    if (!result.success && mounted) {
+      setState(() {
+        _provisioning = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.message ?? '发送失败'),
+        backgroundColor: AppColors.errorLight,
+      ));
+    }
+  }
+
+  void _onBleProvisionSuccess() {
     if (!mounted) return;
+
+    setState(() {
+      _provisioning = false;
+    });
+
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(AppLocalizations.of(context)!.configSuccess),
+      content: Text('配网成功！设备正在连接WiFi...'),
       backgroundColor: AppColors.successLight,
     ));
 
-    setState(() => _scConfiguring = false);
+    _waitForDeviceOnline();
+  }
 
+  Future<void> _waitForDeviceOnline() async {
     final mqtt = getIt<MQTTService>();
     bool deviceOnline = false;
 
@@ -473,17 +543,50 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     } catch (_) {}
 
     if (!mounted) return;
+
     if (deviceOnline) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(AppLocalizations.of(context)!.deviceOnline),
+        content: Text(AppLocalizations.of(context)!.deviceOnlineWifi),
         backgroundColor: AppColors.successLight,
+        duration: const Duration(seconds: 3),
       ));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(AppLocalizations.of(context)!.provisionSuccessWaiting),
+        content: Text('配网成功，等待设备上线中...'),
         backgroundColor: const Color(0xFFF59E0B),
         duration: const Duration(seconds: 3),
       ));
+    }
+
+    await _disconnectBleDevice();
+  }
+
+  String _getBleStatusText() {
+    switch (_bleStatus) {
+      case BleProvisioningStatus.idle:
+        return '就绪';
+      case BleProvisioningStatus.scanning:
+        return '正在扫描...';
+      case BleProvisioningStatus.connecting:
+        return '正在连接设备...';
+      case BleProvisioningStatus.discoveringServices:
+        return '正在发现服务...';
+      case BleProvisioningStatus.readingDeviceInfo:
+        return '正在读取设备信息...';
+      case BleProvisioningStatus.subscribingNotifications:
+        return '正在订阅状态...';
+      case BleProvisioningStatus.writingCredentials:
+        return '正在写入WiFi凭据...';
+      case BleProvisioningStatus.waitingForResult:
+        return '等待配网结果...';
+      case BleProvisioningStatus.connected:
+        return '配网成功！';
+      case BleProvisioningStatus.failed:
+        return '配网失败';
+      case BleProvisioningStatus.timeout:
+        return '配网超时';
+      case BleProvisioningStatus.error:
+        return '配网错误';
     }
   }
 
@@ -513,7 +616,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           if (_provisionMode == _ProvisionMode.softap)
             _buildSoftApSection()
           else
-            _buildSmartConfigSection(),
+            _buildBleSection(),
         ],
       ),
     );
@@ -529,20 +632,20 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       child: Row(children: [
         Expanded(
           child: GestureDetector(
-            onTap: () => setState(() => _provisionMode = _ProvisionMode.smartconfig),
+            onTap: () => setState(() => _provisionMode = _ProvisionMode.ble),
             child: Container(
               padding: EdgeInsets.symmetric(vertical: 10.h),
               decoration: BoxDecoration(
-                color: _provisionMode == _ProvisionMode.smartconfig ? AppColors.primary : Colors.transparent,
+                color: _provisionMode == _ProvisionMode.ble ? AppColors.primary : Colors.transparent,
                 borderRadius: BorderRadius.circular(10.r),
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.settings_input_antenna, size: 18.sp,
-                  color: _provisionMode == _ProvisionMode.smartconfig ? Colors.white : AppColors.textSecondary),
+                Icon(Icons.bluetooth, size: 18.sp,
+                  color: _provisionMode == _ProvisionMode.ble ? Colors.white : AppColors.textSecondary),
                 SizedBox(width: 6.w),
-                Text(AppLocalizations.of(context)!.smartProvision,
+                Text('BLE配网',
                   style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600,
-                    color: _provisionMode == _ProvisionMode.smartconfig ? Colors.white : AppColors.textSecondary)),
+                    color: _provisionMode == _ProvisionMode.ble ? Colors.white : AppColors.textSecondary)),
               ]),
             ),
           ),
@@ -773,27 +876,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     ]);
   }
 
-  Widget _buildSmartConfigSection() {
-    final l10n = AppLocalizations.of(context)!;
-    final statusText = switch (_scStatus) {
-      SmartConfigStatus.idle => l10n.provisionReady,
-      SmartConfigStatus.scanning => l10n.scanning,
-      SmartConfigStatus.configuring => l10n.sendingProvisionInfo,
-      SmartConfigStatus.success => '✅ ${l10n.configSuccess}',
-      SmartConfigStatus.timeout => l10n.provisionTimeout,
-      SmartConfigStatus.error => l10n.provisionFailedX,
-    };
-
-    final statusColor = switch (_scStatus) {
-      SmartConfigStatus.idle => AppColors.textHint,
-      SmartConfigStatus.scanning => AppColors.primary,
-      SmartConfigStatus.configuring => AppColors.primary,
-      SmartConfigStatus.success => AppColors.successLight,
-      SmartConfigStatus.timeout => const Color(0xFFF59E0B),
-      SmartConfigStatus.error => AppColors.errorLight,
-    };
-
+  Widget _buildBleSection() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // 说明信息
       Container(
         padding: EdgeInsets.all(14.w),
         margin: EdgeInsets.only(bottom: 20.h),
@@ -805,115 +890,197 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
           SizedBox(width: 10.w),
           Expanded(child: Text(
-            AppLocalizations.of(context)!.smartConfigModeDesc,
+            'BLE配网：通过蓝牙扫描设备，无需切换网络，直接配置WiFi',
             style: TextStyle(fontSize: 12.sp, color: AppColors.textPrimary),
           )),
         ]),
       ),
 
-      TextField(
-        controller: _scSsidController,
-        enabled: !_scConfiguring,
-        decoration: InputDecoration(
-          labelText: AppLocalizations.of(context)!.wifiName,
-          hintText: AppLocalizations.of(context)!.pleaseInputWifiName,
-          prefixIcon: const Icon(Icons.wifi, color: AppColors.primary),
-          suffixIcon: IconButton(
-            icon: const Icon(Icons.refresh, color: AppColors.textHint, size: 20),
-            onPressed: _scConfiguring ? null : _loadCurrentWifiSsid,
-          ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+      // 扫描按钮
+      SizedBox(width: double.infinity, height: 46.h,
+        child: ElevatedButton.icon(
+          onPressed: _bleScanning ? null : _startBleScan,
+          icon: _bleScanning
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.bluetooth_searching, size: 22),
+          label: Text(_bleScanning ? '正在扫描...' : '扫描BLE设备', style: const TextStyle(fontSize: 15)),
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
         ),
       ),
-      SizedBox(height: 12.h),
-      TextField(
-        controller: _scPasswordController,
-        enabled: !_scConfiguring,
-        obscureText: !_scShowPassword,
-        decoration: InputDecoration(
-          labelText: AppLocalizations.of(context)!.wifiPassword,
-          hintText: AppLocalizations.of(context)!.inputWifiPassword,
-          prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textHint),
-          suffixIcon: IconButton(
-            icon: Icon(_scShowPassword ? Icons.visibility_off : Icons.visibility, color: AppColors.textHint),
-            onPressed: () => setState(() => _scShowPassword = !_scShowPassword),
-          ),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-        ),
-      ),
-      SizedBox(height: 24.h),
 
-      if (_scConfiguring)
-        Column(children: [
-          SizedBox(
-            width: 48.w, height: 48.w,
-            child: const CircularProgressIndicator(
-              strokeWidth: 3,
-              color: AppColors.primary,
-            ),
-          ),
-          SizedBox(height: 12.h),
-          Text(statusText, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: statusColor)),
-          SizedBox(height: 20.h),
-          SizedBox(width: double.infinity, height: 46.h,
-            child: OutlinedButton.icon(
-              onPressed: _stopSmartConfig,
-              icon: const Icon(Icons.stop, size: 20),
-              label: Text(AppLocalizations.of(context)!.stopProvision, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.errorLight,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                side: const BorderSide(color: AppColors.errorLight),
+      SizedBox(height: 16.h),
+
+      // 设备列表
+      if (_bleDevices.isNotEmpty) ...[
+        Text('发现 ${_bleDevices.length} 个设备', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+        SizedBox(height: 8.h),
+        ..._bleDevices.map((device) {
+          final rssi = device.rssi;
+          final sig = rssi > -50 ? '📶📶📶' : (rssi > -70 ? '📶📶' : '📶');
+          return Card(
+            margin: EdgeInsets.only(bottom: 8.h),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+            child: ListTile(
+              leading: Container(width: 44.w, height: 44.w, decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r)),
+                child: const Icon(Icons.bluetooth, color: AppColors.primary, size: 22)),
+              title: Text(device.deviceName, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('SN: ${device.sn}', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                  Text('$sig $rssi dBm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                ],
               ),
+              trailing: _bleConnecting && _selectedBleDevice?.macAddress == device.macAddress
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textHint),
+              onTap: _bleConnecting ? null : () => _connectToBleDevice(device),
+            ),
+          );
+        }),
+      ],
+
+      // 无设备提示
+      if (_bleDevices.isEmpty && !_bleScanning)
+        Padding(padding: EdgeInsets.only(top: 16.h), child: Center(child: Container(
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(color: const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(12.r)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.bluetooth_disabled, size: 40.sp, color: AppColors.textHint),
+            SizedBox(height: 10.h),
+            Text('未发现BLE设备', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+            SizedBox(height: 4.h),
+            Text('请确保设备已上电并开启配网模式', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+          ]),
+        ))),
+
+      // 已连接设备信息
+      if (_selectedBleDevice != null && _bleStatus == BleProvisioningStatus.connected) ...[
+        Container(padding: EdgeInsets.all(12.w), margin: EdgeInsets.only(bottom: 16.h),
+          decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(10.r)),
+          child: Row(children: [
+            const Icon(Icons.check_circle, color: AppColors.successLight, size: 20),
+            SizedBox(width: 8.w),
+            Expanded(child: Text('已连接 ${_selectedBleDevice!.deviceName}', style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46)))),
+            GestureDetector(onTap: _disconnectBleDevice, child: Text('断开', style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
+          ])),
+      ],
+
+      // WiFi配置表单（仅在连接后显示）
+      if (_selectedBleDevice != null && _bleStatus == BleProvisioningStatus.connected) ...[
+        SizedBox(width: double.infinity, height: 44.h,
+          child: OutlinedButton.icon(
+            onPressed: _scanningNearbyWifi ? null : _rescanNearbyWifiFromPhone,
+            icon: _scanningNearbyWifi
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.wifi, size: 20),
+            label: Text(_scanningNearbyWifi ? AppLocalizations.of(context)!.scanning : AppLocalizations.of(context)!.scanNearbyWifi, style: const TextStyle(fontSize: 14)),
+            style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+              side: const BorderSide(color: AppColors.primary)),
+          ),
+        ),
+
+        SizedBox(height: 8.h),
+
+        if (_nearbyWifiList.isNotEmpty) ...[
+          Text(AppLocalizations.of(context)!.clickWifiToFill, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+          SizedBox(height: 6.h),
+          Container(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(12.r), border: Border.all(color: const Color(0xFFE5E7EB))),
+            constraints: BoxConstraints(maxHeight: 200.h),
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              itemCount: _nearbyWifiList.length,
+              separatorBuilder: (_, __) => const Divider(height: 1, indent: 56),
+              itemBuilder: (_, i) {
+                final w = _nearbyWifiList[i];
+                final sig = w.rssi > -50 ? '📶📶📶' : (w.rssi > -70 ? '📶📶' : '📶');
+                final selected = _workingSsidController.text == w.ssid;
+                return ListTile(
+                  leading: Icon(w.encrypted ? Icons.lock_outline : Icons.wifi, size: 20, color: selected ? AppColors.primary : AppColors.textHint),
+                  title: Text(w.ssid, style: TextStyle(fontSize: 13.sp, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: AppColors.textPrimary)),
+                  trailing: Text('$sig ${w.rssi}dBm', style: TextStyle(fontSize: 10.sp, color: AppColors.textHint)),
+                  tileColor: selected ? const Color(0xFFEFF6FF) : null,
+                  dense: true,
+                  onTap: () => _pickWiFi(w),
+                );
+              },
             ),
           ),
-        ])
-      else
+          SizedBox(height: 16.h),
+        ],
+
+        TextField(
+          controller: _workingSsidController,
+          decoration: InputDecoration(
+            labelText: AppLocalizations.of(context)!.wifiName, hintText: AppLocalizations.of(context)!.clickAboveOrManual,
+            prefixIcon: const Icon(Icons.wifi, color: AppColors.primary),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+          ),
+        ),
+        SizedBox(height: 12.h),
+        TextField(
+          controller: _workingPasswordController,
+          obscureText: !_showPassword,
+          decoration: InputDecoration(
+            labelText: AppLocalizations.of(context)!.wifiPassword, hintText: AppLocalizations.of(context)!.inputWifiPassword,
+            prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textHint),
+            suffixIcon: IconButton(
+              icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility, color: AppColors.textHint),
+              onPressed: () => setState(() => _showPassword = !_showPassword),
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+          ),
+        ),
+        SizedBox(height: 20.h),
         SizedBox(width: double.infinity, height: 50.h,
           child: ElevatedButton.icon(
-            onPressed: _scStatus == SmartConfigStatus.success ? null : _startSmartConfig,
-            icon: const Icon(Icons.settings_input_antenna, size: 22),
-            label: Text(_scStatus == SmartConfigStatus.success ? AppLocalizations.of(context)!.configSuccess : AppLocalizations.of(context)!.provisionStarted,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _scStatus == SmartConfigStatus.success ? AppColors.successLight : AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-            ),
+            onPressed: _provisioning ? null : _sendBleProvisionConfig,
+            icon: _provisioning
+                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                : const Icon(Icons.bluetooth, size: 22),
+            label: Text(_provisioning ? '配网中...' : '发送WiFi配置', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.successLight, foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
           ),
         ),
+      ],
 
-      if (_scStatus != SmartConfigStatus.idle && !_scConfiguring) ...[
+      // 状态显示
+      if (_bleStatus != BleProvisioningStatus.idle && _bleStatus != BleProvisioningStatus.scanning) ...[
         SizedBox(height: 16.h),
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(14.w),
+        Container(width: double.infinity, padding: EdgeInsets.all(14.w),
           decoration: BoxDecoration(
-            color: _scStatus == SmartConfigStatus.success
+            color: _bleStatus == BleProvisioningStatus.connected
                 ? const Color(0xFFECFDF5)
-                : (_scStatus == SmartConfigStatus.error || _scStatus == SmartConfigStatus.timeout)
+                : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
                     ? const Color(0xFFFEF2F2)
                     : const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(12.r),
-          ),
+            borderRadius: BorderRadius.circular(12.r)),
           child: Row(children: [
             Icon(
-              _scStatus == SmartConfigStatus.success
+              _bleStatus == BleProvisioningStatus.connected
                   ? Icons.check_circle
-                  : (_scStatus == SmartConfigStatus.error || _scStatus == SmartConfigStatus.timeout)
+                  : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
                       ? Icons.error
                       : Icons.info,
               size: 20.sp,
-              color: statusColor,
-            ),
+              color: _bleStatus == BleProvisioningStatus.connected
+                  ? AppColors.successLight
+                  : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
+                      ? AppColors.errorLight
+                      : AppColors.primary),
             SizedBox(width: 10.w),
-            Expanded(child: Text(statusText, style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
-          ]),
-        ),
+            Expanded(child: Text(_getBleStatusText(), style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
+          ])),
       ],
 
       SizedBox(height: 60.h),
