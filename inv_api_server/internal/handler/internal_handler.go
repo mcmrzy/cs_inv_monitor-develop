@@ -615,9 +615,9 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 
 	var telemetryTime time.Time
 	if req.Timestamp > 0 {
-		telemetryTime = time.Unix(req.Timestamp, 0)
+		telemetryTime = time.Unix(req.Timestamp, 0).UTC()
 	} else {
-		telemetryTime = time.Now()
+		telemetryTime = time.Now().UTC()
 	}
 
 	_, err = h.db.Exec(ctx, `
