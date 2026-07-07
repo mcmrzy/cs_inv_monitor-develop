@@ -1,21 +1,146 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/services/firmware_download_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/ota/presentation/bloc/ota_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class FirmwareListPage extends StatelessWidget {
+class FirmwareListPage extends StatefulWidget {
   final String sn;
   final String deviceModel;
   final String currentMainVersion;
 
   const FirmwareListPage({
-    Key? key,
+    super.key,
     required this.sn,
     required this.deviceModel,
     required this.currentMainVersion,
-  }) : super(key: key);
+  });
+
+  @override
+  State<FirmwareListPage> createState() => _FirmwareListPageState();
+}
+
+class _FirmwareListPageState extends State<FirmwareListPage> {
+  final FirmwareDownloadService _downloadService = FirmwareDownloadService(
+    getIt<Dio>(),
+    getIt<SharedPreferences>(),
+  );
+
+  // 跟踪每个package的下载状态
+  final Map<int, bool> _downloadedCache = {};
+  final Map<int, double> _downloadingProgress = {};
+  final Set<int> _downloadingIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _requestList();
+  }
+
+  @override
+  void dispose() {
+    _downloadService.dispose();
+    super.dispose();
+  }
+
+  void _requestList() {
+    context.read<OtaBloc>().add(
+      LoadAvailablePackages(sn: widget.sn),
+    );
+  }
+
+  /// 预下载升级包中的所有固件
+  Future<void> _preDownloadPackage(dynamic pkg) async {
+    final items = (pkg is Map && pkg['items'] is List)
+        ? (pkg['items'] as List)
+        : <dynamic>[];
+    
+    if (items.isEmpty) return;
+    
+    final packageId = (pkg is Map) ? (pkg['id'] as int? ?? 0) : 0;
+    
+    setState(() {
+      _downloadingIds.add(packageId);
+      _downloadingProgress[packageId] = 0.0;
+    });
+
+    _downloadService.downloadProgressStream.listen((progress) {
+      if (_downloadingIds.contains(packageId) && mounted) {
+        setState(() {
+          _downloadingProgress[packageId] = progress;
+        });
+      }
+    });
+
+    try {
+      int downloadedCount = 0;
+      final totalItems = items.length;
+      
+      for (final item in items) {
+        if (item is Map) {
+          final firmwareId = item['firmware_id'] as int? ?? 0;
+          final downloadUrl = item['download_url'] as String? ?? '';
+          final chip = item['target_chip'] as String? ?? 'firmware';
+          final version = item['firmware_version'] as String? ?? '';
+          final fileName = '${chip}_$version.bin';
+          
+          if (firmwareId > 0 && downloadUrl.isNotEmpty) {
+            // 检查是否已下载
+            final alreadyDownloaded = await _downloadService.isFirmwareDownloaded(firmwareId);
+            if (!alreadyDownloaded) {
+              await _downloadService.downloadFirmware(
+                url: downloadUrl,
+                fileName: fileName,
+                firmwareId: firmwareId,
+              );
+            }
+            downloadedCount++;
+            
+            // 更新进度
+            if (mounted) {
+              setState(() {
+                _downloadingProgress[packageId] = downloadedCount / totalItems;
+              });
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _downloadedCache[packageId] = true;
+          _downloadingIds.remove(packageId);
+        });
+        
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.str('downloaded')),
+            backgroundColor: AppColors.successLight,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloadingIds.remove(packageId);
+        });
+        
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.str('pre_download_failed', {'error': '$e'})),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
 
   /// Compare version strings like "V3.0.2.20250601".
   /// Returns -1 if a < b, 0 if equal, 1 if a > b.
@@ -50,21 +175,15 @@ class FirmwareListPage extends StatelessWidget {
   }
 
   bool _isRollback(String packageVersion) {
-    if (currentMainVersion.isEmpty) return false;
-    final current = _normalizeVersion(currentMainVersion);
+    if (widget.currentMainVersion.isEmpty) return false;
+    final current = _normalizeVersion(widget.currentMainVersion);
     return _compareVersions(packageVersion, current) < 0;
   }
 
   bool _isCurrentVersion(String packageVersion) {
-    if (currentMainVersion.isEmpty) return false;
-    final current = _normalizeVersion(currentMainVersion);
+    if (widget.currentMainVersion.isEmpty) return false;
+    final current = _normalizeVersion(widget.currentMainVersion);
     return _compareVersions(packageVersion, current) == 0;
-  }
-
-  void _requestList(BuildContext context) {
-    context.read<OtaBloc>().add(
-      LoadAvailablePackages(sn: sn),
-    );
   }
 
   void _installPackage(BuildContext context, int packageId, String version) {
@@ -99,14 +218,14 @@ class FirmwareListPage extends StatelessWidget {
         if (confirmed == true && context.mounted) {
           // 使用 package_id 触发升级 (POST /ota/trigger)
           context.read<OtaBloc>().add(
-            OTATriggerRequested(sn: sn, packageId: packageId),
+            OTATriggerRequested(sn: widget.sn, packageId: packageId),
           );
         }
       });
     } else {
       // 使用 package_id 触发升级 (POST /ota/trigger)
       context.read<OtaBloc>().add(
-        OTATriggerRequested(sn: sn, packageId: packageId),
+        OTATriggerRequested(sn: widget.sn, packageId: packageId),
       );
     }
   }
@@ -153,7 +272,7 @@ class FirmwareListPage extends StatelessWidget {
           // Initial kick
           if (state is OTAInitial || state is OTAUpToDate || state is OTAUpdateAvailable) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (context.mounted) _requestList(context);
+              if (context.mounted) _requestList();
             });
           }
 
@@ -193,7 +312,7 @@ class FirmwareListPage extends StatelessWidget {
                   ),
                   SizedBox(height: 20.h),
                   ElevatedButton(
-                    onPressed: () => _requestList(context),
+                    onPressed: () => _requestList(),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
@@ -237,7 +356,7 @@ class FirmwareListPage extends StatelessWidget {
       padding: EdgeInsets.all(16.w),
       children: [
         // Current version card
-        if (currentMainVersion.isNotEmpty)
+        if (widget.currentMainVersion.isNotEmpty)
           Container(
             padding: EdgeInsets.all(14.w),
             margin: EdgeInsets.only(bottom: 16.h),
@@ -264,7 +383,7 @@ class FirmwareListPage extends StatelessWidget {
                       ),
                       SizedBox(height: 2.h),
                       Text(
-                        currentMainVersion,
+                        widget.currentMainVersion,
                         style: TextStyle(
                           fontSize: 16.sp,
                           fontWeight: FontWeight.w700,
@@ -310,6 +429,11 @@ class FirmwareListPage extends StatelessWidget {
     final borderColor = isCurrent
         ? AppColors.successLight.withValues(alpha: 0.5)
         : const Color(0xFFE5E7EB);
+
+    // 检查下载状态
+    final isDownloaded = _downloadedCache[id] ?? false;
+    final isDownloading = _downloadingIds.contains(id);
+    final downloadProgress = _downloadingProgress[id] ?? 0.0;
 
     return Container(
       margin: EdgeInsets.only(bottom: 12.h),
@@ -431,7 +555,7 @@ class FirmwareListPage extends StatelessWidget {
             ),
           ],
 
-          // Footer: date + install button
+          // Footer: date + buttons
           SizedBox(height: 12.h),
           Row(
             children: [
@@ -442,8 +566,80 @@ class FirmwareListPage extends StatelessWidget {
                 style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
               ),
               const Spacer(),
-              if (!isCurrent)
+              if (!isCurrent) ...[
+                // 预下载/本地安装按钮
+                if (isDownloading)
+                  SizedBox(
+                    width: 80.w,
+                    child: Column(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4.r),
+                          child: LinearProgressIndicator(
+                            value: downloadProgress > 0 ? downloadProgress : null,
+                            minHeight: 4.h,
+                            backgroundColor: const Color(0xFFE5E7EB),
+                            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                          ),
+                        ),
+                        SizedBox(height: 2.h),
+                        Text(
+                          downloadProgress > 0 
+                            ? '${(downloadProgress * 100).toStringAsFixed(0)}%'
+                            : '下载中...',
+                          style: TextStyle(fontSize: 10.sp, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (isDownloaded)
+                  GestureDetector(
+                    onTap: () {
+                      // 跳转到本地OTA页面
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('请在OTA页面使用本地安装功能')),
+                      );
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                      decoration: BoxDecoration(
+                        color: AppColors.successLight,
+                        borderRadius: BorderRadius.circular(8.r),
+                      ),
+                      child: Text(
+                        '本地安装',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  GestureDetector(
+                    onTap: () => _preDownloadPackage(pkg),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(8.r),
+                        border: Border.all(color: AppColors.primary),
+                      ),
+                      child: Text(
+                        '预下载',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                SizedBox(width: 8.w),
+                // 安装按钮
                 _buildInstallButton(context, id, displayVersion, isRollbackVer),
+              ],
             ],
           ),
         ],

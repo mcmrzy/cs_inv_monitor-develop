@@ -1401,6 +1401,10 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 	type chipInfo struct {
 		TargetChip      string `json:"target_chip"`
 		FirmwareVersion string `json:"firmware_version"`
+		FirmwareID      int64  `json:"firmware_id"`
+		DownloadURL     string `json:"download_url"`
+		FileSize        int64  `json:"file_size"`
+		FileMD5         string `json:"file_md5"`
 	}
 	type availablePackage struct {
 		ID            int64      `json:"id"`
@@ -1419,6 +1423,10 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 			chips = append(chips, chipInfo{
 				TargetChip:      item.TargetChip,
 				FirmwareVersion: item.FirmwareVersion,
+				FirmwareID:      item.FirmwareID,
+				DownloadURL:     h.otaService.BuildDownloadURL(item.FileURL),
+				FileSize:        item.FileSize,
+				FileMD5:         item.FileMD5,
 			})
 		}
 		result = append(result, availablePackage{
