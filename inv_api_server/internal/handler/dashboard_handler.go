@@ -289,6 +289,9 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 	case "day":
 		startDate = now.AddDate(0, 0, -7).Format("2006-01-02")
 		endDate = now.Format("2006-01-02")
+	case "30days":
+		startDate = now.AddDate(0, 0, -30).Format("2006-01-02")
+		endDate = now.Format("2006-01-02")
 	case "week":
 		startDate = now.AddDate(0, 0, -28).Format("2006-01-02")
 		endDate = now.Format("2006-01-02")

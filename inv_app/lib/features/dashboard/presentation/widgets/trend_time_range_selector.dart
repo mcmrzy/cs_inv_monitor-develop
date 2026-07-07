@@ -26,6 +26,7 @@ class TrendTimeRangeSelector extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _buildRangeButton(context, '日', 'day'),
+          _buildRangeButton(context, '30日', '30days'),
           _buildRangeButton(context, '周', 'week'),
           _buildRangeButton(context, '月', 'month'),
         ],
