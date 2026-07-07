@@ -6,8 +6,8 @@ import {
 import {
   DashboardOutlined, DesktopOutlined, CloudUploadOutlined, AlertOutlined,
   ToolOutlined, TeamOutlined, SettingOutlined, LogoutOutlined, UserOutlined,
-  MenuFoldOutlined, MenuUnfoldOutlined, SafetyOutlined, ClusterOutlined,
-  FundViewOutlined, HomeOutlined, ThunderboltOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined, ClusterOutlined,
+  FundViewOutlined, ThunderboltOutlined,
   EnvironmentOutlined, LockOutlined, FileTextOutlined,
   RadarChartOutlined, ControlOutlined, UnorderedListOutlined,
   EditOutlined, ExperimentOutlined, GlobalOutlined, ClockCircleOutlined,
@@ -43,7 +43,6 @@ const getAdminMenuItems = (t: (key: string) => string): MenuItem[] => [
   { key: '/batch-settings', icon: <EditOutlined />, label: t('menu.batchSettings'), permission: 'devices:view' },
   { key: '/ota', icon: <CloudUploadOutlined />, label: t('menu.ota'), permission: 'firmware:view' },
   { key: '/alerts', icon: <AlertOutlined />, label: t('menu.alertCenter'), permission: 'alerts:view' },
-  { key: '/alert-rules', icon: <SafetyOutlined />, label: t('menu.alertRules'), permission: 'alert_rules:view' },
   { key: '/work-orders', icon: <FileTextOutlined />, label: t('menu.workOrders'), permission: 'work_orders:view' },
   { key: '/admin', icon: <SettingOutlined />, label: t('menu.systemConfig'), permission: 'admin:view' },
   { key: '/users', icon: <TeamOutlined />, label: t('menu.userManage'), permission: 'users:view' },
@@ -57,9 +56,7 @@ const getUserMenuItems = (t: (key: string) => string): MenuItem[] => [
   { key: '/devices', icon: <DesktopOutlined />, label: t('menu.deviceManage'), permission: 'devices:view' },
   { key: '/remote-settings', icon: <ControlOutlined />, label: t('menu.remoteSettings'), permission: 'devices:view' },
   { key: '/alerts', icon: <AlertOutlined />, label: t('menu.alertCenter'), permission: 'alerts:view' },
-  { key: '/alert-rules', icon: <SafetyOutlined />, label: t('menu.alertRules'), permission: 'alert_rules:view' },
   { key: '/work-orders', icon: <FileTextOutlined />, label: t('menu.workOrders'), permission: 'work_orders:view' },
-  { key: '/portal', icon: <HomeOutlined />, label: t('menu.myStation'), permission: 'dashboard:view' },
 ]
 
 const MainLayout: React.FC = () => {
@@ -104,7 +101,7 @@ const MainLayout: React.FC = () => {
     return filterMenuItems(source)
   }, [isAdminRole, hasPermission, lang])
 
-  const selectedKey = '/' + (location.pathname.split('/')[1] || (isAdminRole ? 'dashboard' : 'portal'))
+  const selectedKey = '/' + (location.pathname.split('/')[1] || 'dashboard')
 
   const handleMenuClick = (info: { key: string }) => {
     navigate(info.key)

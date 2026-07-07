@@ -12,15 +12,13 @@ import DashboardPage from '@/pages/dashboard'
 import DevicesPage from '@/pages/devices'
 import OtaPage from '@/pages/ota'
 import AlertsPage from '@/pages/alerts'
-import AlertRulesPage from '@/pages/alert-rules'
+
 import UsersPage from '@/pages/users'
 import AdminPage from '@/pages/admin'
 import WorkOrdersPage from '@/pages/work-orders'
 import BigScreenPage from '@/pages/big-screen'
 import ParallelPage from '@/pages/parallel'
-import PortalOverview from '@/pages/portal/OverviewPage'
-import PortalDevices from '@/pages/portal/DeviceMonitorPage'
-import PortalAlerts from '@/pages/portal/AlertsPage'
+
 import StationsPage from '@/pages/stations'
 import ModelsPage from '@/pages/models'
 import MonitoringPage from '@/pages/monitoring'
@@ -38,7 +36,7 @@ const RoleRedirect: React.FC = () => {
     return <Navigate to="/devices" replace />
   }
   if (user?.role === Role.END_USER) {
-    return <Navigate to="/portal" replace />
+    return <Navigate to="/dashboard" replace />
   }
   return <Navigate to="/dashboard" replace />
 }
@@ -131,14 +129,12 @@ const App: React.FC = () => {
               <Route path="/devices" element={<DevicesPage />} />
               <Route path="/ota" element={<OtaPage />} />
               <Route path="/alerts" element={<AlertsPage />} />
-              <Route path="/alert-rules" element={<AlertRulesPage />} />
+
               <Route path="/work-orders" element={<WorkOrdersPage />} />
               <Route path="/users" element={<UsersPage />} />
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/parallel" element={<ParallelPage />} />
-              <Route path="/portal" element={<PortalOverview />} />
-              <Route path="/portal/devices" element={<PortalDevices />} />
-              <Route path="/portal/alerts" element={<PortalAlerts />} />
+
               <Route path="/stations" element={<StationsPage />} />
               <Route path="/models" element={<ModelsPage />} />
               <Route path="/monitoring" element={<MonitoringPage />} />
