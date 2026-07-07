@@ -351,6 +351,17 @@ const DashboardPage: React.FC = () => {
         ))}
       </Row>
 
+      {/* 30日发电趋势 */}
+      <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
+        title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
+      >
+        {trend30DaysData.length > 0 ? (
+          <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
+        ) : (
+          <Empty description={t('dash.noEnergyData')} />
+        )}
+      </Card>
+
       {/* 功率趋势 + 设备状态 */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={16}>
@@ -393,17 +404,6 @@ const DashboardPage: React.FC = () => {
           </Card>
         </Col>
       </Row>
-
-      {/* 30日发电趋势 */}
-      <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
-        title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
-      >
-        {trend30DaysData.length > 0 ? (
-          <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
-        ) : (
-          <Empty description={t('dash.noEnergyData')} />
-        )}
-      </Card>
 
       {/* 电量概览 */}
       <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
