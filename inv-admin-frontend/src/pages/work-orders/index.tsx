@@ -14,7 +14,6 @@ import type { ColumnsType } from 'antd/es/table'
 import type { UploadFile } from 'antd/es/upload/interface'
 import dayjs from 'dayjs'
 import { workOrderApi, type WorkOrderDetail, type WorkOrderTemplate } from '@/services/workOrderApi'
-import { userApi } from '@/services/userApi'
 import { deviceApi } from '@/services/deviceApi'
 import useAuthStore from '@/stores/authStore'
 import { Role } from '@/types'
@@ -132,18 +131,6 @@ const WorkOrdersPage: React.FC = () => {
       return [] as WorkOrderTemplate[]
     }),
     enabled: templateOpen,
-  })
-
-  const { data: installers } = useQuery({
-    queryKey: ['users', 'installers'],
-    queryFn: () => userApi.getInstallers().then((r) => {
-      const data = r.data?.data
-      // 兼容数组格式和分页格式
-      if (Array.isArray(data)) return data as User[]
-      if (data?.items && Array.isArray(data.items)) return data.items as User[]
-      return [] as User[]
-    }),
-    enabled: createOpen,
   })
 
   const { data: detail, isLoading: detailLoading } = useQuery({
@@ -326,9 +313,6 @@ const WorkOrdersPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="priority" label={t('wo.priority')} rules={[{ required: true, message: t('wo.selectPriority') }]}>
             <Select placeholder={t('wo.selectPriority')} options={Object.entries(WO_PRIORITY_MAP).map(([k, v]) => ({ label: v.label, value: k }))} />
-          </Form.Item>
-          <Form.Item name="assigneeId" label={t('wo.assignee')} rules={[{ required: true, message: t('wo.selectInstaller') }]}>
-            <Select placeholder={t('wo.selectInstaller')} options={(installers ?? []).map((u: User) => ({ label: u.nickname || u.phone, value: u.id }))} />
           </Form.Item>
         </Form>
       </Modal>
