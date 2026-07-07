@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Button, Modal, Form, Input, Select, Tag, Space,
-  Row, Col, Popconfirm, Typography, App, Empty,
+  Row, Col, Popconfirm, Typography, App, Empty, Tabs,
 } from 'antd'
 import {
   PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined,
@@ -189,11 +189,29 @@ const UsersPage: React.FC = () => {
   const data = listRes?.items ?? []
   const total = listRes?.total ?? 0
 
+  const roleTabs = [
+    { key: 'all', label: t('user.allUsers') },
+    { key: '0', label: t('user.superAdmin') },
+    { key: '1', label: t('user.agent') },
+    { key: '2', label: t('user.installer') },
+    { key: '3', label: t('user.endUser') },
+  ]
+
+  const handleTabChange = (key: string) => {
+    if (key === 'all') {
+      setRoleFilter(undefined)
+    } else {
+      setRoleFilter(Number(key))
+    }
+    setPage(1)
+  }
+
   return (
     <div>
       <Title level={4} style={{ marginBottom: 16 }}>
         <TeamOutlined style={{ marginRight: 8 }} />{t('user.title')}
       </Title>
+      <Tabs activeKey={roleFilter !== undefined ? String(roleFilter) : 'all'} onChange={handleTabChange} items={roleTabs} style={{ marginBottom: 16 }} />
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
           <Col>

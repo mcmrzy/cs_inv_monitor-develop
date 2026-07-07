@@ -1,6 +1,7 @@
 export default {
   zh: {
     'user.title': '用户管理',
+    'user.allUsers': '全部用户',
     'user.searchPlaceholder': '搜索手机号/邮箱/昵称',
     'user.filterRole': '角色筛选',
     'user.filterStatus': '状态筛选',
@@ -48,6 +49,7 @@ export default {
   },
   en: {
     'user.title': 'User Management',
+    'user.allUsers': 'All Users',
     'user.searchPlaceholder': 'Search phone/email/nickname',
     'user.filterRole': 'Filter by role',
     'user.filterStatus': 'Filter by status',
