@@ -44,6 +44,7 @@ export interface DeviceModelProtocolItem {
 export const modelApi = {
   // 型号 CRUD
   listModels: () => api.get('/admin/models'),
+  listModelsPublic: () => api.get('/models'),  // 不需要管理员权限，所有登录用户可用
   getModel: (id: number) => api.get(`/models/${id}`),
   createModel: (data: Partial<DeviceModelItem>) => api.post('/models', data),
   updateModel: (id: number, data: Partial<DeviceModelItem>) => api.put(`/models/${id}`, data),

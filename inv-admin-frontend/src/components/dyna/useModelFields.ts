@@ -19,7 +19,8 @@ export function useModelFields(deviceModel: string | undefined) {
     setLoading(true)
     setError(null)
     try {
-      const modelsRes = await modelApi.listModels()
+      // 使用 listModelsPublic 而非 listModels，避免终端用户因缺少 admin:manage 权限而无法获取型号列表
+      const modelsRes = await modelApi.listModelsPublic()
       const models: DeviceModelItem[] =
         modelsRes.data?.data ?? modelsRes.data ?? []
 
