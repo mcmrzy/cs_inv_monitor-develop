@@ -681,6 +681,11 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/devices/unbind-requests/:id/approve", deps.DeviceHandler.ApproveUnbind)
 			auth.POST("/devices/unbind-requests/:id/reject", deps.DeviceHandler.RejectUnbind)
 
+			// 设备分配安装商
+			auth.POST("/devices/:sn/assign-installer", deps.DeviceHandler.AssignInstaller)
+			auth.DELETE("/devices/:sn/installer", deps.DeviceHandler.RemoveInstaller)
+			auth.POST("/devices/batch-assign-installer", deps.DeviceHandler.BatchAssignInstaller)
+
 			auth.GET("/alarms", deps.AlarmHandler.List)
 			auth.DELETE("/alarms/clear", deps.AlarmHandler.ClearAll)
 			auth.PUT("/alarms/read", deps.AlarmHandler.MarkRead)
@@ -774,8 +779,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		{
 			usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
 			usersGroup.GET("/:id", deps.AdminHandler.GetUser)
+			usersGroup.GET("/:id/children", deps.AdminHandler.GetUserChildren)
 			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
+			usersGroup.PUT("/:id/parent", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserParent)
 		}
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService))

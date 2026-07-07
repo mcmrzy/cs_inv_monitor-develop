@@ -26,18 +26,18 @@ func NewUserRepository(db *pgxpool.Pool, cache *redis.Client) *UserRepository {
 
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, region_id, parent_id, status,
 			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`
 
 	var user model.User
-	var regionID sql.NullInt64
+	var regionID, parentID sql.NullInt64
 	var lastLoginAt sql.NullTime
 
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &user.Nickname, &user.Avatar,
-		&user.Role, &regionID, &user.Status, &user.Timezone, &lastLoginAt, &user.LastLoginIP,
+		&user.Role, &regionID, &parentID, &user.Status, &user.Timezone, &lastLoginAt, &user.LastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -50,6 +50,9 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 
 	if regionID.Valid {
 		user.RegionID = &regionID.Int64
+	}
+	if parentID.Valid {
+		user.ParentID = &parentID.Int64
 	}
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
@@ -104,8 +107,8 @@ func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.U
 
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	query := `
-		INSERT INTO users (phone, email, password_hash, nickname, avatar, role, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+		INSERT INTO users (phone, email, password_hash, nickname, avatar, role, parent_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 
@@ -115,8 +118,74 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	}
 
 	return r.db.QueryRow(ctx, query,
-		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.Role, user.Status,
+		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.Role, user.ParentID, user.Status,
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
+}
+
+// ListByParentID 查询指定上级用户的下级用户列表
+func (r *UserRepository) ListByParentID(ctx context.Context, parentID int64, page, pageSize int) ([]*model.User, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	var total int64
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE parent_id = $1 AND deleted_at IS NULL`, parentID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT id, phone, COALESCE(email,''), COALESCE(nickname,''), COALESCE(avatar,''), role, region_id, parent_id, status,
+			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, created_at, updated_at
+		FROM users WHERE parent_id = $1 AND deleted_at IS NULL
+		ORDER BY id DESC LIMIT $2 OFFSET $3
+	`
+
+	rows, err := r.db.Query(ctx, query, parentID, pageSize, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var users []*model.User
+	for rows.Next() {
+		var user model.User
+		var regionID, pid sql.NullInt64
+		var lastLoginAt sql.NullTime
+
+		if err := rows.Scan(&user.ID, &user.Phone, &user.Email, &user.Nickname, &user.Avatar,
+			&user.Role, &regionID, &pid, &user.Status, &user.Timezone, &lastLoginAt,
+			&user.CreatedAt, &user.UpdatedAt); err != nil {
+			continue
+		}
+
+		if regionID.Valid {
+			user.RegionID = &regionID.Int64
+		}
+		if pid.Valid {
+			user.ParentID = &pid.Int64
+		}
+		if lastLoginAt.Valid {
+			user.LastLoginAt = &lastLoginAt.Time
+		}
+		users = append(users, &user)
+	}
+
+	if users == nil {
+		users = []*model.User{}
+	}
+
+	return users, total, nil
+}
+
+// UpdateParentID 修改用户的上级关系
+func (r *UserRepository) UpdateParentID(ctx context.Context, userID int64, parentID *int64) error {
+	_, err := r.db.Exec(ctx, `UPDATE users SET parent_id = $1, updated_at = NOW() WHERE id = $2`, parentID, userID)
+	return err
 }
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
@@ -2942,6 +3011,18 @@ func (r *DeviceRepository) RejectUnbind(ctx context.Context, id int64, reviewerI
 		return fmt.Errorf("request not found or already processed")
 	}
 	return nil
+}
+
+// UpdateInstallerID 更新设备的安装商ID
+func (r *DeviceRepository) UpdateInstallerID(ctx context.Context, sn string, installerID *int64) error {
+	_, err := r.db.Exec(ctx, `UPDATE devices SET installer_id = $1, updated_at = NOW() WHERE sn = $2`, installerID, sn)
+	return err
+}
+
+// BatchUpdateInstallerID 批量更新设备的安装商ID
+func (r *DeviceRepository) BatchUpdateInstallerID(ctx context.Context, sns []string, installerID int64) error {
+	_, err := r.db.Exec(ctx, `UPDATE devices SET installer_id = $1, updated_at = NOW() WHERE sn = ANY($2)`, installerID, sns)
+	return err
 }
 
 func (r *UserRepository) LogAudit(ctx context.Context, operatorID int64, operatorName, action, resourceType, resourceID, detail, ip string) {

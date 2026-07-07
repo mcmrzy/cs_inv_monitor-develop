@@ -782,3 +782,79 @@ func (h *AdminHandler) GetMetrics(c *gin.Context) {
 		"uptime":       int64(time.Since(serverStartTime).Seconds()),
 	})
 }
+
+// GetUserChildren 获取指定用户的下级用户列表
+func (h *AdminHandler) GetUserChildren(c *gin.Context) {
+	userID := parseID(c.Param("id"))
+	if userID <= 0 {
+		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		return
+	}
+
+	page := getQueryInt(c, "page", 1)
+	pageSize := getQueryInt(c, "pageSize", 20)
+
+	children, total, err := h.userRepo.ListByParentID(c.Request.Context(), userID, page, pageSize)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询下级用户失败", err))
+		return
+	}
+
+	// 清除密码哈希
+	for _, child := range children {
+		child.PasswordHash = ""
+	}
+
+	response.Success(c, gin.H{
+		"items": children,
+		"total": total,
+	})
+}
+
+// UpdateUserParentRequest 修改用户上级关系的请求
+type UpdateUserParentRequest struct {
+	ParentID *int64 `json:"parentId"`
+}
+
+// UpdateUserParent 修改用户的上级关系
+func (h *AdminHandler) UpdateUserParent(c *gin.Context) {
+	userID := parseID(c.Param("id"))
+	if userID <= 0 {
+		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		return
+	}
+
+	var req UpdateUserParentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	// 验证用户存在
+	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
+	if err != nil || user == nil {
+		response.HandleError(c, apperr.NotFound("用户不存在"))
+		return
+	}
+
+	// 如果设置了上级，验证上级用户存在且角色正确
+	if req.ParentID != nil {
+		parent, err := h.userRepo.GetByID(c.Request.Context(), *req.ParentID)
+		if err != nil || parent == nil {
+			response.HandleError(c, apperr.NotFound("上级用户不存在"))
+			return
+		}
+		// 验证层级关系：设备商(1)->安装商(2)->终端用户(3)
+		if user.Role <= parent.Role {
+			response.HandleError(c, apperr.BadRequest("上级用户角色必须高于当前用户"))
+			return
+		}
+	}
+
+	if err := h.userRepo.UpdateParentID(c.Request.Context(), userID, req.ParentID); err != nil {
+		response.HandleError(c, apperr.Internal("更新上级关系失败", err))
+		return
+	}
+
+	response.SuccessWithMessage(c, "上级关系更新成功", nil)
+}

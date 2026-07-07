@@ -892,3 +892,86 @@ func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "device deleted", nil)
 }
+
+// AssignInstallerRequest 分配安装商的请求
+type AssignInstallerRequest struct {
+	InstallerID int64 `json:"installerId" binding:"required"`
+}
+
+// AssignInstaller 分配设备给安装商
+func (h *DeviceHandler) AssignInstaller(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.HandleError(c, apperr.BadRequest("device sn is required"))
+		return
+	}
+
+	var req AssignInstallerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	// 验证设备存在
+	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
+	if err != nil || device == nil {
+		response.HandleError(c, apperr.NotFound("device not found"))
+		return
+	}
+
+	// 更新设备的installer_id
+	err = h.deviceService.UpdateInstallerID(c.Request.Context(), sn, req.InstallerID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("failed to assign installer", err))
+		return
+	}
+
+	response.SuccessWithMessage(c, "installer assigned successfully", gin.H{"sn": sn, "installerId": req.InstallerID})
+}
+
+// BatchAssignInstallerRequest 批量分配安装商的请求
+type BatchAssignInstallerRequest struct {
+	DeviceSNs   []string `json:"deviceSns" binding:"required"`
+	InstallerID int64    `json:"installerId" binding:"required"`
+}
+
+// BatchAssignInstaller 批量分配设备给安装商
+func (h *DeviceHandler) BatchAssignInstaller(c *gin.Context) {
+	var req BatchAssignInstallerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	if len(req.DeviceSNs) == 0 {
+		response.HandleError(c, apperr.BadRequest("deviceSns is required"))
+		return
+	}
+
+	// 批量更新设备的installer_id
+	err := h.deviceService.BatchUpdateInstallerID(c.Request.Context(), req.DeviceSNs, req.InstallerID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("failed to batch assign installer", err))
+		return
+	}
+
+	response.SuccessWithMessage(c, "installer assigned successfully", gin.H{"count": len(req.DeviceSNs), "installerId": req.InstallerID})
+}
+
+// RemoveInstaller 移除设备的安装商分配
+func (h *DeviceHandler) RemoveInstaller(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.HandleError(c, apperr.BadRequest("device sn is required"))
+		return
+	}
+
+	// 更新设备的installer_id为null
+	err := h.deviceService.UpdateInstallerID(c.Request.Context(), sn, 0)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("failed to remove installer", err))
+		return
+	}
+
+	response.SuccessWithMessage(c, "installer removed successfully", nil)
+}
