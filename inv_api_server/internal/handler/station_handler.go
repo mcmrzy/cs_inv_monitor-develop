@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -18,12 +20,14 @@ import (
 type StationHandler struct {
 	stationService *service.StationService
 	deviceService  *service.DeviceService
+	userService    *service.UserService
 }
 
-func NewStationHandler(stationService *service.StationService, deviceService *service.DeviceService) *StationHandler {
+func NewStationHandler(stationService *service.StationService, deviceService *service.DeviceService, userService *service.UserService) *StationHandler {
 	return &StationHandler{
 		stationService: stationService,
 		deviceService:  deviceService,
+		userService:    userService,
 	}
 }
 
@@ -83,7 +87,21 @@ func (h *StationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// 记录审计日志
+	logAudit(c, h.userService, "create", "station", fmt.Sprintf("%d", station.ID), fmt.Sprintf(`{"name":"%s"}`, req.Name))
+
 	response.Success(c, station)
+}
+
+// logAudit 记录审计日志的辅助函数
+func logAudit(c *gin.Context, userService *service.UserService, action, resourceType, resourceID, detail string) {
+	userID := middleware.GetUserID(c)
+	phone := middleware.GetPhone(c)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		userService.LogAudit(ctx, userID, phone, action, resourceType, resourceID, detail, c.ClientIP())
+	}()
 }
 
 type UpdateStationRequest struct {

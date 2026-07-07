@@ -384,11 +384,11 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 		UserID     int64           `json:"userId"`
 		Username   string          `json:"username"`
 		Action     string          `json:"action"`
-		Resource   string          `json:"resourceType"`
+		Resource   string          `json:"resource"`
 		ResourceID string          `json:"resourceId"`
-		Detail     json.RawMessage `json:"detail"`
-		IPAddress  string          `json:"ip"`
-		Timestamp  time.Time       `json:"timestamp"`
+		Detail     json.RawMessage `json:"details"`
+		IPAddress  string          `json:"ipAddress"`
+		CreatedAt  time.Time       `json:"createdAt"`
 	}
 
 	var items []auditLogItem
@@ -396,7 +396,7 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 		var item auditLogItem
 		var details json.RawMessage
 		if err := rows.Scan(&item.ID, &item.UserID, &item.Username, &item.Action,
-			&item.Resource, &item.ResourceID, &details, &item.IPAddress, &item.Timestamp); err != nil {
+			&item.Resource, &item.ResourceID, &details, &item.IPAddress, &item.CreatedAt); err != nil {
 			continue
 		}
 		item.Detail = details

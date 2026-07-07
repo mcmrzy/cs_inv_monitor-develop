@@ -129,6 +129,19 @@ func GetRole(c *gin.Context) int {
 	return r
 }
 
+// GetPhone 从上下文获取用户手机号
+func GetPhone(c *gin.Context) string {
+	v, exists := c.Get("phone")
+	if !exists {
+		return ""
+	}
+	p, ok := v.(string)
+	if !ok {
+		return ""
+	}
+	return p
+}
+
 func CORS(allowedOrigins []string) gin.HandlerFunc {
 	originSet := make(map[string]bool, len(allowedOrigins))
 	for _, o := range allowedOrigins {

@@ -146,7 +146,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	captchaHandler := handler.NewCaptchaHandler(rdb)
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache, captchaHandler)
-	stationHandler := handler.NewStationHandler(stationService, deviceService)
+	stationHandler := handler.NewStationHandler(stationService, deviceService, userService)
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
