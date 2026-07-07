@@ -115,3 +115,31 @@ func (h *WorkOrderHandler) Delete(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "work order deleted", gin.H{"id": orderID})
 }
+
+// ListTemplates 获取工单模板列表
+func (h *WorkOrderHandler) ListTemplates(c *gin.Context) {
+	log.Printf("WARNING: work_order_handler.ListTemplates is using stub implementation")
+	response.Success(c, []gin.H{
+		{
+			"id":          1,
+			"name":        "设备故障",
+			"description": "设备运行异常，需要检修",
+			"priority":    "high",
+			"category":    "fault",
+		},
+		{
+			"id":          2,
+			"name":        "定期维护",
+			"description": "设备定期保养维护",
+			"priority":    "normal",
+			"category":    "maintenance",
+		},
+		{
+			"id":          3,
+			"name":        "参数调整",
+			"description": "设备运行参数需要调整",
+			"priority":    "normal",
+			"category":    "config",
+		},
+	})
+}
