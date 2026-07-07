@@ -29,4 +29,7 @@ export const deviceApi = {
       params,
       responseType: 'blob',
     }),
+  assignInstaller: (sn: string, installerId: number) => api.post(`/devices/${sn}/assign-installer`, { installerId }),
+  removeInstaller: (sn: string) => api.delete(`/devices/${sn}/installer`),
+  batchAssignInstaller: (deviceSns: string[], installerId: number) => api.post('/devices/batch-assign-installer', { deviceSns, installerId }),
 }

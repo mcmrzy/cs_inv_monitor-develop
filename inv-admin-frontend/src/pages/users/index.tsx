@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Button, Modal, Form, Input, Select, Tag, Space,
-  Row, Col, Popconfirm, Typography, App, Empty, Tabs,
+  Row, Col, Popconfirm, Typography, App, Empty, Tabs, Drawer,
 } from 'antd'
 import {
   PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined,
@@ -61,6 +61,9 @@ const UsersPage: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [resetPwdOpen, setResetPwdOpen] = useState(false)
   const [resetUserId, setResetUserId] = useState<string>('')
+  const [childrenDrawerOpen, setChildrenDrawerOpen] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState<string>('')
+  const [selectedUserName, setSelectedUserName] = useState<string>('')
   const [form] = Form.useForm()
   const [pwdForm] = Form.useForm()
 
@@ -78,6 +81,15 @@ const UsersPage: React.FC = () => {
       const d = (r.data?.data ?? r.data) as { items?: User[]; total?: number }
       return { items: d?.items ?? [], total: d?.total ?? 0 }
     }),
+  })
+
+  const { data: childrenRes } = useQuery({
+    queryKey: ['users', 'children', selectedUserId],
+    queryFn: () => userApi.getChildren(selectedUserId).then((r) => {
+      const d = (r.data?.data ?? r.data) as { items?: User[]; total?: number }
+      return { items: d?.items ?? [], total: d?.total ?? 0 }
+    }),
+    enabled: childrenDrawerOpen && !!selectedUserId,
   })
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.users.all })
@@ -113,6 +125,18 @@ const UsersPage: React.FC = () => {
   })
 
   const assignableRoles = getAssignableRoles(currentUser?.role)
+
+  // 获取可选的上级用户列表（角色等级高于当前创建的用户）
+  const { data: parentUsers } = useQuery({
+    queryKey: ['users', 'parents', currentUser?.id],
+    queryFn: () => userApi.list({ pageSize: 100, status: 1 }).then((r) => {
+      const d = (r.data?.data ?? r.data) as { items?: User[]; total?: number }
+      const items = d?.items ?? []
+      // 过滤出角色等级高于当前用户的用户（排除自己）
+      return items.filter((u: User) => u.id !== currentUser?.id && (ROLE_ORDER[u.role] ?? 99) < (ROLE_ORDER[currentUser?.role ?? ''] ?? 99))
+    }),
+    enabled: modalOpen,
+  })
 
   const openAdd = () => { setEditingUser(null); form.resetFields(); setModalOpen(true) }
   const openEdit = (record: User) => {
@@ -162,12 +186,14 @@ const UsersPage: React.FC = () => {
     { title: t('user.lastLogin'), dataIndex: 'last_login_at', key: 'last_login_at', width: 170, render: (val: string) => val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') : '-' },
     { title: t('user.registerTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
-      title: t('common.operation'), key: 'action', width: 220,
+      title: t('common.operation'), key: 'action', width: 280,
       render: (_: any, record: User) => {
         const canManage = canManageUser(currentUser?.role, record.role)
         const isSuperAdmin = currentUser?.role === Role.SUPER_ADMIN
+        const canViewChildren = record.role !== Role.END_USER && canManage
         return (
           <Space>
+            {canViewChildren && <Button type="link" size="small" onClick={() => { setSelectedUserId(record.id); setSelectedUserName(record.nickname || record.phone); setChildrenDrawerOpen(true) }}>{t('user.children')}</Button>}
             {canManage && <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>{t('user.edit')}</Button>}
             {canManage && (
               <Popconfirm title={record.status === 1 ? t('user.confirmDisable') : t('user.confirmEnable')} onConfirm={() => toggleMutation.mutate({ id: record.id, status: record.status === 1 ? 0 : 1 })}>
@@ -249,6 +275,18 @@ const UsersPage: React.FC = () => {
           <Form.Item name="role" label={t('user.role')} rules={[{ required: true, message: t('common.pleaseSelect') + t('user.role') }]}>
             <Select placeholder={t('common.pleaseSelect') + t('user.role')} options={assignableRoles.map((r) => ({ label: ROLE_MAP[ROLE_TO_NUMERIC[r]], value: ROLE_TO_NUMERIC[r] }))} />
           </Form.Item>
+          {!editingUser && parentUsers && parentUsers.length > 0 && (
+            <Form.Item name="parentId" label={t('user.parentUser')}>
+              <Select
+                allowClear
+                placeholder={t('user.selectParent')}
+                options={parentUsers.map((u) => ({
+                  label: `${u.nickname || u.phone} (${ROLE_MAP[String(u.role)] || u.role})`,
+                  value: u.id,
+                }))}
+              />
+            </Form.Item>
+          )}
           {!editingUser && (
             <Form.Item name="password" label={t('user.newPassword')} rules={[{ required: true, message: t('user.pleaseInputPassword') }, { min: 6, message: t('user.pwdMinLength') }]}>
               <Input.Password placeholder={t('user.pleaseInputPassword')} />
@@ -272,6 +310,45 @@ const UsersPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      <Drawer
+        title={`${selectedUserName} - ${t('user.children')}`}
+        open={childrenDrawerOpen}
+        onClose={() => { setChildrenDrawerOpen(false); setSelectedUserId(''); setSelectedUserName('') }}
+        width={600}
+        destroyOnClose
+      >
+        {childrenRes?.items && childrenRes.items.length > 0 ? (
+          <Table<User>
+            rowKey="id"
+            dataSource={childrenRes.items}
+            size="small"
+            pagination={false}
+            columns={[
+              { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
+              { title: t('user.phone'), dataIndex: 'phone', key: 'phone', width: 130 },
+              { title: t('user.nickname'), dataIndex: 'nickname', key: 'nickname', width: 120 },
+              {
+                title: t('user.role'), dataIndex: 'role', key: 'role', width: 110,
+                render: (role: any) => {
+                  const key = typeof role === 'number' ? String(role) : role
+                  return <Tag color={ROLE_COLORS[key] || '#d9d9d9'}>{ROLE_MAP[key] || key}</Tag>
+                },
+              },
+              {
+                title: t('user.status'), dataIndex: 'status', key: 'status', width: 90,
+                render: (status: number) => {
+                  const cfg = STATUS_MAP[status] || { label: String(status), color: '#d9d9d9' }
+                  return <Tag color={cfg.color}>{cfg.label}</Tag>
+                },
+              },
+              { title: t('common.createdAt'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') },
+            ]}
+          />
+        ) : (
+          <Empty description={t('user.noChildren')} />
+        )}
+      </Drawer>
     </div>
   )
 }

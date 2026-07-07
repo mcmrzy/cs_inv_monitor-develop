@@ -46,6 +46,10 @@ export default {
     'user.agent': '代理商',
     'user.installer': '安装商',
     'user.endUser': '终端用户',
+    'user.parentUser': '上级用户',
+    'user.selectParent': '选择上级用户（可选）',
+    'user.children': '下级用户',
+    'user.noChildren': '暂无下级用户',
   },
   en: {
     'user.title': 'User Management',
@@ -94,5 +98,9 @@ export default {
     'user.agent': 'Agent',
     'user.installer': 'Installer',
     'user.endUser': 'End User',
+    'user.parentUser': 'Parent User',
+    'user.selectParent': 'Select parent user (optional)',
+    'user.children': 'Sub Users',
+    'user.noChildren': 'No sub users',
   },
 }
