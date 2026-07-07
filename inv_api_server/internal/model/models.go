@@ -11,6 +11,7 @@ type User struct {
 	Avatar       string     `json:"avatar"`
 	Role         int        `json:"role"`
 	RegionID     *int64     `json:"region_id"`
+	ParentID     *int64     `json:"parent_id"`
 	Status       int        `json:"status"`
 	Timezone     string     `json:"timezone"`
 	LastLoginAt  *time.Time `json:"last_login_at"`

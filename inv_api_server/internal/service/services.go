@@ -644,6 +644,20 @@ func (s *DeviceService) RejectUnbind(ctx context.Context, id, reviewerID int64, 
 	return s.repo.RejectUnbind(ctx, id, reviewerID, comment)
 }
 
+// UpdateInstallerID 更新设备的安装商ID
+func (s *DeviceService) UpdateInstallerID(ctx context.Context, sn string, installerID int64) error {
+	var id *int64
+	if installerID > 0 {
+		id = &installerID
+	}
+	return s.repo.UpdateInstallerID(ctx, sn, id)
+}
+
+// BatchUpdateInstallerID 批量更新设备的安装商ID
+func (s *DeviceService) BatchUpdateInstallerID(ctx context.Context, sns []string, installerID int64) error {
+	return s.repo.BatchUpdateInstallerID(ctx, sns, installerID)
+}
+
 type AlarmService struct {
 	repo *repository.AlarmRepository
 }
