@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Button, Modal, Form, Input, Select, Tag, Drawer,
   Timeline, Space, Row, Col, Statistic, Radio, Empty, Dropdown,
-  Upload, Image, Tooltip, Typography, App,
+  Upload, Image, Tooltip, Typography, App, AutoComplete,
 } from 'antd'
 import {
   PlusOutlined, ReloadOutlined, EyeOutlined, DownOutlined,
@@ -15,6 +15,9 @@ import type { UploadFile } from 'antd/es/upload/interface'
 import dayjs from 'dayjs'
 import { workOrderApi, type WorkOrderDetail, type WorkOrderTemplate } from '@/services/workOrderApi'
 import { userApi } from '@/services/userApi'
+import { deviceApi } from '@/services/deviceApi'
+import useAuthStore from '@/stores/authStore'
+import { Role } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
 import { queryKeys } from '@/utils/queryKeys'
 import type { WorkOrder, User } from '@/types'
@@ -43,6 +46,9 @@ const WorkOrdersPage: React.FC = () => {
   const { message } = App.useApp()
   const { t } = useTranslation()
   const { timezone } = useTimezoneStore()
+  const { user } = useAuthStore()
+  const isEndUser = user?.role === Role.END_USER
+  const isInstaller = user?.role === Role.INSTALLER
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState<string>()
@@ -55,6 +61,27 @@ const WorkOrdersPage: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [form] = Form.useForm()
+
+  // 设备列表查询（用于工单关联设备SN下拉选择）
+  const { data: devicesRes } = useQuery({
+    queryKey: ['devices', 'for-work-order', user?.id, user?.role],
+    queryFn: () => {
+      const params: any = { pageSize: 200 }
+      if (isInstaller) params.installerId = user?.id
+      if (isEndUser) params.userId = user?.id
+      return deviceApi.getDevices(params)
+    },
+    enabled: createOpen,
+  })
+
+  const deviceOptions = useMemo(() => {
+    const d = devicesRes?.data?.data ?? devicesRes?.data ?? []
+    const items = Array.isArray(d) ? d : (d?.items ?? [])
+    return items.map((device: any) => ({
+      value: device.sn,
+      label: `${device.sn} (${device.model || '-'})`,
+    }))
+  }, [devicesRes])
 
   const WO_PRIORITY_MAP: Record<string, { label: string; color: string }> = {
     low: { label: t('wo.low'), color: '#d9d9d9' },
@@ -286,7 +313,16 @@ const WorkOrdersPage: React.FC = () => {
           <Form.Item name="templateType" hidden><Input /></Form.Item>
           <Form.Item name="title" label={t('wo.orderTitle')} rules={[{ required: true, message: t('common.pleaseInput') + t('wo.orderTitle') }]}><Input placeholder={t('wo.orderTitle')} /></Form.Item>
           <Form.Item name="description" label={t('wo.description')} rules={[{ required: true, message: t('common.pleaseInput') + t('wo.description') }]}><TextArea rows={3} placeholder={t('wo.description')} /></Form.Item>
-          <Form.Item name="deviceSn" label={t('wo.deviceSN')}><Input placeholder={t('common.optional')} /></Form.Item>
+          <Form.Item name="deviceSn" label={t('wo.deviceSN')}>
+            <AutoComplete
+              placeholder={t('wo.deviceSNHint')}
+              options={deviceOptions}
+              filterOption={(inputValue, option) =>
+                (option?.value ?? '').toLowerCase().includes(inputValue.toLowerCase())
+              }
+              allowClear
+            />
+          </Form.Item>
           <Form.Item name="priority" label={t('wo.priority')} rules={[{ required: true, message: t('wo.selectPriority') }]}>
             <Select placeholder={t('wo.selectPriority')} options={Object.entries(WO_PRIORITY_MAP).map(([k, v]) => ({ label: v.label, value: k }))} />
           </Form.Item>
