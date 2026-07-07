@@ -18,7 +18,7 @@ import useTranslation from '@/hooks/useTranslation'
 import { ROLE_MAP, ROLE_COLORS } from '@/utils/constants'
 import { Role } from '@/types'
 import api from '@/services/api'
-import { TIMEZONE_LIST } from '@/utils/timezone'
+import { TIMEZONE_LIST, getTimezoneLabel } from '@/utils/timezone'
 
 const { Header, Sider, Content } = Layout
 
@@ -180,7 +180,7 @@ const MainLayout: React.FC = () => {
   ]
 
   const currentTimezone = user?.timezone || 'Asia/Shanghai'
-  const currentTimezoneLabel = TIMEZONE_LIST.find(tz => tz.id === currentTimezone)?.label || currentTimezone
+  const currentTimezoneLabel = getTimezoneLabel(currentTimezone, lang)
 
   const handleTimezoneChange = async (tz: string) => {
     try {
@@ -201,7 +201,7 @@ const MainLayout: React.FC = () => {
 
   const timezoneMenuItems = TIMEZONE_LIST.map(tz => ({
     key: tz.id,
-    label: tz.label,
+    label: getTimezoneLabel(tz.id, lang),
   }))
 
   return (

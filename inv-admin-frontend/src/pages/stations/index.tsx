@@ -20,8 +20,9 @@ import useAuthStore from '@/stores/authStore'
 import { Role } from '@/types'
 import { ALARM_LEVEL_MAP, DEVICE_STATUS_MAP, getAlarmLevelDisplay } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
-import { formatInTimezone, TIMEZONE_LIST } from '@/utils/timezone'
+import { formatInTimezone, TIMEZONE_LIST, getTimezoneLabel } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
+import useLocaleStore from '@/stores/localeStore'
 
 const { Title, Text } = Typography
 
@@ -113,6 +114,7 @@ const StationsPage: React.FC = () => {
   const screens = Grid.useBreakpoint()
 
   const { t } = useTranslation()
+  const { lang } = useLocaleStore()
   const isAdmin = user && (user.role === Role.SUPER_ADMIN || user.role === Role.AGENT)
 
   /* ---------- 详情抽屉 ---------- */
@@ -593,7 +595,7 @@ const StationsPage: React.FC = () => {
           <Descriptions.Item label={t('station.installDate')}>
             {station.install_date ? dayjs(station.install_date).format('YYYY-MM-DD') : '-'}
           </Descriptions.Item>
-          <Descriptions.Item label={t('station.timezone')}>{station.timezone || 'Asia/Shanghai'}</Descriptions.Item>
+          <Descriptions.Item label={t('station.timezone')}>{getTimezoneLabel(station.timezone || 'Asia/Shanghai', lang)}</Descriptions.Item>
           <Descriptions.Item label={t('common.createdAt')}>
             {formatInTimezone(station.created_at, station.timezone)}
           </Descriptions.Item>
@@ -887,7 +889,7 @@ const StationsPage: React.FC = () => {
                 <Select
                   showSearch
                   placeholder={t('station.selectTimezone')}
-                  options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: tz.label }))}
+                  options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) }))}
                   filterOption={(input, option) =>
                     (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                   }
