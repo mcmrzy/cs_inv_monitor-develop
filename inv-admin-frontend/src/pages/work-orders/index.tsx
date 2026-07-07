@@ -321,6 +321,7 @@ const WorkOrdersPage: React.FC = () => {
                 (option?.value ?? '').toLowerCase().includes(inputValue.toLowerCase())
               }
               allowClear
+              suffixIcon={<DownOutlined />}
             />
           </Form.Item>
           <Form.Item name="priority" label={t('wo.priority')} rules={[{ required: true, message: t('wo.selectPriority') }]}>
