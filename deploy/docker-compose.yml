@@ -202,8 +202,7 @@ services:
       - "3001:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/dashboard.json:/etc/grafana/provisioning/dashboards/inv-mqtt.json:ro
-      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - inv-net
 
