@@ -174,16 +174,12 @@ func (c *Client) Connect(ctx context.Context) error {
 			logger.Info("MQTT connected (command channel only)")
 			if _, err := cm.Subscribe(ctx, &paho.Subscribe{
 				Subscriptions: []paho.SubscribeOptions{
-					{Topic: "cs_inv/+/data/#", QoS: 1},
-					{Topic: "cs_inv/+/status", QoS: 1},
-					{Topic: "cs_inv/+/ota/status", QoS: 1},
-					{Topic: "cs_inv/+/ota/cmd_ack", QoS: 1},
-					{Topic: "cs_inv/+/cmd_result", QoS: 1},
+					{Topic: "cs_inv/#", QoS: 1},
 				},
 			}); err != nil {
 				logger.Error("Failed to subscribe to topic", zap.Error(err))
 			} else {
-				logger.Info("Subscribed to cs_inv/+/data/#, cs_inv/+/status, cs_inv/+/ota/status, cs_inv/+/ota/cmd_ack, cs_inv/+/cmd_result")
+				logger.Info("Subscribed to cs_inv/#")
 			}
 		},
 		OnConnectError: func(err error) {
