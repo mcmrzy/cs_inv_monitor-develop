@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -41,10 +42,21 @@ func NewReverseProxy(target string) *ReverseProxy {
 			MaxConnsPerHost:     100,
 			IdleConnTimeout:     90 * time.Second,
 			TLSHandshakeTimeout: 10 * time.Second,
-			DialContext: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				dialer := &net.Dialer{
+					Timeout:   10 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}
+				conn, err := dialer.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				// 禁用Nagle算法，减少小数据包延迟
+				if tcpConn, ok := conn.(*net.TCPConn); ok {
+					tcpConn.SetNoDelay(true)
+				}
+				return conn, nil
+			},
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			log.Printf("[Proxy] 后端服务不可达: %s -> %v", target, err)
