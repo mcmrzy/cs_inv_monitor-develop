@@ -1941,18 +1941,6 @@ const DevicesPage: React.FC = () => {
           <Form.Item name="sn" label={t('dev.deviceSN')}>
             <Input disabled />
           </Form.Item>
-          <Form.Item name="model" label={t('common.model')}>
-            <Input placeholder={t('common.model')} />
-          </Form.Item>
-          <Form.Item name="ratedPower" label={t('dev.ratedPower_W')}>
-            <InputNumber style={{ width: '100%' }} placeholder={t('dev.ratedPower_W')} />
-          </Form.Item>
-          <Form.Item name="firmwareVersion" label={t('dev.firmwareVersion')}>
-            <Input placeholder={t('dev.firmwareVersion')} />
-          </Form.Item>
-          <Form.Item name="hardwareVersion" label={t('dev.hardwareVersion')}>
-            <Input placeholder={t('dev.hardwareVersion')} />
-          </Form.Item>
           <Form.Item name="stationId" label={t('dev.belongStation')}>
             <Select
               placeholder={t('dev.selectStation')}
@@ -1962,6 +1950,9 @@ const DevicesPage: React.FC = () => {
               optionFilterProp="label"
             />
           </Form.Item>
+          <div style={{ color: '#999', fontSize: 12, marginTop: -8 }}>
+            {t('dev.model')}: {editingDevice?.model || '-'} | {t('dev.ratedPower')}: {editingDevice?.rated_power || '-'} W | {t('dev.firmwareVersion')}: {editingDevice?.firmware_arm || '-'}
+          </div>
         </Form>
       </Modal>
 
