@@ -18,6 +18,8 @@ import { userApi } from '@/services/userApi'
 import useTranslation from '@/hooks/useTranslation'
 import { queryKeys } from '@/utils/queryKeys'
 import type { WorkOrder, User } from '@/types'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 
 const { TextArea } = Input
 const { Title } = Typography
@@ -40,6 +42,7 @@ const WorkOrdersPage: React.FC = () => {
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const { t } = useTranslation()
+  const { timezone } = useTimezoneStore()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState<string>()
@@ -157,7 +160,7 @@ const WorkOrdersPage: React.FC = () => {
         const sla = getSlaStatus(record.sla_deadline, record.status)
         if (!sla) return <span style={{ color: '#d9d9d9' }}>-</span>
         const cfg = SLA_STATUS_MAP[sla]
-        return <Tooltip title={`${cfg.label}${record.sla_deadline ? ' - ' + dayjs(record.sla_deadline).format('MM-DD HH:mm') : ''}`}><Tag color={cfg.color} icon={cfg.icon}>{cfg.label}</Tag></Tooltip>
+        return <Tooltip title={`${cfg.label}${record.sla_deadline ? ' - ' + formatInTimezone(record.sla_deadline, timezone, 'MM-DD HH:mm') : ''}`}><Tag color={cfg.color} icon={cfg.icon}>{cfg.label}</Tag></Tooltip>
       },
     },
     {
@@ -168,7 +171,7 @@ const WorkOrdersPage: React.FC = () => {
       title: t('wo.status'), dataIndex: 'status', key: 'status', width: 90,
       render: (val: string) => { const cfg = WO_STATUS_MAP[val] || { label: val, color: '#d9d9d9' }; return <Tag color={cfg.color}>{cfg.label}</Tag> },
     },
-    { title: t('common.createdAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss') },
+    { title: t('common.createdAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (val: string) => formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.operation'), key: 'action', width: 220,
       render: (_: any, record: WorkOrder) => (
@@ -202,7 +205,7 @@ const WorkOrdersPage: React.FC = () => {
                   <Space>
                     <Tag color={WO_PRIORITY_MAP[item.priority]?.color}>{WO_PRIORITY_MAP[item.priority]?.label}</Tag>
                     {getSlaStatus(item.sla_deadline, item.status) && <Tag color={SLA_STATUS_MAP[getSlaStatus(item.sla_deadline, item.status)!]?.color}>{SLA_STATUS_MAP[getSlaStatus(item.sla_deadline, item.status)!]?.label}</Tag>}
-                    <span style={{ color: '#999', fontSize: 12 }}>{dayjs(item.createdAt).format('MM-DD HH:mm')}</span>
+                    <span style={{ color: '#999', fontSize: 12 }}>{formatInTimezone(item.createdAt, timezone, 'MM-DD HH:mm')}</span>
                   </Space>
                 </Card>
               )) : <Empty description={t('wo.noOrders')} image={Empty.PRESENTED_IMAGE_SIMPLE} />}
@@ -288,11 +291,11 @@ const WorkOrdersPage: React.FC = () => {
               <p><strong>{t('wo.orderTitle')}：</strong>{detail.title}</p>
               <p><strong>{t('wo.priority')}：</strong><Tag color={WO_PRIORITY_MAP[detail.priority]?.color}>{WO_PRIORITY_MAP[detail.priority]?.label || detail.priority}</Tag></p>
               <p><strong>{t('wo.status')}：</strong><Tag color={WO_STATUS_MAP[detail.status]?.color}>{WO_STATUS_MAP[detail.status]?.label || detail.status}</Tag></p>
-              {detail.slaDeadline && <p><strong>{t('wo.slaDeadline')}：</strong>{dayjs(detail.slaDeadline).format('YYYY-MM-DD HH:mm:ss')} {getSlaStatus(detail.slaDeadline, detail.status) && <Tag color={SLA_STATUS_MAP[getSlaStatus(detail.slaDeadline, detail.status)!]?.color} style={{ marginLeft: 8 }}>{SLA_STATUS_MAP[getSlaStatus(detail.slaDeadline, detail.status)!]?.label}</Tag>}</p>}
+              {detail.slaDeadline && <p><strong>{t('wo.slaDeadline')}：</strong>{formatInTimezone(detail.slaDeadline, timezone, 'YYYY-MM-DD HH:mm:ss')} {getSlaStatus(detail.slaDeadline, detail.status) && <Tag color={SLA_STATUS_MAP[getSlaStatus(detail.slaDeadline, detail.status)!]?.color} style={{ marginLeft: 8 }}>{SLA_STATUS_MAP[getSlaStatus(detail.slaDeadline, detail.status)!]?.label}</Tag>}</p>}
               <p><strong>{t('wo.description')}：</strong>{detail.description}</p>
               <p><strong>{t('wo.creator')}：</strong>{detail.creatorName || '-'}</p>
               <p><strong>{t('wo.assignee')}：</strong>{detail.assigneeName || '-'}</p>
-              <p><strong>{t('common.createdAt')}：</strong>{dayjs(detail.createdAt).format('YYYY-MM-DD HH:mm:ss')}</p>
+              <p><strong>{t('common.createdAt')}：</strong>{formatInTimezone(detail.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss')}</p>
               {detail.resolution && <p><strong>{t('wo.solution')}：</strong>{detail.resolution}</p>}
             </Card>
 
@@ -325,7 +328,7 @@ const WorkOrdersPage: React.FC = () => {
             <Card title={t('wo.statusTimeline')} size="small" style={{ marginBottom: 16 }}>
               {detail.timeline && detail.timeline.length > 0 ? (
                 <Timeline items={detail.timeline.map((t: any) => ({
-                  children: <div><Tag color={WO_STATUS_MAP[t.status]?.color}>{WO_STATUS_MAP[t.status]?.label || t.status}</Tag><span style={{ marginLeft: 8 }}>{t.operator}</span><div style={{ color: '#999', fontSize: 12 }}>{dayjs(t.timestamp).format('YYYY-MM-DD HH:mm:ss')}</div>{t.remark && <div>{t.remark}</div>}</div>,
+                  children: <div><Tag color={WO_STATUS_MAP[t.status]?.color}>{WO_STATUS_MAP[t.status]?.label || t.status}</Tag><span style={{ marginLeft: 8 }}>{t.operator}</span><div style={{ color: '#999', fontSize: 12 }}>{formatInTimezone(t.timestamp, timezone, 'YYYY-MM-DD HH:mm:ss')}</div>{t.remark && <div>{t.remark}</div>}</div>,
                 }))} />
               ) : <span style={{ color: '#999' }}>{t('wo.noRecords')}</span>}
             </Card>

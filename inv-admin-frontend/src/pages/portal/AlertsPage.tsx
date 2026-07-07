@@ -5,11 +5,14 @@ import dayjs from 'dayjs'
 import { alertApi } from '@/services/alertApi'
 import { ALARM_LEVEL_MAP, getAlarmLevelDisplay } from '@/utils/constants'
 import useTranslation from '@/hooks/useTranslation'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 
 const { Title } = Typography
 
 const AlertsPage: React.FC = () => {
   const { t } = useTranslation()
+  const { timezone } = useTimezoneStore()
   const [loading, setLoading] = useState(true)
   const [alerts, setAlerts] = useState<any[]>([])
   const [stats, setStats] = useState({ total: 0, unhandled: 0, critical: 0 })
@@ -45,7 +48,7 @@ const AlertsPage: React.FC = () => {
       width: 160,
       render: (v: string, r: any) => {
         const t = v ?? r.occurred_at
-        return t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '-'
+        return t ? formatInTimezone(t, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'
       },
     },
     {

@@ -17,6 +17,8 @@ import { parallelApi } from '@/services/parallelApi'
 import { deviceApi } from '@/services/deviceApi'
 import { ALARM_LEVEL_MAP } from '@/utils/constants'
 import useTranslation from '@/hooks/useTranslation'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 
 const { Text, Title } = Typography
 
@@ -59,6 +61,7 @@ interface ParallelGroup {
 const ParallelPage: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { timezone } = useTimezoneStore()
   const [filters, setFilters] = useState<{
     keyword?: string
     phaseConfig?: string
@@ -293,7 +296,7 @@ const ParallelPage: React.FC = () => {
       title: t('parallel.createTime'),
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (val: string) => (val ? dayjs(val).format('YYYY-MM-DD HH:mm') : '-'),
+      render: (val: string) => (val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm') : '-'),
     },
     {
       title: t('common.actions'),
@@ -561,7 +564,7 @@ const ParallelPage: React.FC = () => {
       title: t('parallel.occurTime'),
       dataIndex: 'occurred_at',
       key: 'occurred_at',
-      render: (val: string) => (val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (val: string) => (val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
       title: t('parallel.status'),

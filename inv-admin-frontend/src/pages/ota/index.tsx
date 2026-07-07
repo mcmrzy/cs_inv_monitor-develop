@@ -65,6 +65,8 @@ import { modelApi } from '@/services/modelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import type { Firmware, DeviceUpgrade, Device, UpgradePackage, UpgradeTask } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 import PublishModal from './components/PublishModal'
 
 const { TextArea } = Input
@@ -810,6 +812,7 @@ const FirmwareTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { timezone } = useTimezoneStore()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [modelFilter, setModelFilter] = useState<string>()
@@ -950,7 +953,7 @@ const FirmwareTab: React.FC = () => {
     { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (size: number) => formatFileSize(size) },
     { title: 'MD5', dataIndex: 'file_md5', key: 'file_md5', width: 180, ellipsis: true, render: (val: string) => <Tooltip title={val}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span></Tooltip> },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (val: string) => <Tooltip title={val}><span>{val || '-'}</span></Tooltip> },
-    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss') },
+    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.operation'), key: 'action', width: 140,
       render: (_: any, record: Firmware) => (
@@ -1078,6 +1081,7 @@ const PackagesTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { timezone } = useTimezoneStore()
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm] = Form.useForm()
   const [modelFilter, setModelFilter] = useState<string>()
@@ -1228,7 +1232,7 @@ const PackagesTab: React.FC = () => {
         return typeMap[record.rollout_type || ''] || (record.rollout_type || '-')
       },
     },
-    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-' },
+    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm') : '-' },
     {
       title: t('ota.action'), key: 'action', width: 300,
       render: (_: any, record: UpgradePackage) => (
@@ -1377,7 +1381,7 @@ const PackagesTab: React.FC = () => {
                   dataIndex: 'created_at',
                   key: 'created_at',
                   width: 170,
-                  render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+                  render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
                 },
               ]}
             />
@@ -1434,6 +1438,7 @@ const AppVersionTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { timezone } = useTimezoneStore()
   const [platformFilter, setPlatformFilter] = useState<string>()
   const [createOpen, setCreateOpen] = useState(false)
   const [rolloutModalOpen, setRolloutModalOpen] = useState(false)
@@ -1522,7 +1527,7 @@ const AppVersionTab: React.FC = () => {
       },
     },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (val: string) => <Tooltip title={val}><span>{val || '-'}</span></Tooltip> },
-    { title: t('ota.publishTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm') : '-' },
+    { title: t('ota.publishTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (val: string) => val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm') : '-' },
     {
       title: t('common.operation'), key: 'action', width: 200,
       render: (_: any, record: any) => (

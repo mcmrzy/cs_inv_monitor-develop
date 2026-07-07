@@ -1,10 +1,23 @@
 /// 时区管理工具
 /// 后端存储/传输统一使用 UTC, 前端根据站点时区进行本地化显示
 import 'package:intl/intl.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class TimezoneUtils {
   TimezoneUtils._();
+
+  /// 是否已初始化时区数据
+  static bool _initialized = false;
+
+  /// 初始化时区数据（必须在使用前调用）
+  static void initialize() {
+    if (!_initialized) {
+      tz_data.initializeTimeZones();
+      _initialized = true;
+    }
+  }
 
   /// 默认时区
   static const String defaultTimezone = 'Asia/Shanghai';
@@ -96,12 +109,30 @@ class TimezoneUtils {
     }
   }
 
-  /// 格式化 UTC 时间为本地时间字符串
-  static String formatLocalTime(String? dateTimeStr, {String format = 'yyyy-MM-dd HH:mm:ss'}) {
+  /// 格式化 UTC 时间为指定时区的时间字符串
+  /// [dateTimeStr] UTC 时间字符串
+  /// [timezone] 目标时区（如 'Asia/Shanghai'），如果为 null 则使用设备本地时区
+  /// [format] 输出格式
+  static String formatLocalTime(String? dateTimeStr, {String format = 'yyyy-MM-dd HH:mm:ss', String? timezone}) {
     if (dateTimeStr == null || dateTimeStr.isEmpty) return '-';
     try {
-      final dt = DateTime.parse(dateTimeStr).toLocal();
-      return DateFormat(format).format(dt);
+      final dt = DateTime.parse(dateTimeStr);
+      
+      // 如果提供了时区，使用该时区转换
+      if (timezone != null && timezone.isNotEmpty) {
+        initialize(); // 确保时区数据已初始化
+        try {
+          final location = tz.getLocation(timezone);
+          final tzDateTime = tz.TZDateTime.from(dt, location);
+          return DateFormat(format).format(tzDateTime);
+        } catch (e) {
+          // 时区无效时回退到本地时间
+          return DateFormat(format).format(dt.toLocal());
+        }
+      }
+      
+      // 否则使用设备本地时区
+      return DateFormat(format).format(dt.toLocal());
     } catch (_) {
       return dateTimeStr;
     }

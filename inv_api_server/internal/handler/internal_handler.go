@@ -319,7 +319,7 @@ func (h *InternalHandler) pushRealtimeData(ctx context.Context, sn string, data 
 	}
 
 	data["_sn"] = sn
-	data["_updated_at"] = time.Now().Format(time.RFC3339)
+	data["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
 	payload, err := json.Marshal(data)
 	if err != nil {
@@ -333,7 +333,7 @@ func (h *InternalHandler) pushRealtimeData(ctx context.Context, sn string, data 
 		if k == "_sn" || k == "_updated_at" {
 			continue
 		}
-		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": time.Now().Unix()})
+		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": time.Now().UTC().Unix()})
 		pipe.Set(ctx, "realtime:latest:"+sn+":"+k, fieldBytes, 120*time.Second)
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
@@ -1386,7 +1386,7 @@ func (h *InternalHandler) NotificationStream(c *gin.Context) {
 	c.SSEvent("connected", map[string]interface{}{
 		"userID":   userID,
 		"clientID": clientID,
-		"time":     time.Now().Unix(),
+		"time":     time.Now().UTC().Unix(),
 	})
 	c.Writer.Flush()
 
@@ -1448,7 +1448,7 @@ func (h *InternalHandler) broadcastNotification(userID int64, notifyType, title,
 		Title:     title,
 		Content:   content,
 		DeviceSN:  deviceSn,
-		CreatedAt: time.Now().Format(time.RFC3339),
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 
 	data, _ := json.Marshal(notification)
