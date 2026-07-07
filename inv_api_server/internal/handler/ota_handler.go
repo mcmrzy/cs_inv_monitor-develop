@@ -420,12 +420,19 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			"bms": device.FirmwareBMS,
 		}
 		for _, item := range firstPkg.Items {
+			// 获取固件信息以构造下载URL
+			fw, _ := h.otaService.GetFirmware(c.Request.Context(), item.FirmwareID)
+			downloadURL := ""
+			if fw != nil {
+				downloadURL = h.otaService.BuildDownloadURL(fw.FileURL)
+			}
 			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
 				"chip":             item.TargetChip,
 				"current":          chipVersions[item.TargetChip],
 				"target":           item.FirmwareVersion,
 				"firmware_id":      item.FirmwareID,
 				"firmware_version": item.FirmwareVersion,
+				"download_url":     downloadURL,
 			})
 		}
 
