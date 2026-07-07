@@ -720,16 +720,17 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 
 	pipe := p.rdb.Pipeline()
 	// 存储单个字段到 Redis（用于按字段查询和订阅）
+	// 缓存时间改为600秒（10分钟），因为设备不同topic发送频率不同（1-6分钟）
 	for k, v := range payload {
 		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": time.Now().UTC().Unix()})
-		pipe.Set(ctx, fmt.Sprintf("realtime:latest:%s:%s", sn, k), fieldBytes, 120*time.Second)
+		pipe.Set(ctx, fmt.Sprintf("realtime:latest:%s:%s", sn, k), fieldBytes, 600*time.Second)
 	}
 	rt["_sn"] = sn
 	rt["_msg_type"] = msgType
 	rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
 	mergedBytes, _ := json.Marshal(rt)
-	pipe.Set(ctx, cacheKey, mergedBytes, 120*time.Second)
+	pipe.Set(ctx, cacheKey, mergedBytes, 600*time.Second)
 
 	// 有效数据缓存：检查合并后的完整数据是否包含有效值
 	// 因为设备数据分散在多个topic中，需要检查整个rt而不是单个payload
