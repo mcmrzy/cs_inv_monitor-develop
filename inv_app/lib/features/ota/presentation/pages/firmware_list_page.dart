@@ -56,11 +56,17 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
   /// 预下载升级包中的所有固件
   Future<void> _preDownloadPackage(dynamic pkg) async {
-    final items = (pkg is Map && pkg['items'] is List)
-        ? (pkg['items'] as List)
-        : <dynamic>[];
+    // 后端返回chips字段，前端也兼容items字段
+    final chips = (pkg is Map && pkg['chips'] is List)
+        ? (pkg['chips'] as List)
+        : (pkg is Map && pkg['items'] is List)
+            ? (pkg['items'] as List)
+            : <dynamic>[];
     
-    if (items.isEmpty) return;
+    if (chips.isEmpty) {
+      print('[PreDownload] No chips found in package: $pkg');
+      return;
+    }
     
     final packageId = (pkg is Map) ? (pkg['id'] as int? ?? 0) : 0;
     
@@ -79,15 +85,17 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
     try {
       int downloadedCount = 0;
-      final totalItems = items.length;
+      final totalItems = chips.length;
       
-      for (final item in items) {
-        if (item is Map) {
-          final firmwareId = item['firmware_id'] as int? ?? 0;
-          final downloadUrl = item['download_url'] as String? ?? '';
-          final chip = item['target_chip'] as String? ?? 'firmware';
-          final version = item['firmware_version'] as String? ?? '';
-          final fileName = '${chip}_$version.bin';
+      for (final chip in chips) {
+        if (chip is Map) {
+          final firmwareId = chip['firmware_id'] as int? ?? 0;
+          final downloadUrl = chip['download_url'] as String? ?? '';
+          final chipName = chip['target_chip'] as String? ?? 'firmware';
+          final version = chip['firmware_version'] as String? ?? '';
+          final fileName = '${chipName}_$version.bin';
+          
+          print('[PreDownload] Chip: $chipName, firmwareId: $firmwareId, url: $downloadUrl');
           
           if (firmwareId > 0 && downloadUrl.isNotEmpty) {
             // 检查是否已下载
@@ -107,6 +115,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                 _downloadingProgress[packageId] = downloadedCount / totalItems;
               });
             }
+          } else {
+            print('[PreDownload] Skipping chip $chipName: invalid firmwareId or downloadUrl');
           }
         }
       }
@@ -126,6 +136,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         );
       }
     } catch (e) {
+      print('[PreDownload] Error: $e');
       if (mounted) {
         setState(() {
           _downloadingIds.remove(packageId);
@@ -416,9 +427,12 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     final displayChangelog = userChangelog.isNotEmpty ? userChangelog : changelog;
     final isForce = (pkg is Map) ? (pkg['is_force'] as bool? ?? false) : false;
     final createdAtRaw = (pkg is Map) ? (pkg['created_at'] as String? ?? '') : '';
-    final items = (pkg is Map && pkg['items'] is List)
-        ? (pkg['items'] as List)
-        : <dynamic>[];
+    // 后端返回chips字段，前端也兼容items字段
+    final items = (pkg is Map && pkg['chips'] is List)
+        ? (pkg['chips'] as List)
+        : (pkg is Map && pkg['items'] is List)
+            ? (pkg['items'] as List)
+            : <dynamic>[];
 
     final isCurrent = _isCurrentVersion(displayVersion);
     final isRollbackVer = _isRollback(displayVersion);
