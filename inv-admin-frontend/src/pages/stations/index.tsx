@@ -469,17 +469,32 @@ const StationsPage: React.FC = () => {
               <a><SwapOutlined /> {t('station.assign')}</a>
             </Popconfirm>
           )}
-          {isAdmin && hasPermission('stations:edit') && (
-            <Popconfirm
-              title={t('station.deleteConfirm')}
-              onConfirm={() => handleDelete(record.id)}
-              okText={t('common.confirm')}
-              cancelText={t('common.cancel')}
-              okButtonProps={{ danger: true }}
-            >
-              <a style={{ color: '#ff4d4f' }}><DeleteOutlined /> {t('common.delete')}</a>
-            </Popconfirm>
-          )}
+          <a onClick={() => {
+            editForm.setFieldsValue({
+              name: record.name,
+              province: record.province,
+              city: record.city,
+              district: record.district,
+              address: record.address,
+              capacity: record.capacity,
+              panel_count: record.panel_count,
+              battery_capacity: record.battery_capacity,
+              contact_name: record.contact_name,
+              contact_phone: record.contact_phone,
+              timezone: record.timezone || 'Asia/Shanghai',
+            })
+            setCurrentStation(record)
+            setEditModalOpen(true)
+          }}><EditOutlined /> {t('common.edit')}</a>
+          <Popconfirm
+            title={t('station.deleteConfirm')}
+            onConfirm={() => handleDelete(record.id)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+            okButtonProps={{ danger: true }}
+          >
+            <a style={{ color: '#ff4d4f' }}><DeleteOutlined /> {t('common.delete')}</a>
+          </Popconfirm>
         </Space>
       ),
     },
