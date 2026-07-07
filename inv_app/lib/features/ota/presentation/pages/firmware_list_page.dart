@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/services/firmware_download_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -35,6 +36,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   final Map<int, bool> _downloadedCache = {};
   final Map<int, double> _downloadingProgress = {};
   final Set<int> _downloadingIds = {};
+  final Set<int> _checkedDownloadIds = {};
 
   @override
   void initState() {
@@ -52,6 +54,41 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     context.read<OtaBloc>().add(
       LoadAvailablePackages(sn: widget.sn),
     );
+  }
+
+  /// 恢复升级包的下载状态（从 SharedPreferences 持久化记录中检查）
+  Future<void> _restorePackageDownloadState(dynamic pkg) async {
+    final packageId = (pkg is Map) ? (pkg['id'] as int? ?? 0) : 0;
+    if (_checkedDownloadIds.contains(packageId)) return;
+    _checkedDownloadIds.add(packageId);
+
+    final chips = (pkg is Map && pkg['chips'] is List)
+        ? (pkg['chips'] as List)
+        : (pkg is Map && pkg['items'] is List)
+            ? (pkg['items'] as List)
+            : <dynamic>[];
+
+    if (chips.isEmpty) return;
+
+    bool allDownloaded = true;
+    for (final chip in chips) {
+      if (chip is Map) {
+        final firmwareId = chip['firmware_id'] as int? ?? 0;
+        if (firmwareId > 0) {
+          final downloaded = await _downloadService.isFirmwareDownloaded(firmwareId);
+          if (!downloaded) {
+            allDownloaded = false;
+            break;
+          }
+        }
+      }
+    }
+
+    if (allDownloaded && mounted) {
+      setState(() {
+        _downloadedCache[packageId] = true;
+      });
+    }
   }
 
   /// 预下载升级包中的所有固件
@@ -444,6 +481,11 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         ? AppColors.successLight.withValues(alpha: 0.5)
         : const Color(0xFFE5E7EB);
 
+    // 在 build 过程中触发异步状态恢复（仅执行一次）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _restorePackageDownloadState(pkg);
+    });
+
     // 检查下载状态
     final isDownloaded = _downloadedCache[id] ?? false;
     final isDownloading = _downloadingIds.contains(id);
@@ -608,12 +650,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   )
                 else if (isDownloaded)
                   GestureDetector(
-                    onTap: () {
-                      // 跳转到本地OTA页面
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('请在OTA页面使用本地安装功能')),
-                      );
-                    },
+                    onTap: () => _navigateToLocalOTA(pkg),
                     child: Container(
                       padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
                       decoration: BoxDecoration(
@@ -692,5 +729,94 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     }
     // Fallback: return first 10 chars
     return raw.length > 10 ? raw.substring(0, 10) : raw;
+  }
+
+  /// 跳转到本地OTA安装页面
+  void _navigateToLocalOTA(dynamic pkg) {
+    final chips = (pkg is Map && pkg['chips'] is List)
+        ? (pkg['chips'] as List)
+        : (pkg is Map && pkg['items'] is List)
+            ? (pkg['items'] as List)
+            : <dynamic>[];
+
+    if (chips.isEmpty) return;
+
+    final validChips = chips.where((chip) {
+      if (chip is! Map) return false;
+      final firmwareId = chip['firmware_id'] as int? ?? 0;
+      final downloadUrl = chip['download_url'] as String? ?? '';
+      return firmwareId > 0 && downloadUrl.isNotEmpty;
+    }).toList();
+
+    if (validChips.isEmpty) return;
+
+    if (validChips.length == 1) {
+      _jumpToLocalOTA(validChips[0] as Map);
+    } else {
+      _showChipSelectionDialog(validChips);
+    }
+  }
+
+  /// 执行实际的路由跳转到 LocalOTAPage
+  void _jumpToLocalOTA(Map chip) {
+    final firmwareId = chip['firmware_id'] as int? ?? 0;
+    final downloadUrl = chip['download_url'] as String? ?? '';
+    final chipName = chip['target_chip'] as String? ?? 'firmware';
+    final version = chip['firmware_version'] as String? ?? '';
+    final fileName = '${chipName}_$version.bin';
+
+    context.push(
+      '/ota/${widget.sn}/local'
+      '?ip=192.168.4.1'
+      '&firmware_id=$firmwareId'
+      '&firmware_url=${Uri.encodeComponent(downloadUrl)}'
+      '&firmware_file_name=${Uri.encodeComponent(fileName)}'
+      '&target_chip=$chipName',
+    );
+  }
+
+  /// 显示芯片选择对话框
+  void _showChipSelectionDialog(List<dynamic> validChips) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text('选择要安装的固件', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: validChips.map((chip) {
+              final chipMap = chip as Map;
+              final chipName = (chipMap['target_chip'] as String? ?? '').toUpperCase();
+              final fwVer = chipMap['firmware_version'] as String? ?? '-';
+              return ListTile(
+                leading: Container(
+                  width: 36.w,
+                  height: 36.w,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8.r),
+                  ),
+                  child: Center(
+                    child: Text(
+                      chipName.isNotEmpty ? chipName.substring(0, 1) : '?',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+                    ),
+                  ),
+                ),
+                title: Text(chipName, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.sp)),
+                subtitle: Text('v$fwVer', style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _jumpToLocalOTA(chipMap);
+                },
+              );
+            }).toList(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('取消')),
+          ],
+        );
+      },
+    );
   }
 }
