@@ -215,13 +215,41 @@ const StationsPage: React.FC = () => {
 
   const { data: stationStats, isLoading: statsLoading } = useQuery({
     queryKey: ['station-statistics', currentStation?.id, trendRange],
-    queryFn: () => api.get(`/stations/${currentStation!.id}/statistics`, {
-      params: {
-        start_date: dayjs().subtract(trendRange, 'day').format('YYYY-MM-DD'),
-        end_date: dayjs().format('YYYY-MM-DD'),
-        period: 'day',
+    queryFn: async () => {
+      const res = await api.get(`/stations/${currentStation!.id}/statistics`, {
+        params: {
+          start_date: dayjs().subtract(trendRange, 'day').format('YYYY-MM-DD'),
+          end_date: dayjs().format('YYYY-MM-DD'),
+          period: 'day',
+        }
+      })
+      const rawData = extractData(res)
+      
+      // 后端返回的是数组格式，需要转换为前端期望的对象格式
+      if (Array.isArray(rawData)) {
+        const daily = rawData.map((item: any) => ({
+          date: item.time || item.date,
+          value: item.daily_pv || item.value || 0
+        }))
+        
+        // 计算汇总数据
+        const today = daily.length > 0 ? daily[daily.length - 1].value : 0
+        const total = daily.reduce((sum: number, item: any) => sum + item.value, 0)
+        const monthStart = dayjs().startOf('month').format('YYYY-MM-DD')
+        const month = daily
+          .filter((item: any) => item.date >= monthStart)
+          .reduce((sum: number, item: any) => sum + item.value, 0)
+        const yearStart = dayjs().startOf('year').format('YYYY-MM-DD')
+        const year = daily
+          .filter((item: any) => item.date >= yearStart)
+          .reduce((sum: number, item: any) => sum + item.value, 0)
+        
+        return { today, month, year, total, daily }
       }
-    }).then(extractData),
+      
+      // 如果已经是对象格式，直接返回
+      return rawData
+    },
     enabled: !!currentStation?.id && drawerOpen && activeTab === 'statistics',
   })
 
