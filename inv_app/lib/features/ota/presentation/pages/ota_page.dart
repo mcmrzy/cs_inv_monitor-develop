@@ -382,10 +382,18 @@ class _OTAPageState extends State<OTAPage> {
     final firmwareId = info['firmware_id'] as int? ?? 0;
     final chipsToUpgrade = (info['chips_to_upgrade'] as List?) ?? [];
     final changelog = info['changelog'] as String? ?? '';
-    // 从第一个芯片提取下载信息用于预下载
-    final firstChip = chipsToUpgrade.isNotEmpty ? chipsToUpgrade[0] as Map<String, dynamic> : {};
-    final downloadUrl = firstChip['download_url'] as String? ?? '';
-    final fileName = '${firstChip['chip'] ?? 'firmware'}_${firstChip['target'] ?? ''}.bin';
+    
+    // 从chips_to_upgrade中提取下载信息用于预下载
+    String downloadUrl = '';
+    String fileName = 'firmware_$firmwareId.bin';
+    
+    if (chipsToUpgrade.isNotEmpty) {
+      final firstChip = chipsToUpgrade[0] as Map<String, dynamic>;
+      downloadUrl = firstChip['download_url'] as String? ?? '';
+      final chipName = firstChip['chip'] ?? 'firmware';
+      final target = firstChip['target'] ?? '';
+      fileName = '${chipName}_$target.bin';
+    }
 
     return Padding(
       padding: EdgeInsets.all(16.w),
