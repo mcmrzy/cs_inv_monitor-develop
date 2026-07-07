@@ -259,7 +259,7 @@ const WorkOrdersPage: React.FC = () => {
 
       <Modal title={t('wo.selectTemplate')} open={templateOpen} onCancel={() => setTemplateOpen(false)} footer={null} width={720} destroyOnClose>
         <Row gutter={[16, 16]}>
-          {(templates ?? []).map((tpl: WorkOrderTemplate) => (
+          {Array.isArray(templates) && templates.map((tpl: WorkOrderTemplate) => (
             <Col key={tpl.templateId} span={6}>
               <Card hoverable size="small" style={{ textAlign: 'center', height: '100%' }} onClick={() => handleTemplateSelect(tpl.templateId)}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>{TEMPLATE_ICONS[tpl.templateId] || '\uD83D\uDCCB'}</div>
