@@ -194,6 +194,10 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
       GF_SECURITY_ALLOW_EMBEDDING: "true"
+      # 中文界面
+      GF_USERS_DEFAULT_LANGUAGE: "zh-Hans"
+      # 启用 Grafana Live (WebSocket)
+      GF_LIVE_ALLOWED_ORIGINS: "*"
     ports:
       - "3001:3000"
     volumes:
