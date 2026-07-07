@@ -593,7 +593,30 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	}
 
 	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
-	router.Static("/firmware", "/data/firmware")
+	// 使用 http.ServeContent 替代 Gin Static，优化大文件传输
+	firmwareDir := "/data/firmware"
+	router.GET("/firmware/*filepath", func(c *gin.Context) {
+		filepath := c.Param("filepath")
+		if filepath == "" {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		fullPath := firmwareDir + filepath
+		f, err := os.Open(fullPath)
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		defer f.Close()
+		stat, err := f.Stat()
+		if err != nil || stat.IsDir() {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Header("Content-Type", "application/octet-stream")
+		c.Header("Accept-Ranges", "bytes")
+		http.ServeContent(c.Writer, c.Request, stat.Name(), stat.ModTime(), f)
+	})
 
 	api := router.Group("/api/v1")
 	{
