@@ -97,7 +97,13 @@ const WorkOrdersPage: React.FC = () => {
 
   const { data: templates } = useQuery({
     queryKey: ['work-orders', 'templates'],
-    queryFn: () => workOrderApi.getTemplates().then((r) => r.data?.data ?? [] as WorkOrderTemplate[]),
+    queryFn: () => workOrderApi.getTemplates().then((r) => {
+      const data = r.data?.data
+      // 兼容数组格式和分页格式
+      if (Array.isArray(data)) return data as WorkOrderTemplate[]
+      if (data?.items && Array.isArray(data.items)) return data.items as WorkOrderTemplate[]
+      return [] as WorkOrderTemplate[]
+    }),
     enabled: templateOpen,
   })
 
