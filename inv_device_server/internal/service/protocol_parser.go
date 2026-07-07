@@ -731,39 +731,14 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 	mergedBytes, _ := json.Marshal(rt)
 	pipe.Set(ctx, cacheKey, mergedBytes, 120*time.Second)
 
-	// 有效数据缓存：如果当前数据包含有效值（非全0），同时更新有效数据缓存
-	if isValidRealtimeData(payload, topicCategory) {
+	// 有效数据缓存：检查合并后的完整数据是否包含有效值
+	// 因为设备数据分散在多个topic中，需要检查整个rt而不是单个payload
+	if isValidRealtimeData(rt, topicCategory) {
 		validCacheKey := "realtime:last_valid:" + sn
-		// 合并现有有效数据
-		validExisting, err := p.rdb.Get(ctx, validCacheKey).Bytes()
-		var validRt map[string]interface{}
-		if err == nil {
-			_ = json.Unmarshal(validExisting, &validRt)
-		}
-		if validRt == nil {
-			validRt = make(map[string]interface{})
-		}
-		// 更新有效数据
-		if topicCategory != "" {
-			validNested := make(map[string]interface{})
-			if v, ok := validRt[topicCategory]; ok {
-				if nestedMap, ok := v.(map[string]interface{}); ok {
-					validNested = nestedMap
-				}
-			}
-			for k, v := range payload {
-				validNested[k] = v
-			}
-			validRt[topicCategory] = validNested
-		} else {
-			for k, v := range payload {
-				validRt[k] = v
-			}
-		}
-		validRt["_sn"] = sn
-		validRt["_msg_type"] = msgType
-		validRt["_updated_at"] = time.Now().Format(time.RFC3339)
-		validMergedBytes, _ := json.Marshal(validRt)
+		rt["_sn"] = sn
+		rt["_msg_type"] = msgType
+		rt["_updated_at"] = time.Now().Format(time.RFC3339)
+		validMergedBytes, _ := json.Marshal(rt)
 		// 有效数据缓存7天过期
 		pipe.Set(ctx, validCacheKey, validMergedBytes, 7*24*time.Hour)
 	}
@@ -780,16 +755,47 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 
 // isValidRealtimeData 判断实时数据是否为有效数据（非全0）
 // 用于决定是否更新有效数据缓存
-func isValidRealtimeData(payload map[string]interface{}, topicCategory string) bool {
+// 注意：data参数可能是合并后的完整数据（包含ac/batt/pv等嵌套对象）
+func isValidRealtimeData(data map[string]interface{}, topicCategory string) bool {
 	// 如果是info类型，始终认为是有效数据
 	if topicCategory == "info" {
 		return true
 	}
 
+	// 检查顶层字段
+	if hasValidFields(data) {
+		return true
+	}
+
+	// 检查嵌套对象中的字段（ac、batt、pv、energy等）
+	// 设备数据结构: {"ac": {"data": {...}, "timestamp": ...}, ...}
+	nestedKeys := []string{"ac", "batt", "battery", "pv", "energy", "sys", "system"}
+	for _, key := range nestedKeys {
+		if nested, ok := data[key]; ok {
+			if nestedMap, ok := nested.(map[string]interface{}); ok {
+				// 处理嵌套格式 {"data": {...}, "timestamp": ...}
+				if innerData, exists := nestedMap["data"].(map[string]interface{}); exists {
+					if hasValidFields(innerData) {
+						return true
+					}
+				} else {
+					if hasValidFields(nestedMap) {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	return false
+}
+
+// hasValidFields 检查数据中是否包含有效字段（功率/电压/能量>0）
+func hasValidFields(data map[string]interface{}) bool {
 	// 检查功率相关字段
 	powerFields := []string{"power", "pv_power", "pv_power_total", "active_power", "total_active_power"}
 	for _, field := range powerFields {
-		if v, ok := payload[field]; ok {
+		if v, ok := data[field]; ok {
 			if f, ok := v.(float64); ok && f > 0 {
 				return true
 			}
@@ -799,7 +805,7 @@ func isValidRealtimeData(payload map[string]interface{}, topicCategory string) b
 	// 检查电压相关字段（电压通常不为0表示设备在工作）
 	voltageFields := []string{"voltage", "ac_voltage", "pv_voltage", "pv1_voltage", "pv2_voltage"}
 	for _, field := range voltageFields {
-		if v, ok := payload[field]; ok {
+		if v, ok := data[field]; ok {
 			if f, ok := v.(float64); ok && f > 0 {
 				return true
 			}
@@ -809,7 +815,7 @@ func isValidRealtimeData(payload map[string]interface{}, topicCategory string) b
 	// 检查能量相关字段
 	energyFields := []string{"daily_pv", "total_pv", "daily_charge", "total_charge"}
 	for _, field := range energyFields {
-		if v, ok := payload[field]; ok {
+		if v, ok := data[field]; ok {
 			if f, ok := v.(float64); ok && f > 0 {
 				return true
 			}
