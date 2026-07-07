@@ -166,41 +166,42 @@ services:
     networks:
       - inv-net
 
-  # prometheus:
-  #   image: prom/prometheus:latest
-  #   container_name: inv-prometheus
-  #   restart: unless-stopped
-  #   command:
-  #     - '--config.file=/etc/prometheus/prometheus.yml'
-  #     - '--storage.tsdb.path=/prometheus'
-  #     - '--storage.tsdb.retention.time=30d'
-  #     - '--web.enable-lifecycle'
-  #   ports:
-  #     - "9090:9090"
-  #   volumes:
-  #     - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-  #     - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
-  #     - prometheus_data:/prometheus
-  #   networks:
-  #     - inv-net
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: inv-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - inv-net
 
-  # grafana:
-  #   image: grafana/grafana:latest
-  #   container_name: inv-grafana
-  #   restart: unless-stopped
-  #   environment:
-  #     GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)d/grafana"
-  #     GF_SERVER_SERVE_FROM_SUB_PATH: "true"
-  #     GF_AUTH_ANONYMOUS_ENABLED: "true"
-  #     GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
-  #     GF_SECURITY_ALLOW_EMBEDDING: "true"
-  #   ports:
-  #     - "3001:3000"
-  #   volumes:
-  #     - grafana_data:/var/lib/grafana
-  #     - ./grafana/dashboard.json:/etc/grafana/provisioning/dashboards/inv-mqtt.json:ro
-  #   networks:
-  #     - inv-net
+  grafana:
+    image: grafana/grafana:latest
+    container_name: inv-grafana
+    restart: unless-stopped
+    environment:
+      GF_SERVER_ROOT_URL: "/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboard.json:/etc/grafana/provisioning/dashboards/inv-mqtt.json:ro
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - inv-net
 
 networks:
   inv-net:

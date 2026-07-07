@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['inv-api-gateway:8080']
+
+  - job_name: 'inv-api-server'
+    static_configs:
+      - targets: ['inv-api-server:8080']
+
+  - job_name: 'inv-device-server'
+    static_configs:
+      - targets: ['inv-device-server:8081']
