@@ -351,34 +351,14 @@ const DashboardPage: React.FC = () => {
         ))}
       </Row>
 
-      {/* 30日发电趋势 */}
-      <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
-        title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
-      >
-        {trend30DaysData.length > 0 ? (
-          <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
-        ) : (
-          <Empty description={t('dash.noEnergyData')} />
-        )}
-      </Card>
-
-      {/* 功率趋势 + 设备状态 */}
+      {/* 30日发电趋势 + 设备状态 */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={16}>
           <Card bordered={false} style={{ borderRadius: 12 }}
-            title={<Space><LineChartOutlined style={{ color: '#1677ff' }} /><span>{t('dash.powerTrend')}</span></Space>}
-            extra={
-              <Space>
-                <DatePicker value={dayjs(flowDate)} onChange={(d) => d && setFlowDate(d.format('YYYY-MM-DD'))} allowClear={false} style={{ width: 150 }} />
-                <Button size="small" onClick={() => setFlowDate(dayjs().subtract(1, 'day').format('YYYY-MM-DD'))}>昨天</Button>
-                <Button size="small" onClick={() => setFlowDate(dayjs().format('YYYY-MM-DD'))}>今天</Button>
-              </Space>
-            }
+            title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
           >
-            {flowLoading ? (
-              <div style={{ height: 340, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
-            ) : flowData.length > 0 ? (
-              <ReactECharts option={energyFlowOption} style={{ height: 340 }} />
+            {trend30DaysData.length > 0 ? (
+              <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
             ) : (
               <Empty description={t('dash.noEnergyData')} />
             )}
@@ -404,6 +384,26 @@ const DashboardPage: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* 功率趋势 */}
+      <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
+        title={<Space><LineChartOutlined style={{ color: '#1677ff' }} /><span>{t('dash.powerTrend')}</span></Space>}
+        extra={
+          <Space>
+            <DatePicker value={dayjs(flowDate)} onChange={(d) => d && setFlowDate(d.format('YYYY-MM-DD'))} allowClear={false} style={{ width: 150 }} />
+            <Button size="small" onClick={() => setFlowDate(dayjs().subtract(1, 'day').format('YYYY-MM-DD'))}>昨天</Button>
+            <Button size="small" onClick={() => setFlowDate(dayjs().format('YYYY-MM-DD'))}>今天</Button>
+          </Space>
+        }
+      >
+        {flowLoading ? (
+          <div style={{ height: 340, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+        ) : flowData.length > 0 ? (
+          <ReactECharts option={energyFlowOption} style={{ height: 340 }} />
+        ) : (
+          <Empty description={t('dash.noEnergyData')} />
+        )}
+      </Card>
 
       {/* 电量概览 */}
       <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
