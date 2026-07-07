@@ -1511,13 +1511,14 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 		result := make(map[string]interface{})
 		result["online"] = online
 
-		mainKey := "realtime:latest:" + sn
-		cached, err := r.cache.Get(ctx, mainKey).Result()
-		if err == nil && cached != "" {
-			var m map[string]interface{}
-			if json.Unmarshal([]byte(cached), &m) == nil {
-				for k, v := range m {
-					// 处理嵌套格式 {"data": {...}, "timestamp": ...}
+		// 优先获取有效数据缓存（设备上报的有效数据，非全0）
+		validKey := "realtime:last_valid:" + sn
+		validCached, validErr := r.cache.Get(ctx, validKey).Result()
+		if validErr == nil && validCached != "" {
+			var validM map[string]interface{}
+			if json.Unmarshal([]byte(validCached), &validM) == nil {
+				for k, v := range validM {
+					// 处理嵌套格式
 					if nested, ok := v.(map[string]interface{}); ok {
 						if innerData, exists := nested["data"].(map[string]interface{}); exists {
 							result[k] = innerData
@@ -1526,6 +1527,31 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 						}
 					} else {
 						result[k] = v
+					}
+				}
+				// 标记数据来源为有效数据缓存
+				result["_data_source"] = "last_valid"
+			}
+		}
+
+		// 如果有效数据缓存不存在或数据不完整，回退到实时数据
+		if len(result) <= 3 {
+			mainKey := "realtime:latest:" + sn
+			cached, err := r.cache.Get(ctx, mainKey).Result()
+			if err == nil && cached != "" {
+				var m map[string]interface{}
+				if json.Unmarshal([]byte(cached), &m) == nil {
+					for k, v := range m {
+						// 处理嵌套格式 {"data": {...}, "timestamp": ...}
+						if nested, ok := v.(map[string]interface{}); ok {
+							if innerData, exists := nested["data"].(map[string]interface{}); exists {
+								result[k] = innerData
+							} else {
+								result[k] = v
+							}
+						} else {
+							result[k] = v
+						}
 					}
 				}
 			}
@@ -1544,7 +1570,7 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 				if err == nil {
 					for i, key := range keys {
 						if i < len(vals) && vals[i] != nil {
-							fieldName := key[len("realtime:latest:"+sn+":"):]
+							fieldName := key[len("realtime:latest:"+sn+":") :]
 							if valStr, ok := vals[i].(string); ok {
 								var fieldData map[string]interface{}
 								if json.Unmarshal([]byte(valStr), &fieldData) == nil {
