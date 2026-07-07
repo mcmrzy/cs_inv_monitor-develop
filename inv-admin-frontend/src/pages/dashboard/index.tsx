@@ -103,6 +103,17 @@ const DashboardPage: React.FC = () => {
   const energyTrendData = Array.isArray(energyTrendRes?.data)
     ? energyTrendRes.data
     : (Array.isArray(energyTrendRes?.data?.data) ? energyTrendRes.data.data : []) as any[]
+
+  // 30日发电趋势数据
+  const { data: trend30DaysRes } = useQuery({
+    queryKey: ['dashboard', 'trend30Days'],
+    queryFn: () => dashboardApi.getTrend('30days').then((r) => r.data),
+    refetchInterval: 15000,
+  })
+  const trend30DaysData = Array.isArray(trend30DaysRes?.data)
+    ? trend30DaysRes.data
+    : (Array.isArray(trend30DaysRes?.data?.data) ? trend30DaysRes.data.data : []) as any[]
+
   const recentAlerts = ((stats?.recentAlarms ?? []) as AlertItem[])
 
   const ds = stats?.deviceStats ?? stats
@@ -231,6 +242,35 @@ const DashboardPage: React.FC = () => {
     }
   }, [energyStatsRaw, energyTrendData, t])
 
+  /* 30日发电趋势图表配置 */
+  const trend30DaysOption = useMemo(() => {
+    if (!trend30DaysData || trend30DaysData.length === 0) return {}
+    return {
+      tooltip: { trigger: 'axis' as const },
+      grid: { left: '3%', right: '4%', bottom: '12%', top: '45', containLabel: true },
+      xAxis: {
+        type: 'category' as const,
+        data: trend30DaysData.map((d: any) => dayjs(d.date).format('MM-DD')),
+        axisLabel: { fontSize: 11, interval: 2 },
+      },
+      yAxis: { type: 'value' as const, name: 'kWh' },
+      dataZoom: [
+        { type: 'inside', start: 0, end: 100 },
+        { type: 'slider', start: 0, end: 100, height: 20, bottom: 8 },
+      ],
+      series: [{
+        name: t('station.genEnergy'),
+        type: 'line' as const,
+        data: trend30DaysData.map((d: any) => safeNum(d.energy)),
+        smooth: true,
+        symbol: 'none',
+        lineStyle: { color: '#f59e0b', width: 2 },
+        itemStyle: { color: '#f59e0b' },
+        areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.3)' }, { offset: 1, color: 'rgba(245,158,11,0.02)' }] } },
+      }],
+    }
+  }, [trend30DaysData, t])
+
   /* 电站排行 */
   const [rankingPeriod, setRankingPeriod] = useState('today')
   const { data: rankingRes } = useQuery({
@@ -353,6 +393,17 @@ const DashboardPage: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* 30日发电趋势 */}
+      <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
+        title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
+      >
+        {trend30DaysData.length > 0 ? (
+          <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
+        ) : (
+          <Empty description={t('dash.noEnergyData')} />
+        )}
+      </Card>
 
       {/* 电量概览 */}
       <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
