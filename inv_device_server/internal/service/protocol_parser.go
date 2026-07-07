@@ -817,7 +817,7 @@ func isValidRealtimeData(payload map[string]interface{}, topicCategory string) b
 	}
 
 	// 检查SOC字段
-	if v, ok := payload["soc"]; ok {
+	if v, ok := data["soc"]; ok {
 		if f, ok := v.(float64); ok && f > 0 {
 			return true
 		}
