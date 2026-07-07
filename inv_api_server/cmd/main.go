@@ -735,6 +735,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 			auth.GET("/work-orders", deps.WorkOrderHandler.List)
 			auth.GET("/work-orders/stats", deps.WorkOrderHandler.GetStatistics)
+			auth.GET("/work-orders/templates", deps.WorkOrderHandler.ListTemplates)
 			auth.POST("/work-orders", deps.WorkOrderHandler.Create)
 			auth.GET("/work-orders/:id", deps.WorkOrderHandler.GetByID)
 			auth.PUT("/work-orders/:id", deps.WorkOrderHandler.Update)
