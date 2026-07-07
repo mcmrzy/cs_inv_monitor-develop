@@ -720,6 +720,7 @@ const Map<String, String> en = {
 
   // Dashboard widgets (new, non-duplicate)
   'recent_7day_trend': '7-Day Trend',
+  'recent_30day_trend': '30-Day Trend',
   'power_consumption': 'Consumption',
   'unit_devices': '',
   'no_devices_yet': 'No devices',

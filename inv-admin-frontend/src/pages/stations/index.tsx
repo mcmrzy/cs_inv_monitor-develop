@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Typography, Tag, Select, message, Space, Popconfirm,
   Drawer, Descriptions, Tabs, Statistic, Input, Button, Form, Modal, Empty, Spin, Grid,
-  Tooltip,
+  Tooltip, Radio,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -135,6 +135,9 @@ const StationsPage: React.FC = () => {
   const [deviceKeyword, setDeviceKeyword] = useState('')
   const [deviceStatusFilter, setDeviceStatusFilter] = useState<number | undefined>(undefined)
 
+  /* ---------- 趋势图时间范围 ---------- */
+  const [trendRange, setTrendRange] = useState<7 | 30>(30)
+
   /* ---------- 数据获取 ---------- */
 
   const { data: stations = [], isLoading, refetch } = useQuery({
@@ -206,8 +209,14 @@ const StationsPage: React.FC = () => {
   }
 
   const { data: stationStats, isLoading: statsLoading } = useQuery({
-    queryKey: ['station-statistics', currentStation?.id],
-    queryFn: () => api.get(`/stations/${currentStation!.id}/statistics`).then(extractData),
+    queryKey: ['station-statistics', currentStation?.id, trendRange],
+    queryFn: () => api.get(`/stations/${currentStation!.id}/statistics`, {
+      params: {
+        start_date: dayjs().subtract(trendRange, 'day').format('YYYY-MM-DD'),
+        end_date: dayjs().format('YYYY-MM-DD'),
+        period: 'day',
+      }
+    }).then(extractData),
     enabled: !!currentStation?.id && drawerOpen && activeTab === 'statistics',
   })
 
@@ -286,7 +295,10 @@ const StationsPage: React.FC = () => {
       xAxis: {
         type: 'category' as const,
         data: stats.daily.map((d) => dayjs(d.date).format('MM-DD')),
-        axisLabel: { fontSize: 11 },
+        axisLabel: {
+          fontSize: 11,
+          interval: trendRange === 30 ? 2 : 0,
+        },
       },
       yAxis: {
         type: 'value' as const,
@@ -314,7 +326,7 @@ const StationsPage: React.FC = () => {
         },
       ],
     }
-  }, [stationStats])
+  }, [stationStats, trendRange, t])
 
   /* ---------- 电站表格列定义 ---------- */
 
@@ -699,7 +711,24 @@ const StationsPage: React.FC = () => {
             </Card>
           </Col>
         </Row>
-        <Card title={t('station.genTrend30Days')} size="small" bordered={false} style={{ borderRadius: 12 }}>
+        <Card
+          title={t('station.genTrend30Days')}
+          size="small"
+          bordered={false}
+          style={{ borderRadius: 12 }}
+          extra={
+            <Radio.Group
+              value={trendRange}
+              onChange={(e) => setTrendRange(e.target.value)}
+              size="small"
+              optionType="button"
+              buttonStyle="solid"
+            >
+              <Radio.Button value={7}>7D</Radio.Button>
+              <Radio.Button value={30}>30D</Radio.Button>
+            </Radio.Group>
+          }
+        >
           {generationChartOption ? (
             <ReactECharts option={generationChartOption} style={{ height: 280 }} />
           ) : (

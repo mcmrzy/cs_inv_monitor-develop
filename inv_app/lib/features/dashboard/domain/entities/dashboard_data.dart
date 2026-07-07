@@ -9,7 +9,7 @@ class DashboardData {
   final int onlineCount; // 在线设备数
   final int offlineCount; // 离线设备数
   final int faultCount; // 故障设备数
-  final List<TrendDataPoint> trendData; // 7 日发电趋势
+  final List<TrendDataPoint> trendData; // 发电趋势数据（7日/30日）
   final List<StationRankItem> stationRanking; // 电站排行
   final List<Map<String, dynamic>> recentAlarms; // 最近告警
   final bool isFromCache; // 是否来自缓存
