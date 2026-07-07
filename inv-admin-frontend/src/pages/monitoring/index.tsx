@@ -1372,6 +1372,7 @@ const MonitoringPage: React.FC = () => {
             <Segmented size="small" value={energyOverviewPeriod} onChange={(v) => setEnergyOverviewPeriod(v as string)}
               options={[
                 { label: t('dash.last7Days'), value: 'day' },
+                { label: t('dash.last30Days'), value: '30days' },
                 { label: t('dash.last4Weeks'), value: 'week' },
                 { label: t('dash.last12Months'), value: 'month' },
               ]}
