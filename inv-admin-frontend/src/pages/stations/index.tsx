@@ -10,7 +10,7 @@ import type { ColumnsType } from 'antd/es/table'
 import {
   ReloadOutlined, SwapOutlined, EyeOutlined, EditOutlined,
   ApartmentOutlined, DesktopOutlined, CheckCircleOutlined, ThunderboltOutlined,
-  SunOutlined, ArrowUpOutlined, FireOutlined,
+  SunOutlined, ArrowUpOutlined, FireOutlined, PlusOutlined, DeleteOutlined,
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import dayjs from 'dayjs'
@@ -125,6 +125,11 @@ const StationsPage: React.FC = () => {
   /* ---------- 编辑弹窗 ---------- */
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editForm] = Form.useForm()
+
+  /* ---------- 创建电站弹窗 ---------- */
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [addForm] = Form.useForm()
+  const [addLoading, setAddLoading] = useState(false)
 
   /* ---------- 分配用户 ---------- */
   const [assignVisible, setAssignVisible] = useState(false)
@@ -254,12 +259,38 @@ const StationsPage: React.FC = () => {
     }
   }
 
+  const handleCreate = async () => {
+    try {
+      setAddLoading(true)
+      const values = await addForm.validateFields()
+      await api.post('/stations', values)
+      messageApi.success(t('station.addSuccess'))
+      setAddModalOpen(false)
+      addForm.resetFields()
+      queryClient.invalidateQueries({ queryKey: ['stations'] })
+    } catch {
+      messageApi.error(t('station.addFailed'))
+    } finally {
+      setAddLoading(false)
+    }
+  }
+
   const openDetail = (record: StationItem) => {
     setCurrentStation(record)
     setActiveTab('info')
     setDrawerOpen(true)
     setDeviceKeyword('')
     setDeviceStatusFilter(undefined)
+  }
+
+  const handleDelete = async (stationId: number) => {
+    try {
+      await api.delete(`/stations/${stationId}`)
+      messageApi.success(t('station.deleteSuccess'))
+      queryClient.invalidateQueries({ queryKey: ['stations'] })
+    } catch {
+      messageApi.error(t('station.deleteFailed'))
+    }
   }
 
   /* ---------- 过滤后的设备列表 ---------- */
@@ -436,6 +467,17 @@ const StationsPage: React.FC = () => {
               onOpenChange={(open) => { if (open) setAssignStation(record) }}
             >
               <a><SwapOutlined /> {t('station.assign')}</a>
+            </Popconfirm>
+          )}
+          {isAdmin && hasPermission('stations:edit') && (
+            <Popconfirm
+              title={t('station.deleteConfirm')}
+              onConfirm={() => handleDelete(record.id)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+              okButtonProps={{ danger: true }}
+            >
+              <a style={{ color: '#ff4d4f' }}><DeleteOutlined /> {t('common.delete')}</a>
             </Popconfirm>
           )}
         </Space>
@@ -766,6 +808,11 @@ const StationsPage: React.FC = () => {
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
         <Title level={4} style={{ margin: 0 }}>⚡ {t('station.title')}</Title>
         <Space>
+          {isAdmin && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
+              {t('station.addStation')}
+            </Button>
+          )}
           {isAdmin && <Tag icon={<ReloadOutlined spin={isLoading} />} color="processing">{t('station.manageAll')}</Tag>}
           <Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button>
         </Space>
@@ -914,6 +961,89 @@ const StationsPage: React.FC = () => {
               </Form.Item>
             </Col>
             <Col span={24}>
+              <Form.Item name="timezone" label={t('station.timezone')}>
+                <Select
+                  showSearch
+                  placeholder={t('station.selectTimezone')}
+                  options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) }))}
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="contact_name" label={t('station.contact')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="contact_phone" label={t('station.contactPhone')}>
+                <Input />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
+
+      {/* 创建电站弹窗 */}
+      <Modal
+        title={t('station.addStationTitle')}
+        open={addModalOpen}
+        onCancel={() => {
+          setAddModalOpen(false)
+          addForm.resetFields()
+        }}
+        onOk={handleCreate}
+        confirmLoading={addLoading}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        width={600}
+        destroyOnClose
+      >
+        <Form form={addForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="name" label={t('station.stationName')} rules={[{ required: true, message: t('station.stationName') }]}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="capacity" label={t('station.capacity_kW')}>
+                <Input type="number" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="province" label={t('station.province')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="city" label={t('station.city')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="district" label={t('station.district')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item name="address" label={t('station.address')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="panel_count" label={t('station.panelCount')}>
+                <Input type="number" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="battery_capacity" label={t('station.batteryCapacity')}>
+                <Input type="number" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
               <Form.Item name="timezone" label={t('station.timezone')}>
                 <Select
                   showSearch

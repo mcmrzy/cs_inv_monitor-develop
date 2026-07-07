@@ -19,6 +19,7 @@ import ReactECharts from 'echarts-for-react'
 import { deviceApi } from '@/services/deviceApi'
 import { commandApi } from '@/services/commandApi'
 import { modelApi } from '@/services/modelApi'
+import api from '@/services/api'
 import useAuthStore from '@/stores/authStore'
 import { Role } from '@/types'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
@@ -229,6 +230,7 @@ const DevicesPage: React.FC = () => {
   const [unbindReqPageSize, setUnbindReqPageSize] = useState(10)
 
   const [modelOptions, setModelOptions] = useState<{ label: string; value: string }[]>([])
+  const [stationOptions, setStationOptions] = useState<{ label: string; value: number }[]>([])
   const modelFields = useModelFields(detailDevice?.model)
 
   const buildQueryParams = useCallback(() => {
@@ -352,6 +354,18 @@ const DevicesPage: React.FC = () => {
         models.map((m: any) => ({
           label: `${m.model_name} (${m.model_code})`,
           value: m.model_code,
+        })),
+      )
+    }).catch(() => {})
+
+    // 获取电站列表
+    api.get('/stations', { params: { all: true } }).then((res) => {
+      const stations = res.data?.data ?? res.data ?? []
+      const list = Array.isArray(stations) ? stations : (stations?.items ?? [])
+      setStationOptions(
+        list.map((s: any) => ({
+          label: s.name,
+          value: s.id,
         })),
       )
     }).catch(() => {})
@@ -515,6 +529,7 @@ const DevicesPage: React.FC = () => {
       ratedPower: record.rated_power,
       firmwareVersion: record.firmware_arm,
       hardwareVersion: record.firmware_esp,
+      stationId: record.station_id || undefined,
     })
     setEditModalOpen(true)
   }
@@ -976,6 +991,17 @@ const DevicesPage: React.FC = () => {
       },
     },
     {
+      title: t('dev.belongStation'),
+      key: 'station',
+      width: 130,
+      responsive: ['md'],
+      render: (_: any, record: any) => {
+        if (!record.station_id) return <Text type="secondary">-</Text>
+        const station = stationOptions.find(s => s.value === record.station_id)
+        return <Text>{station?.label || `ID:${record.station_id}`}</Text>
+      },
+    },
+    {
       title: t('dev.onlineStatus'),
       dataIndex: 'status',
       key: 'status',
@@ -1004,39 +1030,33 @@ const DevicesPage: React.FC = () => {
           >
             {t('common.detail')}
           </Button>
-          {!isEndUser && (
-            <>
-              <Button
-                type="link"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => handleEdit(record)}
-              >
-                {t('common.edit')}
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                icon={<LinkOutlined />}
-                danger
-                onClick={() => handleUnbind(record)}
-              >
-                {t('dev.unbind')}
-              </Button>
-              {isSuperAdmin && (
-                <Popconfirm
-                  title={t('dev.confirmDelete')}
-                  onConfirm={() => deleteMutation.mutate(record.sn)}
-                  okText={t('common.confirm')}
-                  cancelText={t('common.cancel')}
-                >
-                  <Button type="link" size="small" icon={<DeleteOutlined />} danger>
-                    {t('common.delete')}
-                  </Button>
-                </Popconfirm>
-              )}
-            </>
-          )}
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            {t('common.edit')}
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<LinkOutlined />}
+            danger
+            onClick={() => handleUnbind(record)}
+          >
+            {t('dev.unbind')}
+          </Button>
+          <Popconfirm
+            title={t('dev.confirmDelete')}
+            onConfirm={() => deleteMutation.mutate(record.sn)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+          >
+            <Button type="link" size="small" icon={<DeleteOutlined />} danger>
+              {t('common.delete')}
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -1759,11 +1779,9 @@ const DevicesPage: React.FC = () => {
             <Row justify="space-between" align="middle">
               <Col>
                 <Space>
-                  {!isEndUser && (
-                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-                      {t('dev.addDevice')}
-                    </Button>
-                  )}
+                  <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+                    {t('dev.addDevice')}
+                  </Button>
                   {(isSuperAdmin || isAgent) && (
                     <Button icon={<UploadOutlined />} onClick={() => {
                       setImportModalOpen(true)
@@ -1774,7 +1792,7 @@ const DevicesPage: React.FC = () => {
                       {t('dev.importExcel')}
                     </Button>
                   )}
-                  {!isEndUser && selectedRowKeys.length > 0 && (
+                  {selectedRowKeys.length > 0 && (
                     <Dropdown menu={{ items: batchMenuItems }} placement="bottomLeft">
                       <Button icon={<SettingOutlined />}>
                         {t('dev.batchOps')} ({selectedRowKeys.length})
@@ -1797,14 +1815,10 @@ const DevicesPage: React.FC = () => {
               columns={columns}
               dataSource={devicesRes?.items ?? []}
               loading={devicesLoading}
-              rowSelection={
-                !isEndUser
-                  ? {
-                      selectedRowKeys,
-                      onChange: (keys) => setSelectedRowKeys(keys),
-                    }
-                  : undefined
-              }
+              rowSelection={{
+                selectedRowKeys,
+                onChange: (keys) => setSelectedRowKeys(keys),
+              }}
               pagination={{
                 current: page,
                 pageSize,
@@ -1938,6 +1952,15 @@ const DevicesPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="hardwareVersion" label={t('dev.hardwareVersion')}>
             <Input placeholder={t('dev.hardwareVersion')} />
+          </Form.Item>
+          <Form.Item name="stationId" label={t('dev.belongStation')}>
+            <Select
+              placeholder={t('dev.selectStation')}
+              options={stationOptions}
+              allowClear
+              showSearch
+              optionFilterProp="label"
+            />
           </Form.Item>
         </Form>
       </Modal>
