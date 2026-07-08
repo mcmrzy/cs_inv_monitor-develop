@@ -10,6 +10,11 @@ import (
 	jwt "github.com/golang-jwt/jwt/v5"
 )
 
+// publicPaths 和 publicPrefixes 定义公开路径白名单。
+// 此白名单同时服务于两个场景：
+// 1. JWT 中间件内部跳过认证（虽然路由分组后 public 组不再经过 JWT，但仍保留作为安全兜底）
+// 2. RBAC 中间件的 isPublicPath() 检查（rbac.go 第 229 行），确保公开路径不做权限校验
+// 注意：不要删除此白名单，否则 RBAC 会错误拦截公开接口。
 var publicPaths = map[string]bool{
 	"/health":                      true,
 	"/metrics":                     true,
