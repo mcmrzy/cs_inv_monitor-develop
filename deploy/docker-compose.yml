@@ -145,6 +145,10 @@ services:
     ports:
       - "8888:8080"
     depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       inv-api-server:
         condition: service_healthy
       inv-device-server:

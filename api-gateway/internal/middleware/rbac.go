@@ -118,7 +118,9 @@ func (r *RBACMiddleware) getRolePermissions(ctx context.Context, role int) ([]Pe
 		WHERE role = $1 AND is_allowed = true
 	`, role)
 	if err != nil {
-		return nil, err
+		// role_permissions 表可能不存在（未执行迁移），记录警告并返回空列表
+		log.Printf("[WARN] RBAC: 查询 role_permissions 失败 (role=%d): %v - 请执行 012_create_role_permissions 迁移", role, err)
+		return []PermissionEntry{}, nil
 	}
 	defer rows.Close()
 
