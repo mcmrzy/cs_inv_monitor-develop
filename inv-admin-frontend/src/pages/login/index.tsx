@@ -8,18 +8,18 @@ import api from '@/services/api'
 import type { User } from '@/types'
 import SliderCaptchaModal from '@/components/SliderCaptcha/SliderCaptchaModal'
 
-// 导入登录背景图片
-import loginBg1 from '@/assets/images/login/login-bg-1.jpg'
-import loginBg2 from '@/assets/images/login/login-bg-2.jpg'
-import loginBg3 from '@/assets/images/login/login-bg-3.jpg'
-import loginBg4 from '@/assets/images/login/login-bg-4.jpg'
-import loginBg5 from '@/assets/images/login/login-bg-5.jpg'
-import loginBg6 from '@/assets/images/login/login-bg-6.png'
-import loginBg7 from '@/assets/images/login/login-bg-7.png'
-import loginBg8 from '@/assets/images/login/login-bg-8.jpg'
-import loginBg9 from '@/assets/images/login/login-bg-9.jpg'
-
-const loginBackgrounds = [loginBg1, loginBg2, loginBg3, loginBg4, loginBg5, loginBg6, loginBg7, loginBg8, loginBg9]
+// 登录背景图片（放在public目录，不需要import）
+const loginBackgrounds = [
+  '/images/login/login-bg-1.jpg',
+  '/images/login/login-bg-2.jpg',
+  '/images/login/login-bg-3.jpg',
+  '/images/login/login-bg-4.jpg',
+  '/images/login/login-bg-5.jpg',
+  '/images/login/login-bg-6.png',
+  '/images/login/login-bg-7.png',
+  '/images/login/login-bg-8.jpg',
+  '/images/login/login-bg-9.jpg',
+]
 const getRandomBg = () => loginBackgrounds[Math.floor(Math.random() * loginBackgrounds.length)]
 
 type ActiveTab = 'login' | 'loginByCode' | 'register' | 'reset'

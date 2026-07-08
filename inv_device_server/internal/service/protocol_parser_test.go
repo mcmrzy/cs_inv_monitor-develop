@@ -15,37 +15,37 @@ func TestRawMessageParsing(t *testing.T) {
 	}{
 		{
 			name:    "realtime data",
-			input:   `{"sn":"INV001","type":"data/realtime","payload":{"ac":{"voltage":230,"power":5000}}}`,
+			input:   `{"sn":"INV001","msg_type":"data/realtime","payload":{"ac":{"voltage":230,"power":5000}}}`,
 			wantSN:  "INV001",
 			wantTyp: "data/realtime",
 		},
 		{
 			name:    "energy data",
-			input:   `{"sn":"INV002","type":"data/energy","payload":{"daily_pv":12.5,"runtime_hours":8.0}}`,
+			input:   `{"sn":"INV002","msg_type":"data/energy","payload":{"daily_pv":12.5,"runtime_hours":8.0}}`,
 			wantSN:  "INV002",
 			wantTyp: "data/energy",
 		},
 		{
 			name:    "info message",
-			input:   `{"sn":"INV003","type":"info","payload":{"model":"X1-5K","manufacturer":"CSKJ"}}`,
+			input:   `{"sn":"INV003","msg_type":"info","payload":{"model":"X1-5K","manufacturer":"CSKJ"}}`,
 			wantSN:  "INV003",
 			wantTyp: "info",
 		},
 		{
 			name:    "online status",
-			input:   `{"sn":"INV004","type":"status","payload":{"online":true}}`,
+			input:   `{"sn":"INV004","msg_type":"status","payload":{"online":true}}`,
 			wantSN:  "INV004",
 			wantTyp: "status",
 		},
 		{
 			name:    "cmd response",
-			input:   `{"sn":"INV005","type":"cmd/response","payload":{"cmd":"open","result":"ok"}}`,
+			input:   `{"sn":"INV005","msg_type":"cmd/response","payload":{"cmd":"open","result":"ok"}}`,
 			wantSN:  "INV005",
 			wantTyp: "cmd/response",
 		},
 		{
 			name:    "missing sn",
-			input:   `{"type":"data/realtime","payload":{}}`,
+			input:   `{"msg_type":"data/realtime","payload":{}}`,
 			wantSN:  "",
 			wantTyp: "data/realtime",
 			wantErr: true,
@@ -57,7 +57,7 @@ func TestRawMessageParsing(t *testing.T) {
 		},
 		{
 			name:    "empty payload uses default",
-			input:   `{"sn":"INV006","type":"data/realtime"}`,
+			input:   `{"sn":"INV006","msg_type":"data/realtime"}`,
 			wantSN:  "INV006",
 			wantTyp: "data/realtime",
 		},
