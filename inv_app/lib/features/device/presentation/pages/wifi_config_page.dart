@@ -57,6 +57,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   BleDeviceInfo? _selectedBleDevice;
   bool _bleScanning = false;
   bool _bleConnecting = false;
+  bool _provisionSuccess = false; // 配网成功状态
   String? _bleErrorMessage; // 配网失败错误消息
   String? _originalSsid;
 
@@ -545,15 +546,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     setState(() {
       _provisioning = false;
+      _provisionSuccess = true; // 设置配网成功状态
+      _bleErrorMessage = null; // 清除错误消息
     });
-
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('配网成功！设备正在连接WiFi...'),
-      backgroundColor: AppColors.successLight,
-    ));
-
-    // 立即断开BLE连接并重置状态
-    _disconnectBleDevice();
   }
 
   Future<void> _waitForDeviceOnline() async {
@@ -690,9 +685,16 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         Expanded(
           child: GestureDetector(
             onTap: () {
-              // 切换到热点模式时断开BLE连接
+              // 切换到热点模式时断开BLE连接并重置状态
               _disconnectBleDevice();
-              setState(() => _provisionMode = _ProvisionMode.softap);
+              setState(() {
+                _provisionMode = _ProvisionMode.softap;
+                _selectedDeviceAp = null;
+                _provisionStep = 0;
+                _provisionStatus = '';
+                _provisionOk = false;
+                _provisionSuccess = false;
+              });
               if (_csInvNetworks.isEmpty && !_wifiScanning) _scanCSInvWiFi();
             },
             child: Container(
@@ -927,12 +929,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     final bool isError = _bleStatus == BleProvisioningStatus.failed || 
                          _bleStatus == BleProvisioningStatus.timeout || 
                          _bleStatus == BleProvisioningStatus.error;
-    final bool showScanPhase = _bleScanning || (_bleDevices.isNotEmpty && !deviceSelected) || (!deviceSelected && !_bleScanning && !isError);
-    final bool showConnectingPhase = _bleConnecting;
-    final bool showConfigPhase = isConnected && !isConfiguring;
-    final bool showConfiguringPhase = isConfiguring;
+    final bool showSuccessPhase = _provisionSuccess; // 配网成功阶段
+    final bool showScanPhase = !showSuccessPhase && (_bleScanning || (_bleDevices.isNotEmpty && !deviceSelected) || (!deviceSelected && !_bleScanning && !isError));
+    final bool showConnectingPhase = !showSuccessPhase && _bleConnecting;
+    final bool showConfigPhase = !showSuccessPhase && isConnected && !isConfiguring;
+    final bool showConfiguringPhase = !showSuccessPhase && isConfiguring;
     final bool showCompletedPhase = isCompleted;
-    final bool showErrorPhase = isError && !deviceSelected;
+    final bool showErrorPhase = !showSuccessPhase && isError && !deviceSelected;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       // 步骤指示器
@@ -954,6 +957,55 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ),
       ]),
       SizedBox(height: 24.h),
+
+      // 配网成功显示
+      if (showSuccessPhase) ...[
+        Container(
+          padding: EdgeInsets.all(16.w),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Column(children: [
+            const Icon(Icons.check_circle, color: AppColors.successLight, size: 40),
+            SizedBox(height: 12.h),
+            Text(
+              '配网成功！',
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.successLight),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              '设备正在连接WiFi，请稍候查看设备状态',
+              style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16.h),
+            SizedBox(
+              width: double.infinity,
+              height: 44.h,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _provisionSuccess = false;
+                    _selectedBleDevice = null;
+                    _bleErrorMessage = null;
+                    _workingSsidController.clear();
+                    _workingPasswordController.clear();
+                  });
+                  _disconnectBleDevice();
+                },
+                icon: const Icon(Icons.check, size: 20),
+                label: const Text('完成', style: TextStyle(fontSize: 15)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ],
 
       // 错误状态显示
       if (showErrorPhase) ...[
