@@ -465,11 +465,14 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Future<void> _startBleScan() async {
+    print('[BLE] _startBleScan 被调用');
+    print('[BLE] 当前状态: _bleScanning=$_bleScanning, _provisionSuccess=$_provisionSuccess, _bleStatus=$_bleStatus');
     setState(() {
       _bleDevices = [];
       _selectedBleDevice = null;
       _bleConnecting = false;
       _provisioning = false;
+      _provisionSuccess = false; // 重置配网成功状态
       _bleErrorMessage = null;
       _workingSsidController.clear();
       _workingPasswordController.clear();
@@ -1072,7 +1075,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       if (showScanPhase) ...[
         SizedBox(width: double.infinity, height: 46.h,
         child: ElevatedButton.icon(
-          onPressed: _bleScanning ? null : _startBleScan,
+          onPressed: () {
+            print('[BLE] 扫描按钮被点击, _bleScanning=$_bleScanning');
+            if (!_bleScanning) {
+              _startBleScan();
+            }
+          },
           icon: _bleScanning
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Icon(Icons.bluetooth_searching, size: 22),
