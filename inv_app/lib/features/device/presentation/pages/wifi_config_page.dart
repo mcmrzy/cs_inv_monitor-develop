@@ -892,20 +892,19 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Widget _buildBleSection() {
-    // 计算当前步骤
+    // 计算当前状态
     final bool deviceSelected = _selectedBleDevice != null;
     final bool isConfiguring = _bleStatus == BleProvisioningStatus.writingCredentials || 
                                _bleStatus == BleProvisioningStatus.waitingForResult;
     final bool isCompleted = _bleStatus == BleProvisioningStatus.wifiConnected;
+    final bool isConnected = _bleStatus == BleProvisioningStatus.bleConnected;
     
-    int currentStep = 0;
-    if (isCompleted) {
-      currentStep = 2;
-    } else if (deviceSelected && (_bleStatus == BleProvisioningStatus.bleConnected || isConfiguring)) {
-      currentStep = 1;
-    } else if (_bleDevices.isNotEmpty) {
-      currentStep = 0;
-    }
+    // 判断当前阶段
+    final bool showScanPhase = _bleScanning || (_bleDevices.isNotEmpty && !deviceSelected);
+    final bool showConnectingPhase = _bleConnecting;
+    final bool showConfigPhase = isConnected && !isConfiguring;
+    final bool showConfiguringPhase = isConfiguring;
+    final bool showCompletedPhase = isCompleted;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       // 步骤指示器
@@ -913,41 +912,44 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         _StepData(
           label: AppLocalizations.of(context)!.scanNearInverters,
           isCompleted: deviceSelected,
-          isCurrent: !deviceSelected,
+          isCurrent: showScanPhase,
         ),
         _StepData(
           label: AppLocalizations.of(context)!.selectWifi,
-          isCompleted: isCompleted,
-          isCurrent: deviceSelected && !isCompleted,
+          isCompleted: isCompleted || isConnected || isConfiguring,
+          isCurrent: showConfigPhase || showConfiguringPhase,
         ),
         _StepData(
           label: AppLocalizations.of(context)!.finish,
           isCompleted: isCompleted,
-          isCurrent: false,
+          isCurrent: showCompletedPhase,
         ),
       ]),
       SizedBox(height: 24.h),
 
-      // 说明信息
-      Container(
-        padding: EdgeInsets.all(14.w),
-        margin: EdgeInsets.only(bottom: 20.h),
-        decoration: BoxDecoration(
-          color: const Color(0xFFEFF6FF),
-          borderRadius: BorderRadius.circular(12.r),
+      // 说明信息（仅在扫描阶段显示）
+      if (showScanPhase) ...[
+        Container(
+          padding: EdgeInsets.all(14.w),
+          margin: EdgeInsets.only(bottom: 20.h),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Row(children: [
+            const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
+            SizedBox(width: 10.w),
+            Expanded(child: Text(
+              'BLE配网：通过蓝牙扫描设备，无需切换网络，直接配置WiFi',
+              style: TextStyle(fontSize: 12.sp, color: AppColors.textPrimary),
+            )),
+          ]),
         ),
-        child: Row(children: [
-          const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
-          SizedBox(width: 10.w),
-          Expanded(child: Text(
-            'BLE配网：通过蓝牙扫描设备，无需切换网络，直接配置WiFi',
-            style: TextStyle(fontSize: 12.sp, color: AppColors.textPrimary),
-          )),
-        ]),
-      ),
+      ],
 
-      // 扫描按钮
-      SizedBox(width: double.infinity, height: 46.h,
+      // 扫描按钮（仅在扫描阶段显示）
+      if (showScanPhase) ...[
+        SizedBox(width: double.infinity, height: 46.h,
         child: ElevatedButton.icon(
           onPressed: _bleScanning ? null : _startBleScan,
           icon: _bleScanning
@@ -959,10 +961,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ),
       ),
 
-      SizedBox(height: 16.h),
+        SizedBox(height: 16.h),
 
-      // 设备列表
-      if (_bleDevices.isNotEmpty) ...[
+        // 设备列表
+        if (_bleDevices.isNotEmpty) ...[
         Text(AppLocalizations.of(context)!.foundNInverters('${_bleDevices.length}'), style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
         SizedBox(height: 8.h),
         ..._bleDevices.map((device) {
@@ -999,6 +1001,24 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             Text(AppLocalizations.of(context)!.ensureDevicePowered, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
           ]),
         ))),
+      ], // 结束扫描阶段
+
+      // 连接阶段
+      if (showConnectingPhase) ...[
+        SizedBox(height: 16.h),
+        Container(
+          padding: EdgeInsets.all(16.w),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Row(children: [
+            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 12.w),
+            Expanded(child: Text(_getBleStatusText(), style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
+          ]),
+        ),
+      ],
 
       // 已连接设备信息
       if (_selectedBleDevice != null && (_bleStatus == BleProvisioningStatus.bleConnected || _bleStatus == BleProvisioningStatus.wifiConnected)) ...[
@@ -1019,10 +1039,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           ])),
       ],
 
-      // WiFi配置表单（连接成功后显示，或者正在配置/等待结果时显示）
-      if (_selectedBleDevice != null && (_bleStatus == BleProvisioningStatus.bleConnected || 
-          _bleStatus == BleProvisioningStatus.writingCredentials ||
-          _bleStatus == BleProvisioningStatus.waitingForResult)) ...[
+      // WiFi配置表单（仅在配置阶段显示）
+      if (showConfigPhase) ...[
         SizedBox(width: double.infinity, height: 44.h,
           child: OutlinedButton.icon(
             onPressed: _scanningNearbyWifi ? null : _rescanNearbyWifiFromPhone,
@@ -1107,33 +1125,39 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ),
       ],
 
-      // 状态显示
-      if (_bleStatus != BleProvisioningStatus.idle && _bleStatus != BleProvisioningStatus.scanning) ...[
+      // 配置中阶段
+      if (showConfiguringPhase) ...[
         SizedBox(height: 16.h),
-        Container(width: double.infinity, padding: EdgeInsets.all(14.w),
+        Container(
+          padding: EdgeInsets.all(16.w),
           decoration: BoxDecoration(
-            color: (_bleStatus == BleProvisioningStatus.bleConnected || _bleStatus == BleProvisioningStatus.wifiConnected)
-                ? const Color(0xFFECFDF5)
-                : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
-                    ? const Color(0xFFFEF2F2)
-                    : const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(12.r)),
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
           child: Row(children: [
-            Icon(
-              (_bleStatus == BleProvisioningStatus.bleConnected || _bleStatus == BleProvisioningStatus.wifiConnected)
-                  ? Icons.check_circle
-                  : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
-                      ? Icons.error
-                      : Icons.info,
-              size: 20.sp,
-              color: (_bleStatus == BleProvisioningStatus.bleConnected || _bleStatus == BleProvisioningStatus.wifiConnected)
-                  ? AppColors.successLight
-                  : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
-                      ? AppColors.errorLight
-                      : AppColors.primary),
+            const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            SizedBox(width: 12.w),
+            Expanded(child: Text(_getBleStatusText(), style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
+          ]),
+        ),
+      ],
+
+      // 完成阶段
+      if (showCompletedPhase) ...[
+        SizedBox(height: 16.h),
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(14.w),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Row(children: [
+            const Icon(Icons.check_circle, color: AppColors.successLight, size: 20),
             SizedBox(width: 10.w),
             Expanded(child: Text(_getBleStatusText(), style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
-          ])),
+          ]),
+        ),
       ],
 
       SizedBox(height: 60.h),
