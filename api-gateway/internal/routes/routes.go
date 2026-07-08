@@ -60,15 +60,7 @@ func Setup(cfg Config) *gin.Engine {
 	}
 	adminGroup.Use(middleware.RequireRole(1)) // role <= 1 (super_admin + admin)
 
-	// 网关自身管理端点组 — 直接注册在网关上，受 admin 级别保护
-	adminDirectGroup := r.Group("/")
-	adminDirectGroup.Use(middleware.JWTAuth(cfg.JWTSecret))
-	if cfg.RBAC != nil {
-		adminDirectGroup.Use(cfg.RBAC.RBACGuard())
-	}
-	adminDirectGroup.Use(middleware.RequireRole(1))
-
-	registerGatewayEndpoints(r, adminDirectGroup)
+	registerGatewayEndpoints(r)
 	registerAPIRoutes(publicGroup, userGroup, adminGroup, apiProxy)
 	registerDeviceRoutes(userGroup, deviceProxy)
 	registerFallback(r)
@@ -76,7 +68,7 @@ func Setup(cfg Config) *gin.Engine {
 	return r
 }
 
-func registerGatewayEndpoints(r *gin.Engine, adminDirectGroup *gin.RouterGroup) {
+func registerGatewayEndpoints(r *gin.Engine) {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
@@ -89,11 +81,6 @@ func registerGatewayEndpoints(r *gin.Engine, adminDirectGroup *gin.RouterGroup) 
 
 	r.GET("/api/docs", func(c *gin.Context) {
 		c.JSON(http.StatusOK, buildAPIDoc())
-	})
-
-	// admin 端点注册在 adminDirectGroup 上（网关自身数据，受 admin 保护）
-	adminDirectGroup.GET("/api/v1/admin/route-groups", func(c *gin.Context) {
-		c.JSON(http.StatusOK, buildRouteGroups())
 	})
 }
 
@@ -112,8 +99,12 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	publicGroup.Any("/firmware/*action", p.Handler())
 	publicGroup.Any("/ws/*action", p.Handler())
 
-	// User — 需登录
-	userGroup.Any("/api/v1/auth/*action", p.Handler()) // 需认证的 auth 子端点（logout, change-password, profile 等）
+	// User — 需登录（具体 auth 子端点，不用通配符以避免与 publicGroup 冲突）
+	userGroup.Any("/api/v1/auth/logout", p.Handler())
+	userGroup.Any("/api/v1/auth/change-password", p.Handler())
+	userGroup.Any("/api/v1/auth/profile", p.Handler())
+	userGroup.Any("/api/v1/auth/refresh", p.Handler())
+
 	userGroup.Any("/api/v1/stations/*action", p.Handler())
 	userGroup.Any("/api/v1/stations", p.Handler())
 	userGroup.Any("/api/v1/devices/*action", p.Handler())
@@ -136,10 +127,12 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/work-orders/*action", p.Handler())
 	userGroup.Any("/api/v1/work-orders", p.Handler())
 
-	// Admin — 需管理员
+	// Admin — 需管理员（不用 admin/*action 通配符以避免与 route-groups 冲突）
+	adminGroup.GET("/api/v1/admin/route-groups", func(c *gin.Context) {
+		c.JSON(http.StatusOK, buildRouteGroups())
+	})
 	adminGroup.Any("/api/v1/users/*action", p.Handler())
 	adminGroup.Any("/api/v1/users", p.Handler())
-	adminGroup.Any("/api/v1/admin/*action", p.Handler())
 	adminGroup.Any("/api/v1/parallel/*action", p.Handler())
 	adminGroup.Any("/api/v1/parallel-groups/*action", p.RewriteHandler("/api/v1/parallel"))
 	adminGroup.Any("/api/v1/parallel-groups", p.RewriteHandler("/api/v1/parallel"))
