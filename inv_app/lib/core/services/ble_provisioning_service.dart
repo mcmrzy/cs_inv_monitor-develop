@@ -213,6 +213,11 @@ class BleProvisioningService {
           );
         }).toList();
 
+        // 发现设备后，取消超时定时器，避免显示“配网超时”
+        if (_discoveredDevices.isNotEmpty) {
+          _scanTimer?.cancel();
+        }
+
         _devicesController.add(_discoveredDevices);
       });
 
