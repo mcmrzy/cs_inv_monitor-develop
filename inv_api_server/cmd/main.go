@@ -779,6 +779,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		{
 			usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
 			usersGroup.GET("/:id", deps.AdminHandler.GetUser)
+			usersGroup.PATCH("/:id", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUser)
 			usersGroup.GET("/:id/children", deps.AdminHandler.GetUserChildren)
 			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)

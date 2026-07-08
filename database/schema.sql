@@ -10,11 +10,14 @@
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
     phone VARCHAR(20) NOT NULL UNIQUE,
+    email VARCHAR(100),
     password_hash VARCHAR(255) NOT NULL,
     nickname VARCHAR(50),
     avatar VARCHAR(500),
     role SMALLINT NOT NULL DEFAULT 5, -- 1:原厂 2:总代理 3:经销商 4:安装商 5:用户
     region_id BIGINT, -- 所属区域(代理商/经销商)
+    parent_id BIGINT, -- 上级用户ID
+    timezone VARCHAR(50) DEFAULT 'Asia/Shanghai',
     status SMALLINT NOT NULL DEFAULT 1, -- 1:正常 0:禁用
     last_login_at TIMESTAMP,
     last_login_ip VARCHAR(45),
@@ -24,8 +27,10 @@ CREATE TABLE users (
 );
 
 CREATE INDEX idx_users_phone ON users(phone);
+CREATE INDEX idx_users_email_col ON users(email) WHERE deleted_at IS NULL;
 CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_region ON users(region_id);
+CREATE INDEX idx_users_parent ON users(parent_id);
 
 -- 用户操作日志表
 CREATE TABLE user_operation_logs (

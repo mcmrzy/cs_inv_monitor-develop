@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/repository"
@@ -809,6 +810,88 @@ func (h *AdminHandler) GetUserChildren(c *gin.Context) {
 		"items": children,
 		"total": total,
 	})
+}
+
+// UpdateUserRequest 通用用户更新请求
+type UpdateUserRequest struct {
+	Nickname *string `json:"nickname"`
+	Email    *string `json:"email"`
+	Phone    *string `json:"phone"`
+	Role     *int    `json:"role"`
+	Status   *int    `json:"status"`
+}
+
+// UpdateUser 通用用户更新
+func (h *AdminHandler) UpdateUser(c *gin.Context) {
+	userID := parseID(c.Param("id"))
+	if userID <= 0 {
+		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		return
+	}
+
+	var req UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	user, err := h.userRepo.GetByID(ctx, userID)
+	if err != nil || user == nil {
+		response.HandleError(c, apperr.NotFound("用户不存在"))
+		return
+	}
+
+	setClauses := []string{}
+	args := []interface{}{}
+	argIdx := 1
+
+	if req.Nickname != nil {
+		setClauses = append(setClauses, fmt.Sprintf("nickname = $%d", argIdx))
+		args = append(args, *req.Nickname)
+		argIdx++
+	}
+	if req.Email != nil {
+		setClauses = append(setClauses, fmt.Sprintf("email = $%d", argIdx))
+		args = append(args, *req.Email)
+		argIdx++
+	}
+	if req.Phone != nil {
+		setClauses = append(setClauses, fmt.Sprintf("phone = $%d", argIdx))
+		args = append(args, *req.Phone)
+		argIdx++
+	}
+	if req.Role != nil {
+		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
+		args = append(args, *req.Role)
+		argIdx++
+	}
+	if req.Status != nil {
+		setClauses = append(setClauses, fmt.Sprintf("status = $%d", argIdx))
+		args = append(args, *req.Status)
+		argIdx++
+	}
+
+	if len(setClauses) == 0 {
+		response.HandleError(c, apperr.BadRequest("没有需要更新的字段"))
+		return
+	}
+
+	setClauses = append(setClauses, "updated_at = NOW()")
+	query := fmt.Sprintf("UPDATE users SET %s WHERE id = $%d", strings.Join(setClauses, ", "), argIdx)
+	args = append(args, userID)
+
+	if _, err := h.db.Exec(ctx, query, args...); err != nil {
+		response.HandleError(c, apperr.Internal("更新用户失败", err))
+		return
+	}
+
+	if req.Role != nil {
+		go h.permChecker.InvalidateUser(userID)
+	}
+
+	response.SuccessWithMessage(c, "用户更新成功", nil)
 }
 
 // UpdateUserParentRequest 修改用户上级关系的请求
