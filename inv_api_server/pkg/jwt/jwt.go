@@ -13,7 +13,7 @@ type Claims struct {
 	UserID int64  `json:"user_id"`
 	Phone  string `json:"phone"`
 	Role   int    `json:"role"`
-	jti    string `json:"jti"`
+	JTI    string `json:"jti"`
 	jwt.RegisteredClaims
 }
 
@@ -75,7 +75,7 @@ func (j *JWT) generateRefreshToken(userID int64, phone string, role int, accessJ
 		UserID: userID,
 		Phone:  phone,
 		Role:   role,
-		jti:    jti,
+		JTI:    jti,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(j.config.RefreshExpireTime)),
 			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
@@ -132,5 +132,5 @@ func (j *JWT) RefreshToken(tokenString string) (string, error) {
 }
 
 func (j *JWT) GetJTI(claims *Claims) string {
-	return claims.jti
+	return claims.JTI
 }
