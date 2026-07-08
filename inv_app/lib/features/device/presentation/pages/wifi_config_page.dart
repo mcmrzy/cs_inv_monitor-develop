@@ -57,6 +57,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   BleDeviceInfo? _selectedBleDevice;
   bool _bleScanning = false;
   bool _bleConnecting = false;
+  String? _bleErrorMessage; // 配网失败错误消息
   String? _originalSsid;
 
   @override
@@ -97,6 +98,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     _bleResultSub = _bleProvisioningService.resultStream.listen((result) {
       if (mounted) {
+        setState(() {
+          _bleErrorMessage = result;
+        });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(result),
           duration: const Duration(seconds: 3),
@@ -458,6 +462,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _selectedBleDevice = null;
       _bleConnecting = false;
       _provisioning = false;
+      _bleErrorMessage = null;
       _workingSsidController.clear();
       _workingPasswordController.clear();
     });
@@ -1036,6 +1041,26 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               ],
             )),
             GestureDetector(onTap: _disconnectBleDevice, child: Text(AppLocalizations.of(context)!.disconnect, style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
+          ])),
+      ],
+
+      // 配网失败错误提示
+      if (_bleErrorMessage != null && showConfigPhase) ...[
+        Container(
+          padding: EdgeInsets.all(12.w),
+          margin: EdgeInsets.only(bottom: 16.h),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(10.r),
+          ),
+          child: Row(children: [
+            const Icon(Icons.error_outline, color: AppColors.errorLight, size: 20),
+            SizedBox(width: 8.w),
+            Expanded(child: Text(_bleErrorMessage!, style: TextStyle(fontSize: 13.sp, color: const Color(0xFF991B1B)))),
+            GestureDetector(
+              onTap: () => setState(() => _bleErrorMessage = null),
+              child: const Icon(Icons.close, size: 16, color: AppColors.textHint),
+            ),
           ])),
       ],
 

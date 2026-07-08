@@ -398,8 +398,10 @@ class BleProvisioningService {
         _emitStatus(BleProvisioningStatus.wifiConnected);
         break;
       case 'failed':
-        _resultController.add('连接失败');
-        _emitStatus(BleProvisioningStatus.failed);
+      case 'not_found':
+        // 配网失败后，回到bleConnected状态，允许重新输入凭据
+        _resultController.add(status == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
+        _emitStatus(BleProvisioningStatus.bleConnected);
         break;
     }
   }
