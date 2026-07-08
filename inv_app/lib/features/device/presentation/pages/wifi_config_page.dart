@@ -455,6 +455,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     setState(() {
       _bleDevices = [];
       _selectedBleDevice = null;
+      _bleConnecting = false;
+      _provisioning = false;
+      _workingSsidController.clear();
+      _workingPasswordController.clear();
     });
 
     await _bleProvisioningService.startScan();

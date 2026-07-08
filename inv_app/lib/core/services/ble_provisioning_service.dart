@@ -155,6 +155,11 @@ class BleProvisioningService {
     if (_running) return;
     _running = true;
     _discoveredDevices = [];
+    _connectedDevice = null;
+    _statusCharacteristic = null;
+    _scanTimer?.cancel();
+    _connectionTimer?.cancel();
+    _provisioningTimer?.cancel();
     _emitStatus(BleProvisioningStatus.scanning);
 
     try {
@@ -275,6 +280,9 @@ class BleProvisioningService {
 
       // 更新已发现设备列表中的设备信息（SN等）
       _updateDiscoveredDeviceInfo(deviceInfoResult);
+
+      // 订阅成功后，立即标记为已连接状态
+      _emitStatus(BleProvisioningStatus.connected);
 
       return BleProvisioningResult(
         success: true,
