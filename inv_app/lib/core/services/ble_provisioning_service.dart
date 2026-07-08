@@ -183,14 +183,24 @@ class BleProvisioningService {
       // 监听扫描结果
       FlutterBluePlus.scanResults.listen((results) {
         _discoveredDevices = results.map((result) {
-          // 从广播名中提取SN后6位
-          final deviceName = result.advertisementData.advName.isNotEmpty
-              ? result.advertisementData.advName
-              : 'CS_INV_${result.device.remoteId.toString().substring(result.device.remoteId.toString().length - 6)}';
+          // 协议说明：广播名是 CS_INV_<SN后6位>，完整设备名在Scan Response中
+          // flutter_blue_plus 会自动合并主广播包和Scan Response
+          // advName 可能是广播名或完整设备名
+          final advName = result.advertisementData.advName;
+          String deviceName;
+          
+          if (advName.isNotEmpty) {
+            // 使用获取到的设备名（可能是完整名或广播名）
+            deviceName = advName;
+          } else {
+            // 如果没有设备名，用MAC地址后6位生成
+            final mac = result.device.remoteId.toString();
+            deviceName = 'CS_INV_${mac.substring(mac.length - 6).replaceAll(':', '')}';
+          }
           
           return BleDeviceInfo(
-            sn: deviceName,
-            firmwareVersion: '', // 需要连接后读取
+            sn: '', // SN需要连接后从GATT读取，先留空
+            firmwareVersion: '',
             macAddress: result.device.remoteId.toString(),
             deviceName: deviceName,
             rssi: result.rssi,
@@ -263,6 +273,9 @@ class BleProvisioningService {
       // 订阅状态通知
       await _subscribeToStatusNotifications(targetService);
 
+      // 更新已发现设备列表中的设备信息（SN等）
+      _updateDiscoveredDeviceInfo(deviceInfoResult);
+
       return BleProvisioningResult(
         success: true,
         deviceInfo: deviceInfoResult,
@@ -296,12 +309,18 @@ class BleProvisioningService {
       }
     }
 
+    // 从已发现设备列表中获取设备名
+    final existingDevice = _discoveredDevices.firstWhere(
+      (d) => d.macAddress == (_connectedDevice?.remoteId.toString() ?? ''),
+      orElse: () => BleDeviceInfo(sn: '', firmwareVersion: '', macAddress: '', deviceName: '未知设备', rssi: 0),
+    );
+
     return BleDeviceInfo(
       sn: sn,
       firmwareVersion: firmwareVersion,
-      macAddress: macAddress,
-      deviceName: _connectedDevice?.platformName ?? '未知设备',
-      rssi: 0, // 已连接，RSSI不再重要
+      macAddress: macAddress.isNotEmpty ? macAddress : (_connectedDevice?.remoteId.toString() ?? ''),
+      deviceName: existingDevice.deviceName.isNotEmpty ? existingDevice.deviceName : (_connectedDevice?.platformName ?? '未知设备'),
+      rssi: 0,
     );
   }
 
@@ -311,17 +330,30 @@ class BleProvisioningService {
       if (characteristic.uuid == Guid(statusCharacteristicUuid)) {
         _statusCharacteristic = characteristic;
         
-        // 启用通知
+        // 先启用通知（必须在监听之前）
         await characteristic.setNotifyValue(true);
         
         // 监听状态变化
         characteristic.lastValueStream.listen((value) {
-          final status = String.fromCharCodes(value);
-          _handleStatusUpdate(status);
+          if (value.isNotEmpty) {
+            final status = String.fromCharCodes(value);
+            _handleStatusUpdate(status);
+          }
         });
         
         break;
       }
+    }
+  }
+
+  /// 更新已发现设备列表中的设备信息
+  void _updateDiscoveredDeviceInfo(BleDeviceInfo deviceInfo) {
+    final index = _discoveredDevices.indexWhere(
+      (d) => d.macAddress == deviceInfo.macAddress,
+    );
+    if (index >= 0) {
+      _discoveredDevices[index] = deviceInfo;
+      _devicesController.add(_discoveredDevices);
     }
   }
 
