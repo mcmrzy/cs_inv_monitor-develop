@@ -64,6 +64,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     super.initState();
     _loadCurrentWifiSsid();
     _initBleProvisioning();
+    // 自动开始BLE扫描（类似热点配网的自动扫描）
+    _startBleScan();
   }
 
   void _initBleProvisioning() {
@@ -466,7 +468,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     final result = await _bleProvisioningService.connectToDevice(device);
 
-    if (!result.success && mounted) {
+    if (result.success && mounted) {
+      // 连接成功，更新设备信息（包含真实SN）
+      setState(() {
+        _selectedBleDevice = result.deviceInfo;
+        _bleConnecting = false;
+      });
+    } else if (mounted) {
       setState(() {
         _bleConnecting = false;
         _selectedBleDevice = null;
@@ -877,7 +885,42 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Widget _buildBleSection() {
+    // 计算当前步骤
+    final bool deviceSelected = _selectedBleDevice != null;
+    final bool isConfiguring = _bleStatus == BleProvisioningStatus.writingCredentials || 
+                               _bleStatus == BleProvisioningStatus.waitingForResult;
+    final bool isCompleted = _bleStatus == BleProvisioningStatus.connected;
+    
+    int currentStep = 0;
+    if (isCompleted) {
+      currentStep = 2;
+    } else if (deviceSelected && (_bleStatus == BleProvisioningStatus.connected || isConfiguring)) {
+      currentStep = 1;
+    } else if (_bleDevices.isNotEmpty) {
+      currentStep = 0;
+    }
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // 步骤指示器
+      _buildStepIndicatorRow([
+        _StepData(
+          label: AppLocalizations.of(context)!.scanNearInverters,
+          isCompleted: deviceSelected,
+          isCurrent: !deviceSelected,
+        ),
+        _StepData(
+          label: AppLocalizations.of(context)!.selectWifi,
+          isCompleted: isCompleted,
+          isCurrent: deviceSelected && !isCompleted,
+        ),
+        _StepData(
+          label: AppLocalizations.of(context)!.finish,
+          isCompleted: isCompleted,
+          isCurrent: false,
+        ),
+      ]),
+      SizedBox(height: 24.h),
+
       // 说明信息
       Container(
         padding: EdgeInsets.all(14.w),
@@ -903,7 +946,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           icon: _bleScanning
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Icon(Icons.bluetooth_searching, size: 22),
-          label: Text(_bleScanning ? '正在扫描...' : '扫描BLE设备', style: const TextStyle(fontSize: 15)),
+          label: Text(_bleScanning ? AppLocalizations.of(context)!.scanning : AppLocalizations.of(context)!.scanNearInverters, style: const TextStyle(fontSize: 15)),
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
         ),
@@ -913,7 +956,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
       // 设备列表
       if (_bleDevices.isNotEmpty) ...[
-        Text('发现 ${_bleDevices.length} 个设备', style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+        Text(AppLocalizations.of(context)!.foundNInverters('${_bleDevices.length}'), style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
         SizedBox(height: 8.h),
         ..._bleDevices.map((device) {
           final rssi = device.rssi;
@@ -926,13 +969,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r)),
                 child: const Icon(Icons.bluetooth, color: AppColors.primary, size: 22)),
               title: Text(device.deviceName, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('SN: ${device.sn}', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
-                  Text('$sig $rssi dBm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
-                ],
-              ),
+              subtitle: Text('$sig $rssi dBm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
               trailing: _bleConnecting && _selectedBleDevice?.macAddress == device.macAddress
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textHint),
@@ -950,9 +987,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(Icons.bluetooth_disabled, size: 40.sp, color: AppColors.textHint),
             SizedBox(height: 10.h),
-            Text('未发现BLE设备', style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+            Text(AppLocalizations.of(context)!.noInverterFound, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
             SizedBox(height: 4.h),
-            Text('请确保设备已上电并开启配网模式', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+            Text(AppLocalizations.of(context)!.ensureDevicePowered, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
           ]),
         ))),
 
@@ -963,13 +1000,22 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           child: Row(children: [
             const Icon(Icons.check_circle, color: AppColors.successLight, size: 20),
             SizedBox(width: 8.w),
-            Expanded(child: Text('已连接 ${_selectedBleDevice!.deviceName}', style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46)))),
-            GestureDetector(onTap: _disconnectBleDevice, child: Text('断开', style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('已连接 ${_selectedBleDevice!.deviceName}', style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46))),
+                if (_selectedBleDevice!.sn.isNotEmpty)
+                  Text('SN: ${_selectedBleDevice!.sn}', style: TextStyle(fontSize: 11.sp, color: const Color(0xFF065F46))),
+              ],
+            )),
+            GestureDetector(onTap: _disconnectBleDevice, child: Text(AppLocalizations.of(context)!.disconnect, style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
           ])),
       ],
 
-      // WiFi配置表单（仅在连接后显示）
-      if (_selectedBleDevice != null && _bleStatus == BleProvisioningStatus.connected) ...[
+      // WiFi配置表单（连接成功后显示，或者正在配置/等待结果时显示）
+      if (_selectedBleDevice != null && (_bleStatus == BleProvisioningStatus.connected || 
+          _bleStatus == BleProvisioningStatus.writingCredentials ||
+          _bleStatus == BleProvisioningStatus.waitingForResult)) ...[
         SizedBox(width: double.infinity, height: 44.h,
           child: OutlinedButton.icon(
             onPressed: _scanningNearbyWifi ? null : _rescanNearbyWifiFromPhone,
