@@ -1,1 +1,1 @@
-export { default as SliderCaptchaModal } from './index'
+export { default as SliderCaptchaModal } from './SliderCaptchaModal'

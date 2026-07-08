@@ -21,6 +21,7 @@ import { DEVICE_STATUS_MAP, ALARM_LEVEL_MAP, CHART_COLORS, HERO_GRADIENTS, getAl
 import { safeNum, fmt } from '@/utils/format'
 import useTranslation from '@/hooks/useTranslation'
 import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 import { useModelFields } from '@/components/dyna/useModelFields'
 import type { DeviceModelFieldItem } from '@/services/modelApi'
 import type { ColumnsType } from 'antd/es/table'
@@ -120,6 +121,7 @@ const MonitoringPage: React.FC = () => {
   const { t } = useTranslation()
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md
+  const { timezone } = useTimezoneStore()
 
   const TIME_RANGES = [
     { label: t('mon.oneHour'), value: '1h' },
@@ -413,7 +415,7 @@ const MonitoringPage: React.FC = () => {
     if (!curveData || curveData.length === 0 || curveParams.length === 0) return {}
 
     const times = curveData.map((r: any) =>
-      dayjs(r.time ?? r.timestamp ?? r.created_at).format('MM-DD HH:mm'),
+      formatInTimezone(r.time ?? r.timestamp ?? r.created_at, timezone, 'MM-DD HH:mm'),
     )
 
     const series = curveParams.map((paramKey, idx) => {
@@ -810,7 +812,7 @@ const MonitoringPage: React.FC = () => {
       title: t('common.time'), dataIndex: 'time', key: 'time', width: 160, fixed: 'left' as const,
       render: (_: any, record: any) => {
         const t = record.time ?? record.timestamp ?? record.created_at
-        return t ? dayjs(t).format('YYYY-MM-DD HH:mm:ss') : '--'
+        return t ? formatInTimezone(t, timezone, 'YYYY-MM-DD HH:mm:ss') : '--'
       },
     }
 
@@ -1085,7 +1087,7 @@ const MonitoringPage: React.FC = () => {
   const alarmColumns: ColumnsType<AlarmRecord> = [
     {
       title: t('common.time'), dataIndex: 'occurred_at', key: 'occurred_at', width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '--',
+      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '--',
     },
     {
       title: t('mon.alertLevelLabel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
@@ -1166,7 +1168,7 @@ const MonitoringPage: React.FC = () => {
                             {alarm.fault_message || t('mon.noDescription')}
                           </Text>
                           <Text type="secondary" style={{ fontSize: 12 }}>
-                            {alarm.occurred_at ? dayjs(alarm.occurred_at).format('YYYY-MM-DD HH:mm:ss') : '--'}
+                            {alarm.occurred_at ? formatInTimezone(alarm.occurred_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '--'}
                           </Text>
                         </div>
                       ),

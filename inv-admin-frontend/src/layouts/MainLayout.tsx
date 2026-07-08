@@ -357,7 +357,7 @@ const MainLayout: React.FC = () => {
             <Select
               showSearch
               placeholder={t('modal.timezonePlaceholder')}
-              options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: tz.label }))}
+              options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: tz.labelZh }))}
               filterOption={(input, option) =>
                 (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
               }

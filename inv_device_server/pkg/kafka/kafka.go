@@ -57,7 +57,7 @@ func (p *Producer) SendMessage(ctx context.Context, topic string, key string, va
 	return w.WriteMessages(ctx, kafka.Message{
 		Key:   []byte(key),
 		Value: payload,
-		Time:  time.Now(),
+		Time:  time.Now().UTC(),
 	})
 }
 

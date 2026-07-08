@@ -16,6 +16,8 @@ import { alertApi } from '@/services/alertApi'
 import { commandApi } from '@/services/commandApi'
 import { ALARM_LEVEL_MAP } from '@/utils/constants'
 import { queryKeys } from '@/utils/queryKeys'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 
 const { Title, Text } = Typography
@@ -93,6 +95,7 @@ const TAB_KEY_MAP: Record<string, string> = {
 const OperationLogsPage: React.FC = () => {
   const { message } = App.useApp()
   const { t } = useTranslation()
+  const { timezone } = useTimezoneStore()
 
   const ACTION_LABELS: Record<string, string> = {
     create: t('logs.createAction'),
@@ -239,7 +242,7 @@ const OperationLogsPage: React.FC = () => {
     } catch {
       exportToCsv(
         auditData.map((r) => ({
-          [t('logs.time')]: dayjs(r.createdAt).format('YYYY-MM-DD HH:mm:ss'),
+          [t('logs.time')]: formatInTimezone(r.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss'),
           [t('logs.user')]: r.username,
           [t('logs.operation')]: r.action,
           [t('logs.resource')]: r.resource,
@@ -257,7 +260,7 @@ const OperationLogsPage: React.FC = () => {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('logs.user'),
@@ -333,7 +336,7 @@ const OperationLogsPage: React.FC = () => {
   const handleExportAlarms = () => {
     exportToCsv(
       alarmData.map((r) => ({
-        [t('logs.time')]: r.occurred_at ? dayjs(r.occurred_at).format('YYYY-MM-DD HH:mm:ss') : '',
+        [t('logs.time')]: r.occurred_at ? formatInTimezone(r.occurred_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '',
         [t('logs.deviceSN')]: r.device_sn,
         [t('logs.alertLevel')]: typeof r.alarm_level === 'number' ? (ALARM_LEVEL_MAP[r.alarm_level]?.label || r.alarm_level) : r.alarm_level,
         [t('logs.faultCode')]: r.fault_code,
@@ -350,7 +353,7 @@ const OperationLogsPage: React.FC = () => {
       dataIndex: 'occurred_at',
       key: 'occurred_at',
       width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('logs.deviceSN'),
@@ -446,7 +449,7 @@ const OperationLogsPage: React.FC = () => {
   const handleExportCommands = () => {
     exportToCsv(
       cmdData.map((r: CommandRecord) => ({
-        [t('logs.time')]: dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss'),
+        [t('logs.time')]: formatInTimezone(r.created_at, timezone, 'YYYY-MM-DD HH:mm:ss'),
         [t('logs.deviceSN')]: r.device_sn,
         [t('logs.command')]: r.command_label || r.command_name,
         [t('logs.status')]: COMMAND_STATUS_MAP[r.status]?.label || r.status,
@@ -463,7 +466,7 @@ const OperationLogsPage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('logs.deviceSN'),
@@ -536,7 +539,7 @@ const OperationLogsPage: React.FC = () => {
   const handleExportSystem = () => {
     exportToCsv(
       sysData.map((r) => ({
-        [t('logs.time')]: dayjs(r.createdAt).format('YYYY-MM-DD HH:mm:ss'),
+        [t('logs.time')]: formatInTimezone(r.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss'),
         [t('logs.user')]: r.username,
         [t('logs.operation')]: r.action,
         [t('logs.resource')]: r.resource,
@@ -553,7 +556,7 @@ const OperationLogsPage: React.FC = () => {
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('logs.user'),
@@ -613,7 +616,7 @@ const OperationLogsPage: React.FC = () => {
                   <Tag color={color}>{ACTION_LABELS[event.action] || event.action}</Tag>
                   <Text type="secondary" style={{ fontSize: 12 }}>
                     {event.username && <span>{event.username} · </span>}
-                    {dayjs(event.createdAt).format('YYYY-MM-DD HH:mm:ss')}
+                    {formatInTimezone(event.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss')}
                   </Text>
                 </div>
                 <Text>{event.details || `${event.resource}${event.resourceId ? ` #${event.resourceId}` : ''}`}</Text>

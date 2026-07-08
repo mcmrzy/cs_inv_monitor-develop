@@ -193,18 +193,34 @@ func (r *RBACMiddleware) hasPermission(userID string, resource string, action st
 
 var resourceActionMap = map[string]string{
 	"/api/v1/admin/":          "admin",
+	"/api/v1/users":           "users",
 	"/api/v1/users/":          "users",
 	"/api/v1/ota/tasks":       "ota",
 	"/api/v1/ota/firmwares":   "firmware",
 	"/api/v1/ota/":            "ota",
+	"/api/v1/parallel":        "parallel",
 	"/api/v1/parallel/":       "parallel",
+	"/api/v1/devices":         "devices",
 	"/api/v1/devices/":        "devices",
+	"/api/v1/alarms":          "alerts",
 	"/api/v1/alarms/":         "alerts",
 	"/api/v1/stations/":       "stations",
+	"/api/v1/models":          "models",
+	"/api/v1/models/":         "models",
+	"/api/v1/dashboard":       "dashboard",
+	"/api/v1/dashboard/":      "dashboard",
+	"/api/v1/notifications/":  "notifications",
+	"/api/v1/alert-rules":     "alert_rules",
+	"/api/v1/alert-rules/":    "alert_rules",
+	"/api/v1/work-orders":     "work_orders",
+	"/api/v1/work-orders/":    "work_orders",
+	"/api/v1/firmwares":       "firmware",
 }
 
-// appAllowedPaths 是 APP 端接口的路径前缀列表，这些接口已通 JWT 认证保护，
-// 对所有登录用户开放，不需要 RBAC 权限检查
+// appAllowedPaths 定义 APP 端接口白名单。
+// 这些接口已通过 JWT 认证保护（位于 user 组），对所有登录用户开放，不需要 RBAC 细粒度权限检查。
+// 在路由分组架构下，这些接口属于 user 组，会经过 RBAC 中间件，
+// 因此保留此白名单以确保 APP 端 OTA 等接口不被 RBAC resourceActionMap 误拦截。
 var appAllowedPaths = []string{
 	"/api/v1/ota/check/",
 	"/api/v1/ota/trigger",
