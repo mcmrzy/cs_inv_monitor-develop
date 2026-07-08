@@ -95,6 +95,7 @@ export default {
     'admin.smsSignName': '短信签名',
     'admin.smsTemplate': '短信模板',
     'admin.dataSettings': '数据管理',
+    'admin.viewPermissions': '查看权限',
   },
   en: {
     'admin.title': 'System Management',
@@ -192,5 +193,6 @@ export default {
     'admin.smsSignName': 'SMS Signature',
     'admin.smsTemplate': 'SMS Template',
     'admin.dataSettings': 'Data Management',
+    'admin.viewPermissions': 'View Permissions',
   },
 }

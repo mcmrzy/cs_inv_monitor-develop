@@ -54,4 +54,5 @@ export const adminApi = {
   getRolePermissions: (role: number) => api.get(`/admin/permissions/${role}`),
   updateRolePermissions: (role: number, data: any) => api.put(`/admin/permissions/${role}`, data),
   togglePermission: (role: number, data: any) => api.post(`/admin/permissions/${role}/toggle`, data),
+  getRouteGroups: () => api.get('/admin/route-groups'),
 }

@@ -57,7 +57,7 @@ const AdminPage: React.FC = () => {
         { key: 'settings', label: t('admin.systemConfig'), children: <SettingsTab /> },
         { key: 'quotas', label: t('admin.systemQuota'), children: <QuotaTab /> },
         { key: 'permissions', label: t('admin.permissionConfig'), children: <PermissionTab /> },
-        { key: 'api-overview', label: t('admin.apiOverview'), children: <APIOverviewTab /> },
+        { key: 'api-overview', label: t('admin.apiOverview'), children: <APIOverviewTab onNavigateToPermissions={() => setActiveTab('permissions')} /> },
       ]} />
     </div>
   )
@@ -461,7 +461,7 @@ const PermissionTab: React.FC = () => {
   )
 }
 
-const APIOverviewTab: React.FC = () => {
+const APIOverviewTab: React.FC<{ onNavigateToPermissions?: () => void }> = ({ onNavigateToPermissions }) => {
   const { t } = useTranslation()
   const [searchText, setSearchText] = useState('')
 
@@ -560,6 +560,16 @@ const APIOverviewTab: React.FC = () => {
                         <div style={{ fontSize: 11, color: '#999' }}>{route.description}</div>
                       </div>
                       <Tag style={{ fontSize: 10 }}>{route.backend}</Tag>
+                      {group.name === 'admin' && onNavigateToPermissions && (
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ fontSize: 11, padding: '0 4px' }}
+                          onClick={() => onNavigateToPermissions()}
+                        >
+                          {t('admin.viewPermissions') || '查看权限'}
+                        </Button>
+                      )}
                     </div>
                   ))}
                   {filteredRoutes.length === 0 && (
