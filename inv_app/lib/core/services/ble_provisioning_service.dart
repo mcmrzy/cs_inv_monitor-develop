@@ -244,6 +244,7 @@ class BleProvisioningService {
   void stopScan() {
     FlutterBluePlus.stopScan();
     _scanTimer?.cancel();
+    _running = false; // 重置运行标志
     if (_currentStatus == BleProvisioningStatus.scanning) {
       _emitStatus(BleProvisioningStatus.idle);
     }
