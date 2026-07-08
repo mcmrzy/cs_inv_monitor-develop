@@ -79,6 +79,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                           status == BleProvisioningStatus.discoveringServices ||
                           status == BleProvisioningStatus.readingDeviceInfo ||
                           status == BleProvisioningStatus.subscribingNotifications;
+          // 配网失败或回到连接状态时，重置provisioning状态
+          if (status == BleProvisioningStatus.bleConnected || 
+              status == BleProvisioningStatus.failed ||
+              status == BleProvisioningStatus.timeout ||
+              status == BleProvisioningStatus.error) {
+            _provisioning = false;
+          }
         });
 
         // WiFi配网成功
@@ -905,11 +912,15 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     final bool isConnected = _bleStatus == BleProvisioningStatus.bleConnected;
     
     // 判断当前阶段
-    final bool showScanPhase = _bleScanning || (_bleDevices.isNotEmpty && !deviceSelected);
+    final bool isError = _bleStatus == BleProvisioningStatus.failed || 
+                         _bleStatus == BleProvisioningStatus.timeout || 
+                         _bleStatus == BleProvisioningStatus.error;
+    final bool showScanPhase = _bleScanning || (_bleDevices.isNotEmpty && !deviceSelected) || (!deviceSelected && !_bleScanning && !isError);
     final bool showConnectingPhase = _bleConnecting;
     final bool showConfigPhase = isConnected && !isConfiguring;
     final bool showConfiguringPhase = isConfiguring;
     final bool showCompletedPhase = isCompleted;
+    final bool showErrorPhase = isError && !deviceSelected;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       // 步骤指示器
@@ -931,6 +942,47 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ),
       ]),
       SizedBox(height: 24.h),
+
+      // 错误状态显示
+      if (showErrorPhase) ...[
+        Container(
+          padding: EdgeInsets.all(16.w),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Column(children: [
+            const Icon(Icons.error_outline, color: AppColors.errorLight, size: 40),
+            SizedBox(height: 12.h),
+            Text(
+              _bleStatus == BleProvisioningStatus.timeout ? '配网超时' : 
+              _bleStatus == BleProvisioningStatus.failed ? '配网失败' : '配网错误',
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.errorLight),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              '请检查设备是否正常工作，然后重新扫描',
+              style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16.h),
+            SizedBox(
+              width: double.infinity,
+              height: 44.h,
+              child: ElevatedButton.icon(
+                onPressed: _startBleScan,
+                icon: const Icon(Icons.refresh, size: 20),
+                label: const Text('重新扫描', style: TextStyle(fontSize: 15)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ],
 
       // 说明信息（仅在扫描阶段显示）
       if (showScanPhase) ...[
