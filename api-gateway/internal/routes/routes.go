@@ -134,8 +134,8 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	adminGroup.Any("/api/v1/users/*action", p.Handler())
 	adminGroup.Any("/api/v1/users", p.Handler())
 	adminGroup.Any("/api/v1/parallel/*action", p.Handler())
-	adminGroup.Any("/api/v1/parallel-groups/*action", p.RewriteHandler("/api/v1/parallel"))
-	adminGroup.Any("/api/v1/parallel-groups", p.RewriteHandler("/api/v1/parallel"))
+	adminGroup.Any("/api/v1/parallel-groups/*action", p.Handler())
+	adminGroup.Any("/api/v1/parallel-groups", p.Handler())
 	adminGroup.Any("/api/v1/parallel", p.Handler())
 	adminGroup.Any("/api/v1/internal/*action", p.Handler())
 }
@@ -274,17 +274,20 @@ func buildRouteGroups() map[string][]RouteGroup {
 			{
 				Name: "user", Label: "用户接口", Description: "需登录（JWT + RBAC）",
 				Routes: []RouteInfo{
-					{Path: "/api/v1/auth/*", Method: "ALL", Description: "需认证子端点（logout, change-password, profile）", Backend: "api-server"},
+					{Path: "/api/v1/auth/logout", Method: "ALL", Description: "用户登出", Backend: "api-server"},
+					{Path: "/api/v1/auth/change-password", Method: "ALL", Description: "修改密码", Backend: "api-server"},
+					{Path: "/api/v1/auth/profile", Method: "ALL", Description: "用户资料", Backend: "api-server"},
+					{Path: "/api/v1/auth/refresh", Method: "ALL", Description: "刷新令牌", Backend: "api-server"},
 					{Path: "/api/v1/stations", Method: "ALL", Description: "电站管理", Backend: "api-server"},
 					{Path: "/api/v1/devices", Method: "ALL", Description: "设备管理", Backend: "api-server"},
 					{Path: "/api/v1/alarms", Method: "ALL", Description: "告警管理", Backend: "api-server"},
-					{Path: "/api/v1/alerts", Method: "ALL", Description: "告警(别名)", Backend: "api-server"},
+					{Path: "/api/v1/alerts", Method: "ALL", Description: "告警管理（别名，重写到 /api/v1/alarms）", Backend: "api-server"},
 					{Path: "/api/v1/notifications", Method: "ALL", Description: "通知管理", Backend: "api-server"},
 					{Path: "/api/v1/alert-rules", Method: "ALL", Description: "告警规则", Backend: "api-server"},
 					{Path: "/api/v1/models", Method: "ALL", Description: "设备型号", Backend: "api-server"},
 					{Path: "/api/v1/dashboard", Method: "ALL", Description: "仪表盘", Backend: "api-server"},
 					{Path: "/api/v1/ota/*", Method: "ALL", Description: "OTA升级（含APP端）", Backend: "api-server"},
-					{Path: "/api/v1/firmwares", Method: "ALL", Description: "固件(别名)", Backend: "api-server"},
+					{Path: "/api/v1/firmwares", Method: "ALL", Description: "固件管理（别名，重写到 /api/v1/ota/firmware）", Backend: "api-server"},
 					{Path: "/api/v1/work-orders", Method: "ALL", Description: "工单管理", Backend: "api-server"},
 					{Path: "/api/v1/device/*", Method: "ALL", Description: "设备服务", Backend: "device-server"},
 					{Path: "/api/v1/stats/*", Method: "ALL", Description: "统计数据", Backend: "device-server"},
@@ -293,10 +296,10 @@ func buildRouteGroups() map[string][]RouteGroup {
 			{
 				Name: "admin", Label: "管理接口", Description: "需管理员角色（JWT + RBAC + RequireRole）",
 				Routes: []RouteInfo{
-					{Path: "/api/v1/admin/*", Method: "ALL", Description: "管理后台", Backend: "api-server"},
+					{Path: "/api/v1/admin/route-groups", Method: "GET", Description: "路由分组信息（网关本地）", Backend: "gateway"},
 					{Path: "/api/v1/users", Method: "ALL", Description: "用户管理", Backend: "api-server"},
 					{Path: "/api/v1/parallel", Method: "ALL", Description: "并机配置", Backend: "api-server"},
-					{Path: "/api/v1/parallel-groups", Method: "ALL", Description: "并机(别名)", Backend: "api-server"},
+					{Path: "/api/v1/parallel-groups", Method: "ALL", Description: "并机配置（别名，重写到 /api/v1/parallel）", Backend: "api-server"},
 					{Path: "/api/v1/internal/*", Method: "ALL", Description: "内部接口", Backend: "api-server"},
 				},
 			},
