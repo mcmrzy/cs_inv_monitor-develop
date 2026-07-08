@@ -332,11 +332,20 @@ class BleProvisioningService {
       orElse: () => BleDeviceInfo(sn: '', firmwareVersion: '', macAddress: '', deviceName: '未知设备', rssi: 0),
     );
 
+    // 使用读取到的SN更新设备名
+    String deviceName = existingDevice.deviceName;
+    if (sn.isNotEmpty) {
+      // 如果读取到SN，使用完整SN作为设备名
+      deviceName = 'CS_INV_$sn';
+    } else if (deviceName.isEmpty) {
+      deviceName = _connectedDevice?.platformName ?? '未知设备';
+    }
+
     return BleDeviceInfo(
       sn: sn,
       firmwareVersion: firmwareVersion,
       macAddress: macAddress.isNotEmpty ? macAddress : (_connectedDevice?.remoteId.toString() ?? ''),
-      deviceName: existingDevice.deviceName.isNotEmpty ? existingDevice.deviceName : (_connectedDevice?.platformName ?? '未知设备'),
+      deviceName: deviceName,
       rssi: 0,
     );
   }
