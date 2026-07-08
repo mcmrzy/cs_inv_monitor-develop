@@ -29,15 +29,17 @@ type AdminHandler struct {
 	permChecker *service.PermChecker
 	db          *pgxpool.Pool
 	rdb         *redis.Client
+	cfgSvc      *service.ConfigService
 }
 
-func NewAdminHandler(userRepo *repository.UserRepository, modelRepo *repository.ModelRepository, permChecker *service.PermChecker, db *pgxpool.Pool, rdb *redis.Client) *AdminHandler {
+func NewAdminHandler(userRepo *repository.UserRepository, modelRepo *repository.ModelRepository, permChecker *service.PermChecker, db *pgxpool.Pool, rdb *redis.Client, cfgSvc *service.ConfigService) *AdminHandler {
 	return &AdminHandler{
 		userRepo:    userRepo,
 		modelRepo:   modelRepo,
 		permChecker: permChecker,
 		db:          db,
 		rdb:         rdb,
+		cfgSvc:      cfgSvc,
 	}
 }
 
@@ -569,6 +571,11 @@ func (h *AdminHandler) UpdateSystemConfig(c *gin.Context) {
 	if err := tx.Commit(ctx); err != nil {
 		response.HandleError(c, apperr.Internal("提交事务失败", err))
 		return
+	}
+
+	// 清除配置缓存，使新配置立即生效
+	if h.cfgSvc != nil {
+		h.cfgSvc.Invalidate()
 	}
 
 	response.SuccessWithMessage(c, "配置保存成功", nil)

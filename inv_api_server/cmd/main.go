@@ -133,7 +133,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		smsProvider = &service.MockSMSProvider{}
 	}
 	smsService := service.NewSMSService(rdb, smsProvider)
-	emailService := service.NewEmailService(rdb, cfg.Email)
+	configService := service.NewConfigService(db, rdb, *cfg)
+	emailService := service.NewEmailService(rdb, cfg.Email, configService)
 	stationService := service.NewStationService(stationRepo)
 	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
 	alarmService := service.NewAlarmService(alarmRepo)
@@ -153,7 +154,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	notificationHandler := handler.NewNotificationHandler(db)
 	wsHandler := handler.NewWSHandler(rdb, jwtService)
 	modelHandler := handler.NewModelHandler(modelService)
-	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb)
+	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
 	otaHandler := handler.NewOTAHandler(otaService)
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
 	alertRuleHandler := handler.NewAlertRuleHandler()
