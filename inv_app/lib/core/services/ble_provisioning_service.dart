@@ -189,15 +189,18 @@ class BleProvisioningService {
       // 监听扫描结果
       FlutterBluePlus.scanResults.listen((results) {
         _discoveredDevices = results.map((result) {
-          // 协议说明：广播名是 CS_INV_<SN后6位>，完整设备名在Scan Response中
-          // flutter_blue_plus 会自动合并主广播包和Scan Response
-          // advName 可能是广播名或完整设备名
+          // 协议说明：广播名是 CS_INV_完整SN，GAP Device Name也是完整SN
           final advName = result.advertisementData.advName;
           String deviceName;
+          String sn = '';
           
           if (advName.isNotEmpty) {
-            // 使用获取到的设备名（可能是完整名或广播名）
+            // 使用获取到的设备名
             deviceName = advName;
+            // 从设备名中提取SN（去掉CS_INV_前缀）
+            if (advName.startsWith('CS_INV_')) {
+              sn = advName.substring(7); // 'CS_INV_'.length = 7
+            }
           } else {
             // 如果没有设备名，用MAC地址后6位生成
             final mac = result.device.remoteId.toString();
@@ -205,7 +208,7 @@ class BleProvisioningService {
           }
           
           return BleDeviceInfo(
-            sn: '', // SN需要连接后从GATT读取，先留空
+            sn: sn,
             firmwareVersion: '',
             macAddress: result.device.remoteId.toString(),
             deviceName: deviceName,

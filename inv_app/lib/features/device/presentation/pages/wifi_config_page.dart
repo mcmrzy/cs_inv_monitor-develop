@@ -982,7 +982,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               leading: Container(width: 44.w, height: 44.w, decoration: BoxDecoration(
                 color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r)),
                 child: const Icon(Icons.bluetooth, color: AppColors.primary, size: 22)),
-              title: Text(device.deviceName, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              title: Text(device.sn.isNotEmpty ? device.sn : device.deviceName, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
               subtitle: Text('$sig $rssi dBm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
               trailing: _bleConnecting && _selectedBleDevice?.macAddress == device.macAddress
                   ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
@@ -1035,9 +1035,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('已连接 ${_selectedBleDevice!.deviceName}', style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46))),
-                if (_selectedBleDevice!.sn.isNotEmpty)
-                  Text('SN: ${_selectedBleDevice!.sn}', style: TextStyle(fontSize: 11.sp, color: const Color(0xFF065F46))),
+                Text('已连接 ${_selectedBleDevice!.sn.isNotEmpty ? _selectedBleDevice!.sn : _selectedBleDevice!.deviceName}', style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46))),
               ],
             )),
             GestureDetector(onTap: _disconnectBleDevice, child: Text(AppLocalizations.of(context)!.disconnect, style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
