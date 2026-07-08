@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -70,12 +71,13 @@ type internalDeviceCmdStatusRequest struct {
 }
 
 type internalDeviceAlarmRequest struct {
-	SN        string `json:"sn"`
-	Code      int    `json:"code"`
-	Level     string `json:"level"`
-	Message   string `json:"message"`
-	Count     int    `json:"count"`
-	Timestamp int64  `json:"timestamp"`
+	SN        string          `json:"sn"`
+	Code      int             `json:"code"`
+	Level     string          `json:"level"`
+	Message   string          `json:"message"`
+	Count     int             `json:"count"`
+	Timestamp int64           `json:"timestamp"`
+	Trigger   json.RawMessage `json:"trigger"`
 }
 
 // NotificationService 通知服务接口，由 service 层实现。
@@ -1125,6 +1127,13 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	if req.SN == "" {
 		response.HandleError(c, apperr.BadRequest("sn is required"))
 		return
+	}
+	if len(req.Trigger) > 0 {
+		trimmed := bytes.TrimLeft(req.Trigger, " \t\r\n")
+		if len(trimmed) == 0 || trimmed[0] != '{' {
+			response.HandleError(c, apperr.BadRequest("invalid trigger type"))
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
