@@ -361,12 +361,16 @@ class BleProvisioningService {
         
         // 先启用通知（必须在监听之前）
         await characteristic.setNotifyValue(true);
+        print('[BLE] 已订阅状态通知，特征UUID: ${characteristic.uuid}');
         
         // 监听状态变化
         characteristic.lastValueStream.listen((value) {
           if (value.isNotEmpty) {
             final status = String.fromCharCodes(value);
+            print('[BLE] 收到状态通知: $status');
             _handleStatusUpdate(status);
+          } else {
+            print('[BLE] 收到空状态通知');
           }
         });
         
@@ -388,6 +392,7 @@ class BleProvisioningService {
 
   /// 处理状态更新
   void _handleStatusUpdate(String status) {
+    print('[BLE] 处理状态更新: $status');
     switch (status) {
       case 'waiting':
         _resultController.add('等待凭据');
@@ -405,6 +410,9 @@ class BleProvisioningService {
         // 配网失败后，回到bleConnected状态，允许重新输入凭据
         _resultController.add(status == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
         _emitStatus(BleProvisioningStatus.bleConnected);
+        break;
+      default:
+        print('[BLE] 未知状态: $status');
         break;
     }
   }
@@ -449,9 +457,11 @@ class BleProvisioningService {
 
       // 先写入SSID
       await ssidCharacteristic.write(ssid.codeUnits, withoutResponse: false);
+      print('[BLE] 已写入SSID: $ssid');
       
       // 写入密码（触发配网）
       await passwordCharacteristic.write(password.codeUnits, withoutResponse: false);
+      print('[BLE] 已写入密码，等待设备响应...');
 
       _emitStatus(BleProvisioningStatus.waitingForResult);
 
