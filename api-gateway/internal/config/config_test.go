@@ -32,10 +32,13 @@ rbac:
 		t.Fatal(err)
 	}
 
+	t.Setenv("GW_PORT", "9999")
 	t.Setenv("JWT_SECRET", "test-secret-123")
 	t.Setenv("API_SERVER_URL", "http://api:9090")
+	t.Setenv("DEVICE_SERVER_URL", "http://device:8081")
 	t.Setenv("REDIS_HOST", "myredis")
 	t.Setenv("REDIS_PORT", "6380")
+	t.Setenv("REDIS_PASSWORD", "")
 
 	cfg, err := Load(cfgPath)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"fmt"
+	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/apperr"
@@ -17,10 +18,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type OTAHandler struct {
 	otaService *service.OTAService
+	db         *pgxpool.Pool
 }
 
 // toUserVersion 将 main_version (V1.0.0.20260703) 转换为 user_version 格式 (V1.0.0)
@@ -33,8 +36,8 @@ func toUserVersion(mainVersion string) string {
 	return mainVersion
 }
 
-func NewOTAHandler(otaService *service.OTAService) *OTAHandler {
-	return &OTAHandler{otaService: otaService}
+func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool) *OTAHandler {
+	return &OTAHandler{otaService: otaService, db: db}
 }
 
 type CreateFirmwareRequest struct {
@@ -1088,7 +1091,9 @@ func (h *OTAHandler) DeleteUpgradeTask(c *gin.Context) {
 
 // GetTaskStats 获取任务统计
 func (h *OTAHandler) GetTaskStats(c *gin.Context) {
-	pending, running, todayCompleted, failed, err := h.otaService.GetTaskStats(c.Request.Context())
+	userID := middleware.GetUserID(c)
+	tz := getUserTimezone(c.Request.Context(), h.db, userID)
+	pending, running, todayCompleted, failed, err := h.otaService.GetTaskStats(c.Request.Context(), tz)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("查询统计失败", err))
 		return

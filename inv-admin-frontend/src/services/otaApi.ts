@@ -50,6 +50,7 @@ export const otaApi = {
     user_version?: string
     user_changelog?: string
     is_published?: boolean
+    is_force?: boolean
     rollout_type?: 'all' | 'model' | 'user' | 'device'
     rollout_targets?: any
   }) => api.put(`/ota/packages/${id}`, data),

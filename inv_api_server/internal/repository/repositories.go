@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"inv-api-server/internal/model"
+	"inv-api-server/pkg/timezone"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -1205,7 +1206,11 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 	return devices, nil
 }
 
-func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, stationID int64) (float64, float64, error) {
+func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, stationID int64, tz string) (float64, float64, error) {
+	todayStr := timezone.TodayInTimezone(tz)
+	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
+	todayEnd := todayStart.AddDate(0, 0, 1)
+
 	var dailyEnergy float64
 	query := `
 		SELECT COALESCE(MAX(COALESCE(
@@ -1217,10 +1222,10 @@ func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, statio
 		)), 0)
 		FROM device_telemetry
 		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status IN (1, 2))
-		AND time::date = CURRENT_DATE
+		AND time >= $2 AND time < $3
 		AND topic = 'data/energy'
 	`
-	r.db.QueryRow(ctx, query, stationID).Scan(&dailyEnergy)
+	r.db.QueryRow(ctx, query, stationID, todayStart, todayEnd).Scan(&dailyEnergy)
 
 	var totalPower float64
 	sns, err := r.getStationDeviceSNs(ctx, stationID, true)
@@ -1369,7 +1374,7 @@ func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, station
 	return
 }
 
-func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationID int64) (float64, float64) {
+func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationID int64, tz string) (float64, float64) {
 	// 累计发电量：直接取每个设备最新的 total_pv 值，然后求和
 	var totalEnergy float64
 	rows, err := r.db.Query(ctx, `
@@ -1397,6 +1402,10 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 		}
 	}
 
+	loc := timezone.LoadLocation(tz)
+	now := time.Now().In(loc)
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc).UTC()
+
 	// 本月发电量：用 daily_pv 按天汇总
 	monthQuery := `
 		SELECT COALESCE(SUM(daily_max), 0)
@@ -1408,19 +1417,23 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 			)) as daily_max
 			FROM device_telemetry
 			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
-			AND time >= DATE_TRUNC('month', CURRENT_DATE)
+			AND time >= $2
 			AND topic = 'data/energy'
 			GROUP BY DATE(time), device_sn
 		) per_device_daily
 		WHERE daily_max > 0
 	`
 	var monthEnergy float64
-	r.db.QueryRow(ctx, monthQuery, stationID).Scan(&monthEnergy)
+	r.db.QueryRow(ctx, monthQuery, stationID, monthStart).Scan(&monthEnergy)
 
 	return totalEnergy, monthEnergy
 }
 
-func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID int64) float64 {
+func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID int64, tz string) float64 {
+	loc := timezone.LoadLocation(tz)
+	now := time.Now().In(loc)
+	yearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc).UTC()
+
 	query := `
 		SELECT COALESCE(SUM(daily_max), 0)
 		FROM (
@@ -1434,18 +1447,22 @@ func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID i
 				)) as daily_max
 			FROM device_telemetry
 			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
-			AND time >= DATE_TRUNC('year', CURRENT_DATE)
+			AND time >= $2
 			AND topic = 'data/energy'
 			GROUP BY DATE(time), device_sn
 		) per_device_daily
 		WHERE daily_max > 0
 	`
 	var yearEnergy float64
-	r.db.QueryRow(ctx, query, stationID).Scan(&yearEnergy)
+	r.db.QueryRow(ctx, query, stationID, yearStart).Scan(&yearEnergy)
 	return yearEnergy
 }
 
-func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID int64) (float64, error) {
+func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID int64, tz string) (float64, error) {
+	todayStr := timezone.TodayInTimezone(tz)
+	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
+	todayEnd := todayStart.AddDate(0, 0, 1)
+
 	query := `
 		SELECT COALESCE(MAX(COALESCE(
 			(data->'data'->>'daily_pv')::float,
@@ -1456,11 +1473,11 @@ func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID 
 		)), 0)
 		FROM device_telemetry
 		WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
-		AND time::date = CURRENT_DATE
+		AND time >= $2 AND time < $3
 		AND topic = 'data/energy'
 	`
 	var energy float64
-	err := r.db.QueryRow(ctx, query, stationID).Scan(&energy)
+	err := r.db.QueryRow(ctx, query, stationID, todayStart, todayEnd).Scan(&energy)
 	return energy, err
 }
 
@@ -1991,9 +2008,17 @@ func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, en
 	return results, nil
 }
 
-func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, endDate, period string) (map[string]interface{}, error) {
+func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, endDate, period, tz string) (map[string]interface{}, error) {
 	// JSONB 数据可能是嵌套格式 {"data": {"daily_pv": ...}} 或扁平格式 {"daily_pv": ...}
 	// 使用 COALESCE 兼容两种格式
+
+	todayStr := timezone.TodayInTimezone(tz)
+	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
+	todayEnd := todayStart.AddDate(0, 0, 1)
+
+	loc := timezone.LoadLocation(tz)
+	now := time.Now().In(loc)
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc).UTC()
 
 	// 今日发电量：取今天 data/energy topic 中 daily_pv 的最大值
 	dailyQuery := `
@@ -2004,10 +2029,10 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 			(data->>'energy_daily_pv')::float
 		)), 0)
 		FROM device_telemetry
-		WHERE device_sn = $1 AND time::date = CURRENT_DATE AND topic = 'data/energy'
+		WHERE device_sn = $1 AND time >= $2 AND time < $3 AND topic = 'data/energy'
 	`
 	var dailyEnergy float64
-	r.db.QueryRow(ctx, dailyQuery, sn).Scan(&dailyEnergy)
+	r.db.QueryRow(ctx, dailyQuery, sn, todayStart, todayEnd).Scan(&dailyEnergy)
 
 	// 月发电量：本月每天 daily_pv 最大值之和
 	monthlyQuery := `
@@ -2021,7 +2046,7 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 			)) as daily_max
 			FROM device_telemetry
 			WHERE device_sn = $1
-			  AND time >= DATE_TRUNC('month', CURRENT_DATE)
+			  AND time >= $2
 			  AND topic = 'data/energy'
 			GROUP BY DATE(time)
 			HAVING MAX(COALESCE(
@@ -2033,7 +2058,7 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 		) daily
 	`
 	var monthlyEnergy float64
-	r.db.QueryRow(ctx, monthlyQuery, sn).Scan(&monthlyEnergy)
+	r.db.QueryRow(ctx, monthlyQuery, sn, monthStart).Scan(&monthlyEnergy)
 
 	// 总发电量：历史每天 daily_pv 最大值之和
 	totalQuery := `
@@ -2068,10 +2093,10 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 			(data->>'energy_daily_discharge')::float
 		)), 0)
 		FROM device_telemetry
-		WHERE device_sn = $1 AND time::date = CURRENT_DATE AND topic = 'data/energy'
+		WHERE device_sn = $1 AND time >= $2 AND time < $3 AND topic = 'data/energy'
 	`
 	var dailyDischarge float64
-	r.db.QueryRow(ctx, dischargeQuery, sn).Scan(&dailyDischarge)
+	r.db.QueryRow(ctx, dischargeQuery, sn, todayStart, todayEnd).Scan(&dailyDischarge)
 
 	return map[string]interface{}{
 		"daily_energy":    dailyEnergy,
@@ -2483,7 +2508,11 @@ func (r *DeviceRepository) GetLifecycleHistory(ctx context.Context, sn string, p
 	return results, total, nil
 }
 
-func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64) (map[string]interface{}, error) {
+func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64, tz string) (map[string]interface{}, error) {
+	todayStr := timezone.TodayInTimezone(tz)
+	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
+	todayEnd := todayStart.AddDate(0, 0, 1)
+
 	query := `
 		SELECT COUNT(DISTINCT d.id) as device_count,
 			   COUNT(DISTINCT CASE WHEN d.status IN (1, 2) THEN d.id END) as online_count,
@@ -2507,13 +2536,13 @@ func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64) (map[s
 		FROM (
 			SELECT DISTINCT ON (d.sn) (dt.data->>'daily_energy')::float as today_energy
 			FROM devices d
-			LEFT JOIN device_telemetry dt ON dt.device_sn = d.sn AND dt.time::date = CURRENT_DATE
+			LEFT JOIN device_telemetry dt ON dt.device_sn = d.sn AND dt.time >= $2 AND dt.time < $3
 			WHERE d.deleted_at IS NULL
 			AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)
 			ORDER BY d.sn, dt.time DESC
 		) latest
 	`
-	r.db.QueryRow(ctx, energyQuery, userID).Scan(&todayEnergy)
+	r.db.QueryRow(ctx, energyQuery, userID, todayStart, todayEnd).Scan(&todayEnergy)
 
 	result["device_count"] = deviceCount
 	result["online_count"] = onlineCount
@@ -2524,18 +2553,22 @@ func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64) (map[s
 	return result, nil
 }
 
-func (r *DeviceRepository) GetTrend(ctx context.Context, userID int64, period string) ([]map[string]interface{}, error) {
+func (r *DeviceRepository) GetTrend(ctx context.Context, userID int64, period, tz string) ([]map[string]interface{}, error) {
+	todayStr := timezone.TodayInTimezone(tz)
+	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
+	thirtyDaysAgo := todayStart.AddDate(0, 0, -30)
+
 	query := `
 		SELECT bucket, SUM(daily_energy) as energy_produce
 		FROM device_telemetry_1day dd
 		JOIN devices d ON d.sn = dd.device_sn
 		WHERE d.deleted_at IS NULL
 		AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)
-		AND bucket >= CURRENT_DATE - INTERVAL '30 days'
+		AND bucket >= $2
 		GROUP BY bucket ORDER BY bucket
 	`
 
-	rows, err := r.db.Query(ctx, query, userID)
+	rows, err := r.db.Query(ctx, query, userID, thirtyDaysAgo)
 	if err != nil {
 		return nil, err
 	}

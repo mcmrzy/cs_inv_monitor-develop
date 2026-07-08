@@ -109,7 +109,9 @@ class BleProvisioningService {
   /// 发射状态更新
   void _emitStatus(BleProvisioningStatus status) {
     _currentStatus = status;
-    _statusController.add(status);
+    if (!_statusController.isClosed) {
+      _statusController.add(status);
+    }
   }
 
   /// 请求蓝牙权限
@@ -189,15 +191,18 @@ class BleProvisioningService {
       // 监听扫描结果
       FlutterBluePlus.scanResults.listen((results) {
         _discoveredDevices = results.map((result) {
-          // 协议说明：广播名是 CS_INV_<SN后6位>，完整设备名在Scan Response中
-          // flutter_blue_plus 会自动合并主广播包和Scan Response
-          // advName 可能是广播名或完整设备名
+          // 协议说明：广播名是 CS_INV_完整SN，GAP Device Name也是完整SN
           final advName = result.advertisementData.advName;
           String deviceName;
+          String sn = '';
           
           if (advName.isNotEmpty) {
-            // 使用获取到的设备名（可能是完整名或广播名）
+            // 使用获取到的设备名
             deviceName = advName;
+            // 从设备名中提取SN（去掉CS_INV_前缀）
+            if (advName.startsWith('CS_INV_')) {
+              sn = advName.substring(7); // 'CS_INV_'.length = 7
+            }
           } else {
             // 如果没有设备名，用MAC地址后6位生成
             final mac = result.device.remoteId.toString();
@@ -205,7 +210,7 @@ class BleProvisioningService {
           }
           
           return BleDeviceInfo(
-            sn: '', // SN需要连接后从GATT读取，先留空
+            sn: sn,
             firmwareVersion: '',
             macAddress: result.device.remoteId.toString(),
             deviceName: deviceName,
@@ -239,6 +244,7 @@ class BleProvisioningService {
   void stopScan() {
     FlutterBluePlus.stopScan();
     _scanTimer?.cancel();
+    _running = false; // 重置运行标志
     if (_currentStatus == BleProvisioningStatus.scanning) {
       _emitStatus(BleProvisioningStatus.idle);
     }
@@ -358,12 +364,16 @@ class BleProvisioningService {
         
         // 先启用通知（必须在监听之前）
         await characteristic.setNotifyValue(true);
+        print('[BLE] 已订阅状态通知，特征UUID: ${characteristic.uuid}');
         
         // 监听状态变化
         characteristic.lastValueStream.listen((value) {
           if (value.isNotEmpty) {
             final status = String.fromCharCodes(value);
+            print('[BLE] 收到状态通知: $status');
             _handleStatusUpdate(status);
+          } else {
+            print('[BLE] 收到空状态通知');
           }
         });
         
@@ -385,22 +395,36 @@ class BleProvisioningService {
 
   /// 处理状态更新
   void _handleStatusUpdate(String status) {
-    switch (status) {
-      case 'waiting':
-        _resultController.add('等待凭据');
-        break;
-      case 'connecting':
-        _resultController.add('正在连接WiFi...');
-        _emitStatus(BleProvisioningStatus.waitingForResult);
-        break;
-      case 'connected':
-        _resultController.add('WiFi连接成功！');
-        _emitStatus(BleProvisioningStatus.wifiConnected);
-        break;
-      case 'failed':
-        _resultController.add('连接失败');
-        _emitStatus(BleProvisioningStatus.failed);
-        break;
+    print('[BLE] 处理状态更新: $status (长度: ${status.length})');
+    // 去除空白字符和空字符
+    final cleanStatus = status.replaceAll(RegExp(r'[\s\x00]+'), '');
+    print('[BLE] 清理后状态: $cleanStatus');
+    
+    if (!_resultController.isClosed) {
+      switch (cleanStatus) {
+        case 'waiting':
+          _resultController.add('等待凭据');
+          break;
+        case 'connecting':
+          _resultController.add('正在连接WiFi...');
+          _emitStatus(BleProvisioningStatus.waitingForResult);
+          break;
+        case 'connected':
+          _resultController.add('WiFi连接成功！');
+          _emitStatus(BleProvisioningStatus.wifiConnected);
+          break;
+        case 'failed':
+        case 'not_found':
+          // 配网失败后，回到bleConnected状态，允许重新输入凭据
+          _resultController.add(cleanStatus == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
+          _emitStatus(BleProvisioningStatus.bleConnected);
+          break;
+        default:
+          print('[BLE] 未知状态: $cleanStatus');
+          break;
+      }
+    } else {
+      print('[BLE] 结果流已关闭，忽略状态更新');
     }
   }
 
@@ -444,9 +468,11 @@ class BleProvisioningService {
 
       // 先写入SSID
       await ssidCharacteristic.write(ssid.codeUnits, withoutResponse: false);
+      print('[BLE] 已写入SSID: $ssid');
       
       // 写入密码（触发配网）
       await passwordCharacteristic.write(password.codeUnits, withoutResponse: false);
+      print('[BLE] 已写入密码，等待设备响应...');
 
       _emitStatus(BleProvisioningStatus.waitingForResult);
 

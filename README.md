@@ -6,6 +6,7 @@
 
 ## 功能特性
 
+- [x] **BLE 蓝牙配网** — 通过蓝牙低功耗协议为设备配置 WiFi，无需切换手机网络
 - [x] **实时数据采集** — 设备通过 MQTT 上报遥测数据，毫秒级延迟推送至 APP 与管理后台
 - [x] **万级设备接入** — EMQX 共享订阅 + 多实例水平扩展，支撑大规模设备并发
 - [x] **告警管理** — 实时告警检测、分级告警、推送通知、告警确认与处理
@@ -83,6 +84,7 @@ Flutter App ── MQTT (JWT认证) ──→ EMQX Broker ←── 设备(ESP32
 | go_router | - | 声明式路由 + AuthGuard |
 | Dio | - | HTTP 客户端 |
 | mqtt_client | - | APP MQTT 直连 |
+| flutter_blue_plus | - | BLE 蓝牙配网 |
 | get_it + injectable | - | 依赖注入 |
 
 ### 基础设施
@@ -378,6 +380,7 @@ APP 设备详情页实时数据**完全走 MQTT 推送**，不通过 HTTP 轮询
 
 | 文档 | 说明 |
 |------|------|
+| [BLE 配网协议](docs/BLE_Provisioning_Protocol.md) | BLE 蓝牙配网协议规范与实现 |
 | [MQTT 协议文档](docs/MQTT接口文档.md) | MQTT 主题定义与上下行数据格式 |
 | [系统参数规范](docs/系统参数规范_48V离网逆变器.md) | 逆变器参数定义与映射 |
 | [ARM-ESP32 UART 协议](docs/ARM_ESP32_UART_Protocol.md) | ARM ↔ ESP32 帧协议 |

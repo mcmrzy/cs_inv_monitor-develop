@@ -13,6 +13,8 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { adminApi, type SystemHealth, type Tenant } from '@/services/adminApi'
 import useAuthStore from '@/stores/authStore'
+import useTimezoneStore from '@/stores/timezoneStore'
+import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
 import { Role } from '@/types'
 import { queryKeys } from '@/utils/queryKeys'
@@ -57,6 +59,7 @@ const AdminPage: React.FC = () => {
         { key: 'settings', label: t('admin.systemConfig'), children: <SettingsTab /> },
         { key: 'quotas', label: t('admin.systemQuota'), children: <QuotaTab /> },
         { key: 'permissions', label: t('admin.permissionConfig'), children: <PermissionTab /> },
+        { key: 'api-overview', label: t('admin.apiOverview'), children: <APIOverviewTab onNavigateToPermissions={() => setActiveTab('permissions')} /> },
       ]} />
     </div>
   )
@@ -65,6 +68,7 @@ const AdminPage: React.FC = () => {
 const HealthTab: React.FC = () => {
   const { t } = useTranslation()
   const { message } = App.useApp()
+  const { timezone } = useTimezoneStore()
   const { data: health, isLoading, refetch } = useQuery({
     queryKey: queryKeys.admin.health(),
     queryFn: () => adminApi.getSystemHealth().then((r) => r.data?.data ?? null as SystemHealth | null),
@@ -88,7 +92,7 @@ const HealthTab: React.FC = () => {
           <Col span={8} key={svc.label}>
             <Card size="small" title={svc.label} bordered={false} style={{ borderRadius: 12 }}>
               <Space>{health !== null && statusIcon(!!svc.ok)}<span>{svc.ok ? t('admin.connected') : t('admin.disconnected')}</span></Space>
-              {health && <div style={{ color: '#999', fontSize: 12, marginTop: 8 }}>{t('admin.lastCheck')}: {dayjs(health.lastCheckAt).format('YYYY-MM-DD HH:mm:ss')}</div>}
+              {health && <div style={{ color: '#999', fontSize: 12, marginTop: 8 }}>{t('admin.lastCheck')}: {formatInTimezone(health.lastCheckAt, timezone, 'YYYY-MM-DD HH:mm:ss')}</div>}
             </Card>
           </Col>
         ))}
@@ -118,19 +122,73 @@ const SettingsTab: React.FC = () => {
   })
 
   return (
-    <Card title={t('admin.systemConfig')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading} extra={
-      <Tooltip title="前往 Grafana 监控大盘"><Button icon={<DashboardOutlined />} href="/grafana" target="_blank">Grafana</Button></Tooltip>
-    }>
-      <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-        <Form.Item name="siteName" label={t('admin.siteName')}><Input placeholder="请输入站点名称" /></Form.Item>
-        <Form.Item name="mqttBrokerUrl" label={t('admin.mqttBroker')}><Input placeholder="mqtt://localhost:1883" /></Form.Item>
-        <Form.Item name="dataRetentionDays" label={t('admin.dataRetention')}><InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="30" /></Form.Item>
-        <Form.Item name="enableAutoUpgrade" label={t('admin.autoUpgrade')} valuePropName="checked"><Switch /></Form.Item>
-        <Form.Item name="alertRetentionDays" label={t('admin.alertRetention')}><InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="90" /></Form.Item>
-        <Form.Item name="maxLoginAttempts" label={t('admin.maxLoginAttempts')}><InputNumber min={1} max={10} style={{ width: '100%' }} placeholder="5" /></Form.Item>
-        <Form.Item><Button type="primary" onClick={async () => { try { const v = await form.validateFields(); saveMutation.mutate(v) } catch {} }} loading={saveMutation.isPending}>{t('admin.saveConfig')}</Button></Form.Item>
-      </Form>
-    </Card>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card title={t('admin.basicSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Form.Item name="site_name" label={t('admin.siteName')}><Input placeholder="CSERGY 光伏监控平台" /></Form.Item>
+        </Form>
+      </Card>
+
+      <Card title={t('admin.emailSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Row gutter={16}>
+            <Col span={16}><Form.Item name="email_host" label={t('admin.smtpServer')}><Input placeholder="smtp.qq.com" /></Form.Item></Col>
+            <Col span={8}><Form.Item name="email_port" label={t('admin.smtpPort')}><InputNumber placeholder="465" style={{ width: '100%' }} /></Form.Item></Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="email_username" label={t('admin.emailUsername')}><Input placeholder="your@email.com" /></Form.Item></Col>
+            <Col span={12}><Form.Item name="email_password" label={t('admin.emailPassword')}><Input.Password placeholder={t('admin.emailPasswordPlaceholder')} /></Form.Item></Col>
+          </Row>
+          <Form.Item name="email_from" label={t('admin.emailFrom')}><Input placeholder="your@email.com" /></Form.Item>
+          <Form.Item name="email_use_ssl" label={t('admin.enableSSL')} valuePropName="checked"><Switch /></Form.Item>
+        </Form>
+      </Card>
+
+      <Card title={t('admin.mqttSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Row gutter={16}>
+            <Col span={16}><Form.Item name="mqtt_broker" label={t('admin.mqttBroker')}><Input placeholder="jiuxiaoyw.online" /></Form.Item></Col>
+            <Col span={8}><Form.Item name="mqtt_port" label={t('admin.mqttPort')}><Input placeholder="8883" /></Form.Item></Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="mqtt_username" label={t('admin.mqttUsername')}><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="mqtt_password" label={t('admin.mqttPassword')}><Input.Password /></Form.Item></Col>
+          </Row>
+          <Form.Item name="mqtt_tls_insecure" label={t('admin.mqttTLSInsecure')} valuePropName="checked"><Switch /></Form.Item>
+        </Form>
+      </Card>
+
+      <Card title={t('admin.smsSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="sms_access_key" label="Access Key"><Input.Password /></Form.Item></Col>
+            <Col span={12}><Form.Item name="sms_secret_key" label="Secret Key"><Input.Password /></Form.Item></Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="sms_sign_name" label={t('admin.smsSignName')}><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="sms_template" label={t('admin.smsTemplate')}><Input /></Form.Item></Col>
+          </Row>
+        </Form>
+      </Card>
+
+      <Card title={t('admin.dataSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Row gutter={16}>
+            <Col span={8}><Form.Item name="data_retention_days" label={t('admin.dataRetention')}><InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="30" /></Form.Item></Col>
+            <Col span={8}><Form.Item name="alert_retention_days" label={t('admin.alertRetention')}><InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="90" /></Form.Item></Col>
+            <Col span={8}><Form.Item name="max_login_attempts" label={t('admin.maxLoginAttempts')}><InputNumber min={1} max={10} style={{ width: '100%' }} placeholder="5" /></Form.Item></Col>
+          </Row>
+          <Form.Item name="enable_auto_upgrade" label={t('admin.autoUpgrade')} valuePropName="checked"><Switch /></Form.Item>
+        </Form>
+      </Card>
+
+      <Button type="primary" size="large" onClick={async () => {
+        try {
+          const v = await form.validateFields()
+          saveMutation.mutate(v)
+        } catch {}
+      }} loading={saveMutation.isPending}>{t('admin.saveConfig')}</Button>
+    </div>
   )
 }
 
@@ -138,6 +196,7 @@ const TenantTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { timezone } = useTimezoneStore()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [createOpen, setCreateOpen] = useState(false)
@@ -182,7 +241,7 @@ const TenantTab: React.FC = () => {
     { title: t('admin.tenantStatus'), dataIndex: 'status', key: 'status', width: 80, render: (s: number) => s === 1 ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag color="red">{t('common.disabled')}</Tag> },
     { title: t('admin.subUsers'), dataIndex: 'subUserCount', key: 'subUserCount', width: 80, render: (c: number, r: Tenant) => <span>{c}{r.userLimit ? ` / ${r.userLimit}` : ''}</span> },
     { title: t('admin.tenantDevices'), dataIndex: 'deviceCount', key: 'deviceCount', width: 80, render: (c: number, r: Tenant) => <span>{c}{r.deviceLimit ? ` / ${r.deviceLimit}` : ''}</span> },
-    { title: t('common.createdAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm:ss') },
+    { title: t('common.createdAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.actions'), key: 'actions', width: 180,
       render: (_: unknown, record: Tenant) => (
@@ -402,6 +461,130 @@ const PermissionTab: React.FC = () => {
           </Row>
         </Spin>
       )}
+    </div>
+  )
+}
+
+const APIOverviewTab: React.FC<{ onNavigateToPermissions?: () => void }> = ({ onNavigateToPermissions }) => {
+  const { t } = useTranslation()
+  const [searchText, setSearchText] = useState('')
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'route-groups'],
+    queryFn: () => adminApi.getRouteGroups().then((r) => r.data?.data ?? r.data),
+  })
+
+  const groups = (data as any)?.groups ?? []
+
+  const groupColors: Record<string, string> = {
+    public: '#52c41a',
+    user: '#1677ff',
+    admin: '#ff4d4f',
+  }
+  const groupLabels: Record<string, string> = {
+    public: t('admin.publicGroup'),
+    user: t('admin.userGroup'),
+    admin: t('admin.adminGroup'),
+  }
+
+  const filterRoutes = (routes: any[]) => {
+    if (!searchText.trim()) return routes
+    const keyword = searchText.toLowerCase()
+    return routes.filter((r: any) =>
+      r.path.toLowerCase().includes(keyword) ||
+      r.description.toLowerCase().includes(keyword)
+    )
+  }
+
+  return (
+    <div>
+      <Card size="small" bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
+        <Row justify="space-between" align="middle">
+          <Col>
+            <Title level={5} style={{ margin: 0 }}>{t('admin.apiOverview')}</Title>
+          </Col>
+          <Col>
+            <Input.Search
+              placeholder={t('admin.searchApi')}
+              allowClear
+              style={{ width: 300 }}
+              onSearch={setSearchText}
+              onChange={(e) => !e.target.value && setSearchText('')}
+            />
+          </Col>
+        </Row>
+      </Card>
+      <Spin spinning={isLoading}>
+        <Row gutter={[16, 16]}>
+          {groups.map((group: any) => {
+            const filteredRoutes = filterRoutes(group.routes ?? [])
+            return (
+              <Col xs={24} md={8} key={group.name}>
+                <Card
+                  title={
+                    <Space>
+                      <Tag color={groupColors[group.name]} style={{ fontWeight: 600 }}>
+                        {groupLabels[group.name] ?? group.name}
+                      </Tag>
+                      <Text type="secondary" style={{ fontSize: 12 }}>{group.description}</Text>
+                    </Space>
+                  }
+                  size="small"
+                  bordered={false}
+                  style={{ borderRadius: 12 }}
+                >
+                  <div style={{ marginBottom: 8 }}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('admin.routeCount')}: {filteredRoutes.length}
+                    </Text>
+                  </div>
+                  {filteredRoutes.map((route: any, idx: number) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: '6px 8px',
+                        marginBottom: 4,
+                        borderRadius: 6,
+                        background: '#fafafa',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <Tag
+                        color={groupColors[group.name]}
+                        style={{ fontSize: 10, lineHeight: '16px', minWidth: 36, textAlign: 'center' }}
+                      >
+                        {route.method}
+                      </Tag>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 500, wordBreak: 'break-all' }}>
+                          {route.path}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#999' }}>{route.description}</div>
+                      </div>
+                      <Tag style={{ fontSize: 10 }}>{route.backend}</Tag>
+                      {group.name === 'admin' && onNavigateToPermissions && (
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ fontSize: 11, padding: '0 4px' }}
+                          onClick={() => onNavigateToPermissions()}
+                        >
+                          {t('admin.viewPermissions') || '查看权限'}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  {filteredRoutes.length === 0 && (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('admin.noMatchingRoutes')} />
+                  )}
+                </Card>
+              </Col>
+            )
+          })}
+        </Row>
+      </Spin>
     </div>
   )
 }

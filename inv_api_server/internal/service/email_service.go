@@ -17,12 +17,13 @@ import (
 )
 
 type EmailService struct {
-	cache *redis.Client
-	cfg   config.EmailConfig
+	cache  *redis.Client
+	cfg    config.EmailConfig
+	cfgSvc *ConfigService
 }
 
-func NewEmailService(cache *redis.Client, cfg config.EmailConfig) *EmailService {
-	return &EmailService{cache: cache, cfg: cfg}
+func NewEmailService(cache *redis.Client, cfg config.EmailConfig, cfgSvc *ConfigService) *EmailService {
+	return &EmailService{cache: cache, cfg: cfg, cfgSvc: cfgSvc}
 }
 
 func (s *EmailService) SendCode(ctx context.Context, email, codeType string) error {
@@ -41,8 +42,13 @@ func (s *EmailService) SendCode(ctx context.Context, email, codeType string) err
 
 	code := generateEmailCode(6)
 
-	if s.cfg.Host != "" && s.cfg.Host != "smtp.example.com" {
-		if err := s.sendMail(email, code, codeType); err != nil {
+	emailCfg := s.cfg
+	if s.cfgSvc != nil {
+		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
+	}
+
+	if emailCfg.Host != "" && emailCfg.Host != "smtp.example.com" {
+		if err := s.sendMail(email, code, codeType, emailCfg); err != nil {
 			return fmt.Errorf("邮件发送失败: %v", err)
 		}
 	} else {
@@ -85,9 +91,9 @@ func (s *EmailService) VerifyCode(ctx context.Context, email, code, codeType str
 	return false
 }
 
-func (s *EmailService) sendMail(to, code, codeType string) error {
+func (s *EmailService) sendMail(to, code, codeType string, cfg config.EmailConfig) error {
 	m := gomail.NewMessage()
-	m.SetHeader("From", s.cfg.From)
+	m.SetHeader("From", cfg.From)
 	m.SetHeader("To", to)
 
 	subject := "验证码"
@@ -188,12 +194,12 @@ func (s *EmailService) sendMail(to, code, codeType string) error {
 </html>
 `, subject, code))
 
-	d := gomail.NewDialer(s.cfg.Host, s.cfg.Port, s.cfg.Username, s.cfg.Password)
-	if s.cfg.UseSSL {
+	d := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
+	if cfg.UseSSL {
 		d.SSL = true
 		d.TLSConfig = &tls.Config{
-			ServerName:         s.cfg.Host,
-			InsecureSkipVerify: s.cfg.TLSInsecure,
+			ServerName:         cfg.Host,
+			InsecureSkipVerify: cfg.TLSInsecure,
 		}
 	}
 

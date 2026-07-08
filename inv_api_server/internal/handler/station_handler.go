@@ -15,19 +15,22 @@ import (
 	"inv-api-server/pkg/timezone"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type StationHandler struct {
 	stationService *service.StationService
 	deviceService  *service.DeviceService
 	userService    *service.UserService
+	db             *pgxpool.Pool
 }
 
-func NewStationHandler(stationService *service.StationService, deviceService *service.DeviceService, userService *service.UserService) *StationHandler {
+func NewStationHandler(stationService *service.StationService, deviceService *service.DeviceService, userService *service.UserService, db *pgxpool.Pool) *StationHandler {
 	return &StationHandler{
 		stationService: stationService,
 		deviceService:  deviceService,
 		userService:    userService,
+		db:             db,
 	}
 }
 
@@ -409,10 +412,10 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 		}
 	}
 
-	_, totalPower, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), stationID)
-	dailyEnergy, _ := h.deviceService.GetStationTodayEnergy(c.Request.Context(), stationID)
-	totalEnergy, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), stationID)
-	yearEnergy := h.deviceService.GetStationYearEnergy(c.Request.Context(), stationID)
+	_, totalPower, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), stationID, station.Timezone)
+	dailyEnergy, _ := h.deviceService.GetStationTodayEnergy(c.Request.Context(), stationID, station.Timezone)
+	totalEnergy, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), stationID, station.Timezone)
+	yearEnergy := h.deviceService.GetStationYearEnergy(c.Request.Context(), stationID, station.Timezone)
 
 	pvPower, loadPower, gridPower, battPower, battSoc := h.deviceService.GetStationPowerBreakdown(c.Request.Context(), stationID)
 
@@ -507,8 +510,8 @@ func (h *StationHandler) List(c *gin.Context) {
 			}
 		}
 
-		todayEnergy, _ := h.deviceService.GetStationTodayEnergy(ctx, st.ID)
-		totalEnergy, _ := h.deviceService.GetStationEnergySummary(ctx, st.ID)
+		todayEnergy, _ := h.deviceService.GetStationTodayEnergy(ctx, st.ID, st.Timezone)
+		totalEnergy, _ := h.deviceService.GetStationEnergySummary(ctx, st.ID, st.Timezone)
 
 		item := map[string]interface{}{
 			"id":                 st.ID,
@@ -602,17 +605,17 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 			}
 		}
 
-		_, tp, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), station.ID)
+		_, tp, _ := h.deviceService.GetStationRealtimeSummary(c.Request.Context(), station.ID, station.Timezone)
 		totalPower = tp
 
-		dailyEnergy, _ := h.deviceService.GetStationTodayEnergy(c.Request.Context(), station.ID)
-		todayData, _ := h.stationService.GetDayData(c.Request.Context(), station.ID, time.Now().Format("2006-01-02"))
+		dailyEnergy, _ := h.deviceService.GetStationTodayEnergy(c.Request.Context(), station.ID, station.Timezone)
+		todayData, _ := h.stationService.GetDayData(c.Request.Context(), station.ID, timezone.TodayInTimezone(station.Timezone))
 		todayIncome := 0.0
 		if todayData != nil {
 			todayIncome = todayData.Income
 		}
 
-		stationTotal, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), station.ID)
+		stationTotal, monthEnergy := h.deviceService.GetStationEnergySummary(c.Request.Context(), station.ID, station.Timezone)
 
 		summaries = append(summaries, StationSummary{
 			StationID:   station.ID,
@@ -695,11 +698,12 @@ func (h *StationHandler) GetStatistics(c *gin.Context) {
 	endDate := c.Query("end_date")
 	period := c.DefaultQuery("period", "day")
 
+	tz := station.Timezone
 	if startDate == "" {
-		startDate = time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+		startDate = timezone.NowInTimezone(tz).AddDate(0, 0, -7).Format("2006-01-02")
 	}
 	if endDate == "" {
-		endDate = time.Now().Format("2006-01-02")
+		endDate = timezone.TodayInTimezone(tz)
 	}
 
 	data, err := h.stationService.GetStatistics(c.Request.Context(), stationID, startDate, endDate, period)

@@ -133,7 +133,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		smsProvider = &service.MockSMSProvider{}
 	}
 	smsService := service.NewSMSService(rdb, smsProvider)
-	emailService := service.NewEmailService(rdb, cfg.Email)
+	configService := service.NewConfigService(db, rdb, *cfg)
+	emailService := service.NewEmailService(rdb, cfg.Email, configService)
 	stationService := service.NewStationService(stationRepo)
 	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
 	alarmService := service.NewAlarmService(alarmRepo)
@@ -146,15 +147,15 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	captchaHandler := handler.NewCaptchaHandler(rdb)
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache, captchaHandler)
-	stationHandler := handler.NewStationHandler(stationService, deviceService, userService)
+	stationHandler := handler.NewStationHandler(stationService, deviceService, userService, db)
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
-	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService)
+	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService, db)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
 	notificationHandler := handler.NewNotificationHandler(db)
 	wsHandler := handler.NewWSHandler(rdb, jwtService)
 	modelHandler := handler.NewModelHandler(modelService)
-	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb)
-	otaHandler := handler.NewOTAHandler(otaService)
+	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
+	otaHandler := handler.NewOTAHandler(otaService, db)
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
 	alertRuleHandler := handler.NewAlertRuleHandler()
 	workOrderHandler := handler.NewWorkOrderHandler()
@@ -779,6 +780,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		{
 			usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
 			usersGroup.GET("/:id", deps.AdminHandler.GetUser)
+			usersGroup.PATCH("/:id", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUser)
 			usersGroup.GET("/:id/children", deps.AdminHandler.GetUserChildren)
 			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)

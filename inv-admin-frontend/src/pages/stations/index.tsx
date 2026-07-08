@@ -21,6 +21,7 @@ import { Role } from '@/types'
 import { ALARM_LEVEL_MAP, DEVICE_STATUS_MAP, getAlarmLevelDisplay } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone, TIMEZONE_LIST, getTimezoneLabel } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import useLocaleStore from '@/stores/localeStore'
 
@@ -115,6 +116,7 @@ const StationsPage: React.FC = () => {
 
   const { t } = useTranslation()
   const { lang } = useLocaleStore()
+  const { timezone } = useTimezoneStore()
   const isAdmin = user && (user.role === Role.SUPER_ADMIN || user.role === Role.AGENT)
 
   /* ---------- 详情抽屉 ---------- */
@@ -453,7 +455,7 @@ const StationsPage: React.FC = () => {
       title: t('station.createDate'),
       dataIndex: 'created_at',
       width: 110,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD') : '-',
     },
     ...(isAdmin ? [
       {
@@ -603,7 +605,7 @@ const StationsPage: React.FC = () => {
       width: 160,
       render: (v: string, r: AlarmItem) => {
         const time = v || r.created_at
-        return time ? dayjs(time).format('YYYY-MM-DD HH:mm:ss') : '-'
+        return time ? formatInTimezone(time, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'
       },
     },
     { title: t('common.deviceSN'), dataIndex: 'device_sn', width: 160 },
@@ -690,11 +692,11 @@ const StationsPage: React.FC = () => {
           <Descriptions.Item label={t('station.contact')}>{station.contact_name || '-'}</Descriptions.Item>
           <Descriptions.Item label={t('station.contactPhone')}>{station.contact_phone || '-'}</Descriptions.Item>
           <Descriptions.Item label={t('station.installDate')}>
-            {station.install_date ? dayjs(station.install_date).format('YYYY-MM-DD') : '-'}
+            {station.install_date ? formatInTimezone(station.install_date, timezone, 'YYYY-MM-DD') : '-'}
           </Descriptions.Item>
           <Descriptions.Item label={t('station.timezone')}>{getTimezoneLabel(station.timezone || 'Asia/Shanghai', lang)}</Descriptions.Item>
           <Descriptions.Item label={t('common.createdAt')}>
-            {formatInTimezone(station.created_at, station.timezone)}
+            {formatInTimezone(station.created_at, timezone)}
           </Descriptions.Item>
         </Descriptions>
       </>

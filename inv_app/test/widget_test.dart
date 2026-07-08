@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  testWidgets('Basic widget test', (WidgetTester tester) async {
+  testWidgets('App smoke test', (WidgetTester tester) async {
+    // Simple smoke test that verifies basic widget creation
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
         home: Scaffold(
           body: Center(
-            child: Text('Hello Test'),
+            child: Text('Test'),
           ),
         ),
       ),
     );
 
-    expect(find.text('Hello Test'), findsOneWidget);
+    expect(find.byType(MaterialApp), findsOneWidget);
+    expect(find.text('Test'), findsOneWidget);
   });
 }
