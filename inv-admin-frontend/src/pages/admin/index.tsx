@@ -13,6 +13,8 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { adminApi, type SystemHealth, type Tenant } from '@/services/adminApi'
 import useAuthStore from '@/stores/authStore'
+import useTimezoneStore from '@/stores/timezoneStore'
+import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
 import { Role } from '@/types'
 import { queryKeys } from '@/utils/queryKeys'
@@ -66,6 +68,7 @@ const AdminPage: React.FC = () => {
 const HealthTab: React.FC = () => {
   const { t } = useTranslation()
   const { message } = App.useApp()
+  const { timezone } = useTimezoneStore()
   const { data: health, isLoading, refetch } = useQuery({
     queryKey: queryKeys.admin.health(),
     queryFn: () => adminApi.getSystemHealth().then((r) => r.data?.data ?? null as SystemHealth | null),
@@ -89,7 +92,7 @@ const HealthTab: React.FC = () => {
           <Col span={8} key={svc.label}>
             <Card size="small" title={svc.label} bordered={false} style={{ borderRadius: 12 }}>
               <Space>{health !== null && statusIcon(!!svc.ok)}<span>{svc.ok ? t('admin.connected') : t('admin.disconnected')}</span></Space>
-              {health && <div style={{ color: '#999', fontSize: 12, marginTop: 8 }}>{t('admin.lastCheck')}: {dayjs(health.lastCheckAt).format('YYYY-MM-DD HH:mm:ss')}</div>}
+              {health && <div style={{ color: '#999', fontSize: 12, marginTop: 8 }}>{t('admin.lastCheck')}: {formatInTimezone(health.lastCheckAt, timezone, 'YYYY-MM-DD HH:mm:ss')}</div>}
             </Card>
           </Col>
         ))}
@@ -193,6 +196,7 @@ const TenantTab: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { timezone } = useTimezoneStore()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [createOpen, setCreateOpen] = useState(false)
@@ -237,7 +241,7 @@ const TenantTab: React.FC = () => {
     { title: t('admin.tenantStatus'), dataIndex: 'status', key: 'status', width: 80, render: (s: number) => s === 1 ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag color="red">{t('common.disabled')}</Tag> },
     { title: t('admin.subUsers'), dataIndex: 'subUserCount', key: 'subUserCount', width: 80, render: (c: number, r: Tenant) => <span>{c}{r.userLimit ? ` / ${r.userLimit}` : ''}</span> },
     { title: t('admin.tenantDevices'), dataIndex: 'deviceCount', key: 'deviceCount', width: 80, render: (c: number, r: Tenant) => <span>{c}{r.deviceLimit ? ` / ${r.deviceLimit}` : ''}</span> },
-    { title: t('common.createdAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm:ss') },
+    { title: t('common.createdAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.actions'), key: 'actions', width: 180,
       render: (_: unknown, record: Tenant) => (

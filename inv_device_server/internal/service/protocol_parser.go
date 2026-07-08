@@ -700,6 +700,16 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 		rt = make(map[string]interface{})
 	}
 
+	// ── 时间戳保护：防止离线补发的旧数据覆盖 Redis 中的新数据 ──
+	// 从 incoming payload 提取设备时间戳（Unix 秒）
+	incomingTimestamp := extractUnixTimestamp(payload, "timestamp")
+	// 从已缓存数据中提取上次写入的设备时间戳（_timestamp 由本方法写入顶层）
+	cachedTimestamp := extractUnixTimestamp(rt, "_timestamp")
+	// 仅当新数据不比缓存旧时才执行写入
+	if incomingTimestamp < cachedTimestamp {
+		return nil
+	}
+
 	// 将 payload 存入嵌套对象（只存原始字段，不添加带前缀的重复字段）
 	if topicCategory != "" {
 		existingNested := make(map[string]interface{})
@@ -728,6 +738,8 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 	rt["_sn"] = sn
 	rt["_msg_type"] = msgType
 	rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+	// 记录设备时间戳（Unix 秒），用于下次写入时做时间戳保护比较
+	rt["_timestamp"] = incomingTimestamp
 
 	mergedBytes, _ := json.Marshal(rt)
 	pipe.Set(ctx, cacheKey, mergedBytes, 600*time.Second)
@@ -738,7 +750,7 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 		validCacheKey := "realtime:last_valid:" + sn
 		rt["_sn"] = sn
 		rt["_msg_type"] = msgType
-		rt["_updated_at"] = time.Now().Format(time.RFC3339)
+		rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 		validMergedBytes, _ := json.Marshal(rt)
 		// 有效数据缓存7天过期
 		pipe.Set(ctx, validCacheKey, validMergedBytes, 7*24*time.Hour)
@@ -862,5 +874,25 @@ func (p *ProtocolParser) getTopicCategory(msgType string) string {
 		return "meter"
 	default:
 		return ""
+	}
+}
+
+// extractUnixTimestamp 从 map 中提取指定 key 的 Unix 时间戳（int64 秒）。
+// 兼容 JSON 反序列化后的 float64、原生 int64 以及 json.Number 类型。
+func extractUnixTimestamp(m map[string]interface{}, key string) int64 {
+	v, ok := m[key]
+	if !ok {
+		return 0
+	}
+	switch val := v.(type) {
+	case float64:
+		return int64(val)
+	case int64:
+		return val
+	case json.Number:
+		n, _ := val.Int64()
+		return n
+	default:
+		return 0
 	}
 }

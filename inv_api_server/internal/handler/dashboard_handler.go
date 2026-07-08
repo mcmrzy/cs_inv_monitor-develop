@@ -39,10 +39,10 @@ func (h *DashboardHandler) isSuperAdmin(ctx context.Context, userID int64) bool 
 	return role == 0
 }
 
-// getUserTimezone 获取用户账号的时区配置
-func (h *DashboardHandler) getUserTimezone(ctx context.Context, userID int64) string {
+// getUserTimezone 获取用户账号的时区配置（包级共享函数）
+func getUserTimezone(ctx context.Context, db *pgxpool.Pool, userID int64) string {
 	var tz string
-	h.db.QueryRow(ctx, "SELECT COALESCE(timezone, '') FROM users WHERE id = $1", userID).Scan(&tz)
+	db.QueryRow(ctx, "SELECT COALESCE(timezone, '') FROM users WHERE id = $1", userID).Scan(&tz)
 	if tz == "" {
 		return timezone.AsiaShanghai
 	}
@@ -56,6 +56,7 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
 	isAdmin := h.isSuperAdmin(ctx, userID)
+	tz := getUserTimezone(ctx, h.db, userID)
 
 	type DeviceStats struct {
 		Total   int64 `json:"total"`
@@ -125,7 +126,9 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 	}
 
 	if len(deviceSNs) > 0 {
-		today := time.Now().Format("2006-01-02")
+		todayStr := timezone.TodayInTimezone(tz)
+		todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
+		todayEnd := todayStart.AddDate(0, 0, 1)
 
 		var todayQuery string
 		var todayArgs []interface{}
@@ -139,9 +142,9 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 					daily_energy
 				)), 0)
 				FROM device_telemetry
-				WHERE device_sn = ANY($1) AND time::date = $2 AND topic = 'data/energy'
+				WHERE device_sn = ANY($1) AND time >= $2 AND time < $3 AND topic = 'data/energy'
 			`
-			todayArgs = append(todayArgs, deviceSNs, today)
+			todayArgs = append(todayArgs, deviceSNs, todayStart, todayEnd)
 		} else {
 			todayQuery = `
 				SELECT COALESCE(MAX(COALESCE(
@@ -152,9 +155,9 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 					dt.daily_energy
 				)), 0)
 				FROM device_telemetry dt JOIN devices d ON d.sn = dt.device_sn
-				WHERE dt.device_sn = ANY($1) AND dt.time::date = $2 AND dt.topic = 'data/energy' AND d.user_id = $3
+				WHERE dt.device_sn = ANY($1) AND dt.time >= $2 AND dt.time < $3 AND dt.topic = 'data/energy' AND d.user_id = $4
 			`
-			todayArgs = append(todayArgs, deviceSNs, today, userID)
+			todayArgs = append(todayArgs, deviceSNs, todayStart, todayEnd, userID)
 		}
 		h.db.QueryRow(ctx, todayQuery, todayArgs...).Scan(&todayEnergy)
 
@@ -279,11 +282,12 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
 	isAdmin := h.isSuperAdmin(ctx, userID)
+	tz := getUserTimezone(ctx, h.db, userID)
 
 	trendType := c.DefaultQuery("type", "day")
 
 	var startDate, endDate string
-	now := time.Now()
+	now := timezone.NowInTimezone(tz)
 
 	switch trendType {
 	case "day":
@@ -527,6 +531,7 @@ func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
 	isAdmin := h.isSuperAdmin(ctx, userID)
+	tz := getUserTimezone(ctx, h.db, userID)
 
 	statType := c.DefaultQuery("type", "day")
 	stationIDStr := c.Query("stationId")
@@ -543,7 +548,7 @@ func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 		daysBack = 7
 	}
 
-	now := time.Now()
+	now := timezone.NowInTimezone(tz)
 	startDate := now.AddDate(0, 0, -daysBack).Format("2006-01-02")
 	endDate := now.Format("2006-01-02")
 
@@ -677,6 +682,7 @@ func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
 	isAdmin := h.isSuperAdmin(ctx, userID)
+	tz := getUserTimezone(ctx, h.db, userID)
 
 	period := c.DefaultQuery("period", "today")
 	limitStr := c.DefaultQuery("limit", "10")
@@ -688,7 +694,7 @@ func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 		limit = 100
 	}
 
-	now := time.Now()
+	now := timezone.NowInTimezone(tz)
 	var startDate string
 	switch period {
 	case "today":
@@ -773,8 +779,9 @@ func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
+	tz := getUserTimezone(ctx, h.db, userID)
 
-	dateStr := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+	dateStr := c.DefaultQuery("date", timezone.TodayInTimezone(tz))
 	targetDate, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid date format, use YYYY-MM-DD"))
@@ -782,8 +789,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	}
 
 	// 数据库存的是UTC，将本地日期转为UTC范围
-	// 本地 2026-06-24 00:00 (Asia/Shanghai) = UTC 2026-06-23 16:00
-	loc := timezone.LoadLocation("Asia/Shanghai")
+	loc := timezone.LoadLocation(tz)
 	localDate := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, loc)
 	startUTC := localDate.UTC().Format("2006-01-02 15:04:05")
 	endUTC := localDate.AddDate(0, 0, 1).UTC().Format("2006-01-02 15:04:05")
@@ -802,7 +808,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var pvArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		pvQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Shanghai', 'HH24:MI') as time_slot,
+			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $3, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -810,10 +816,10 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		pvArgs = append(pvArgs, startUTC, endUTC)
+		pvArgs = append(pvArgs, startUTC, endUTC, tz)
 	} else {
 		pvQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Shanghai', 'HH24:MI') as time_slot,
+			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $4, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -821,7 +827,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		pvArgs = append(pvArgs, userID, startUTC, endUTC)
+		pvArgs = append(pvArgs, userID, startUTC, endUTC, tz)
 	}
 
 	// 查询电池功率
@@ -829,7 +835,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var battArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		battQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Shanghai', 'HH24:MI') as time_slot,
+			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $3, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -837,10 +843,10 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		battArgs = append(battArgs, startUTC, endUTC)
+		battArgs = append(battArgs, startUTC, endUTC, tz)
 	} else {
 		battQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Shanghai', 'HH24:MI') as time_slot,
+			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $4, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -848,7 +854,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		battArgs = append(battArgs, userID, startUTC, endUTC)
+		battArgs = append(battArgs, userID, startUTC, endUTC, tz)
 	}
 
 	// 查询负载功率
@@ -856,7 +862,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var loadArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		loadQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Shanghai', 'HH24:MI') as time_slot,
+			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $3, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -864,10 +870,10 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		loadArgs = append(loadArgs, startUTC, endUTC)
+		loadArgs = append(loadArgs, startUTC, endUTC, tz)
 	} else {
 		loadQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Shanghai', 'HH24:MI') as time_slot,
+			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $4, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -875,7 +881,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		loadArgs = append(loadArgs, userID, startUTC, endUTC)
+		loadArgs = append(loadArgs, userID, startUTC, endUTC, tz)
 	}
 
 	// 收集所有时间点

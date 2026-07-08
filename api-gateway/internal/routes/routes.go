@@ -73,7 +73,7 @@ func registerGatewayEndpoints(r *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "ok",
 			"service": "api-gateway",
-			"time":    time.Now().Format(time.RFC3339),
+			"time":    time.Now().UTC().Format(time.RFC3339),
 		})
 	})
 

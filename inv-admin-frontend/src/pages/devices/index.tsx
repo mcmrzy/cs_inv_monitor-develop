@@ -27,6 +27,7 @@ import useTranslation from '@/hooks/useTranslation'
 import StatusBadge from '@/components/StatusBadge'
 import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -158,6 +159,7 @@ const LIFECYCLE_EVENT_COLORS: Record<string, string> = {
 const DevicesPage: React.FC = () => {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { timezone } = useTimezoneStore()
 
   const COMMAND_CATEGORY_LABELS: Record<string, string> = {
     power: t('dev.powerControl'),
@@ -814,7 +816,7 @@ const DevicesPage: React.FC = () => {
       dataIndex: 'created_at',
       key: 'created_at',
       width: 170,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('common.actions'),
@@ -1089,7 +1091,7 @@ const DevicesPage: React.FC = () => {
   const telemetryOption = useMemo(() => {
     if (!telemetryData || telemetryData.length === 0) return {}
     const times = telemetryData.map((item: any) =>
-      dayjs(item.timestamp ?? item.time).format('MM-DD HH:mm'),
+      formatInTimezone(item.timestamp ?? item.time, timezone, 'MM-DD HH:mm'),
     )
     const powers = telemetryData.map((item: any) => item.ac_power ?? item.power ?? item.acPower ?? 0)
     const voltages = telemetryData.map((item: any) => item.ac_voltage ?? item.voltage ?? item.acVoltage ?? 0)
@@ -1289,7 +1291,7 @@ const DevicesPage: React.FC = () => {
                   {LIFECYCLE_EVENT_LABELS[event.event_type] || event.event_type}
                 </Tag>
                 <Text style={{ fontSize: 12, color: '#999' }}>
-                  {dayjs(event.created_at).format('YYYY-MM-DD HH:mm:ss')}
+                  {formatInTimezone(event.created_at, timezone, 'YYYY-MM-DD HH:mm:ss')}
                 </Text>
               </div>
               <Text>{event.description}</Text>
@@ -1648,7 +1650,7 @@ const DevicesPage: React.FC = () => {
                           </Tag>
                         </Space>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          {dayjs(item.created_at).format('MM-DD HH:mm:ss')}
+                          {formatInTimezone(item.created_at, timezone, 'MM-DD HH:mm:ss')}
                         </Text>
                       </div>
                       {item.params && Object.keys(item.params).length > 0 && (

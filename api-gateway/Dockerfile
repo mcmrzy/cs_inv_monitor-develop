@@ -23,7 +23,7 @@ FROM docker.m.daocloud.io/library/alpine:3.19
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
     apk --no-cache add ca-certificates tzdata
 
-ENV TZ=Asia/Shanghai
+ENV TZ=UTC
 
 RUN adduser -D -g '' appuser
 

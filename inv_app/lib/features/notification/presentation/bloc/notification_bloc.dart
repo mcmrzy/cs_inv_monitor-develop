@@ -55,7 +55,7 @@ class SystemNotification {
       type: SystemNotificationType.values[json['type'] as int],
       title: json['title'] as String,
       subtitle: json['subtitle'] as String,
-      timestamp: DateTime.parse(json['timestamp'] as String),
+      timestamp: DateTime.parse(json['timestamp'] as String).toLocal(),
       deviceSn: json['deviceSn'] as String?,
     );
   }
@@ -90,7 +90,7 @@ class SystemNotification {
       title: json['title'] as String? ?? '',
       subtitle: json['content'] as String? ?? '',
       timestamp: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.parse(json['created_at'] as String).toLocal()
           : DateTime.now(),
       deviceSn: json['device_sn'] as String?,
       fromBackend: true,

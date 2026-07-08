@@ -106,7 +106,7 @@ func (c *Config) RedisAddr() string {
 }
 
 func (c *Config) DatabaseDSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable&timezone=UTC",
 		c.Database.User, c.Database.Password, c.Database.Host, c.Database.Port, c.Database.Name)
 }
 
