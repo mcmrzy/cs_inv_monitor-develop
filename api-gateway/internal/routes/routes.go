@@ -143,6 +143,10 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 func registerDeviceRoutes(userGroup *gin.RouterGroup, p *proxy.ReverseProxy) {
 	userGroup.Any("/api/v1/device/*action", p.Handler())
 	userGroup.Any("/api/v1/stats/*action", p.Handler())
+	userGroup.Any("/api/v1/parallel/*action", p.Handler())
+	userGroup.Any("/api/v1/parallel-groups/*action", p.Handler())
+	userGroup.Any("/api/v1/parallel-groups", p.Handler())
+	userGroup.Any("/api/v1/parallel", p.Handler())
 }
 
 func registerFallback(r *gin.Engine) {
@@ -289,6 +293,8 @@ func buildRouteGroups() map[string][]RouteGroup {
 					{Path: "/api/v1/ota/*", Method: "ALL", Description: "OTA升级（含APP端）", Backend: "api-server"},
 					{Path: "/api/v1/firmwares", Method: "ALL", Description: "固件管理（别名，重写到 /api/v1/ota/firmware）", Backend: "api-server"},
 					{Path: "/api/v1/work-orders", Method: "ALL", Description: "工单管理", Backend: "api-server"},
+					{Path: "/api/v1/parallel", Method: "ALL", Description: "并机配置", Backend: "device-server"},
+					{Path: "/api/v1/parallel-groups", Method: "ALL", Description: "并机配置（别名）", Backend: "device-server"},
 					{Path: "/api/v1/device/*", Method: "ALL", Description: "设备服务", Backend: "device-server"},
 					{Path: "/api/v1/stats/*", Method: "ALL", Description: "统计数据", Backend: "device-server"},
 				},

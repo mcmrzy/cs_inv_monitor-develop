@@ -75,7 +75,7 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
-	expanded := expandEnv(string(data))
+	expanded := os.ExpandEnv(string(data))
 
 	cfg := &Config{}
 	cfg.Server.Port = 8080
@@ -99,20 +99,6 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 	return cfg, nil
-}
-
-// expandEnv 展开环境变量，支持 ${VAR:-default} 默认值语法。
-// 标准库 os.ExpandEnv 不识别 :- 语法，因此使用 os.Expand + 自定义映射。
-func expandEnv(s string) string {
-	return os.Expand(s, func(key string) string {
-		if i := strings.Index(key, ":-"); i >= 0 {
-			if v, ok := os.LookupEnv(key[:i]); ok {
-				return v
-			}
-			return key[i+2:]
-		}
-		return os.Getenv(key)
-	})
 }
 
 func (c *Config) RedisAddr() string {
