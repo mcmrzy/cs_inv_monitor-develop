@@ -392,8 +392,11 @@ class BleProvisioningService {
 
   /// 处理状态更新
   void _handleStatusUpdate(String status) {
-    print('[BLE] 处理状态更新: $status');
-    switch (status) {
+    print('[BLE] 处理状态更新: "$status" (长度: ${status.length})');
+    // 去除可能的空白字符
+    final cleanStatus = status.trim();
+    print('[BLE] 清理后状态: "$cleanStatus"');
+    switch (cleanStatus) {
       case 'waiting':
         _resultController.add('等待凭据');
         break;
@@ -408,11 +411,15 @@ class BleProvisioningService {
       case 'failed':
       case 'not_found':
         // 配网失败后，回到bleConnected状态，允许重新输入凭据
-        _resultController.add(status == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
+        _resultController.add(cleanStatus == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
         _emitStatus(BleProvisioningStatus.bleConnected);
         break;
       default:
-        print('[BLE] 未知状态: $status');
+        print('[BLE] 未知状态: $cleanStatus');
+        // 打印每个字符的码点
+        for (int i = 0; i < cleanStatus.length; i++) {
+          print('[BLE] 字符[$i]: ${cleanStatus[i]} (码点: ${cleanStatus.codeUnitAt(i)})');
+        }
         break;
     }
   }
