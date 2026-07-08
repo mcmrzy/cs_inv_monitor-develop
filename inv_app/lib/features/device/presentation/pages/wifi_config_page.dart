@@ -80,7 +80,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                           status == BleProvisioningStatus.subscribingNotifications;
         });
 
-        if (status == BleProvisioningStatus.connected) {
+        // WiFi配网成功
+        if (status == BleProvisioningStatus.wifiConnected) {
           _onBleProvisionSuccess();
         }
       }
@@ -591,7 +592,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         return '正在写入WiFi凭据...';
       case BleProvisioningStatus.waitingForResult:
         return '等待配网结果...';
-      case BleProvisioningStatus.connected:
+      case BleProvisioningStatus.bleConnected:
+        return '已连接设备';
+      case BleProvisioningStatus.wifiConnected:
         return '配网成功！';
       case BleProvisioningStatus.failed:
         return '配网失败';
@@ -893,12 +896,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     final bool deviceSelected = _selectedBleDevice != null;
     final bool isConfiguring = _bleStatus == BleProvisioningStatus.writingCredentials || 
                                _bleStatus == BleProvisioningStatus.waitingForResult;
-    final bool isCompleted = _bleStatus == BleProvisioningStatus.connected;
+    final bool isCompleted = _bleStatus == BleProvisioningStatus.wifiConnected;
     
     int currentStep = 0;
     if (isCompleted) {
       currentStep = 2;
-    } else if (deviceSelected && (_bleStatus == BleProvisioningStatus.connected || isConfiguring)) {
+    } else if (deviceSelected && (_bleStatus == BleProvisioningStatus.bleConnected || isConfiguring)) {
       currentStep = 1;
     } else if (_bleDevices.isNotEmpty) {
       currentStep = 0;
@@ -998,7 +1001,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ))),
 
       // 已连接设备信息
-      if (_selectedBleDevice != null && _bleStatus == BleProvisioningStatus.connected) ...[
+      if (_selectedBleDevice != null && (_bleStatus == BleProvisioningStatus.bleConnected || _bleStatus == BleProvisioningStatus.wifiConnected)) ...[
         Container(padding: EdgeInsets.all(12.w), margin: EdgeInsets.only(bottom: 16.h),
           decoration: BoxDecoration(color: const Color(0xFFECFDF5), borderRadius: BorderRadius.circular(10.r)),
           child: Row(children: [
@@ -1017,7 +1020,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       ],
 
       // WiFi配置表单（连接成功后显示，或者正在配置/等待结果时显示）
-      if (_selectedBleDevice != null && (_bleStatus == BleProvisioningStatus.connected || 
+      if (_selectedBleDevice != null && (_bleStatus == BleProvisioningStatus.bleConnected || 
           _bleStatus == BleProvisioningStatus.writingCredentials ||
           _bleStatus == BleProvisioningStatus.waitingForResult)) ...[
         SizedBox(width: double.infinity, height: 44.h,
@@ -1109,7 +1112,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         SizedBox(height: 16.h),
         Container(width: double.infinity, padding: EdgeInsets.all(14.w),
           decoration: BoxDecoration(
-            color: _bleStatus == BleProvisioningStatus.connected
+            color: (_bleStatus == BleProvisioningStatus.bleConnected || _bleStatus == BleProvisioningStatus.wifiConnected)
                 ? const Color(0xFFECFDF5)
                 : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
                     ? const Color(0xFFFEF2F2)
@@ -1117,13 +1120,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             borderRadius: BorderRadius.circular(12.r)),
           child: Row(children: [
             Icon(
-              _bleStatus == BleProvisioningStatus.connected
+              (_bleStatus == BleProvisioningStatus.bleConnected || _bleStatus == BleProvisioningStatus.wifiConnected)
                   ? Icons.check_circle
                   : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
                       ? Icons.error
                       : Icons.info,
               size: 20.sp,
-              color: _bleStatus == BleProvisioningStatus.connected
+              color: (_bleStatus == BleProvisioningStatus.bleConnected || _bleStatus == BleProvisioningStatus.wifiConnected)
                   ? AppColors.successLight
                   : (_bleStatus == BleProvisioningStatus.failed || _bleStatus == BleProvisioningStatus.timeout || _bleStatus == BleProvisioningStatus.error)
                       ? AppColors.errorLight

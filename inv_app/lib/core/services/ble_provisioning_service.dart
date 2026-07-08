@@ -10,9 +10,10 @@ enum BleProvisioningStatus {
   discoveringServices,
   readingDeviceInfo,
   subscribingNotifications,
+  bleConnected, // BLE连接成功，可以开始配网
   writingCredentials,
   waitingForResult,
-  connected,
+  wifiConnected, // WiFi配网成功
   failed,
   timeout,
   error,
@@ -240,6 +241,9 @@ class BleProvisioningService {
 
   /// 连接到BLE设备
   Future<BleProvisioningResult> connectToDevice(BleDeviceInfo deviceInfo) async {
+    // 先停止扫描
+    stopScan();
+    
     if (_connectedDevice != null) {
       await disconnectFromDevice();
     }
@@ -281,8 +285,8 @@ class BleProvisioningService {
       // 更新已发现设备列表中的设备信息（SN等）
       _updateDiscoveredDeviceInfo(deviceInfoResult);
 
-      // 订阅成功后，立即标记为已连接状态
-      _emitStatus(BleProvisioningStatus.connected);
+      // 订阅成功后，立即标记为BLE已连接状态
+      _emitStatus(BleProvisioningStatus.bleConnected);
 
       return BleProvisioningResult(
         success: true,
@@ -377,7 +381,7 @@ class BleProvisioningService {
         break;
       case 'connected':
         _resultController.add('WiFi连接成功！');
-        _emitStatus(BleProvisioningStatus.connected);
+        _emitStatus(BleProvisioningStatus.wifiConnected);
         break;
       case 'failed':
         _resultController.add('连接失败');
