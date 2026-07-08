@@ -19,11 +19,11 @@ CREATE TABLE users (
     parent_id BIGINT, -- 上级用户ID
     timezone VARCHAR(50) DEFAULT 'Asia/Shanghai',
     status SMALLINT NOT NULL DEFAULT 1, -- 1:正常 0:禁用
-    last_login_at TIMESTAMP,
+    last_login_at TIMESTAMPTZ,
     last_login_ip VARCHAR(45),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_users_phone ON users(phone);
@@ -42,7 +42,7 @@ CREATE TABLE user_operation_logs (
     result VARCHAR(20) NOT NULL, -- success/failed
     error_message TEXT,
     ip_address VARCHAR(45),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_operation_logs_user ON user_operation_logs(user_id);
@@ -57,8 +57,8 @@ CREATE TABLE user_sessions (
     device_type VARCHAR(20), -- ios/android/web
     device_id VARCHAR(100),
     ip_address VARCHAR(45),
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_sessions_user ON user_sessions(user_id);
@@ -70,9 +70,9 @@ CREATE TABLE verification_codes (
     phone VARCHAR(20) NOT NULL,
     code VARCHAR(6) NOT NULL,
     type VARCHAR(20) NOT NULL, -- register/reset_password/login
-    expires_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
     used BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_verify_code_phone_type ON verification_codes(phone, type);
@@ -109,9 +109,9 @@ CREATE TABLE stations (
     longitude DECIMAL(10,7),
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 电站所在时区, IANA 时区标识符
     status SMALLINT NOT NULL DEFAULT 1, -- 1:正常 0:禁用
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_stations_user ON stations(user_id);
@@ -147,10 +147,10 @@ CREATE TABLE devices (
     user_id BIGINT NOT NULL,
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 设备所在时区, 继承自所属电站
     status SMALLINT NOT NULL DEFAULT 0, -- 0:离线 1:在线 2:故障
-    last_online_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
+    last_online_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
 );
 
 CREATE INDEX idx_devices_sn ON devices(sn);
@@ -189,11 +189,11 @@ CREATE TABLE alarms (
     fault_message VARCHAR(200) NOT NULL,
     fault_detail TEXT,
     status SMALLINT NOT NULL DEFAULT 0, -- 0:未处理 1:已处理 2:已忽略
-    occurred_at TIMESTAMP NOT NULL,
-    recovered_at TIMESTAMP,
-    handled_at TIMESTAMP,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    recovered_at TIMESTAMPTZ,
+    handled_at TIMESTAMPTZ,
     handled_by BIGINT,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_alarms_device ON alarms(device_sn);
@@ -209,8 +209,8 @@ CREATE TABLE alarm_notifications (
     user_id BIGINT NOT NULL,
     notify_type VARCHAR(20) NOT NULL, -- push/sms/email
     notify_status VARCHAR(20) NOT NULL, -- pending/sent/failed
-    sent_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_alarm_notify_alarm ON alarm_notifications(alarm_id);
@@ -226,7 +226,7 @@ CREATE TABLE notifications (
     title VARCHAR(200) NOT NULL,
     content TEXT,
     status SMALLINT NOT NULL DEFAULT 0, -- 0:未读 1:已读
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_notifications_user ON notifications(user_id);
@@ -261,7 +261,7 @@ CREATE TABLE firmware_versions (
     changelog TEXT,
     is_force BOOLEAN DEFAULT FALSE,
     status SMALLINT DEFAULT 1, -- 1:正常 0:禁用
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(model, version)
 );
 
@@ -277,9 +277,9 @@ CREATE TABLE ota_records (
     status VARCHAR(20) NOT NULL, -- pending/downloading/upgrading/success/failed
     progress INTEGER DEFAULT 0,
     error_message TEXT,
-    started_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_ota_device ON ota_records(device_sn);
@@ -295,8 +295,8 @@ CREATE TABLE system_configs (
     config_key VARCHAR(100) NOT NULL UNIQUE,
     config_value TEXT,
     description VARCHAR(200),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 初始化系统配置
@@ -325,7 +325,7 @@ ON CONFLICT (config_key) DO NOTHING;
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
+    NEW.updated_at = NOW();
     RETURN NEW;
 END;
 $$ language 'plpgsql';
@@ -356,7 +356,7 @@ CREATE OR REPLACE FUNCTION clean_expired_data()
 RETURNS void AS $$
 BEGIN
     -- 清理过期验证码
-    DELETE FROM verification_codes WHERE expires_at < CURRENT_TIMESTAMP;
+    DELETE FROM verification_codes WHERE expires_at < NOW();
     
     -- 注意：分钟级/小时级数据已由 TimescaleDB 自动管理
     -- user_sessions 已删除（改用 JWT）
@@ -380,8 +380,8 @@ CREATE TABLE IF NOT EXISTS device_telemetry (
     work_state         VARCHAR(50),
     fault_code         VARCHAR(50),
     internal_temperature DECIMAL(6,1) DEFAULT 0,
-    time               TIMESTAMP NOT NULL DEFAULT NOW(),
-    created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+    time               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_telemetry_sn_time ON device_telemetry(device_sn, time DESC);
@@ -421,8 +421,8 @@ CREATE TABLE IF NOT EXISTS device_models (
     mqtt_topics     JSONB NOT NULL DEFAULT '[]',  -- 该型号订阅的 Topic 列表
     description     TEXT,
     is_active       BOOLEAN NOT NULL DEFAULT true,
-    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE device_models IS '设备型号注册表 - 新型号只需在此配置，无需改代码';
@@ -485,7 +485,7 @@ CREATE TABLE IF NOT EXISTS device_alarms (
     fault_desc TEXT,
     alarm_code INTEGER,
     trigger_info JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_device_alarms_sn ON device_alarms(device_sn);
@@ -497,7 +497,7 @@ CREATE TABLE IF NOT EXISTS device_cmd_logs (
     cmd VARCHAR(50) NOT NULL,
     result VARCHAR(20),
     message TEXT,
-    sent_at TIMESTAMP DEFAULT NOW()
+    sent_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_cmd_logs_sn ON device_cmd_logs(device_sn);
@@ -506,7 +506,7 @@ CREATE TABLE IF NOT EXISTS device_day_data (
     device_sn VARCHAR(50) NOT NULL,
     data_date DATE NOT NULL,
     data JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (device_sn, data_date)
 );
 
@@ -520,7 +520,7 @@ CREATE TABLE IF NOT EXISTS station_day_data (
     device_count INTEGER DEFAULT 0,
     online_count INTEGER DEFAULT 0,
     fault_count INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (station_id, data_date)
 );
 

@@ -12,8 +12,10 @@ import (
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
+	"inv-api-server/pkg/timezone"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var deviceSNRegex = regexp.MustCompile(`^[A-Z0-9-]{8,64}$`)
@@ -21,12 +23,14 @@ var deviceSNRegex = regexp.MustCompile(`^[A-Z0-9-]{8,64}$`)
 type DeviceHandler struct {
 	deviceService *service.DeviceService
 	alarmService  *service.AlarmService
+	db            *pgxpool.Pool
 }
 
-func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService) *DeviceHandler {
+func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, db *pgxpool.Pool) *DeviceHandler {
 	return &DeviceHandler{
 		deviceService: deviceService,
 		alarmService:  alarmService,
+		db:            db,
 	}
 }
 
@@ -565,9 +569,11 @@ func (h *DeviceHandler) GetStatistics(c *gin.Context) {
 	endDate := c.Query("end_date")
 	period := c.DefaultQuery("period", "day")
 
+	tz := getUserTimezone(c.Request.Context(), h.db, userID)
+
 	// 当日期参数为空时，提供合理默认值
 	if startDate == "" {
-		now := time.Now()
+		now := timezone.NowInTimezone(tz)
 		switch period {
 		case "hour":
 			startDate = now.AddDate(0, 0, -1).Format("2006-01-02")
@@ -578,10 +584,10 @@ func (h *DeviceHandler) GetStatistics(c *gin.Context) {
 		}
 	}
 	if endDate == "" {
-		endDate = time.Now().Format("2006-01-02")
+		endDate = timezone.TodayInTimezone(tz)
 	}
 
-	data, err := h.deviceService.GetStatistics(c.Request.Context(), sn, startDate, endDate, period)
+	data, err := h.deviceService.GetStatistics(c.Request.Context(), sn, startDate, endDate, period, tz)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("get statistics failed", err))
 		return

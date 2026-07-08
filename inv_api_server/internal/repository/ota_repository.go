@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"inv-api-server/internal/model"
+	"inv-api-server/pkg/timezone"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -1709,15 +1710,18 @@ func (r *OTARepository) CancelUpgradesByTask(ctx context.Context, taskID int64) 
 }
 
 // GetTaskStats 获取任务统计
-func (r *OTARepository) GetTaskStats(ctx context.Context) (pending, running, todayCompleted, failed int, err error) {
+func (r *OTARepository) GetTaskStats(ctx context.Context, tz string) (pending, running, todayCompleted, failed int, err error) {
+	todayStr := timezone.TodayInTimezone(tz)
+	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
+
 	err = r.db.QueryRow(ctx, `
 		SELECT
 		    COUNT(*) FILTER (WHERE status IN ('pending','scheduled')),
 		    COUNT(*) FILTER (WHERE status = 'running'),
-		    COUNT(*) FILTER (WHERE status IN ('completed','partial_success') AND completed_at >= CURRENT_DATE),
+		    COUNT(*) FILTER (WHERE status IN ('completed','partial_success') AND completed_at >= $1),
 		    COUNT(*) FILTER (WHERE status = 'failed')
 		FROM upgrade_tasks
-	`).Scan(&pending, &running, &todayCompleted, &failed)
+	`, todayStart).Scan(&pending, &running, &todayCompleted, &failed)
 	return
 }
 

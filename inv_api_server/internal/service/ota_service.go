@@ -1528,8 +1528,8 @@ func (s *OTAService) DeleteUpgradeTask(ctx context.Context, taskID int64) error 
 }
 
 // GetTaskStats 获取任务统计
-func (s *OTAService) GetTaskStats(ctx context.Context) (pending, running, todayCompleted, failed int, err error) {
-	return s.repo.GetTaskStats(ctx)
+func (s *OTAService) GetTaskStats(ctx context.Context, tz string) (pending, running, todayCompleted, failed int, err error) {
+	return s.repo.GetTaskStats(ctx, tz)
 }
 
 // ReportLocalOTAResult 本地OTA完成后，更新设备固件版本并记录升级历史

@@ -348,20 +348,20 @@ func (s *DeviceService) GetByStationID(ctx context.Context, stationID int64) ([]
 	return s.repo.GetByStationID(ctx, stationID)
 }
 
-func (s *DeviceService) GetStationRealtimeSummary(ctx context.Context, stationID int64) (float64, float64, error) {
-	return s.repo.GetStationRealtimeSummary(ctx, stationID)
+func (s *DeviceService) GetStationRealtimeSummary(ctx context.Context, stationID int64, tz string) (float64, float64, error) {
+	return s.repo.GetStationRealtimeSummary(ctx, stationID, tz)
 }
 
-func (s *DeviceService) GetStationEnergySummary(ctx context.Context, stationID int64) (float64, float64) {
-	return s.repo.GetStationEnergySummary(ctx, stationID)
+func (s *DeviceService) GetStationEnergySummary(ctx context.Context, stationID int64, tz string) (float64, float64) {
+	return s.repo.GetStationEnergySummary(ctx, stationID, tz)
 }
 
-func (s *DeviceService) GetStationYearEnergy(ctx context.Context, stationID int64) float64 {
-	return s.repo.GetStationYearEnergy(ctx, stationID)
+func (s *DeviceService) GetStationYearEnergy(ctx context.Context, stationID int64, tz string) float64 {
+	return s.repo.GetStationYearEnergy(ctx, stationID, tz)
 }
 
-func (s *DeviceService) GetStationTodayEnergy(ctx context.Context, stationID int64) (float64, error) {
-	return s.repo.GetStationTodayEnergy(ctx, stationID)
+func (s *DeviceService) GetStationTodayEnergy(ctx context.Context, stationID int64, tz string) (float64, error) {
+	return s.repo.GetStationTodayEnergy(ctx, stationID, tz)
 }
 
 func (s *DeviceService) GetStationPowerBreakdown(ctx context.Context, stationID int64) (float64, float64, float64, float64, float64) {
@@ -608,8 +608,8 @@ func (s *DeviceService) GetHistoryData(ctx context.Context, sn, startDate, endDa
 	return s.repo.GetHistoryData(ctx, sn, startDate, endDate, period)
 }
 
-func (s *DeviceService) GetStatistics(ctx context.Context, sn, startDate, endDate, period string) (map[string]interface{}, error) {
-	return s.repo.GetStatistics(ctx, sn, startDate, endDate, period)
+func (s *DeviceService) GetStatistics(ctx context.Context, sn, startDate, endDate, period, tz string) (map[string]interface{}, error) {
+	return s.repo.GetStatistics(ctx, sn, startDate, endDate, period, tz)
 }
 
 func (s *DeviceService) ScanLocalNetwork(ctx context.Context, userID int64) ([]*model.Device, error) {
@@ -714,10 +714,10 @@ func NewStatisticsService(deviceRepo *repository.DeviceRepository, stationRepo *
 	}
 }
 
-func (s *StatisticsService) GetOverview(ctx context.Context, userID int64) (map[string]interface{}, error) {
-	return s.deviceRepo.GetOverview(ctx, userID)
+func (s *StatisticsService) GetOverview(ctx context.Context, userID int64, tz string) (map[string]interface{}, error) {
+	return s.deviceRepo.GetOverview(ctx, userID, tz)
 }
 
-func (s *StatisticsService) GetTrend(ctx context.Context, userID int64, period string) ([]map[string]interface{}, error) {
-	return s.deviceRepo.GetTrend(ctx, userID, period)
+func (s *StatisticsService) GetTrend(ctx context.Context, userID int64, period, tz string) ([]map[string]interface{}, error) {
+	return s.deviceRepo.GetTrend(ctx, userID, period, tz)
 }
