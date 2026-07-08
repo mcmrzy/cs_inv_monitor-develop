@@ -305,7 +305,7 @@ const WorkOrdersPage: React.FC = () => {
               placeholder={t('wo.deviceSNHint')}
               options={deviceOptions}
               filterOption={(inputValue, option) =>
-                (option?.value ?? '').toLowerCase().includes(inputValue.toLowerCase())
+                String(option?.value ?? '').toLowerCase().includes(inputValue.toLowerCase())
               }
               allowClear
               suffixIcon={<DownOutlined />}
