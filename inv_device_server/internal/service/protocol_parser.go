@@ -48,7 +48,7 @@ type ProtocolParser struct {
 type RawMessage struct {
 	SN         string          `json:"sn"`
 	ClientID   string          `json:"client_id"`
-	MsgType    string          `json:"msg_type"`
+	MsgType    string          `json:"type"`
 	Payload    json.RawMessage `json:"payload"`
 	ReceivedAt string          `json:"received_at"`
 }
