@@ -270,7 +270,7 @@ const LoginPage: React.FC = () => {
 
   const inputStyle = { borderRadius: 10, height: 56, fontSize: 17 }
 
-  const CodeButton = ({ emailField, type, form }: { emailField: string; type: 'register' | 'reset'; form: any }) => (
+  const CodeButton = ({ emailField, type, form }: { emailField: string; type: 'register' | 'reset' | 'login'; form: any }) => (
     <Button disabled={countdown > 0}
       onClick={() => { const val = form.getFieldValue(emailField); if (val) sendEmailCode(val, type); else showError(t.errEmailFirst) }}
       style={{ height: 56, borderRadius: '0 10px 10px 0', borderColor: '#d9d9d9', minWidth: 110, fontSize: 15, color: countdown > 0 ? '#6b7280' : '#4f6ef7' }}>
@@ -376,7 +376,7 @@ const LoginPage: React.FC = () => {
 
               {/* Tab switcher */}
               <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 3, marginBottom: 24 }}>
-                {([['login', t.login], ['loginByCode', t.loginByCode], ['register', t.register], ['reset', t.reset]] as const).map(([tab, label]) => (
+                {([['login', t.login], ['register', t.register], ['reset', t.reset]] as const).map(([tab, label]) => (
                   <button key={tab} onClick={() => { setActiveTab(tab as ActiveTab); setCountdown(0); setError(null) }} style={{
                     flex: 1, padding: '10px 0', border: 'none', borderRadius: 8, cursor: 'pointer',
                     fontSize: 14, fontWeight: 500, transition: 'all 0.2s ease',
@@ -412,8 +412,8 @@ const LoginPage: React.FC = () => {
                 </Form>
               )}
 
-              {/* LoginByCode */}
-              {activeTab === 'loginByCode' && (
+              {/* [暂时禁用] LoginByCode - 验证码登录功能暂时隐藏 */}
+              {/* {activeTab === 'loginByCode' && (
                 <div>
                   <Form name="phoneCodeLogin" onFinish={onPhoneCodeLogin} size="large">
                     <Form.Item name="phone" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号' : 'Phone required' }, { pattern: /^1[3-9]\d{9}$/, message: t.errPhoneFormat }]}>
@@ -443,7 +443,7 @@ const LoginPage: React.FC = () => {
                     <a onClick={() => setActiveTab('register')} style={{ color: '#4f6ef7', marginLeft: 4, fontWeight: 500, fontSize: 17 }}>{t.goRegister}</a>
                   </div>
                 </div>
-              )}
+              )} */}
 
               {/* Register */}
               {activeTab === 'register' && (
