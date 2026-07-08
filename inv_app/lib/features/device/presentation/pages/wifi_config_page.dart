@@ -552,7 +552,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       backgroundColor: AppColors.successLight,
     ));
 
-    _waitForDeviceOnline();
+    // 立即断开BLE连接并重置状态
+    _disconnectBleDevice();
   }
 
   Future<void> _waitForDeviceOnline() async {
@@ -659,7 +660,16 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       child: Row(children: [
         Expanded(
           child: GestureDetector(
-            onTap: () => setState(() => _provisionMode = _ProvisionMode.ble),
+            onTap: () {
+              // 切换到BLE模式时重置热点配网状态
+              setState(() {
+                _provisionMode = _ProvisionMode.ble;
+                _selectedDeviceAp = null;
+                _provisionStep = 0;
+                _provisionStatus = '';
+                _provisionOk = false;
+              });
+            },
             child: Container(
               padding: EdgeInsets.symmetric(vertical: 10.h),
               decoration: BoxDecoration(
@@ -680,6 +690,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         Expanded(
           child: GestureDetector(
             onTap: () {
+              // 切换到热点模式时断开BLE连接
+              _disconnectBleDevice();
               setState(() => _provisionMode = _ProvisionMode.softap);
               if (_csInvNetworks.isEmpty && !_wifiScanning) _scanCSInvWiFi();
             },
