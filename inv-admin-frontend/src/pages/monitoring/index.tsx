@@ -1282,7 +1282,7 @@ const MonitoringPage: React.FC = () => {
       ],
       markLine: { silent: true, lineStyle: { color: '#94a3b8', type: 'solid' as const, width: 1 }, data: [{ yAxis: 0 }], label: { show: false } },
     }
-  }, [flowData])
+  }, [flowData, timezone])
 
   const [energyOverviewPeriod, setEnergyOverviewPeriod] = useState('day')
 
