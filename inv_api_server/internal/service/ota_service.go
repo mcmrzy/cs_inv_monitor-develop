@@ -19,6 +19,7 @@ import (
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/timezone"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -26,6 +27,8 @@ import (
 type OTAService struct {
 	repo         *repository.OTARepository
 	rdb          *redis.Client
+	db           *pgxpool.Pool
+	jpushService *JPushService
 	deviceServer string
 	internalKey  string
 	uploadDir    string // 固件上传存储目录
@@ -34,13 +37,15 @@ type OTAService struct {
 	concurrency  int
 }
 
-func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, uploadDir string, serverURL string) *OTAService {
+func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServer string, internalKey string, uploadDir string, serverURL string, db *pgxpool.Pool, jpushService *JPushService) *OTAService {
 	if uploadDir == "" {
 		uploadDir = "/data/firmware"
 	}
 	return &OTAService{
 		repo:         repo,
 		rdb:          rdb,
+		db:           db,
+		jpushService: jpushService,
 		deviceServer: deviceServer,
 		internalKey:  internalKey,
 		uploadDir:    uploadDir,
@@ -814,7 +819,85 @@ func (s *OTAService) PublishPackage(ctx context.Context, packageID int64, req Pu
 		}
 	}
 
+	// 4. 发布成功后推送通知
+	if req.IsPublished && s.jpushService != nil {
+		go s.pushOtaNotification(pkg, req)
+	}
+
 	return nil
+}
+
+// pushOtaNotification 根据 rollout_type 推送 OTA 可用通知
+func (s *OTAService) pushOtaNotification(pkg *model.UpgradePackage, req PublishPackageReq) {
+	ctx := context.Background()
+	title := "固件更新可用"
+	content := fmt.Sprintf("%s %s: %s", pkg.Model, pkg.UserVersion, pkg.UserChangelog)
+
+	switch req.RolloutType {
+	case "all":
+		s.jpushService.SendBroadcastAsync(ctx, title, content, map[string]string{
+			"notify_type": "ota_available",
+		})
+	case "model":
+		userIDs, err := s.getUserIDsByModel(ctx, pkg.Model)
+		if err != nil || len(userIDs) == 0 {
+			logger.Error("failed to get users for model", zap.String("model", pkg.Model), zap.Error(err))
+			return
+		}
+		s.jpushService.SendNotificationAsync(ctx, userIDs, "ota_available", "", title, content)
+	case "device":
+		sns := strings.Split(req.RolloutTargets, ",")
+		userIDs, err := s.getUserIDsByDeviceSNs(ctx, sns)
+		if err != nil || len(userIDs) == 0 {
+			logger.Error("failed to get users for devices", zap.Error(err))
+			return
+		}
+		s.jpushService.SendNotificationAsync(ctx, userIDs, "ota_available", "", title, content)
+	case "user":
+		var userIDs []int64
+		for _, idStr := range strings.Split(req.RolloutTargets, ",") {
+			if id, err := strconv.ParseInt(strings.TrimSpace(idStr), 10, 64); err == nil {
+				userIDs = append(userIDs, id)
+			}
+		}
+		if len(userIDs) > 0 {
+			s.jpushService.SendNotificationAsync(ctx, userIDs, "ota_available", "", title, content)
+		}
+	}
+}
+
+func (s *OTAService) getUserIDsByModel(ctx context.Context, model string) ([]int64, error) {
+	rows, err := s.db.Query(ctx, `SELECT DISTINCT user_id FROM devices WHERE model=$1 AND user_id>0 AND deleted_at IS NULL`, model)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func (s *OTAService) getUserIDsByDeviceSNs(ctx context.Context, sns []string) ([]int64, error) {
+	rows, err := s.db.Query(ctx, `SELECT DISTINCT user_id FROM devices WHERE sn=ANY($1) AND user_id>0 AND deleted_at IS NULL`, sns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // parseRolloutTargets 解析 RolloutTargets 为 SN 列表
