@@ -240,10 +240,23 @@ void main() {
       ),
       act: (bloc) => bloc.add(const DashboardSSEConnectRequested()),
       expect: () => [
+        // 1) Bloc explicitly emits isSSEConnected: false before connecting
+        isA<DashboardLoaded>().having(
+          (s) => s.isSSEConnected,
+          'isSSEConnected',
+          false,
+        ),
+        // 2) DashboardSSEConnectionChanged(isConnected: true) is added
         isA<DashboardLoaded>().having(
           (s) => s.isSSEConnected,
           'isSSEConnected',
           true,
+        ),
+        // 3) Stream.empty() completes immediately, onDone fires → isConnected: false
+        isA<DashboardLoaded>().having(
+          (s) => s.isSSEConnected,
+          'isSSEConnected',
+          false,
         ),
       ],
     );
