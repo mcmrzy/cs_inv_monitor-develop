@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:jpush_flutter/jpush_flutter.dart';
 import 'package:jpush_flutter/jpush_interface.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:inv_app/core/router/app_router.dart';
 
 /// 极光推送消息对象
@@ -84,6 +85,9 @@ class JPushService {
       },
     );
 
+    // Android 13+ 需要运行时申请通知权限
+    await _requestNotificationPermission();
+
     _initialized = true;
   }
 
@@ -100,9 +104,28 @@ class JPushService {
   ///
   /// [userId] 为用户 ID，绑定后后端可通过别名 `user_$userId`
   /// 向该用户的所有设备推送消息。
+  /// 会等待 JPush SDK 就绪后再设置别名，最多重试 3 次。
   Future<void> bindUser(int userId) async {
     if (!_initialized) return;
-    await _jpush.setAlias('user_$userId');
+    final alias = 'user_$userId';
+
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        // 等待 SDK 注册完成（获取到 registrationID 表示就绪）
+        final regId = await _jpush.getRegistrationID();
+        if (regId != null && regId.isNotEmpty) {
+          debugPrint('[JPushService] SDK ready, regId=$regId, setting alias=$alias');
+          await _jpush.setAlias(alias);
+          debugPrint('[JPushService] Alias set successfully: $alias');
+          return;
+        }
+        debugPrint('[JPushService] SDK not ready yet, retry ${attempt + 1}/3...');
+      } catch (e) {
+        debugPrint('[JPushService] setAlias failed (attempt ${attempt + 1}/3): $e');
+      }
+      await Future.delayed(const Duration(seconds: 2));
+    }
+    debugPrint('[JPushService] Failed to set alias after 3 attempts');
   }
 
   /// 退出登录时解绑别名
@@ -179,8 +202,34 @@ class JPushService {
       case 'system_announcement':
         AppRouter.router.go('/alarms');
         break;
+      case 'ota_available':
+        AppRouter.router.go('/ota');
+        break;
+      case 'app_update':
+        AppRouter.router.go('/settings');
+        break;
       default:
         debugPrint('[JPushService] Unknown notify_type: $notifyType, skip navigation');
+    }
+  }
+
+  /// 申请通知权限（Android 13+ 必需）
+  Future<void> _requestNotificationPermission() async {
+    final status = await Permission.notification.status;
+    if (status.isGranted) {
+      debugPrint('[JPushService] Notification permission already granted');
+      return;
+    }
+    if (status.isDenied) {
+      final result = await Permission.notification.request();
+      if (result.isGranted) {
+        debugPrint('[JPushService] Notification permission granted');
+      } else {
+        debugPrint('[JPushService] Notification permission denied');
+      }
+    }
+    if (status.isPermanentlyDenied) {
+      debugPrint('[JPushService] Notification permission permanently denied, please enable in settings');
     }
   }
 }

@@ -22,8 +22,9 @@ import (
 )
 
 type OTAHandler struct {
-	otaService *service.OTAService
-	db         *pgxpool.Pool
+	otaService   *service.OTAService
+	db           *pgxpool.Pool
+	jpushService *service.JPushService
 }
 
 // toUserVersion 将 main_version (V1.0.0.20260703) 转换为 user_version 格式 (V1.0.0)
@@ -36,8 +37,8 @@ func toUserVersion(mainVersion string) string {
 	return mainVersion
 }
 
-func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool) *OTAHandler {
-	return &OTAHandler{otaService: otaService, db: db}
+func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushService *service.JPushService) *OTAHandler {
+	return &OTAHandler{otaService: otaService, db: db, jpushService: jpushService}
 }
 
 type CreateFirmwareRequest struct {
@@ -648,6 +649,21 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 		response.HandleError(c, apperr.Internal("创建版本失败", err))
 		return
 	}
+
+	// 推送APP新版本通知
+	if h.jpushService != nil {
+		content := fmt.Sprintf("v%s", req.VersionName)
+		if len(req.Changelog) > 100 {
+			content += ": " + req.Changelog[:100] + "..."
+		} else if req.Changelog != "" {
+			content += ": " + req.Changelog
+		}
+		h.jpushService.SendBroadcastAsync(c.Request.Context(), "APP新版本发布", content, map[string]string{
+			"notify_type": "app_update",
+		})
+		log.Printf("[CreateAppVersion] broadcast push sent: platform=%s, version=%s", req.Platform, req.VersionName)
+	}
+
 	response.Success(c, v)
 }
 

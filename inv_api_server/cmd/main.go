@@ -144,7 +144,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	permChecker := service.NewPermChecker(rdb, userRepo)
 
 	otaRepo := repository.NewOTARepository(db)
-	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL)
+	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL, db, jpushService)
 
 	captchaHandler := handler.NewCaptchaHandler(rdb)
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache, captchaHandler)
@@ -156,7 +156,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	wsHandler := handler.NewWSHandler(rdb, jwtService)
 	modelHandler := handler.NewModelHandler(modelService)
 	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
-	otaHandler := handler.NewOTAHandler(otaService, db)
+	otaHandler := handler.NewOTAHandler(otaService, db, jpushService)
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
 	alertRuleHandler := handler.NewAlertRuleHandler()
 	workOrderHandler := handler.NewWorkOrderHandler()
