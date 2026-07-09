@@ -206,7 +206,7 @@ const DashboardPage: React.FC = () => {
       ],
       markLine: { silent: true, lineStyle: { color: '#94a3b8', type: 'solid' as const, width: 1 }, data: [{ yAxis: 0 }], label: { show: false } },
     }
-  }, [flowData])
+  }, [flowData, timezone])
 
   /* 电量概览柱状图配置 */
   const energyOverviewOption = useMemo(() => {
