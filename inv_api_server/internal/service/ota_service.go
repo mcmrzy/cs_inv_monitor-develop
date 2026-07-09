@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -567,13 +566,22 @@ func (s *OTAService) GetDeviceOTAHistory(ctx context.Context, sn string, page, p
 // ========== App版本管理 ==========
 
 // CheckAppUpdate 检查App是否有新版本
-func (s *OTAService) CheckAppUpdate(ctx context.Context, platform string, currentVersionCode int) (*model.AppVersion, bool, error) {
+func (s *OTAService) CheckAppUpdate(ctx context.Context, platform string, currentVersionCode int, userID int64) (*model.AppVersion, bool, error) {
 	latest, err := s.repo.GetLatestAppVersion(ctx, platform)
 	if err != nil {
 		return nil, false, err
 	}
 	hasUpdate := latest.VersionCode > currentVersionCode
-	return latest, hasUpdate, nil
+	if !hasUpdate {
+		return latest, false, nil
+	}
+	// 灰度过滤：判断当前用户是否在灰度范围内
+	if latest.RolloutPercentage > 0 && latest.RolloutPercentage < 100 {
+		if !isInRollout(userID, latest.ID, latest.RolloutPercentage) {
+			return latest, false, nil // 用户不在灰度范围，返回无更新
+		}
+	}
+	return latest, true, nil
 }
 
 // CreateAppVersion 创建App版本
@@ -774,47 +782,9 @@ func (s *OTAService) PublishPackage(ctx context.Context, packageID int64, req Pu
 		return fmt.Errorf("更新发布状态失败: %w", err)
 	}
 
-	// 3. 如果 AutoPush=true 且已发布，自动推送升级
+	// 3. 如果 AutoPush=true 且已发布，使用确定性灰度推送
 	if req.AutoPush && req.IsPublished {
-		var deviceSNs []string
-
-		switch req.RolloutType {
-		case "all", "model":
-			// 查询该型号所有设备SN
-			deviceSNs, err = s.repo.GetDeviceSNsByModel(ctx, pkg.Model)
-			if err != nil {
-				return fmt.Errorf("查询设备列表失败: %w", err)
-			}
-		case "device":
-			// 从 RolloutTargets 解析 SN 列表
-			deviceSNs = s.parseRolloutTargets(req.RolloutTargets)
-		case "user":
-			// user 类型暂不自动推送
-			logger.Info("PublishPackage: rollout_type=user, skip auto push",
-				zap.Int64("package_id", packageID))
-			return nil
-		default:
-			// 默认按 all 处理
-			deviceSNs, err = s.repo.GetDeviceSNsByModel(ctx, pkg.Model)
-			if err != nil {
-				return fmt.Errorf("查询设备列表失败: %w", err)
-			}
-		}
-
-		if len(deviceSNs) == 0 {
-			logger.Info("PublishPackage: no devices found for auto push",
-				zap.Int64("package_id", packageID), zap.String("rollout_type", req.RolloutType))
-			return nil
-		}
-
-		// 调用已有的 PushPackageUpgrade 方法执行推送
-		pushReq := &PushPackageUpgradeReq{
-			PackageID:      packageID,
-			DeviceSNs:      deviceSNs,
-			Immediate:      true,
-			RolloutPercent: req.RolloutPercent,
-		}
-		if err := s.PushPackageUpgrade(ctx, pushReq); err != nil {
+		if err := s.publishUpgradeToDevices(ctx, pkg, req.RolloutPercent); err != nil {
 			return fmt.Errorf("自动推送失败: %w", err)
 		}
 	}
@@ -874,7 +844,7 @@ func (s *OTAService) pushOtaNotification(pkg *model.UpgradePackage, req PublishP
 
 	// 灰度百分比过滤
 	if req.RolloutPercent > 0 && req.RolloutPercent < 100 {
-		userIDs = SelectByPercent(userIDs, req.RolloutPercent)
+		userIDs = SelectByRollout(userIDs, pkg.ID, req.RolloutPercent)
 	}
 	if len(userIDs) > 0 {
 		s.jpushService.SendNotificationAsync(ctx, userIDs, "ota_available", "", title, content)
@@ -957,22 +927,21 @@ func (s *OTAService) PushPackageUpgrade(ctx context.Context, req *PushPackageUpg
 		return fmt.Errorf("升级包不存在")
 	}
 
-	// 1.5 灰度推送：只选择 X% 的设备
+	// 1.5 灰度推送：确定性哈希选取设备
 	deviceSNs := req.DeviceSNs
 	if req.RolloutPercent > 0 && req.RolloutPercent < 100 {
-		targetCount := len(deviceSNs) * req.RolloutPercent / 100
-		if targetCount < 1 {
-			targetCount = 1
+		var selected []string
+		for _, sn := range deviceSNs {
+			if isDeviceInRollout(sn, pkg.ID, req.RolloutPercent) {
+				selected = append(selected, sn)
+			}
 		}
-		// 随机打乱
-		rand.Shuffle(len(deviceSNs), func(i, j int) {
-			deviceSNs[i], deviceSNs[j] = deviceSNs[j], deviceSNs[i]
-		})
-		deviceSNs = deviceSNs[:targetCount]
-		logger.Info("Gray rollout",
+		deviceSNs = selected
+		logger.Info("Gray rollout (deterministic)",
 			zap.Int("percent", req.RolloutPercent),
 			zap.Int("total", len(req.DeviceSNs)),
-			zap.Int("selected", targetCount))
+			zap.Int("selected", len(deviceSNs)),
+			zap.Int64("package_id", pkg.ID))
 	}
 
 	// 2. 对每个设备处理
@@ -1306,17 +1275,22 @@ func (s *OTAService) CreateUpgradeTask(ctx context.Context, req *CreateUpgradeTa
 		return nil, fmt.Errorf("请选择固件或升级包")
 	}
 
-	// 灰度处理
+	// 灰度处理（确定性哈希）
 	deviceSNs := req.DeviceSNs
 	if req.RolloutPercent > 0 && req.RolloutPercent < 100 {
-		targetCount := len(deviceSNs) * req.RolloutPercent / 100
-		if targetCount < 1 {
-			targetCount = 1
+		var entityID int64
+		if req.PackageID != nil {
+			entityID = *req.PackageID
+		} else if req.FirmwareID != nil {
+			entityID = *req.FirmwareID
 		}
-		rand.Shuffle(len(deviceSNs), func(i, j int) {
-			deviceSNs[i], deviceSNs[j] = deviceSNs[j], deviceSNs[i]
-		})
-		deviceSNs = deviceSNs[:targetCount]
+		var selected []string
+		for _, sn := range deviceSNs {
+			if isDeviceInRollout(sn, entityID, req.RolloutPercent) {
+				selected = append(selected, sn)
+			}
+		}
+		deviceSNs = selected
 	}
 
 	// 确定初始状态
@@ -1746,6 +1720,48 @@ func (s *OTAService) RollbackUpgrade(ctx context.Context, sn string, targetPacka
 	return taskID, nil
 }
 
+// RollbackToPublishedVersion 回滚到最新已发布的升级包版本
+func (s *OTAService) RollbackToPublishedVersion(ctx context.Context, sn string) (int64, error) {
+	// 1. 查找设备对应的最新已发布升级包
+	packages, err := s.repo.GetPublishedPackagesForDevice(ctx, sn, 0)
+	if err != nil || len(packages) == 0 {
+		return 0, fmt.Errorf("没有已发布的升级包")
+	}
+	targetPkg := packages[0] // 按 created_at DESC 排序，取最新的
+
+	// 2. 创建回退任务
+	taskID, err := s.repo.RollbackToPackage(ctx, sn, targetPkg.ID)
+	if err != nil {
+		return 0, fmt.Errorf("创建回退任务失败: %w", err)
+	}
+
+	logger.Info("Rollback to published version",
+		zap.Int64("task_id", taskID),
+		zap.String("sn", sn),
+		zap.Int64("package_id", targetPkg.ID),
+		zap.String("version", targetPkg.MainVersion))
+
+	// 3. 发送升级命令
+	devices, err := s.repo.ListUpgradeDevicesByTaskID(ctx, taskID)
+	if err != nil {
+		return taskID, nil
+	}
+	for _, du := range devices {
+		if du.Status != model.UpgradeStatusPending {
+			continue
+		}
+		fw, err := s.repo.GetFirmware(ctx, du.FirmwareID)
+		if err != nil || fw == nil {
+			continue
+		}
+		duCopy := du
+		go s.SendUpgradeCommand(context.Background(), &duCopy, fw, s.BuildDownloadURL(fw.FileURL))
+		break
+	}
+
+	return taskID, nil
+}
+
 // GetAvailablePackagesForDevice 查询设备可见的已发布升级包
 func (s *OTAService) GetAvailablePackagesForDevice(ctx context.Context, sn string, userID int64) ([]model.UpgradePackage, error) {
 	return s.repo.GetPublishedPackagesForDevice(ctx, sn, userID)
@@ -1769,20 +1785,82 @@ func (s *OTAService) GetAllUserIDs(ctx context.Context) ([]int64, error) {
 	return ids, nil
 }
 
-// SelectByPercent 随机选取指定百分比的用户ID（导出供 handler 层使用）
-func SelectByPercent(userIDs []int64, percent int) []int64 {
-	if percent <= 0 || len(userIDs) == 0 {
-		return nil
-	}
-	if percent >= 100 {
+// SelectByRollout 确定性灰度选取：基于 userID + entityID 哈希
+// 同一个 userID + entityID 组合，结果始终一致
+func SelectByRollout(userIDs []int64, entityID int64, percent int) []int64 {
+	if percent >= 100 || percent <= 0 {
 		return userIDs
 	}
-	rand.Shuffle(len(userIDs), func(i, j int) {
-		userIDs[i], userIDs[j] = userIDs[j], userIDs[i]
-	})
-	count := len(userIDs) * percent / 100
-	if count < 1 {
-		count = 1
+	var selected []int64
+	for _, uid := range userIDs {
+		if isInRollout(uid, entityID, percent) {
+			selected = append(selected, uid)
+		}
 	}
-	return userIDs[:count]
+	return selected
+}
+
+// isInRollout 判断用户是否在灰度范围内（确定性哈希）
+func isInRollout(userID, entityID int64, percent int) bool {
+	if percent >= 100 {
+		return true
+	}
+	if percent <= 0 {
+		return false
+	}
+	hash := (userID*31 + entityID) % 100
+	if hash < 0 {
+		hash = -hash
+	}
+	return hash < int64(percent)
+}
+
+// isDeviceInRollout 判断设备是否在灰度范围内（确定性哈希，基于设备SN）
+func isDeviceInRollout(deviceSN string, entityID int64, percent int) bool {
+	if percent >= 100 {
+		return true
+	}
+	if percent <= 0 {
+		return false
+	}
+	var snHash int64
+	for _, c := range deviceSN {
+		snHash = snHash*31 + int64(c)
+	}
+	hash := (snHash + entityID) % 100
+	if hash < 0 {
+		hash = -hash
+	}
+	return hash < int64(percent)
+}
+
+// publishUpgradeToDevices 确定性灰度发布升级
+func (s *OTAService) publishUpgradeToDevices(ctx context.Context, pkg *model.UpgradePackage, rolloutPercent int) error {
+	deviceSNs, err := s.repo.GetDeviceSNsByModel(ctx, pkg.Model)
+	if err != nil {
+		return fmt.Errorf("查询设备列表失败: %w", err)
+	}
+
+	// 确定性灰度过滤
+	var selected []string
+	for _, sn := range deviceSNs {
+		if isDeviceInRollout(sn, pkg.ID, rolloutPercent) {
+			selected = append(selected, sn)
+		}
+	}
+	deviceSNs = selected
+
+	if len(deviceSNs) == 0 {
+		logger.Info("publishUpgradeToDevices: no devices selected after rollout filter",
+			zap.Int64("package_id", pkg.ID),
+			zap.Int("percent", rolloutPercent))
+		return nil
+	}
+
+	pushReq := &PushPackageUpgradeReq{
+		PackageID: pkg.ID,
+		DeviceSNs: deviceSNs,
+		Immediate: true,
+	}
+	return s.PushPackageUpgrade(ctx, pushReq)
 }
