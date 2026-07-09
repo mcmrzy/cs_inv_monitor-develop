@@ -143,10 +143,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 func registerDeviceRoutes(userGroup *gin.RouterGroup, p *proxy.ReverseProxy) {
 	userGroup.Any("/api/v1/device/*action", p.Handler())
 	userGroup.Any("/api/v1/stats/*action", p.Handler())
-	userGroup.Any("/api/v1/parallel/*action", p.Handler())
-	userGroup.Any("/api/v1/parallel-groups/*action", p.Handler())
-	userGroup.Any("/api/v1/parallel-groups", p.Handler())
-	userGroup.Any("/api/v1/parallel", p.Handler())
+	// parallel 路由已在 registerAPIRoutes 的 adminGroup 中注册，避免 Gin 通配符冲突
 }
 
 func registerFallback(r *gin.Engine) {
