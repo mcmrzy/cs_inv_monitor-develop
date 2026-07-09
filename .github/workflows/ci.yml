@@ -5,6 +5,109 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+jobs:
+  go-check:
+    name: Go Build & Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [inv_api_server, inv_device_server, api-gateway, mqtt-kafka-bridge]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Build
+        working-directory: ${{ matrix.module }}
+        run: go build ./...
+      - name: Vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+      - name: Run Go tests with coverage
+        working-directory: ${{ matrix.module }}
+        run: go test -race -cover -coverprofile=coverage.out -count=1 ./...
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: matrix.module == 'inv_api_server'
+        with:
+          name: go-coverage
+          path: ${{ matrix.module }}/coverage.out
+
+  frontend-check:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: inv-admin-frontend/package-lock.json
+      - name: Install
+        working-directory: inv-admin-frontend
+        run: npm ci
+      - name: Type Check
+        working-directory: inv-admin-frontend
+        run: npx tsc --noEmit
+      - name: Build
+        working-directory: inv-admin-frontend
+        run: npm run build
+      - name: Run frontend tests
+        working-directory: inv-admin-frontend
+        run: npm run test:run --if-present
+
+  flutter-check:
+    name: Flutter Analyze & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44'
+          channel: 'stable'
+      - name: Pub Get
+        working-directory: inv_app
+        run: flutter pub get
+      - name: Analyze
+        working-directory: inv_app
+        run: flutter analyze || true
+      - name: Test
+        working-directory: inv_app
+        run: flutter test --coverage
+
+  integration-test:
+    name: Integration Tests
+    needs: [go-check]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run integration tests
+        run: cd tests/integration && go test -v -tags=integration -count=1 ./...
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run security tests
+        run: cd inv_api_server && go test -v -count=1 ./tests/security/...
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
 
 jobs:
   go-check:

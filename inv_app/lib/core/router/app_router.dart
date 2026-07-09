@@ -240,7 +240,7 @@ class AppRouter {
           return _slidePage(state, BlocProvider(
             create: (_) => getIt<OtaBloc>(),
             child: OTAPage(deviceSN: sn),
-          ));
+          ),);
         },
       ),
       GoRoute(
@@ -252,7 +252,7 @@ class AppRouter {
           return _slidePage(state, BlocProvider(
             create: (_) => getIt<OtaBloc>(),
             child: OTADetailPage(deviceSN: sn, taskId: taskId),
-          ));
+          ),);
         },
       ),
       GoRoute(
@@ -274,7 +274,7 @@ class AppRouter {
             firmwareUrl: firmwareUrl,
             firmwareFileName: firmwareFileName,
             targetChip: targetChip,
-          ));
+          ),);
         },
       ),
     ],
@@ -342,7 +342,7 @@ class _MainShellState extends State<MainShell> {
             builder: (ctx, setDialogState) => AlertDialog(
               title: Row(
                 children: [
-                  Icon(Icons.system_update, color: AppColors.primary),
+                  const Icon(Icons.system_update, color: AppColors.primary),
                   SizedBox(width: 8.w),
                   Text(l10n.newVersionFound),
                 ],
@@ -458,7 +458,7 @@ class _MainShellState extends State<MainShell> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.open_in_browser, color: AppColors.primary),
+            const Icon(Icons.open_in_browser, color: AppColors.primary),
             SizedBox(width: 8.w),
             Text(l10n.str('browser_download_title', {})),
           ],
@@ -543,7 +543,7 @@ class BottomNavBar extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final navItems = RoleService.getNavItems(role, labels: [
       l10n.navHome, l10n.navOverview, l10n.navDevice, l10n.navAlarm, l10n.navProfile,
-    ]);
+    ],);
     final currentPath = GoRouterState.of(context).matchedLocation;
 
     int currentIndex = 0;
@@ -583,7 +583,7 @@ class BottomNavBar extends StatelessWidget {
           icon: Icon(item.icon, size: 22),
           activeIcon: Icon(item.activeIcon, size: 22),
           label: _translateNavLabel(context, item.label),
-        )).toList(),
+        ),).toList(),
       ),
     );
   }

@@ -29,7 +29,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(l10n.myProfile, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17, color: AppColors.textPrimary)),
+        title: Text(l10n.myProfile, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17, color: AppColors.textPrimary)),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -104,7 +104,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   )
                 else
                   Text(displayName,
-                      style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                      style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),),
                 SizedBox(height: 4.h),
                 if (isLoading)
                   Container(
@@ -113,7 +113,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   )
                 else
                   Text(l10n.roleLabel(roleText),
-                      style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+                      style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),),
               ],
             ),
           ),
@@ -152,7 +152,7 @@ class _ProfilePageState extends State<ProfilePage> {
             onTap: item.$3,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
             contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-          )).toList(),
+          ),).toList(),
         ),
       ),
     );

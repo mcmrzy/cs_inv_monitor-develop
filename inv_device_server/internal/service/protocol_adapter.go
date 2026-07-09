@@ -155,16 +155,22 @@ func matchTopic(pattern, topic string) bool {
 
 	if strings.HasSuffix(pattern, "/*") {
 		prefix := strings.TrimSuffix(pattern, "/*")
-		return strings.HasPrefix(topic, prefix)
+		// 如果前缀包含 +，交给后续通配符处理
+		if !strings.Contains(prefix, "+") {
+			return strings.HasPrefix(topic, prefix)
+		}
 	}
 
 	if strings.HasSuffix(pattern, "/+") {
 		prefix := strings.TrimSuffix(pattern, "/+")
-		if !strings.HasPrefix(topic, prefix) {
-			return false
+		// 如果前缀包含 +，交给后续通配符处理
+		if !strings.Contains(prefix, "+") {
+			if !strings.HasPrefix(topic, prefix) {
+				return false
+			}
+			rest := topic[len(prefix):]
+			return !strings.Contains(rest[1:], "/")
 		}
-		rest := topic[len(prefix):]
-		return !strings.Contains(rest[1:], "/")
 	}
 
 	if strings.Contains(pattern, "+") {

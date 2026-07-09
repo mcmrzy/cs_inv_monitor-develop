@@ -89,7 +89,7 @@ class _AlarmPageState extends State<AlarmPage> {
                 children: [
                   Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
                   SizedBox(height: 12.h),
-                  Text(l10n.translateError(state.message), style: TextStyle(color: AppColors.textSecondary)),
+                  Text(l10n.translateError(state.message), style: const TextStyle(color: AppColors.textSecondary)),
                   SizedBox(height: 12.h),
                   FilledButton.icon(
                     onPressed: () => context.read<AlarmBloc>().add(const AlarmListRequested()),

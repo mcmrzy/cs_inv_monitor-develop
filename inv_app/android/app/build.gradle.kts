@@ -19,16 +19,16 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.inv_app"
+        applicationId = "com.csinv.app"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
         // JPush 推送配置
-        manifestPlaceholders["JPUSH_PKGNAME"] = applicationId
+        manifestPlaceholders["JPUSH_PKGNAME"] = "com.csinv.app"
         manifestPlaceholders["JPUSH_APPKEY"] = "e89e8b711cd18f666705fe7f"
-        manifestPlaceholders["JPUSH_CHANNEL"] = "inv_app"
+        manifestPlaceholders["JPUSH_CHANNEL"] = "csergy_app"
     }
 
     buildTypes {

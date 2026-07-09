@@ -225,7 +225,7 @@ class _EnergyFlowPainter extends CustomPainter {
       _drawPulseEffect(canvas, battCenter, battColor);
     }
     _drawIconCircle(canvas, battCenter, _nodeRadius, battColor,
-        batteryPower >= 0 ? Icons.battery_charging_full : Icons.battery_alert);
+        batteryPower >= 0 ? Icons.battery_charging_full : Icons.battery_alert,);
     _drawIconCircle(canvas, loadCenter, _nodeRadius, loadColor, Icons.home);
     _drawIconCircle(canvas, gridCenter, _nodeRadius, gridColor, Icons.electrical_services);
 
@@ -382,11 +382,11 @@ class _EnergyFlowPainter extends CustomPainter {
       // Glow
       canvas.drawCircle(pos, sz + 2, Paint()
         ..color = color.withValues(alpha: alpha * 0.4)
-        ..style = PaintingStyle.fill);
+        ..style = PaintingStyle.fill,);
       // Core
       canvas.drawCircle(pos, sz, Paint()
         ..color = color.withValues(alpha: alpha)
-        ..style = PaintingStyle.fill);
+        ..style = PaintingStyle.fill,);
     }
   }
 
@@ -433,11 +433,11 @@ class _EnergyFlowPainter extends CustomPainter {
   void _drawIconCircle(Canvas canvas, Offset center, double radius, Color color, IconData icon) {
     canvas.drawCircle(center, radius, Paint()
       ..color = color.withValues(alpha: 0.15)
-      ..style = PaintingStyle.fill);
+      ..style = PaintingStyle.fill,);
     canvas.drawCircle(center, radius, Paint()
       ..color = color.withValues(alpha: 0.4)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2);
+      ..strokeWidth = 2,);
 
     final paragraph = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 20))
           ..pushStyle(ui.TextStyle(color: color, fontSize: 20))

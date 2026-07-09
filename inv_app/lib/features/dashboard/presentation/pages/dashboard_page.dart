@@ -274,7 +274,7 @@ class _DashboardPageState extends State<DashboardPage> {
         if (widgets.isNotEmpty) widgets.add(_divider(context));
         widgets.add(_sectionHeader(
           context, def['title'] as String, def['icon'] as IconData, def['color'] as Color,
-        ));
+        ),);
         final items = sectionFields.map((f) {
           final val = realtimeMap[f.fieldKey];
           return _dataItem(f.fieldName, _fmtValue(val, f.fieldType, f.unit), def['color'] as Color);

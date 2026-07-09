@@ -166,7 +166,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           type: _ItemType.alarm,
           timestamp: timestamp,
           data: alarm,
-        ));
+        ),);
       }
     } else if (_cachedAlarmState is AlarmListLoaded) {
       for (final alarm in (_cachedAlarmState as AlarmListLoaded).alarms) {
@@ -177,7 +177,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           type: _ItemType.alarm,
           timestamp: timestamp,
           data: alarm,
-        ));
+        ),);
       }
     }
 
@@ -188,7 +188,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
           type: _ItemType.system,
           timestamp: notif.timestamp,
           data: notif,
-        ));
+        ),);
       }
     }
 
@@ -223,7 +223,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         children: [
           Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
           SizedBox(height: 12.h),
-          Text(message, style: TextStyle(color: AppColors.textSecondary)),
+          Text(message, style: const TextStyle(color: AppColors.textSecondary)),
           SizedBox(height: 12.h),
           FilledButton.icon(
             onPressed: onRetry,

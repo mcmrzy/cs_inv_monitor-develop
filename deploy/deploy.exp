@@ -1,0 +1,68 @@
+#!/usr/bin/expect -f
+
+# 部署配置
+set SERVER "cskj@192.168.8.50"
+set PASSWORD "cskj9527"
+set REMOTE_DIR "/opt/inv-mqtt"
+
+# 设置超时时间
+set timeout 300
+
+# 开始部署
+puts "========================================"
+puts "光伏逆变器监控系统 - 自动部署"
+puts "========================================"
+puts ""
+
+# 1. 创建远程目录
+puts "\[1/5\] 创建远程目录..."
+spawn ssh -o StrictHostKeyChecking=no $SERVER "mkdir -p $REMOTE_DIR && ls -la /opt/"
+expect {
+    "password:" {
+        send "$PASSWORD\r"
+        exp_continue
+    }
+    eof
+}
+
+# 2. 上传代码
+puts "\n\[2/5\] 上传代码到服务器..."
+spawn scp -o StrictHostKeyChecking=no -r d:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/* $SERVER:$REMOTE_DIR/
+expect {
+    "password:" {
+        send "$PASSWORD\r"
+        exp_continue
+    }
+    eof
+}
+
+# 3. 执行部署
+puts "\n\[3/5\] 执行部署..."
+spawn ssh -o StrictHostKeyChecking=no $SERVER "cd $REMOTE_DIR/deploy && docker-compose down && docker-compose up -d --build"
+expect {
+    "password:" {
+        send "$PASSWORD\r"
+        exp_continue
+    }
+    eof
+}
+
+# 4. 等待服务启动
+puts "\n\[4/5\] 等待服务启动..."
+sleep 15
+
+# 5. 检查服务状态
+puts "\n\[5/5\] 检查服务状态..."
+spawn ssh -o StrictHostKeyChecking=no $SERVER "docker ps"
+expect {
+    "password:" {
+        send "$PASSWORD\r"
+        exp_continue
+    }
+    eof
+}
+
+puts "\n========================================"
+puts "部署完成！"
+puts "访问地址: http://192.168.8.50:8888"
+puts "========================================"

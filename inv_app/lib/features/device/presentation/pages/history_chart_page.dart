@@ -87,7 +87,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
           startDate: startDate,
           endDate: endDate,
           metric: _currentMetric,
-        ));
+        ),);
   }
 
   Future<void> _pickDate() async {
@@ -339,7 +339,7 @@ class _HistoryChartPageState extends State<HistoryChartPage>
           ),
           borderData: FlBorderData(
             show: true,
-            border: Border(
+            border: const Border(
               bottom: BorderSide(color: AppColors.divider),
               left: BorderSide(color: AppColors.divider),
             ),

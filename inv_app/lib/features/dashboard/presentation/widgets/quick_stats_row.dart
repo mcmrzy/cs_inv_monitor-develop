@@ -118,7 +118,7 @@ class _StatChipState extends State<_StatChip>
     ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOut,
-    ));
+    ),);
   }
 
   @override
@@ -272,7 +272,7 @@ class _AnimatedCountState extends State<_AnimatedCount>
     ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOutCubic,
-    ));
+    ),);
     _controller.forward();
     _previousCount = widget.count;
   }
@@ -288,7 +288,7 @@ class _AnimatedCountState extends State<_AnimatedCount>
       ).animate(CurvedAnimation(
         parent: _controller,
         curve: Curves.easeOutCubic,
-      ));
+      ),);
       _controller.reset();
       _controller.forward();
     }

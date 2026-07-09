@@ -64,7 +64,7 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
       final response = await dio.post('/devices/${widget.deviceSN}/control', data: {
         'command': field.fieldKey,
         'params': params ?? {},
-      });
+      },);
 
       if (mounted) {
         final code = response.data['code'];
@@ -75,14 +75,14 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
           content: Text(success ? '✅ $msg' : '❌ $msg'),
           backgroundColor: success ? AppColors.success : AppColors.error,
           duration: const Duration(seconds: 2),
-        ));
+        ),);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(l10n.str('command_send_failed', {'error': '$e'})),
           backgroundColor: AppColors.error,
-        ));
+        ),);
       }
     }
   }
@@ -148,7 +148,7 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
                 SizedBox(width: 10.w),
                 Expanded(
                   child: Text(l10n.deviceOfflineWarning,
-                    style: TextStyle(fontSize: 12.sp, color: AppColors.warning)),
+                    style: TextStyle(fontSize: 12.sp, color: AppColors.warning),),
                 ),
               ],
             ),
@@ -190,7 +190,7 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
           style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
         ),
         trailing: _isOnline
-            ? Icon(Icons.chevron_right_rounded, color: AppColors.textHint)
+            ? const Icon(Icons.chevron_right_rounded, color: AppColors.textHint)
             : Icon(Icons.lock_outline, color: AppColors.textHint, size: 18.sp),
         onTap: !_isOnline
             ? null
@@ -248,7 +248,7 @@ class _DeviceControlPageState extends State<DeviceControlPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('${value.toStringAsFixed(0)} $unit',
-                style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.w700, color: AppColors.primary),),
               SizedBox(height: 16.h),
               Slider(
                 value: value,

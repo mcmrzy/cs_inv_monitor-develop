@@ -72,10 +72,13 @@ export function parseFaultCode(faultCode: string | number | null | undefined): n
   if (faultCode == null) return -1
   if (typeof faultCode === 'number') return faultCode
   const str = String(faultCode).trim()
+  if (str === '') return -1
   if (str.startsWith('0x') || str.startsWith('0X')) {
-    return parseInt(str.substring(2), 16) || -1
+    const parsed = parseInt(str.substring(2), 16)
+    return Number.isNaN(parsed) ? -1 : parsed
   }
-  return parseInt(str, 10) || -1
+  const parsed = parseInt(str, 10)
+  return Number.isNaN(parsed) ? -1 : parsed
 }
 
 // 根据故障码获取告警级别显示，优先使用告警码映射，回退到 alarm_level

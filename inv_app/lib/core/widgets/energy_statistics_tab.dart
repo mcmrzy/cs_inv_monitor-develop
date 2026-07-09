@@ -67,7 +67,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         'station_id': widget.stationId,
         'page': 1,
         'page_size': 5,
-      });
+      },);
       if (response.statusCode == 200 && mounted) {
         final body = response.data;
         if (body is Map<String, dynamic> && body['code'] == 0) {
@@ -130,7 +130,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         'start_date': startDate,
         'end_date': endDate,
         'period': period,
-      });
+      },);
 
       if (response.statusCode == 200) {
         final body = response.data;
@@ -682,7 +682,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               ? Center(child: Padding(
                   padding: EdgeInsets.all(20.w),
                   child: const CircularProgressIndicator(strokeWidth: 2),
-                ))
+                ),)
               : _alarms.isEmpty
                   ? Center(
                       child: Padding(

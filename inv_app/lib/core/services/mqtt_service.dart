@@ -329,7 +329,7 @@ class MQTTServiceImpl implements MQTTService {
 
     // 当故障状态发生变化时，也通过 statusStream 通知 UI 刷新
     if (sysStatus.hasFault || oldFaultCode != sysStatus.faultCode) {
-      final fallbackStatus = rt.onlineStatus ?? OnlineStatus(online: true);
+      final fallbackStatus = rt.onlineStatus ?? const OnlineStatus(online: true);
       _statusController.add(fallbackStatus);
     }
   }

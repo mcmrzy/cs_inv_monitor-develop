@@ -27,10 +27,10 @@ class ProvisionService {
 
   Future<List<ScanResult>> scanWiFi() async {
     final client = HttpClient();
-    client.connectionTimeout = Duration(seconds: _httpTimeout);
+    client.connectionTimeout = const Duration(seconds: _httpTimeout);
     try {
       final request = await client.getUrl(Uri.parse('$baseUrl/scan'));
-      final response = await request.close().timeout(Duration(seconds: 8));
+      final response = await request.close().timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final body = await response.transform(utf8.decoder).join();
         final data = jsonDecode(body);
@@ -43,7 +43,7 @@ class ProvisionService {
           ssid: n['ssid'] ?? '',
           rssi: n['rssi'] ?? -100,
           encrypted: (n['enc'] ?? 1) == 1,
-        )).toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
+        ),).toList()..sort((a, b) => b.rssi.compareTo(a.rssi));
       }
     } catch (_) {}
     return [];
@@ -84,12 +84,12 @@ class ProvisionService {
   /// POST JSON 请求
   Future<ProvisionResult> _postJson(String url, Map<String, dynamic> body) async {
     final client = HttpClient();
-    client.connectionTimeout = Duration(seconds: _httpTimeout);
+    client.connectionTimeout = const Duration(seconds: _httpTimeout);
     try {
       final request = await client.postUrl(Uri.parse(url));
       request.headers.set('Content-Type', 'application/json');
       request.write(jsonEncode(body));
-      final response = await request.close().timeout(Duration(seconds: 10));
+      final response = await request.close().timeout(const Duration(seconds: 10));
       final responseBody = await response.transform(utf8.decoder).join();
       return _parseResponse(responseBody, 'JSON POST $url');
     } on FormatException {
@@ -102,12 +102,12 @@ class ProvisionService {
   /// POST 表单/URL编码 请求
   Future<ProvisionResult> _postForm(String url, String formBody) async {
     final client = HttpClient();
-    client.connectionTimeout = Duration(seconds: _httpTimeout);
+    client.connectionTimeout = const Duration(seconds: _httpTimeout);
     try {
       final request = await client.postUrl(Uri.parse(url));
       request.headers.set('Content-Type', 'application/x-www-form-urlencoded');
       if (formBody.isNotEmpty) request.write(formBody);
-      final response = await request.close().timeout(Duration(seconds: 10));
+      final response = await request.close().timeout(const Duration(seconds: 10));
       final responseBody = await response.transform(utf8.decoder).join();
       return _parseResponse(responseBody, 'FORM POST $url');
     } on FormatException {
@@ -120,10 +120,10 @@ class ProvisionService {
   /// GET 带查询参数 请求
   Future<ProvisionResult> _getWithParams(String url) async {
     final client = HttpClient();
-    client.connectionTimeout = Duration(seconds: _httpTimeout);
+    client.connectionTimeout = const Duration(seconds: _httpTimeout);
     try {
       final request = await client.getUrl(Uri.parse(url));
-      final response = await request.close().timeout(Duration(seconds: 10));
+      final response = await request.close().timeout(const Duration(seconds: 10));
       final responseBody = await response.transform(utf8.decoder).join();
       return _parseResponse(responseBody, 'GET $url');
     } on FormatException {
@@ -163,10 +163,10 @@ class ProvisionService {
 
   Future<ProvisionResult> checkStatus() async {
     final client = HttpClient();
-    client.connectionTimeout = Duration(seconds: _httpTimeout);
+    client.connectionTimeout = const Duration(seconds: _httpTimeout);
     try {
       final request = await client.getUrl(Uri.parse('$baseUrl/wifi_status'));
-      final response = await request.close().timeout(Duration(seconds: 5));
+      final response = await request.close().timeout(const Duration(seconds: 5));
       final body = await response.transform(utf8.decoder).join();
       final data = jsonDecode(body);
       if (data['connected'] == true) {
@@ -185,10 +185,10 @@ class ProvisionService {
 
   Future<String?> getApInfo() async {
     final client = HttpClient();
-    client.connectionTimeout = Duration(seconds: _httpTimeout);
+    client.connectionTimeout = const Duration(seconds: _httpTimeout);
     try {
       final request = await client.getUrl(Uri.parse('$baseUrl/ap_info'));
-      final response = await request.close().timeout(Duration(seconds: 5));
+      final response = await request.close().timeout(const Duration(seconds: 5));
       final body = await response.transform(utf8.decoder).join();
       final data = jsonDecode(body);
       if (data['result'] == 'ok') {

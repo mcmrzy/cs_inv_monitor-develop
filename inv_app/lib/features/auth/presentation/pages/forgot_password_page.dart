@@ -69,7 +69,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     context.read<AuthBloc>().add(AuthSendCodeRequested(
       phone: phone,
       type: 'reset',
-    ));
+    ),);
   }
 
   void _handleResetPassword() {
@@ -78,7 +78,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         phone: _phoneController.text.trim(),
         code: _codeController.text.trim(),
         newPassword: _passwordController.text,
-      ));
+      ),);
     }
   }
 

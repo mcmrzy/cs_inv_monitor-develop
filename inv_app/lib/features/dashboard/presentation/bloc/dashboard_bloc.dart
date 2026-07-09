@@ -333,7 +333,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
                   'stationName': e.stationName,
                   'energy': e.energy,
                   'deviceCount': e.deviceCount,
-                })
+                },)
             .toList(),
         'recentAlarms': data.recentAlarms,
       });

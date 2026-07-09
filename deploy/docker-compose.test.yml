@@ -1,0 +1,78 @@
+# ============================================================
+# cs_inv_monitor - Integration Test Environment
+# Usage:
+#   docker compose -f docker-compose.test.yml up -d
+#   cd ../tests/integration && go test -v -tags=integration -count=1 ./...
+#   docker compose -f docker-compose.test.yml down -v
+# ============================================================
+
+name: inv-monitor-test
+
+services:
+  # ---------- PostgreSQL + TimescaleDB ----------
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: inv-test-postgres
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+      POSTGRES_DB: inv_test
+      TZ: UTC
+    ports:
+      - "15432:5432"
+    volumes:
+      - test-pg-data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/02-timescaledb.sql:ro
+    networks:
+      - inv-test-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d inv_test"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ---------- Redis ----------
+  redis:
+    image: redis:7-alpine
+    container_name: inv-test-redis
+    ports:
+      - "16379:6379"
+    command: redis-server --requirepass testredispass --appendonly yes
+    volumes:
+      - test-redis-data:/data
+    networks:
+      - inv-test-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "testredispass", "ping"]
+      interval: 3s
+      retries: 5
+
+  # ---------- EMQX (MQTT Broker) ----------
+  emqx:
+    image: emqx/emqx:5.3
+    container_name: inv-test-emqx
+    environment:
+      EMQX_NAME: emqx-test
+      EMQX_HOST: 127.0.0.1
+      EMQX_LISTENERS__TCP__DEFAULT__ENABLE: "true"
+      EMQX_LOADED_PLUGINS: "emqx_management,emqx_auth_mnesia,emqx_retainer"
+    ports:
+      - "1883:1883"    # MQTT TCP
+      - "18083:18083"  # EMQX Dashboard
+    networks:
+      - inv-test-net
+    healthcheck:
+      test: ["CMD", "emqx", "ping"]
+      interval: 5s
+      retries: 10
+      start_period: 20s
+
+networks:
+  inv-test-net:
+    driver: bridge
+
+volumes:
+  test-pg-data:
+  test-redis-data:

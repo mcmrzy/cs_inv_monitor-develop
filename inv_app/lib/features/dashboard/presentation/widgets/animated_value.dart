@@ -43,7 +43,7 @@ class _AnimatedValueState extends State<AnimatedValue>
     ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOut,
-    ));
+    ),);
     _controller.forward();
     _previousValue = widget.value;
   }
@@ -59,7 +59,7 @@ class _AnimatedValueState extends State<AnimatedValue>
       ).animate(CurvedAnimation(
         parent: _controller,
         curve: Curves.easeOut,
-      ));
+      ),);
       _controller.reset();
       _controller.forward();
     }

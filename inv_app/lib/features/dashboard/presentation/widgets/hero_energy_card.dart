@@ -198,7 +198,7 @@ class _AnimatedEnergyValueState extends State<_AnimatedEnergyValue>
     ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOutCubic,
-    ));
+    ),);
     _controller.forward();
     _previousValue = widget.value;
   }
@@ -214,7 +214,7 @@ class _AnimatedEnergyValueState extends State<_AnimatedEnergyValue>
       ).animate(CurvedAnimation(
         parent: _controller,
         curve: Curves.easeOutCubic,
-      ));
+      ),);
       _controller.reset();
       _controller.forward();
     }

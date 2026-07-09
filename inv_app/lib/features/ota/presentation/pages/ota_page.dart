@@ -1,4 +1,4 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -103,7 +103,7 @@ class _OTAPageState extends State<OTAPage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: Text(l10n.otaTitle, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(l10n.otaTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -335,7 +335,7 @@ class _OTAPageState extends State<OTAPage> {
                 elevation: 0,
               ),
               child: _triggering
-                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : Text(l10n.startUpgrade, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
             ),
           ),
@@ -555,7 +555,7 @@ class _OTAPageState extends State<OTAPage> {
                 elevation: 0,
               ),
               child: _triggering
-                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : Text(l10n.startUpgrade, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
             ),
           ),
@@ -785,7 +785,7 @@ class _OTAPageState extends State<OTAPage> {
                 border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Text(l10n.str('current_version_label', {'version': currentVersion}),
-                  style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
+                  style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),),
             ),
           ],
           // 芯片固件版本明细
@@ -877,7 +877,7 @@ class _OTAPageState extends State<OTAPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
+          const SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
           SizedBox(height: 16.h),
           Text(l10n.sendingUpgradeCommand, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
         ],
@@ -906,7 +906,7 @@ class _OTAPageState extends State<OTAPage> {
               value: state.progress > 0 ? state.progress.clamp(0.0, 100.0) / 100.0 : null,
               minHeight: 8.h,
               backgroundColor: const Color(0xFFE5E7EB),
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
             ),
           ),
           SizedBox(height: 8.h),

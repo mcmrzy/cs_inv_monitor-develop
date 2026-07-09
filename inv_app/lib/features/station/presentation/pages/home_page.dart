@@ -68,7 +68,7 @@ class _HomePageState extends State<HomePage> {
               (s['station_name'] ?? s['name'] ?? '')
                   .toString()
                   .toLowerCase()
-                  .contains(q))
+                  .contains(q),)
           .toList();
     }
     switch (_filterIndex) {
@@ -77,7 +77,7 @@ class _HomePageState extends State<HomePage> {
             .where((s) =>
                 (s['status'] ?? 1) == 1 &&
                 (s['fault_count'] ?? 0) == 0 &&
-                (s['online_count'] ?? 0) > 0)
+                (s['online_count'] ?? 0) > 0,)
             .toList();
       case 2:
         list = list.where((s) => (s['fault_count'] ?? 0) > 0).toList();
@@ -134,7 +134,7 @@ class _HomePageState extends State<HomePage> {
                           child: Row(
                             children: [
                               Text(l10n.str('station_count', {'count': '${filtered.length}'}),
-                                  style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                                  style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary),),
                               const Spacer(),
                               if (_filterIndex > 0)
                                 GestureDetector(
@@ -153,7 +153,7 @@ class _HomePageState extends State<HomePage> {
                           sliver: SliverList(
                               delegate: SliverChildBuilderDelegate(
                                   (_, i) => _buildCard(filtered[i]),
-                                  childCount: filtered.length)),
+                                  childCount: filtered.length,),),
                         ),
                       const SliverToBoxAdapter(child: SizedBox(height: 100)),
                     ],
@@ -175,7 +175,7 @@ class _HomePageState extends State<HomePage> {
             top: MediaQuery.of(context).padding.top + 12.h,
             left: 20.w,
             right: 20.w,
-            bottom: 8.h),
+            bottom: 8.h,),
         color: Colors.white,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -188,10 +188,10 @@ class _HomePageState extends State<HomePage> {
                         fontSize: 22.sp,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
-                        letterSpacing: -0.3)),
+                        letterSpacing: -0.3,),),
                 SizedBox(height: 2.h),
                 Text(l10n.pvInverterMonitor,
-                    style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                    style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),),
               ],
             ),
             Row(
@@ -259,27 +259,27 @@ class _HomePageState extends State<HomePage> {
           decoration: InputDecoration(
             hintText: l10n.searchStation,
             hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
-            prefixIcon: Icon(Icons.search_rounded, size: 20, color: AppColors.textHint),
+            prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textHint),
             suffixIcon: _searchCtl.text.isNotEmpty
                 ? IconButton(
-                    icon: Icon(Icons.close_rounded, size: 18, color: AppColors.textHint),
+                    icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textHint),
                     onPressed: () {
                       _searchCtl.clear();
                       setState(() {});
-                    })
+                    },)
                 : null,
             filled: true,
             fillColor: AppColors.surfaceHover,
             contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
             border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12.r),
-                borderSide: BorderSide.none),
+                borderSide: BorderSide.none,),
             enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12.r),
-                borderSide: BorderSide.none),
+                borderSide: BorderSide.none,),
             focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12.r),
-                borderSide: BorderSide(color: AppColors.primary, width: 1)),
+                borderSide: const BorderSide(color: AppColors.primary, width: 1),),
           ),
         ),
       ),
@@ -330,13 +330,13 @@ class _HomePageState extends State<HomePage> {
                                 fontSize: 16.sp,
                                 fontWeight: FontWeight.w800,
                                 color: _filterColors[i],
-                                height: 1.1)),
+                                height: 1.1,),),
                         SizedBox(height: 3.h),
                         Text(_filters[i],
                             style: TextStyle(
                                 fontSize: 11.sp,
                                 fontWeight: FontWeight.w600,
-                                color: active ? _filterColors[i] : AppColors.textHint)),
+                                color: active ? _filterColors[i] : AppColors.textHint,),),
                       ],
                     ),
                   ),
@@ -421,9 +421,9 @@ class _HomePageState extends State<HomePage> {
                                 style: TextStyle(
                                     fontSize: 16.sp,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary),
+                                    color: AppColors.textPrimary,),
                                 maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
+                                overflow: TextOverflow.ellipsis,),
                           ),
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
@@ -432,7 +432,7 @@ class _HomePageState extends State<HomePage> {
                               borderRadius: BorderRadius.circular(6.r),
                             ),
                             child: Text(badgeText,
-                                style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: badgeColor)),
+                                style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: badgeColor),),
                           ),
                         ],
                       ),
@@ -440,7 +440,7 @@ class _HomePageState extends State<HomePage> {
                       Text(addressText,
                           style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                          overflow: TextOverflow.ellipsis,),
                       SizedBox(height: 10.h),
                       Row(
                         children: [
@@ -473,14 +473,14 @@ class _HomePageState extends State<HomePage> {
                     fontSize: 18.sp,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
-                    height: 1.1),
+                    height: 1.1,),
               ),
               TextSpan(
                 text: ' $unit',
                 style: TextStyle(
                     fontSize: 11.sp,
                     fontWeight: FontWeight.w500,
-                    color: AppColors.textHint),
+                    color: AppColors.textHint,),
               ),
             ],
           ),
@@ -502,15 +502,15 @@ class _HomePageState extends State<HomePage> {
             height: 80.w,
             decoration: BoxDecoration(
                 color: AppColors.surfaceHover,
-                borderRadius: BorderRadius.circular(20.r)),
+                borderRadius: BorderRadius.circular(20.r),),
             child: Icon(Icons.add_home_work_outlined, size: 36.sp, color: AppColors.textHint),
           ),
           SizedBox(height: 18.h),
           Text(l10n.noStations,
-              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary),),
           SizedBox(height: 6.h),
           Text(l10n.tapPlusToCreate,
-              style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+              style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),),
         ],
       ),
     );
@@ -528,12 +528,12 @@ class _HomePageState extends State<HomePage> {
             SizedBox(height: 14.h),
             Text(l10n.translateError(msg),
                 style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
-                textAlign: TextAlign.center),
+                textAlign: TextAlign.center,),
             SizedBox(height: 16.h),
             OutlinedButton(
                 onPressed: () => context.read<StationBloc>().add(StationSummaryRequested()),
                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
-                child: Text(l10n.retry)),
+                child: Text(l10n.retry),),
           ],
         ),
       ),
@@ -632,7 +632,7 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
       ),
       _MenuItemData(
         icon: Icons.wifi,
-        color: Color(0xFF8B5CF6),
+        color: const Color(0xFF8B5CF6),
         title: l10n.wifiConfig,
         subtitle: l10n.configWifiForDevice,
         path: '/wifi-config',
@@ -733,16 +733,16 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
                   children: [
                     Text(item.title,
                         style: TextStyle(
-                            fontSize: 16.sp, fontWeight: FontWeight.w600)),
+                            fontSize: 16.sp, fontWeight: FontWeight.w600,),),
                     SizedBox(height: 2.h),
                     Text(item.subtitle,
                         style: TextStyle(
-                            fontSize: 12.sp, color: AppColors.textHint)),
+                            fontSize: 12.sp, color: AppColors.textHint,),),
                   ],
                 ),
               ),
               const Icon(Icons.arrow_forward_ios,
-                  size: 16, color: AppColors.textHint),
+                  size: 16, color: AppColors.textHint,),
             ],
           ),
         ),

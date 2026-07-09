@@ -27,7 +27,7 @@ class DeviceRemoteDataSource {
     return await dio.post('/devices/bind', data: {
       'sn': sn,
       'station_id': stationId,
-    });
+    },);
   }
 
   Future<Response> unbind(String sn) async {
@@ -38,7 +38,7 @@ class DeviceRemoteDataSource {
     return await dio.post('/devices/$sn/control', data: {
       'command': cmdType,
       'params': params,
-    });
+    },);
   }
 
   Future<Response> getStatistics(String sn, String startDate, String endDate, String period) async {
@@ -46,7 +46,7 @@ class DeviceRemoteDataSource {
       'start_date': startDate,
       'end_date': endDate,
       'period': period,
-    });
+    },);
   }
 
   Future<Response> getHistory(String sn, String startDate, String endDate, String period) async {
@@ -54,14 +54,14 @@ class DeviceRemoteDataSource {
       'start_date': startDate,
       'end_date': endDate,
       'period': period,
-    });
+    },);
   }
 
   Future<Response> getAlarms(String sn, {int page = 1, int pageSize = 20}) async {
     return await dio.get('/devices/$sn/alarms', queryParameters: {
       'page': page,
       'page_size': pageSize,
-    });
+    },);
   }
 
   Future<Response> scanLocal() async {

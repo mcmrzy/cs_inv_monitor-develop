@@ -26,7 +26,7 @@ class AlarmRemoteDataSource {
   Future<Response> markRead(List<int> alarmIds) async {
     return await dio.put('/alarms/read', data: {
       'ids': alarmIds,
-    });
+    },);
   }
 }
 

@@ -3,7 +3,7 @@
 # 用法: make help 查看所有可用命令
 # ============================================================
 
-.PHONY: help build test lint docker clean run
+.PHONY: help build test lint docker clean run test-unit-go test-generate-mocks test-all test-unit test-unit-flutter test-unit-frontend test-integration test-security test-load test-coverage
 
 # ---------- 全局变量 ----------
 GO := go
@@ -40,6 +40,16 @@ test-device: ## 测试 inv_device_server
 	cd inv_device_server && $(GO) test ./... -v -count=1
 
 test-go: test-api test-device ## 运行所有 Go 测试
+
+test-unit-go: ## 运行 Go 单元测试（含 race 检测和覆盖率）
+	cd inv_api_server && $(GO) test -race -cover -count=1 ./...
+	cd inv_device_server && $(GO) test -race -cover -count=1 ./...
+	cd api-gateway && $(GO) test -race -cover -count=1 ./...
+	cd mqtt-kafka-bridge && $(GO) test -race -cover -count=1 ./...
+
+test-generate-mocks: ## Mock 说明（手工维护）
+	@echo "Mocks are maintained manually in testutil/mocks/"
+	@echo "如需自动生成，请安装 mockery: go install github.com/vektra/mockery/v2@latest"
 
 vet-go: ## Go vet 静态检查
 	cd inv_api_server && $(GO) vet ./...
@@ -121,3 +131,30 @@ clean: ## 清理编译产物
 clean-all: clean ## 深度清理（含 node_modules、.dart_tool）
 	rm -rf inv_app/.dart_tool inv_app/build
 	rm -rf inv-admin-frontend/node_modules inv-admin-frontend/dist
+
+# ==================== 高级测试 ====================
+
+test-all: test-unit test-security ## 运行所有测试（单元测试 + 安全测试）
+	@echo "All tests completed"
+
+test-unit: test-unit-go test-unit-flutter test-unit-frontend ## 运行所有单元测试
+
+test-unit-flutter: ## 运行 Flutter 单元测试（含覆盖率）
+	cd inv_app && $(FLUTTER) test --coverage
+
+test-unit-frontend: ## 运行前端单元测试
+	cd inv-admin-frontend && $(NPM) run test:run
+
+test-integration: ## 运行集成测试
+	cd tests/integration && $(GO) test -v -tags=integration -count=1 ./...
+
+test-security: ## 运行安全测试
+	cd inv_api_server && $(GO) test -v -count=1 ./tests/security/...
+
+test-load: ## 显示负载测试命令
+	@echo "Run k6 load tests manually:"
+	@echo "  k6 run inv_api_server/tests/load-test/api-stress.js"
+	@echo "  k6 run inv_api_server/tests/load-test/mqtt-stress.js"
+
+test-coverage: test-unit ## 生成覆盖率报告
+	@echo "Coverage reports generated"

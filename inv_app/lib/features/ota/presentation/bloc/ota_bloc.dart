@@ -70,7 +70,7 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
   ) async {
     // 先调用 resend API 确保升级命令被发送到设备
     await repository.resendUpgradeCommand(event.sn);
-    emit(OTATriggered(taskId: 0));
+    emit(const OTATriggered(taskId: 0));
     _startProgressPoll(event.sn);
   }
 

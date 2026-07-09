@@ -180,7 +180,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
             sn: event.sn,
             data: {'cmd_type': event.cmdType, 'params': event.params},
             timestamp: DateTime.now(),
-          ));
+          ),);
         }
         emit(const DeviceControlSuccess(message: 'Command sent'));
       } catch (e) {
@@ -191,7 +191,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
             sn: event.sn,
             data: {'cmd_type': event.cmdType, 'params': event.params},
             timestamp: DateTime.now(),
-          ));
+          ),);
         }
         emit(DeviceError(message: e.toString()));
       }
@@ -226,7 +226,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           sn: event.sn,
           data: event.params,
           timestamp: DateTime.now(),
-        ));
+        ),);
       }
       emit(DeviceParamsUpdateSuccess());
     } catch (e) {
@@ -237,7 +237,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           sn: event.sn,
           data: event.params,
           timestamp: DateTime.now(),
-        ));
+        ),);
       }
       emit(DeviceError(message: e.toString()));
     }
@@ -302,7 +302,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           data: points,
           period: event.period,
           metric: event.metric,
-        ));
+        ),);
       },
     );
   }
@@ -382,7 +382,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           sn: _activeSN ?? '',
           data: event.params,
           timestamp: DateTime.now(),
-        ));
+        ),);
       }
       emit(DeviceParamsUpdateSuccess());
     } catch (e) {
@@ -393,7 +393,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           sn: _activeSN ?? '',
           data: event.params,
           timestamp: DateTime.now(),
-        ));
+        ),);
       }
       emit(DeviceError(message: e.toString()));
     }

@@ -35,7 +35,7 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
         sn: widget.deviceSN,
         cmdType: 'share',
         params: {'phone': _phoneController.text.trim(), 'permission': _permission},
-      ));
+      ),);
     }
   }
 

@@ -16,15 +16,15 @@ class DashboardRepositoryImpl implements DashboardRepository {
     final message = e.message ?? e.toString();
     switch (statusCode) {
       case 401:
-        return UnauthorizedFailure('Unauthorized');
+        return const UnauthorizedFailure('Unauthorized');
       case 403:
-        return ForbiddenFailure('Access denied');
+        return const ForbiddenFailure('Access denied');
       case 404:
-        return NotFoundFailure('Not found');
+        return const NotFoundFailure('Not found');
       case 422:
         return ValidationFailure(message);
       case null:
-        return NetworkFailure('Network error');
+        return const NetworkFailure('Network error');
       default:
         return ServerFailure('Server error: $statusCode');
     }
@@ -42,7 +42,7 @@ class DashboardRepositoryImpl implements DashboardRepository {
       }
       throw ServerFailure(data['message'] ?? 'Request failed');
     }
-    throw ServerFailure('Response format error');
+    throw const ServerFailure('Response format error');
   }
 
   List<dynamic> _parseList(Response response) {
@@ -63,7 +63,7 @@ class DashboardRepositoryImpl implements DashboardRepository {
     if (data is List) {
       return data;
     }
-    throw ServerFailure('Response format error');
+    throw const ServerFailure('Response format error');
   }
 
   @override

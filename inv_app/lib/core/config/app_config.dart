@@ -1,5 +1,5 @@
 class AppConfig {
-  static const String appName = 'PV Inverter';
+  static const String appName = '辰烁光伏';
   static const String version = '1.0.0';
   static const int versionCode = 1; // 与 pubspec.yaml 中的 build number 一致
   

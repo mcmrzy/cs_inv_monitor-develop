@@ -13,7 +13,7 @@ class StationRemoteDataSource {
     return await dio.get('/stations', queryParameters: {
       'page': page,
       'page_size': pageSize,
-    });
+    },);
   }
 
   Future<Response> getDetail(int stationId) async {
@@ -37,7 +37,7 @@ class StationRemoteDataSource {
       'start_date': startDate,
       'end_date': endDate,
       'period': period,
-    });
+    },);
   }
 }
 

@@ -81,7 +81,7 @@ class ServiceLocator {
       connectTimeout: const Duration(milliseconds: AppConfig.connectTimeout),
       receiveTimeout: const Duration(milliseconds: AppConfig.receiveTimeout),
       sendTimeout: const Duration(milliseconds: AppConfig.sendTimeout),
-    ));
+    ),);
 
     // 拦截器1：Token 注入 + 自动刷新
     dio.interceptors.add(InterceptorsWrapper(
@@ -124,7 +124,7 @@ class ServiceLocator {
               baseUrl: AppConfig.apiBaseUrl,
               connectTimeout: const Duration(milliseconds: AppConfig.connectTimeout),
               receiveTimeout: const Duration(milliseconds: AppConfig.receiveTimeout),
-            ));
+            ),);
 
             final refreshResponse = await refreshDio.post(
               '/auth/refresh',
@@ -195,7 +195,7 @@ class ServiceLocator {
         }
         return handler.next(error);
       },
-    ));
+    ),);
 
     dio.interceptors.add(PrettyDioLogger(
       requestHeader: true,
@@ -204,7 +204,7 @@ class ServiceLocator {
       responseHeader: false,
       error: true,
       compact: true,
-    ));
+    ),);
 
     getIt.registerLazySingleton<Dio>(() => dio);
   }

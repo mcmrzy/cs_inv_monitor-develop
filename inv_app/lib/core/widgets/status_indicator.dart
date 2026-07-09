@@ -87,7 +87,7 @@ class _StatusIndicatorState extends State<StatusIndicator>
               decoration: BoxDecoration(
                 color: isOnline
                     ? dotColor.withValues(
-                        alpha: 0.3 + (_pulseAnimation.value * 0.7))
+                        alpha: 0.3 + (_pulseAnimation.value * 0.7),)
                     : dotColor,
                 shape: BoxShape.circle,
               ),

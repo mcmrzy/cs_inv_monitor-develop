@@ -61,7 +61,7 @@ class PhaseBar extends StatelessWidget {
                 phase: phase,
                 maxValue: maxValue,
                 theme: theme,
-              )),
+              ),),
         ],
       ),
     );

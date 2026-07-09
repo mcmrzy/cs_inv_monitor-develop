@@ -55,7 +55,7 @@ class _LoginPageState extends State<LoginPage> {
       account: _accountController.text.trim(),
       password: _passwordController.text,
       rememberPassword: _rememberPassword,
-    ));
+    ),);
   }
 
   @override

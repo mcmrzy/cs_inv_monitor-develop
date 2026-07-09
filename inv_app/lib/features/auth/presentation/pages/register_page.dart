@@ -79,7 +79,7 @@ class _RegisterPageState extends State<RegisterPage> {
       code: _codeController.text.trim(),
       phone: _phoneController.text.trim(),
       nickname: _nicknameController.text.trim(),
-    ));
+    ),);
   }
 
   @override

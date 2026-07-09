@@ -114,7 +114,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       final openMeteoDio = Dio(BaseOptions(
         connectTimeout: const Duration(seconds: 5),
         receiveTimeout: const Duration(seconds: 5),
-      ));
+      ),);
       final res = await openMeteoDio.get(url);
       if (res.statusCode != 200) return;
 
@@ -360,7 +360,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
                   borderRadius: BorderRadius.circular(8.r),
                   child: Padding(
                     padding: EdgeInsets.all(8.w),
-                    child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+                    child: const Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
                   ),
                 ),
               ),
@@ -574,42 +574,42 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
 
     // PV → Load (main trunk)
     if (pv > threshold && load > threshold) {
-      flows.add(FlowEdge(
+      flows.add(const FlowEdge(
         from: NodePosition.top, to: NodePosition.bottom,
-        fromColor: const Color(0xFFF59E0B), toColor: const Color(0xFF3B82F6),
-      ));
+        fromColor: Color(0xFFF59E0B), toColor: Color(0xFF3B82F6),
+      ),);
     }
 
     // PV → Battery (left branch)
     if (pv > threshold && batt > threshold) {
-      flows.add(FlowEdge(
+      flows.add(const FlowEdge(
         from: NodePosition.top, to: NodePosition.left,
-        fromColor: const Color(0xFFF59E0B), toColor: AppColors.successLight,
-      ));
+        fromColor: Color(0xFFF59E0B), toColor: AppColors.successLight,
+      ),);
     }
 
     // Battery → Load (left branch, discharging)
     if (batt < -threshold) {
-      flows.add(FlowEdge(
+      flows.add(const FlowEdge(
         from: NodePosition.left, to: NodePosition.bottom,
-        fromColor: AppColors.successLight, toColor: const Color(0xFF3B82F6),
-      ));
+        fromColor: AppColors.successLight, toColor: Color(0xFF3B82F6),
+      ),);
     }
 
     // Grid → Load (right branch, importing)
     if (grid > threshold) {
-      flows.add(FlowEdge(
+      flows.add(const FlowEdge(
         from: NodePosition.right, to: NodePosition.bottom,
-        fromColor: AppColors.textSecondary, toColor: const Color(0xFF3B82F6),
-      ));
+        fromColor: AppColors.textSecondary, toColor: Color(0xFF3B82F6),
+      ),);
     }
 
     // Load → Grid (right branch, exporting to grid)
     if (grid < -threshold) {
-      flows.add(FlowEdge(
+      flows.add(const FlowEdge(
         from: NodePosition.bottom, to: NodePosition.right,
-        fromColor: const Color(0xFF3B82F6), toColor: AppColors.textSecondary,
-      ));
+        fromColor: Color(0xFF3B82F6), toColor: AppColors.textSecondary,
+      ),);
     }
 
     return flows;
@@ -778,7 +778,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               borderRadius: BorderRadius.circular(8.r),
               child: Padding(
                 padding: EdgeInsets.all(8.w),
-                child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+                child: const Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
               ),
             ),
           ),
@@ -896,7 +896,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               borderRadius: BorderRadius.circular(8.r),
               child: Padding(
                 padding: EdgeInsets.all(8.w),
-                child: Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+                child: const Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
               ),
             ),
           ),
@@ -994,12 +994,12 @@ void paint(Canvas canvas, Size size) {
       Offset(cx - offset, bY), 
       Offset(cx - offset, bY - r), 
       lineEndColor, lineStartColor,
-      reverse: !pvToBatt);
+      reverse: !pvToBatt,);
     
     _solidLine(canvas, Offset(cx - offset, bY - r), pvTarget, lineStartColor);
 
     _curvedParticlesV(canvas, battRight, Offset(cx - offset - r, bY), Offset(cx - offset, bY), Offset(cx - offset, bY - r), pvTarget, battColor, pvColor,
-      reverse: pvToBatt);
+      reverse: pvToBatt,);
     if (pvToBatt) {
       _drawArrow(canvas, battRight.dx - 12, bY, battColor, pointingLeft: true);
     } else {
@@ -1019,7 +1019,7 @@ void paint(Canvas canvas, Size size) {
       Offset(cx - offset - r, bY),
       Offset(cx - offset, bY),
       Offset(cx - offset, bY + r),
-      battColor, loadColor);
+      battColor, loadColor,);
     
     _solidLine(canvas, Offset(cx - offset, bY + r), loadTarget, loadColor);
 
@@ -1044,12 +1044,12 @@ void paint(Canvas canvas, Size size) {
       Offset(cx + offset, gY),
       Offset(cx + offset, gY - r),
       lineEndColor, lineStartColor,
-      reverse: !pvToGrid);
+      reverse: !pvToGrid,);
     
     _solidLine(canvas, Offset(cx + offset, gY - r), pvTarget, lineStartColor);
 
     _curvedParticlesV(canvas, gridLeft, Offset(cx + offset + r, gY), Offset(cx + offset, gY), Offset(cx + offset, gY - r), pvTarget, gridColor, pvColor,
-      reverse: pvToGrid);
+      reverse: pvToGrid,);
     if (pvToGrid) {
       _drawArrow(canvas, gridLeft.dx + 12, gY, gridColor, pointingLeft: false);
     } else {
@@ -1074,12 +1074,12 @@ void paint(Canvas canvas, Size size) {
       Offset(cx + offset, gY),
       Offset(cx + offset, gY + r),
       lineEndColor, lineStartColor,
-      reverse: !loadToGrid);
+      reverse: !loadToGrid,);
     
     _solidLine(canvas, Offset(cx + offset, gY + r), loadTarget, lineStartColor);
 
     _curvedParticlesV(canvas, gridLeft, Offset(cx + offset + r, gY), Offset(cx + offset, gY), Offset(cx + offset, gY + r), loadTarget, gridColor, loadColor,
-      reverse: loadToGrid);
+      reverse: loadToGrid,);
     if (loadToGrid) {
       _drawArrow(canvas, gridLeft.dx + 12, gY, gridColor, pointingLeft: false);
     } else {
@@ -1131,7 +1131,7 @@ void paint(Canvas canvas, Size size) {
         Offset(x1, y1), 
         Offset(x2, y2), 
         [color1, color2], 
-        [0.0, 1.0]
+        [0.0, 1.0],
       );
       
       canvas.drawLine(
@@ -1141,7 +1141,7 @@ void paint(Canvas canvas, Size size) {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.8
           ..strokeCap = StrokeCap.round
-          ..shader = shader
+          ..shader = shader,
       );
     }
   }
@@ -1151,7 +1151,7 @@ void paint(Canvas canvas, Size size) {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.8
       ..strokeCap = StrokeCap.round
-      ..color = color);
+      ..color = color,);
   }
 
   void _curvedArcOnly(Canvas canvas, Offset cornerStart, Offset control, Offset cornerEnd, Color ca, Color cb, {bool reverse = false}) {
@@ -1164,7 +1164,7 @@ void paint(Canvas canvas, Size size) {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.8
       ..strokeCap = StrokeCap.round
-      ..shader = shader);
+      ..shader = shader,);
   }
 
   void _particles(Canvas canvas, Offset a, Offset b, Color ca, Color cb) {
@@ -1225,10 +1225,10 @@ void paint(Canvas canvas, Size size) {
     canvas.drawCircle(Offset(x, y), 5.0, Paint()
       ..color = c.withOpacity(alpha * 0.5)
       ..style = PaintingStyle.fill
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),);
     canvas.drawCircle(Offset(x, y), 3.0, Paint()
       ..color = c.withOpacity(alpha)
-      ..style = PaintingStyle.fill);
+      ..style = PaintingStyle.fill,);
   }
 
   @override

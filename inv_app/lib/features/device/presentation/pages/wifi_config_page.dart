@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -112,7 +112,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(result),
           duration: const Duration(seconds: 3),
-        ));
+        ),);
       }
     });
   }
@@ -161,7 +161,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(AppLocalizations.of(context)!.wifiPermissionHint),
             duration: const Duration(seconds: 4),
-          ));
+          ),);
         }
         return;
       }
@@ -172,7 +172,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(AppLocalizations.of(context)!.locationServiceHint),
           duration: const Duration(seconds: 4),
-        ));
+        ),);
         setState(() => _wifiScanning = false);
         return;
       }
@@ -303,7 +303,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ssid: n.ssid ?? '',
         rssi: n.level ?? -100,
         encrypted: !_isOpenNetwork(n),
-      )).toList();
+      ),).toList();
       _scanningNearbyWifi = false;
       _provisionStatus = _nearbyWifiList.isEmpty
           ? AppLocalizations.of(context)!.noWifiFoundInputManually
@@ -355,7 +355,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           ssid: n.ssid ?? '',
           rssi: n.level ?? -100,
           encrypted: !_isOpenNetwork(n),
-        )).toList();
+        ),).toList();
         _scanningNearbyWifi = false;
         _provisionStatus = _nearbyWifiList.isEmpty
             ? AppLocalizations.of(context)!.noWifiFoundInputManually
@@ -438,7 +438,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         content: Text(AppLocalizations.of(context)!.deviceOnlineWifi),
         backgroundColor: AppColors.successLight,
         duration: const Duration(seconds: 3),
-      ));
+      ),);
     }
 
     final shouldSwitch = await showWifiSwitchDialog(context, originalSsid: _originalSsid);
@@ -459,7 +459,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(AppLocalizations.of(context)!.switchedToRemoteMode),
           backgroundColor: AppColors.successLight,
-        ));
+        ),);
       }
     }
   }
@@ -503,7 +503,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(result.message ?? '连接失败'),
         backgroundColor: AppColors.errorLight,
-      ));
+      ),);
     }
   }
 
@@ -540,7 +540,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(result.message ?? '发送失败'),
         backgroundColor: AppColors.errorLight,
-      ));
+      ),);
     }
   }
 
@@ -573,13 +573,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         content: Text(AppLocalizations.of(context)!.deviceOnlineWifi),
         backgroundColor: AppColors.successLight,
         duration: const Duration(seconds: 3),
-      ));
+      ),);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('配网成功，等待设备上线中...'),
-        backgroundColor: const Color(0xFFF59E0B),
-        duration: const Duration(seconds: 3),
-      ));
+        backgroundColor: Color(0xFFF59E0B),
+        duration: Duration(seconds: 3),
+      ),);
     }
 
     await _disconnectBleDevice();
@@ -676,12 +676,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.bluetooth, size: 18.sp,
-                  color: _provisionMode == _ProvisionMode.ble ? Colors.white : AppColors.textSecondary),
+                  color: _provisionMode == _ProvisionMode.ble ? Colors.white : AppColors.textSecondary,),
                 SizedBox(width: 6.w),
                 Text('BLE配网',
                   style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600,
-                    color: _provisionMode == _ProvisionMode.ble ? Colors.white : AppColors.textSecondary)),
-              ]),
+                    color: _provisionMode == _ProvisionMode.ble ? Colors.white : AppColors.textSecondary,),),
+              ],),
             ),
           ),
         ),
@@ -708,16 +708,16 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(Icons.router, size: 18.sp,
-                  color: _provisionMode == _ProvisionMode.softap ? Colors.white : AppColors.textSecondary),
+                  color: _provisionMode == _ProvisionMode.softap ? Colors.white : AppColors.textSecondary,),
                 SizedBox(width: 6.w),
                 Text(AppLocalizations.of(context)!.hotspotProvision,
                   style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600,
-                    color: _provisionMode == _ProvisionMode.softap ? Colors.white : AppColors.textSecondary)),
-              ]),
+                    color: _provisionMode == _ProvisionMode.softap ? Colors.white : AppColors.textSecondary,),),
+              ],),
             ),
           ),
         ),
-      ]),
+      ],),
     );
   }
 
@@ -754,7 +754,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 : const Icon(Icons.wifi_find, size: 22),
             label: Text(_wifiScanning ? AppLocalizations.of(context)!.scanning : ' ${AppLocalizations.of(context)!.scanNearInverters}', style: const TextStyle(fontSize: 15)),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),),
           ),
         ),
 
@@ -771,8 +771,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
               child: ListTile(
                 leading: Container(width: 44.w, height: 44.w, decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r)),
-                  child: const Icon(Icons.solar_power, color: AppColors.primary, size: 22)),
+                  color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r),),
+                  child: const Icon(Icons.solar_power, color: AppColors.primary, size: 22),),
                 title: Text(ssid, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
                 subtitle: Text('$sig $rssi dBm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textHint),
@@ -792,18 +792,18 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               Text(AppLocalizations.of(context)!.noInverterFound, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
               SizedBox(height: 4.h),
               Text(AppLocalizations.of(context)!.ensureDevicePowered, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
-            ]),
-          ))),
+            ],),
+          ),),),
       ],
 
       if (_provisionStep == 1) ...[
         Container(padding: EdgeInsets.all(16.w), decoration: BoxDecoration(
-          color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12.r)),
+          color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12.r),),
           child: Row(children: [
             const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             SizedBox(width: 12.w),
             Expanded(child: Text(_provisionStatus, style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
-          ])),
+          ],),),
       ],
 
       if (deviceConnected) ...[
@@ -814,7 +814,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             SizedBox(width: 8.w),
             Expanded(child: Text(AppLocalizations.of(context)!.connectedTo(_selectedDeviceAp?.ssid ?? ''), style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46)))),
             GestureDetector(onTap: _resetProvision, child: Text(AppLocalizations.of(context)!.disconnect, style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
-          ])),
+          ],),),
       ],
 
       if (deviceConnected) ...[
@@ -827,7 +827,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             label: Text(_scanningNearbyWifi ? AppLocalizations.of(context)!.scanning : AppLocalizations.of(context)!.scanNearbyWifi, style: const TextStyle(fontSize: 14)),
             style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-              side: const BorderSide(color: AppColors.primary)),
+              side: const BorderSide(color: AppColors.primary),),
           ),
         ),
 
@@ -869,7 +869,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             prefixIcon: const Icon(Icons.wifi, color: AppColors.primary),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),),
           ),
         ),
         SizedBox(height: 12.h),
@@ -885,7 +885,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),),
           ),
         ),
         SizedBox(height: 20.h),
@@ -897,7 +897,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 : const Icon(Icons.router, size: 22),
             label: Text(_provisioning ? AppLocalizations.of(context)!.configuring : AppLocalizations.of(context)!.sendingProvisionInfo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.successLight, foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),),
           ),
         ),
       ],
@@ -907,17 +907,17 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         Container(width: double.infinity, padding: EdgeInsets.all(14.w),
           decoration: BoxDecoration(
             color: _provisionOk ? const Color(0xFFECFDF5) : (_provisionStatus.contains('❌') ? const Color(0xFFFEF2F2) : const Color(0xFFEFF6FF)),
-            borderRadius: BorderRadius.circular(12.r)),
+            borderRadius: BorderRadius.circular(12.r),),
           child: Row(children: [
             Icon(_provisionOk ? Icons.check_circle : (_provisionStatus.contains('❌') ? Icons.error : Icons.info),
-              size: 20.sp, color: _provisionOk ? AppColors.successLight : (_provisionStatus.contains('❌') ? AppColors.errorLight : AppColors.primary)),
+              size: 20.sp, color: _provisionOk ? AppColors.successLight : (_provisionStatus.contains('❌') ? AppColors.errorLight : AppColors.primary),),
             SizedBox(width: 10.w),
             Expanded(child: Text(_provisionStatus, style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
-          ])),
+          ],),),
       ],
 
       SizedBox(height: 60.h),
-    ]);
+    ],);
   }
 
   Widget _buildBleSection() {
@@ -1007,7 +1007,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 ),
               ),
             ),
-          ]),
+          ],),
         ),
       ],
 
@@ -1048,7 +1048,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 ),
               ),
             ),
-          ]),
+          ],),
         ),
       ],
 
@@ -1088,7 +1088,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 ),
               ),
             ),
-          ]),
+          ],),
         ),
       ],
 
@@ -1108,8 +1108,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             Expanded(child: Text(
               'BLE配网：通过蓝牙扫描设备，无需切换网络，直接配置WiFi',
               style: TextStyle(fontSize: 12.sp, color: AppColors.textPrimary),
-            )),
-          ]),
+            ),),
+          ],),
         ),
       ],
 
@@ -1128,7 +1128,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               : const Icon(Icons.bluetooth_searching, size: 22),
           label: Text(_bleScanning ? AppLocalizations.of(context)!.scanning : AppLocalizations.of(context)!.scanNearInverters, style: const TextStyle(fontSize: 15)),
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),),
         ),
       ),
 
@@ -1146,8 +1146,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
             child: ListTile(
               leading: Container(width: 44.w, height: 44.w, decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r)),
-                child: const Icon(Icons.bluetooth, color: AppColors.primary, size: 22)),
+                color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(10.r),),
+                child: const Icon(Icons.bluetooth, color: AppColors.primary, size: 22),),
               title: Text(device.sn.isNotEmpty ? device.sn : device.deviceName, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
               subtitle: Text('$sig $rssi dBm', style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
               trailing: _bleConnecting && _selectedBleDevice?.macAddress == device.macAddress
@@ -1170,8 +1170,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             Text(AppLocalizations.of(context)!.noInverterFound, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
             SizedBox(height: 4.h),
             Text(AppLocalizations.of(context)!.ensureDevicePowered, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
-          ]),
-        ))),
+          ],),
+        ),),),
       ], // 结束扫描阶段
 
       // 连接阶段
@@ -1187,7 +1187,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             SizedBox(width: 12.w),
             Expanded(child: Text(_getBleStatusText(), style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
-          ]),
+          ],),
         ),
       ],
 
@@ -1203,9 +1203,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               children: [
                 Text('已连接 ${_selectedBleDevice!.sn.isNotEmpty ? _selectedBleDevice!.sn : _selectedBleDevice!.deviceName}', style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46))),
               ],
-            )),
+            ),),
             GestureDetector(onTap: _disconnectBleDevice, child: Text(AppLocalizations.of(context)!.disconnect, style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
-          ])),
+          ],),),
       ],
 
       // 配网失败错误提示
@@ -1225,7 +1225,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               onTap: () => setState(() => _bleErrorMessage = null),
               child: const Icon(Icons.close, size: 16, color: AppColors.textHint),
             ),
-          ])),
+          ],),),
       ],
 
       // WiFi配置表单（仅在配置阶段显示）
@@ -1239,7 +1239,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             label: Text(_scanningNearbyWifi ? AppLocalizations.of(context)!.scanning : AppLocalizations.of(context)!.scanNearbyWifi, style: const TextStyle(fontSize: 14)),
             style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-              side: const BorderSide(color: AppColors.primary)),
+              side: const BorderSide(color: AppColors.primary),),
           ),
         ),
 
@@ -1281,7 +1281,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             prefixIcon: const Icon(Icons.wifi, color: AppColors.primary),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),),
           ),
         ),
         SizedBox(height: 12.h),
@@ -1297,7 +1297,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),),
           ),
         ),
         SizedBox(height: 20.h),
@@ -1309,7 +1309,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 : const Icon(Icons.bluetooth, size: 22),
             label: Text(_provisioning ? '配网中...' : '发送WiFi配置', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.successLight, foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r))),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),),
           ),
         ),
       ],
@@ -1327,7 +1327,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             SizedBox(width: 12.w),
             Expanded(child: Text(_getBleStatusText(), style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
-          ]),
+          ],),
         ),
       ],
 
@@ -1345,12 +1345,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             const Icon(Icons.check_circle, color: AppColors.successLight, size: 20),
             SizedBox(width: 10.w),
             Expanded(child: Text(_getBleStatusText(), style: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary))),
-          ]),
+          ],),
         ),
       ],
 
       SizedBox(height: 60.h),
-    ]);
+    ],);
   }
 
  Widget _buildStepIndicatorRow(List<_StepData> steps) {

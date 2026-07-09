@@ -889,6 +889,8 @@ func extractUnixTimestamp(m map[string]interface{}, key string) int64 {
 		return int64(val)
 	case int64:
 		return val
+	case int:
+		return int64(val)
 	case json.Number:
 		n, _ := val.Int64()
 		return n
