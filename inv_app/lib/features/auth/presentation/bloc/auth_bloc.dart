@@ -95,7 +95,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         phone: phone,
         role: role,
         user: user,
-      ));
+      ),);
 
       _connectMQTT(phone.isNotEmpty ? phone : 'user_$userId');
       jpushService.bindUser(userId);
@@ -143,7 +143,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           phone: response.user.phone,
           role: response.user.role,
           user: response.user,
-        ));
+        ),);
 
         jpushService.bindUser(response.user.id);
         _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
@@ -181,7 +181,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           phone: response.user.phone,
           role: response.user.role,
           user: response.user,
-        ));
+        ),);
 
         jpushService.bindUser(response.user.id);
       },
@@ -281,7 +281,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             phone: currentState.phone,
             role: currentState.role,
             user: currentState.user,
-          ));
+          ),);
         }
       },
     );
@@ -326,7 +326,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           phone: response.user.phone,
           role: response.user.role,
           user: response.user,
-        ));
+        ),);
 
         jpushService.bindUser(response.user.id);
         _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
@@ -365,7 +365,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           phone: response.user.phone,
           role: response.user.role,
           user: response.user,
-        ));
+        ),);
 
         jpushService.bindUser(response.user.id);
         _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
@@ -426,7 +426,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           phone: response.user.phone,
           role: response.user.role,
           user: response.user,
-        ));
+        ),);
 
         jpushService.bindUser(response.user.id);
         _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
@@ -460,7 +460,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           phone: response.user.phone,
           role: response.user.role,
           user: response.user,
-        ));
+        ),);
 
         jpushService.bindUser(response.user.id);
         _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');

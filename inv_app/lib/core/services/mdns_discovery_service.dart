@@ -198,7 +198,7 @@ class MDNSDiscoveryService {
           host: hostName ?? '',
           port: port,
           sn: sn,
-        ));
+        ),);
       }
     } catch (_) {}
 

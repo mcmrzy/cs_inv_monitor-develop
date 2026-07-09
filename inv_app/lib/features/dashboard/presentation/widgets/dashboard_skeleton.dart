@@ -34,16 +34,16 @@ class DashboardSkeleton extends StatelessWidget {
           ),
           SizedBox(height: 16.h),
           // 趋势图
-          SkeletonCard(height: 230),
+          const SkeletonCard(height: 230),
           SizedBox(height: 16.h),
           // 设备分布
-          SkeletonCard(height: 160),
+          const SkeletonCard(height: 160),
           SizedBox(height: 16.h),
           // 电站排行
-          SkeletonCard(height: 220),
+          const SkeletonCard(height: 220),
           SizedBox(height: 16.h),
           // 最近告警
-          SkeletonCard(height: 180),
+          const SkeletonCard(height: 180),
           SizedBox(height: 100.h),
         ],
       ),

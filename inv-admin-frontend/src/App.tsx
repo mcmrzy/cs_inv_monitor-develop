@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { BrowserRouter, Router, Routes, Route, Navigate } from 'react-router-dom'
+import type { History } from '@remix-run/router'
+import { useEffect, useState } from 'react'
 import { ConfigProvider, App as AntApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import enUS from 'antd/locale/en_US'
@@ -41,7 +42,64 @@ const RoleRedirect: React.FC = () => {
   return <Navigate to="/dashboard" replace />
 }
 
-const App: React.FC = () => {
+const AppRoutes: React.FC = () => (
+  <Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/unauthorized" element={<UnauthorizedPage />} />
+    <Route
+      path="/"
+      element={
+        <ProtectedRoute>
+          <RoleRedirect />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/big-screen"
+      element={
+        <ProtectedRoute>
+          <BigScreenPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      element={
+        <ProtectedRoute>
+          <MainLayout />
+        </ProtectedRoute>
+      }
+    >
+      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/devices" element={<DevicesPage />} />
+      <Route path="/ota" element={<OtaPage />} />
+      <Route path="/alerts" element={<AlertsPage />} />
+      <Route path="/work-orders" element={<WorkOrdersPage />} />
+      <Route path="/users" element={<UsersPage />} />
+      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/parallel" element={<ParallelPage />} />
+      <Route path="/stations" element={<StationsPage />} />
+      <Route path="/models" element={<ModelsPage />} />
+      <Route path="/monitoring" element={<MonitoringPage />} />
+      <Route path="/remote-settings" element={<RemoteSettingsPage />} />
+      <Route path="/batch-settings" element={<BatchSettingsPage />} />
+      <Route path="/operation-logs" element={<OperationLogsPage />} />
+    </Route>
+  </Routes>
+)
+
+const MemoryRouterWrapper: React.FC<{ history: History; children: React.ReactNode }> = ({ history, children }) => {
+  const [location, setLocation] = useState(history.location)
+  useEffect(() => {
+    return history.listen(({ location: loc }) => setLocation(loc))
+  }, [history])
+  return (
+    <Router location={location} navigator={history}>
+      {children}
+    </Router>
+  )
+}
+
+const App: React.FC<{ history?: History }> = ({ history }) => {
   const lang = useLocaleStore((s) => s.lang)
   const fetchTimezone = useTimezoneStore((s) => s.fetchTimezone)
 
@@ -98,52 +156,15 @@ const App: React.FC = () => {
     >
       <AntApp>
         <ErrorBoundary>
-          <BrowserRouter>
-            <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/unauthorized" element={<UnauthorizedPage />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <RoleRedirect />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/big-screen"
-              element={
-                <ProtectedRoute>
-                  <BigScreenPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              element={
-                <ProtectedRoute>
-                  <MainLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/devices" element={<DevicesPage />} />
-              <Route path="/ota" element={<OtaPage />} />
-              <Route path="/alerts" element={<AlertsPage />} />
-
-              <Route path="/work-orders" element={<WorkOrdersPage />} />
-              <Route path="/users" element={<UsersPage />} />
-              <Route path="/admin" element={<AdminPage />} />
-              <Route path="/parallel" element={<ParallelPage />} />
-
-              <Route path="/stations" element={<StationsPage />} />
-              <Route path="/models" element={<ModelsPage />} />
-              <Route path="/monitoring" element={<MonitoringPage />} />
-              <Route path="/remote-settings" element={<RemoteSettingsPage />} />
-              <Route path="/batch-settings" element={<BatchSettingsPage />} />
-              <Route path="/operation-logs" element={<OperationLogsPage />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+          {history ? (
+            <MemoryRouterWrapper history={history}>
+              <AppRoutes />
+            </MemoryRouterWrapper>
+          ) : (
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          )}
         </ErrorBoundary>
       </AntApp>
     </ConfigProvider>

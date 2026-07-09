@@ -42,13 +42,13 @@ void main() async {
       deviceSn: notification.deviceSn,
       title: notification.title,
       content: notification.content,
-    ));
+    ),);
   };
   getIt<JPushService>().onNotificationOpened = (notification) {
     notificationBloc.add(JPushNotificationTapped(
       notifyType: notification.notifyType,
       deviceSn: notification.deviceSn,
-    ));
+    ),);
   };
 
   runApp(InvApp(notificationBloc: notificationBloc));

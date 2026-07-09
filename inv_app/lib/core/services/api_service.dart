@@ -87,7 +87,7 @@ class ApiService {
           return Left(ServerFailure(code != null ? '[$code] $msg' : msg));
         }
       }
-      return Left(ServerFailure('Invalid response format'));
+      return const Left(ServerFailure('Invalid response format'));
     }
     return Left(ServerFailure('HTTP ${response.statusCode}'));
   }
@@ -97,23 +97,23 @@ class ApiService {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return NetworkFailure('Connection timeout');
+        return const NetworkFailure('Connection timeout');
       case DioExceptionType.badResponse:
         final statusCode = e.response?.statusCode;
         if (statusCode == 401) {
-          return UnauthorizedFailure('Unauthorized');
+          return const UnauthorizedFailure('Unauthorized');
         } else if (statusCode == 403) {
-          return ForbiddenFailure('Forbidden');
+          return const ForbiddenFailure('Forbidden');
         } else if (statusCode == 404) {
-          return NotFoundFailure('Not found');
+          return const NotFoundFailure('Not found');
         }
         return ServerFailure('Server error: $statusCode');
       case DioExceptionType.cancel:
-        return NetworkFailure('Request cancelled');
+        return const NetworkFailure('Request cancelled');
       case DioExceptionType.connectionError:
-        return NetworkFailure('No internet connection');
+        return const NetworkFailure('No internet connection');
       default:
-        return NetworkFailure('Network error');
+        return const NetworkFailure('Network error');
     }
   }
 }

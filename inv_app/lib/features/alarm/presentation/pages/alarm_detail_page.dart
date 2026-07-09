@@ -396,7 +396,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                 margin: EdgeInsets.only(top: 4.h),
                 width: 6.w,
                 height: 6.w,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.warning,
                   shape: BoxShape.circle,
                 ),
@@ -414,7 +414,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               ),
             ],
           ),
-        )).toList(),
+        ),).toList(),
       ),
     );
   }
@@ -466,7 +466,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               ),
             ],
           ),
-        )),
+        ),),
       ),
     );
   }
@@ -674,7 +674,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               ? SizedBox(
                   width: 18.sp,
                   height: 18.sp,
-                  child: CircularProgressIndicator(
+                  child: const CircularProgressIndicator(
                     strokeWidth: 2,
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),

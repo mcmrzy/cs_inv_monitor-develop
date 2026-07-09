@@ -30,7 +30,7 @@ class NotificationService {
         'OTA Upgrade',
         description: 'Firmware upgrade notifications',
         importance: Importance.high,
-      ));
+      ),);
     }
   }
 

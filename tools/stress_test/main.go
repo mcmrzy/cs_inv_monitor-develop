@@ -1,25 +1,18 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"math/rand"
+	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type DevicePayload struct {
-	SN      string                 `json:"sn"`
-	Type    string                 `json:"type"`
-	Payload map[string]interface{} `json:"payload"`
-}
-
 func main() {
 	apiURL := flag.String("url", "http://localhost:8080", "API gateway URL")
+	token := flag.String("token", "", "JWT token for Authorization header")
 	numDevices := flag.Int("devices", 1000, "number of simulated devices")
 	duration := flag.Duration("duration", 60*time.Second, "test duration")
 	interval := flag.Duration("interval", 5*time.Second, "report interval per device")
@@ -61,36 +54,15 @@ func main() {
 				case <-ctx:
 					return
 				case <-ticker.C:
-					payload := DevicePayload{
-						SN:   sn,
-						Type: "data/realtime",
-						Payload: map[string]interface{}{
-							"ac": map[string]interface{}{
-								"voltage":  220 + rand.Float64()*20,
-								"current":  rand.Float64() * 30,
-								"power":    rand.Float64() * 5000,
-								"frequency": 50 + rand.Float64()*0.5,
-							},
-							"energy": map[string]interface{}{
-								"daily_pv":     rand.Float64() * 30,
-								"total_pv":     rand.Float64() * 10000,
-								"runtime_hours": rand.Float64() * 12,
-							},
-							"sys_status": map[string]interface{}{
-								"state":     "normal",
-								"fault_code": 0,
-								"temp_inv":   35 + rand.Float64()*20,
-							},
-						},
-					}
-
-					body, _ := json.Marshal(payload)
 					start := time.Now()
-					resp, err := client.Post(
-						*apiURL+"/api/v1/device/"+sn+"/telemetry",
-						"application/json",
-						bytes.NewReader(body),
+					req, _ := http.NewRequest("GET",
+						*apiURL+"/api/v1/device/"+sn+"/online",
+						nil,
 					)
+					if *token != "" {
+						req.Header.Set("Authorization", "Bearer "+*token)
+					}
+					resp, err := client.Do(req)
 					lat := time.Since(start).Milliseconds()
 
 					atomic.AddInt64(&totalSent, 1)
@@ -100,6 +72,7 @@ func main() {
 						atomic.AddInt64(&totalErr, 1)
 						continue
 					}
+					io.Copy(io.Discard, resp.Body)
 					resp.Body.Close()
 					if resp.StatusCode < 400 {
 						atomic.AddInt64(&totalOK, 1)

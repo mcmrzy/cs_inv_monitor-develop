@@ -166,7 +166,7 @@ class _AboutPageState extends State<AboutPage> {
           builder: (context, setDialogState) => AlertDialog(
             title: Row(
               children: [
-                Icon(Icons.system_update, color: AppColors.primary),
+                const Icon(Icons.system_update, color: AppColors.primary),
                 SizedBox(width: 8.w),
                 Text(l10n.newVersionFound),
               ],
@@ -231,7 +231,7 @@ class _AboutPageState extends State<AboutPage> {
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.open_in_browser, color: AppColors.primary),
+            const Icon(Icons.open_in_browser, color: AppColors.primary),
             SizedBox(width: 8.w),
             Text(l10n.str('browser_download_title', {})),
           ],
@@ -351,7 +351,7 @@ class _AboutPageState extends State<AboutPage> {
           Center(
             child: Text(
               l10n.pvInverterSmartMonitor,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
           SizedBox(height: 4.h),

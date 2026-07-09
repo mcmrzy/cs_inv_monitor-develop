@@ -241,9 +241,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         builder: (ctx) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.warning_rounded, color: AppColors.warning),
+              const Icon(Icons.warning_rounded, color: AppColors.warning),
               SizedBox(width: 8.w),
-              Text('警告', style: TextStyle(color: AppColors.warning)),
+              const Text('警告', style: TextStyle(color: AppColors.warning)),
             ],
           ),
           content: Text(
@@ -253,12 +253,12 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: Text('取消'),
+              child: const Text('取消'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
-              child: Text('确定安装'),
+              child: const Text('确定安装'),
             ),
           ],
         ),
@@ -286,7 +286,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: Text(
+          title: const Text(
             '升级包列表',
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
           ),
@@ -329,7 +329,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 40,
                     height: 40,
                     child: CircularProgressIndicator(
@@ -799,7 +799,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   child: Center(
                     child: Text(
                       chipName.isNotEmpty ? chipName.substring(0, 1) : '?',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
                     ),
                   ),
                 ),
@@ -813,7 +813,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             }).toList(),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('取消')),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           ],
         );
       },

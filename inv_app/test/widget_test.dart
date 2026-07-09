@@ -5,7 +5,7 @@ void main() {
   testWidgets('App smoke test', (WidgetTester tester) async {
     // Simple smoke test that verifies basic widget creation
     await tester.pumpWidget(
-      MaterialApp(
+      const MaterialApp(
         home: Scaffold(
           body: Center(
             child: Text('Test'),

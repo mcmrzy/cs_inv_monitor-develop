@@ -27,7 +27,7 @@ class LocalCommunicationService {
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       sendTimeout: const Duration(seconds: 30),
-    ));
+    ),);
   }
 
   /// 确保HTTP请求走WiFi网络
@@ -74,7 +74,7 @@ class LocalCommunicationService {
     await _dio.post('/api/v1/control', data: {
       'cmd_type': cmdType,
       ...params,
-    });
+    },);
   }
 
   Future<void> sendControl(String deviceIP, String cmdType, Map<String, dynamic> params) async {
@@ -82,7 +82,7 @@ class LocalCommunicationService {
     await dio.post('/api/v1/control', data: {
       'cmd_type': cmdType,
       ...params,
-    });
+    },);
   }
 
   Future<Map<String, dynamic>> getDeviceInfo() async {
@@ -127,7 +127,7 @@ class LocalCommunicationService {
     await _dio.post('/api/v1/wifi/config', data: {
       'ssid': ssid,
       'password': password,
-    });
+    },);
   }
 
   Future<Map<String, dynamic>> checkWiFiStatus() async {
@@ -386,7 +386,7 @@ class LocalCommunicationService {
               rssi: json['rssi'] ?? -100,
               isEncrypted: false,
               bssid: json['mac'] ?? json['bssid'],
-            ));
+            ),);
           } catch (_) {
             try {
               final data = utf8.decode(datagram.data);
@@ -394,7 +394,7 @@ class LocalCommunicationService {
                 ssid: data.trim(),
                 rssi: -100,
                 isEncrypted: false,
-              ));
+              ),);
             } catch (_) {}
           }
         }

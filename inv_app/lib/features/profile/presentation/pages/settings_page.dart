@@ -102,7 +102,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text('kW', style: TextStyle(fontSize: 16.sp)),
                   if (_unitType == 'kW') ...[
                     const Spacer(),
-                    Icon(Icons.check, color: AppColors.primary),
+                    const Icon(Icons.check, color: AppColors.primary),
                   ],
                 ],
               ),
@@ -123,7 +123,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text('W', style: TextStyle(fontSize: 16.sp)),
                   if (_unitType == 'W') ...[
                     const Spacer(),
-                    Icon(Icons.check, color: AppColors.primary),
+                    const Icon(Icons.check, color: AppColors.primary),
                   ],
                 ],
               ),
@@ -208,7 +208,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text(label, style: TextStyle(fontSize: 16.sp)),
                   if (_currentTimezone == id) ...[
                     const Spacer(),
-                    Icon(Icons.check, color: AppColors.primary),
+                    const Icon(Icons.check, color: AppColors.primary),
                   ],
                 ],
               ),
@@ -238,7 +238,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text('中文', style: TextStyle(fontSize: 16.sp)),
                   if (_currentLocale == 'zh') ...[
                     const Spacer(),
-                    Icon(Icons.check, color: AppColors.primary),
+                    const Icon(Icons.check, color: AppColors.primary),
                   ],
                 ],
               ),
@@ -257,7 +257,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text('English', style: TextStyle(fontSize: 16.sp)),
                   if (_currentLocale == 'en') ...[
                     const Spacer(),
-                    Icon(Icons.check, color: AppColors.primary),
+                    const Icon(Icons.check, color: AppColors.primary),
                   ],
                 ],
               ),

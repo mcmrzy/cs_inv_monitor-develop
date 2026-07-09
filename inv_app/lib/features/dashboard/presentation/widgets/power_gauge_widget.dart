@@ -42,7 +42,7 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
     ).animate(CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOut,
-    ));
+    ),);
     _controller.forward();
     _previousPower = widget.currentPower;
   }
@@ -58,7 +58,7 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
       ).animate(CurvedAnimation(
         parent: _controller,
         curve: Curves.easeOut,
-      ));
+      ),);
       _controller.reset();
       _controller.forward();
     }

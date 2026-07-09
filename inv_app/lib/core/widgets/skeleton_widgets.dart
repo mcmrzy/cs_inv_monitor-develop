@@ -447,10 +447,10 @@ class OfflineDataBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFEF3C7),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFEF3C7),
         border: Border(
-          bottom: BorderSide(color: const Color(0xFFFDE68A), width: 0.5),
+          bottom: BorderSide(color: Color(0xFFFDE68A), width: 0.5),
         ),
       ),
       child: Row(

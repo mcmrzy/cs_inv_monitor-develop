@@ -31,7 +31,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: Text(l10n.otaTitle, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(l10n.otaTitle, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,

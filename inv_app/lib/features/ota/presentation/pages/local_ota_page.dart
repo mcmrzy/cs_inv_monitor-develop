@@ -519,7 +519,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         if (mounted) {
           setState(() {
             _upgradeStatus = l10n.str('waiting_hotspot_recovery',
-                {'seconds': '$totalWaitSeconds'});
+                {'seconds': '$totalWaitSeconds'},);
           });
         }
 
@@ -579,7 +579,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           if (newVersion == null) {
             try {
               final info = await _firmwareService.getDeviceInfo(
-                  deviceIP: widget.deviceIP);
+                  deviceIP: widget.deviceIP,);
               print('Device info response: $info');
               // 同样优先 main_version
               final infoMainVer = info['main_version'] as String? ?? '';
@@ -634,7 +634,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         if (mounted) {
           setState(() {
             _upgradeStatus = l10n.str('waiting_device_response',
-                {'seconds': '$totalWaitSeconds'});
+                {'seconds': '$totalWaitSeconds'},);
           });
         }
         continue;
@@ -684,7 +684,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: Text(l10n.localFirmwareUpgrade, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(l10n.localFirmwareUpgrade, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -960,7 +960,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             child: Column(
               children: [
                 if (isInProgress) ...[
-                  SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
+                  const SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
                   SizedBox(height: 12.h),
                   Text(
                     _isProcessing

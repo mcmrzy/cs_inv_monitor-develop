@@ -9,7 +9,7 @@ class NotificationRemoteDataSource {
     return await dio.get('/notifications', queryParameters: {
       'page': page,
       'page_size': pageSize,
-    });
+    },);
   }
 
   Future<Response> getStats() async {

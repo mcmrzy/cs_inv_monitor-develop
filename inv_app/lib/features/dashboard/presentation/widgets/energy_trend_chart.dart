@@ -245,7 +245,7 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
             ],
           ),
         ),
-      ));
+      ),);
     }
 
     return LineChartData(

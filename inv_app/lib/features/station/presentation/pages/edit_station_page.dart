@@ -86,7 +86,7 @@ class _EditStationPageState extends State<EditStationPage> {
           'latitude': double.tryParse(_latitudeController.text) ?? 0,
           'longitude': double.tryParse(_longitudeController.text) ?? 0,
         },
-      ));
+      ),);
     }
   }
 

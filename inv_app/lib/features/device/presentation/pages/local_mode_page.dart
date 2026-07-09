@@ -168,7 +168,7 @@ class _LocalModePageState extends State<LocalModePage> {
         child: AppBar(
           title: Text(
             AppLocalizations.of(context)!.localConnection,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
           ),
           centerTitle: true,
           elevation: 0,

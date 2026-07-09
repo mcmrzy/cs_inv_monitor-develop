@@ -73,7 +73,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
       'city': _city,
       'district': _district,
       'address': _addressText,
-    }));
+    },),);
   }
 
   void _showErr(String msg) {
@@ -494,7 +494,7 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                       height: _itemH,
                       decoration: BoxDecoration(
                         color: AppColors.primary.withValues(alpha: 0.06),
-                        border: Border.symmetric(horizontal: BorderSide(color: const Color(0xFFE5E7EB))),
+                        border: const Border.symmetric(horizontal: BorderSide(color: Color(0xFFE5E7EB))),
                       ),
                     ),
                     const Spacer(),

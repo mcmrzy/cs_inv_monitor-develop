@@ -1,7 +1,12 @@
 package service
 
 import (
+	"context"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCanTransition(t *testing.T) {
@@ -166,5 +171,103 @@ func TestStateTransitionMatrix(t *testing.T) {
 	state, ok = CanTransition(StateFault, EventHeartbeatTimeout)
 	if !ok || state != StateOffline {
 		t.Error("Fault + HeartbeatTimeout should become Offline")
+	}
+}
+
+// TestDetectAndHandleFault_NoFault 测试非故障 payload 直接返回 nil，不触发后续状态变更
+func TestDetectAndHandleFault_NoFault(t *testing.T) {
+	manager := NewDeviceStateManager(nil, "", "")
+	manager.stateCache.Store("SN001", StateOnline)
+
+	tests := []struct {
+		name    string
+		payload map[string]interface{}
+	}{
+		{"normal state", map[string]interface{}{"state": "normal"}},
+		{"fault_code zero", map[string]interface{}{"fault_code": float64(0)}},
+		{"fault_code missing", map[string]interface{}{"voltage": float64(220)}},
+		{"empty payload", map[string]interface{}{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := manager.DetectAndHandleFault(context.Background(), "SN001", tt.payload)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+// TestCanTransition_Concurrent 并发竞态测试：多 goroutine 同时查询状态转换矩阵
+func TestCanTransition_Concurrent(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			state, ok := CanTransition(DeviceState(idx%3), StateTransition(idx%6))
+			_ = state
+			_ = ok
+		}(i)
+	}
+	wg.Wait()
+}
+
+// TestDeviceStateManager_ConcurrentCache 并发读写状态缓存不应触发竞态
+func TestDeviceStateManager_ConcurrentCache(t *testing.T) {
+	manager := NewDeviceStateManager(nil, "", "")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sn := "SN" + string(rune('A'+idx%26))
+			manager.stateCache.Store(sn, DeviceState(idx%3))
+		}(i)
+	}
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sn := "SN" + string(rune('A'+idx%26))
+			_, _ = manager.stateCache.Load(sn)
+		}(i)
+	}
+	wg.Wait()
+}
+
+// TestGetDebounceTTL_Concurrent 并发读取防抖 TTL
+func TestGetDebounceTTL_Concurrent(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			ttl := getDebounceTTL(StateTransition(idx % 6))
+			assert.True(t, ttl >= 0)
+		}(i)
+	}
+	wg.Wait()
+}
+
+// TestDebounceTTLValues 验证不同事件的防抖 TTL
+func TestDebounceTTLValues(t *testing.T) {
+	tests := []struct {
+		event    StateTransition
+		expected time.Duration
+	}{
+		{EventOnlineReport, 10 * time.Second},
+		{EventOfflineReport, 10 * time.Second},
+		{EventFaultDetected, 15 * time.Second},
+		{EventFaultRecovered, 10 * time.Second},
+		{EventHeartbeatTimeout, 0},
+		{EventLWTOffline, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(EventToString(tt.event), func(t *testing.T) {
+			got := getDebounceTTL(tt.event)
+			assert.Equal(t, tt.expected, got)
+		})
 	}
 }

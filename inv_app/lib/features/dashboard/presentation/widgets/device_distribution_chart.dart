@@ -150,7 +150,7 @@ class DeviceDistributionChart extends StatelessWidget {
         color: AppColors.online,
         radius: 16.w,
         showTitle: false,
-      ));
+      ),);
     }
     if (offlineCount > 0) {
       sections.add(PieChartSectionData(
@@ -158,7 +158,7 @@ class DeviceDistributionChart extends StatelessWidget {
         color: AppColors.offline,
         radius: 16.w,
         showTitle: false,
-      ));
+      ),);
     }
     if (faultCount > 0) {
       sections.add(PieChartSectionData(
@@ -166,7 +166,7 @@ class DeviceDistributionChart extends StatelessWidget {
         color: AppColors.fault,
         radius: 16.w,
         showTitle: false,
-      ));
+      ),);
     }
 
     return sections;

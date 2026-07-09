@@ -54,7 +54,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
 
     try {
       final res = await dio.post('/devices/${widget.sn}/control',
-          data: {'command': 'get_params'});
+          data: {'command': 'get_params'},);
       final d = res.data['data'] ?? res.data['params'] ?? res.data ?? {};
       if (d is Map<String, dynamic>) params = d;
     } catch (_) {}
@@ -71,7 +71,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
           content: Text(AppLocalizations.of(context)!.settingReadSuccess),
           backgroundColor: AppColors.success,
           duration: const Duration(seconds: 1),
-        ));
+        ),);
       }
     }
   }
@@ -114,7 +114,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     if (changes.isEmpty) return;
 
     final confirmed = await ParamConfirmDialog.show(context,
-        changes: changes, dangerousKeys: dangerousKeys);
+        changes: changes, dangerousKeys: dangerousKeys,);
     if (confirmed != true) return;
 
     setState(() => _isApplying = true);
@@ -130,12 +130,12 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
       await dio.post('/devices/${widget.sn}/control', data: {
         'command': 'set_params',
         'params': paramsToWrite,
-      });
+      },);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(l10n.settingSetSuccess),
           backgroundColor: AppColors.success,
-        ));
+        ),);
         setState(() {
           _originalValues = Map.from(_modifiedValues);
           _isApplying = false;
@@ -146,7 +146,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(l10n.settingSetFailed),
           backgroundColor: AppColors.error,
-        ));
+        ),);
         setState(() => _isApplying = false);
       }
     }
@@ -157,25 +157,25 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     try {
       final dio = getIt<Dio>();
       await dio.post('/devices/${widget.sn}/control',
-          data: {'command': command, 'params': {}});
+          data: {'command': command, 'params': {}},);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(l10n.commandSent),
           backgroundColor: AppColors.success,
-        ));
+        ),);
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(l10n.settingSetFailed),
           backgroundColor: AppColors.error,
-        ));
+        ),);
       }
     }
   }
 
   void _showDangerousConfirm(String labelKey, String confirmKey, String command,
-      {Map<String, dynamic>? params}) {
+      {Map<String, dynamic>? params,}) {
     final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
@@ -187,12 +187,12 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
             SizedBox(width: 8.w),
             Expanded(
               child: Text(l10n.settingForceConfirmTitle,
-                  style: TextStyle(fontSize: 16.sp)),
+                  style: TextStyle(fontSize: 16.sp),),
             ),
           ],
         ),
         content: Text(l10n.str(confirmKey),
-            style: TextStyle(fontSize: 14.sp)),
+            style: TextStyle(fontSize: 14.sp),),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -228,7 +228,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(l10n.paramSettings,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp)),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -283,7 +283,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
           SizedBox(width: 10.w),
           Expanded(
             child: Text(l10n.deviceOfflineWarning,
-                style: TextStyle(fontSize: 12.sp, color: AppColors.warning)),
+                style: TextStyle(fontSize: 12.sp, color: AppColors.warning),),
           ),
         ],
       ),
@@ -328,7 +328,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
   }
 
   Widget _buildTabContent(
-      SettingGroup group, AppLocalizations l10n, ThemeData theme) {
+      SettingGroup group, AppLocalizations l10n, ThemeData theme,) {
     final items =
         deviceSettingItems.where((i) => i.groupKey == group.key).toList();
 
@@ -348,12 +348,12 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
             child: Row(
               children: [
                 Icon(Icons.info_outline_rounded,
-                    size: 18.w, color: AppColors.error),
+                    size: 18.w, color: AppColors.error,),
                 SizedBox(width: 10.w),
                 Expanded(
                   child: Text(l10n.settingAdvancedHint,
                       style: TextStyle(
-                          fontSize: 12.sp, color: AppColors.error)),
+                          fontSize: 12.sp, color: AppColors.error,),),
                 ),
               ],
             ),
@@ -366,7 +366,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
   }
 
   Widget _buildSettingItem(
-      DeviceSettingItem item, AppLocalizations l10n, ThemeData theme) {
+      DeviceSettingItem item, AppLocalizations l10n, ThemeData theme,) {
     final currentValue = _modifiedValues[item.key];
     final modified = _isModified(item.key);
     final disabled = !_isOnline;
@@ -399,7 +399,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
                   Padding(
                     padding: EdgeInsets.only(right: 6.w),
                     child: Icon(Icons.warning_amber_rounded,
-                        color: AppColors.error, size: 16.sp),
+                        color: AppColors.error, size: 16.sp,),
                   ),
                 Expanded(
                   child: Text(
@@ -424,7 +424,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
                         style: TextStyle(
                             fontSize: 10.sp,
                             color: AppColors.primary,
-                            fontWeight: FontWeight.w600)),
+                            fontWeight: FontWeight.w600,),),
                   ),
               ],
             ),
@@ -438,7 +438,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
   }
 
   Widget _buildControl(DeviceSettingItem item, dynamic currentValue,
-      bool disabled, AppLocalizations l10n, ThemeData theme) {
+      bool disabled, AppLocalizations l10n, ThemeData theme,) {
     switch (item.controlType) {
       case SettingControlType.switchToggle:
         return _buildSwitch(item, currentValue, disabled, l10n);
@@ -456,7 +456,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
   // ==================== Switch ====================
 
   Widget _buildSwitch(DeviceSettingItem item, dynamic currentValue,
-      bool disabled, AppLocalizations l10n) {
+      bool disabled, AppLocalizations l10n,) {
     final val = currentValue is bool
         ? currentValue
         : currentValue == 1 || currentValue == '1' || currentValue == 'true' || currentValue == true;
@@ -482,7 +482,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
                         : 'setting_force_discharge_confirm';
                     _showDangerousConfirm(
                         item.labelKey, confirmKey, item.key,
-                        params: {'value': v});
+                        params: {'value': v},);
                   } else {
                     _onValueChanged(item.key, v);
                   }
@@ -495,7 +495,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
   // ==================== Slider ====================
 
   Widget _buildSlider(DeviceSettingItem item, dynamic currentValue,
-      bool disabled, ThemeData theme) {
+      bool disabled, ThemeData theme,) {
     final minVal = item.min ?? 0;
     final maxVal = item.max ?? 100;
     double val = (currentValue is num ? currentValue.toDouble() : minVal)
@@ -531,9 +531,9 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('${minVal.toInt()}${item.unit ?? ''}',
-                style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),),
             Text('${maxVal.toInt()}${item.unit ?? ''}',
-                style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),),
           ],
         ),
       ],
@@ -543,7 +543,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
   // ==================== NumberInput ====================
 
   Widget _buildNumberInput(DeviceSettingItem item, dynamic currentValue,
-      bool disabled, ThemeData theme, AppLocalizations l10n) {
+      bool disabled, ThemeData theme, AppLocalizations l10n,) {
     final displayVal = currentValue ?? '-';
 
     return Row(
@@ -558,14 +558,14 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
                     color: _isModified(item.key)
                         ? AppColors.primary
                         : theme.colorScheme.onSurface,
-                  )),
+                  ),),
               if (item.unit != null)
                 Padding(
                   padding: EdgeInsets.only(left: 4.w),
                   child: Text(item.unit!,
                       style: TextStyle(
                           fontSize: 12.sp,
-                          color: theme.colorScheme.onSurfaceVariant)),
+                          color: theme.colorScheme.onSurfaceVariant,),),
                 ),
             ],
           ),
@@ -605,7 +605,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
                   style: TextStyle(
                       fontSize: 24.sp,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.primary)),
+                      color: AppColors.primary,),),
               SizedBox(height: 16.h),
               if (maxVal - minVal <= 200 && maxVal - minVal > 1)
                 Slider(
@@ -632,7 +632,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
                   final parsed = double.tryParse(v);
                   if (parsed != null) {
                     setDialogState(
-                        () => sliderVal = parsed.clamp(minVal, maxVal));
+                        () => sliderVal = parsed.clamp(minVal, maxVal),);
                   }
                 },
               ),
@@ -662,7 +662,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
   // ==================== EnumChoice ====================
 
   Widget _buildEnumChoice(DeviceSettingItem item, dynamic currentValue,
-      bool disabled, AppLocalizations l10n, ThemeData theme) {
+      bool disabled, AppLocalizations l10n, ThemeData theme,) {
     final options = item.options ?? [];
     return Wrap(
       spacing: 8.w,
@@ -671,7 +671,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
         final selected = opt.value.toString() == currentValue.toString();
         return ChoiceChip(
           label: Text(l10n.enumLabel(opt.labelKey),
-              style: TextStyle(fontSize: 13.sp)),
+              style: TextStyle(fontSize: 13.sp),),
           selected: selected,
           onSelected: disabled
               ? null
@@ -685,7 +685,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
   // ==================== Button ====================
 
   Widget _buildButton(
-      DeviceSettingItem item, bool disabled, AppLocalizations l10n) {
+      DeviceSettingItem item, bool disabled, AppLocalizations l10n,) {
     return OutlinedButton.icon(
       icon: Icon(Icons.restart_alt_rounded, size: 18.sp),
       label: Text(l10n.settingRestartBtn),
@@ -697,7 +697,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
       onPressed: disabled
           ? null
           : () => _showDangerousConfirm(item.labelKey,
-              'setting_restart_confirm', item.commandKey ?? 'restart'),
+              'setting_restart_confirm', item.commandKey ?? 'restart',),
     );
   }
 
@@ -723,7 +723,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
               child: Text(
                 l10n.paramModifiedCount('$_modifiedCount'),
                 style: TextStyle(
-                    fontSize: 13.sp, color: AppColors.textSecondary),
+                    fontSize: 13.sp, color: AppColors.textSecondary,),
               ),
             ),
             FilledButton(
@@ -732,14 +732,14 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
                 padding:
                     EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.r)),
+                    borderRadius: BorderRadius.circular(8.r),),
               ),
               child: _isApplying
                   ? SizedBox(
                       width: 18.w,
                       height: 18.w,
                       child: const CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
+                          strokeWidth: 2, color: Colors.white,),
                     )
                   : Text(l10n.applyChanges),
             ),

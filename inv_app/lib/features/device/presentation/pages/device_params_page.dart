@@ -46,7 +46,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           options: (val['options'] as List<dynamic>?)
                   ?.map((o) => o is Map<String, dynamic>
                       ? ParamOption(value: o['value'], label: o['label'] as String? ?? '${o['value']}')
-                      : ParamOption(value: o, label: '$o'))
+                      : ParamOption(value: o, label: '$o'),)
                   .toList() ??
               [],
           isDangerous: val['isDangerous'] as bool? ?? false,
@@ -494,7 +494,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           .map((opt) => DropdownMenuItem<dynamic>(
                 value: opt.value,
                 child: Text(opt.label, style: TextStyle(fontSize: 13.sp)),
-              ))
+              ),)
           .toList(),
       onChanged: (v) {
         if (v != null) _onValueChanged(param.key, v);

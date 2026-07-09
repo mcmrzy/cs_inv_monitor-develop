@@ -34,7 +34,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       context.read<AuthBloc>().add(AuthChangePasswordRequested(
         oldPassword: _oldPasswordController.text,
         newPassword: _newPasswordController.text,
-      ));
+      ),);
     }
   }
 

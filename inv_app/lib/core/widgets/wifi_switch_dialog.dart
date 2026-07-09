@@ -31,10 +31,10 @@ class _WifiSwitchDialog extends StatelessWidget {
         ),
         SizedBox(width: 12.w),
         Expanded(child: Text(AppLocalizations.of(context)?.configSuccess ?? 'Config Success', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700))),
-      ]),
+      ],),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(AppLocalizations.of(context)?.provisionSuccessWifi ?? 'Provisioning success, please switch back to your WiFi for remote monitoring.',
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary)),
+          style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),),
         if (originalSsid != null) ...[
           SizedBox(height: 8.h),
           Container(
@@ -44,13 +44,13 @@ class _WifiSwitchDialog extends StatelessWidget {
               borderRadius: BorderRadius.circular(8.r),
             ),
             child: Row(children: [
-              Icon(Icons.wifi, size: 18, color: AppColors.primary),
+              const Icon(Icons.wifi, size: 18, color: AppColors.primary),
               SizedBox(width: 8.w),
               Text(originalSsid!, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-            ]),
+            ],),
           ),
         ],
-      ]),
+      ],),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),

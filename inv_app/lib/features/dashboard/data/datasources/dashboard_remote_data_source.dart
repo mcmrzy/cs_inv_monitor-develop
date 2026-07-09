@@ -26,7 +26,7 @@ class DashboardRemoteDataSource {
     return await dio.get('/dashboard/station-ranking', queryParameters: {
       'period': 'today',
       'limit': limit,
-    });
+    },);
   }
 }
 

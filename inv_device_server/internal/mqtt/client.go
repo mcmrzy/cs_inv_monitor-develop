@@ -129,7 +129,7 @@ func (h *Hub) GetOnlineDeviceSNs() []string {
 	return nil
 }
 
-func (h *Hub) GetCmdChan() chan<- *DeviceCommand {
+func (h *Hub) GetCmdChan() chan *DeviceCommand {
 	return h.cmdChan
 }
 
@@ -404,7 +404,7 @@ func isOtaStatusTopic(topic string) bool {
 		return true
 	}
 	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/ota/status
-	if len(parts) >= 7 && parts[0] == "$share" && parts[3] == "cs_inv" && parts[5] == "ota" && parts[6] == "status" {
+	if len(parts) == 6 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "ota" && parts[5] == "status" {
 		return true
 	}
 	return false
@@ -418,7 +418,7 @@ func isOtaCmdAckTopic(topic string) bool {
 		return true
 	}
 	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/ota/cmd_ack
-	if len(parts) >= 7 && parts[0] == "$share" && parts[3] == "cs_inv" && parts[5] == "ota" && parts[6] == "cmd_ack" {
+	if len(parts) == 6 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "ota" && parts[5] == "cmd_ack" {
 		return true
 	}
 	return false
@@ -432,7 +432,7 @@ func isDeviceStatusTopic(topic string) bool {
 		return true
 	}
 	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/status
-	if len(parts) == 6 && parts[0] == "$share" && parts[3] == "cs_inv" && parts[5] == "status" {
+	if len(parts) == 5 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "status" {
 		return true
 	}
 	return false
@@ -445,7 +445,7 @@ func isCmdResultTopic(topic string) bool {
 		return true
 	}
 	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/cmd_result
-	if len(parts) >= 6 && parts[0] == "$share" && parts[3] == "cs_inv" && parts[5] == "cmd_result" {
+	if len(parts) == 5 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "cmd_result" {
 		return true
 	}
 	return false

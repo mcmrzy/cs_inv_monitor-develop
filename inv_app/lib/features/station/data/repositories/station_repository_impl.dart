@@ -14,15 +14,15 @@ class StationRepositoryImpl implements StationRepository {
     final message = e.message ?? e.toString();
     switch (statusCode) {
       case 401:
-        return UnauthorizedFailure('Unauthorized');
+        return const UnauthorizedFailure('Unauthorized');
       case 403:
-        return ForbiddenFailure('Access denied');
+        return const ForbiddenFailure('Access denied');
       case 404:
-        return NotFoundFailure('Not found');
+        return const NotFoundFailure('Not found');
       case 422:
         return ValidationFailure(message);
       case null:
-        return NetworkFailure('Network error');
+        return const NetworkFailure('Network error');
       default:
         return ServerFailure('Server error: $statusCode');
     }
@@ -36,11 +36,11 @@ class StationRepositoryImpl implements StationRepository {
         if (inner is Map<String, dynamic>) {
           return Right(inner);
         }
-        return Right(<String, dynamic>{});
+        return const Right(<String, dynamic>{});
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
-    return Left(ServerFailure('Response format error'));
+    return const Left(ServerFailure('Response format error'));
   }
 
   Either<Failure, List<dynamic>> _parseList(Response response) {
@@ -51,11 +51,11 @@ class StationRepositoryImpl implements StationRepository {
         if (inner is List) {
           return Right(inner);
         }
-        return Right(<dynamic>[]);
+        return const Right(<dynamic>[]);
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
-    return Left(ServerFailure('Response format error'));
+    return const Left(ServerFailure('Response format error'));
   }
 
   @override
