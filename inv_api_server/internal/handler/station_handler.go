@@ -706,7 +706,7 @@ func (h *StationHandler) GetStatistics(c *gin.Context) {
 		endDate = timezone.TodayInTimezone(tz)
 	}
 
-	data, err := h.stationService.GetStatistics(c.Request.Context(), stationID, startDate, endDate, period)
+	data, err := h.stationService.GetStatistics(c.Request.Context(), stationID, startDate, endDate, period, tz)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("get statistics failed", err))
 		return

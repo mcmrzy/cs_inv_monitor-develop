@@ -301,8 +301,8 @@ func (s *StationService) GetDayData(ctx context.Context, stationID int64, date s
 	return s.repo.GetDayData(ctx, stationID, date)
 }
 
-func (s *StationService) GetStatistics(ctx context.Context, stationID int64, startDate, endDate, period string) ([]map[string]interface{}, error) {
-	return s.repo.GetStatistics(ctx, stationID, startDate, endDate, period)
+func (s *StationService) GetStatistics(ctx context.Context, stationID int64, startDate, endDate, period, tz string) ([]map[string]interface{}, error) {
+	return s.repo.GetStatistics(ctx, stationID, startDate, endDate, period, tz)
 }
 
 type DeviceService struct {
@@ -534,7 +534,7 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 
 	// 4. 设备离线时，存入 Redis 离线队列
 	if resp.StatusCode == http.StatusServiceUnavailable {
-		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "queued", "设备离线，已加入待发送队列")
+		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "queued", "Device offline, queued for delivery")
 		if s.cache != nil {
 			queueData, _ := json.Marshal(map[string]interface{}{
 				"command": cmdType,

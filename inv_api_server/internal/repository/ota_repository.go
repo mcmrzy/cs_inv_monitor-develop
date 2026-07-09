@@ -1580,7 +1580,7 @@ func (r *OTARepository) ListUpgradeTasks(ctx context.Context, page, pageSize int
 // UpdateUpgradeTaskStatus 更新任务状态
 func (r *OTARepository) UpdateUpgradeTaskStatus(ctx context.Context, id int64, status string) error {
 	var executedAt, completedAt *time.Time
-	now := time.Now()
+	now := timezone.NowUTC()
 
 	if status == "running" {
 		// 只有 executed_at 为 NULL 时才设置
@@ -1894,7 +1894,7 @@ func (r *OTARepository) UpdateUpgradePackage(ctx context.Context, id int64, upda
 	}
 
 	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argIdx))
-	args = append(args, time.Now())
+	args = append(args, timezone.NowUTC())
 	argIdx++
 
 	args = append(args, id)

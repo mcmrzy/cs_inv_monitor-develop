@@ -273,12 +273,12 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	// 设备状态变化时，插入通知记录（带 120 秒冷却期，防止状态抖动产生大量重复通知）
 	if oldStatus != newStatus && userID > 0 {
 		notifyType := "device_online"
-		title := "设备上线"
-		content := "设备 " + req.SN + " 已上线"
+		title := "Device Online"
+		content := "Device " + req.SN + " is online"
 		if newStatus == 0 {
 			notifyType = "device_offline"
-			title = "设备离线"
-			content = "设备 " + req.SN + " 已离线"
+			title = "Device Offline"
+			content = "Device " + req.SN + " is offline"
 		} else if newStatus == 2 || (newStatus == 1 && oldStatus == 2) {
 			// 故障和故障恢复通知由 DeviceAlarm 路径统一生成（通过 alarms 表 + SSE 广播）
 			// 此处只更新设备状态，不插入 notifications 表，避免与 DeviceAlarm 路径重复
@@ -1141,7 +1141,7 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 
 	// 告警码到默认描述的映射
 	alarmCodeMessageMap := map[int]string{
-		0:  "故障恢复，系统正常",
+		0:  "Fault recovered, system normal",
 		1:  "逆变器过温保护",
 		2:  "电池过压保护",
 		3:  "电池欠压保护",
@@ -1232,12 +1232,12 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 				if clearStationID.Valid {
 					csid = clearStationID.Int64
 				}
-				clearContent := "设备 " + req.SN + " 已恢复正常"
+				clearContent := "Device " + req.SN + " has recovered"
 				_, _ = h.db.Exec(ctx, `
 					INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
 					VALUES ($1, $2, $3, $4, $5, $6, NOW())
-				`, req.SN, csid, clearUserID, "alarm_cleared", "故障恢复", clearContent)
-				h.broadcastNotification(clearUserID, "alarm_cleared", "故障恢复", clearContent, req.SN)
+				`, req.SN, csid, clearUserID, "alarm_cleared", "Fault Recovered", clearContent)
+				h.broadcastNotification(clearUserID, "alarm_cleared", "Fault Recovered", clearContent, req.SN)
 			}
 		}
 

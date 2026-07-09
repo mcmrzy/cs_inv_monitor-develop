@@ -20,8 +20,11 @@ import useAuthStore from '@/stores/authStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import dayjsTimezone from 'dayjs/plugin/timezone'
 
 const { Title, Text } = Typography
+
+dayjs.extend(dayjsTimezone)
 
 /* ==================== 类型定义 ==================== */
 
@@ -78,7 +81,7 @@ const DashboardPage: React.FC = () => {
   const { timezone } = useTimezoneStore()
   const user = useAuthStore((s) => s.user)
   const userTimezone = timezone
-  const [flowDate, setFlowDate] = useState(dayjs().format('YYYY-MM-DD'))
+  const [flowDate, setFlowDate] = useState(dayjs().tz(timezone).format('YYYY-MM-DD'))
 
   const { data: flowRes, isLoading: flowLoading } = useQuery({
     queryKey: ['dashboard', 'energyFlow', flowDate, userTimezone],
@@ -171,11 +174,11 @@ const DashboardPage: React.FC = () => {
           return html
         },
       },
-      legend: { data: ['光伏功率', '电池充电', '电池放电', '负载功率'], top: 0, itemGap: 16 },
+      legend: { data: [t('dash.pvPower'), t('dash.batteryCharge'), t('dash.batteryDischarge'), t('dash.loadPower')], top: 0, itemGap: 16 },
       grid: { left: '3%', right: '4%', bottom: '12%', top: '45', containLabel: true },
       xAxis: { type: 'category' as const, data: times, axisLabel: { fontSize: 11 } },
       yAxis: {
-        type: 'value' as const, name: '功率 (W)',
+        type: 'value' as const, name: t('dash.powerUnit'),
         axisLabel: { formatter: (v: number) => Math.abs(v) >= 1000 ? (Math.abs(v) / 1000).toFixed(1) + 'k' : Math.abs(v).toString() },
       },
       dataZoom: [
@@ -184,22 +187,22 @@ const DashboardPage: React.FC = () => {
       ],
       series: [
         {
-          name: '光伏功率', type: 'line' as const, data: pvData, smooth: true, symbol: 'none',
+          name: t('dash.pvPower'), type: 'line' as const, data: pvData, smooth: true, symbol: 'none',
           lineStyle: { color: '#f59e0b', width: 2 }, itemStyle: { color: '#f59e0b' },
           areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.3)' }, { offset: 1, color: 'rgba(245,158,11,0.02)' }] } },
         },
         {
-          name: '电池充电', type: 'line' as const, data: battChargeData, smooth: true, symbol: 'none',
+          name: t('dash.batteryCharge'), type: 'line' as const, data: battChargeData, smooth: true, symbol: 'none',
           lineStyle: { color: '#22c55e', width: 2 }, itemStyle: { color: '#22c55e' },
           areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(34,197,94,0.3)' }, { offset: 1, color: 'rgba(34,197,94,0.02)' }] } },
         },
         {
-          name: '电池放电', type: 'line' as const, data: battDischargeData, smooth: true, symbol: 'none',
+          name: t('dash.batteryDischarge'), type: 'line' as const, data: battDischargeData, smooth: true, symbol: 'none',
           lineStyle: { color: '#3b82f6', width: 2 }, itemStyle: { color: '#3b82f6' },
           areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.02)' }, { offset: 1, color: 'rgba(59,130,246,0.2)' }] } },
         },
         {
-          name: '负载功率', type: 'line' as const, data: loadData, smooth: true, symbol: 'none',
+          name: t('dash.loadPower'), type: 'line' as const, data: loadData, smooth: true, symbol: 'none',
           lineStyle: { color: '#ef4444', width: 2 }, itemStyle: { color: '#ef4444' },
           areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(239,68,68,0.02)' }, { offset: 1, color: 'rgba(239,68,68,0.2)' }] } },
         },
@@ -320,7 +323,7 @@ const DashboardPage: React.FC = () => {
     { title: t('dash.faultMessage'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true },
     {
       title: t('common.time'), dataIndex: 'occurred_at', key: 'occurred_at', width: 150,
-      render: (v: string) => v ? dayjs(v).format('MM-DD HH:mm:ss') : '-',
+      render: (v: string) => v ? formatInTimezone(v, timezone, 'MM-DD HH:mm:ss') : '-',
     },
   ]
 
@@ -393,9 +396,9 @@ const DashboardPage: React.FC = () => {
         title={<Space><LineChartOutlined style={{ color: '#1677ff' }} /><span>{t('dash.powerTrend')}</span></Space>}
         extra={
           <Space>
-            <DatePicker value={dayjs(flowDate)} onChange={(d) => d && setFlowDate(d.format('YYYY-MM-DD'))} allowClear={false} style={{ width: 150 }} />
-            <Button size="small" onClick={() => setFlowDate(dayjs().subtract(1, 'day').format('YYYY-MM-DD'))}>昨天</Button>
-            <Button size="small" onClick={() => setFlowDate(dayjs().format('YYYY-MM-DD'))}>今天</Button>
+            <DatePicker value={dayjs(flowDate)} onChange={(d) => d && setFlowDate(dayjs(d).tz(timezone).format('YYYY-MM-DD'))} allowClear={false} style={{ width: 150 }} />
+            <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).subtract(1, 'day').format('YYYY-MM-DD'))}>{t('dash.yesterday')}</Button>
+            <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).format('YYYY-MM-DD'))}>{t('dash.today')}</Button>
           </Space>
         }
       >
