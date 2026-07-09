@@ -20,7 +20,7 @@ import useTranslation from '@/hooks/useTranslation'
 import { ROLE_MAP, ROLE_COLORS } from '@/utils/constants'
 import { Role } from '@/types'
 import api from '@/services/api'
-import { TIMEZONE_LIST, getTimezoneLabel } from '@/utils/timezone'
+import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
 
 const { Header, Sider, Content } = Layout
 
@@ -182,7 +182,21 @@ const MainLayout: React.FC = () => {
   ]
 
   const currentTimezone = user?.timezone || 'Asia/Shanghai'
-  const currentTimezoneLabel = getTimezoneLabel(currentTimezone, lang)
+
+  const timezoneOptions = useMemo(() => {
+    const groups: Record<string, { label: string; options: { value: string; label: string }[] }> = {}
+    TIMEZONE_LIST.forEach(tz => {
+      if (!groups[tz.region]) {
+        const regionLabel = REGION_LABELS[tz.region]
+        groups[tz.region] = { label: lang === 'zh' ? regionLabel['zh-CN'] : regionLabel['en-US'], options: [] }
+      }
+      groups[tz.region].options.push({
+        value: tz.id,
+        label: getTimezoneLabel(tz.id, lang),
+      })
+    })
+    return Object.values(groups)
+  }, [lang])
 
   const handleTimezoneChange = async (tz: string) => {
     try {
@@ -203,11 +217,6 @@ const MainLayout: React.FC = () => {
       message.error(t('msg.timezoneUpdateFailed'))
     }
   }
-
-  const timezoneMenuItems = TIMEZONE_LIST.map(tz => ({
-    key: tz.id,
-    label: getTimezoneLabel(tz.id, lang),
-  }))
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -237,23 +246,19 @@ const MainLayout: React.FC = () => {
                 {lang === 'zh' ? '中文' : 'EN'}
               </Button>
             </Dropdown>
-            <Dropdown
-              menu={{
-                items: timezoneMenuItems,
-                onClick: ({ key }) => handleTimezoneChange(key),
-                selectedKeys: [currentTimezone],
-              }}
-              placement="bottomRight"
-              dropdownRender={(menu) => (
-                <div style={{ maxHeight: 300, overflow: 'auto' }}>
-                  {menu}
-                </div>
-              )}
-            >
-              <Button type="text" icon={<ClockCircleOutlined />} style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 4 }}>
-                {currentTimezoneLabel}
-              </Button>
-            </Dropdown>
+            <Select
+              showSearch
+              value={currentTimezone}
+              options={timezoneOptions}
+              onChange={(val) => handleTimezoneChange(val)}
+              filterOption={(input, option) =>
+                (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+              }
+              style={{ width: isMobile ? 100 : 160 }}
+              popupMatchSelectWidth={false}
+              variant="borderless"
+              suffixIcon={<ClockCircleOutlined />}
+            />
             {user && (
               <Badge color={ROLE_COLORS[user.role]} text={<Typography.Text style={{ fontSize: 13 }}>{ROLE_MAP[user.role] || user.role}</Typography.Text>} />
             )}
@@ -365,7 +370,7 @@ const MainLayout: React.FC = () => {
             <Select
               showSearch
               placeholder={t('modal.timezonePlaceholder')}
-              options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: tz.labelZh }))}
+              options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) }))}
               filterOption={(input, option) =>
                 (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
               }
