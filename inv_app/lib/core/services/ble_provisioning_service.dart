@@ -147,8 +147,10 @@ class BleProvisioningService {
   Future<bool> isBluetoothAvailable() async {
     try {
       final adapterState = await FlutterBluePlus.adapterState.first;
+      print('[BLE] 蓝牙状态: $adapterState');
       return adapterState == BluetoothAdapterState.on;
     } catch (e) {
+      print('[BLE] 检查蓝牙状态失败: $e');
       return false;
     }
   }
@@ -177,10 +179,12 @@ class BleProvisioningService {
       // 检查蓝牙是否可用
       final isAvailable = await isBluetoothAvailable();
       if (!isAvailable) {
+        print('[BLE] 蓝牙不可用，无法开始扫描');
         _emitStatus(BleProvisioningStatus.error);
         _running = false;
         return;
       }
+      print('[BLE] 开始扫描，过滤服务UUID: $serviceUuid');
 
       // 开始扫描，过滤服务UUID
       await FlutterBluePlus.startScan(
