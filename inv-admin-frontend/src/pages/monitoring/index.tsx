@@ -1229,7 +1229,7 @@ const MonitoringPage: React.FC = () => {
 
   const energyFlowOption = useMemo(() => {
     if (!flowData || flowData.length === 0) return {}
-    const times = flowData.map((d: any) => d.time)
+    const times = flowData.map((d: any) => formatInTimezone(d.time, timezone, 'HH:mm'))
     const pvData = flowData.map((d: any) => safeNum(d.pvPower))
     const battChargeData = flowData.map((d: any) => safeNum(d.batteryCharge))
     const battDischargeData = flowData.map((d: any) => -safeNum(d.batteryDischarge))

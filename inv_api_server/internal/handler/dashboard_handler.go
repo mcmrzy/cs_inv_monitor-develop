@@ -802,20 +802,20 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	endUTC := localDate.AddDate(0, 0, 1).UTC().Format("2006-01-02 15:04:05")
 
 	type FlowPoint struct {
-		Time             string  `json:"time"`
-		PVPower          float64 `json:"pvPower"`
-		BatteryPower     float64 `json:"batteryPower"`
-		LoadPower        float64 `json:"loadPower"`
-		BatteryCharge    float64 `json:"batteryCharge"`
-		BatteryDischarge float64 `json:"batteryDischarge"`
+		Time             time.Time `json:"time"`
+		PVPower          float64   `json:"pvPower"`
+		BatteryPower     float64   `json:"batteryPower"`
+		LoadPower        float64   `json:"loadPower"`
+		BatteryCharge    float64   `json:"batteryCharge"`
+		BatteryDischarge float64   `json:"batteryDischarge"`
 	}
 
-	// 查询PV功率（按分钟聚合）— 数据库存的是UTC，转为本地时间
+	// 查询PV功率（按分钟聚合）— 返回UTC时间，前端负责时区转换
 	var pvQuery string
 	var pvArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		pvQuery = `
-			SELECT TO_CHAR(dt.time AT TIME ZONE $3, 'HH24:MI') as time_slot,
+			SELECT dt.time as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -823,10 +823,10 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		pvArgs = append(pvArgs, startUTC, endUTC, tz)
+		pvArgs = append(pvArgs, startUTC, endUTC)
 	} else {
 		pvQuery = `
-			SELECT TO_CHAR(dt.time AT TIME ZONE $4, 'HH24:MI') as time_slot,
+			SELECT dt.time as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -834,7 +834,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		pvArgs = append(pvArgs, userID, startUTC, endUTC, tz)
+		pvArgs = append(pvArgs, userID, startUTC, endUTC)
 	}
 
 	// 查询电池功率
@@ -842,7 +842,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var battArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		battQuery = `
-			SELECT TO_CHAR(dt.time AT TIME ZONE $3, 'HH24:MI') as time_slot,
+			SELECT dt.time as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -850,10 +850,10 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		battArgs = append(battArgs, startUTC, endUTC, tz)
+		battArgs = append(battArgs, startUTC, endUTC)
 	} else {
 		battQuery = `
-			SELECT TO_CHAR(dt.time AT TIME ZONE $4, 'HH24:MI') as time_slot,
+			SELECT dt.time as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -861,7 +861,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		battArgs = append(battArgs, userID, startUTC, endUTC, tz)
+		battArgs = append(battArgs, userID, startUTC, endUTC)
 	}
 
 	// 查询负载功率
@@ -869,7 +869,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var loadArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		loadQuery = `
-			SELECT TO_CHAR(dt.time AT TIME ZONE $3, 'HH24:MI') as time_slot,
+			SELECT dt.time as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -877,10 +877,10 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		loadArgs = append(loadArgs, startUTC, endUTC, tz)
+		loadArgs = append(loadArgs, startUTC, endUTC)
 	} else {
 		loadQuery = `
-			SELECT TO_CHAR(dt.time AT TIME ZONE $4, 'HH24:MI') as time_slot,
+			SELECT dt.time as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -888,7 +888,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
 			GROUP BY time_slot ORDER BY time_slot
 		`
-		loadArgs = append(loadArgs, userID, startUTC, endUTC, tz)
+		loadArgs = append(loadArgs, userID, startUTC, endUTC)
 	}
 
 	// 收集所有时间点
@@ -899,11 +899,12 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	if err == nil {
 		defer pvRows.Close()
 		for pvRows.Next() {
-			var slot string
+			var t time.Time
 			var pv float64
-			if pvRows.Scan(&slot, &pv) == nil {
+			if pvRows.Scan(&t, &pv) == nil {
+				slot := t.UTC().Format("15:04")
 				if _, ok := flowMap[slot]; !ok {
-					flowMap[slot] = &FlowPoint{Time: slot}
+					flowMap[slot] = &FlowPoint{Time: t}
 				}
 				flowMap[slot].PVPower = pv
 			}
@@ -915,11 +916,12 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	if err == nil {
 		defer battRows.Close()
 		for battRows.Next() {
-			var slot string
+			var t time.Time
 			var batt float64
-			if battRows.Scan(&slot, &batt) == nil {
+			if battRows.Scan(&t, &batt) == nil {
+				slot := t.UTC().Format("15:04")
 				if _, ok := flowMap[slot]; !ok {
-					flowMap[slot] = &FlowPoint{Time: slot}
+					flowMap[slot] = &FlowPoint{Time: t}
 				}
 				flowMap[slot].BatteryPower = batt
 				if batt > 0 {
@@ -936,11 +938,12 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	if err == nil {
 		defer loadRows.Close()
 		for loadRows.Next() {
-			var slot string
+			var t time.Time
 			var load float64
-			if loadRows.Scan(&slot, &load) == nil {
+			if loadRows.Scan(&t, &load) == nil {
+				slot := t.UTC().Format("15:04")
 				if _, ok := flowMap[slot]; !ok {
-					flowMap[slot] = &FlowPoint{Time: slot}
+					flowMap[slot] = &FlowPoint{Time: t}
 				}
 				flowMap[slot].LoadPower = load
 			}
