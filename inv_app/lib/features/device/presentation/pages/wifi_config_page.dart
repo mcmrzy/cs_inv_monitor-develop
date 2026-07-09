@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -930,10 +930,11 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     
     // 判断当前阶段
     final bool isError = _bleStatus == BleProvisioningStatus.failed || 
-                         _bleStatus == BleProvisioningStatus.timeout || 
                          _bleStatus == BleProvisioningStatus.error;
+    final bool isTimeout = _bleStatus == BleProvisioningStatus.timeout; // 扫描超时
     final bool showSuccessPhase = _provisionSuccess; // 配网成功阶段
-    final bool showScanPhase = !showSuccessPhase && (_bleScanning || (_bleDevices.isNotEmpty && !deviceSelected) || (!deviceSelected && !_bleScanning && !isError));
+    final bool showScanPhase = !showSuccessPhase && (_bleScanning || (_bleDevices.isNotEmpty && !deviceSelected) || (!deviceSelected && !_bleScanning && !isError && !isTimeout));
+    final bool showNoDevicePhase = isTimeout && !showSuccessPhase && !isError && !deviceSelected; // 未发现设备阶段
     final bool showConnectingPhase = !showSuccessPhase && _bleConnecting;
     final bool showConfigPhase = !showSuccessPhase && isConnected && !isConfiguring;
     final bool showConfiguringPhase = !showSuccessPhase && isConfiguring;
@@ -1050,6 +1051,47 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           ]),
         ),
       ],
+
+      // 未发现设备显示（扫描超时）
+      if (showNoDevicePhase) ...[
+        Container(
+          padding: EdgeInsets.all(16.w),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Column(children: [
+            const Icon(Icons.bluetooth_disabled, color: AppColors.textHint, size: 40),
+            SizedBox(height: 12.h),
+            Text(
+              '未发现设备',
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+            ),
+            SizedBox(height: 8.h),
+            Text(
+              '请确保设备已开启并处于配网模式',
+              style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 16.h),
+            SizedBox(
+              width: double.infinity,
+              height: 44.h,
+              child: ElevatedButton.icon(
+                onPressed: _startBleScan,
+                icon: const Icon(Icons.refresh, size: 20),
+                label: const Text('重新扫描', style: TextStyle(fontSize: 15)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ],
+
 
       // 说明信息（仅在扫描阶段显示）
       if (showScanPhase) ...[
@@ -1394,3 +1436,5 @@ class _StepData {
   final bool isCurrent;
   const _StepData({required this.label, required this.isCompleted, required this.isCurrent});
 }
+
+
