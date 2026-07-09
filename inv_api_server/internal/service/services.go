@@ -632,6 +632,10 @@ func (s *DeviceService) Delete(ctx context.Context, sn string) error {
 	return s.repo.Delete(ctx, sn)
 }
 
+func (s *DeviceService) Update(ctx context.Context, sn string, model string, ratedPower *float64, firmwareArm string, firmwareEsp string) error {
+	return s.repo.Update(ctx, sn, model, ratedPower, firmwareArm, firmwareEsp)
+}
+
 func (s *DeviceService) GetUnbindRequests(ctx context.Context, page, pageSize int) ([]map[string]interface{}, int64, error) {
 	return s.repo.GetUnbindRequests(ctx, page, pageSize)
 }
