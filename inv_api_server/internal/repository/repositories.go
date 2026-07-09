@@ -1881,6 +1881,26 @@ func (r *DeviceRepository) MarkDeviceOfflineBySN(ctx context.Context, sn string)
 // 	return nil
 // }
 
+func (r *DeviceRepository) Update(ctx context.Context, sn string, model string, ratedPower *float64, firmwareArm string, firmwareEsp string) error {
+	result, err := r.db.Exec(ctx, `
+		UPDATE devices SET
+			model = COALESCE(NULLIF($2, ''), model),
+			rated_power = COALESCE($3, rated_power),
+			firmware_arm = COALESCE(NULLIF($4, ''), firmware_arm),
+			firmware_esp = COALESCE(NULLIF($5, ''), firmware_esp),
+			updated_at = NOW()
+		WHERE sn = $1 AND deleted_at IS NULL`,
+		sn, model, ratedPower, firmwareArm, firmwareEsp)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("device not found: %s", sn)
+	}
+	r.invalidateDeviceCache(ctx, sn)
+	return nil
+}
+
 // Deprecated: SendCommand via Redis Pub/Sub is no longer used.
 // DeviceService.SendCommand now calls Device Server via HTTP directly.
 func (r *DeviceRepository) SendCommand(ctx context.Context, sn, cmdType string, params map[string]interface{}) error {

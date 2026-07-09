@@ -127,7 +127,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/work-orders/*action", p.Handler())
 	userGroup.Any("/api/v1/work-orders", p.Handler())
 
-	// Admin — 需管理员（不用 admin/*action 通配符以避免与 route-groups 冲突）
+	// Admin — 需管理员（route-groups 单独注册，其余通过 admin/*action 通配符代理）
 	adminGroup.GET("/api/v1/admin/route-groups", func(c *gin.Context) {
 		c.JSON(http.StatusOK, buildRouteGroups())
 	})
@@ -138,6 +138,19 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	adminGroup.Any("/api/v1/parallel-groups", p.Handler())
 	adminGroup.Any("/api/v1/parallel", p.Handler())
 	adminGroup.Any("/api/v1/internal/*action", p.Handler())
+	// Admin 子路由代理 — 逐条注册以避免与 route-groups 通配符冲突
+	adminGroup.Any("/api/v1/admin/models", p.Handler())
+	adminGroup.Any("/api/v1/admin/users", p.Handler())
+	adminGroup.Any("/api/v1/admin/users/*action", p.Handler())
+	adminGroup.Any("/api/v1/admin/permissions", p.Handler())
+	adminGroup.Any("/api/v1/admin/permissions/*action", p.Handler())
+	adminGroup.Any("/api/v1/admin/logs", p.Handler())
+	adminGroup.Any("/api/v1/admin/logs/*action", p.Handler())
+	adminGroup.Any("/api/v1/admin/system-health", p.Handler())
+	adminGroup.Any("/api/v1/admin/system-config", p.Handler())
+	adminGroup.Any("/api/v1/admin/tenants", p.Handler())
+	adminGroup.Any("/api/v1/admin/tenants/*action", p.Handler())
+	adminGroup.Any("/api/v1/admin/metrics", p.Handler())
 }
 
 func registerDeviceRoutes(userGroup *gin.RouterGroup, p *proxy.ReverseProxy) {

@@ -442,7 +442,27 @@ func (h *DeviceHandler) GetControlFields(c *gin.Context) {
 
 // DEPRECATED: Device params removed. Use MQTT direct configuration.
 // func (h *DeviceHandler) GetParams(c *gin.Context) {}
-// func (h *DeviceHandler) UpdateParams(c *gin.Context) {}
+
+type UpdateDeviceRequest struct {
+	Model           string   `json:"model"`
+	RatedPower      *float64 `json:"ratedPower"`
+	FirmwareVersion string   `json:"firmwareVersion"`
+	HardwareVersion string   `json:"hardwareVersion"`
+}
+
+func (h *DeviceHandler) Update(c *gin.Context) {
+	sn := c.Param("sn")
+	var req UpdateDeviceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request body"))
+		return
+	}
+	if err := h.deviceService.Update(c.Request.Context(), sn, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
+		response.HandleError(c, apperr.Internal("failed to update device", err))
+		return
+	}
+	response.SuccessWithMessage(c, "device updated", nil)
+}
 
 func (h *DeviceHandler) GetHistory(c *gin.Context) {
 	sn := c.Param("sn")

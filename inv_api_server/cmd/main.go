@@ -666,6 +666,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
 			auth.DELETE("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
 			auth.DELETE("/devices/:sn", deps.DeviceHandler.DeleteDevice)
+			auth.PUT("/devices/:sn", deps.DeviceHandler.Update)
 			auth.POST("/devices/:sn/control", deps.DeviceHandler.Control)
 			auth.POST("/devices/batch/control", deps.DeviceHandler.BatchControl)
 			auth.GET("/devices/:sn/control-fields", deps.DeviceHandler.GetControlFields)
