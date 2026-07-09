@@ -319,43 +319,50 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 	var query string
 	var args []interface{}
 
+	// 将本地日期范围转为 UTC 时间范围用于数据库查询
+	loc := timezone.LoadLocation(tz)
+	startLocal, _ := time.ParseInLocation("2006-01-02", startDate, loc)
+	endLocal, _ := time.ParseInLocation("2006-01-02", endDate, loc)
+	startUTCTime := startLocal.UTC()
+	endUTCTime := endLocal.AddDate(0, 0, 1).UTC()
+
 	if isAdmin {
 		query = `
 			SELECT date, energy, load, cumulative FROM (
 				SELECT 
-					TO_CHAR(dt.time, 'YYYY-MM-DD') as date,
+					TO_CHAR(dt.time AT TIME ZONE $3, 'YYYY-MM-DD') as date,
 					(dt.data->'data'->>'daily_pv')::float as energy,
 					(dt.data->'data'->>'daily_load')::float as load,
 					(dt.data->'data'->>'total_pv')::float as cumulative,
-					ROW_NUMBER() OVER (PARTITION BY TO_CHAR(dt.time, 'YYYY-MM-DD') ORDER BY dt.time DESC) as rn
+					ROW_NUMBER() OVER (PARTITION BY TO_CHAR(dt.time AT TIME ZONE $3, 'YYYY-MM-DD') ORDER BY dt.time DESC) as rn
 				FROM device_telemetry dt
 				JOIN devices d ON d.sn = dt.device_sn
 				WHERE dt.topic = 'data/energy'
 					AND d.deleted_at IS NULL
-					AND dt.time >= $1::timestamp AND dt.time < ($2::date + INTERVAL '1 day')::timestamp
+					AND dt.time >= $1 AND dt.time < $2
 					AND dt.data->'data'->>'daily_pv' IS NOT NULL
 			) sub WHERE rn = 1 ORDER BY date
 		`
-		args = append(args, startDate, endDate)
+		args = append(args, startUTCTime, endUTCTime, tz)
 	} else {
 		query = `
 			SELECT date, energy, load, cumulative FROM (
 				SELECT 
-					TO_CHAR(dt.time, 'YYYY-MM-DD') as date,
+					TO_CHAR(dt.time AT TIME ZONE $4, 'YYYY-MM-DD') as date,
 					(dt.data->'data'->>'daily_pv')::float as energy,
 					(dt.data->'data'->>'daily_load')::float as load,
 					(dt.data->'data'->>'total_pv')::float as cumulative,
-					ROW_NUMBER() OVER (PARTITION BY TO_CHAR(dt.time, 'YYYY-MM-DD') ORDER BY dt.time DESC) as rn
+					ROW_NUMBER() OVER (PARTITION BY TO_CHAR(dt.time AT TIME ZONE $4, 'YYYY-MM-DD') ORDER BY dt.time DESC) as rn
 				FROM device_telemetry dt
 				JOIN devices d ON d.sn = dt.device_sn
 				WHERE dt.topic = 'data/energy'
 					AND d.deleted_at IS NULL
 					AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)
-					AND dt.time >= $2::timestamp AND dt.time < ($3::date + INTERVAL '1 day')::timestamp
+					AND dt.time >= $2 AND dt.time < $3
 					AND dt.data->'data'->>'daily_pv' IS NOT NULL
 			) sub WHERE rn = 1 ORDER BY date
 		`
-		args = append(args, userID, startDate, endDate)
+		args = append(args, userID, startUTCTime, endUTCTime, tz)
 	}
 
 	rows, err := h.db.Query(ctx, query, args...)
@@ -808,7 +815,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var pvArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		pvQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $3, 'HH24:MI') as time_slot,
+			SELECT TO_CHAR(dt.time AT TIME ZONE $3, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -819,7 +826,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		pvArgs = append(pvArgs, startUTC, endUTC, tz)
 	} else {
 		pvQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $4, 'HH24:MI') as time_slot,
+			SELECT TO_CHAR(dt.time AT TIME ZONE $4, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -835,7 +842,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var battArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		battQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $3, 'HH24:MI') as time_slot,
+			SELECT TO_CHAR(dt.time AT TIME ZONE $3, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -846,7 +853,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		battArgs = append(battArgs, startUTC, endUTC, tz)
 	} else {
 		battQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $4, 'HH24:MI') as time_slot,
+			SELECT TO_CHAR(dt.time AT TIME ZONE $4, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -862,7 +869,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var loadArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		loadQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $3, 'HH24:MI') as time_slot,
+			SELECT TO_CHAR(dt.time AT TIME ZONE $3, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -873,7 +880,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		loadArgs = append(loadArgs, startUTC, endUTC, tz)
 	} else {
 		loadQuery = `
-			SELECT TO_CHAR((dt.time AT TIME ZONE 'UTC') AT TIME ZONE $4, 'HH24:MI') as time_slot,
+			SELECT TO_CHAR(dt.time AT TIME ZONE $4, 'HH24:MI') as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
