@@ -74,6 +74,11 @@ services:
       EMAIL_USER: ${EMAIL_USER}
       EMAIL_PASS: ${EMAIL_PASS}
       EMAIL_FROM: ${EMAIL_FROM}
+      JPUSH_ENABLED: ${JPUSH_ENABLED:-false}
+      JPUSH_APP_KEY: ${JPUSH_APP_KEY}
+      JPUSH_MASTER_SECRET: ${JPUSH_MASTER_SECRET}
+      JPUSH_TIMEOUT: ${JPUSH_TIMEOUT:-10}
+      JPUSH_DEDUP_TTL: ${JPUSH_DEDUP_TTL:-120}
     volumes:
       - firmware_data:/data/firmware
       - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行

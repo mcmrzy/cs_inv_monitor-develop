@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
@@ -117,6 +118,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   }) : super(NotificationInitial()) {
     on<SystemNotificationsRequested>(_onSystemNotificationsRequested);
     on<_MqttStatusUpdate>(_onMqttStatusUpdate);
+    on<JPushNotificationReceived>(_onJPushNotificationReceived);
+    on<JPushNotificationTapped>(_onJPushNotificationTapped);
     _subscribeToMqtt();
   }
 
@@ -164,6 +167,24 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   ) async {
     // 后端 DeviceStatus handler 已自动插入通知记录
     // 这里只触发刷新，从后端拉取最新通知
+    _debouncedRefresh();
+  }
+
+  /// JPush 推送消息到达时，触发通知列表刷新
+  Future<void> _onJPushNotificationReceived(
+    JPushNotificationReceived event,
+    Emitter<NotificationState> emit,
+  ) async {
+    debugPrint('[NotificationBloc] JPush received: ${event.notifyType}, deviceSn=${event.deviceSn}');
+    _debouncedRefresh();
+  }
+
+  /// 用户点击 JPush 通知时，触发通知列表刷新
+  Future<void> _onJPushNotificationTapped(
+    JPushNotificationTapped event,
+    Emitter<NotificationState> emit,
+  ) async {
+    debugPrint('[NotificationBloc] JPush tapped: ${event.notifyType}, deviceSn=${event.deviceSn}');
     _debouncedRefresh();
   }
 
