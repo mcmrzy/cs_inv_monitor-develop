@@ -621,6 +621,7 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 		Changelog           string `json:"changelog"`
 		IsForce             bool   `json:"is_force"`
 		MinSupportedVersion int    `json:"min_supported_version"`
+		RolloutPercentage   int    `json:"rollout_percentage"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, apperr.BadRequest("参数错误: "+err.Error()))
@@ -630,6 +631,10 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 	if req.Platform != "android" && req.Platform != "ios" {
 		response.HandleError(c, apperr.BadRequest("platform 必须是 android 或 ios"))
 		return
+	}
+
+	if req.RolloutPercentage <= 0 {
+		req.RolloutPercentage = 100
 	}
 
 	v := &model.AppVersion{
@@ -642,6 +647,7 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 		Changelog:           req.Changelog,
 		IsForce:             req.IsForce,
 		MinSupportedVersion: req.MinSupportedVersion,
+		RolloutPercentage:   req.RolloutPercentage,
 	}
 
 	if err := h.otaService.CreateAppVersion(c.Request.Context(), v); err != nil {
@@ -658,10 +664,23 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 		} else if req.Changelog != "" {
 			content += ": " + req.Changelog
 		}
-		h.jpushService.SendBroadcastAsync(c.Request.Context(), "APP新版本发布", content, map[string]string{
-			"notify_type": "app_update",
-		})
-		log.Printf("[CreateAppVersion] broadcast push sent: platform=%s, version=%s", req.Platform, req.VersionName)
+
+		if req.RolloutPercentage >= 100 {
+			h.jpushService.SendBroadcastAsync(c.Request.Context(), "APP新版本发布", content, map[string]string{
+				"notify_type": "app_update",
+			})
+			log.Printf("[CreateAppVersion] broadcast push sent: platform=%s, version=%s", req.Platform, req.VersionName)
+		} else {
+			// 灰度推送：查询所有用户，按比例选取
+			userIDs, err := h.otaService.GetAllUserIDs(c.Request.Context())
+			if err == nil && len(userIDs) > 0 {
+				userIDs = service.SelectByPercent(userIDs, req.RolloutPercentage)
+				if len(userIDs) > 0 {
+					h.jpushService.SendNotificationAsync(c.Request.Context(), userIDs, "app_update", "", "APP新版本发布", content)
+					log.Printf("[CreateAppVersion] grayscale push sent: platform=%s, version=%s, percent=%d, users=%d", req.Platform, req.VersionName, req.RolloutPercentage, len(userIDs))
+				}
+			}
+		}
 	}
 
 	response.Success(c, v)

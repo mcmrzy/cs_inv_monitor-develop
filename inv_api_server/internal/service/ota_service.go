@@ -833,36 +833,51 @@ func (s *OTAService) pushOtaNotification(pkg *model.UpgradePackage, req PublishP
 	title := "固件更新可用"
 	content := fmt.Sprintf("%s %s: %s", pkg.Model, pkg.UserVersion, pkg.UserChangelog)
 
+	var userIDs []int64
 	switch req.RolloutType {
 	case "all":
-		s.jpushService.SendBroadcastAsync(ctx, title, content, map[string]string{
-			"notify_type": "ota_available",
-		})
+		if req.RolloutPercent >= 100 || req.RolloutPercent <= 0 {
+			s.jpushService.SendBroadcastAsync(ctx, title, content, map[string]string{
+				"notify_type": "ota_available",
+			})
+			return
+		}
+		// 灰度：查询所有用户再按比例选取
+		ids, err := s.GetAllUserIDs(ctx)
+		if err != nil || len(ids) == 0 {
+			logger.Error("failed to get all users for OTA push", zap.Error(err))
+			return
+		}
+		userIDs = ids
 	case "model":
-		userIDs, err := s.getUserIDsByModel(ctx, pkg.Model)
-		if err != nil || len(userIDs) == 0 {
+		ids, err := s.getUserIDsByModel(ctx, pkg.Model)
+		if err != nil || len(ids) == 0 {
 			logger.Error("failed to get users for model", zap.String("model", pkg.Model), zap.Error(err))
 			return
 		}
-		s.jpushService.SendNotificationAsync(ctx, userIDs, "ota_available", "", title, content)
+		userIDs = ids
 	case "device":
 		sns := strings.Split(req.RolloutTargets, ",")
-		userIDs, err := s.getUserIDsByDeviceSNs(ctx, sns)
-		if err != nil || len(userIDs) == 0 {
+		ids, err := s.getUserIDsByDeviceSNs(ctx, sns)
+		if err != nil || len(ids) == 0 {
 			logger.Error("failed to get users for devices", zap.Error(err))
 			return
 		}
-		s.jpushService.SendNotificationAsync(ctx, userIDs, "ota_available", "", title, content)
+		userIDs = ids
 	case "user":
-		var userIDs []int64
 		for _, idStr := range strings.Split(req.RolloutTargets, ",") {
 			if id, err := strconv.ParseInt(strings.TrimSpace(idStr), 10, 64); err == nil {
 				userIDs = append(userIDs, id)
 			}
 		}
-		if len(userIDs) > 0 {
-			s.jpushService.SendNotificationAsync(ctx, userIDs, "ota_available", "", title, content)
-		}
+	}
+
+	// 灰度百分比过滤
+	if req.RolloutPercent > 0 && req.RolloutPercent < 100 {
+		userIDs = SelectByPercent(userIDs, req.RolloutPercent)
+	}
+	if len(userIDs) > 0 {
+		s.jpushService.SendNotificationAsync(ctx, userIDs, "ota_available", "", title, content)
 	}
 }
 
@@ -1734,4 +1749,40 @@ func (s *OTAService) RollbackUpgrade(ctx context.Context, sn string, targetPacka
 // GetAvailablePackagesForDevice 查询设备可见的已发布升级包
 func (s *OTAService) GetAvailablePackagesForDevice(ctx context.Context, sn string, userID int64) ([]model.UpgradePackage, error) {
 	return s.repo.GetPublishedPackagesForDevice(ctx, sn, userID)
+}
+
+// GetAllUserIDs 查询所有未删除的用户ID
+func (s *OTAService) GetAllUserIDs(ctx context.Context) ([]int64, error) {
+	rows, err := s.db.Query(ctx, `SELECT id FROM users WHERE deleted_at IS NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// SelectByPercent 随机选取指定百分比的用户ID（导出供 handler 层使用）
+func SelectByPercent(userIDs []int64, percent int) []int64 {
+	if percent <= 0 || len(userIDs) == 0 {
+		return nil
+	}
+	if percent >= 100 {
+		return userIDs
+	}
+	rand.Shuffle(len(userIDs), func(i, j int) {
+		userIDs[i], userIDs[j] = userIDs[j], userIDs[i]
+	})
+	count := len(userIDs) * percent / 100
+	if count < 1 {
+		count = 1
+	}
+	return userIDs[:count]
 }
