@@ -810,12 +810,12 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		BatteryDischarge float64   `json:"batteryDischarge"`
 	}
 
-	// 查询PV功率（按分钟聚合）— 返回UTC时间，前端负责时区转换
+	// 查询PV功率（time_bucket 做分钟级聚合）— 返回UTC时间，前端负责时区转换
 	var pvQuery string
 	var pvArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		pvQuery = `
-			SELECT dt.time as time_slot,
+			SELECT time_bucket('1 minute', dt.time) as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -826,7 +826,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		pvArgs = append(pvArgs, startUTC, endUTC)
 	} else {
 		pvQuery = `
-			SELECT dt.time as time_slot,
+			SELECT time_bucket('1 minute', dt.time) as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -842,7 +842,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var battArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		battQuery = `
-			SELECT dt.time as time_slot,
+			SELECT time_bucket('1 minute', dt.time) as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -853,7 +853,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		battArgs = append(battArgs, startUTC, endUTC)
 	} else {
 		battQuery = `
-			SELECT dt.time as time_slot,
+			SELECT time_bucket('1 minute', dt.time) as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -869,7 +869,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var loadArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		loadQuery = `
-			SELECT dt.time as time_slot,
+			SELECT time_bucket('1 minute', dt.time) as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -880,7 +880,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		loadArgs = append(loadArgs, startUTC, endUTC)
 	} else {
 		loadQuery = `
-			SELECT dt.time as time_slot,
+			SELECT time_bucket('1 minute', dt.time) as time_slot,
 				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
 			FROM device_telemetry dt
 			JOIN devices d ON d.sn = dt.device_sn
@@ -891,8 +891,8 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		loadArgs = append(loadArgs, userID, startUTC, endUTC)
 	}
 
-	// 收集所有时间点
-	flowMap := make(map[string]*FlowPoint)
+	// 收集所有时间点，key 为 Unix 分钟数，确保分钟级去重与排序
+	flowMap := make(map[int64]*FlowPoint)
 
 	// 查询PV
 	pvRows, err := h.db.Query(ctx, pvQuery, pvArgs...)
@@ -902,11 +902,11 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			var t time.Time
 			var pv float64
 			if pvRows.Scan(&t, &pv) == nil {
-				slot := t.UTC().Format("15:04")
-				if _, ok := flowMap[slot]; !ok {
-					flowMap[slot] = &FlowPoint{Time: t}
+				key := t.Unix() / 60
+				if _, ok := flowMap[key]; !ok {
+					flowMap[key] = &FlowPoint{Time: t}
 				}
-				flowMap[slot].PVPower = pv
+				flowMap[key].PVPower = pv
 			}
 		}
 	}
@@ -919,15 +919,15 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			var t time.Time
 			var batt float64
 			if battRows.Scan(&t, &batt) == nil {
-				slot := t.UTC().Format("15:04")
-				if _, ok := flowMap[slot]; !ok {
-					flowMap[slot] = &FlowPoint{Time: t}
+				key := t.Unix() / 60
+				if _, ok := flowMap[key]; !ok {
+					flowMap[key] = &FlowPoint{Time: t}
 				}
-				flowMap[slot].BatteryPower = batt
+				flowMap[key].BatteryPower = batt
 				if batt > 0 {
-					flowMap[slot].BatteryCharge = batt
+					flowMap[key].BatteryCharge = batt
 				} else {
-					flowMap[slot].BatteryDischarge = -batt
+					flowMap[key].BatteryDischarge = -batt
 				}
 			}
 		}
@@ -941,21 +941,21 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			var t time.Time
 			var load float64
 			if loadRows.Scan(&t, &load) == nil {
-				slot := t.UTC().Format("15:04")
-				if _, ok := flowMap[slot]; !ok {
-					flowMap[slot] = &FlowPoint{Time: t}
+				key := t.Unix() / 60
+				if _, ok := flowMap[key]; !ok {
+					flowMap[key] = &FlowPoint{Time: t}
 				}
-				flowMap[slot].LoadPower = load
+				flowMap[key].LoadPower = load
 			}
 		}
 	}
 
-	// 排序输出
-	var keys []string
+	// 按分钟 key 排序输出
+	var keys []int64
 	for k := range flowMap {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 
 	// 过滤边界上不完整的时间点（只有PV数据，电池/负载为0）
 	for len(keys) > 0 {
