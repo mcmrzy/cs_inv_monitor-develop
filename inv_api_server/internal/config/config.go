@@ -21,6 +21,7 @@ type Config struct {
 	Timezone  string           `mapstructure:"timezone"`
 	Backends  BackendsConfig   `mapstructure:"backends"`
 	Migration MigrationConfig `mapstructure:"migration"`
+	JPush     JPushConfig      `mapstructure:"jpush"`
 }
 
 type CORSConfig struct {
@@ -108,6 +109,20 @@ type LogConfig struct {
 	Compress   bool   `mapstructure:"compress"`
 }
 
+// JPushConfig 极光推送配置
+//   - Enabled:      是否启用推送
+//   - AppKey:       极光应用 AppKey
+//   - MasterSecret: 极光应用 MasterSecret
+//   - Timeout:      HTTP 请求超时（秒）
+//   - DedupTTL:     消息去重窗口（秒），避免短时间内重复推送
+type JPushConfig struct {
+	Enabled      bool   `mapstructure:"enabled"`
+	AppKey       string `mapstructure:"app_key"`
+	MasterSecret string `mapstructure:"master_secret"`
+	Timeout      int    `mapstructure:"timeout"`    // 秒，默认10
+	DedupTTL     int    `mapstructure:"dedup_ttl"` // 去重窗口秒数，默认120
+}
+
 func Load(configPath string) (*Config, error) {
 	viper.SetConfigType("yaml")
 
@@ -168,6 +183,12 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("migration.schema_file", "")
 	viper.SetDefault("migration.auto_run", true)
 
+	viper.SetDefault("jpush.enabled", false)
+	viper.SetDefault("jpush.app_key", "")
+	viper.SetDefault("jpush.master_secret", "")
+	viper.SetDefault("jpush.timeout", 10)
+	viper.SetDefault("jpush.dedup_ttl", 120)
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
@@ -207,6 +228,12 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("backends.amap_api_key", "AMAP_API_KEY")
 	viper.BindEnv("backends.upload_dir", "UPLOAD_DIR")
 	viper.BindEnv("backends.weather_source", "WEATHER_SOURCE")
+
+	viper.BindEnv("jpush.enabled", "JPUSH_ENABLED")
+	viper.BindEnv("jpush.app_key", "JPUSH_APP_KEY")
+	viper.BindEnv("jpush.master_secret", "JPUSH_MASTER_SECRET")
+	viper.BindEnv("jpush.timeout", "JPUSH_TIMEOUT")
+	viper.BindEnv("jpush.dedup_ttl", "JPUSH_DEDUP_TTL")
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {

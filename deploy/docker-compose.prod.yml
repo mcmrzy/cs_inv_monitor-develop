@@ -130,6 +130,11 @@ services:
       REDIS_HOST: redis
       DEVICE_SERVER_URL: http://inv-device-server:8081
       INTERNAL_KEY: ${INTERNAL_KEY}
+      JPUSH_ENABLED: ${JPUSH_ENABLED:-false}
+      JPUSH_APP_KEY: ${JPUSH_APP_KEY}
+      JPUSH_MASTER_SECRET: ${JPUSH_MASTER_SECRET}
+      JPUSH_TIMEOUT: ${JPUSH_TIMEOUT:-10}
+      JPUSH_DEDUP_TTL: ${JPUSH_DEDUP_TTL:-120}
     volumes:
       - ./configs/api-server.yaml:/app/config.yaml:ro
       - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行

@@ -15,7 +15,7 @@ func init() {
 }
 
 func setupTestRouter() *gin.Engine {
-	h := NewInternalHandler(nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
 	r := gin.New()
 	r.POST("/api/v1/internal/device-status", h.DeviceStatus)
 	r.POST("/api/v1/internal/device-info", h.DeviceInfo)

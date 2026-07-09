@@ -132,6 +132,7 @@ type InternalHandler struct {
 	db         *pgxpool.Pool
 	rdb        *redis.Client
 	otaService *service.OTAService
+	jpushService *service.JPushService
 	// SSE multi-client broadcast: map[user_id][]sseClientEntry
 	sseClientsByUser map[int64][]sseClientEntry
 	sseClientsMu     sync.RWMutex
@@ -140,7 +141,7 @@ type InternalHandler struct {
 	notifyCfg        *NotificationConfig
 }
 
-func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService, notifySvc NotificationService, notifyCfg *NotificationConfig) *InternalHandler {
+func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService, jpushService *service.JPushService, notifySvc NotificationService, notifyCfg *NotificationConfig) *InternalHandler {
 	if notifyCfg == nil {
 		notifyCfg = defaultNotificationConfig()
 	}
@@ -148,6 +149,7 @@ func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service
 		db:               db,
 		rdb:              rdb,
 		otaService:       otaService,
+		jpushService:     jpushService,
 		sseClientsByUser: make(map[int64][]sseClientEntry),
 		sseHub:           make(chan sseHubEvent, 256),
 		notifySvc:        notifySvc,
@@ -309,6 +311,19 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 
 			// 通过 SSE 实时推送通知给前端
 			h.broadcastNotification(userID, notifyType, title, content, req.SN)
+
+			// JPush 推送通知给 APP 端
+			if h.jpushService != nil {
+				if userIDs, err := h.getNotificationUsers(ctx, req.SN); err == nil && len(userIDs) > 0 {
+					jpushTitle := "设备上线"
+					jpushContent := fmt.Sprintf("设备 %s 已上线", req.SN)
+					if notifyType == "device_offline" {
+						jpushTitle = "设备离线"
+						jpushContent = fmt.Sprintf("设备 %s 已离线", req.SN)
+					}
+					h.jpushService.SendNotificationAsync(ctx, userIDs, notifyType, req.SN, jpushTitle, jpushContent)
+				}
+			}
 		}
 	}
 
@@ -1238,6 +1253,14 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 					VALUES ($1, $2, $3, $4, $5, $6, NOW())
 				`, req.SN, csid, clearUserID, "alarm_cleared", "Fault Recovered", clearContent)
 				h.broadcastNotification(clearUserID, "alarm_cleared", "Fault Recovered", clearContent, req.SN)
+
+				// JPush 推送故障恢复通知给 APP 端
+				if h.jpushService != nil {
+					if userIDs, err := h.getNotificationUsers(ctx, req.SN); err == nil && len(userIDs) > 0 {
+						h.jpushService.SendNotificationAsync(ctx, userIDs, "alarm_cleared", req.SN,
+							"故障已恢复", fmt.Sprintf("设备 %s: 故障已恢复", req.SN))
+					}
+				}
 			}
 		}
 
@@ -1346,6 +1369,14 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	// 通过 SSE 实时推送告警信息给前端（只推送，不插入 notifications 表）
 	if userID > 0 {
 		h.broadcastNotification(userID, "alarm", faultMessage, fmt.Sprintf("设备 %s: %s", req.SN, faultMessage), req.SN)
+	}
+
+	// JPush 推送告警通知给 APP 端
+	if h.jpushService != nil {
+		if userIDs, err := h.getNotificationUsers(ctx, req.SN); err == nil && len(userIDs) > 0 {
+			h.jpushService.SendNotificationAsync(ctx, userIDs, "device_alarm", req.SN,
+				"设备告警", fmt.Sprintf("设备 %s: %s", req.SN, faultMessage))
+		}
 	}
 
 	logger.Info("Device alarm recorded",
@@ -1487,4 +1518,25 @@ func (h *InternalHandler) broadcastNotification(userID int64, notifyType, title,
 		}
 	}
 	log.Printf("[SSE] Notification sent to %d/%d clients for user %d", sentCount, len(clientsCopy), userID)
+}
+
+// getNotificationUsers 获取对该设备有权限的所有用户ID
+func (h *InternalHandler) getNotificationUsers(ctx context.Context, deviceSN string) ([]int64, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT DISTINCT user_id FROM devices
+		WHERE sn = $1 AND user_id > 0 AND deleted_at IS NULL`, deviceSN)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var userIDs []int64
+	for rows.Next() {
+		var uid int64
+		if err := rows.Scan(&uid); err != nil {
+			continue
+		}
+		userIDs = append(userIDs, uid)
+	}
+	return userIDs, nil
 }

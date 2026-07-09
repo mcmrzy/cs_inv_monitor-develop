@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/internal/service"
 	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
@@ -15,11 +17,12 @@ import (
 )
 
 type NotificationHandler struct {
-	db *pgxpool.Pool
+	db           *pgxpool.Pool
+	jpushService *service.JPushService
 }
 
-func NewNotificationHandler(db *pgxpool.Pool) *NotificationHandler {
-	return &NotificationHandler{db: db}
+func NewNotificationHandler(db *pgxpool.Pool, jpushService *service.JPushService) *NotificationHandler {
+	return &NotificationHandler{db: db, jpushService: jpushService}
 }
 
 func (h *NotificationHandler) List(c *gin.Context) {
@@ -208,4 +211,127 @@ func (h *NotificationHandler) ClearAll(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "all notifications cleared", nil)
+}
+
+type pushAnnouncementRequest struct {
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Target  string `json:"target"`
+}
+
+// PushAnnouncement 向指定范围用户推送系统公告。
+// target 支持："all"、"station_{id}"、"user_{id}"。
+func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
+	var req pushAnnouncementRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request body"))
+		return
+	}
+
+	if strings.TrimSpace(req.Title) == "" || strings.TrimSpace(req.Content) == "" {
+		response.HandleError(c, apperr.BadRequest("title and content are required"))
+		return
+	}
+	if strings.TrimSpace(req.Target) == "" {
+		response.HandleError(c, apperr.BadRequest("target is required"))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	const notifyType = "system_announcement"
+	const deviceSN = "system"
+	adminID := middleware.GetUserID(c)
+
+	switch {
+	case req.Target == "all":
+		h.jpushService.SendBroadcastAsync(ctx, req.Title, req.Content, map[string]string{
+			"notify_type": "system_announcement",
+		})
+		if err := h.saveAnnouncement(ctx, deviceSN, nil, adminID, notifyType, req.Title, req.Content); err != nil {
+			response.HandleError(c, apperr.Internal("failed to save announcement", err))
+			return
+		}
+
+	case strings.HasPrefix(req.Target, "station_"):
+		stationIDStr := strings.TrimPrefix(req.Target, "station_")
+		stationID, err := strconv.ParseInt(stationIDStr, 10, 64)
+		if err != nil || stationID <= 0 {
+			response.HandleError(c, apperr.BadRequest("invalid station target"))
+			return
+		}
+
+		userIDs, err := h.getUserIDsByStation(ctx, stationID)
+		if err != nil {
+			response.HandleError(c, apperr.Internal("failed to query station users", err))
+			return
+		}
+		if len(userIDs) == 0 {
+			response.HandleError(c, apperr.BadRequest("no users found in station"))
+			return
+		}
+
+		h.jpushService.SendNotificationAsync(ctx, userIDs, notifyType, deviceSN, req.Title, req.Content)
+		if err := h.saveAnnouncement(ctx, deviceSN, &stationID, adminID, notifyType, req.Title, req.Content); err != nil {
+			response.HandleError(c, apperr.Internal("failed to save announcement", err))
+			return
+		}
+
+	case strings.HasPrefix(req.Target, "user_"):
+		userIDStr := strings.TrimPrefix(req.Target, "user_")
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil || userID <= 0 {
+			response.HandleError(c, apperr.BadRequest("invalid user target"))
+			return
+		}
+
+		h.jpushService.SendNotificationAsync(ctx, []int64{userID}, notifyType, deviceSN, req.Title, req.Content)
+		if err := h.saveAnnouncement(ctx, deviceSN, nil, userID, notifyType, req.Title, req.Content); err != nil {
+			response.HandleError(c, apperr.Internal("failed to save announcement", err))
+			return
+		}
+
+	default:
+		response.HandleError(c, apperr.BadRequest("invalid target"))
+		return
+	}
+
+	response.SuccessWithMessage(c, "announcement pushed", nil)
+}
+
+func (h *NotificationHandler) getUserIDsByStation(ctx context.Context, stationID int64) ([]int64, error) {
+	rows, err := h.db.Query(ctx, `
+		SELECT DISTINCT user_id
+		FROM devices
+		WHERE station_id = $1 AND deleted_at IS NULL
+	`, stationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var userIDs []int64
+	for rows.Next() {
+		var uid int64
+		if err := rows.Scan(&uid); err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, uid)
+	}
+	return userIDs, rows.Err()
+}
+
+func (h *NotificationHandler) saveAnnouncement(
+	ctx context.Context,
+	deviceSN string,
+	stationID *int64,
+	userID int64,
+	notifyType, title, content string,
+) error {
+	_, err := h.db.Exec(ctx, `
+		INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+	`, deviceSN, stationID, userID, notifyType, title, content)
+	return err
 }

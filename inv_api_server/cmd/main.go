@@ -135,6 +135,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	smsService := service.NewSMSService(rdb, smsProvider)
 	configService := service.NewConfigService(db, rdb, *cfg)
 	emailService := service.NewEmailService(rdb, cfg.Email, configService)
+	jpushService := service.NewJPushService(&cfg.JPush, rdb)
 	stationService := service.NewStationService(stationRepo)
 	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
 	alarmService := service.NewAlarmService(alarmRepo)
@@ -151,7 +152,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService, db)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
-	notificationHandler := handler.NewNotificationHandler(db)
+	notificationHandler := handler.NewNotificationHandler(db, jpushService)
 	wsHandler := handler.NewWSHandler(rdb, jwtService)
 	modelHandler := handler.NewModelHandler(modelService)
 	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
@@ -187,6 +188,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		AdminHandler:        adminHandler,
 		OTAHandler:          otaHandler,
 		OTAService:          otaService,
+		JPushService:        jpushService,
 		DashboardHandler:    dashboardHandler,
 		AlertRuleHandler:    alertRuleHandler,
 		WorkOrderHandler:    workOrderHandler,
@@ -539,6 +541,7 @@ type RouterDeps struct {
 	AdminHandler        *handler.AdminHandler
 	OTAHandler          *handler.OTAHandler
 	OTAService          *service.OTAService
+	JPushService        *service.JPushService
 	DashboardHandler    *handler.DashboardHandler
 	AlertRuleHandler    *handler.AlertRuleHandler
 	WorkOrderHandler    *handler.WorkOrderHandler
@@ -579,7 +582,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		c.JSON(http.StatusOK, status)
 	})
 
-	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, nil, nil)
+	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, deps.JPushService, nil, nil)
 
 	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth())
 	{
@@ -770,6 +773,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			adminGroup.GET("/system-health", deps.AdminHandler.GetSystemHealth)
 			adminGroup.GET("/system-config", deps.AdminHandler.GetSystemConfig)
 			adminGroup.PATCH("/system-config", deps.AdminHandler.UpdateSystemConfig)
+			adminGroup.POST("/push-announcement", deps.NotificationHandler.PushAnnouncement)
 			adminGroup.GET("/tenants", deps.AdminHandler.ListTenants)
 			adminGroup.POST("/tenants", deps.AdminHandler.CreateTenant)
 			adminGroup.PATCH("/tenants/:id", deps.AdminHandler.UpdateTenant)

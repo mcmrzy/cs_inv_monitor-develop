@@ -14,6 +14,7 @@ import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 import 'package:inv_app/features/notification/presentation/bloc/notification_bloc.dart';
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/core/router/app_router.dart';
+import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 void main() async {
@@ -26,11 +27,37 @@ void main() async {
 
   await ServiceLocator.init();
 
-  runApp(const InvApp());
+  // 初始化极光推送（在依赖注入完成后）
+  try {
+    await getIt<JPushService>().init();
+  } catch (e) {
+    debugPrint('JPush init failed: $e');
+  }
+
+  // 提前创建 NotificationBloc 实例，用于接收 JPush 事件
+  final notificationBloc = getIt<NotificationBloc>();
+  getIt<JPushService>().onNotificationReceived = (notification) {
+    notificationBloc.add(JPushNotificationReceived(
+      notifyType: notification.notifyType,
+      deviceSn: notification.deviceSn,
+      title: notification.title,
+      content: notification.content,
+    ));
+  };
+  getIt<JPushService>().onNotificationOpened = (notification) {
+    notificationBloc.add(JPushNotificationTapped(
+      notifyType: notification.notifyType,
+      deviceSn: notification.deviceSn,
+    ));
+  };
+
+  runApp(InvApp(notificationBloc: notificationBloc));
 }
 
 class InvApp extends StatefulWidget {
-  const InvApp({super.key});
+  final NotificationBloc notificationBloc;
+
+  const InvApp({super.key, required this.notificationBloc});
 
   @override
   State<InvApp> createState() => _InvAppState();
@@ -69,7 +96,7 @@ class _InvAppState extends State<InvApp> {
           create: (_) => getIt<AlarmBloc>(),
         ),
         BlocProvider<NotificationBloc>(
-          create: (_) => getIt<NotificationBloc>(),
+          create: (_) => widget.notificationBloc,
         ),
         BlocProvider<DashboardBloc>(
           create: (_) => getIt<DashboardBloc>(),

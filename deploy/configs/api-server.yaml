@@ -64,3 +64,11 @@ migration:
   dir: /app/database/migrations
   schema_file: /app/database/schema.sql
   auto_run: true
+
+# 极光推送配置
+jpush:
+  enabled: false
+  app_key: ""
+  master_secret: ""
+  timeout: 10
+  dedup_ttl: 120

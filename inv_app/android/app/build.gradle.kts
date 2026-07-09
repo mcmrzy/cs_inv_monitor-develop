@@ -24,6 +24,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // JPush 推送配置
+        manifestPlaceholders["JPUSH_PKGNAME"] = applicationId
+        manifestPlaceholders["JPUSH_APPKEY"] = "e89e8b711cd18f666705fe7f"
+        manifestPlaceholders["JPUSH_CHANNEL"] = "inv_app"
     }
 
     buildTypes {

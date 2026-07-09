@@ -15,6 +15,7 @@ import 'package:inv_app/core/services/offline_sync_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
+import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:inv_app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:inv_app/features/auth/domain/repositories/auth_repository.dart';
@@ -298,6 +299,10 @@ class ServiceLocator {
     getIt.registerLazySingleton<AppUpdateService>(
       () => AppUpdateService(getIt()),
     );
+
+    getIt.registerLazySingleton<JPushService>(
+      () => JPushService(),
+    );
   }
 
   static void _initDataSources() {
@@ -396,6 +401,7 @@ class ServiceLocator {
         googleLoginUseCase: getIt(),
         storageService: getIt(),
         mqttService: getIt(),
+        jpushService: getIt(),
       ),
     );
 
