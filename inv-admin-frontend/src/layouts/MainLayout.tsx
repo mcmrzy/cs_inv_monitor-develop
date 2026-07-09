@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Layout, Menu, Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Modal, Form, Input, App, Select,
 } from 'antd'
@@ -74,6 +75,7 @@ const MainLayout: React.FC = () => {
   const { user, logout, hasPermission } = useAuthStore()
   const { lang, setLang } = useLocaleStore()
   const fetchTimezone = useTimezoneStore((s) => s.fetchTimezone)
+  const queryClient = useQueryClient()
   const { t } = useTranslation()
   const { token: themeToken } = theme.useToken()
   const screens = Grid.useBreakpoint()
@@ -193,6 +195,9 @@ const MainLayout: React.FC = () => {
       message.success(t('msg.timezoneUpdated'))
       if (user) {
         useAuthStore.setState({ user: { ...user, timezone: tz } })
+        // 更新 timezoneStore 中的时区状态并失效缓存，使页面重新获取数据
+        fetchTimezone()
+        queryClient.invalidateQueries()
       }
     } catch {
       message.error(t('msg.timezoneUpdateFailed'))
