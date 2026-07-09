@@ -1,8 +1,10 @@
-import 'dart:async';
+﻿import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// BLE配网状态枚举
+/// BLE配网状态枚�?
 enum BleProvisioningStatus {
   idle,
   scanning,
@@ -10,7 +12,7 @@ enum BleProvisioningStatus {
   discoveringServices,
   readingDeviceInfo,
   subscribingNotifications,
-  bleConnected, // BLE连接成功，可以开始配网
+  bleConnected, // BLE连接成功，可以开始配�?
   writingCredentials,
   waitingForResult,
   wifiConnected, // WiFi配网成功
@@ -67,7 +69,7 @@ class BleProvisioningService {
   // 配网超时时间
   static const Duration provisioningTimeout = Duration(seconds: 60);
 
-  // 状态流控制器
+  // 状态流控制�?
   final StreamController<BleProvisioningStatus> _statusController = 
       StreamController<BleProvisioningStatus>.broadcast();
   Stream<BleProvisioningStatus> get statusStream => _statusController.stream;
@@ -82,7 +84,7 @@ class BleProvisioningService {
       StreamController<String>.broadcast();
   Stream<String> get resultStream => _resultController.stream;
 
-  // 当前状态
+  // 当前状�?
   BleProvisioningStatus _currentStatus = BleProvisioningStatus.idle;
   BleProvisioningStatus get currentStatus => _currentStatus;
 
@@ -90,14 +92,14 @@ class BleProvisioningService {
   List<BleDeviceInfo> _discoveredDevices = [];
   List<BleDeviceInfo> get discoveredDevices => _discoveredDevices;
 
-  // 当前连接的设备
+  // 当前连接的设�?
   BluetoothDevice? _connectedDevice;
   BluetoothDevice? get connectedDevice => _connectedDevice;
 
-  // 订阅状态通知的特征
+  // 订阅状态通知的特�?
   BluetoothCharacteristic? _statusCharacteristic;
 
-  // 超时定时器
+  // 超时定时�?
   Timer? _scanTimer;
   Timer? _connectionTimer;
   Timer? _provisioningTimer;
@@ -106,7 +108,7 @@ class BleProvisioningService {
   bool _running = false;
   bool get isRunning => _running;
 
-  /// 发射状态更新
+  /// 发射状态更�?
   void _emitStatus(BleProvisioningStatus status) {
     _currentStatus = status;
     if (!_statusController.isClosed) {
@@ -116,25 +118,25 @@ class BleProvisioningService {
 
   /// 请求蓝牙权限
   Future<bool> requestBluetoothPermissions() async {
-    // Android 12+ 需要蓝牙权限
+    // Android 12+ 需要蓝牙权�?
     if (await Permission.bluetooth.isDenied) {
       final status = await Permission.bluetooth.request();
       if (!status.isGranted) return false;
     }
 
-    // Android 12+ 需要蓝牙扫描权限
+    // Android 12+ 需要蓝牙扫描权�?
     if (await Permission.bluetoothScan.isDenied) {
       final status = await Permission.bluetoothScan.request();
       if (!status.isGranted) return false;
     }
 
-    // Android 12+ 需要蓝牙连接权限
+    // Android 12+ 需要蓝牙连接权�?
     if (await Permission.bluetoothConnect.isDenied) {
       final status = await Permission.bluetoothConnect.request();
       if (!status.isGranted) return false;
     }
 
-    // Android 需要位置权限用于蓝牙扫描
+    // Android 需要位置权限用于蓝牙扫�?
     if (await Permission.location.isDenied) {
       final status = await Permission.location.request();
       if (!status.isGranted) return false;
@@ -143,9 +145,15 @@ class BleProvisioningService {
     return true;
   }
 
-  /// 检查蓝牙是否可用
+  /// 检查蓝牙是否可�?
   Future<bool> isBluetoothAvailable() async {
     try {
+      // 检查是否在支持BLE的平台上（Android/iOS）
+      if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
+        print('[BLE] 当前平台不支持BLE: ${Platform.operatingSystem}');
+        return false;
+      }
+
       final adapterState = await FlutterBluePlus.adapterState.first;
       print('[BLE] 蓝牙状态: $adapterState');
       return adapterState == BluetoothAdapterState.on;
@@ -176,10 +184,10 @@ class BleProvisioningService {
         return;
       }
 
-      // 检查蓝牙是否可用
+      // 检查蓝牙是否可�?
       final isAvailable = await isBluetoothAvailable();
       if (!isAvailable) {
-        print('[BLE] 蓝牙不可用，无法开始扫描');
+        print('[BLE] 蓝牙不可用，无法开始扫�?);
         _emitStatus(BleProvisioningStatus.error);
         _running = false;
         return;
@@ -195,20 +203,20 @@ class BleProvisioningService {
       // 监听扫描结果
       FlutterBluePlus.scanResults.listen((results) {
         _discoveredDevices = results.map((result) {
-          // 协议说明：广播名是 CS_INV_完整SN，GAP Device Name也是完整SN
+          // 协议说明：广播名�?CS_INV_完整SN，GAP Device Name也是完整SN
           final advName = result.advertisementData.advName;
           String deviceName;
           String sn = '';
           
           if (advName.isNotEmpty) {
-            // 使用获取到的设备名
+            // 使用获取到的设备�?
             deviceName = advName;
-            // 从设备名中提取SN（去掉CS_INV_前缀）
+            // 从设备名中提取SN（去掉CS_INV_前缀�?
             if (advName.startsWith('CS_INV_')) {
               sn = advName.substring(7); // 'CS_INV_'.length = 7
             }
           } else {
-            // 如果没有设备名，用MAC地址后6位生成
+            // 如果没有设备名，用MAC地址�?位生�?
             final mac = result.device.remoteId.toString();
             deviceName = 'CS_INV_${mac.substring(mac.length - 6).replaceAll(':', '')}';
           }
@@ -222,7 +230,7 @@ class BleProvisioningService {
           );
         }).toList();
 
-        // 发现设备后，取消超时定时器，避免显示“配网超时”
+        // 发现设备后，取消超时定时器，避免显示“配网超时�?
         if (_discoveredDevices.isNotEmpty) {
           _scanTimer?.cancel();
         }
@@ -256,7 +264,7 @@ class BleProvisioningService {
 
   /// 连接到BLE设备
   Future<BleProvisioningResult> connectToDevice(BleDeviceInfo deviceInfo) async {
-    // 先停止扫描
+    // 先停止扫�?
     stopScan();
     
     if (_connectedDevice != null) {
@@ -284,7 +292,7 @@ class BleProvisioningService {
       // 查找目标服务
       final targetService = services.firstWhere(
         (service) => service.uuid == Guid(serviceUuid),
-        orElse: () => throw Exception('未找到配网服务'),
+        orElse: () => throw Exception('未找到配网服�?),
       );
 
       _emitStatus(BleProvisioningStatus.readingDeviceInfo);
@@ -300,7 +308,7 @@ class BleProvisioningService {
       // 更新已发现设备列表中的设备信息（SN等）
       _updateDiscoveredDeviceInfo(deviceInfoResult);
 
-      // 订阅成功后，立即标记为BLE已连接状态
+      // 订阅成功后，立即标记为BLE已连接状�?
       _emitStatus(BleProvisioningStatus.bleConnected);
 
       return BleProvisioningResult(
@@ -342,10 +350,10 @@ class BleProvisioningService {
       orElse: () => BleDeviceInfo(sn: '', firmwareVersion: '', macAddress: '', deviceName: '未知设备', rssi: 0),
     );
 
-    // 使用读取到的SN更新设备名
+    // 使用读取到的SN更新设备�?
     String deviceName = existingDevice.deviceName;
     if (sn.isNotEmpty) {
-      // 如果读取到SN，使用完整SN作为设备名
+      // 如果读取到SN，使用完整SN作为设备�?
       deviceName = 'CS_INV_$sn';
     } else if (deviceName.isEmpty) {
       deviceName = _connectedDevice?.platformName ?? '未知设备';
@@ -366,11 +374,11 @@ class BleProvisioningService {
       if (characteristic.uuid == Guid(statusCharacteristicUuid)) {
         _statusCharacteristic = characteristic;
         
-        // 先启用通知（必须在监听之前）
+        // 先启用通知（必须在监听之前�?
         await characteristic.setNotifyValue(true);
         print('[BLE] 已订阅状态通知，特征UUID: ${characteristic.uuid}');
         
-        // 监听状态变化
+        // 监听状态变�?
         characteristic.lastValueStream.listen((value) {
           if (value.isNotEmpty) {
             final status = String.fromCharCodes(value);
@@ -386,7 +394,7 @@ class BleProvisioningService {
     }
   }
 
-  /// 更新已发现设备列表中的设备信息
+  /// 更新已发现设备列表中的设备信�?
   void _updateDiscoveredDeviceInfo(BleDeviceInfo deviceInfo) {
     final index = _discoveredDevices.indexWhere(
       (d) => d.macAddress == deviceInfo.macAddress,
@@ -397,12 +405,12 @@ class BleProvisioningService {
     }
   }
 
-  /// 处理状态更新
+  /// 处理状态更�?
   void _handleStatusUpdate(String status) {
-    print('[BLE] 处理状态更新: $status (长度: ${status.length})');
+    print('[BLE] 处理状态更�? $status (长度: ${status.length})');
     // 去除空白字符和空字符
     final cleanStatus = status.replaceAll(RegExp(r'[\s\x00]+'), '');
-    print('[BLE] 清理后状态: $cleanStatus');
+    print('[BLE] 清理后状�? $cleanStatus');
     
     if (!_resultController.isClosed) {
       switch (cleanStatus) {
@@ -414,21 +422,21 @@ class BleProvisioningService {
           _emitStatus(BleProvisioningStatus.waitingForResult);
           break;
         case 'connected':
-          _resultController.add('WiFi连接成功！');
+          _resultController.add('WiFi连接成功�?);
           _emitStatus(BleProvisioningStatus.wifiConnected);
           break;
         case 'failed':
         case 'not_found':
           // 配网失败后，回到bleConnected状态，允许重新输入凭据
-          _resultController.add(cleanStatus == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
+          _resultController.add(cleanStatus == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密�?);
           _emitStatus(BleProvisioningStatus.bleConnected);
           break;
         default:
-          print('[BLE] 未知状态: $cleanStatus');
+          print('[BLE] 未知状�? $cleanStatus');
           break;
       }
     } else {
-      print('[BLE] 结果流已关闭，忽略状态更新');
+      print('[BLE] 结果流已关闭，忽略状态更�?);
     }
   }
 
@@ -440,7 +448,7 @@ class BleProvisioningService {
     if (_connectedDevice == null) {
       return BleProvisioningResult(
         success: false,
-        message: '未连接设备',
+        message: '未连接设�?,
       );
     }
 
@@ -451,10 +459,10 @@ class BleProvisioningService {
       final services = await _connectedDevice!.discoverServices();
       final targetService = services.firstWhere(
         (service) => service.uuid == Guid(serviceUuid),
-        orElse: () => throw Exception('未找到配网服务'),
+        orElse: () => throw Exception('未找到配网服�?),
       );
 
-      // 查找SSID和密码特征
+      // 查找SSID和密码特�?
       BluetoothCharacteristic? ssidCharacteristic;
       BluetoothCharacteristic? passwordCharacteristic;
 
