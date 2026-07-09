@@ -12,8 +12,10 @@ import { alertApi, notificationApi } from '@/services/alertApi'
 import { deviceApi } from '@/services/deviceApi'
 import { ALARM_LEVEL_MAP, getAlarmLevelDisplay } from '@/utils/constants'
 import { queryKeys } from '@/utils/queryKeys'
+import { formatInTimezone } from '@/utils/timezone'
 import type { Alert } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
+import useTimezoneStore from '@/stores/timezoneStore'
 
 const { RangePicker } = DatePicker
 const { Title } = Typography
@@ -32,6 +34,7 @@ const AlertsPage: React.FC = () => {
   const queryClient = useQueryClient()
   const { message } = App.useApp()
   const { t } = useTranslation()
+  const { timezone } = useTimezoneStore()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState<string>()
@@ -50,7 +53,7 @@ const AlertsPage: React.FC = () => {
   const NOTIFY_TYPE_MAP: Record<string, { label: string; color: string; icon: string }> = {
     'device_online': { label: t('alert.deviceOnline') || '设备上线', color: '#52c41a', icon: '↑' },
     'device_offline': { label: t('alert.deviceOffline') || '设备离线', color: '#ff4d4f', icon: '↓' },
-    'ota_available': { label: 'OTA更新', color: '#1890ff', icon: '↑' },
+    'ota_available': { label: t('alert.otaAvailable') || 'OTA更新', color: '#1890ff', icon: '↑' },
     'command_sent': { label: t('alert.commandSent') || '命令下发', color: '#722ed1', icon: '→' },
     'command_success': { label: t('alert.commandSuccess') || '命令成功', color: '#52c41a', icon: '✓' },
     'command_failed': { label: t('alert.commandFailed') || '命令失败', color: '#ff4d4f', icon: '✗' },
@@ -212,7 +215,7 @@ const AlertsPage: React.FC = () => {
     },
     {
       title: t('alert.occurTime'), dataIndex: 'occurred_at', key: 'occurred_at', width: 170,
-      render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (val: string) => val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('common.operation'), key: 'action', width: 200,
@@ -254,7 +257,7 @@ const AlertsPage: React.FC = () => {
     { title: t('alert.content') || '内容', dataIndex: 'content', key: 'content', ellipsis: true },
     {
       title: t('alert.occurTime'), dataIndex: 'created_at', key: 'created_at', width: 170,
-      render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-',
+      render: (val: string) => val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
       title: t('common.operation'), key: 'action', width: 80,
@@ -322,7 +325,7 @@ const AlertsPage: React.FC = () => {
       title: t('alert.occurTime'), key: 'time', width: 170,
       render: (_: any, record: any) => {
         const val = record._type === 'notification' ? record.created_at : record.occurred_at
-        return val ? dayjs(val).format('YYYY-MM-DD HH:mm:ss') : '-'
+        return val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'
       },
     },
     {
@@ -436,7 +439,7 @@ const AlertsPage: React.FC = () => {
                 options={[
                   { label: t('alert.deviceOnline') || '设备上线', value: 'device_online' },
                   { label: t('alert.deviceOffline') || '设备离线', value: 'device_offline' },
-                  { label: 'OTA更新', value: 'ota_available' },
+                  { label: t('alert.otaAvailable') || 'OTA更新', value: 'ota_available' },
                   { label: t('alert.commandSent') || '命令下发', value: 'command_sent' },
                   { label: t('alert.commandSuccess') || '命令成功', value: 'command_success' },
                   { label: t('alert.commandFailed') || '命令失败', value: 'command_failed' },

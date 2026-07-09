@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FullscreenOutlined, FullscreenExitOutlined, RocketOutlined } from '@ant-design/icons'
 import { dashboardApi } from '@/services/dashboardApi'
 import api from '@/services/api'
+import useLocaleStore from '@/stores/localeStore'
 import { KPIPanel, MapPanel, TrendPanel } from './components'
 
 // ──────────────────────────────────────────────────────────
@@ -77,16 +78,17 @@ const BigScreenPage: React.FC = () => {
 
   // 2. 时钟（useRef + setInterval 避免 re-render）
   const clockRef = useRef<HTMLSpanElement>(null)
+  const { lang } = useLocaleStore()
   useEffect(() => {
     const update = () => {
       if (clockRef.current) {
-        clockRef.current.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+        clockRef.current.textContent = new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour12: false })
       }
     }
     update()
     const timer = setInterval(update, 1000)
     return () => clearInterval(timer)
-  }, [])
+  }, [lang])
 
   // 3. 监听 fullscreenchange 同步状态
   useEffect(() => {

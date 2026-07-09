@@ -15,6 +15,8 @@ import dayjs from 'dayjs'
 import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
 import StatusBadge from '@/components/StatusBadge'
+import { formatInTimezone } from '@/utils/timezone'
+import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 
 const { Title, Text } = Typography
@@ -93,6 +95,7 @@ let batchHistoryStorage: BatchHistoryRecord[] = []
 
 const BatchSettingsPage: React.FC = () => {
   const { t } = useTranslation()
+  const { timezone } = useTimezoneStore()
   const queryClient = useQueryClient()
   const [messageApi, contextHolder] = message.useMessage()
 
@@ -353,7 +356,7 @@ const BatchSettingsPage: React.FC = () => {
       dataIndex: 'timestamp',
       key: 'timestamp',
       width: 180,
-      render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm:ss'),
+      render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss'),
     },
     { title: t('batch.operator'), dataIndex: 'operator', key: 'operator', width: 100 },
     { title: t('batch.deviceCount'), dataIndex: 'deviceCount', key: 'deviceCount', width: 100 },

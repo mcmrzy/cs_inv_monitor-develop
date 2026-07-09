@@ -713,7 +713,7 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 			rangeSize = 7
 		}
 
-		now := time.Now()
+		now := timezone.NowUTC()
 		endTime = now.Format(time.RFC3339)
 
 		switch granularity {

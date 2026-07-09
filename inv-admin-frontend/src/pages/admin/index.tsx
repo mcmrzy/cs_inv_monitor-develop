@@ -337,29 +337,29 @@ const RESOURCE_LABELS: Record<string, string> = {
 }
 const RESOURCE_ORDER = ['devices', 'users', 'alerts', 'alert_rules', 'work_orders', 'firmware', 'ota', 'dashboard', 'stations', 'parallel', 'audit', 'admin']
 const ALL_PERMISSION_DEFS = [
-  { resource: 'devices', action: 'view', label: '查看设备列表' }, { resource: 'devices', action: 'create', label: '创建设备/导入Excel' },
-  { resource: 'devices', action: 'edit', label: '编辑设备信息' }, { resource: 'devices', action: 'delete', label: '删除设备' },
-  { resource: 'devices', action: 'export', label: '导出设备数据' }, { resource: 'devices', action: 'control', label: '远程控制设备' },
-  { resource: 'devices', action: 'manage', label: '解绑/审批/生命周期管理' },
-  { resource: 'users', action: 'view', label: '查看用户列表' }, { resource: 'users', action: 'create', label: '创建下级用户' },
-  { resource: 'users', action: 'edit', label: '编辑用户信息' }, { resource: 'users', action: 'delete', label: '删除/禁用用户' },
-  { resource: 'users', action: 'manage', label: '重置密码/角色变更' },
-  { resource: 'alerts', action: 'view', label: '查看告警列表' }, { resource: 'alerts', action: 'manage', label: '确认/忽略告警' },
-  { resource: 'alert_rules', action: 'view', label: '查看告警规则' }, { resource: 'alert_rules', action: 'create', label: '创建告警规则' },
-  { resource: 'alert_rules', action: 'edit', label: '编辑告警规则' }, { resource: 'alert_rules', action: 'delete', label: '删除告警规则' },
-  { resource: 'work_orders', action: 'view', label: '查看工单列表' }, { resource: 'work_orders', action: 'create', label: '创建工单' },
-  { resource: 'work_orders', action: 'edit', label: '编辑/指派工单' }, { resource: 'work_orders', action: 'manage', label: 'SLA管理/升级工单' },
-  { resource: 'firmware', action: 'view', label: '查看固件列表' }, { resource: 'firmware', action: 'create', label: '上传固件' },
-  { resource: 'firmware', action: 'delete', label: '删除固件' },
-  { resource: 'ota', action: 'view', label: '查看OTA任务' }, { resource: 'ota', action: 'create', label: '创建OTA任务' },
-  { resource: 'ota', action: 'control', label: '执行/取消/回滚OTA任务' },
-  { resource: 'dashboard', action: 'view', label: '查看仪表盘' }, { resource: 'dashboard', action: 'export', label: '多设备对比/导出' },
-  { resource: 'stations', action: 'view', label: '查看电站列表' }, { resource: 'stations', action: 'create', label: '创建电站' },
-  { resource: 'stations', action: 'edit', label: '编辑电站' },
-  { resource: 'parallel', action: 'view', label: '查看并机配置' }, { resource: 'parallel', action: 'create', label: '创建并机配置' },
-  { resource: 'parallel', action: 'control', label: '同步参数/管理并机' },
-  { resource: 'audit', action: 'view', label: '查看审计日志' },
-  { resource: 'admin', action: 'view', label: '查看系统健康' }, { resource: 'admin', action: 'manage', label: '租户管理/系统配置' },
+  { resource: 'devices', action: 'view', label: 'admin.perm.devices.view' }, { resource: 'devices', action: 'create', label: 'admin.perm.devices.create' },
+  { resource: 'devices', action: 'edit', label: 'admin.perm.devices.edit' }, { resource: 'devices', action: 'delete', label: 'admin.perm.devices.delete' },
+  { resource: 'devices', action: 'export', label: 'admin.perm.devices.export' }, { resource: 'devices', action: 'control', label: 'admin.perm.devices.control' },
+  { resource: 'devices', action: 'manage', label: 'admin.perm.devices.manage' },
+  { resource: 'users', action: 'view', label: 'admin.perm.users.view' }, { resource: 'users', action: 'create', label: 'admin.perm.users.create' },
+  { resource: 'users', action: 'edit', label: 'admin.perm.users.edit' }, { resource: 'users', action: 'delete', label: 'admin.perm.users.delete' },
+  { resource: 'users', action: 'manage', label: 'admin.perm.users.manage' },
+  { resource: 'alerts', action: 'view', label: 'admin.perm.alerts.view' }, { resource: 'alerts', action: 'manage', label: 'admin.perm.alerts.manage' },
+  { resource: 'alert_rules', action: 'view', label: 'admin.perm.alertRules.view' }, { resource: 'alert_rules', action: 'create', label: 'admin.perm.alertRules.create' },
+  { resource: 'alert_rules', action: 'edit', label: 'admin.perm.alertRules.edit' }, { resource: 'alert_rules', action: 'delete', label: 'admin.perm.alertRules.delete' },
+  { resource: 'work_orders', action: 'view', label: 'admin.perm.workOrders.view' }, { resource: 'work_orders', action: 'create', label: 'admin.perm.workOrders.create' },
+  { resource: 'work_orders', action: 'edit', label: 'admin.perm.workOrders.edit' }, { resource: 'work_orders', action: 'manage', label: 'admin.perm.workOrders.manage' },
+  { resource: 'firmware', action: 'view', label: 'admin.perm.firmware.view' }, { resource: 'firmware', action: 'create', label: 'admin.perm.firmware.create' },
+  { resource: 'firmware', action: 'delete', label: 'admin.perm.firmware.delete' },
+  { resource: 'ota', action: 'view', label: 'admin.perm.ota.view' }, { resource: 'ota', action: 'create', label: 'admin.perm.ota.create' },
+  { resource: 'ota', action: 'control', label: 'admin.perm.ota.control' },
+  { resource: 'dashboard', action: 'view', label: 'admin.perm.dashboard.view' }, { resource: 'dashboard', action: 'export', label: 'admin.perm.dashboard.export' },
+  { resource: 'stations', action: 'view', label: 'admin.perm.stations.view' }, { resource: 'stations', action: 'create', label: 'admin.perm.stations.create' },
+  { resource: 'stations', action: 'edit', label: 'admin.perm.stations.edit' },
+  { resource: 'parallel', action: 'view', label: 'admin.perm.parallel.view' }, { resource: 'parallel', action: 'create', label: 'admin.perm.parallel.create' },
+  { resource: 'parallel', action: 'control', label: 'admin.perm.parallel.control' },
+  { resource: 'audit', action: 'view', label: 'admin.perm.audit.view' },
+  { resource: 'admin', action: 'view', label: 'admin.perm.admin.view' }, { resource: 'admin', action: 'manage', label: 'admin.perm.admin.manage' },
 ]
 const ROLE_TABS = [{ key: '0', label: 'admin.superAdminRole' }, { key: '1', label: 'admin.agentRole' }, { key: '2', label: 'admin.installerRole' }, { key: '3', label: 'admin.endUserRole' }]
 
@@ -451,7 +451,7 @@ const PermissionTab: React.FC = () => {
                   <Card title={<span style={{ fontWeight: 600, fontSize: 14 }}>{group.label}</span>} size="small" bordered={false} style={{ borderRadius: 12 }}>
                     {group.actions.map((perm) => (
                       <div key={perm.action} style={{ marginBottom: 8 }}>
-                        <Checkbox checked={allowedSet.has(perm.action)} onChange={(e) => handleToggle(group.resource, perm.action, e.target.checked)}>{perm.label}</Checkbox>
+                        <Checkbox checked={allowedSet.has(perm.action)} onChange={(e) => handleToggle(group.resource, perm.action, e.target.checked)}>{t(perm.label)}</Checkbox>
                       </div>
                     ))}
                   </Card>

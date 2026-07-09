@@ -12,6 +12,7 @@ import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/alarm/presentation/bloc/alarm_bloc.dart';
 import 'package:inv_app/features/notification/presentation/bloc/notification_bloc.dart';
+import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class NotificationCenterPage extends StatefulWidget {
@@ -379,7 +380,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                           ),
                         ),
                         Text(
-                          _formatTime(timestamp),
+                          _formatTime(timestamp, l10n),
                           style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
                         ),
                       ],
@@ -470,7 +471,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                         ),
                       ),
                       Text(
-                        _formatTime(timestamp),
+                        _formatTime(timestamp, l10n),
                         style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
                       ),
                     ],
@@ -484,14 +485,11 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     );
   }
 
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-    if (diff.inMinutes < 1) return '刚刚';
-    if (diff.inHours < 1) return '${diff.inMinutes}分钟前';
-    if (diff.inDays < 1) return '${diff.inHours}小时前';
-    if (diff.inDays < 7) return '${diff.inDays}天前';
-    return '${time.month}/${time.day}';
+  String _formatTime(DateTime time, AppLocalizations l10n) {
+    return TimezoneUtils.formatRelativeTime(
+      time.toUtc().toIso8601String(),
+      l10n: l10n,
+    );
   }
 }
 

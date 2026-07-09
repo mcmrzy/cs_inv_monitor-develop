@@ -740,7 +740,7 @@ func (r *StationRepository) GetDayData(ctx context.Context, stationID int64, dat
 	return &data, nil
 }
 
-func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, startDate, endDate, period string) ([]map[string]interface{}, error) {
+func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, startDate, endDate, period, tz string) ([]map[string]interface{}, error) {
 	// 获取该电站下所有设备的SN
 	devicesQuery := `SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL`
 	deviceRows, err := r.db.Query(ctx, devicesQuery, stationID)
@@ -768,7 +768,7 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 	case "hour":
 		query := `
 			SELECT
-				DATE_TRUNC('hour', telem.time) as hour_time,
+				DATE_TRUNC('hour', telem.time AT TIME ZONE $4) as hour_time,
 				AVG(COALESCE((telem.data->>'pv_power_total')::float, (telem.data->'pv_data'->>'pv_power_total')::float, (telem.data->'data'->>'pv_power_total')::float)) FILTER (WHERE telem.topic = 'data/pv') as avg_pv_power,
 				AVG(COALESCE((telem.data->>'power')::float, (telem.data->'ac_data'->>'power')::float, (telem.data->'data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as avg_ac_power,
 				AVG(COALESCE(
@@ -787,13 +787,13 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 				AND telem.time >= $2::timestamp
 				AND telem.time <= $3::timestamp
 				AND telem.topic IN ('data/pv', 'data/ac', 'data/battery', 'data/energy')
-			GROUP BY DATE_TRUNC('hour', telem.time)
+			GROUP BY DATE_TRUNC('hour', telem.time AT TIME ZONE $4)
 			ORDER BY hour_time
 		`
 		startTs := startDate + " 00:00:00"
 		endTs := endDate + " 23:59:59"
 
-		rows, err := r.db.Query(ctx, query, deviceSns, startTs, endTs)
+		rows, err := r.db.Query(ctx, query, deviceSns, startTs, endTs, tz)
 		if err != nil {
 			return nil, err
 		}
@@ -832,7 +832,7 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 	default:
 		query := `
 			SELECT 
-				DATE(telem.time) as day_date,
+				DATE(telem.time AT TIME ZONE $4) as day_date,
 				MAX(COALESCE((telem.data->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float, (telem.data->'data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
 				MAX(COALESCE((telem.data->>'power')::float, (telem.data->'ac_data'->>'power')::float, (telem.data->'data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as max_ac_power,
 				MAX(COALESCE((telem.data->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float, (telem.data->'data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
@@ -844,12 +844,12 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 				AND telem.time >= $2::timestamp
 				AND telem.time <= $3::timestamp
 				AND telem.topic IN ('data/pv', 'data/ac', 'data/energy')
-			GROUP BY DATE(telem.time)
+			GROUP BY DATE(telem.time AT TIME ZONE $4)
 			ORDER BY day_date
 		`
 		endTs := endDate + " 23:59:59"
 
-		rows, err := r.db.Query(ctx, query, deviceSns, startDate, endTs)
+		rows, err := r.db.Query(ctx, query, deviceSns, startDate, endTs, tz)
 		if err != nil {
 			return nil, err
 		}
@@ -1410,7 +1410,7 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 	monthQuery := `
 		SELECT COALESCE(SUM(daily_max), 0)
 		FROM (
-			SELECT DATE(time) as day, device_sn, MAX(COALESCE(
+			SELECT DATE(time AT TIME ZONE $3) as day, device_sn, MAX(COALESCE(
 				(data->>'daily_pv')::float,
 				(data->'data'->>'daily_pv')::float,
 				0
@@ -1419,12 +1419,12 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
 			AND time >= $2
 			AND topic = 'data/energy'
-			GROUP BY DATE(time), device_sn
+			GROUP BY DATE(time AT TIME ZONE $3), device_sn
 		) per_device_daily
 		WHERE daily_max > 0
 	`
 	var monthEnergy float64
-	r.db.QueryRow(ctx, monthQuery, stationID, monthStart).Scan(&monthEnergy)
+	r.db.QueryRow(ctx, monthQuery, stationID, monthStart, tz).Scan(&monthEnergy)
 
 	return totalEnergy, monthEnergy
 }
@@ -1437,7 +1437,7 @@ func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID i
 	query := `
 		SELECT COALESCE(SUM(daily_max), 0)
 		FROM (
-			SELECT DATE(time) as day, device_sn,
+			SELECT DATE(time AT TIME ZONE $3) as day, device_sn,
 				MAX(COALESCE(
 					(data->'data'->>'daily_pv')::float,
 					(data->>'daily_pv')::float,
@@ -1449,12 +1449,12 @@ func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID i
 			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL)
 			AND time >= $2
 			AND topic = 'data/energy'
-			GROUP BY DATE(time), device_sn
+			GROUP BY DATE(time AT TIME ZONE $3), device_sn
 		) per_device_daily
 		WHERE daily_max > 0
 	`
 	var yearEnergy float64
-	r.db.QueryRow(ctx, query, stationID, yearStart).Scan(&yearEnergy)
+	r.db.QueryRow(ctx, query, stationID, yearStart, tz).Scan(&yearEnergy)
 	return yearEnergy
 }
 
@@ -2038,7 +2038,7 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 	monthlyQuery := `
 		SELECT COALESCE(SUM(daily_max), 0)
 		FROM (
-			SELECT DATE(time) as day, MAX(COALESCE(
+			SELECT DATE(time AT TIME ZONE $2) as day, MAX(COALESCE(
 				(data->'data'->>'daily_pv')::float,
 				(data->>'daily_pv')::float,
 				(data->'data'->>'energy_daily_pv')::float,
@@ -2046,9 +2046,9 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 			)) as daily_max
 			FROM device_telemetry
 			WHERE device_sn = $1
-			  AND time >= $2
+			  AND time >= $3
 			  AND topic = 'data/energy'
-			GROUP BY DATE(time)
+			GROUP BY DATE(time AT TIME ZONE $2)
 			HAVING MAX(COALESCE(
 				(data->'data'->>'daily_pv')::float,
 				(data->>'daily_pv')::float,
@@ -2058,13 +2058,13 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 		) daily
 	`
 	var monthlyEnergy float64
-	r.db.QueryRow(ctx, monthlyQuery, sn, monthStart).Scan(&monthlyEnergy)
+	r.db.QueryRow(ctx, monthlyQuery, sn, tz, monthStart).Scan(&monthlyEnergy)
 
 	// 总发电量：历史每天 daily_pv 最大值之和
 	totalQuery := `
 		SELECT COALESCE(SUM(daily_max), 0)
 		FROM (
-			SELECT DATE(time) as day, MAX(COALESCE(
+			SELECT DATE(time AT TIME ZONE $2) as day, MAX(COALESCE(
 				(data->'data'->>'daily_pv')::float,
 				(data->>'daily_pv')::float,
 				(data->'data'->>'energy_daily_pv')::float,
@@ -2072,7 +2072,7 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 			)) as daily_max
 			FROM device_telemetry
 			WHERE device_sn = $1 AND topic = 'data/energy'
-			GROUP BY DATE(time)
+			GROUP BY DATE(time AT TIME ZONE $2)
 			HAVING MAX(COALESCE(
 				(data->'data'->>'daily_pv')::float,
 				(data->>'daily_pv')::float,
@@ -2082,7 +2082,7 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 		) daily
 	`
 	var totalEnergy float64
-	r.db.QueryRow(ctx, totalQuery, sn).Scan(&totalEnergy)
+	r.db.QueryRow(ctx, totalQuery, sn, tz).Scan(&totalEnergy)
 
 	// 今日放电量
 	dischargeQuery := `
