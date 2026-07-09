@@ -94,7 +94,7 @@ class _EnergyFlowDiagramState extends State<EnergyFlowDiagram>
                     batteryDischargeColor: Colors.blue,
                     loadColor: Colors.purple,
                     gridColor: Colors.blue,
-                    inverterLabel: l10n.inverterLabel,
+                    inverterOutputLabel: l10n.inverterOutput,
                     batteryLabel: l10n.batteryLabel,
                     loadLabel: l10n.loadLabel,
                     gridLabel: l10n.gridLabel,
@@ -170,7 +170,7 @@ class _EnergyFlowPainter extends CustomPainter {
   final Color batteryDischargeColor;
   final Color loadColor;
   final Color gridColor;
-  final String inverterLabel;
+  final String inverterOutputLabel;
   final String batteryLabel;
   final String loadLabel;
   final String gridLabel;
@@ -191,7 +191,7 @@ class _EnergyFlowPainter extends CustomPainter {
     required this.batteryDischargeColor,
     required this.loadColor,
     required this.gridColor,
-    required this.inverterLabel,
+    required this.inverterOutputLabel,
     required this.batteryLabel,
     required this.loadLabel,
     required this.gridLabel,
@@ -231,10 +231,10 @@ class _EnergyFlowPainter extends CustomPainter {
 
     // ── Labels ──
     _drawNodeLabel(canvas, pvCenter, 'PV', pvColor, below: true);
-    _drawNodeLabel(canvas, invCenter, l10n.inverterOutput, AppColors.primary, below: true);
-    _drawNodeLabel(canvas, battCenter, l10n.battery, battColor, below: true);
-    _drawNodeLabel(canvas, loadCenter, l10n.load, loadColor, below: true);
-    _drawNodeLabel(canvas, gridCenter, l10n.grid, gridColor, below: true);
+    _drawNodeLabel(canvas, invCenter, inverterOutputLabel, AppColors.primary, below: true);
+    _drawNodeLabel(canvas, battCenter, batteryLabel, battColor, below: true);
+    _drawNodeLabel(canvas, loadCenter, loadLabel, loadColor, below: true);
+    _drawNodeLabel(canvas, gridCenter, gridLabel, gridColor, below: true);
 
     // ── Flow paths ──
     //
