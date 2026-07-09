@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: ${DB_NAME:-inv_mqtt}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: UTC
     # 生产环境不暴露端口，仅通过Docker内部网络访问
     # 如需本地调试，取消注释下面的行
     # ports:

@@ -12,6 +12,7 @@ import (
 
 	"inv-device-server/internal/model"
 	"inv-device-server/pkg/logger"
+	"inv-device-server/pkg/timezone"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -185,10 +186,10 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 			SN:         raw.SN,
 			Code:       0,
 			Level:      "normal",
-			Message:    "故障恢复，系统正常",
+			Message:    "Fault recovered, system normal",
 			Count:      0,
 			Alarms:     nil,
-			ReceivedAt: time.Now(),
+			ReceivedAt: timezone.NowUTC(),
 		}
 		if err := a.postInternalAlarm(alarm); err != nil {
 			logger.Error("Failed to post alarm clear", zap.String("sn", raw.SN), zap.Error(err))
@@ -233,11 +234,11 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 			SN:         raw.SN,
 			Code:       0,
 			Level:      "normal",
-			Message:    "故障恢复，系统正常",
+			Message:    "Fault recovered, system normal",
 			Count:      0,
 			Alarms:     nil,
 			Timestamp:  alarmPayload.Timestamp,
-			ReceivedAt: time.Now(),
+			ReceivedAt: timezone.NowUTC(),
 		}
 		if err := a.postInternalAlarm(alarm); err != nil {
 			logger.Error("Failed to post alarm clear", zap.String("sn", raw.SN), zap.Error(err))
@@ -284,7 +285,7 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 				Count:      alarmPayload.Count,
 				Alarms:     nil,
 				Timestamp:  alarmPayload.Timestamp,
-				ReceivedAt: time.Now(),
+				ReceivedAt: timezone.NowUTC(),
 			}
 			if err := a.postInternalAlarm(alarm); err != nil {
 				logger.Error("Failed to post alarm item",
@@ -309,7 +310,7 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 			Count:      alarmPayload.Count,
 			Alarms:     nil,
 			Timestamp:  alarmPayload.Timestamp,
-			ReceivedAt: time.Now(),
+			ReceivedAt: timezone.NowUTC(),
 		}
 		if err := a.postInternalAlarm(alarm); err != nil {
 			logger.Error("Failed to post alarm",

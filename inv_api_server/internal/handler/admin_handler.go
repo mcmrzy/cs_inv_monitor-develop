@@ -505,7 +505,7 @@ func (h *AdminHandler) GetSystemHealth(c *gin.Context) {
 		"redis":       redisOK,
 		"mqtt":        mqttOK,
 		"version":     "1.0.0",
-		"lastCheckAt": time.Now().Format(time.RFC3339),
+		"lastCheckAt": time.Now().UTC().Format(time.RFC3339),
 	})
 }
 

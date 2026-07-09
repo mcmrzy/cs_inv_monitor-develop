@@ -14,6 +14,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: inv_mqtt
+      TZ: UTC
     ports:
       - "5432:5432"
     volumes:

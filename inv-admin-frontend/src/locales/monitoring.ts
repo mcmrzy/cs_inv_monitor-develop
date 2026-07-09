@@ -98,6 +98,11 @@ export default {
     'mon.pleaseSelectParam': '请选择参数并确认设备有遥测数据',
     'mon.noFieldConfig': '请先在「型号管理」中配置设备字段',
     'mon.other': '其他',
+    'mon.pvPower': '光伏功率',
+    'mon.batteryCharge': '电池充电',
+    'mon.batteryDischarge': '电池放电',
+    'mon.loadPower': '负载功率',
+    'mon.powerUnit': '功率 (W)',
   },
   en: {
     'mon.title': 'Station Monitor',
@@ -198,5 +203,10 @@ export default {
     'mon.pleaseSelectParam': 'Please select parameters and ensure device has telemetry data',
     'mon.noFieldConfig': 'Please configure device fields in Model Management first',
     'mon.other': 'Other',
+    'mon.pvPower': 'PV Power',
+    'mon.batteryCharge': 'Battery Charge',
+    'mon.batteryDischarge': 'Battery Discharge',
+    'mon.loadPower': 'Load Power',
+    'mon.powerUnit': 'Power (W)',
   },
 }
