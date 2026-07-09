@@ -14,8 +14,10 @@ import ReactECharts from 'echarts-for-react'
 import { dashboardApi } from '@/services/dashboardApi'
 import { ALARM_LEVEL_MAP, HERO_GRADIENTS, getAlarmLevelDisplay } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
+import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
+import useTimezoneStore from '@/stores/timezoneStore'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 
@@ -73,8 +75,9 @@ const DashboardPage: React.FC = () => {
     : (Array.isArray(trendRes?.data?.data) ? trendRes.data.data : []) as any[]
 
   /* ---------- 功率趋势 ---------- */
+  const { timezone } = useTimezoneStore()
   const user = useAuthStore((s) => s.user)
-  const userTimezone = user?.timezone || 'Asia/Shanghai'
+  const userTimezone = timezone
   const [flowDate, setFlowDate] = useState(dayjs().format('YYYY-MM-DD'))
 
   const { data: flowRes, isLoading: flowLoading } = useQuery({
@@ -150,7 +153,7 @@ const DashboardPage: React.FC = () => {
   /* 功率趋势图配置 */
   const energyFlowOption = useMemo(() => {
     if (!flowData || flowData.length === 0) return {}
-    const times = flowData.map((d: any) => d.time)
+    const times = flowData.map((d: any) => formatInTimezone(d.time, timezone, 'HH:mm'))
     const pvData = flowData.map((d: any) => safeNum(d.pvPower))
     const battChargeData = flowData.map((d: any) => safeNum(d.batteryCharge))
     const battDischargeData = flowData.map((d: any) => -safeNum(d.batteryDischarge))
