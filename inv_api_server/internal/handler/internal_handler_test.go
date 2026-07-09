@@ -202,8 +202,8 @@ func TestInternalDeviceAlarm_Validation(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "invalid trigger type",
-			body:       map[string]interface{}{"sn": "INV001", "trigger": "not-an-object"},
+			name:       "invalid code type",
+			body:       map[string]interface{}{"sn": "INV001", "code": "not-a-number"},
 			wantStatus: http.StatusBadRequest,
 		},
 	}

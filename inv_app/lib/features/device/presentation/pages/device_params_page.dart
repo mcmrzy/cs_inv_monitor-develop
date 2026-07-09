@@ -9,9 +9,9 @@ import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceParamsPage extends StatefulWidget {
-  final String deviceSN;
+  final String deviceIP;
 
-  const DeviceParamsPage({super.key, required this.deviceSN});
+  const DeviceParamsPage({super.key, required this.deviceIP});
 
   @override
   State<DeviceParamsPage> createState() => _DeviceParamsPageState();
@@ -27,7 +27,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
   @override
   void initState() {
     super.initState();
-    context.read<DeviceBloc>().add(DeviceLocalParamsRequested(sn: widget.deviceSN));
+    context.read<DeviceBloc>().add(DeviceLocalParamsRequested(deviceIP: widget.deviceIP));
   }
 
   List<DeviceParam> _parseParams(Map<String, dynamic> raw) {
@@ -135,7 +135,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
 
     if (!mounted) return;
     context.read<DeviceBloc>().add(
-          DeviceLocalParamsUpdateRequested(sn: widget.deviceSN, params: paramsToWrite),
+          DeviceLocalParamsUpdateRequested(deviceIP: widget.deviceIP, params: paramsToWrite),
         );
   }
 
@@ -297,7 +297,7 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
               Expanded(
                 child: StyledRefreshIndicator(
                   onRefresh: () async {
-                    context.read<DeviceBloc>().add(DeviceLocalParamsRequested(sn: widget.deviceSN));
+                    context.read<DeviceBloc>().add(DeviceLocalParamsRequested(deviceIP: widget.deviceIP));
                   },
                   child: ListView.builder(
                     padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
