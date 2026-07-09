@@ -1159,7 +1159,7 @@ func (h *DashboardHandler) collectDashboardData(ctx context.Context, userID int6
 	return map[string]interface{}{
 		"deviceStats":  deviceStats,
 		"recentAlarms": recentAlarms,
-		"timestamp":    time.Now().Format(time.RFC3339),
+		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 		"type":         "dashboard_update",
 	}
 }
@@ -1255,6 +1255,6 @@ func (h *DashboardHandler) collectDashboardSSEData(ctx context.Context, userID i
 			"fault":   fault,
 		},
 		"recentAlarms": recentAlarms,
-		"timestamp":    time.Now().Format(time.RFC3339),
+		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 	}
 }

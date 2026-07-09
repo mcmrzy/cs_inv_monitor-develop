@@ -17,6 +17,7 @@ import (
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/pkg/logger"
+	"inv-api-server/pkg/timezone"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -1098,7 +1099,7 @@ func (s *OTAService) GetPackageUpgradesByPackageID(ctx context.Context, packageI
 func (s *OTAService) generateMainVersion(ctx context.Context, model string) (string, error) {
 	latest, _ := s.repo.GetLatestPackageVersion(ctx, model)
 
-	now := time.Now()
+	now := timezone.NowUTC()
 	dateStr := now.Format("20060102")
 
 	if latest == "" {

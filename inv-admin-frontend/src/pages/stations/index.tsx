@@ -220,8 +220,8 @@ const StationsPage: React.FC = () => {
     queryFn: async () => {
       const res = await api.get(`/stations/${currentStation!.id}/statistics`, {
         params: {
-          start_date: dayjs().subtract(trendRange, 'day').format('YYYY-MM-DD'),
-          end_date: dayjs().format('YYYY-MM-DD'),
+          start_date: dayjs().tz(timezone).subtract(trendRange, 'day').format('YYYY-MM-DD'),
+          end_date: dayjs().tz(timezone).format('YYYY-MM-DD'),
           period: 'day',
         }
       })
@@ -237,11 +237,11 @@ const StationsPage: React.FC = () => {
         // 计算汇总数据
         const today = daily.length > 0 ? daily[daily.length - 1].value : 0
         const total = daily.reduce((sum: number, item: any) => sum + item.value, 0)
-        const monthStart = dayjs().startOf('month').format('YYYY-MM-DD')
+        const monthStart = dayjs().tz(timezone).startOf('month').format('YYYY-MM-DD')
         const month = daily
           .filter((item: any) => item.date >= monthStart)
           .reduce((sum: number, item: any) => sum + item.value, 0)
-        const yearStart = dayjs().startOf('year').format('YYYY-MM-DD')
+        const yearStart = dayjs().tz(timezone).startOf('year').format('YYYY-MM-DD')
         const year = daily
           .filter((item: any) => item.date >= yearStart)
           .reduce((sum: number, item: any) => sum + item.value, 0)
