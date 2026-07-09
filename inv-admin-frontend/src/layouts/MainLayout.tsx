@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
+import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import { ROLE_MAP, ROLE_COLORS } from '@/utils/constants'
 import { Role } from '@/types'
@@ -72,6 +73,7 @@ const MainLayout: React.FC = () => {
   const location = useLocation()
   const { user, logout, hasPermission } = useAuthStore()
   const { lang, setLang } = useLocaleStore()
+  const fetchTimezone = useTimezoneStore((s) => s.fetchTimezone)
   const { t } = useTranslation()
   const { token: themeToken } = theme.useToken()
   const screens = Grid.useBreakpoint()
@@ -131,10 +133,11 @@ const MainLayout: React.FC = () => {
       }
       message.success(t('msg.profileUpdated'))
       setProfileModalOpen(false)
-      // 更新本地存储的用户信息
+      // 更新本地存储的用户信息并刷新时区
       if (user) {
         const updatedUser = { ...user, nickname: values.nickname, timezone: values.timezone }
         useAuthStore.setState({ user: updatedUser })
+        fetchTimezone()
       }
     } catch {
       message.error(t('msg.profileUpdateFailed'))
