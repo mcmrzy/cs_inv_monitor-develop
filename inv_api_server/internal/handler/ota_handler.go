@@ -588,7 +588,8 @@ func (h *OTAHandler) CheckAppUpdate(c *gin.Context) {
 
 	versionCode := parseInt(versionCodeStr)
 
-	latest, hasUpdate, err := h.otaService.CheckAppUpdate(c.Request.Context(), platform, versionCode)
+	userID := middleware.GetUserID(c)
+	latest, hasUpdate, err := h.otaService.CheckAppUpdate(c.Request.Context(), platform, versionCode, userID)
 	if err != nil {
 		// 没有记录也算无更新
 		response.Success(c, gin.H{"has_update": false})
@@ -674,7 +675,7 @@ func (h *OTAHandler) CreateAppVersion(c *gin.Context) {
 			// 灰度推送：查询所有用户，按比例选取
 			userIDs, err := h.otaService.GetAllUserIDs(c.Request.Context())
 			if err == nil && len(userIDs) > 0 {
-				userIDs = service.SelectByPercent(userIDs, req.RolloutPercentage)
+				userIDs = service.SelectByRollout(userIDs, v.ID, req.RolloutPercentage)
 				if len(userIDs) > 0 {
 					h.jpushService.SendNotificationAsync(c.Request.Context(), userIDs, "app_update", "", "APP新版本发布", content)
 					log.Printf("[CreateAppVersion] grayscale push sent: platform=%s, version=%s, percent=%d, users=%d", req.Platform, req.VersionName, req.RolloutPercentage, len(userIDs))
@@ -1508,4 +1509,23 @@ func (h *OTAHandler) RollbackUpgrade(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"task_id": taskID, "message": "回退指令已发送"})
+}
+
+// RollbackToPublishedVersion 回滚到最新已发布的升级包版本
+func (h *OTAHandler) RollbackToPublishedVersion(c *gin.Context) {
+	var req struct {
+		SN string `json:"sn" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
+		return
+	}
+
+	taskID, err := h.otaService.RollbackToPublishedVersion(c.Request.Context(), req.SN)
+	if err != nil {
+		log.Printf("[RollbackToPublishedVersion] error: sn=%s, err=%v", req.SN, err)
+		response.HandleError(c, apperr.Internal("回滚失败: "+err.Error(), err))
+		return
+	}
+	response.Success(c, gin.H{"task_id": taskID, "message": "已回滚到最新发布版本"})
 }

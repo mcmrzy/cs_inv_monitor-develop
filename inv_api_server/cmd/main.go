@@ -845,6 +845,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.GET("/devices/:sn/upgrade-packages", deps.OTAHandler.ListDeviceUpgradePackages)
 			otaGroup.GET("/packages/available/:sn", deps.OTAHandler.GetAvailablePackages)
 			otaGroup.POST("/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackUpgrade)
+			otaGroup.POST("/rollback-to-published", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackToPublishedVersion)
 
 			// App版本管理
 			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP检查更新（无需额外权限）
