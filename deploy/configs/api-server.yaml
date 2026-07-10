@@ -67,8 +67,8 @@ migration:
 
 # 极光推送配置
 jpush:
-  enabled: false
-  app_key: ""
-  master_secret: ""
+  enabled: true
+  app_key: "*REMOVED*"
+  master_secret: "*REMOVED*"
   timeout: 10
   dedup_ttl: 120
