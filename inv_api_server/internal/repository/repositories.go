@@ -2308,11 +2308,9 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 		// mappedKeys 记录已被标准化映射的原始字段名，避免 pass-through 产生重复列
 		mappedKeys := make(map[string]bool)
 
-		// setFloat 设置浮点字段，值为 0 时跳过（减少空列）
+		// setFloat 设置浮点字段（零值也写入，保留夜间 0W 等有效读数）
 		setFloat := func(stdKey string, val float64, rawKeys ...string) {
-			if val != 0 {
-				slot.data[stdKey] = val
-			}
+			slot.data[stdKey] = val
 			for _, rk := range rawKeys {
 				mappedKeys[rk] = true
 			}
@@ -2350,6 +2348,15 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 			setFloat("load_rate", getJSONFloat(rawData, "load_rate", "load_percent"), "load_rate", "load_percent")
 			setFloat("voltage_thd", getJSONFloat(rawData, "voltage_thd", "thd_v"), "voltage_thd", "thd_v")
 
+			// Field aliases for device_model_field compatibility
+			if v, ok := slot.data["apparent_power"]; ok { slot.data["ac_apparent"] = v }
+			if v, ok := slot.data["power_factor"]; ok { slot.data["ac_pf"] = v }
+			if v, ok := slot.data["load_rate"]; ok { slot.data["ac_load_percent"] = v }
+			if v, ok := slot.data["voltage_thd"]; ok { slot.data["ac_thd_v"] = v }
+			if v, ok := slot.data["ac_voltage"]; ok { slot.data["voltage"] = v }
+			if v, ok := slot.data["ac_current"]; ok { slot.data["current"] = v }
+			if v, ok := slot.data["ac_power"]; ok { slot.data["power"] = v }
+
 		case "data/battery":
 			setFloat("battery_soc", getJSONFloat(rawData, "batt_soc", "soc", "battery_soc"), "batt_soc", "soc", "battery_soc")
 			setFloat("battery_voltage", getJSONFloat(rawData, "batt_voltage", "voltage", "battery_voltage"), "batt_voltage", "voltage", "battery_voltage")
@@ -2374,6 +2381,22 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 			setFloat("charge_volt_ref", getJSONFloat(rawData, "charge_volt_ref"), "charge_volt_ref")
 			setFloat("dischg_cut_volt", getJSONFloat(rawData, "dischg_cut_volt"), "dischg_cut_volt")
 
+			// Field aliases for device_model_field compatibility
+			if v, ok := slot.data["battery_soc"]; ok { slot.data["batt_soc"] = v }
+			if v, ok := slot.data["battery_voltage"]; ok { slot.data["batt_voltage"] = v }
+			if v, ok := slot.data["battery_current"]; ok { slot.data["batt_current"] = v }
+			if v, ok := slot.data["charge_discharge_power"]; ok { slot.data["batt_power"] = v }
+			if v, ok := slot.data["cycle_count"]; ok { slot.data["batt_cycle_count"] = v }
+			if v, ok := slot.data["cell_max_temp"]; ok { slot.data["batt_temp_max"] = v }
+			if v, ok := slot.data["cell_min_temp"]; ok { slot.data["batt_temp_min"] = v }
+			if v, ok := slot.data["cell_max_voltage"]; ok { slot.data["batt_cell_volt_max"] = v }
+			if v, ok := slot.data["cell_min_voltage"]; ok { slot.data["batt_cell_volt_min"] = v }
+			if v, ok := slot.data["charge_status"]; ok { slot.data["batt_charge_state"] = v }
+			if v, ok := slot.data["battery_health"]; ok { slot.data["batt_soh"] = v }
+			if v, ok := slot.data["battery_avg_temp"]; ok { slot.data["batt_temp_battery"] = v }
+			if v, ok := slot.data["rated_capacity"]; ok { slot.data["batt_capacity_total"] = v }
+			if v, ok := slot.data["battery_capacity"]; ok { slot.data["batt_capacity_remain"] = v }
+
 		case "data/pv":
 			setFloat("pv1_voltage", getJSONFloat(rawData, "pv1_voltage", "pv_voltage"), "pv1_voltage", "pv_voltage")
 			setFloat("pv1_current", getJSONFloat(rawData, "pv1_current", "pv_current"), "pv1_current", "pv_current")
@@ -2388,6 +2411,14 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 			setFloat("pv2_voltage_max", getJSONFloat(rawData, "pv2_voltage_max"), "pv2_voltage_max")
 			setFloat("pv2_power_max", getJSONFloat(rawData, "pv2_power_max"), "pv2_power_max")
 
+			// Field aliases for device_model_field compatibility
+			if v, ok := slot.data["pv1_voltage"]; ok { slot.data["pv_pv1_voltage"] = v }
+			if v, ok := slot.data["pv1_current"]; ok { slot.data["pv_pv1_current"] = v }
+			if v, ok := slot.data["pv1_power"]; ok { slot.data["pv_pv1_power"] = v }
+			if v, ok := slot.data["pv2_voltage"]; ok { slot.data["pv_pv2_voltage"] = v }
+			if v, ok := slot.data["pv2_current"]; ok { slot.data["pv_pv2_current"] = v }
+			if v, ok := slot.data["pv2_power"]; ok { slot.data["pv_pv2_power"] = v }
+
 		case "data/status":
 			setString("run_status", getJSONString(rawData, "state", "run_status"), "state", "run_status")
 			setInt("fault_code", getJSONInt(rawData, "fault_code"), "fault_code")
@@ -2401,6 +2432,12 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 			setFloat("efficiency", getJSONFloat(rawData, "efficiency", "sys_efficiency"), "efficiency", "sys_efficiency")
 			setFloat("run_time", getJSONFloat(rawData, "runtime_hours", "run_time"), "runtime_hours", "run_time")
 			setFloat("fan_speed", getJSONFloat(rawData, "fan_speed"), "fan_speed")
+
+			// Field aliases for device_model_field compatibility
+			if v, ok := slot.data["inverter_temp"]; ok { slot.data["temp_inv"] = v }
+			if v, ok := slot.data["heatsink_temp"]; ok { slot.data["temp_mos"] = v }
+			if v, ok := slot.data["ambient_temp"]; ok { slot.data["temp_env"] = v }
+			if v, ok := slot.data["run_status"]; ok { slot.data["work_state"] = v }
 
 		case "data/energy":
 			dailyPV := getJSONFloat(rawData, "daily_pv", "energy_daily_pv")
