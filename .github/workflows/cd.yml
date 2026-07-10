@@ -66,6 +66,7 @@ jobs:
             # 清理旧容器（含孤立容器），防止容器名冲突
             docker compose -f docker-compose.prod.yml --env-file .env.prod down --remove-orphans
             docker rm -f inv-admin-frontend inv-api-gateway inv-api-server inv-device-server inv-postgres inv-redis 2>/dev/null || true
+            docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache inv-admin-frontend
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
             
             # 清理未使用的 Docker 镜像
