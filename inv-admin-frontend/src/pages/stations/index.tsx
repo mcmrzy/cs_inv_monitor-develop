@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Typography, Tag, Select, message, Space, Popconfirm,
   Drawer, Descriptions, Tabs, Statistic, Input, Button, Form, Modal, Empty, Spin, Grid,
@@ -138,6 +138,11 @@ const StationsPage: React.FC = () => {
   const [assignStation, setAssignStation] = useState<StationItem | null>(null)
   const [targetUserId, setTargetUserId] = useState<number | null>(null)
 
+  /* ---------- 添加设备弹窗 ---------- */
+  const [addDeviceModalOpen, setAddDeviceModalOpen] = useState(false)
+  const [addDeviceSn, setAddDeviceSn] = useState('')
+  const isSuperAdmin = user?.role === Role.SUPER_ADMIN
+
   /* ---------- 设备筛选 ---------- */
   const [deviceKeyword, setDeviceKeyword] = useState('')
   const [deviceStatusFilter, setDeviceStatusFilter] = useState<number | undefined>(undefined)
@@ -167,7 +172,7 @@ const StationsPage: React.FC = () => {
 
   const { data: stationDevices = [], isLoading: devicesLoading } = useQuery({
     queryKey: ['station-devices', currentStation?.id],
-    queryFn: () => api.get('/devices', { params: { stationId: currentStation!.id, pageSize: 999 } }).then(extractList),
+    queryFn: () => api.get('/devices', { params: { station_id: currentStation!.id, pageSize: 999 } }).then(extractList),
     enabled: !!currentStation?.id && drawerOpen && activeTab === 'devices',
   })
 
@@ -257,8 +262,35 @@ const StationsPage: React.FC = () => {
 
   const { data: stationAlarms = [], isLoading: alarmsLoading } = useQuery({
     queryKey: ['station-alarms', currentStation?.id],
-    queryFn: () => api.get('/alarms', { params: { stationId: currentStation!.id, pageSize: 999 } }).then(extractList),
+    queryFn: () => api.get('/alarms', { params: { station_id: currentStation!.id, pageSize: 999 } }).then(extractList),
     enabled: !!currentStation?.id && drawerOpen && activeTab === 'alarms',
+  })
+
+  /* ---------- 设备绑定/移除 Mutation ---------- */
+
+  const addToStationMutation = useMutation({
+    mutationFn: ({ sn, stationId }: { sn: string; stationId: number }) =>
+      deviceApi.addToStation(sn, stationId),
+    onSuccess: () => {
+      messageApi.success(t('station.addDeviceSuccess'))
+      setAddDeviceModalOpen(false)
+      setAddDeviceSn('')
+      queryClient.invalidateQueries({ queryKey: ['station-devices', currentStation?.id] })
+    },
+    onError: (err: any) => {
+      messageApi.error(err?.response?.data?.message || err?.message || t('common.error'))
+    },
+  })
+
+  const removeFromStationMutation = useMutation({
+    mutationFn: (sn: string) => deviceApi.removeFromStation(sn),
+    onSuccess: () => {
+      messageApi.success(t('station.removeDeviceSuccess'))
+      queryClient.invalidateQueries({ queryKey: ['station-devices', currentStation?.id] })
+    },
+    onError: (err: any) => {
+      messageApi.error(err?.response?.data?.message || err?.message || t('common.error'))
+    },
   })
 
   /* ---------- 操作处理 ---------- */
@@ -594,6 +626,26 @@ const StationsPage: React.FC = () => {
         </a>
       ),
     },
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      width: 100,
+      fixed: 'right' as const,
+      render: (_: any, record: DeviceItem) => (
+        (isSuperAdmin || currentStation?.user_id === user?.id) && (
+          <Popconfirm
+            title={t('station.confirmRemoveDevice')}
+            onConfirm={() => removeFromStationMutation.mutate(record.sn)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+          >
+            <Button type="link" size="small" danger>
+              {t('station.removeDevice')}
+            </Button>
+          </Popconfirm>
+        )
+      ),
+    },
   ]
 
   /* ---------- 告警表格列定义 ---------- */
@@ -728,6 +780,15 @@ const StationsPage: React.FC = () => {
         <Button icon={<ReloadOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['station-devices', currentStation?.id] })}>
           {t('common.refresh')}
         </Button>
+        {(isSuperAdmin || currentStation?.user_id === user?.id) && (
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => { setAddDeviceSn(''); setAddDeviceModalOpen(true) }}
+          >
+            {t('station.addDevice')}
+          </Button>
+        )}
       </Space>
       <Table<DeviceItem>
         columns={deviceColumns}
@@ -1029,6 +1090,30 @@ const StationsPage: React.FC = () => {
             </Col>
           </Row>
         </Form>
+      </Modal>
+
+      {/* 添加设备弹窗 */}
+      <Modal
+        title={t('station.addDevice')}
+        open={addDeviceModalOpen}
+        onCancel={() => { setAddDeviceModalOpen(false); setAddDeviceSn('') }}
+        onOk={() => {
+          if (addDeviceSn.trim() && currentStation?.id) {
+            addToStationMutation.mutate({ sn: addDeviceSn.trim(), stationId: currentStation.id })
+          }
+        }}
+        confirmLoading={addToStationMutation.isPending}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+      >
+        <div style={{ padding: '16px 0' }}>
+          <div style={{ marginBottom: 8 }}>{t('station.searchDeviceSN')}</div>
+          <Input
+            value={addDeviceSn}
+            onChange={(e) => setAddDeviceSn(e.target.value)}
+            placeholder={t('station.searchDeviceSN')}
+          />
+        </div>
       </Modal>
 
       {/* 创建电站弹窗 */}

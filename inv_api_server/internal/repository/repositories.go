@@ -990,11 +990,11 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 		d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 		COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
-		d.last_online_at, d.created_at, d.updated_at`
+		d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name`
 
 	allowedSNsSubquery := `(SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)`
 
-	baseQuery := fmt.Sprintf(` FROM devices d LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
+	baseQuery := fmt.Sprintf(` FROM devices d LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
 	args := []interface{}{userID}
 	argIdx := 2
 
@@ -1010,7 +1010,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		argIdx++
 	}
 
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM devices d WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM devices d LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
 	countArgs := []interface{}{userID}
 	countIdx := 2
 	if stationID > 0 {
@@ -1054,6 +1054,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 			&device.CurrentPower, &device.DailyEnergy,
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
+			&device.StationName,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -1078,9 +1079,9 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 		d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 		COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
-		d.last_online_at, d.created_at, d.updated_at`
+		d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name`
 
-	baseQuery := ` FROM devices d LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn WHERE d.deleted_at IS NULL`
+	baseQuery := ` FROM devices d LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
 	args := []interface{}{}
 	argIdx := 1
 
@@ -1096,7 +1097,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 		argIdx++
 	}
 
-	countQuery := `SELECT COUNT(*) FROM devices d WHERE d.deleted_at IS NULL`
+	countQuery := `SELECT COUNT(*) FROM devices d LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
 	countArgs := []interface{}{}
 	countIdx := 1
 	if stationID > 0 {
@@ -1140,6 +1141,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 			&device.CurrentPower, &device.DailyEnergy,
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
+			&device.StationName,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -1163,9 +1165,10 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
 			   d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
 			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
-			   d.last_online_at, d.created_at, d.updated_at
+			   d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name
 		FROM devices d
 		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
+		LEFT JOIN stations s ON s.id = d.station_id
 		WHERE d.station_id = $1 AND d.deleted_at IS NULL
 	`
 
@@ -1191,6 +1194,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 			&device.CurrentPower, &device.DailyEnergy,
 			&lastOnlineAt,
 			&device.CreatedAt, &device.UpdatedAt,
+			&device.StationName,
 		); err != nil {
 			return nil, err
 		}
@@ -1753,6 +1757,22 @@ func (r *DeviceRepository) AddToStation(ctx context.Context, sn string, stationI
 	if err == nil {
 		r.invalidateDeviceCache(ctx, sn)
 		r.updateStationCapacity(ctx, stationID)
+	}
+	return err
+}
+
+func (r *DeviceRepository) RemoveFromStation(ctx context.Context, sn string) error {
+	// 先获取原来的 station_id
+	var oldStationID int64
+	_ = r.db.QueryRow(ctx, `SELECT COALESCE(station_id, 0) FROM devices WHERE sn = $1`, sn).Scan(&oldStationID)
+
+	query := `UPDATE devices SET station_id = NULL, timezone = 'Asia/Shanghai', updated_at = NOW() WHERE sn = $1`
+	_, err := r.db.Exec(ctx, query, sn)
+	if err == nil {
+		r.invalidateDeviceCache(ctx, sn)
+		if oldStationID > 0 {
+			r.updateStationCapacity(ctx, oldStationID)
+		}
 	}
 	return err
 }

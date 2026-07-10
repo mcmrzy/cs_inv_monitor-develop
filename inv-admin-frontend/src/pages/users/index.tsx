@@ -22,6 +22,16 @@ import useTimezoneStore from '@/stores/timezoneStore'
 
 const { Title } = Typography
 
+interface UserRecord {
+  id: string
+  phone: string
+  nickname: string
+  role: number
+  status: number
+  parent_id?: string | null
+  created_at: string
+}
+
 const ROLE_TO_NUMERIC: Record<Role, number> = {
   [Role.SUPER_ADMIN]: 0, [Role.AGENT]: 1, [Role.INSTALLER]: 2, [Role.END_USER]: 3,
 }

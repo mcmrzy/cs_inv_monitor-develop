@@ -21,16 +21,18 @@ import (
 var deviceSNRegex = regexp.MustCompile(`^[A-Z0-9-]{8,64}$`)
 
 type DeviceHandler struct {
-	deviceService *service.DeviceService
-	alarmService  *service.AlarmService
-	db            *pgxpool.Pool
+	deviceService  *service.DeviceService
+	alarmService   *service.AlarmService
+	stationService *service.StationService
+	db             *pgxpool.Pool
 }
 
-func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, db *pgxpool.Pool) *DeviceHandler {
+func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, stationService *service.StationService, db *pgxpool.Pool) *DeviceHandler {
 	return &DeviceHandler{
-		deviceService: deviceService,
-		alarmService:  alarmService,
-		db:            db,
+		deviceService:  deviceService,
+		alarmService:   alarmService,
+		stationService: stationService,
+		db:             db,
 	}
 }
 
@@ -549,9 +551,22 @@ func (h *DeviceHandler) AddToStation(c *gin.Context) {
 		return
 	}
 
-	if !isAdmin && device.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
-		return
+	if !isAdmin {
+		// Check device ownership
+		if device.UserID != userID {
+			response.HandleError(c, apperr.Forbidden("permission denied"))
+			return
+		}
+		// Check station ownership
+		station, err := h.stationService.GetByID(c.Request.Context(), req.StationID)
+		if err != nil || station == nil {
+			response.HandleError(c, apperr.BadRequest("station not found"))
+			return
+		}
+		if station.UserID != userID {
+			response.HandleError(c, apperr.Forbidden("station not owned by you"))
+			return
+		}
 	}
 
 	if err := h.deviceService.AddToStation(c.Request.Context(), req.SN, req.StationID); err != nil {
@@ -560,6 +575,40 @@ func (h *DeviceHandler) AddToStation(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "device added to station", nil)
+}
+
+func (h *DeviceHandler) RemoveFromStation(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
+
+	sn := c.Param("sn")
+	if sn == "" {
+		response.HandleError(c, apperr.BadRequest("invalid sn"))
+		return
+	}
+
+	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("system error", err))
+		return
+	}
+	if device == nil {
+		response.Error(c, 5001, "device not found")
+		return
+	}
+
+	if !isAdmin && device.UserID != userID {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+
+	if err := h.deviceService.RemoveFromStation(c.Request.Context(), sn); err != nil {
+		response.HandleError(c, apperr.Internal("remove from station failed", err))
+		return
+	}
+
+	response.SuccessWithMessage(c, "device removed from station", nil)
 }
 
 func (h *DeviceHandler) ScanLocal(c *gin.Context) {
