@@ -596,6 +596,14 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/ota-cmd-ack", internalHandler.OTACmdAck)
 	}
 
+	// ESP32 设备兼容路由（无 /v1 前缀）
+	// 设备固件直接调用 /api/internal/telemetry 和 /api/internal/ota/pending
+	espCompat := router.Group("/api/internal").Use(middleware.InternalAuth())
+	{
+		espCompat.POST("/telemetry", internalHandler.DeviceData)
+		espCompat.GET("/ota/pending", deps.OTAHandler.CheckUpdateByQuery)
+	}
+
 	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
 	// 使用 http.ServeContent 替代 Gin Static，优化大文件传输
 	firmwareDir := "/data/firmware"
