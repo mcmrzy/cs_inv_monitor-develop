@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/model"
@@ -1517,6 +1518,19 @@ func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
 			if v, exists := battMap["charge_state"]; exists {
 				data["charge_state"] = v
 			}
+			// 全量展平：将 batt 中所有字段提升到顶层（避免遗漏非预定义字段）
+			// 如果字段名带 batt_ 前缀，同时写入去前缀后的 key（如 batt_soc → soc）
+			for k, v := range battMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
+				if strings.HasPrefix(k, "batt_") {
+					stripped := k[5:] // len("batt_") = 5
+					if _, exists := data[stripped]; !exists {
+						data[stripped] = v
+					}
+				}
+			}
 		}
 	}
 
@@ -1532,6 +1546,19 @@ func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
 			}
 			if v, exists := sysMap["state"]; exists {
 				data["work_state"] = v
+			}
+			// 全量展平：将 sys 中所有字段提升到顶层（避免遗漏非预定义字段）
+			// 如果字段名带 sys_ 前缀，同时写入去前缀后的 key（如 sys_temp_inv → temp_inv）
+			for k, v := range sysMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
+				if strings.HasPrefix(k, "sys_") {
+					stripped := k[4:] // len("sys_") = 4
+					if _, exists := data[stripped]; !exists {
+						data[stripped] = v
+					}
+				}
 			}
 		}
 	}
@@ -1565,6 +1592,19 @@ func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
 			}
 			if v, exists := acMap["pf"]; exists {
 				data["power_factor"] = v
+			}
+			// 全量展平：将 ac 中所有字段提升到顶层（避免遗漏非预定义字段）
+			// 如果字段名带 ac_ 前缀，同时写入去前缀后的 key（如 ac_thd_v → thd_v）
+			for k, v := range acMap {
+				if _, exists := data[k]; !exists {
+					data[k] = v
+				}
+				if strings.HasPrefix(k, "ac_") {
+					stripped := k[3:] // len("ac_") = 3
+					if _, exists := data[stripped]; !exists {
+						data[stripped] = v
+					}
+				}
 			}
 		}
 	}
