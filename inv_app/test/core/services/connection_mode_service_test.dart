@@ -180,7 +180,8 @@ void main() {
       verify(() => mockStorageService.saveIsLocalMode(false)).called(1);
     });
 
-    test('reconnects MQTT when not connected', () async {
+    test(
+      'reconnects MQTT when not connected', () async {
       when(() => mockStorageService.saveIsLocalMode(any()))
           .thenAnswer((_) async {});
       when(() => mockMQTTService.isConnected).thenReturn(false);
