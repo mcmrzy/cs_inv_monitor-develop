@@ -2319,9 +2319,15 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 		// 根据 granularity 选择聚合粒度
 		var key string
 		var rounded time.Time
+		// roundTo3Minute 将时间向下取整到3分钟窗口，确保同一轮上报的不同topic数据能合并
+		roundTo3Minute := func(t time.Time) time.Time {
+			minute := t.Minute()
+			roundedMinute := minute - (minute % 3)
+			return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinute, 0, 0, t.Location())
+		}
 		switch granularity {
 		case "hour":
-			rounded = dataTime.Truncate(time.Minute)
+			rounded = roundTo3Minute(dataTime)
 			key = rounded.Format(time.RFC3339)
 		case "week", "month":
 			rounded = time.Date(dataTime.Year(), dataTime.Month(), dataTime.Day(), 0, 0, 0, 0, dataTime.Location())
@@ -2334,7 +2340,7 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 				rounded = time.Date(dataTime.Year(), dataTime.Month(), dataTime.Day(), 0, 0, 0, 0, dataTime.Location())
 				key = rounded.Format("2006-01-02")
 			} else {
-				rounded = dataTime.Truncate(time.Minute)
+				rounded = roundTo3Minute(dataTime)
 				key = rounded.Format(time.RFC3339)
 			}
 		}
