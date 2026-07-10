@@ -27,18 +27,18 @@ jobs:
         run: |
           echo "Checking if production environment is configured..."
           if [ -z "${{ secrets.SERVER_HOST }}" ]; then
-            echo "❌ SERVER_HOST secret is not set"
+            echo "�?SERVER_HOST secret is not set"
             exit 1
           fi
           if [ -z "${{ secrets.SERVER_USERNAME }}" ]; then
-            echo "❌ SERVER_USERNAME secret is not set"
+            echo "�?SERVER_USERNAME secret is not set"
             exit 1
           fi
           if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-            echo "❌ SSH_PRIVATE_KEY secret is not set"
+            echo "�?SSH_PRIVATE_KEY secret is not set"
             exit 1
           fi
-          echo "✅ All required secrets are configured"
+          echo "�?All required secrets are configured"
 
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1
@@ -52,7 +52,7 @@ jobs:
             # 进入项目目录
             cd /opt/inv-mqtt
             
-            # 拉取最新代码
+            # 拉取最新代�?
             git fetch origin
             git checkout main
             git pull origin main
@@ -62,36 +62,38 @@ jobs:
             
             # 清理旧容器（含孤立容器），防止容器名冲突
             docker compose -f docker-compose.prod.yml --env-file .env.prod down --remove-orphans
+            # Force remove conflicting containers
+            docker rm -f inv-admin-frontend inv-api-gateway inv-api-server inv-device-server inv-postgres inv-redis 2>/dev/null || true
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
             
             # 清理未使用的 Docker 镜像
             docker image prune -f
             
-            # 检查服务状态
-            echo "=== 服务状态 ==="
+            # 检查服务状�?
+            echo "=== 服务状�?==="
             docker compose -f docker-compose.prod.yml --env-file .env.prod ps
             
-            echo "=== 最近日志 ==="
+            echo "=== 最近日�?==="
             docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail=20
             
-            # 健康检查
-            echo "=== 健康检查 ==="
+            # 健康检�?
+            echo "=== 健康检�?==="
             sleep 10
             
-            # 检查 API Gateway
+            # 检�?API Gateway
             if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-              echo "✅ API Gateway 正常"
+              echo "�?API Gateway 正常"
             else
-              echo "❌ API Gateway 异常"
+              echo "�?API Gateway 异常"
               exit 1
             fi
             
-            # 检查前端
+            # 检查前�?
             if curl -sf http://localhost:3000 > /dev/null 2>&1; then
-              echo "✅ Admin Frontend 正常"
+              echo "�?Admin Frontend 正常"
             else
-              echo "❌ Admin Frontend 异常"
+              echo "�?Admin Frontend 异常"
               exit 1
             fi
             
-            echo "🎉 部署成功完成！"
+            echo "🎉 部署成功完成�?
