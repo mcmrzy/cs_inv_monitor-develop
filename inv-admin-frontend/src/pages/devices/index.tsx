@@ -13,10 +13,12 @@ import {
   DownloadOutlined, DeleteOutlined, LinkOutlined, EditOutlined,
   EyeOutlined, ExclamationCircleOutlined, ThunderboltOutlined,
   UploadOutlined, InboxOutlined, CheckOutlined, CloseOutlined,
+  DisconnectOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import ReactECharts from 'echarts-for-react'
 import { deviceApi } from '@/services/deviceApi'
+import api from '@/services/api'
 import { commandApi } from '@/services/commandApi'
 import { modelApi } from '@/services/modelApi'
 import { userApi } from '@/services/userApi'
@@ -45,6 +47,9 @@ interface DeviceRecord {
   userId: string
   installerId: string
   timezone?: string
+  station_id?: number
+  station_name?: string
+  user_phone?: string
   owner?: { phone: string; nickname: string }
   installer?: { nickname: string; phone: string }
 }
@@ -235,6 +240,11 @@ const DevicesPage: React.FC = () => {
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assignTargetSn, setAssignTargetSn] = useState<string>('')
   const [selectedInstallerId, setSelectedInstallerId] = useState<number | null>(null)
+
+  // 绑定电站相关状态
+  const [bindStationModalOpen, setBindStationModalOpen] = useState(false)
+  const [bindStationSn, setBindStationSn] = useState<string>('')
+  const [selectedStationId, setSelectedStationId] = useState<number | null>(null)
 
   const [modelOptions, setModelOptions] = useState<{ label: string; value: string }[]>([])
   const modelFields = useModelFields(detailDevice?.model)
@@ -525,6 +535,41 @@ const DevicesPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['devices'] })
     },
     onError: () => messageApi.error(t('dev.assignFailed')),
+  })
+
+  // 获取电站列表（用于绑定电站下拉）
+  const { data: stationsList = [] } = useQuery({
+    queryKey: ['stations-for-bind'],
+    queryFn: () => api.get('/stations', { params: { pageSize: 200 } }).then((res: any) => {
+      const d = res.data
+      return Array.isArray(d) ? d : d?.data?.list || d?.list || d?.data || []
+    }),
+    enabled: bindStationModalOpen,
+  })
+
+  const bindStationMutation = useMutation({
+    mutationFn: ({ sn, stationId }: { sn: string; stationId: number }) =>
+      deviceApi.addToStation(sn, stationId),
+    onSuccess: () => {
+      messageApi.success(t('dev.bindStationSuccess'))
+      setBindStationModalOpen(false)
+      setSelectedStationId(null)
+      queryClient.invalidateQueries({ queryKey: ['devices'] })
+    },
+    onError: (err: any) => {
+      messageApi.error(err?.response?.data?.message || err?.message || t('common.error'))
+    },
+  })
+
+  const removeFromStationMutation = useMutation({
+    mutationFn: (sn: string) => deviceApi.removeFromStation(sn),
+    onSuccess: () => {
+      messageApi.success(t('dev.removeFromStationSuccess'))
+      queryClient.invalidateQueries({ queryKey: ['devices'] })
+    },
+    onError: (err: any) => {
+      messageApi.error(err?.response?.data?.message || err?.message || t('common.error'))
+    },
   })
 
   const handleAdd = () => {
@@ -1009,6 +1054,14 @@ const DevicesPage: React.FC = () => {
       },
     },
     {
+      title: t('dev.stationName'),
+      dataIndex: 'station_name',
+      key: 'station_name',
+      width: 140,
+      responsive: ['sm'],
+      render: (v: string) => v || '-',
+    },
+    {
       title: t('dev.onlineStatus'),
       dataIndex: 'status',
       key: 'status',
@@ -1059,6 +1112,36 @@ const DevicesPage: React.FC = () => {
                 >
                   {t('dev.assignInstaller')}
                 </Button>
+              )}
+              {(isSuperAdmin || record.user_id === user?.id) && (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<LinkOutlined />}
+                  onClick={() => {
+                    setBindStationSn(record.sn)
+                    setSelectedStationId(null)
+                    setBindStationModalOpen(true)
+                  }}
+                >
+                  {t('dev.bindStation')}
+                </Button>
+              )}
+              {(isSuperAdmin || record.user_id === user?.id) && record.station_id && (
+                <Popconfirm
+                  title={t('dev.confirmRemoveFromStation')}
+                  onConfirm={() => removeFromStationMutation.mutate(record.sn)}
+                  okText={t('common.confirm')}
+                  cancelText={t('common.cancel')}
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<DisconnectOutlined />}
+                  >
+                    {t('dev.removeFromStation')}
+                  </Button>
+                </Popconfirm>
               )}
               <Button
                 type="link"
@@ -2196,6 +2279,36 @@ const DevicesPage: React.FC = () => {
           <Spin tip={t('common.loading')} />
         )}
       </Drawer>
+
+      {/* 绑定电站Modal */}
+      <Modal
+        title={t('dev.bindStation')}
+        open={bindStationModalOpen}
+        onCancel={() => { setBindStationModalOpen(false); setSelectedStationId(null) }}
+        onOk={() => {
+          if (selectedStationId && bindStationSn) {
+            bindStationMutation.mutate({ sn: bindStationSn, stationId: selectedStationId })
+          }
+        }}
+        confirmLoading={bindStationMutation.isPending}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+      >
+        <div style={{ padding: '16px 0' }}>
+          <div style={{ marginBottom: 8 }}>{t('dev.selectStation')}</div>
+          <Select
+            style={{ width: '100%' }}
+            placeholder={t('dev.selectStation')}
+            value={selectedStationId}
+            onChange={(v) => setSelectedStationId(v)}
+            showSearch
+            filterOption={(input, option) =>
+              (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+            }
+            options={stationsList.map((s: any) => ({ value: s.id, label: s.name }))}
+          />
+        </div>
+      </Modal>
 
       {/* 分配安装商Modal */}
       <Modal

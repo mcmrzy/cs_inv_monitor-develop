@@ -388,6 +388,10 @@ func (s *DeviceService) AddToStation(ctx context.Context, sn string, stationID i
 	return s.repo.AddToStation(ctx, sn, stationID)
 }
 
+func (s *DeviceService) RemoveFromStation(ctx context.Context, sn string) error {
+	return s.repo.RemoveFromStation(ctx, sn)
+}
+
 func (s *DeviceService) HasPermission(ctx context.Context, userID int64, sn string) bool {
 	return s.repo.HasDataPermission(ctx, userID, sn)
 }
