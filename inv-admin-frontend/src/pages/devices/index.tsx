@@ -580,9 +580,9 @@ const DevicesPage: React.FC = () => {
   // 获取电站列表（用于绑定电站下拉）
   const { data: stationsList = [] } = useQuery({
     queryKey: ['stations-for-bind'],
-    queryFn: () => api.get('/stations', { params: { pageSize: 200 } }).then((res: any) => {
+    queryFn: () => api.get('/stations', { params: { page_size: 200 } }).then((res: any) => {
       const d = res.data
-      const list = Array.isArray(d) ? d : d?.data?.list || d?.list || (Array.isArray(d?.data) ? d?.data : [])
+      const list = Array.isArray(d) ? d : d?.data?.items || d?.data?.list || d?.list || (Array.isArray(d?.data) ? d?.data : [])
       return Array.isArray(list) ? list : []
     }),
     enabled: bindStationModalOpen,
