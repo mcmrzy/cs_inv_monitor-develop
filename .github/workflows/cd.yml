@@ -7,38 +7,87 @@ on:
       - completed
     branches:
       - main
-  # 手动触发（用于测试）
   workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Deploy to Production
+  build:
+    name: Build & Push Images
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
-    
+    permissions:
+      contents: read
+      packages: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate production environment
-        run: |
-          echo "Checking if production environment is configured..."
-          if [ -z "${{ secrets.SERVER_HOST }}" ]; then
-            echo "❌ SERVER_HOST secret is not set"
-            exit 1
-          fi
-          if [ -z "${{ secrets.SERVER_USERNAME }}" ]; then
-            echo "❌ SERVER_USERNAME secret is not set"
-            exit 1
-          fi
-          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-            echo "❌ SSH_PRIVATE_KEY secret is not set"
-            exit 1
-          fi
-          echo "✅ All required secrets are configured"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push inv-device-server
+        uses: docker/build-push-action@v6
+        with:
+          context: ./inv_device_server
+          file: ./inv_device_server/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/inv-device-server:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/inv-device-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push inv-api-server
+        uses: docker/build-push-action@v6
+        with:
+          context: ./inv_api_server
+          file: ./inv_api_server/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/inv-api-server:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/inv-api-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push api-gateway
+        uses: docker/build-push-action@v6
+        with:
+          context: ./api-gateway
+          file: ./api-gateway/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/api-gateway:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/api-gateway:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push inv-admin-frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./inv-admin-frontend
+          file: ./inv-admin-frontend/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/inv-admin-frontend:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/inv-admin-frontend:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -46,53 +95,49 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          command_timeout: 30m
+          command_timeout: 10m
           script: |
-            # 进入项目目录
             cd /opt/inv-mqtt
-            
-            # 拉取最新代码
             git fetch origin
             git checkout main
             git pull origin main
-            
-            # 进入部署目录
             cd deploy
-            
-            # 清理旧容器（含孤立容器），防止容器名冲突
+
+            # 设置镜像 tag（先移除旧的 IMAGE_TAG 行再追加）
+            sed -i '/^IMAGE_TAG=/d' .env.prod
+            echo "IMAGE_TAG=${{ github.sha }}" >> .env.prod
+
+            # 登录 ghcr.io
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # 拉取新镜像
+            docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+
+            # 更新容器
             docker compose -f docker-compose.prod.yml --env-file .env.prod down --remove-orphans
-            docker rm -f inv-admin-frontend inv-api-gateway inv-api-server inv-device-server inv-postgres inv-redis 2>/dev/null || true
-            docker compose -f docker-compose.prod.yml --env-file .env.prod build --no-cache inv-admin-frontend
-            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
-            
-            # 清理未使用的 Docker 镜像
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+
+            # 清理旧镜像
             docker image prune -f
-            
-            # 检查服务状态
+
+            # 健康检查
             echo "=== 服务状态 ==="
             docker compose -f docker-compose.prod.yml --env-file .env.prod ps
-            
-            echo "=== 最近日志 ==="
-            docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail=20
-            
-            # 健康检查
-            echo "=== 健康检查 ==="
+
             sleep 10
-            
-            # 检查 API Gateway
+
             if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
               echo "✅ API Gateway 正常"
             else
               echo "❌ API Gateway 异常"
               exit 1
             fi
-            
-            # 检查前端
+
             if docker ps --format "{{.Names}}" | grep -q inv-admin-frontend && docker inspect -f "{{.State.Running}}" inv-admin-frontend | grep -q true; then
               echo "✅ Admin Frontend 正常"
             else
               echo "❌ Admin Frontend 异常"
               exit 1
             fi
-            
+
             echo "🎉 部署成功完成！"
