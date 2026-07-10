@@ -582,7 +582,8 @@ const DevicesPage: React.FC = () => {
     queryKey: ['stations-for-bind'],
     queryFn: () => api.get('/stations', { params: { pageSize: 200 } }).then((res: any) => {
       const d = res.data
-      return Array.isArray(d) ? d : d?.data?.list || d?.list || d?.data || []
+      const list = Array.isArray(d) ? d : d?.data?.list || d?.list || (Array.isArray(d?.data) ? d?.data : [])
+      return Array.isArray(list) ? list : []
     }),
     enabled: bindStationModalOpen,
   })
@@ -2345,7 +2346,7 @@ const DevicesPage: React.FC = () => {
             filterOption={(input, option) =>
               (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
             }
-            options={stationsList.map((s: any) => ({ value: s.id, label: s.name }))}
+            options={(Array.isArray(stationsList) ? stationsList : []).map((s: any) => ({ value: s.id, label: s.name }))}
           />
         </div>
       </Modal>
