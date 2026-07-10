@@ -57,12 +57,11 @@ jobs:
             git checkout main
             git pull origin main
             
-            # 更新环境变量（如果需要）
-            # 注意：生产环境的 .env.prod 文件应该提前配置好
-            
-            # 重新构建并部署服务
+            # 进入部署目录
             cd deploy
-            docker compose -f docker-compose.prod.yml --env-file .env.prod down
+            
+            # 清理旧容器（含孤立容器），防止容器名冲突
+            docker compose -f docker-compose.prod.yml --env-file .env.prod down --remove-orphans
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
             
             # 清理未使用的 Docker 镜像

@@ -20,8 +20,7 @@ services:
     volumes:
       - pg-data:/var/lib/postgresql/data
       - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ../database/migration_architecture_upgrade_20260529.sql:/docker-entrypoint-initdb.d/02-upgrade.sql:ro
-      - ../database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/03-timescaledb.sql:ro
+      - ../database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/02-timescaledb.sql:ro
     networks:
       - inv-prod-network
     restart: unless-stopped
