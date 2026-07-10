@@ -669,6 +669,13 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 		telemetryTime = time.Now().UTC()
 	}
 
+	// 设备服务器发送的数据是嵌套结构: {"data": {...实际字段...}, "ac_data": {...}, "timestamp": ...}
+	// 先解包内层 data 用于字段提取
+	dataMap := req.Data
+	if nested, ok := req.Data["data"].(map[string]interface{}); ok {
+		dataMap = nested
+	}
+
 	// 从 JSONB data 中提取常用索引字段
 	var totalActivePower, dailyEnergy, internalTemp float64
 	var gridFreq, battSOC, battPower, pvPower float64
@@ -676,19 +683,19 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 
 	switch req.Topic {
 	case "data/ac":
-		totalActivePower = extractFloat(req.Data, "power", "total_active_power")
-		gridFreq = extractFloat(req.Data, "grid_freq", "grid_frequency", "freq")
-		pvPower = extractFloat(req.Data, "pv_power")
+		totalActivePower = extractFloat(dataMap, "power", "total_active_power")
+		gridFreq = extractFloat(dataMap, "grid_freq", "grid_frequency", "freq")
+		pvPower = extractFloat(dataMap, "pv_power")
 	case "data/status":
-		workState = extractString(req.Data, "state", "work_state")
-		faultCode = extractString(req.Data, "fault_code")
-		internalTemp = extractFloat(req.Data, "temp_inv", "internal_temperature")
-		gridFreq = extractFloat(req.Data, "grid_freq", "grid_frequency", "freq")
-		battSOC = extractFloat(req.Data, "battery_soc", "batt_soc")
-		battPower = extractFloat(req.Data, "battery_power")
-		pvPower = extractFloat(req.Data, "pv_power")
+		workState = extractString(dataMap, "state", "work_state")
+		faultCode = extractString(dataMap, "fault_code")
+		internalTemp = extractFloat(dataMap, "temp_inv", "internal_temperature")
+		gridFreq = extractFloat(dataMap, "grid_freq", "grid_frequency", "freq")
+		battSOC = extractFloat(dataMap, "battery_soc", "batt_soc")
+		battPower = extractFloat(dataMap, "battery_power")
+		pvPower = extractFloat(dataMap, "pv_power")
 	case "data/energy":
-		dailyEnergy = extractFloat(req.Data, "daily_pv", "daily_energy")
+		dailyEnergy = extractFloat(dataMap, "daily_pv", "daily_energy")
 	}
 
 	_, err = h.db.Exec(ctx, `
