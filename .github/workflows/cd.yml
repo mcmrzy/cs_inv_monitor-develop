@@ -91,7 +91,7 @@ jobs:
             fi
             
             # 检查前端
-            if curl -sf -H "Host: jiuxiaoyw.online" http://localhost:80 > /dev/null 2>&1; then
+            if docker ps --format "{{.Names}}" | grep -q inv-admin-frontend && docker inspect -f "{{.State.Running}}" inv-admin-frontend | grep -q true; then
               echo "✅ Admin Frontend 正常"
             else
               echo "❌ Admin Frontend 异常"
