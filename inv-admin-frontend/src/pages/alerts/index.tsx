@@ -58,6 +58,8 @@ const AlertsPage: React.FC = () => {
     'command_success': { label: t('alert.commandSuccess') || '命令成功', color: '#52c41a', icon: '✓' },
     'command_failed': { label: t('alert.commandFailed') || '命令失败', color: '#ff4d4f', icon: '✗' },
     'command_queued': { label: t('alert.commandQueued') || '命令排队', color: '#faad14', icon: '…' },
+    'alarm_cleared': { label: '告警恢复', color: '#52c41a', icon: '✓' },
+    'device_alarm': { label: '设备告警', color: '#ff4d4f', icon: '!' },
   }
 
   // 获取设备列表（用于 SN 下拉）
