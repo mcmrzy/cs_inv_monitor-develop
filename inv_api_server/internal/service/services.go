@@ -538,7 +538,7 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 
 	// 4. 设备离线时，存入 Redis 离线队列
 	if resp.StatusCode == http.StatusServiceUnavailable {
-		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "queued", "Device offline, queued for delivery")
+		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "queued", fmt.Sprintf("设备 %s 离线，命令已排队等待发送", sn))
 		if s.cache != nil {
 			queueData, _ := json.Marshal(map[string]interface{}{
 				"command": cmdType,
