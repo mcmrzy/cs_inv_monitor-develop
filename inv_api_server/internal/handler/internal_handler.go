@@ -307,12 +307,12 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	// 设备状态变化时，插入通知记录（带 120 秒冷却期，防止状态抖动产生大量重复通知）
 	if oldStatus != newStatus && userID > 0 {
 		notifyType := "device_online"
-		title := "Device Online"
-		content := "Device " + req.SN + " is online"
+		title := "设备重新上线"
+		content := "设备 " + req.SN + " 已上线"
 		if newStatus == 0 {
 			notifyType = "device_offline"
-			title = "Device Offline"
-			content = "Device " + req.SN + " is offline"
+			title = "设备离线"
+			content = "设备 " + req.SN + " 已离线"
 		} else if newStatus == 2 || (newStatus == 1 && oldStatus == 2) {
 			// 故障和故障恢复通知由 DeviceAlarm 路径统一生成（通过 alarms 表 + SSE 广播）
 			// 此处只更新设备状态，不插入 notifications 表，避免与 DeviceAlarm 路径重复
@@ -1217,7 +1217,7 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 
 	// 告警码到默认描述的映射
 	alarmCodeMessageMap := map[int]string{
-		0:  "Fault recovered, system normal",
+		0:  "设备故障恢复",
 		1:  "逆变器过温保护",
 		2:  "电池过压保护",
 		3:  "电池欠压保护",
@@ -1308,18 +1308,26 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 				if clearStationID.Valid {
 					csid = clearStationID.Int64
 				}
-				clearContent := "Device " + req.SN + " has recovered"
+				var lastFaultMsg string
+				_ = h.db.QueryRow(ctx,
+					`SELECT fault_message FROM alarms WHERE device_sn=$1 AND status=2 ORDER BY recovered_at DESC LIMIT 1`,
+					req.SN,
+				).Scan(&lastFaultMsg)
+				if lastFaultMsg == "" {
+					lastFaultMsg = "故障"
+				}
+				clearContent := fmt.Sprintf("设备 %s %s 已恢复", req.SN, lastFaultMsg)
 				_, _ = h.db.Exec(ctx, `
 					INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
 					VALUES ($1, $2, $3, $4, $5, $6, NOW())
-				`, req.SN, csid, clearUserID, "alarm_cleared", "Fault Recovered", clearContent)
-				h.broadcastNotification(clearUserID, "alarm_cleared", "Fault Recovered", clearContent, req.SN)
+				`, req.SN, csid, clearUserID, "alarm_cleared", "故障已恢复", clearContent)
+				h.broadcastNotification(clearUserID, "alarm_cleared", "故障已恢复", clearContent, req.SN)
 
 				// JPush 推送故障恢复通知给 APP 端
 				if h.jpushService != nil {
 					if userIDs, err := h.getNotificationUsers(ctx, req.SN); err == nil && len(userIDs) > 0 {
 						h.jpushService.SendNotificationAsync(ctx, userIDs, "alarm_cleared", req.SN,
-							"故障已恢复", fmt.Sprintf("设备 %s: 故障已恢复", req.SN))
+							"故障已恢复", fmt.Sprintf("设备 %s 故障已恢复", req.SN))
 					}
 				}
 			}
