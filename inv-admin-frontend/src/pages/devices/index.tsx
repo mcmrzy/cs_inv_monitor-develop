@@ -303,6 +303,46 @@ const DevicesPage: React.FC = () => {
         const batObj = raw?.battery || raw?.batt || (raw?.soc != null ? raw : null)
         const sysObj = raw?.sys_status || raw?.sys || raw
 
+        // Build aliased raw data for DynamicFieldRenderer compatibility
+        const rawForFields: Record<string, any> = { ...(raw || {}) }
+
+        // Add aliases so DB field_key names can find the data
+        // AC aliases
+        if (rawForFields.apparent_power != null) rawForFields.ac_apparent = rawForFields.apparent_power
+        if (rawForFields.power_factor != null) rawForFields.ac_pf = rawForFields.power_factor
+        if (rawForFields.load_rate != null) rawForFields.ac_load_percent = rawForFields.load_rate
+        if (rawForFields.voltage_thd != null) rawForFields.ac_thd_v = rawForFields.voltage_thd
+
+        // Battery aliases
+        if (rawForFields.battery_soc != null) rawForFields.batt_soc = rawForFields.battery_soc
+        if (rawForFields.battery_voltage != null) rawForFields.batt_voltage = rawForFields.battery_voltage
+        if (rawForFields.battery_current != null) rawForFields.batt_current = rawForFields.battery_current
+        if (rawForFields.battery_power != null) rawForFields.batt_power = rawForFields.battery_power
+        if (rawForFields.battery_soh != null) rawForFields.batt_soh = rawForFields.battery_soh
+        if (rawForFields.cycle_count != null) rawForFields.batt_cycle_count = rawForFields.cycle_count
+        if (rawForFields.cell_max_temp != null) rawForFields.batt_temp_max = rawForFields.cell_max_temp
+        if (rawForFields.cell_min_temp != null) rawForFields.batt_temp_min = rawForFields.cell_min_temp
+        if (rawForFields.cell_max_voltage != null) rawForFields.batt_cell_volt_max = rawForFields.cell_max_voltage
+        if (rawForFields.cell_min_voltage != null) rawForFields.batt_cell_volt_min = rawForFields.cell_min_voltage
+        if (rawForFields.charge_status != null) rawForFields.batt_charge_state = rawForFields.charge_status
+        if (rawForFields.battery_avg_temp != null) rawForFields.batt_temp_battery = rawForFields.battery_avg_temp
+        if (rawForFields.rated_capacity != null) rawForFields.batt_capacity_total = rawForFields.rated_capacity
+        if (rawForFields.battery_capacity != null) rawForFields.batt_capacity_remain = rawForFields.battery_capacity
+
+        // PV aliases
+        if (rawForFields.pv1_voltage != null) rawForFields.pv_pv1_voltage = rawForFields.pv1_voltage
+        if (rawForFields.pv1_current != null) rawForFields.pv_pv1_current = rawForFields.pv1_current
+        if (rawForFields.pv1_power != null) rawForFields.pv_pv1_power = rawForFields.pv1_power
+        if (rawForFields.pv2_voltage != null) rawForFields.pv_pv2_voltage = rawForFields.pv2_voltage
+        if (rawForFields.pv2_current != null) rawForFields.pv_pv2_current = rawForFields.pv2_current
+        if (rawForFields.pv2_power != null) rawForFields.pv_pv2_power = rawForFields.pv2_power
+
+        // Status aliases
+        if (rawForFields.inverter_temp != null) rawForFields.temp_inv = rawForFields.inverter_temp
+        if (rawForFields.heatsink_temp != null) rawForFields.temp_mos = rawForFields.heatsink_temp
+        if (rawForFields.ambient_temp != null) rawForFields.temp_env = rawForFields.ambient_temp
+        if (rawForFields.run_status != null) rawForFields.work_state = rawForFields.run_status
+
         return {
           ac: acObj ? {
             voltage: acObj.voltage || 0,
@@ -329,7 +369,7 @@ const DevicesPage: React.FC = () => {
             temp_ambient: sysObj.temp_mos || sysObj.temp_env || 0,
           },
           online: { online: raw?.online ?? false, rssi: raw?.rssi || 0, ip: raw?.ip || '' },
-          _raw: raw,
+          _raw: rawForFields,
         } as RealtimeData
       }),
     enabled: !!detailSn && detailDrawerOpen,
@@ -1453,7 +1493,7 @@ const DevicesPage: React.FC = () => {
             <Card size="small" title={`${detailDevice?.model ?? ''} ${t('dev.statusOverview')}`} style={{ marginBottom: 16 }}>
               <DynamicStatCards
                 fields={modelFields.cache.showFields.slice(0, 6)}
-                data={realtimeData ?? {}}
+                data={realtimeData?._raw ?? {}}
               />
             </Card>
           )}
@@ -1462,7 +1502,7 @@ const DevicesPage: React.FC = () => {
             <Card size="small" title={`${detailDevice?.model ?? ''} ${t('dev.realtimeData')}`} style={{ marginBottom: 16 }}>
               <DynamicFieldRenderer
                 fields={modelFields.cache.showFields}
-                data={realtimeData ?? {}}
+                data={realtimeData?._raw ?? {}}
                 column={2}
                 size="small"
               />

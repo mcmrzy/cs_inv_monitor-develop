@@ -380,6 +380,10 @@ CREATE TABLE IF NOT EXISTS device_telemetry (
     work_state         VARCHAR(50),
     fault_code         VARCHAR(50),
     internal_temperature DECIMAL(6,1) DEFAULT 0,
+    grid_frequency       NUMERIC(6,2),
+    battery_soc          NUMERIC(4,1),
+    battery_power        NUMERIC(10,2),
+    pv_power             NUMERIC(10,2),
     time               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -400,6 +404,10 @@ SELECT DISTINCT ON (dt.device_sn)
     dt.work_state,
     dt.fault_code,
     dt.internal_temperature,
+    dt.grid_frequency,
+    dt.battery_soc,
+    dt.battery_power,
+    dt.pv_power,
     dt.time as data_time,
     dt.created_at as updated_at
 FROM device_telemetry dt

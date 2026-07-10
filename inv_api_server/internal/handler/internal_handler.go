@@ -94,6 +94,38 @@ type NotificationConfig struct {
 	CatchupLimit   int // 历史通知回填条数
 }
 
+func extractFloat(m map[string]interface{}, keys ...string) float64 {
+	for _, k := range keys {
+		if v, ok := m[k]; ok {
+			switch val := v.(type) {
+			case float64:
+				return val
+			case float32:
+				return float64(val)
+			case int:
+				return float64(val)
+			case int64:
+				return float64(val)
+			case json.Number:
+				f, _ := val.Float64()
+				return f
+			}
+		}
+	}
+	return 0
+}
+
+func extractString(m map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := m[k]; ok {
+			if s, ok := v.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
 // defaultNotificationConfig 默认配置
 func defaultNotificationConfig() *NotificationConfig {
 	return &NotificationConfig{
@@ -637,10 +669,32 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 		telemetryTime = time.Now().UTC()
 	}
 
+	// 从 JSONB data 中提取常用索引字段
+	var totalActivePower, dailyEnergy, internalTemp float64
+	var gridFreq, battSOC, battPower, pvPower float64
+	var workState, faultCode string
+
+	switch req.Topic {
+	case "data/ac":
+		totalActivePower = extractFloat(req.Data, "power", "total_active_power")
+		gridFreq = extractFloat(req.Data, "grid_freq", "grid_frequency", "freq")
+		pvPower = extractFloat(req.Data, "pv_power")
+	case "data/status":
+		workState = extractString(req.Data, "state", "work_state")
+		faultCode = extractString(req.Data, "fault_code")
+		internalTemp = extractFloat(req.Data, "temp_inv", "internal_temperature")
+		gridFreq = extractFloat(req.Data, "grid_freq", "grid_frequency", "freq")
+		battSOC = extractFloat(req.Data, "battery_soc", "batt_soc")
+		battPower = extractFloat(req.Data, "battery_power")
+		pvPower = extractFloat(req.Data, "pv_power")
+	case "data/energy":
+		dailyEnergy = extractFloat(req.Data, "daily_pv", "daily_energy")
+	}
+
 	_, err = h.db.Exec(ctx, `
-		INSERT INTO device_telemetry (device_sn, topic, data, time, created_at)
-		VALUES ($1, $2, $3::jsonb, $4, NOW())
-	`, req.SN, req.Topic, string(rawJSON), telemetryTime)
+		INSERT INTO device_telemetry (device_sn, topic, data, total_active_power, daily_energy, work_state, fault_code, internal_temperature, grid_frequency, battery_soc, battery_power, pv_power, time, created_at)
+		VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+	`, req.SN, req.Topic, string(rawJSON), totalActivePower, dailyEnergy, workState, faultCode, internalTemp, gridFreq, battSOC, battPower, pvPower, telemetryTime)
 	if err != nil {
 		logger.Error("InternalDeviceData failed", zap.String("sn", req.SN), zap.Error(err))
 		response.HandleError(c, apperr.Internal("insert telemetry failed", err))
