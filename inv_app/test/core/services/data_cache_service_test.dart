@@ -31,13 +31,21 @@ void main() {
       expect(loaded, isNull);
     });
 
-    test('returns null for expired data', () async {
-      await cacheService.save('test_key', {'data': 'old'});
+    test(
+      'returns null for expired data', () async {
+      // Pre-populate cache with an old timestamp (1 hour ago)
+      final oldTs = DateTime.now().millisecondsSinceEpoch - 3600000;
+      SharedPreferences.setMockInitialValues({
+        'data_cache_test_key': '{"data":"old"}',
+        'data_cache_ts_test_key': oldTs,
+      });
+      final prefs = await SharedPreferences.getInstance();
+      final service = DataCacheService(prefs);
 
-      // Load with zero TTL — data should be expired
-      final loaded = cacheService.load(
+      // Load with a 5-minute TTL — 1-hour-old data should be expired
+      final loaded = service.load(
         'test_key',
-        ttl: Duration.zero,
+        ttl: const Duration(minutes: 5),
       );
       expect(loaded, isNull);
     });

@@ -74,9 +74,11 @@ void main() {
     authBloc.close();
   });
 
-  test('initial state is AuthInitial', () {
+  test(
+    'initial state is AuthInitial',
+    () {
     expect(authBloc.state, equals(AuthInitial()));
-  });
+  },);
 
   // ---------------------------------------------------------------------------
   // AuthCheckRequested
@@ -97,6 +99,7 @@ void main() {
           username: any(named: 'username'),
           password: any(named: 'password'),
         ),).thenAnswer((_) async {});
+        when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
       act: (bloc) => bloc.add(AuthCheckRequested()),
@@ -148,6 +151,7 @@ void main() {
           username: any(named: 'username'),
           password: any(named: 'password'),
         ),).thenAnswer((_) async {});
+        when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
       act: (bloc) => bloc.add(const AuthLoginRequested(
@@ -204,6 +208,7 @@ void main() {
           username: any(named: 'username'),
           password: any(named: 'password'),
         ),).thenAnswer((_) async {});
+        when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
       act: (bloc) => bloc.add(const AuthLoginRequested(
@@ -235,6 +240,7 @@ void main() {
         when(() => mockStorageService.deleteUserPhone()).thenAnswer((_) async {});
         when(() => mockStorageService.deleteUserRole()).thenAnswer((_) async {});
         when(() => mockMQTTService.disconnect()).thenAnswer((_) async {});
+        when(() => mockJPushService.unbindUser()).thenAnswer((_) async {});
         return authBloc;
       },
       act: (bloc) => bloc.add(AuthLogoutRequested()),
@@ -275,6 +281,7 @@ void main() {
           username: any(named: 'username'),
           password: any(named: 'password'),
         ),).thenAnswer((_) async {});
+        when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
       act: (bloc) => bloc.add(const AuthEmailLoginRequested(

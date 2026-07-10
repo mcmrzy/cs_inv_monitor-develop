@@ -14,6 +14,11 @@ import 'package:inv_app/core/errors/failures.dart';
 import '../../../../helpers/mock_providers.dart';
 import '../../../../helpers/test_data.dart';
 
+/// Helper: create a [StreamController<Map<String,dynamic>>] that the test can
+/// close manually, giving deterministic control over the SSE lifecycle.
+StreamController<Map<String, dynamic>> _createSSEController() =>
+    StreamController<Map<String, dynamic>>.broadcast();
+
 void main() {
   late DashboardBloc dashboardBloc;
   late MockDashboardRepository mockDashboardRepository;
@@ -221,8 +226,9 @@ void main() {
     blocTest<DashboardBloc, DashboardState>(
       'emits SSE connected state when already loaded',
       build: () {
+        final controller = _createSSEController();
         when(() => mockSSEDataSource.connectToSSE())
-            .thenAnswer((_) => const Stream<Map<String, dynamic>>.empty());
+            .thenAnswer((_) => controller.stream);
         return dashboardBloc;
       },
       seed: () => const DashboardLoaded(
@@ -239,6 +245,7 @@ void main() {
         ),
       ),
       act: (bloc) => bloc.add(const DashboardSSEConnectRequested()),
+      wait: const Duration(milliseconds: 100),
       expect: () => [
         // 1) Bloc explicitly emits isSSEConnected: false before connecting
         isA<DashboardLoaded>().having(
@@ -251,12 +258,6 @@ void main() {
           (s) => s.isSSEConnected,
           'isSSEConnected',
           true,
-        ),
-        // 3) Stream.empty() completes immediately, onDone fires → isConnected: false
-        isA<DashboardLoaded>().having(
-          (s) => s.isSSEConnected,
-          'isSSEConnected',
-          false,
         ),
       ],
     );

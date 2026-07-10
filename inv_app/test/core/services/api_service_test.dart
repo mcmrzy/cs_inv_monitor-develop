@@ -253,7 +253,8 @@ void main() {
   // DELETE
   // ---------------------------------------------------------------------------
   group('DELETE', () {
-    test('returns Right on successful response', () async {
+    test(
+      'returns Right on successful response', () async {
       final response = Response(
         requestOptions: RequestOptions(),
         statusCode: 200,
@@ -276,7 +277,8 @@ void main() {
       expect(result.isRight(), true);
     });
 
-    test('returns Left with NotFoundFailure on 404', () async {
+    test(
+      'returns Left with NotFoundFailure on 404', () async {
       when(() => mockDio.delete(
             any(),
             data: any(named: 'data'),
