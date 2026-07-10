@@ -243,6 +243,7 @@ void main() {
           stationRanking: [],
           recentAlarms: [],
         ),
+        isSSEConnected: true,
       ),
       act: (bloc) => bloc.add(const DashboardSSEConnectRequested()),
       wait: const Duration(milliseconds: 100),
