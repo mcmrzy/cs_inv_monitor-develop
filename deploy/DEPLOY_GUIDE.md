@@ -148,12 +148,24 @@ ssh cskj@192.168.8.50 "cd /opt/inv-mqtt-work/deploy && docker-compose restart"
 ssh cskj@192.168.8.50 "cd /opt/inv-mqtt-work/deploy && docker-compose down"
 ```
 
+## 部署前置条件：强制清理旧容器
+
+在每次部署前，建议先强制删除可能冲突的旧容器，避免 `Conflict. The container name is already in use` 错误：
+
+```bash
+# 强制删除所有项目相关容器（即使不存在也不会报错）
+docker rm -f inv-admin-frontend inv-api-gateway inv-api-server inv-device-server inv-postgres inv-redis 2>/dev/null || true
+```
+
+> **说明**：`docker compose down --remove-orphans` 只能清理 compose 管理的容器，无法处理由旧版 compose 文件或手动创建的孤立容器。`docker rm -f` 可以确保所有同名容器被彻底清除。
+
 ## 故障排查
 
-1. **端口冲突**: 检查端口是否被占用
-2. **Docker 未启动**: 确保 Docker 服务已启动
-3. **数据库连接失败**: 检查 .env 中的数据库配置
-4. **MQTT 连接失败**: 检查 MQTT_BROKER 和端口配置
+1. **容器名冲突**: 运行上方 `docker rm -f` 命令强制清理旧容器
+2. **端口冲突**: 检查端口是否被占用
+3. **Docker 未启动**: 确保 Docker 服务已启动
+4. **数据库连接失败**: 检查 .env 中的数据库配置
+5. **MQTT 连接失败**: 检查 MQTT_BROKER 和端口配置
 
 ## 环境变量说明
 

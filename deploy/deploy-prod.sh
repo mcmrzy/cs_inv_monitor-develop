@@ -127,7 +127,14 @@ if [ "$CLEAN" = true ]; then
 fi
 
 # ============================================================
-# Step 5: Build and Start Services
+# Step 5: Force Remove Conflicting Containers
+# ============================================================
+log_step "Removing potentially conflicting containers..."
+docker rm -f inv-admin-frontend inv-api-gateway inv-api-server inv-device-server inv-postgres inv-redis 2>/dev/null || true
+log_info "Conflicting containers removed."
+
+# ============================================================
+# Step 6: Build and Start Services
 # ============================================================
 log_step "Building and starting services..."
 
@@ -141,7 +148,7 @@ docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d $BUILD_ARGS
 log_info "Services started."
 
 # ============================================================
-# Step 6: Database Migration
+# Step 7: Database Migration
 # ============================================================
 log_step "Waiting for PostgreSQL to be ready..."
 
@@ -173,7 +180,7 @@ else
 fi
 
 # ============================================================
-# Step 7: Health Checks
+# Step 8: Health Checks
 # ============================================================
 log_step "Running health checks..."
 
@@ -223,7 +230,7 @@ else
 fi
 
 # ============================================================
-# Step 8: Print Status
+# Step 9: Print Status
 # ============================================================
 echo ""
 echo "============================================================"
