@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -161,12 +162,9 @@ void main() {
 
 /// Creates a fake Dio Response for testing.
 dynamic _fakeResponse(dynamic data) {
-  // NotificationRemoteDataSource returns dio.Response
-  // We use a simple map since the bloc accesses .data
-  return _FakeResponse(data);
-}
-
-class _FakeResponse {
-  final dynamic data;
-  _FakeResponse(this.data);
+  return Response<dynamic>(
+    requestOptions: RequestOptions(),
+    statusCode: 200,
+    data: data,
+  );
 }

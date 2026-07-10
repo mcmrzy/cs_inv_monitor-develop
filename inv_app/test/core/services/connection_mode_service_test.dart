@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:inv_app/core/services/connection_mode_service.dart';
+import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 
 import '../../helpers/mock_providers.dart';
@@ -18,7 +19,7 @@ void main() {
     mockMQTTService = MockMQTTService();
 
     // Register MQTTService mock with getIt for switchToRemote
-    getIt.registerFactory(() => mockMQTTService);
+    getIt.registerSingleton<MQTTService>(mockMQTTService);
 
     connectionModeService = ConnectionModeService(mockStorageService);
   });
