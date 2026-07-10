@@ -1435,7 +1435,30 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		`, req.SN)
 	}
 
-	// 通过 SSE 实时推送告警信息给前端（只推送，不插入 notifications 表）
+	// 写入 notifications 表，确保所有级别告警在管理后台通知列表中可见
+	if userID > 0 {
+		levelPrefix := "告警"
+		switch alarmLevel {
+		case 3:
+			levelPrefix = "严重"
+		case 2:
+			levelPrefix = "警告"
+		case 1:
+			levelPrefix = "提示"
+		}
+		notifyTitle := fmt.Sprintf("%s%s", levelPrefix, faultMessage)
+		notifyContent := fmt.Sprintf("设备 %s: %s", req.SN, faultMessage)
+		var notifyStationID int64
+		if stationID.Valid {
+			notifyStationID = stationID.Int64
+		}
+		_, _ = h.db.Exec(ctx, `
+			INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		`, req.SN, notifyStationID, userID, "device_alarm", notifyTitle, notifyContent)
+	}
+
+	// 通过 SSE 实时推送告警信息给前端
 	if userID > 0 {
 		h.broadcastNotification(userID, "alarm", faultMessage, fmt.Sprintf("设备 %s: %s", req.SN, faultMessage), req.SN)
 	}
