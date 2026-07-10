@@ -2550,6 +2550,45 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 		}
 	}
 
+	// 跨时间槽向前继承：对于每个时间槽，如果某个标准字段不存在但前一个时间槽有该字段，则从前一个时间槽复制过来
+	carryFields := []string{
+		// ac
+		"ac_voltage", "ac_current", "ac_power", "ac_frequency", "apparent_power", "power_factor", "load_rate", "voltage_thd",
+		"voltage", "current", "power",
+		"ac_apparent", "ac_pf", "ac_load_percent", "ac_thd_v",
+		// battery
+		"battery_soc", "battery_voltage", "battery_current", "battery_capacity", "battery_health",
+		"rated_capacity", "charge_discharge_power", "cell_max_temp", "cell_min_temp",
+		"cell_max_voltage", "cell_min_voltage", "cell_voltage_diff", "charge_status",
+		"battery_avg_temp", "bms_fault_code", "protect_status", "max_chg_current",
+		"max_dischg_current", "charge_volt_ref", "dischg_cut_volt",
+		"batt_soc", "batt_voltage", "batt_current", "batt_power", "batt_cycle_count", "batt_temp_max",
+		// pv
+		"pv1_voltage", "pv1_current", "pv1_power", "pv2_voltage", "pv2_current", "pv2_power",
+		"pv_total_power", "pv_power_total", "mppt_status",
+		"pv1_voltage_max", "pv1_power_max", "pv2_voltage_max", "pv2_power_max",
+		"pv_pv1_voltage", "pv_pv1_current", "pv_pv1_power", "pv_pv2_voltage", "pv_pv2_current", "pv_pv2_power",
+		// status
+		"run_status", "fault_code", "alarm_code", "inverter_temp", "heatsink_temp", "ambient_temp",
+		"dc_bus_voltage", "efficiency", "run_time", "fan_speed",
+		"temp_inv", "temp_mos", "temp_env", "work_state",
+		// energy
+		"total_energy", "daily_charge", "total_charge", "total_discharge",
+		"daily_consumption", "total_consumption", "total_run_time",
+		"total_pv", "total_load",
+	}
+	for i := 1; i < len(orderedKeys); i++ {
+		prevSlot := slots[orderedKeys[i-1]]
+		currSlot := slots[orderedKeys[i]]
+		for _, field := range carryFields {
+			if _, exists := currSlot.data[field]; !exists {
+				if prevVal, exists := prevSlot.data[field]; exists {
+					currSlot.data[field] = prevVal
+				}
+			}
+		}
+	}
+
 	// 构建结果数组
 	results := make([]map[string]interface{}, 0, len(orderedKeys))
 	for _, key := range orderedKeys {
