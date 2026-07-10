@@ -307,18 +307,6 @@ func (h *OTAHandler) DeleteUpgradesByFirmware(c *gin.Context) {
 	response.SuccessWithMessage(c, "已删除", nil)
 }
 
-// CheckUpdateByQuery 检查设备是否有可用更新（通过 query 参数 sn，供 ESP32 设备兼容路由使用）
-func (h *OTAHandler) CheckUpdateByQuery(c *gin.Context) {
-	sn := c.Query("sn")
-	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("sn is required"))
-		return
-	}
-	// 将 sn 设置到 URL 参数中，复用 CheckUpdate 逻辑
-	c.Params = append(c.Params, gin.Param{Key: "sn", Value: sn})
-	h.CheckUpdate(c)
-}
-
 // CheckUpdate 检查设备是否有可用更新
 func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 	sn := c.Param("sn")

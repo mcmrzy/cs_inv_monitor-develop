@@ -99,10 +99,6 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	publicGroup.Any("/firmware/*action", p.Handler())
 	publicGroup.Any("/ws/*action", p.Handler())
 
-	// ESP32 设备兼容路由（无 /v1 前缀，由 API Server 的 InternalAuth 中间件校验 X-Internal-Key）
-	publicGroup.Any("/api/internal/telemetry", p.Handler())
-	publicGroup.Any("/api/internal/ota/pending", p.Handler())
-
 	// User — 需登录（具体 auth 子端点，不用通配符以避免与 publicGroup 冲突）
 	userGroup.Any("/api/v1/auth/logout", p.Handler())
 	userGroup.Any("/api/v1/auth/change-password", p.Handler())
