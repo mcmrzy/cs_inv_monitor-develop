@@ -107,13 +107,6 @@ jobs:
             sed -i '/^IMAGE_TAG=/d' .env.prod
             echo "IMAGE_TAG=${{ github.sha }}" >> .env.prod
 
-            # 设置 JPush 环境变量
-            sed -i '/^JPUSH_/d' .env.prod
-            echo "JPUSH_ENABLED=true" >> .env.prod
-            echo "JPUSH_APP_KEY=${{ secrets.JPUSH_APP_KEY }}" >> .env.prod
-            echo "JPUSH_MASTER_SECRET=${{ secrets.JPUSH_MASTER_SECRET }}" >> .env.prod
-            echo "JPUSH_TIMEOUT=10" >> .env.prod
-            echo "JPUSH_DEDUP_TTL=120" >> .env.prod
 
             # 登录 ghcr.io
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
