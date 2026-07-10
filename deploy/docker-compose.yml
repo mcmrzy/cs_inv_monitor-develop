@@ -10,10 +10,9 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: UTC
-    # 生产环境不暴露端口，仅通过Docker内部网络访问
-    # 如需本地调试，取消注释下面的行
-    # ports:
-    #   - "127.0.0.1:5432:5432"
+    # 暴露端口供外部访问
+    ports:
+      - "5432:5432"
     expose:
       - "5432"
     volumes:
@@ -66,7 +65,7 @@ services:
       DEVICE_SERVER_URL: http://inv-device-server:8081
       INTERNAL_KEY: ${INTERNAL_KEY}
       INTERNAL_API_SECRET: ${INTERNAL_KEY}
-      SERVER_URL: ${SERVER_URL:-http://192.168.8.248:8081}
+      SERVER_URL: ${SERVER_URL:-http://192.168.8.50:8888}
       AMAP_API_KEY: a1747dbd3566aa8883fffde623290cd9
       WEATHER_SOURCE: amap
       EMAIL_HOST: ${EMAIL_HOST}
