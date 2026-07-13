@@ -26,7 +26,7 @@ type Client struct {
 	onOtaStatus    func(sn string, payload []byte)
 	onOtaCmdAck    func(sn string, payload []byte)
 	onStatusChange func(sn string, online bool)
-	onCmdResult     func(sn string, payload []byte)
+	onCmdResult    func(sn string, payload []byte)
 }
 
 func (c *Client) SetOtaStatusHandler(handler func(sn string, payload []byte)) {
@@ -68,7 +68,7 @@ type MQTTStats struct {
 	OnlineClients int       `json:"online_clients"`
 }
 
-const onlineTimeoutSeconds = 120
+const onlineTimeoutSeconds = 600
 
 // heartbeatKey returns the Redis key for device heartbeat with TTL.
 // Each device gets an independent key that auto-expires after timeout,
@@ -167,7 +167,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	cliCfg := autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{serverURL},
 		TlsCfg:                        tlsConfig,
-		KeepAlive:                     120,
+		KeepAlive:                     180,
 		CleanStartOnInitialConnection: true,
 		SessionExpiryInterval:         0,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
@@ -201,7 +201,7 @@ func (c *Client) Connect(ctx context.Context) error {
 							c.hub.stats.DataReceived++
 							c.hub.stats.LastDataAt = time.Now()
 						}
-						// LWT 离线消息：不刷新心跳 key，让 120s TTL 自然过期
+						// LWT 离线消息：不刷新心跳 key，让 600s TTL 自然过期
 						// 不主动删除 key，避免设备短暂断连后重连导致状态抖动
 						if c.onStatusChange != nil {
 							c.onStatusChange(sn, online)
@@ -218,7 +218,7 @@ func (c *Client) Connect(ctx context.Context) error {
 					if isOtaStatusTopic(topic) && c.onOtaStatus != nil {
 						c.onOtaStatus(sn, pr.Packet.Payload)
 					}
-					
+
 					// 处理 OTA 命令确认
 					if isOtaCmdAckTopic(topic) && c.onOtaCmdAck != nil {
 						c.onOtaCmdAck(sn, pr.Packet.Payload)
@@ -351,14 +351,24 @@ func (c *Client) buildMqttPayload(cmd *DeviceCommand) map[string]interface{} {
 	if len(cmd.RawPayload) > 0 {
 		var rawReq map[string]interface{}
 		if err := json.Unmarshal(cmd.RawPayload, &rawReq); err == nil {
+			if version, ok := rawReq["v"]; ok {
+				payload["v"] = version
+			}
+			if timestamp, ok := rawReq["t"]; ok {
+				payload["t"] = timestamp
+			}
 			if tid, ok := rawReq["task_id"].(string); ok {
 				taskID = tid
 			}
+			if args, ok := rawReq["args"].([]interface{}); ok {
+				payload["args"] = args
+			} else {
 			// 使用 RawPayload 中的 params（可能比 cmd.Params 更完整）
 			if params, ok := rawReq["params"]; ok && params != nil {
 				payload["params"] = params
 			} else if cmd.Params != nil && len(cmd.Params) > 0 {
 				payload["params"] = cmd.Params
+			}
 			}
 		} else {
 			if cmd.Params != nil && len(cmd.Params) > 0 {

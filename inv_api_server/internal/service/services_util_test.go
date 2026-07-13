@@ -3,6 +3,7 @@ package service
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -123,10 +124,11 @@ func TestGenerateCode_两次生成不同值(t *testing.T) {
 
 // ==================== generateTaskID ====================
 
-func TestGenerateTaskID_前缀正确(t *testing.T) {
+func TestGenerateTaskID_UUIDv7(t *testing.T) {
 	taskID := generateTaskID()
-	assert.Contains(t, taskID, "cmd_")
-	assert.Greater(t, len(taskID), 10, "taskID 应有足够长度")
+	id, err := uuid.Parse(taskID)
+	assert.NoError(t, err)
+	assert.Equal(t, uuid.Version(7), id.Version())
 }
 
 func TestGenerateTaskID_两次生成不同值(t *testing.T) {

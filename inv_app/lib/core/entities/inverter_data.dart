@@ -5,6 +5,8 @@ class ACData {
   final double frequency;
   final double loadPercent;
   final double pf;
+  final double apparentPower;
+  final double voltageThd;
 
   const ACData({
     this.voltage = 0,
@@ -13,6 +15,8 @@ class ACData {
     this.frequency = 0,
     this.loadPercent = 0,
     this.pf = 0,
+    this.apparentPower = 0,
+    this.voltageThd = 0,
   });
 
   factory ACData.fromJson(Map<String, dynamic> json) {
@@ -23,17 +27,21 @@ class ACData {
       frequency: (json['frequency'] as num?)?.toDouble() ?? 0,
       loadPercent: (json['load_percent'] as num?)?.toDouble() ?? 0,
       pf: (json['pf'] as num?)?.toDouble() ?? 0,
+      apparentPower: (json['apparent_power'] as num?)?.toDouble() ?? 0,
+      voltageThd: (json['voltage_thd'] as num?)?.toDouble() ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'voltage': voltage,
-    'current': current,
-    'power': power,
-    'frequency': frequency,
-    'load_percent': loadPercent,
-    'pf': pf,
-  };
+        'voltage': voltage,
+        'current': current,
+        'power': power,
+        'frequency': frequency,
+        'load_percent': loadPercent,
+        'pf': pf,
+        'apparent_power': apparentPower,
+        'voltage_thd': voltageThd,
+      };
 }
 
 class BatteryData {
@@ -42,6 +50,22 @@ class BatteryData {
   final double voltage;
   final double current;
   final String chargeState;
+  final double power;
+  final double capacityRemain;
+  final double capacityTotal;
+  final int cycleCount;
+  final double tempMax;
+  final double tempMin;
+  final double cellVoltageMax;
+  final double cellVoltageMin;
+  final double cellVoltageDiff;
+  final int protectStatus;
+  final int bmsFaultCode;
+  final double maxChargeCurrent;
+  final double maxDischargeCurrent;
+  final double chargeVoltageRef;
+  final double dischargeCutoffVoltage;
+  final double temperature;
 
   const BatteryData({
     this.soc = 0,
@@ -49,6 +73,22 @@ class BatteryData {
     this.voltage = 0,
     this.current = 0,
     this.chargeState = '',
+    this.power = 0,
+    this.capacityRemain = 0,
+    this.capacityTotal = 0,
+    this.cycleCount = 0,
+    this.tempMax = 0,
+    this.tempMin = 0,
+    this.cellVoltageMax = 0,
+    this.cellVoltageMin = 0,
+    this.cellVoltageDiff = 0,
+    this.protectStatus = 0,
+    this.bmsFaultCode = 0,
+    this.maxChargeCurrent = 0,
+    this.maxDischargeCurrent = 0,
+    this.chargeVoltageRef = 0,
+    this.dischargeCutoffVoltage = 0,
+    this.temperature = 0,
   });
 
   factory BatteryData.fromJson(Map<String, dynamic> json) {
@@ -58,16 +98,50 @@ class BatteryData {
       voltage: (json['voltage'] as num?)?.toDouble() ?? 0,
       current: (json['current'] as num?)?.toDouble() ?? 0,
       chargeState: json['charge_state'] as String? ?? '',
+      power: (json['power'] as num?)?.toDouble() ?? 0,
+      capacityRemain: (json['capacity_remain'] as num?)?.toDouble() ?? 0,
+      capacityTotal: (json['capacity_total'] as num?)?.toDouble() ?? 0,
+      cycleCount: (json['cycle_count'] as num?)?.toInt() ?? 0,
+      tempMax: (json['temp_max'] as num?)?.toDouble() ?? 0,
+      tempMin: (json['temp_min'] as num?)?.toDouble() ?? 0,
+      cellVoltageMax: (json['cell_voltage_max'] as num?)?.toDouble() ?? 0,
+      cellVoltageMin: (json['cell_voltage_min'] as num?)?.toDouble() ?? 0,
+      cellVoltageDiff: (json['cell_voltage_diff'] as num?)?.toDouble() ?? 0,
+      protectStatus: (json['protect_status'] as num?)?.toInt() ?? 0,
+      bmsFaultCode: (json['bms_fault_code'] as num?)?.toInt() ?? 0,
+      maxChargeCurrent: (json['max_charge_current'] as num?)?.toDouble() ?? 0,
+      maxDischargeCurrent:
+          (json['max_discharge_current'] as num?)?.toDouble() ?? 0,
+      chargeVoltageRef: (json['charge_voltage_ref'] as num?)?.toDouble() ?? 0,
+      dischargeCutoffVoltage:
+          (json['discharge_cutoff_voltage'] as num?)?.toDouble() ?? 0,
+      temperature: (json['temperature'] as num?)?.toDouble() ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'soc': soc,
-    'soh': soh,
-    'voltage': voltage,
-    'current': current,
-    'charge_state': chargeState,
-  };
+        'soc': soc,
+        'soh': soh,
+        'voltage': voltage,
+        'current': current,
+        'charge_state': chargeState,
+        'power': power,
+        'capacity_remain': capacityRemain,
+        'capacity_total': capacityTotal,
+        'cycle_count': cycleCount,
+        'temp_max': tempMax,
+        'temp_min': tempMin,
+        'cell_voltage_max': cellVoltageMax,
+        'cell_voltage_min': cellVoltageMin,
+        'cell_voltage_diff': cellVoltageDiff,
+        'protect_status': protectStatus,
+        'bms_fault_code': bmsFaultCode,
+        'max_charge_current': maxChargeCurrent,
+        'max_discharge_current': maxDischargeCurrent,
+        'charge_voltage_ref': chargeVoltageRef,
+        'discharge_cutoff_voltage': dischargeCutoffVoltage,
+        'temperature': temperature,
+      };
 }
 
 class PVData {
@@ -75,12 +149,28 @@ class PVData {
   final double pvCurrent;
   final double pvPower;
   final String mpptState;
+  final double pv1Power;
+  final double pv1VoltageMax;
+  final double pv1PowerMax;
+  final double pv2Voltage;
+  final double pv2Current;
+  final double pv2Power;
+  final double pv2VoltageMax;
+  final double pv2PowerMax;
 
   const PVData({
     this.pvVoltage = 0,
     this.pvCurrent = 0,
     this.pvPower = 0,
     this.mpptState = '',
+    this.pv1Power = 0,
+    this.pv1VoltageMax = 0,
+    this.pv1PowerMax = 0,
+    this.pv2Voltage = 0,
+    this.pv2Current = 0,
+    this.pv2Power = 0,
+    this.pv2VoltageMax = 0,
+    this.pv2PowerMax = 0,
   });
 
   factory PVData.fromJson(Map<String, dynamic> json) {
@@ -89,15 +179,31 @@ class PVData {
       pvCurrent: (json['pv_current'] as num?)?.toDouble() ?? 0,
       pvPower: (json['pv_power'] as num?)?.toDouble() ?? 0,
       mpptState: json['mppt_state'] as String? ?? '',
+      pv1Power: (json['pv1_power'] as num?)?.toDouble() ?? 0,
+      pv1VoltageMax: (json['pv1_voltage_max'] as num?)?.toDouble() ?? 0,
+      pv1PowerMax: (json['pv1_power_max'] as num?)?.toDouble() ?? 0,
+      pv2Voltage: (json['pv2_voltage'] as num?)?.toDouble() ?? 0,
+      pv2Current: (json['pv2_current'] as num?)?.toDouble() ?? 0,
+      pv2Power: (json['pv2_power'] as num?)?.toDouble() ?? 0,
+      pv2VoltageMax: (json['pv2_voltage_max'] as num?)?.toDouble() ?? 0,
+      pv2PowerMax: (json['pv2_power_max'] as num?)?.toDouble() ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'pv_voltage': pvVoltage,
-    'pv_current': pvCurrent,
-    'pv_power': pvPower,
-    'mppt_state': mpptState,
-  };
+        'pv_voltage': pvVoltage,
+        'pv_current': pvCurrent,
+        'pv_power': pvPower,
+        'mppt_state': mpptState,
+        'pv1_power': pv1Power,
+        'pv1_voltage_max': pv1VoltageMax,
+        'pv1_power_max': pv1PowerMax,
+        'pv2_voltage': pv2Voltage,
+        'pv2_current': pv2Current,
+        'pv2_power': pv2Power,
+        'pv2_voltage_max': pv2VoltageMax,
+        'pv2_power_max': pv2PowerMax,
+      };
 }
 
 class SystemStatus {
@@ -107,6 +213,10 @@ class SystemStatus {
   final double tempInv;
   final double tempMos;
   final double efficiency;
+  final double ambientTemperature;
+  final double dcBusVoltage;
+  final int runtimeHours;
+  final double fanSpeedPercent;
 
   const SystemStatus({
     this.state = '',
@@ -115,6 +225,10 @@ class SystemStatus {
     this.tempInv = 0,
     this.tempMos = 0,
     this.efficiency = 0,
+    this.ambientTemperature = 0,
+    this.dcBusVoltage = 0,
+    this.runtimeHours = 0,
+    this.fanSpeedPercent = 0,
   });
 
   factory SystemStatus.fromJson(Map<String, dynamic> json) {
@@ -125,17 +239,26 @@ class SystemStatus {
       tempInv: (json['temp_inv'] as num?)?.toDouble() ?? 0,
       tempMos: (json['temp_mos'] as num?)?.toDouble() ?? 0,
       efficiency: (json['efficiency'] as num?)?.toDouble() ?? 0,
+      ambientTemperature:
+          (json['ambient_temperature'] as num?)?.toDouble() ?? 0,
+      dcBusVoltage: (json['dc_bus_voltage'] as num?)?.toDouble() ?? 0,
+      runtimeHours: (json['runtime_hours'] as num?)?.toInt() ?? 0,
+      fanSpeedPercent: (json['fan_speed_percent'] as num?)?.toDouble() ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'state': state,
-    'fault_code': faultCode,
-    'alarm_code': alarmCode,
-    'temp_inv': tempInv,
-    'temp_mos': tempMos,
-    'efficiency': efficiency,
-  };
+        'state': state,
+        'fault_code': faultCode,
+        'alarm_code': alarmCode,
+        'temp_inv': tempInv,
+        'temp_mos': tempMos,
+        'efficiency': efficiency,
+        'ambient_temperature': ambientTemperature,
+        'dc_bus_voltage': dcBusVoltage,
+        'runtime_hours': runtimeHours,
+        'fan_speed_percent': fanSpeedPercent,
+      };
 
   bool get hasFault => faultCode != 0;
 }
@@ -148,6 +271,12 @@ class EnergyData {
   final double totalFeedEnergy;
   final double dailyGridImport;
   final double totalGridImport;
+  final double dailyCharge;
+  final double totalCharge;
+  final double dailyDischarge;
+  final double totalDischarge;
+  final double dailyLoad;
+  final double totalLoad;
 
   const EnergyData({
     this.dailyPV = 0,
@@ -157,6 +286,12 @@ class EnergyData {
     this.totalFeedEnergy = 0,
     this.dailyGridImport = 0,
     this.totalGridImport = 0,
+    this.dailyCharge = 0,
+    this.totalCharge = 0,
+    this.dailyDischarge = 0,
+    this.totalDischarge = 0,
+    this.dailyLoad = 0,
+    this.totalLoad = 0,
   });
 
   factory EnergyData.fromJson(Map<String, dynamic> json) {
@@ -168,18 +303,30 @@ class EnergyData {
       totalFeedEnergy: (json['total_feed_energy'] as num?)?.toDouble() ?? 0,
       dailyGridImport: (json['daily_grid_import'] as num?)?.toDouble() ?? 0,
       totalGridImport: (json['total_grid_import'] as num?)?.toDouble() ?? 0,
+      dailyCharge: (json['daily_charge'] as num?)?.toDouble() ?? 0,
+      totalCharge: (json['total_charge'] as num?)?.toDouble() ?? 0,
+      dailyDischarge: (json['daily_discharge'] as num?)?.toDouble() ?? 0,
+      totalDischarge: (json['total_discharge'] as num?)?.toDouble() ?? 0,
+      dailyLoad: (json['daily_load'] as num?)?.toDouble() ?? 0,
+      totalLoad: (json['total_load'] as num?)?.toDouble() ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'daily_pv': dailyPV,
-    'total_pv': totalPV,
-    'runtime_hours': runtimeHours,
-    'daily_feed_energy': dailyFeedEnergy,
-    'total_feed_energy': totalFeedEnergy,
-    'daily_grid_import': dailyGridImport,
-    'total_grid_import': totalGridImport,
-  };
+        'daily_pv': dailyPV,
+        'total_pv': totalPV,
+        'runtime_hours': runtimeHours,
+        'daily_feed_energy': dailyFeedEnergy,
+        'total_feed_energy': totalFeedEnergy,
+        'daily_grid_import': dailyGridImport,
+        'total_grid_import': totalGridImport,
+        'daily_charge': dailyCharge,
+        'total_charge': totalCharge,
+        'daily_discharge': dailyDischarge,
+        'total_discharge': totalDischarge,
+        'daily_load': dailyLoad,
+        'total_load': totalLoad,
+      };
 }
 
 class CellsData {
@@ -198,18 +345,20 @@ class CellsData {
       cellCount: (json['cell_count'] as num?)?.toInt() ?? 0,
       voltages: (json['voltages'] as List<dynamic>?)
               ?.map((e) => (e as num).toDouble())
-              .toList() ?? [],
+              .toList() ??
+          [],
       temps: (json['temps'] as List<dynamic>?)
               ?.map((e) => (e as num).toDouble())
-              .toList() ?? [],
+              .toList() ??
+          [],
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'cell_count': cellCount,
-    'voltages': voltages,
-    'temps': temps,
-  };
+        'cell_count': cellCount,
+        'voltages': voltages,
+        'temps': temps,
+      };
 }
 
 class MeterData {
@@ -235,11 +384,11 @@ class MeterData {
   }
 
   Map<String, dynamic> toJson() => {
-    'total_power': totalPower,
-    'phase_a_power': phaseAPower,
-    'phase_b_power': phaseBPower,
-    'phase_c_power': phaseCPower,
-  };
+        'total_power': totalPower,
+        'phase_a_power': phaseAPower,
+        'phase_b_power': phaseBPower,
+        'phase_c_power': phaseCPower,
+      };
 }
 
 class OnlineStatus {
@@ -262,10 +411,10 @@ class OnlineStatus {
   }
 
   Map<String, dynamic> toJson() => {
-    'online': online,
-    'rssi': rssi,
-    'ip': ip,
-  };
+        'online': online,
+        'rssi': rssi,
+        'ip': ip,
+      };
 }
 
 class AlarmData {
@@ -300,14 +449,14 @@ class AlarmData {
   }
 
   Map<String, dynamic> toJson() => {
-    'event': event,
-    'timestamp': timestamp,
-    'source': source,
-    'fault_code': faultCode,
-    'fault_desc': faultDesc,
-    'alarm_code': alarmCode,
-    'trigger': trigger,
-  };
+        'event': event,
+        'timestamp': timestamp,
+        'source': source,
+        'fault_code': faultCode,
+        'fault_desc': faultDesc,
+        'alarm_code': alarmCode,
+        'trigger': trigger,
+      };
 }
 
 class DeviceInfo {
@@ -351,17 +500,17 @@ class DeviceInfo {
   }
 
   Map<String, dynamic> toJson() => {
-    'model': model,
-    'manufacturer': manufacturer,
-    'firmware_arm': firmwareArm,
-    'firmware_esp': firmwareEsp,
-    'rated_power': ratedPower,
-    'rated_voltage': ratedVoltage,
-    'rated_freq': ratedFreq,
-    'battery_voltage': batteryVoltage,
-    'battery_type': batteryType,
-    'cell_count': cellCount,
-  };
+        'model': model,
+        'manufacturer': manufacturer,
+        'firmware_arm': firmwareArm,
+        'firmware_esp': firmwareEsp,
+        'rated_power': ratedPower,
+        'rated_voltage': ratedVoltage,
+        'rated_freq': ratedFreq,
+        'battery_voltage': batteryVoltage,
+        'battery_type': batteryType,
+        'cell_count': cellCount,
+      };
 }
 
 class InverterRealtime {
@@ -400,32 +549,51 @@ class InverterRealtime {
 
     return InverterRealtime(
       deviceSN: json['device_sn'] as String? ?? '',
-      ac: json['ac'] != null ? ACData.fromJson(json['ac'] as Map<String, dynamic>) : null,
-      battery: batteryRaw != null ? BatteryData.fromJson(batteryRaw as Map<String, dynamic>) : null,
-      pv: json['pv'] != null ? PVData.fromJson(json['pv'] as Map<String, dynamic>) : null,
-      sysStatus: sysStatusRaw != null ? SystemStatus.fromJson(sysStatusRaw as Map<String, dynamic>) : null,
-      energy: json['energy'] != null ? EnergyData.fromJson(json['energy'] as Map<String, dynamic>) : null,
-      cells: json['cells'] != null ? CellsData.fromJson(json['cells'] as Map<String, dynamic>) : null,
-      onlineStatus: json['online_status'] != null ? OnlineStatus.fromJson(json['online_status'] as Map<String, dynamic>) : null,
-      deviceInfo: json['device_info'] != null ? DeviceInfo.fromJson(json['device_info'] as Map<String, dynamic>) : null,
-      meter: json['meter'] != null ? MeterData.fromJson(json['meter'] as Map<String, dynamic>) : null,
+      ac: json['ac'] != null
+          ? ACData.fromJson(json['ac'] as Map<String, dynamic>)
+          : null,
+      battery: batteryRaw != null
+          ? BatteryData.fromJson(batteryRaw as Map<String, dynamic>)
+          : null,
+      pv: json['pv'] != null
+          ? PVData.fromJson(json['pv'] as Map<String, dynamic>)
+          : null,
+      sysStatus: sysStatusRaw != null
+          ? SystemStatus.fromJson(sysStatusRaw as Map<String, dynamic>)
+          : null,
+      energy: json['energy'] != null
+          ? EnergyData.fromJson(json['energy'] as Map<String, dynamic>)
+          : null,
+      cells: json['cells'] != null
+          ? CellsData.fromJson(json['cells'] as Map<String, dynamic>)
+          : null,
+      onlineStatus: json['online_status'] != null
+          ? OnlineStatus.fromJson(json['online_status'] as Map<String, dynamic>)
+          : null,
+      deviceInfo: json['device_info'] != null
+          ? DeviceInfo.fromJson(json['device_info'] as Map<String, dynamic>)
+          : null,
+      meter: json['meter'] != null
+          ? MeterData.fromJson(json['meter'] as Map<String, dynamic>)
+          : null,
       loadPower: (json['load_power'] as num?)?.toDouble() ?? 0,
-      updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ?? DateTime.now(),
+      updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'device_sn': deviceSN,
-    'ac': ac?.toJson(),
-    'battery': battery?.toJson(),
-    'pv': pv?.toJson(),
-    'sys_status': sysStatus?.toJson(),
-    'energy': energy?.toJson(),
-    'cells': cells?.toJson(),
-    'online_status': onlineStatus?.toJson(),
-    'device_info': deviceInfo?.toJson(),
-    'meter': meter?.toJson(),
-    'load_power': loadPower,
-    'updated_at': updatedAt.toIso8601String(),
-  };
+        'device_sn': deviceSN,
+        'ac': ac?.toJson(),
+        'battery': battery?.toJson(),
+        'pv': pv?.toJson(),
+        'sys_status': sysStatus?.toJson(),
+        'energy': energy?.toJson(),
+        'cells': cells?.toJson(),
+        'online_status': onlineStatus?.toJson(),
+        'device_info': deviceInfo?.toJson(),
+        'meter': meter?.toJson(),
+        'load_power': loadPower,
+        'updated_at': updatedAt.toIso8601String(),
+      };
 }

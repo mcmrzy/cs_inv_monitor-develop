@@ -84,3 +84,27 @@ bin/
 *.swp
 *.swo
 .migrate_working_dir/
+
+# Local database/deployment and analysis artifacts
+_fix.py
+deploy/deploy_to_850.py
+deploy/inv_full.sql
+deploy/inv_mqtt.dump
+deploy/inv_mqtt_dump.sql
+deploy/inv_mqtt_v2.sql
+deploy/sync.dump
+inv_app/test_output.txt
+tools/data/
+docs/compose/
+
+# Duplicate source copies of login backgrounds
+inv-admin-frontend/public/images/antranias-energy-1322810_1920.jpg
+inv-admin-frontend/public/images/antranias-energy-1322816_1920.jpg
+inv-admin-frontend/public/images/as_photography-solar-panels-1477987.jpg
+inv-admin-frontend/public/images/bulentyildiz-ai-generated-9163165_1920.jpg
+inv-admin-frontend/public/images/hdwh-ai-generated-8300145_1920.png
+inv-admin-frontend/public/images/hdwh-ai-generated-8300149_1920.png
+inv-admin-frontend/public/images/royburi-solar-2666770.jpg
+inv-admin-frontend/public/images/solarimo-solar-4824562_1920.jpg
+inv-admin-frontend/public/images/login/login-bg-6.png
+inv-admin-frontend/public/images/login/login-bg-7.png

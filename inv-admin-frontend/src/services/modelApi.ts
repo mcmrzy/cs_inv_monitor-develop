@@ -12,6 +12,9 @@ export interface DeviceModelItem {
   created_at: string
   updated_at: string
   device_count?: number
+  lifecycle_status?: 'draft' | 'active' | 'retired'
+  heartbeat_protocol_id?: number
+  lock_version?: number
 }
 
 export interface DeviceModelFieldItem {
@@ -41,9 +44,75 @@ export interface DeviceModelProtocolItem {
   created_at: string
 }
 
+export interface FieldCatalogItem {
+  field_key: string
+  field_type: string
+  base_unit?: string
+  category: string
+  description?: string
+  is_timeseries: boolean
+  is_aggregatable: boolean
+  allowed_aggregates: string[]
+  status: 'active' | 'deprecated'
+}
+
+export interface ProtocolVersionItem {
+  id: number
+  protocol_code: string
+  version: number
+  schema_hash: string
+  status: 'draft' | 'released' | 'retired'
+  released_at?: string
+  field_count: number
+}
+
+export interface ProtocolFieldInput {
+  group_code: string
+  field_index: number
+  field_key: string
+  wire_type: string
+  scale?: number
+  minimum?: number
+  maximum?: number
+  nullable?: boolean
+  status?: string
+}
+
+export interface ModelFieldCapability {
+  id: number
+  model_id: number
+  field_key: string
+  field_type: string
+  base_unit?: string
+  category: string
+  display_name_key?: string
+  group_code: string
+  display_unit?: string
+  decimal_places: number
+  sort_order: number
+  is_supported: boolean
+  is_visible: boolean
+  show_realtime: boolean
+  show_history: boolean
+  allow_compare: boolean
+  allow_alarm_rule: boolean
+  default_chart: boolean
+}
+
+export interface ModelCommandCapability {
+  id: number
+  command_code: string
+  display_name_key: string
+  parameter_schema: Record<string, any>
+  timeout_seconds: number
+  risk_level: number
+  requires_online: boolean
+  is_enabled: boolean
+}
+
 export const modelApi = {
   // 型号 CRUD
-  listModels: () => api.get('/admin/models'),
+  listModels: () => api.get('/models'),
   listModelsPublic: () => api.get('/models'),  // 不需要管理员权限，所有登录用户可用
   getModel: (id: number) => api.get(`/models/${id}`),
   createModel: (data: Partial<DeviceModelItem>) => api.post('/models', data),
@@ -56,6 +125,28 @@ export const modelApi = {
   updateField: (modelId: number, fieldId: number, data: Partial<DeviceModelFieldItem>) => api.put(`/models/${modelId}/fields/${fieldId}`, data),
   deleteField: (modelId: number, fieldId: number) => api.delete(`/models/${modelId}/fields/${fieldId}`),
   batchUpdateFields: (modelId: number, fields: Partial<DeviceModelFieldItem>[]) => api.put(`/models/${modelId}/fields/batch`, { fields }),
+  getFieldCatalog: () => api.get('/field-catalog'),
+  saveFieldCatalog: (data: Partial<FieldCatalogItem>) => api.post('/field-catalog', data),
+  getFieldCapabilities: (modelId: number) => api.get(`/models/${modelId}/field-capabilities`),
+  updateFieldCapability: (modelId: number, fieldKey: string, data: Partial<ModelFieldCapability>) =>
+    api.put(`/models/${modelId}/field-capabilities/${fieldKey}`, data),
+  batchUpdateFieldCapabilities: (modelId: number, fields: Partial<ModelFieldCapability>[]) =>
+    api.put(`/models/${modelId}/field-capabilities`, { fields }),
+  getCommandCapabilities: (modelId: number) => api.get(`/models/${modelId}/commands-v2`),
+  updateCommandCapability: (modelId: number, commandCode: string, data: Partial<ModelCommandCapability>) =>
+    api.put(`/models/${modelId}/commands-v2/${commandCode}`, data),
+  saveCommandCapability: (modelId: number, data: Partial<ModelCommandCapability>) =>
+    api.post(`/models/${modelId}/commands-v2`, data),
+  getProtocolSchema: (modelId: number) => api.get(`/models/${modelId}/protocol-schema`),
+  listProtocolVersions: () => api.get('/protocol-versions'),
+  createProtocolVersion: (data: { protocol_code: string; version: number; schema_hash: string; fields: ProtocolFieldInput[] }) =>
+    api.post('/protocol-versions', data),
+  releaseProtocolVersion: (protocolId: number) => api.post(`/protocol-versions/${protocolId}/release`),
+  bindProtocolVersion: (modelId: number, protocolId: number) => api.put(`/models/${modelId}/protocol-version`, { protocol_id: protocolId }),
+  getMigrationReport: (modelId: number) => api.get(`/models/${modelId}/migration-report`),
+  getDataPreview: (modelId: number) => api.get(`/models/${modelId}/data-preview`),
+  validateRegistry: (modelId: number) => api.post(`/models/${modelId}/validate`),
+  activateRegistry: (modelId: number) => api.post(`/models/${modelId}/activate`),
 
   // 协议 CRUD
   getProtocols: (modelId: number) => api.get(`/models/${modelId}/protocols`),

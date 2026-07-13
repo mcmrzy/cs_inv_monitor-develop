@@ -121,6 +121,14 @@ func main() {
 	}
 
 	deviceRepo := repository.NewDeviceRepository(db)
+	if cfg.Kafka.Enabled {
+		schemaCtx, schemaCancel := context.WithTimeout(ctx, 5*time.Second)
+		err := deviceRepo.CheckTelemetryDerivedSchema(schemaCtx)
+		schemaCancel()
+		if err != nil {
+			logger.Fatal("Telemetry database schema is not ready", zap.Error(err))
+		}
+	}
 	metaRepo := repository.NewMetadataRepository(deviceRepo)
 	dataService := service.NewDataService(deviceRepo, metaRepo, hub, rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
 

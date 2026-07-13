@@ -132,6 +132,8 @@ type CommandResponse struct {
 	TaskID    string          `json:"task_id"`
 	Cmd       string          `json:"cmd"`
 	Success   bool            `json:"success"`
+	Stage     string          `json:"stage,omitempty"`
+	Code      string          `json:"code,omitempty"`
 	Message   string          `json:"message"`
 	Data      json.RawMessage `json:"data,omitempty"`
 	Timestamp int64           `json:"timestamp"`

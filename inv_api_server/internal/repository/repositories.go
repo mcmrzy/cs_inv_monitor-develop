@@ -741,7 +741,7 @@ func (r *StationRepository) GetDayData(ctx context.Context, stationID int64, dat
 	return &data, nil
 }
 
-func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, startDate, endDate, period, tz string) ([]map[string]interface{}, error) {
+func (r *StationRepository) getStatisticsLegacy(ctx context.Context, stationID int64, startDate, endDate, period, tz string) ([]map[string]interface{}, error) {
 	// 获取该电站下所有设备的SN
 	devicesQuery := `SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL`
 	deviceRows, err := r.db.Query(ctx, devicesQuery, stationID)
@@ -770,18 +770,17 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 		query := `
 			SELECT
 				DATE_TRUNC('hour', telem.time AT TIME ZONE $4) as hour_time,
-				AVG(COALESCE((telem.data->>'pv_power_total')::float, (telem.data->'pv_data'->>'pv_power_total')::float, (telem.data->'data'->>'pv_power_total')::float)) FILTER (WHERE telem.topic = 'data/pv') as avg_pv_power,
-				AVG(COALESCE((telem.data->>'power')::float, (telem.data->'ac_data'->>'power')::float, (telem.data->'data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as avg_ac_power,
+				AVG(COALESCE((telem.data->'data'->>'pv_power_total')::float, (telem.data->'pv_data'->>'pv_power_total')::float)) FILTER (WHERE telem.topic = 'data/pv') as avg_pv_power,
+				AVG(COALESCE((telem.data->'data'->>'power')::float, (telem.data->'ac_data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as avg_ac_power,
 				AVG(COALESCE(
-					(telem.data->>'voltage')::float * (telem.data->>'current')::float,
-					(telem.data->'batt_data'->>'voltage')::float * (telem.data->'batt_data'->>'current')::float,
 					(telem.data->'data'->>'voltage')::float * (telem.data->'data'->>'current')::float,
+					(telem.data->'batt_data'->>'voltage')::float * (telem.data->'batt_data'->>'current')::float,
 					0
 				)) FILTER (WHERE telem.topic = 'data/battery') as avg_batt_power,
-				MAX(COALESCE((telem.data->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float, (telem.data->'data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
-				MAX(COALESCE((telem.data->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float, (telem.data->'data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
-				MAX(COALESCE((telem.data->>'daily_discharge')::float, (telem.data->'energy_data'->>'daily_discharge')::float, (telem.data->'data'->>'daily_discharge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_discharge,
-				MAX(COALESCE((telem.data->>'daily_load')::float, (telem.data->'energy_data'->>'daily_load')::float, (telem.data->'data'->>'daily_load')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_load,
+				MAX(COALESCE((telem.data->'data'->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
+				MAX(COALESCE((telem.data->'data'->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
+				MAX(COALESCE((telem.data->'data'->>'daily_discharge')::float, (telem.data->'energy_data'->>'daily_discharge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_discharge,
+				MAX(COALESCE((telem.data->'data'->>'daily_load')::float, (telem.data->'energy_data'->>'daily_load')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_load,
 				COUNT(DISTINCT telem.device_sn) FILTER (WHERE telem.topic IN ('data/pv', 'data/ac')) as device_count
 			FROM device_telemetry telem
 			WHERE telem.device_sn = ANY($1)
@@ -834,11 +833,11 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 		query := `
 			SELECT 
 				DATE(telem.time AT TIME ZONE $4) as day_date,
-				MAX(COALESCE((telem.data->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float, (telem.data->'data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
-				MAX(COALESCE((telem.data->>'power')::float, (telem.data->'ac_data'->>'power')::float, (telem.data->'data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as max_ac_power,
-				MAX(COALESCE((telem.data->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float, (telem.data->'data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
-				MAX(COALESCE((telem.data->>'daily_discharge')::float, (telem.data->'energy_data'->>'daily_discharge')::float, (telem.data->'data'->>'daily_discharge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_discharge,
-				MAX(COALESCE((telem.data->>'daily_load')::float, (telem.data->'energy_data'->>'daily_load')::float, (telem.data->'data'->>'daily_load')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_load,
+				MAX(COALESCE((telem.data->'data'->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
+				MAX(COALESCE((telem.data->'data'->>'power')::float, (telem.data->'ac_data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as max_ac_power,
+				MAX(COALESCE((telem.data->'data'->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
+				MAX(COALESCE((telem.data->'data'->>'daily_discharge')::float, (telem.data->'energy_data'->>'daily_discharge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_discharge,
+				MAX(COALESCE((telem.data->'data'->>'daily_load')::float, (telem.data->'energy_data'->>'daily_load')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_load,
 				COUNT(DISTINCT telem.device_sn) FILTER (WHERE telem.topic IN ('data/pv', 'data/ac')) as device_count
 			FROM device_telemetry telem
 			WHERE telem.device_sn = ANY($1)
@@ -1211,7 +1210,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 	return devices, nil
 }
 
-func (r *DeviceRepository) GetStationRealtimeSummary(ctx context.Context, stationID int64, tz string) (float64, float64, error) {
+func (r *DeviceRepository) getStationRealtimeSummaryLegacy(ctx context.Context, stationID int64, tz string) (float64, float64, error) {
 	todayStr := timezone.TodayInTimezone(tz)
 	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
 	todayEnd := todayStart.AddDate(0, 0, 1)
@@ -1276,7 +1275,7 @@ func (r *DeviceRepository) getStationDeviceSNs(ctx context.Context, stationID in
 	return sns, nil
 }
 
-func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, stationID int64) (pvPower float64, loadPower float64, gridPower float64, battPower float64, battSoc float64) {
+func (r *DeviceRepository) getStationPowerBreakdownLegacy(ctx context.Context, stationID int64) (pvPower float64, loadPower float64, gridPower float64, battPower float64, battSoc float64) {
 	sns, err := r.getStationDeviceSNs(ctx, stationID, true)
 	if err != nil {
 		return
@@ -1356,13 +1355,13 @@ func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, station
 	// 从 device_telemetry 获取最新数据（按 topic 分别取每个设备的最新值）
 	query := `
 		SELECT
-			COALESCE(SUM(CASE WHEN telem.topic = 'data/pv' THEN COALESCE((telem.data->'pv_data'->>'pv_power_total')::float, (telem.data->'data'->>'pv_power_total')::float) END), 0),
-			COALESCE(SUM(CASE WHEN telem.topic = 'data/ac' THEN COALESCE((telem.data->'ac_data'->>'power')::float, (telem.data->'data'->>'power')::float) END), 0),
+			COALESCE(SUM(CASE WHEN telem.topic = 'data/pv' THEN COALESCE((telem.data->'data'->>'pv_power_total')::float, (telem.data->'pv_data'->>'pv_power_total')::float) END), 0),
+			COALESCE(SUM(CASE WHEN telem.topic = 'data/ac' THEN COALESCE((telem.data->'data'->>'power')::float, (telem.data->'ac_data'->>'power')::float) END), 0),
 			COALESCE(SUM(CASE WHEN telem.topic = 'data/battery' 
-				THEN COALESCE((telem.data->'batt_data'->>'voltage')::float, (telem.data->'data'->>'voltage')::float, 0) 
-					* COALESCE((telem.data->'batt_data'->>'current')::float, (telem.data->'data'->>'current')::float, 0) 
+				THEN COALESCE((telem.data->'data'->>'voltage')::float, (telem.data->'batt_data'->>'voltage')::float, 0)
+					* COALESCE((telem.data->'data'->>'current')::float, (telem.data->'batt_data'->>'current')::float, 0)
 			END), 0),
-			COALESCE(AVG(CASE WHEN telem.topic = 'data/battery' THEN NULLIF(COALESCE((telem.data->'batt_data'->>'soc')::float, (telem.data->'data'->>'soc')::float), 0) END), 0)
+			COALESCE(AVG(CASE WHEN telem.topic = 'data/battery' THEN NULLIF(COALESCE((telem.data->'data'->>'soc')::float, (telem.data->'batt_data'->>'soc')::float), 0) END), 0)
 		FROM (
 			SELECT device_sn, telem.topic, telem.data,
 				ROW_NUMBER() OVER (PARTITION BY device_sn, telem.topic ORDER BY telem.time DESC) as rn
@@ -1379,7 +1378,7 @@ func (r *DeviceRepository) GetStationPowerBreakdown(ctx context.Context, station
 	return
 }
 
-func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationID int64, tz string) (float64, float64) {
+func (r *DeviceRepository) getStationEnergySummaryLegacy(ctx context.Context, stationID int64, tz string) (float64, float64) {
 	// 累计发电量：直接取每个设备最新的 total_pv 值，然后求和
 	var totalEnergy float64
 	rows, err := r.db.Query(ctx, `
@@ -1434,7 +1433,7 @@ func (r *DeviceRepository) GetStationEnergySummary(ctx context.Context, stationI
 	return totalEnergy, monthEnergy
 }
 
-func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID int64, tz string) float64 {
+func (r *DeviceRepository) getStationYearEnergyLegacy(ctx context.Context, stationID int64, tz string) float64 {
 	loc := timezone.LoadLocation(tz)
 	now := time.Now().In(loc)
 	yearStart := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc).UTC()
@@ -1463,7 +1462,7 @@ func (r *DeviceRepository) GetStationYearEnergy(ctx context.Context, stationID i
 	return yearEnergy
 }
 
-func (r *DeviceRepository) GetStationTodayEnergy(ctx context.Context, stationID int64, tz string) (float64, error) {
+func (r *DeviceRepository) getStationTodayEnergyLegacy(ctx context.Context, stationID int64, tz string) (float64, error) {
 	todayStr := timezone.TodayInTimezone(tz)
 	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
 	todayEnd := todayStart.AddDate(0, 0, 1)
@@ -1700,7 +1699,7 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 				if err == nil {
 					for i, key := range keys {
 						if i < len(vals) && vals[i] != nil {
-							fieldName := key[len("realtime:latest:"+sn+":") :]
+							fieldName := key[len("realtime:latest:"+sn+":"):]
 							if valStr, ok := vals[i].(string); ok {
 								var fieldData map[string]interface{}
 								if json.Unmarshal([]byte(valStr), &fieldData) == nil {
@@ -1722,7 +1721,7 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 			return normalizeRealtimeData(result), nil
 		}
 
-		for _, cacheKey := range []string{"telemetry:latest:" + sn} {
+		for _, cacheKey := range []string{"device:latest:" + sn, "telemetry:latest:" + sn} {
 			cached, err := r.cache.Get(ctx, cacheKey).Result()
 			if err != nil || cached == "" {
 				continue
@@ -1736,6 +1735,18 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 	}
 
 	var rawJSON []byte
+	err = r.db.QueryRow(ctx, `SELECT to_jsonb(s) FROM device_latest_state s WHERE device_sn=$1`, sn).Scan(&rawJSON)
+	if err == nil {
+		var m map[string]interface{}
+		if json.Unmarshal(rawJSON, &m) == nil {
+			m["online"] = online
+			return normalizeRealtimeData(m), nil
+		}
+	}
+	if err != nil && err != pgx.ErrNoRows {
+		return nil, err
+	}
+
 	err = r.db.QueryRow(ctx, `SELECT data FROM device_telemetry WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`, sn).Scan(&rawJSON)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1978,11 +1989,24 @@ func (r *DeviceRepository) InsertCommandLog(ctx context.Context, sn, taskID, cmd
 	if r.db == nil {
 		return nil
 	}
-	_, err := r.db.Exec(ctx, `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `
 		INSERT INTO device_cmd_logs (device_sn, task_id, cmd, params, status, sent_at)
 		VALUES ($1, $2, $3, $4::jsonb, 'pending', NOW())
-	`, sn, taskID, cmdType, paramsJSON)
-	return err
+	`, sn, taskID, cmdType, paramsJSON); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `
+		INSERT INTO device_commands(task_id,device_sn,command_code,requested_args,status,timeout_at)
+		VALUES($1::uuid,$2,$3,$4::jsonb,'pending',NOW()+INTERVAL '30 seconds')
+		ON CONFLICT(task_id) DO NOTHING`, taskID, sn, cmdType, paramsJSON); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // UpdateCommandLogStatus 更新命令状态（failed/queued）
@@ -1990,11 +2014,25 @@ func (r *DeviceRepository) UpdateCommandLogStatus(ctx context.Context, taskID, s
 	if r.db == nil {
 		return nil
 	}
-	_, err := r.db.Exec(ctx, `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `
 		UPDATE device_cmd_logs SET status = $2, result = $3
 		WHERE task_id = $1
-	`, taskID, status, message)
-	return err
+	`, taskID, status, message); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE device_commands SET status=$2,result_message=$3,
+		queued_at=CASE WHEN $2='queued' THEN NOW() ELSE queued_at END,
+		sent_at=CASE WHEN $2='sent' THEN NOW() ELSE sent_at END,
+		completed_at=CASE WHEN $2 IN ('failed','timeout','cancelled') THEN NOW() ELSE completed_at END
+		WHERE task_id=$1::uuid`, taskID, status, message); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // UpdateCommandLogResult 设备回复后更新命令结果
@@ -2002,12 +2040,23 @@ func (r *DeviceRepository) UpdateCommandLogResult(ctx context.Context, taskID, r
 	if r.db == nil {
 		return nil
 	}
-	_, err := r.db.Exec(ctx, `
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `
 		UPDATE device_cmd_logs
 		SET status = $2, result = $3, message = $4, data = $5::jsonb
 		WHERE task_id = $1
-	`, taskID, result, result, message, data)
-	return err
+	`, taskID, result, result, message, data); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE device_commands SET status=$2,result_code=$3,result_message=$4,
+		response_data=COALESCE($5::jsonb,'[]'::jsonb),completed_at=NOW() WHERE task_id=$1::uuid`, taskID, result, result, message, data); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // InsertNotification 插入通知记录
@@ -2032,7 +2081,7 @@ func (r *DeviceRepository) InsertNotification(ctx context.Context, sn string, st
 	return err
 }
 
-func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, endDate, period string) ([]map[string]interface{}, error) {
+func (r *DeviceRepository) getHistoryDataLegacy(ctx context.Context, sn, startDate, endDate, period string) ([]map[string]interface{}, error) {
 	var query string
 	switch period {
 	case "hour":
@@ -2088,7 +2137,7 @@ func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, en
 	return results, nil
 }
 
-func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, endDate, period, tz string) (map[string]interface{}, error) {
+func (r *DeviceRepository) getStatisticsLegacy(ctx context.Context, sn, startDate, endDate, period, tz string) (map[string]interface{}, error) {
 	// JSONB 数据可能是嵌套格式 {"data": {"daily_pv": ...}} 或扁平格式 {"daily_pv": ...}
 	// 使用 COALESCE 兼容两种格式
 
@@ -2270,6 +2319,12 @@ var skipRawFields = map[string]bool{
 }
 
 func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, endTime, granularity string) ([]map[string]interface{}, error) {
+	if data, err := r.getTelemetryV2(ctx, sn, startTime, endTime); err != nil {
+		return nil, err
+	} else if len(data) > 0 {
+		return data, nil
+	}
+
 	query := `
 		SELECT time, topic, data
 		FROM device_telemetry
@@ -2395,13 +2450,27 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 			setFloat("voltage_thd", getJSONFloat(rawData, "voltage_thd", "thd_v"), "voltage_thd", "thd_v")
 
 			// Field aliases for device_model_field compatibility
-			if v, ok := slot.data["apparent_power"]; ok { slot.data["ac_apparent"] = v }
-			if v, ok := slot.data["power_factor"]; ok { slot.data["ac_pf"] = v }
-			if v, ok := slot.data["load_rate"]; ok { slot.data["ac_load_percent"] = v }
-			if v, ok := slot.data["voltage_thd"]; ok { slot.data["ac_thd_v"] = v }
-			if v, ok := slot.data["ac_voltage"]; ok { slot.data["voltage"] = v }
-			if v, ok := slot.data["ac_current"]; ok { slot.data["current"] = v }
-			if v, ok := slot.data["ac_power"]; ok { slot.data["power"] = v }
+			if v, ok := slot.data["apparent_power"]; ok {
+				slot.data["ac_apparent"] = v
+			}
+			if v, ok := slot.data["power_factor"]; ok {
+				slot.data["ac_pf"] = v
+			}
+			if v, ok := slot.data["load_rate"]; ok {
+				slot.data["ac_load_percent"] = v
+			}
+			if v, ok := slot.data["voltage_thd"]; ok {
+				slot.data["ac_thd_v"] = v
+			}
+			if v, ok := slot.data["ac_voltage"]; ok {
+				slot.data["voltage"] = v
+			}
+			if v, ok := slot.data["ac_current"]; ok {
+				slot.data["current"] = v
+			}
+			if v, ok := slot.data["ac_power"]; ok {
+				slot.data["power"] = v
+			}
 
 		case "data/battery":
 			setFloat("battery_soc", getJSONFloat(rawData, "batt_soc", "soc", "battery_soc"), "batt_soc", "soc", "battery_soc")
@@ -2428,20 +2497,48 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 			setFloat("dischg_cut_volt", getJSONFloat(rawData, "dischg_cut_volt"), "dischg_cut_volt")
 
 			// Field aliases for device_model_field compatibility
-			if v, ok := slot.data["battery_soc"]; ok { slot.data["batt_soc"] = v }
-			if v, ok := slot.data["battery_voltage"]; ok { slot.data["batt_voltage"] = v }
-			if v, ok := slot.data["battery_current"]; ok { slot.data["batt_current"] = v }
-			if v, ok := slot.data["charge_discharge_power"]; ok { slot.data["batt_power"] = v }
-			if v, ok := slot.data["cycle_count"]; ok { slot.data["batt_cycle_count"] = v }
-			if v, ok := slot.data["cell_max_temp"]; ok { slot.data["batt_temp_max"] = v }
-			if v, ok := slot.data["cell_min_temp"]; ok { slot.data["batt_temp_min"] = v }
-			if v, ok := slot.data["cell_max_voltage"]; ok { slot.data["batt_cell_volt_max"] = v }
-			if v, ok := slot.data["cell_min_voltage"]; ok { slot.data["batt_cell_volt_min"] = v }
-			if v, ok := slot.data["charge_status"]; ok { slot.data["batt_charge_state"] = v }
-			if v, ok := slot.data["battery_health"]; ok { slot.data["batt_soh"] = v }
-			if v, ok := slot.data["battery_avg_temp"]; ok { slot.data["batt_temp_battery"] = v }
-			if v, ok := slot.data["rated_capacity"]; ok { slot.data["batt_capacity_total"] = v }
-			if v, ok := slot.data["battery_capacity"]; ok { slot.data["batt_capacity_remain"] = v }
+			if v, ok := slot.data["battery_soc"]; ok {
+				slot.data["batt_soc"] = v
+			}
+			if v, ok := slot.data["battery_voltage"]; ok {
+				slot.data["batt_voltage"] = v
+			}
+			if v, ok := slot.data["battery_current"]; ok {
+				slot.data["batt_current"] = v
+			}
+			if v, ok := slot.data["charge_discharge_power"]; ok {
+				slot.data["batt_power"] = v
+			}
+			if v, ok := slot.data["cycle_count"]; ok {
+				slot.data["batt_cycle_count"] = v
+			}
+			if v, ok := slot.data["cell_max_temp"]; ok {
+				slot.data["batt_temp_max"] = v
+			}
+			if v, ok := slot.data["cell_min_temp"]; ok {
+				slot.data["batt_temp_min"] = v
+			}
+			if v, ok := slot.data["cell_max_voltage"]; ok {
+				slot.data["batt_cell_volt_max"] = v
+			}
+			if v, ok := slot.data["cell_min_voltage"]; ok {
+				slot.data["batt_cell_volt_min"] = v
+			}
+			if v, ok := slot.data["charge_status"]; ok {
+				slot.data["batt_charge_state"] = v
+			}
+			if v, ok := slot.data["battery_health"]; ok {
+				slot.data["batt_soh"] = v
+			}
+			if v, ok := slot.data["battery_avg_temp"]; ok {
+				slot.data["batt_temp_battery"] = v
+			}
+			if v, ok := slot.data["rated_capacity"]; ok {
+				slot.data["batt_capacity_total"] = v
+			}
+			if v, ok := slot.data["battery_capacity"]; ok {
+				slot.data["batt_capacity_remain"] = v
+			}
 
 		case "data/pv":
 			setFloat("pv1_voltage", getJSONFloat(rawData, "pv1_voltage", "pv_voltage"), "pv1_voltage", "pv_voltage")
@@ -2458,12 +2555,24 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 			setFloat("pv2_power_max", getJSONFloat(rawData, "pv2_power_max"), "pv2_power_max")
 
 			// Field aliases for device_model_field compatibility
-			if v, ok := slot.data["pv1_voltage"]; ok { slot.data["pv_pv1_voltage"] = v }
-			if v, ok := slot.data["pv1_current"]; ok { slot.data["pv_pv1_current"] = v }
-			if v, ok := slot.data["pv1_power"]; ok { slot.data["pv_pv1_power"] = v }
-			if v, ok := slot.data["pv2_voltage"]; ok { slot.data["pv_pv2_voltage"] = v }
-			if v, ok := slot.data["pv2_current"]; ok { slot.data["pv_pv2_current"] = v }
-			if v, ok := slot.data["pv2_power"]; ok { slot.data["pv_pv2_power"] = v }
+			if v, ok := slot.data["pv1_voltage"]; ok {
+				slot.data["pv_pv1_voltage"] = v
+			}
+			if v, ok := slot.data["pv1_current"]; ok {
+				slot.data["pv_pv1_current"] = v
+			}
+			if v, ok := slot.data["pv1_power"]; ok {
+				slot.data["pv_pv1_power"] = v
+			}
+			if v, ok := slot.data["pv2_voltage"]; ok {
+				slot.data["pv_pv2_voltage"] = v
+			}
+			if v, ok := slot.data["pv2_current"]; ok {
+				slot.data["pv_pv2_current"] = v
+			}
+			if v, ok := slot.data["pv2_power"]; ok {
+				slot.data["pv_pv2_power"] = v
+			}
 
 		case "data/status":
 			setString("run_status", getJSONString(rawData, "state", "run_status"), "state", "run_status")
@@ -2480,10 +2589,18 @@ func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, 
 			setFloat("fan_speed", getJSONFloat(rawData, "fan_speed"), "fan_speed")
 
 			// Field aliases for device_model_field compatibility
-			if v, ok := slot.data["inverter_temp"]; ok { slot.data["temp_inv"] = v }
-			if v, ok := slot.data["heatsink_temp"]; ok { slot.data["temp_mos"] = v }
-			if v, ok := slot.data["ambient_temp"]; ok { slot.data["temp_env"] = v }
-			if v, ok := slot.data["run_status"]; ok { slot.data["work_state"] = v }
+			if v, ok := slot.data["inverter_temp"]; ok {
+				slot.data["temp_inv"] = v
+			}
+			if v, ok := slot.data["heatsink_temp"]; ok {
+				slot.data["temp_mos"] = v
+			}
+			if v, ok := slot.data["ambient_temp"]; ok {
+				slot.data["temp_env"] = v
+			}
+			if v, ok := slot.data["run_status"]; ok {
+				slot.data["work_state"] = v
+			}
 
 		case "data/energy":
 			dailyPV := getJSONFloat(rawData, "daily_pv", "energy_daily_pv")
@@ -2715,7 +2832,7 @@ func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64, tz str
 	return result, nil
 }
 
-func (r *DeviceRepository) GetTrend(ctx context.Context, userID int64, period, tz string) ([]map[string]interface{}, error) {
+func (r *DeviceRepository) getTrendLegacy(ctx context.Context, userID int64, period, tz string) ([]map[string]interface{}, error) {
 	todayStr := timezone.TodayInTimezone(tz)
 	todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
 	thirtyDaysAgo := todayStart.AddDate(0, 0, -30)

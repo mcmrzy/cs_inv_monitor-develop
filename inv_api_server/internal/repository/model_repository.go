@@ -21,6 +21,7 @@ func (r *ModelRepository) ListModels(ctx context.Context) ([]model.DeviceModel, 
 	rows, err := r.db.Query(ctx, `
 		SELECT m.id, m.model_code, m.model_name, COALESCE(m.manufacturer, ''), m.category, 
 			CAST(m.rated_power_kw AS float8), COALESCE(m.description, ''), m.is_active,
+			m.lifecycle_status, m.heartbeat_protocol_id, m.lock_version,
 			COALESCE((SELECT COUNT(*) FROM devices WHERE model_id = m.id AND deleted_at IS NULL), 0) AS device_count,
 			TO_CHAR(m.created_at, 'YYYY-MM-DD HH24:MI:SS'), TO_CHAR(m.updated_at, 'YYYY-MM-DD HH24:MI:SS')
 		FROM device_models m
@@ -35,7 +36,8 @@ func (r *ModelRepository) ListModels(ctx context.Context) ([]model.DeviceModel, 
 		var m model.DeviceModel
 		var deviceCount int64
 		if err := rows.Scan(&m.ID, &m.ModelCode, &m.ModelName, &m.Manufacturer, &m.Category,
-			&m.RatedPowerKw, &m.Description, &m.IsActive, &deviceCount, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			&m.RatedPowerKw, &m.Description, &m.IsActive, &m.LifecycleStatus, &m.HeartbeatProtocolID,
+			&m.LockVersion, &deviceCount, &m.CreatedAt, &m.UpdatedAt); err != nil {
 			continue
 		}
 		m.DeviceCount = int(deviceCount)
@@ -48,10 +50,12 @@ func (r *ModelRepository) GetModelByID(ctx context.Context, id int64) (*model.De
 	var m model.DeviceModel
 	err := r.db.QueryRow(ctx, `
 		SELECT id, model_code, model_name, manufacturer, category, 
-			rated_power_kw, description, is_active, created_at, updated_at
+			rated_power_kw, description, is_active, lifecycle_status, heartbeat_protocol_id,
+			lock_version, created_at, updated_at
 		FROM device_models WHERE id = $1`, id).Scan(
 		&m.ID, &m.ModelCode, &m.ModelName, &m.Manufacturer, &m.Category,
-		&m.RatedPowerKw, &m.Description, &m.IsActive, &m.CreatedAt, &m.UpdatedAt)
+		&m.RatedPowerKw, &m.Description, &m.IsActive, &m.LifecycleStatus,
+		&m.HeartbeatProtocolID, &m.LockVersion, &m.CreatedAt, &m.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -62,10 +66,12 @@ func (r *ModelRepository) GetModelByCode(ctx context.Context, code string) (*mod
 	var m model.DeviceModel
 	err := r.db.QueryRow(ctx, `
 		SELECT id, model_code, model_name, manufacturer, category, 
-			rated_power_kw, description, is_active, created_at, updated_at
+			rated_power_kw, description, is_active, lifecycle_status, heartbeat_protocol_id,
+			lock_version, created_at, updated_at
 		FROM device_models WHERE model_code = $1`, code).Scan(
 		&m.ID, &m.ModelCode, &m.ModelName, &m.Manufacturer, &m.Category,
-		&m.RatedPowerKw, &m.Description, &m.IsActive, &m.CreatedAt, &m.UpdatedAt)
+		&m.RatedPowerKw, &m.Description, &m.IsActive, &m.LifecycleStatus,
+		&m.HeartbeatProtocolID, &m.LockVersion, &m.CreatedAt, &m.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -380,17 +386,17 @@ func (r *ModelRepository) BatchUpsertFields(ctx context.Context, modelID int64, 
 }
 
 type ModelWithCount struct {
-	ID            int64   `json:"id"`
-	ModelCode     string  `json:"model_code"`
-	ModelName     string  `json:"model_name"`
-	Manufacturer  string  `json:"manufacturer"`
-	Category      string  `json:"category"`
-	RatedPowerKW  float64 `json:"rated_power_kw"`
-	Description   string  `json:"description"`
-	IsActive      bool    `json:"is_active"`
-	CreatedAt     string  `json:"created_at"`
-	UpdatedAt     string  `json:"updated_at"`
-	DeviceCount   int     `json:"device_count"`
+	ID           int64   `json:"id"`
+	ModelCode    string  `json:"model_code"`
+	ModelName    string  `json:"model_name"`
+	Manufacturer string  `json:"manufacturer"`
+	Category     string  `json:"category"`
+	RatedPowerKW float64 `json:"rated_power_kw"`
+	Description  string  `json:"description"`
+	IsActive     bool    `json:"is_active"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+	DeviceCount  int     `json:"device_count"`
 }
 
 func (r *ModelRepository) ListAllWithDeviceCount(ctx context.Context) ([]ModelWithCount, error) {
@@ -420,5 +426,3 @@ func (r *ModelRepository) ListAllWithDeviceCount(ctx context.Context) ([]ModelWi
 	}
 	return models, nil
 }
-
-

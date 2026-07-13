@@ -6,6 +6,7 @@ import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
+import 'package:inv_app/core/services/heartbeat_v1_mapper.dart';
 
 abstract class MQTTService {
   Future<void> connect(String clientId, {String? username, String? password});
@@ -24,7 +25,8 @@ abstract class MQTTService {
 
   InverterRealtime? getLatestData(String deviceSN);
 
-  Future<void> sendCommand(String deviceSN, String cmdType, {Map<String, dynamic>? value});
+  Future<void> sendCommand(String deviceSN, String cmdType,
+      {Map<String, dynamic>? value});
 }
 
 class MQTTServiceImpl implements MQTTService {
@@ -38,18 +40,24 @@ class MQTTServiceImpl implements MQTTService {
   bool _isConnecting = false;
   bool _intentionalDisconnect = false;
 
-  final StreamController<InverterRealtime> _realtimeController = StreamController.broadcast();
-  final StreamController<OnlineStatus> _statusController = StreamController.broadcast();
-  final StreamController<AlarmData> _alarmController = StreamController.broadcast();
-  final StreamController<OTANotification> _otaNotificationController = StreamController.broadcast();
+  final StreamController<InverterRealtime> _realtimeController =
+      StreamController.broadcast();
+  final StreamController<OnlineStatus> _statusController =
+      StreamController.broadcast();
+  final StreamController<AlarmData> _alarmController =
+      StreamController.broadcast();
+  final StreamController<OTANotification> _otaNotificationController =
+      StreamController.broadcast();
 
   final Map<String, InverterRealtime> _latestData = {};
 
   @override
-  bool get isConnected => _client?.connectionStatus?.state == MqttConnectionState.connected;
+  bool get isConnected =>
+      _client?.connectionStatus?.state == MqttConnectionState.connected;
 
   @override
-  Future<void> connect(String clientId, {String? username, String? password}) async {
+  Future<void> connect(String clientId,
+      {String? username, String? password}) async {
     if (_isConnecting) {
       await waitForConnection(timeout: const Duration(seconds: 15));
       return;
@@ -72,7 +80,8 @@ class MQTTServiceImpl implements MQTTService {
       _client = null;
     }
 
-    _client = MqttServerClient.withPort(AppConfig.mqttBrokerHost, clientId, AppConfig.mqttBrokerPort);
+    _client = MqttServerClient.withPort(
+        AppConfig.mqttBrokerHost, clientId, AppConfig.mqttBrokerPort);
     _client!.secure = true;
     if (kDebugMode) {
       _client!.onBadCertificate = (Object _) => true;
@@ -85,9 +94,9 @@ class MQTTServiceImpl implements MQTTService {
     _client!.onSubscribed = _onSubscribed;
 
     final connMessage = MqttConnectMessage()
-      .withClientIdentifier(clientId)
-      .startClean()
-      .withWillQos(MqttQos.atMostOnce);
+        .withClientIdentifier(clientId)
+        .startClean()
+        .withWillQos(MqttQos.atMostOnce);
 
     _client!.connectionMessage = connMessage;
 
@@ -135,7 +144,8 @@ class MQTTServiceImpl implements MQTTService {
     if (_lastClientId == null) {
       throw Exception('No previous connection to reconnect to.');
     }
-    await connect(_lastClientId!, username: _lastUsername, password: _lastPassword);
+    await connect(_lastClientId!,
+        username: _lastUsername, password: _lastPassword);
   }
 
   @override
@@ -173,16 +183,16 @@ class MQTTServiceImpl implements MQTTService {
   void _resubscribeAll() {
     if (_subscribedTopics.isEmpty) return;
     for (final topic in _subscribedTopics.toList()) {
-      final qos = topic.contains('/alarm') || topic.contains('/status') && !topic.contains('/data/status')
-          || topic.contains('/info')
+      final qos = topic.contains('/alarm') ||
+              topic.contains('/status') && !topic.contains('/data/status') ||
+              topic.contains('/info')
           ? MqttQos.atLeastOnce
           : MqttQos.atMostOnce;
       _client?.subscribe(topic, qos);
     }
   }
 
-  void _onSubscribed(String topic) {
-  }
+  void _onSubscribed(String topic) {}
 
   void _onMessage(List<MqttReceivedMessage<MqttMessage?>>? messages) {
     if (messages == null) return;
@@ -190,13 +200,17 @@ class MQTTServiceImpl implements MQTTService {
     for (final message in messages) {
       final topic = message.topic;
       final payload = message.payload as MqttPublishMessage;
-      final jsonString = MqttPublishPayload.bytesToStringAsString(payload.payload.message);
+      final jsonString =
+          MqttPublishPayload.bytesToStringAsString(payload.payload.message);
 
       try {
         final data = json.decode(jsonString) as Map<String, dynamic>;
         final sn = _extractSN(topic);
 
-        if (topic.contains('/status') && !topic.contains('/data/status')) {
+        if (topic.endsWith('/heartbeat')) {
+          _handleHeartbeatMessage(sn, data);
+        } else if (topic.contains('/status') &&
+            !topic.contains('/data/status')) {
           _handleStatusMessage(sn, data);
         } else if (topic.contains('/data/ac')) {
           _handleACMessage(sn, data);
@@ -217,8 +231,7 @@ class MQTTServiceImpl implements MQTTService {
         } else if (topic.contains('/ota/notify')) {
           _handleOTANotifyMessage(sn, data);
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     }
   }
 
@@ -228,7 +241,29 @@ class MQTTServiceImpl implements MQTTService {
   }
 
   InverterRealtime _getOrCreate(String sn) {
-    return _latestData[sn] ?? InverterRealtime(deviceSN: sn, updatedAt: DateTime.now());
+    return _latestData[sn] ??
+        InverterRealtime(deviceSN: sn, updatedAt: DateTime.now());
+  }
+
+  void _handleHeartbeatMessage(String sn, Map<String, dynamic> data) {
+    final current = _getOrCreate(sn);
+    final heartbeat = HeartbeatV1Mapper.parse(sn, data);
+    final updated = InverterRealtime(
+      deviceSN: sn,
+      ac: heartbeat.ac,
+      battery: heartbeat.battery,
+      pv: heartbeat.pv,
+      sysStatus: heartbeat.sysStatus,
+      energy: heartbeat.energy,
+      cells: heartbeat.cells,
+      onlineStatus: current.onlineStatus ?? heartbeat.onlineStatus,
+      deviceInfo: current.deviceInfo,
+      meter: current.meter,
+      loadPower: heartbeat.loadPower,
+      updatedAt: heartbeat.updatedAt,
+    );
+    _latestData[sn] = updated;
+    _realtimeController.add(updated);
   }
 
   void _handleStatusMessage(String sn, Map<String, dynamic> data) {
@@ -329,7 +364,8 @@ class MQTTServiceImpl implements MQTTService {
 
     // 当故障状态发生变化时，也通过 statusStream 通知 UI 刷新
     if (sysStatus.hasFault || oldFaultCode != sysStatus.faultCode) {
-      final fallbackStatus = rt.onlineStatus ?? const OnlineStatus(online: true);
+      final fallbackStatus =
+          rt.onlineStatus ?? const OnlineStatus(online: true);
       _statusController.add(fallbackStatus);
     }
   }
@@ -455,10 +491,12 @@ class MQTTServiceImpl implements MQTTService {
   Stream<AlarmData> get alarmStream => _alarmController.stream;
 
   @override
-  Stream<OTANotification> get otaNotificationStream => _otaNotificationController.stream;
+  Stream<OTANotification> get otaNotificationStream =>
+      _otaNotificationController.stream;
 
   @override
-  Future<void> sendCommand(String deviceSN, String cmdType, {Map<String, dynamic>? value}) async {
+  Future<void> sendCommand(String deviceSN, String cmdType,
+      {Map<String, dynamic>? value}) async {
     final topic = 'cs_inv/$deviceSN/cmd';
 
     // 构造符合控制命令文档规范的 MQTT payload: {cmd, params, task_id}
