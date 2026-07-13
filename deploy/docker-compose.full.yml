@@ -6,14 +6,18 @@ services:
       - "8080:8080"
     volumes:
       - ../api-gateway/config.docker.yaml:/app/config.yaml:ro
+    env_file:
+      - .secrets/.env
     networks:
       - inv-network
     restart: unless-stopped
     depends_on:
-      - inv-api-server
-      - inv-device-server
-      - postgres
-      - redis
+      inv-api-server:
+        condition: service_healthy
+      inv-device-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
@@ -21,22 +25,24 @@ services:
         max-file: "3"
 
   postgres:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:2.28.2-pg18
     container_name: inv-postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: cs_inv_admin_2026_test
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: inv_mqtt
     ports:
       - "5432:5432"
     volumes:
-      - pg-data:/var/lib/postgresql/data
-      - ../database/00-init.sql:/docker-entrypoint-initdb.d/00-init.sql
-      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-      - ../database/migration_architecture_upgrade_20260529.sql:/docker-entrypoint-initdb.d/02-upgrade.sql
+      - pg-data:/var/lib/postgresql/18/docker
     networks:
       - inv-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inv_mqtt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     logging:
       driver: json-file
       options:
@@ -50,10 +56,16 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     networks:
       - inv-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 5s
+      retries: 10
     logging:
       driver: json-file
       options:
@@ -111,20 +123,29 @@ services:
         max-file: "3"
 
   inv-api-server:
-    build: ../inv_api_server
+    build:
+      context: ..
+      dockerfile: inv_api_server/Dockerfile
     container_name: inv-api-server
     expose:
       - "8080"
     volumes:
       - ../inv_api_server/config.docker.yaml:/app/config.yaml:ro
-      - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
+    env_file:
+      - .secrets/.env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      DEVICE_SERVER_URL: http://inv-device-server:8081
+      INTERNAL_API_SECRET: ${INTERNAL_KEY}
     networks:
       - inv-network
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
-      - inv-device-server
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
@@ -139,13 +160,20 @@ services:
     volumes:
       - ../inv_device_server/config.docker.yaml:/app/config.yaml:ro
       - device-logs:/app/logs
+    env_file:
+      - .secrets/.env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      API_SERVER_URL: http://inv-api-server:8080
     networks:
       - inv-network
     restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
-      - kafka
+      inv-api-server:
+        condition: service_healthy
+      kafka:
+        condition: service_started
     logging:
       driver: json-file
       options:

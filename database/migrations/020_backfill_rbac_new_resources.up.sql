@@ -1,8 +1,5 @@
 -- 020_backfill_rbac_new_resources: 为新增的5个RBAC资源补充种子数据
 -- 资源: notifications, alert_rules, work_orders, models, dashboard
-
-BEGIN;
-
 -- 总代理 (role=1): 所有资源完整权限
 INSERT INTO role_permissions (role, resource, action, is_allowed) VALUES
 (1, 'notifications', 'view', true),
@@ -72,7 +69,3 @@ INSERT INTO role_permissions (role, resource, action, is_allowed) VALUES
 (5, 'work_orders', 'view', true),
 (5, 'dashboard', 'view', true)
 ON CONFLICT (role, resource, action) DO NOTHING;
-
-INSERT INTO schema_migrations (version, name) VALUES (20, 'backfill_rbac_new_resources') ON CONFLICT DO NOTHING;
-
-COMMIT;

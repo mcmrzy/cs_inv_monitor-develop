@@ -10,7 +10,7 @@ set -e
 
 # ---------- Configuration ----------
 COMPOSE_FILE="docker-compose.prod.yml"
-ENV_FILE=".env.prod"
+ENV_FILE="${ENV_FILE:-.secrets/.env.prod}"
 GIT_REPO="https://your-git-repo/cs_inv_monitor.git"
 BRANCH="main"
 
@@ -93,7 +93,7 @@ log_step "Preparing environment variables..."
 cd "$(dirname "$0")"
 
 if [ ! -f "$ENV_FILE" ]; then
-    log_warn ".env.prod not found, creating from template..."
+	log_warn "$ENV_FILE not found, creating a template..."
     cat > "$ENV_FILE" <<'ENV_TEMPLATE'
 # Change these values before deploying!
 DB_PASSWORD=CHANGE_ME_STRONG_PASSWORD
@@ -105,16 +105,38 @@ ENV_TEMPLATE
     exit 1
 fi
 
-# Warn about placeholder values
+# Placeholder values are always fatal in production.
 if grep -q "CHANGE_ME" "$ENV_FILE"; then
-    log_warn "Found CHANGE_ME placeholders in $ENV_FILE!"
-    log_warn "Please replace them with real values before deploying."
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Aborted."
-        exit 0
-    fi
+	log_error "Found CHANGE_ME placeholders in $ENV_FILE. Refusing production deployment."
+	exit 1
+fi
+
+for required_var in DB_PASSWORD REDIS_PASSWORD JWT_SECRET INTERNAL_KEY; do
+	if ! grep -Eq "^${required_var}=.+" "$ENV_FILE"; then
+		log_error "${required_var} must be set in $ENV_FILE"
+		exit 1
+	fi
+done
+
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config --quiet
+
+for version in 023 024 025; do
+	if ! compgen -G "../database/migrations/${version}_*.sql" > /dev/null; then
+		log_error "Missing required migration ${version}_*.sql"
+		exit 1
+	fi
+done
+
+# A PostgreSQL 16 data directory cannot be mounted into PostgreSQL 18. Refuse
+# the ordinary deployment path until an explicit dump/restore or pg_upgrade
+# has been completed.
+if docker inspect inv-postgres &>/dev/null; then
+	PG_VERSION_NUM=$(docker exec inv-postgres psql -U postgres -d inv_mqtt -Atqc "SHOW server_version_num" 2>/dev/null || true)
+	PG_MAJOR=${PG_VERSION_NUM:0:2}
+	if [ -n "$PG_MAJOR" ] && [ "$PG_MAJOR" != "18" ]; then
+		log_error "Existing PostgreSQL major version is ${PG_MAJOR}; upgrade its data to 18 before deployment."
+		exit 1
+	fi
 fi
 
 # ============================================================
@@ -127,14 +149,7 @@ if [ "$CLEAN" = true ]; then
 fi
 
 # ============================================================
-# Step 5: Force Remove Conflicting Containers
-# ============================================================
-log_step "Removing potentially conflicting containers..."
-docker rm -f inv-admin-frontend inv-api-gateway inv-api-server inv-device-server inv-postgres inv-redis 2>/dev/null || true
-log_info "Conflicting containers removed."
-
-# ============================================================
-# Step 6: Build and Start Services
+# Step 5: Build and Start Services
 # ============================================================
 log_step "Building and starting services..."
 
@@ -143,44 +158,16 @@ if [ "$REBUILD" = true ]; then
     BUILD_ARGS="--build"
 fi
 
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d $BUILD_ARGS
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans --wait --wait-timeout 180 $BUILD_ARGS
 
 log_info "Services started."
 
 # ============================================================
-# Step 7: Database Migration
-# ============================================================
-log_step "Waiting for PostgreSQL to be ready..."
-
-MAX_WAIT=60
-WAITED=0
-while ! docker exec inv-postgres pg_isready -U postgres -d inv_mqtt &>/dev/null; do
-    if [ $WAITED -ge $MAX_WAIT ]; then
-        log_error "PostgreSQL is not ready after ${MAX_WAIT}s"
-        docker logs inv-postgres --tail 20
-        exit 1
-    fi
-    sleep 2
-    WAITED=$((WAITED + 2))
-done
-
-log_info "PostgreSQL is ready."
-
-# Run migration if the schema hasn't been applied yet
-log_info "Checking if migration is needed..."
-MIGRATION_CHECK=$(docker exec inv-postgres psql -U postgres -d inv_mqtt -t -c \
-    "SELECT COUNT(*) FROM information_schema.tables WHERE table_name='devices';" 2>/dev/null || echo "0")
-
-if [ "$(echo $MIGRATION_CHECK | tr -d ' ')" = "0" ]; then
-    log_info "Running database initialization..."
-    docker exec -i inv-postgres psql -U postgres -d inv_mqtt < ../database/schema.sql
-    log_info "Schema initialized."
-else
-    log_info "Database schema already exists, skipping migration."
-fi
+# Database migrations are owned by API startup. Device Server depends on the
+# API healthcheck, so it cannot consume until every migration commits.
 
 # ============================================================
-# Step 8: Health Checks
+# Step 6: Health Checks
 # ============================================================
 log_step "Running health checks..."
 
@@ -222,7 +209,7 @@ else
 fi
 
 echo -n "  Checking redis (port 6379)... "
-if docker exec inv-redis redis-cli ping &>/dev/null; then
+if docker exec inv-redis sh -c 'redis-cli -a "$REDIS_PASSWORD" ping' &>/dev/null; then
     echo -e "${GREEN}OK${NC}"
 else
     echo -e "${RED}FAILED${NC}"
@@ -230,7 +217,7 @@ else
 fi
 
 # ============================================================
-# Step 9: Print Status
+# Step 7: Print Status
 # ============================================================
 echo ""
 echo "============================================================"

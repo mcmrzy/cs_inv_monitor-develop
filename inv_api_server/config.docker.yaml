@@ -23,7 +23,7 @@ redis:
   db: 0
 
 jwt:
-  secret: "CSKJINVAPPJWTSECRET"
+  secret: ""
   expire_time: 168h
   issuer: inv-api-server
 
@@ -37,9 +37,9 @@ sms:
 email:
   host: smtp.qq.com
   port: 465
-  username: "sunhaoyu0221@qq.com"
-  password: "uqcomryxtnimbeha"
-  from: "sunhaoyu0221@qq.com"
+  username: ""
+  password: ""
+  from: ""
   use_ssl: true
 
 log:
@@ -54,6 +54,7 @@ timezone: Asia/Shanghai
 
 backends:
   device_server: http://inv-device-server:8081
+  internal_key: ""
   upload_dir: /data/firmware
 
 # 数据库自动迁移配置
@@ -61,6 +62,7 @@ backends:
 migration:
   dir: /app/database/migrations
   schema_file: /app/database/schema.sql
+  baseline_version: 22
   auto_run: true
 
 # 极光推送配置 (通过环境变量 JPUSH_* 覆盖)

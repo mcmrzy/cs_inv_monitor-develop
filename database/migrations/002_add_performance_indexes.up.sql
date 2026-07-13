@@ -1,8 +1,5 @@
 -- 002_add_performance_indexes: 高频查询索引优化
 -- 目标: 消除 >100ms 的慢查询
-
-BEGIN;
-
 -- 设备列表查询: user_id + station_id + deleted_at 复合索引
 CREATE INDEX IF NOT EXISTS idx_devices_user_station_deleted
     ON devices(user_id, station_id, deleted_at)
@@ -65,7 +62,3 @@ BEGIN
             ON device_day_data(device_sn, data_date DESC);
     END IF;
 END $$;
-
-INSERT INTO schema_migrations (version, name) VALUES (2, 'add_performance_indexes') ON CONFLICT DO NOTHING;
-
-COMMIT;

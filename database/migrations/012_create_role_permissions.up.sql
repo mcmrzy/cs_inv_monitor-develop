@@ -1,8 +1,5 @@
 -- 012_create_role_permissions: RBAC角色权限表
 -- 创建角色权限映射表，用于API网关RBAC中间件的权限校验
-
-BEGIN;
-
 CREATE TABLE IF NOT EXISTS role_permissions (
     id BIGSERIAL PRIMARY KEY,
     role SMALLINT NOT NULL,
@@ -105,7 +102,3 @@ INSERT INTO role_permissions (role, resource, action, is_allowed) VALUES
 (5, 'alerts', 'view', true),
 (5, 'ota', 'view', true)
 ON CONFLICT (role, resource, action) DO NOTHING;
-
-INSERT INTO schema_migrations (version, name) VALUES (12, 'create_role_permissions') ON CONFLICT DO NOTHING;
-
-COMMIT;
