@@ -46,14 +46,14 @@ type CreateFieldRequest struct {
 }
 
 type UpdateFieldRequest struct {
-	FieldName  *string `json:"field_name"`
-	FieldType  *string `json:"field_type"`
-	Unit       *string `json:"unit"`
-	Sort       *int    `json:"sort"`
-	IsShow     *bool   `json:"is_show"`
-	IsControl  *bool   `json:"is_control"`
-	ParseRule  *string `json:"parse_rule"`
-	GroupName  *string `json:"group_name"`
+	FieldName *string `json:"field_name"`
+	FieldType *string `json:"field_type"`
+	Unit      *string `json:"unit"`
+	Sort      *int    `json:"sort"`
+	IsShow    *bool   `json:"is_show"`
+	IsControl *bool   `json:"is_control"`
+	ParseRule *string `json:"parse_rule"`
+	GroupName *string `json:"group_name"`
 }
 
 type BatchUpdateFieldsRequest struct {
@@ -109,8 +109,44 @@ func (s *ModelService) UpdateModel(ctx context.Context, id int64, req *UpdateMod
 }
 
 func (s *ModelService) DeleteModel(ctx context.Context, id int64) error {
-	return s.modelRepo.DeleteModel(ctx, id)
+	return s.modelRepo.RetireModel(ctx, id)
 }
+
+func (s *ModelService) ListFieldCatalog(ctx context.Context) ([]map[string]any, error) {
+	return s.modelRepo.ListFieldCatalog(ctx)
+}
+
+func (s *ModelService) ListFieldCapabilities(ctx context.Context, modelID int64) ([]map[string]any, error) {
+	return s.modelRepo.ListFieldCapabilities(ctx, modelID)
+}
+
+func (s *ModelService) ListModelCommandsV2(ctx context.Context, modelID int64) ([]map[string]any, error) {
+	return s.modelRepo.ListModelCommandsV2(ctx, modelID)
+}
+
+func (s *ModelService) GetProtocolSchema(ctx context.Context, modelID int64) (map[string]any, error) {
+	return s.modelRepo.GetProtocolSchema(ctx, modelID)
+}
+
+func (s *ModelService) UpdateFieldCapability(ctx context.Context, modelID int64, fieldKey string, req repository.FieldCapabilityUpdate) error {
+	return s.modelRepo.UpdateFieldCapability(ctx, modelID, fieldKey, req)
+}
+
+func (s *ModelService) UpdateCommandCapability(ctx context.Context, modelID int64, commandCode string, req repository.CommandCapabilityUpdate) error {
+	return s.modelRepo.UpdateCommandCapability(ctx, modelID, commandCode, req)
+}
+
+func (s *ModelService) UpsertFieldCatalog(ctx context.Context, req repository.FieldCatalogInput, operatorID int64) error { return s.modelRepo.UpsertFieldCatalog(ctx,req,operatorID) }
+func (s *ModelService) BatchUpdateFieldCapabilities(ctx context.Context, modelID, operatorID int64, items []repository.FieldCapabilityPatch) error { return s.modelRepo.BatchUpdateFieldCapabilities(ctx,modelID,operatorID,items) }
+func (s *ModelService) UpsertModelCommand(ctx context.Context, modelID, operatorID int64, req repository.ModelCommandInput) error { return s.modelRepo.UpsertModelCommand(ctx,modelID,operatorID,req) }
+func (s *ModelService) ListProtocolVersions(ctx context.Context)([]map[string]any,error){return s.modelRepo.ListProtocolVersions(ctx)}
+func (s *ModelService) CreateProtocolVersion(ctx context.Context,operatorID int64,req repository.ProtocolVersionInput)(int64,error){return s.modelRepo.CreateProtocolVersion(ctx,operatorID,req)}
+func (s *ModelService) ReleaseProtocolVersion(ctx context.Context,id,operatorID int64)error{return s.modelRepo.ReleaseProtocolVersion(ctx,id,operatorID)}
+func (s *ModelService) BindProtocolVersion(ctx context.Context,modelID,protocolID,operatorID int64)error{return s.modelRepo.BindProtocolVersion(ctx,modelID,protocolID,operatorID)}
+func (s *ModelService) GetMigrationReport(ctx context.Context,modelID int64)(map[string]any,error){return s.modelRepo.GetMigrationReport(ctx,modelID)}
+func (s *ModelService) ValidateModelRegistry(ctx context.Context,modelID int64)([]string,error){return s.modelRepo.ValidateModelRegistry(ctx,modelID)}
+func (s *ModelService) ActivateModel(ctx context.Context,modelID,operatorID int64)error{return s.modelRepo.ActivateModel(ctx,modelID,operatorID)}
+func (s *ModelService) GetModelDataPreview(ctx context.Context,modelID int64)(map[string]any,error){return s.modelRepo.GetModelDataPreview(ctx,modelID)}
 
 func (s *ModelService) GetModelFields(ctx context.Context, modelID int64) ([]model.DeviceModelField, error) {
 	return s.modelRepo.GetFieldsByModelID(ctx, modelID)

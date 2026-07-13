@@ -6,5 +6,7 @@
 
 inv_api_server/.gocache/
 inv_api_server/logs/
+inv_api_server/bin/
+**/*.exe
 **/*.log
 **/*.test

@@ -127,58 +127,11 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 
 	if len(deviceSNs) > 0 {
 		todayStr := timezone.TodayInTimezone(tz)
-		todayStart, _ := timezone.DateRangeInTimezone(todayStr, tz)
-		todayEnd := todayStart.AddDate(0, 0, 1)
-
-		var todayQuery string
-		var todayArgs []interface{}
-		if isAdmin {
-			todayQuery = `
-				SELECT COALESCE(MAX(COALESCE(
-					(data->'data'->>'daily_pv')::float,
-					(data->>'daily_pv')::float,
-					(data->'data'->>'energy_daily_pv')::float,
-					(data->>'energy_daily_pv')::float,
-					daily_energy
-				)), 0)
-				FROM device_telemetry
-				WHERE device_sn = ANY($1) AND time >= $2 AND time < $3 AND topic = 'data/energy'
-			`
-			todayArgs = append(todayArgs, deviceSNs, todayStart, todayEnd)
-		} else {
-			todayQuery = `
-				SELECT COALESCE(MAX(COALESCE(
-					(dt.data->'data'->>'daily_pv')::float,
-					(dt.data->>'daily_pv')::float,
-					(dt.data->'data'->>'energy_daily_pv')::float,
-					(dt.data->>'energy_daily_pv')::float,
-					dt.daily_energy
-				)), 0)
-				FROM device_telemetry dt JOIN devices d ON d.sn = dt.device_sn
-				WHERE dt.device_sn = ANY($1) AND dt.time >= $2 AND dt.time < $3 AND dt.topic = 'data/energy' AND d.user_id = $4
-			`
-			todayArgs = append(todayArgs, deviceSNs, todayStart, todayEnd, userID)
-		}
-		h.db.QueryRow(ctx, todayQuery, todayArgs...).Scan(&todayEnergy)
-
-		var totalQuery string
-		var totalArgs []interface{}
-		if isAdmin {
-			totalQuery = `SELECT COALESCE(
-				(SELECT (data->'data'->>'total_pv')::float FROM device_telemetry WHERE device_sn = ANY($1) AND topic = 'data/energy' AND data->'data'->>'total_pv' IS NOT NULL ORDER BY time DESC LIMIT 1),
-				(SELECT (data->>'total_pv')::float FROM device_telemetry WHERE device_sn = ANY($1) AND topic = 'data/energy' AND data->>'total_pv' IS NOT NULL ORDER BY time DESC LIMIT 1),
-				0
-			)`
-			totalArgs = append(totalArgs, deviceSNs)
-		} else {
-			totalQuery = `SELECT COALESCE(
-				(SELECT (dt.data->'data'->>'total_pv')::float FROM device_telemetry dt JOIN devices d ON d.sn = dt.device_sn WHERE dt.device_sn = ANY($1) AND dt.topic = 'data/energy' AND dt.data->'data'->>'total_pv' IS NOT NULL AND d.user_id = $2 ORDER BY dt.time DESC LIMIT 1),
-				(SELECT (dt.data->>'total_pv')::float FROM device_telemetry dt JOIN devices d ON d.sn = dt.device_sn WHERE dt.device_sn = ANY($1) AND dt.topic = 'data/energy' AND dt.data->>'total_pv' IS NOT NULL AND d.user_id = $2 ORDER BY dt.time DESC LIMIT 1),
-				0
-			)`
-			totalArgs = append(totalArgs, deviceSNs, userID)
-		}
-		h.db.QueryRow(ctx, totalQuery, totalArgs...).Scan(&totalEnergy)
+		h.db.QueryRow(ctx, `SELECT COALESCE(SUM(e.pv_energy),0)
+			FROM device_energy_day e WHERE e.device_sn=ANY($1) AND e.stat_date=$2::date`,
+			deviceSNs, todayStr).Scan(&todayEnergy)
+		h.db.QueryRow(ctx, `SELECT COALESCE(SUM(l.total_pv_energy),0)
+			FROM device_latest_state l WHERE l.device_sn=ANY($1)`, deviceSNs).Scan(&totalEnergy)
 	}
 
 	type RecentAlarm struct {
@@ -328,39 +281,20 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 
 	if isAdmin {
 		query = `
-			SELECT date, energy, load, cumulative FROM (
-				SELECT 
-					TO_CHAR(dt.time AT TIME ZONE $3, 'YYYY-MM-DD') as date,
-					(dt.data->'data'->>'daily_pv')::float as energy,
-					(dt.data->'data'->>'daily_load')::float as load,
-					(dt.data->'data'->>'total_pv')::float as cumulative,
-					ROW_NUMBER() OVER (PARTITION BY TO_CHAR(dt.time AT TIME ZONE $3, 'YYYY-MM-DD') ORDER BY dt.time DESC) as rn
-				FROM device_telemetry dt
-				JOIN devices d ON d.sn = dt.device_sn
-				WHERE dt.topic = 'data/energy'
-					AND d.deleted_at IS NULL
-					AND dt.time >= $1 AND dt.time < $2
-					AND dt.data->'data'->>'daily_pv' IS NOT NULL
-			) sub WHERE rn = 1 ORDER BY date
+			SELECT TO_CHAR(e.stat_date,'YYYY-MM-DD'),SUM(e.pv_energy),SUM(e.load_energy),COALESCE(MAX(e.total_pv_energy),0)
+			FROM device_energy_day e JOIN devices d ON d.sn=e.device_sn
+			WHERE d.deleted_at IS NULL AND e.stat_date >= ($1 AT TIME ZONE $3)::date
+			AND e.stat_date < ($2 AT TIME ZONE $3)::date GROUP BY e.stat_date ORDER BY e.stat_date
 		`
 		args = append(args, startUTCTime, endUTCTime, tz)
 	} else {
 		query = `
-			SELECT date, energy, load, cumulative FROM (
-				SELECT 
-					TO_CHAR(dt.time AT TIME ZONE $4, 'YYYY-MM-DD') as date,
-					(dt.data->'data'->>'daily_pv')::float as energy,
-					(dt.data->'data'->>'daily_load')::float as load,
-					(dt.data->'data'->>'total_pv')::float as cumulative,
-					ROW_NUMBER() OVER (PARTITION BY TO_CHAR(dt.time AT TIME ZONE $4, 'YYYY-MM-DD') ORDER BY dt.time DESC) as rn
-				FROM device_telemetry dt
-				JOIN devices d ON d.sn = dt.device_sn
-				WHERE dt.topic = 'data/energy'
-					AND d.deleted_at IS NULL
-					AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)
-					AND dt.time >= $2 AND dt.time < $3
-					AND dt.data->'data'->>'daily_pv' IS NOT NULL
-			) sub WHERE rn = 1 ORDER BY date
+			SELECT TO_CHAR(e.stat_date,'YYYY-MM-DD'),SUM(e.pv_energy),SUM(e.load_energy),COALESCE(MAX(e.total_pv_energy),0)
+			FROM device_energy_day e JOIN devices d ON d.sn=e.device_sn
+			WHERE d.deleted_at IS NULL
+			AND d.sn IN (SELECT sn FROM devices WHERE user_id=$1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id=$1)
+			AND e.stat_date >= ($2 AT TIME ZONE $4)::date AND e.stat_date < ($3 AT TIME ZONE $4)::date
+			GROUP BY e.stat_date ORDER BY e.stat_date
 		`
 		args = append(args, userID, startUTCTime, endUTCTime, tz)
 	}
@@ -465,10 +399,11 @@ func (h *DashboardHandler) CompareDevices(c *gin.Context) {
 	args = append(args, startTime, endTime)
 
 	query := fmt.Sprintf(`
-		SELECT device_sn, time, data
-		FROM device_telemetry 
-		WHERE device_sn IN (%s) AND time >= $%d AND time <= $%d
-		ORDER BY time
+		SELECT device_sn, event_time,
+			to_jsonb(device_telemetry_3min) - 'device_sn' - 'received_at' - 'event_time' AS data
+		FROM device_telemetry_3min
+		WHERE device_sn IN (%s) AND event_time >= $%d AND event_time <= $%d
+		ORDER BY event_time
 	`, placeholder, len(args)-1, len(args))
 
 	rows, err := h.db.Query(ctx, query, args...)
@@ -571,64 +506,52 @@ func (h *DashboardHandler) GetEnergyStats(c *gin.Context) {
 
 		if isAdmin {
 			query = `
-				SELECT dd.data_date,
-					COALESCE(SUM((dd.data->>'energy_produce')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_charge')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_discharge')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_load')::float8), 0)
-				FROM device_day_data dd
+				SELECT dd.stat_date,
+					COALESCE(SUM(dd.pv_energy), 0), COALESCE(SUM(dd.charge_energy), 0),
+					COALESCE(SUM(dd.discharge_energy), 0), COALESCE(SUM(dd.load_energy), 0)
+				FROM device_energy_day dd
 				JOIN devices d ON d.sn = dd.device_sn
 				WHERE d.deleted_at IS NULL AND d.station_id = $1
-					AND dd.data_date >= $2 AND dd.data_date <= $3
-				GROUP BY dd.data_date
-				ORDER BY dd.data_date
+					AND dd.stat_date >= $2 AND dd.stat_date <= $3
+				GROUP BY dd.stat_date ORDER BY dd.stat_date
 			`
 			args = append(args, sid, startDate, endDate)
 		} else {
 			query = `
-				SELECT dd.data_date,
-					COALESCE(SUM((dd.data->>'energy_produce')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_charge')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_discharge')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_load')::float8), 0)
-				FROM device_day_data dd
+				SELECT dd.stat_date,
+					COALESCE(SUM(dd.pv_energy), 0), COALESCE(SUM(dd.charge_energy), 0),
+					COALESCE(SUM(dd.discharge_energy), 0), COALESCE(SUM(dd.load_energy), 0)
+				FROM device_energy_day dd
 				JOIN devices d ON d.sn = dd.device_sn
 				WHERE d.deleted_at IS NULL AND d.user_id = $1 AND d.station_id = $2
-					AND dd.data_date >= $3 AND dd.data_date <= $4
-				GROUP BY dd.data_date
-				ORDER BY dd.data_date
+					AND dd.stat_date >= $3 AND dd.stat_date <= $4
+				GROUP BY dd.stat_date ORDER BY dd.stat_date
 			`
 			args = append(args, userID, sid, startDate, endDate)
 		}
 	} else {
 		if isAdmin {
 			query = `
-				SELECT dd.data_date,
-					COALESCE(SUM((dd.data->>'energy_produce')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_charge')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_discharge')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_load')::float8), 0)
-				FROM device_day_data dd
+				SELECT dd.stat_date,
+					COALESCE(SUM(dd.pv_energy), 0), COALESCE(SUM(dd.charge_energy), 0),
+					COALESCE(SUM(dd.discharge_energy), 0), COALESCE(SUM(dd.load_energy), 0)
+				FROM device_energy_day dd
 				JOIN devices d ON d.sn = dd.device_sn
 				WHERE d.deleted_at IS NULL
-					AND dd.data_date >= $1 AND dd.data_date <= $2
-				GROUP BY dd.data_date
-				ORDER BY dd.data_date
+					AND dd.stat_date >= $1 AND dd.stat_date <= $2
+				GROUP BY dd.stat_date ORDER BY dd.stat_date
 			`
 			args = append(args, startDate, endDate)
 		} else {
 			query = `
-				SELECT dd.data_date,
-					COALESCE(SUM((dd.data->>'energy_produce')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_charge')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_discharge')::float8), 0),
-					COALESCE(SUM((dd.data->>'daily_load')::float8), 0)
-				FROM device_day_data dd
+				SELECT dd.stat_date,
+					COALESCE(SUM(dd.pv_energy), 0), COALESCE(SUM(dd.charge_energy), 0),
+					COALESCE(SUM(dd.discharge_energy), 0), COALESCE(SUM(dd.load_energy), 0)
+				FROM device_energy_day dd
 				JOIN devices d ON d.sn = dd.device_sn
 				WHERE d.deleted_at IS NULL AND d.user_id = $1
-					AND dd.data_date >= $2 AND dd.data_date <= $3
-				GROUP BY dd.data_date
-				ORDER BY dd.data_date
+					AND dd.stat_date >= $2 AND dd.stat_date <= $3
+				GROUP BY dd.stat_date ORDER BY dd.stat_date
 			`
 			args = append(args, userID, startDate, endDate)
 		}
@@ -730,15 +653,15 @@ func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 	if isAdmin {
 		query = `
 			SELECT s.id, s.name,
-				COALESCE(SUM((dd.data->>'energy_produce')::numeric), 0) as energy,
+				COALESCE(SUM(dd.pv_energy), 0) as energy,
 				COUNT(DISTINCT d.sn) as device_count
 			FROM stations s
 			LEFT JOIN devices d ON d.station_id = s.id AND d.deleted_at IS NULL
-			LEFT JOIN device_day_data dd ON dd.device_sn = d.sn
-				AND dd.data_date >= $1 AND dd.data_date <= $2
+			LEFT JOIN device_energy_day dd ON dd.device_sn = d.sn
+				AND dd.stat_date >= $1 AND dd.stat_date <= $2
 			WHERE s.deleted_at IS NULL
 			GROUP BY s.id, s.name
-			HAVING COALESCE(SUM((dd.data->>'energy_produce')::numeric), 0) > 0
+			HAVING COALESCE(SUM(dd.pv_energy), 0) > 0
 			ORDER BY energy DESC
 			LIMIT $3
 		`
@@ -746,15 +669,15 @@ func (h *DashboardHandler) GetStationRanking(c *gin.Context) {
 	} else {
 		query = `
 			SELECT s.id, s.name,
-				COALESCE(SUM((dd.data->>'energy_produce')::numeric), 0) as energy,
+				COALESCE(SUM(dd.pv_energy), 0) as energy,
 				COUNT(DISTINCT d.sn) as device_count
 			FROM stations s
 			LEFT JOIN devices d ON d.station_id = s.id AND d.deleted_at IS NULL
-			LEFT JOIN device_day_data dd ON dd.device_sn = d.sn
-				AND dd.data_date >= $2 AND dd.data_date <= $3
+			LEFT JOIN device_energy_day dd ON dd.device_sn = d.sn
+				AND dd.stat_date >= $2 AND dd.stat_date <= $3
 			WHERE s.deleted_at IS NULL AND s.user_id = $1
 			GROUP BY s.id, s.name
-			HAVING COALESCE(SUM((dd.data->>'energy_produce')::numeric), 0) > 0
+			HAVING COALESCE(SUM(dd.pv_energy), 0) > 0
 			ORDER BY energy DESC
 			LIMIT $4
 		`
@@ -815,23 +738,20 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var pvArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		pvQuery = `
-			SELECT time_bucket('1 minute', dt.time) as time_slot,
-				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
-			FROM device_telemetry dt
+			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.pv_total_power,0))
+			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE dt.topic = 'data/pv' AND d.deleted_at IS NULL
-				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
+			WHERE d.deleted_at IS NULL AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		pvArgs = append(pvArgs, startUTC, endUTC)
 	} else {
 		pvQuery = `
-			SELECT time_bucket('1 minute', dt.time) as time_slot,
-				AVG(COALESCE((dt.data->'data'->>'pv_power_total')::float, 0)) as pv_power
-			FROM device_telemetry dt
+			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.pv_total_power,0))
+			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE dt.topic = 'data/pv' AND d.deleted_at IS NULL AND d.user_id = $1
-				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
+			WHERE d.deleted_at IS NULL AND d.user_id = $1
+				AND dt.event_time >= $2::timestamptz AND dt.event_time < $3::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		pvArgs = append(pvArgs, userID, startUTC, endUTC)
@@ -842,23 +762,20 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var battArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		battQuery = `
-			SELECT time_bucket('1 minute', dt.time) as time_slot,
-				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
-			FROM device_telemetry dt
+			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.battery_power,0))
+			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE dt.topic = 'data/battery' AND d.deleted_at IS NULL
-				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
+			WHERE d.deleted_at IS NULL AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		battArgs = append(battArgs, startUTC, endUTC)
 	} else {
 		battQuery = `
-			SELECT time_bucket('1 minute', dt.time) as time_slot,
-				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as batt_power
-			FROM device_telemetry dt
+			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.battery_power,0))
+			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE dt.topic = 'data/battery' AND d.deleted_at IS NULL AND d.user_id = $1
-				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
+			WHERE d.deleted_at IS NULL AND d.user_id = $1
+				AND dt.event_time >= $2::timestamptz AND dt.event_time < $3::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		battArgs = append(battArgs, userID, startUTC, endUTC)
@@ -869,23 +786,20 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 	var loadArgs []interface{}
 	if h.isSuperAdmin(ctx, userID) {
 		loadQuery = `
-			SELECT time_bucket('1 minute', dt.time) as time_slot,
-				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
-			FROM device_telemetry dt
+			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.ac_active_power,0))
+			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE dt.topic = 'data/ac' AND d.deleted_at IS NULL
-				AND dt.time >= $1::timestamp AND dt.time < $2::timestamp
+			WHERE d.deleted_at IS NULL AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		loadArgs = append(loadArgs, startUTC, endUTC)
 	} else {
 		loadQuery = `
-			SELECT time_bucket('1 minute', dt.time) as time_slot,
-				AVG(COALESCE((dt.data->'data'->>'power')::float, 0)) as load_power
-			FROM device_telemetry dt
+			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.ac_active_power,0))
+			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE dt.topic = 'data/ac' AND d.deleted_at IS NULL AND d.user_id = $1
-				AND dt.time >= $2::timestamp AND dt.time < $3::timestamp
+			WHERE d.deleted_at IS NULL AND d.user_id = $1
+				AND dt.event_time >= $2::timestamptz AND dt.event_time < $3::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		loadArgs = append(loadArgs, userID, startUTC, endUTC)

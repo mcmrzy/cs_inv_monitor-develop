@@ -89,9 +89,9 @@ type NotificationService interface {
 
 // NotificationConfig SSE 推送配置
 type NotificationConfig struct {
-	SSEBufferSize  int // 每个客户端 channel 缓冲区大小
+	SSEBufferSize     int // 每个客户端 channel 缓冲区大小
 	MaxClientsPerUser int // 每用户最大连接数，超出时踢掉最早的
-	CatchupLimit   int // 历史通知回填条数
+	CatchupLimit      int // 历史通知回填条数
 }
 
 func extractFloat(m map[string]interface{}, keys ...string) float64 {
@@ -137,10 +137,10 @@ func defaultNotificationConfig() *NotificationConfig {
 
 // sseHubEvent SSE Hub 内部事件
 type sseHubEvent struct {
-	subscribe   bool
-	userID      int64
-	clientID    string
-	ch          chan<- string
+	subscribe bool
+	userID    int64
+	clientID  string
+	ch        chan<- string
 }
 
 // sseClientEntry SSE 客户端条目
@@ -161,9 +161,9 @@ type sseNotification struct {
 }
 
 type InternalHandler struct {
-	db         *pgxpool.Pool
-	rdb        *redis.Client
-	otaService *service.OTAService
+	db           *pgxpool.Pool
+	rdb          *redis.Client
+	otaService   *service.OTAService
 	jpushService *service.JPushService
 	// SSE multi-client broadcast: map[user_id][]sseClientEntry
 	sseClientsByUser map[int64][]sseClientEntry
@@ -377,13 +377,13 @@ func (h *InternalHandler) pushRealtimeData(ctx context.Context, sn string, data 
 
 	cacheKey := "realtime:latest:" + sn
 	pipe := h.rdb.Pipeline()
-	pipe.Set(ctx, cacheKey, payload, 120*time.Second)
+	pipe.Set(ctx, cacheKey, payload, 10*time.Minute)
 	for k, v := range data {
 		if k == "_sn" || k == "_updated_at" {
 			continue
 		}
 		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": time.Now().UTC().Unix()})
-		pipe.Set(ctx, "realtime:latest:"+sn+":"+k, fieldBytes, 120*time.Second)
+		pipe.Set(ctx, "realtime:latest:"+sn+":"+k, fieldBytes, 10*time.Minute)
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		log.Printf("ERROR: Redis pipeline failed: %v", err)
@@ -482,11 +482,11 @@ func (h *InternalHandler) reconcileOTAStatus(ctx context.Context, sn string, fwA
 	defer rows.Close()
 
 	type upgradeRecord struct {
-		id          int64
-		targetChip  string
-		version     string
-		startedAt   time.Time
-		packageID   int64
+		id         int64
+		targetChip string
+		version    string
+		startedAt  time.Time
+		packageID  int64
 	}
 
 	var records []upgradeRecord
@@ -669,7 +669,7 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 		telemetryTime = time.Now().UTC()
 	}
 
-	// 设备服务器发送的数据是嵌套结构: {"data": {...实际字段...}, "ac_data": {...}, "timestamp": ...}
+	// 设备服务器发送的数据是嵌套结构: {"data": {...实际字段...}, "timestamp": ...}
 	// 先解包内层 data 用于字段提取
 	dataMap := req.Data
 	if nested, ok := req.Data["data"].(map[string]interface{}); ok {
@@ -806,6 +806,8 @@ type internalDeviceCmdResultRequest struct {
 	Cmd       string          `json:"cmd"`
 	Result    string          `json:"result"`
 	Success   bool            `json:"success"`
+	Stage     string          `json:"stage"`
+	Code      string          `json:"code"`
 	Message   string          `json:"message"`
 	Data      json.RawMessage `json:"data"`
 	Timestamp int64           `json:"timestamp"`
@@ -827,7 +829,13 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 
 	// 确定状态
 	status := "success"
-	if !req.Success && req.Result != "ok" && req.Result != "success" {
+	switch req.Stage {
+	case "acknowledged":
+		status = "acknowledged"
+	case "executing":
+		status = "executing"
+	}
+	if req.Stage != "acknowledged" && req.Stage != "executing" && !req.Success && req.Result != "ok" && req.Result != "success" {
 		status = "failed"
 	}
 
@@ -841,6 +849,16 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 		if err != nil {
 			logger.Error("DeviceCmdResult update failed",
 				zap.String("sn", req.SN), zap.String("task_id", req.TaskID), zap.Error(err))
+		}
+		_, err = h.db.Exec(ctx, `
+			UPDATE device_commands SET status=$2,result_code=COALESCE(NULLIF($3,''),result_code),
+				result_message=$4,response_data=COALESCE($5::jsonb,'[]'::jsonb),
+				acknowledged_at=CASE WHEN $2='acknowledged' THEN NOW() ELSE acknowledged_at END,
+				completed_at=CASE WHEN $2 IN ('success','failed') THEN NOW() ELSE completed_at END
+			WHERE task_id::text=$1
+		`, req.TaskID, status, req.Code, req.Message, req.Data)
+		if err != nil {
+			logger.Error("Device command lifecycle update failed", zap.String("task_id", req.TaskID), zap.Error(err))
 		}
 	} else {
 		// 兼容旧格式：没有 task_id，插入新记录

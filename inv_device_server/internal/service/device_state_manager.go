@@ -28,12 +28,12 @@ const (
 type StateTransition int
 
 const (
-	EventOnlineReport    StateTransition = iota // 设备上报在线
-	EventOfflineReport                          // 设备上报离线
-	EventFaultDetected                          // 检测到故障
-	EventFaultRecovered                         // 故障恢复
-	EventHeartbeatTimeout                       // 心跳超时
-	EventLWTOffline                             // LWT离线
+	EventOnlineReport     StateTransition = iota // 设备上报在线
+	EventOfflineReport                           // 设备上报离线
+	EventFaultDetected                           // 检测到故障
+	EventFaultRecovered                          // 故障恢复
+	EventHeartbeatTimeout                        // 心跳超时
+	EventLWTOffline                              // LWT离线
 )
 
 // StateChangeRequest 状态变更请求
@@ -156,7 +156,7 @@ func (m *DeviceStateManager) GetDeviceState(ctx context.Context, sn string) Devi
 // 刷新Redis心跳key的TTL
 func (m *DeviceStateManager) UpdateHeartbeat(ctx context.Context, sn string) error {
 	key := fmt.Sprintf("device:heartbeat:%s", sn)
-	return m.rdb.Set(ctx, key, time.Now().Unix(), 120*time.Second).Err()
+	return m.rdb.Set(ctx, key, time.Now().Unix(), 10*time.Minute).Err()
 }
 
 // HasHeartbeat 检查设备是否有活跃的心跳
@@ -259,8 +259,8 @@ func (m *DeviceStateManager) postInternal(path string, payload interface{}) erro
 // 行：当前状态，列：事件，值：目标状态（-1表示不允许）
 var stateTransitionMatrix = [3][6]DeviceState{
 	// EventOnlineReport, EventOfflineReport, EventFaultDetected, EventFaultRecovered, EventHeartbeatTimeout, EventLWTOffline
-	{StateOnline, -1, StateFault, -1, -1, -1},                      // 当前: Offline
-	{-1, StateOffline, StateFault, -1, StateOffline, StateOffline},  // 当前: Online
+	{StateOnline, -1, StateFault, -1, -1, -1},                                       // 当前: Offline
+	{-1, StateOffline, StateFault, -1, StateOffline, StateOffline},                  // 当前: Online
 	{StateFault, StateOffline, StateFault, StateOnline, StateOffline, StateOffline}, // 当前: Fault
 }
 

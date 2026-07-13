@@ -11,8 +11,9 @@ import {
   ThunderboltOutlined, ApiOutlined, EyeOutlined, EyeInvisibleOutlined,
   ControlOutlined, InfoCircleOutlined,
 } from '@ant-design/icons'
-import { modelApi, DeviceModelItem, DeviceModelFieldItem, DeviceModelProtocolItem } from '@/services/modelApi'
+import { modelApi, DeviceModelItem, DeviceModelFieldItem, DeviceModelProtocolItem, ModelFieldCapability, ModelCommandCapability } from '@/services/modelApi'
 import useTranslation from '@/hooks/useTranslation'
+import ModelRegistryWorkspace from './model_registry_workspace'
 
 const { Text, Title } = Typography
 
@@ -155,6 +156,38 @@ const ModelsPage: React.FC = () => {
       return (Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []) as DeviceModelProtocolItem[]
     }),
     enabled: currentModelId != null,
+  })
+
+  const { data: fieldCapabilities = [] } = useQuery<ModelFieldCapability[]>({
+    queryKey: ['modelFieldCapabilities', currentModelId],
+    queryFn: () => modelApi.getFieldCapabilities(currentModelId!).then((res) => res.data?.data ?? res.data ?? []),
+    enabled: currentModelId != null && fieldsDrawerOpen,
+  })
+
+  const { data: commandCapabilities = [] } = useQuery<ModelCommandCapability[]>({
+    queryKey: ['modelCommandCapabilities', currentModelId],
+    queryFn: () => modelApi.getCommandCapabilities(currentModelId!).then((res) => res.data?.data ?? res.data ?? []),
+    enabled: currentModelId != null && fieldsDrawerOpen,
+  })
+
+  const { data: protocolSchema } = useQuery<any>({
+    queryKey: ['modelProtocolSchema', currentModelId],
+    queryFn: () => modelApi.getProtocolSchema(currentModelId!).then((res) => res.data?.data ?? res.data),
+    enabled: currentModelId != null && fieldsDrawerOpen,
+  })
+
+  const updateFieldCapabilityMut = useMutation({
+    mutationFn: ({ fieldKey, data }: { fieldKey: string; data: Partial<ModelFieldCapability> }) =>
+      modelApi.updateFieldCapability(currentModelId!, fieldKey, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelFieldCapabilities', currentModelId] }),
+    onError: () => messageApi.error('更新字段能力失败'),
+  })
+
+  const updateCommandCapabilityMut = useMutation({
+    mutationFn: ({ commandCode, data }: { commandCode: string; data: Partial<ModelCommandCapability> }) =>
+      modelApi.updateCommandCapability(currentModelId!, commandCode, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelCommandCapabilities', currentModelId] }),
+    onError: () => messageApi.error('更新控制能力失败'),
   })
 
   const groupedFields = useMemo(() => {
@@ -510,42 +543,66 @@ const ModelsPage: React.FC = () => {
         open={fieldsDrawerOpen}
         onClose={() => setFieldsDrawerOpen(false)}
         width={1000}
-        extra={
-          <Space>
-            <Button icon={<PlusOutlined />} onClick={() => handleCreateField()}>{t('models.addField')}</Button>
-          </Space>
-        }
       >
         <Tabs
           items={[
             {
               key: 'fields',
-              label: <span><EyeOutlined /> {t('models.fieldConfig')}</span>,
-              children: renderFieldGroups(),
+              label: <span><EyeOutlined /> 监测字段</span>,
+              children: <Table<ModelFieldCapability>
+                rowKey="id"
+                size="small"
+                pagination={false}
+                dataSource={fieldCapabilities}
+                columns={[
+                  { title: '标准字段', dataIndex: 'field_key', width: 190 },
+                  { title: '分组', dataIndex: 'group_code', width: 100 },
+                  { title: '类型', dataIndex: 'field_type', width: 90 },
+                  { title: '单位', dataIndex: 'display_unit', width: 80, render: (v, r) => v || r.base_unit || '-' },
+                  { title: '实时', dataIndex: 'show_realtime', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_realtime: checked } })} /> },
+                  { title: '历史', dataIndex: 'show_history', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_history: checked } })} /> },
+                  { title: '对比', dataIndex: 'allow_compare', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_compare: checked } })} /> },
+                  { title: '告警', dataIndex: 'allow_alarm_rule', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_alarm_rule: checked } })} /> },
+                ]}
+                locale={{ emptyText: <Empty description="暂无新版字段能力，请先执行数据库迁移" /> }}
+              />,
             },
             {
-              key: 'protocols',
-              label: (
-                <Space>
-                  <ApiOutlined />
-                  <span>{t('models.mqttProtocol')}</span>
-                  <Badge count={protocolList.length} size="small" />
-                </Space>
-              ),
-              children: (
-                <>
-                  <div style={{ marginBottom: 12 }}>
-                    <Button type="primary" icon={<PlusOutlined />} size="small" onClick={handleCreateProtocol}>
-                      {t('models.addProtocol')}
-                    </Button>
-                    <Text type="secondary" style={{ marginLeft: 12, fontSize: 12 }}>
-                      {t('models.mqttConfigDesc')}
-                    </Text>
-                  </div>
-                  <Table rowKey="id" columns={protocolColumns} dataSource={protocolList} pagination={false} size="small"
-                    locale={{ emptyText: <Empty description={t('models.noProtocol')} /> }} />
-                </>
-              ),
+              key: 'commands',
+              label: <span><ControlOutlined /> 控制能力</span>,
+              children: <Table<ModelCommandCapability>
+                rowKey="id" size="small" pagination={false} dataSource={commandCapabilities}
+                columns={[
+                  { title: '命令编码', dataIndex: 'command_code', width: 220 },
+                  { title: '风险', dataIndex: 'risk_level', width: 80, render: v => <Tag color={v === 3 ? 'red' : v === 2 ? 'orange' : 'blue'}>L{v}</Tag> },
+                  { title: '超时', dataIndex: 'timeout_seconds', width: 90, render: v => `${v}s` },
+                  { title: '要求在线', dataIndex: 'requires_online', width: 90, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { requires_online: checked } })} /> },
+                  { title: '启用', dataIndex: 'is_enabled', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { is_enabled: checked } })} /> },
+                  { title: '参数规则', dataIndex: 'parameter_schema', render: v => <Text code>{JSON.stringify(v)}</Text> },
+                ]}
+              />,
+            },
+            {
+              key: 'protocol',
+              label: <span><ApiOutlined /> 协议版本</span>,
+              children: <>
+                <Descriptions size="small" bordered column={2} style={{ marginBottom: 12 }}>
+                  <Descriptions.Item label="协议">{protocolSchema?.protocol_code ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label="版本">{protocolSchema?.version ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label="状态"><Tag color="green">{protocolSchema?.status ?? '-'}</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Schema Hash">{protocolSchema?.schema_hash ?? '-'}</Descriptions.Item>
+                </Descriptions>
+                <Table rowKey={(r: any) => `${r.group_code}-${r.field_index}`} size="small" pagination={false}
+                  dataSource={protocolSchema?.fields ?? []}
+                  columns={[
+                    { title: '数组', dataIndex: 'group_code', width: 90 },
+                    { title: '下标', dataIndex: 'field_index', width: 70 },
+                    { title: '标准字段', dataIndex: 'field_key', width: 220 },
+                    { title: '线类型', dataIndex: 'wire_type', width: 100 },
+                    { title: '范围', render: (_: any, r: any) => `${r.minimum ?? '-'} ~ ${r.maximum ?? '-'}` },
+                  ]}
+                />
+              </>,
             },
           ]}
         />
@@ -672,4 +729,4 @@ const ModelsPage: React.FC = () => {
   )
 }
 
-export default ModelsPage
+export default ModelRegistryWorkspace

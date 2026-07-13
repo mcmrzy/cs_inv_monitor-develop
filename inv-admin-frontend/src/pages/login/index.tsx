@@ -15,8 +15,8 @@ const loginBackgrounds = [
   '/images/login/login-bg-3.jpg',
   '/images/login/login-bg-4.jpg',
   '/images/login/login-bg-5.jpg',
-  '/images/login/login-bg-6.png',
-  '/images/login/login-bg-7.png',
+  '/images/login/login-bg-6.jpg',
+  '/images/login/login-bg-7.jpg',
   '/images/login/login-bg-8.jpg',
   '/images/login/login-bg-9.jpg',
 ]

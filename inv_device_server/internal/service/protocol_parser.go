@@ -14,6 +14,7 @@ import (
 	"inv-device-server/internal/model"
 	"inv-device-server/internal/mqtt"
 	"inv-device-server/internal/repository"
+	telemetryv2 "inv-device-server/internal/telemetry"
 	"inv-device-server/pkg/logger"
 
 	"github.com/redis/go-redis/v9"
@@ -36,10 +37,10 @@ type ProtocolParser struct {
 	internalKey string
 	httpClient  *http.Client
 
-	snModelCache  map[string]int32
-	snCacheMu     sync.RWMutex
-	parseEngine   *ParseRuleEngine
-	stateManager  *DeviceStateManager // 集中式状态管理器
+	snModelCache map[string]int32
+	snCacheMu    sync.RWMutex
+	parseEngine  *ParseRuleEngine
+	stateManager *DeviceStateManager // 集中式状态管理器
 
 	workerCount int
 	msgChan     chan *parsedMessage
@@ -237,6 +238,10 @@ func (p *ProtocolParser) processMessage(ctx context.Context, raw *RawMessage) er
 	switch raw.MsgType {
 	case "status", "online":
 		return p.handleOnline(ctx, raw)
+	case "heartbeat":
+		return p.handleHeartbeat(ctx, raw)
+	case "config":
+		return p.handleReportedConfig(ctx, raw)
 	case "info", "data/info":
 		return p.handleInfo(ctx, raw)
 	case "cmd", "cmd/response", "cmd_result":
@@ -244,6 +249,80 @@ func (p *ProtocolParser) processMessage(ctx context.Context, raw *RawMessage) er
 	default:
 		return p.handleTelemetry(ctx, raw)
 	}
+}
+
+func (p *ProtocolParser) handleReportedConfig(ctx context.Context, raw *RawMessage) error {
+	cfg, err := telemetryv2.ParseReportedConfig(raw.Payload)
+	if err != nil {
+		return err
+	}
+	if err := p.repo.SaveReportedConfig(ctx, raw.SN, cfg); err != nil {
+		return err
+	}
+	if p.rdb != nil {
+		encoded, err := json.Marshal(cfg.Values)
+		if err == nil {
+			_ = p.rdb.Set(ctx, "device:config:"+raw.SN, encoded, 24*time.Hour).Err()
+		}
+	}
+	return nil
+}
+
+func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) error {
+	receivedAt := time.Now().UTC()
+	if raw.ReceivedAt != "" {
+		if parsed, err := time.Parse(time.RFC3339Nano, raw.ReceivedAt); err == nil {
+			receivedAt = parsed.UTC()
+		}
+	}
+	cellCount, err := p.repo.GetDeviceCellCount(ctx, raw.SN)
+	if err != nil || cellCount <= 0 {
+		cellCount = 16
+	}
+	sample, err := telemetryv2.ParseHeartbeat(raw.SN, raw.Payload, cellCount, receivedAt)
+	if err != nil {
+		return err
+	}
+	if err := p.repo.SaveTelemetryV2(ctx, sample); err != nil {
+		return err
+	}
+
+	if sample.QualityFlags&telemetryv2.QualityBackfill == 0 {
+		if err := p.stateManager.UpdateHeartbeat(ctx, raw.SN); err != nil {
+			logger.Warn("Failed to update heartbeat", zap.String("sn", raw.SN), zap.Error(err))
+		}
+		if err := p.stateManager.HandleStateChange(ctx, &StateChangeRequest{SN: raw.SN, Event: EventOnlineReport, Timestamp: receivedAt}); err != nil {
+			logger.Warn("Failed to handle heartbeat online state", zap.String("sn", raw.SN), zap.Error(err))
+		}
+	}
+
+	status := map[string]interface{}{}
+	if sample.System.FaultCode != nil {
+		status["fault_code"] = int64(*sample.System.FaultCode)
+	}
+	if sample.System.AlarmCode != nil {
+		status["alarm_code"] = int64(*sample.System.AlarmCode)
+	}
+	if sample.System.WorkState != nil {
+		status["work_state"] = int64(*sample.System.WorkState)
+	}
+	if err := p.stateManager.DetectAndHandleFault(ctx, raw.SN, status); err != nil {
+		logger.Warn("Failed to detect heartbeat fault", zap.String("sn", raw.SN), zap.Error(err))
+	}
+
+	if p.rdb != nil && sample.QualityFlags&telemetryv2.QualityBackfill == 0 {
+		latest := map[string]interface{}{
+			"device_sn": raw.SN, "event_time": sample.EventTime, "quality_flags": sample.QualityFlags,
+			"ac_power": sample.AC.ActivePower, "pv_total_power": sample.PV.TotalPower,
+			"battery_soc": sample.Battery.SOC, "battery_power": sample.Battery.Power,
+			"work_state": sample.System.WorkState, "fault_code": sample.System.FaultCode,
+			"daily_pv": sample.Energy.DailyPV, "total_pv": sample.Energy.TotalPV,
+		}
+		if encoded, marshalErr := json.Marshal(latest); marshalErr == nil {
+			_ = p.rdb.Set(ctx, "device:latest:"+raw.SN, encoded, 10*time.Minute).Err()
+		}
+	}
+	return nil
 }
 
 // unwrapPayload 处理 payload 可能是 JSON 字符串的情况
@@ -363,7 +442,7 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 		rt["_sn"] = raw.SN
 		rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 		mergedBytes, _ := json.Marshal(rt)
-		p.rdb.Set(ctx, cacheKey, mergedBytes, 120*time.Second)
+		p.rdb.Set(ctx, cacheKey, mergedBytes, 10*time.Minute)
 	}
 
 	logger.Info("Device info registered",
@@ -514,27 +593,7 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 		}
 	}
 
-	// 构建数据库存储数据（保留带前缀字段用于查询兼容）
-	topicCategory := p.getTopicCategory(raw.MsgType)
-	dataToStore := make(map[string]interface{})
-	for k, v := range parsedPayload {
-		dataToStore[k] = v
-	}
-	if topicCategory != "" {
-		prefix := topicCategory + "_"
-		for k, v := range payloadMap {
-			if !strings.HasPrefix(k, prefix) && !strings.HasPrefix(k, "pv_") && !strings.HasPrefix(k, "mppt_") {
-				dataToStore[prefix+k] = v
-			}
-		}
-	}
-
-	// 构建 Redis 缓存数据（只保留原始字段，不添加带前缀的重复字段）
-	cachePayload := make(map[string]interface{})
-	for k, v := range parsedPayload {
-		cachePayload[k] = v
-	}
-
+	// 直接使用解析后的 payload，不再添加带前缀的冗余字段（ac_data/pv_data/batt_data 等）
 	topic := raw.MsgType
 	if topic == "" {
 		topic = "data/unknown"
@@ -543,7 +602,7 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 	req := map[string]interface{}{
 		"sn":    raw.SN,
 		"topic": topic,
-		"data":  dataToStore,
+		"data":  parsedPayload,
 	}
 
 	var timestamp int64
@@ -597,7 +656,7 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 		return err
 	}
 
-	if err := p.cacheRealtime(ctx, raw.SN, cachePayload, raw.MsgType); err != nil {
+	if err := p.cacheRealtime(ctx, raw.SN, parsedPayload, raw.MsgType); err != nil {
 		logger.Debug("Redis cache failed", zap.String("sn", raw.SN), zap.Error(err))
 	}
 
@@ -673,6 +732,8 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 		"cmd":       resp.Cmd,
 		"result":    result,
 		"success":   resp.Success,
+		"stage":     resp.Stage,
+		"code":      resp.Code,
 		"message":   resp.Message,
 		"timestamp": resp.Timestamp,
 	}

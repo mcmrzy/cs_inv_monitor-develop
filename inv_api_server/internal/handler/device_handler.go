@@ -665,6 +665,21 @@ func (h *DeviceHandler) GetStatistics(c *gin.Context) {
 	response.Success(c, data)
 }
 
+func (h *DeviceHandler) GetControlState(c *gin.Context) {
+	sn := c.Param("sn")
+	userID := middleware.GetUserID(c)
+	if middleware.GetRole(c) != 0 && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+	state, err := h.deviceService.GetControlState(c.Request.Context(), sn)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("get control state failed", err))
+		return
+	}
+	response.Success(c, state)
+}
+
 // DEPRECATED: OTA management migrated to NestJS backend (inv-admin-backend).
 // func (h *DeviceHandler) OTAUpgrade(c *gin.Context) {}
 // func (h *DeviceHandler) GetOTAStatus(c *gin.Context) {}

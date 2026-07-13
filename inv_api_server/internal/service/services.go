@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/model"
@@ -16,14 +17,18 @@ import (
 	"inv-api-server/pkg/jwt"
 	"inv-api-server/pkg/logger"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
 // generateTaskID 生成唯一的任务ID
 func generateTaskID() string {
-	n, _ := rand.Int(rand.Reader, big.NewInt(999999))
-	return fmt.Sprintf("cmd_%d_%06d", time.Now().UnixNano()/1e6, n.Int64())
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.NewString()
+	}
+	return id.String()
 }
 
 type UserService struct {
@@ -413,6 +418,14 @@ var systemCommands = map[string]bool{
 }
 
 func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, command string) error {
+	if found, enabled, err := s.modelRepo.CommandCapability(ctx, sn, command); err != nil {
+		return fmt.Errorf("query command capability: %w", err)
+	} else if found {
+		if !enabled {
+			return fmt.Errorf("command %s is disabled for this model", command)
+		}
+		return nil
+	}
 	// 系统级命令始终允许
 	if systemCommands[command] {
 		return nil
@@ -496,6 +509,10 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 
 	// 生成唯一任务ID
 	taskID := generateTaskID()
+	args, hasV2Spec, err := s.modelRepo.BuildCommandArgs(ctx, sn, cmdType, params)
+	if err != nil {
+		return fmt.Errorf("invalid command %s: %w", cmdType, err)
+	}
 
 	// 1. 写入命令日志（status=pending）
 	paramsJSON, _ := json.Marshal(params)
@@ -510,6 +527,12 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 		"command": cmdType,
 		"params":  params,
 		"task_id": taskID,
+	}
+	if hasV2Spec {
+		cmdBody["v"] = 1
+		cmdBody["t"] = time.Now().Unix()
+		cmdBody["cmd"] = cmdType
+		cmdBody["args"] = args
 	}
 	body, err := json.Marshal(cmdBody)
 	if err != nil {
@@ -564,7 +587,12 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 		return fmt.Errorf("device server returned status %d", resp.StatusCode)
 	}
 
+	_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "sent", "命令已发送")
+
 	// 5. 插入发送通知
+	if hasV2Spec && !strings.HasPrefix(cmdType, "query_") {
+		_ = s.repo.SetDesiredControlState(ctx, sn, taskID, cmdType, params)
+	}
 	s.insertCmdNotification(ctx, sn, taskID, cmdType)
 
 	logger.Info("Command sent to device server",
@@ -614,6 +642,10 @@ func (s *DeviceService) GetHistoryData(ctx context.Context, sn, startDate, endDa
 
 func (s *DeviceService) GetStatistics(ctx context.Context, sn, startDate, endDate, period, tz string) (map[string]interface{}, error) {
 	return s.repo.GetStatistics(ctx, sn, startDate, endDate, period, tz)
+}
+
+func (s *DeviceService) GetControlState(ctx context.Context, sn string) (map[string]interface{}, error) {
+	return s.repo.GetControlState(ctx, sn)
 }
 
 func (s *DeviceService) ScanLocalNetwork(ctx context.Context, userID int64) ([]*model.Device, error) {

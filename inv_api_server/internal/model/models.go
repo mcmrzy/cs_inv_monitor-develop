@@ -71,65 +71,65 @@ type Device struct {
 }
 
 type DeviceRealtimeData struct {
-	DeviceSN             string                 `json:"device_sn"`
-	DataTime             time.Time              `json:"data_time"`
-	Online               bool                   `json:"online"`
-	Manufacturer         string                 `json:"manufacturer"`
-	Model                string                 `json:"model"`
-	DeviceTypeCode       int                    `json:"device_type_code"`
-	ArmVersion           string                 `json:"arm_version"`
-	DSPVersion           string                 `json:"dsp_version"`
-	ProtocolNumber       int                    `json:"protocol_number"`
-	ProtocolVersion      int                    `json:"protocol_version"`
-	NominalActivePower   float64                `json:"nominal_active_power"`
-	NominalReactivePower float64                `json:"nominal_reactive_power"`
-	OutputType           int                    `json:"output_type"`
-	DailyPowerYields     float64                `json:"daily_power_yields"`
-	TotalPowerYields     float64                `json:"total_power_yields"`
-	TotalPowerYields01   float64                `json:"total_power_yields_01"`
-	MonthlyPowerYields   float64                `json:"monthly_power_yields"`
-	TotalRunningTime     int                    `json:"total_running_time"`
-	DailyRunningTime     int                    `json:"daily_running_time"`
-	InternalTemperature  float64                `json:"internal_temperature"`
-	MPPTVoltage          []float64              `json:"mppt_voltage"`
-	MPPTCurrent          []float64              `json:"mppt_current"`
-	TotalDCPower         float64                `json:"total_dc_power"`
-	PhaseAVoltage        float64                `json:"phase_a_voltage"`
-	PhaseBVoltage        float64                `json:"phase_b_voltage"`
-	PhaseCVoltage        float64                `json:"phase_c_voltage"`
-	PhaseACurrent        float64                `json:"phase_a_current"`
-	PhaseBCurrent        float64                `json:"phase_b_current"`
-	PhaseCCurrent        float64                `json:"phase_c_current"`
-	TotalActivePower     float64                `json:"total_active_power"`
-	TotalReactivePower   float64                `json:"total_reactive_power"`
-	TotalApparentPower   float64                `json:"total_apparent_power"`
-	PowerFactor          float64                `json:"power_factor"`
-	GridFrequency        float64                `json:"grid_frequency"`
-	WorkState1           string                 `json:"work_state_1"`
-	WorkState1Code       int                    `json:"work_state_1_code"`
-	WorkState2           int                    `json:"work_state_2"`
-	InverterState1       int                    `json:"inverter_state_1"`
-	InverterState2       int                    `json:"inverter_state_2"`
-	InsulationResistance int                    `json:"insulation_resistance"`
-	BusVoltage           float64                `json:"bus_voltage"`
-	NegativeGroundVoltage float64               `json:"negative_ground_voltage"`
-	PIDWorkState         int                    `json:"pid_work_state"`
-	PIDAlarmCode         int                    `json:"pid_alarm_code"`
-	CountryCode          int                    `json:"country_code"`
-	MeterTotalPower      float64                `json:"meter_total_power"`
-	MeterPhaseAPower     float64                `json:"meter_phase_a_power"`
-	MeterPhaseBPower     float64                `json:"meter_phase_b_power"`
-	MeterPhaseCPower     float64                `json:"meter_phase_c_power"`
-	LoadPower            float64                `json:"load_power"`
-	DailyFeedEnergy      float64                `json:"daily_feed_energy"`
-	TotalFeedEnergy      float64                `json:"total_feed_energy"`
-	DailyGridImport      float64                `json:"daily_grid_import"`
-	TotalGridImport      float64                `json:"total_grid_import"`
-	StringCurrents       []float64              `json:"string_currents"`
-	ActivePowerSetting   float64                `json:"active_power_setting"`
-	ReactivePowerSetting float64                `json:"reactive_power_setting"`
-	PowerFactorSetting   float64                `json:"power_factor_setting"`
-	ESP32Timestamp       int                    `json:"esp32_timestamp"`
+	DeviceSN              string    `json:"device_sn"`
+	DataTime              time.Time `json:"data_time"`
+	Online                bool      `json:"online"`
+	Manufacturer          string    `json:"manufacturer"`
+	Model                 string    `json:"model"`
+	DeviceTypeCode        int       `json:"device_type_code"`
+	ArmVersion            string    `json:"arm_version"`
+	DSPVersion            string    `json:"dsp_version"`
+	ProtocolNumber        int       `json:"protocol_number"`
+	ProtocolVersion       int       `json:"protocol_version"`
+	NominalActivePower    float64   `json:"nominal_active_power"`
+	NominalReactivePower  float64   `json:"nominal_reactive_power"`
+	OutputType            int       `json:"output_type"`
+	DailyPowerYields      float64   `json:"daily_power_yields"`
+	TotalPowerYields      float64   `json:"total_power_yields"`
+	TotalPowerYields01    float64   `json:"total_power_yields_01"`
+	MonthlyPowerYields    float64   `json:"monthly_power_yields"`
+	TotalRunningTime      int       `json:"total_running_time"`
+	DailyRunningTime      int       `json:"daily_running_time"`
+	InternalTemperature   float64   `json:"internal_temperature"`
+	MPPTVoltage           []float64 `json:"mppt_voltage"`
+	MPPTCurrent           []float64 `json:"mppt_current"`
+	TotalDCPower          float64   `json:"total_dc_power"`
+	PhaseAVoltage         float64   `json:"phase_a_voltage"`
+	PhaseBVoltage         float64   `json:"phase_b_voltage"`
+	PhaseCVoltage         float64   `json:"phase_c_voltage"`
+	PhaseACurrent         float64   `json:"phase_a_current"`
+	PhaseBCurrent         float64   `json:"phase_b_current"`
+	PhaseCCurrent         float64   `json:"phase_c_current"`
+	TotalActivePower      float64   `json:"total_active_power"`
+	TotalReactivePower    float64   `json:"total_reactive_power"`
+	TotalApparentPower    float64   `json:"total_apparent_power"`
+	PowerFactor           float64   `json:"power_factor"`
+	GridFrequency         float64   `json:"grid_frequency"`
+	WorkState1            string    `json:"work_state_1"`
+	WorkState1Code        int       `json:"work_state_1_code"`
+	WorkState2            int       `json:"work_state_2"`
+	InverterState1        int       `json:"inverter_state_1"`
+	InverterState2        int       `json:"inverter_state_2"`
+	InsulationResistance  int       `json:"insulation_resistance"`
+	BusVoltage            float64   `json:"bus_voltage"`
+	NegativeGroundVoltage float64   `json:"negative_ground_voltage"`
+	PIDWorkState          int       `json:"pid_work_state"`
+	PIDAlarmCode          int       `json:"pid_alarm_code"`
+	CountryCode           int       `json:"country_code"`
+	MeterTotalPower       float64   `json:"meter_total_power"`
+	MeterPhaseAPower      float64   `json:"meter_phase_a_power"`
+	MeterPhaseBPower      float64   `json:"meter_phase_b_power"`
+	MeterPhaseCPower      float64   `json:"meter_phase_c_power"`
+	LoadPower             float64   `json:"load_power"`
+	DailyFeedEnergy       float64   `json:"daily_feed_energy"`
+	TotalFeedEnergy       float64   `json:"total_feed_energy"`
+	DailyGridImport       float64   `json:"daily_grid_import"`
+	TotalGridImport       float64   `json:"total_grid_import"`
+	StringCurrents        []float64 `json:"string_currents"`
+	ActivePowerSetting    float64   `json:"active_power_setting"`
+	ReactivePowerSetting  float64   `json:"reactive_power_setting"`
+	PowerFactorSetting    float64   `json:"power_factor_setting"`
+	ESP32Timestamp        int       `json:"esp32_timestamp"`
 }
 
 type Alarm struct {
@@ -180,16 +180,16 @@ type StationDayData struct {
 }
 
 type UserNotifySetting struct {
-	ID               int64     `json:"id"`
-	UserID           int64     `json:"user_id"`
-	PushEnabled      bool      `json:"push_enabled"`
-	AlarmPush        bool      `json:"alarm_push"`
-	OfflinePush      bool      `json:"offline_push"`
-	SystemPush       bool      `json:"system_push"`
-	QuietHoursStart  string    `json:"quiet_hours_start"`
-	QuietHoursEnd    string    `json:"quiet_hours_end"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID              int64     `json:"id"`
+	UserID          int64     `json:"user_id"`
+	PushEnabled     bool      `json:"push_enabled"`
+	AlarmPush       bool      `json:"alarm_push"`
+	OfflinePush     bool      `json:"offline_push"`
+	SystemPush      bool      `json:"system_push"`
+	QuietHoursStart string    `json:"quiet_hours_start"`
+	QuietHoursEnd   string    `json:"quiet_hours_end"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type Message struct {
@@ -226,17 +226,20 @@ type OperationLog struct {
 }
 
 type DeviceModel struct {
-	ID            int64      `json:"id"`
-	ModelCode     string     `json:"model_code"`
-	ModelName     string     `json:"model_name"`
-	Manufacturer  string     `json:"manufacturer"`
-	Category      string     `json:"category"`
-	RatedPowerKw  float64    `json:"rated_power_kw"`
-	Description   string     `json:"description"`
-	IsActive      bool       `json:"is_active"`
-	DeviceCount   int        `json:"device_count"`
-	CreatedAt     string     `json:"created_at"`
-	UpdatedAt     string     `json:"updated_at"`
+	ID                  int64   `json:"id"`
+	ModelCode           string  `json:"model_code"`
+	ModelName           string  `json:"model_name"`
+	Manufacturer        string  `json:"manufacturer"`
+	Category            string  `json:"category"`
+	RatedPowerKw        float64 `json:"rated_power_kw"`
+	Description         string  `json:"description"`
+	IsActive            bool    `json:"is_active"`
+	LifecycleStatus     string  `json:"lifecycle_status"`
+	HeartbeatProtocolID *int64  `json:"heartbeat_protocol_id"`
+	LockVersion         int     `json:"lock_version"`
+	DeviceCount         int     `json:"device_count"`
+	CreatedAt           string  `json:"created_at"`
+	UpdatedAt           string  `json:"updated_at"`
 }
 
 type DeviceModelField struct {
@@ -286,49 +289,49 @@ type RolePermission struct {
 }
 
 type Firmware struct {
-	ID         int64      `json:"id"`
-	Model      string     `json:"model"`
-	Version    string     `json:"version"`
-	FileURL    string     `json:"file_url"`
-	FileSize   int64      `json:"file_size"`
-	FileMD5    string     `json:"file_md5"`
-	FileSHA256 string     `json:"file_sha256"`
-	Changelog  string     `json:"changelog"`
-	IsForce    bool       `json:"is_force"`
-	UploadedBy int64      `json:"uploaded_by"`
-	Status     int        `json:"status"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
-	TargetChip string     `json:"target_chip"`
+	ID          int64     `json:"id"`
+	Model       string    `json:"model"`
+	Version     string    `json:"version"`
+	FileURL     string    `json:"file_url"`
+	FileSize    int64     `json:"file_size"`
+	FileMD5     string    `json:"file_md5"`
+	FileSHA256  string    `json:"file_sha256"`
+	Changelog   string    `json:"changelog"`
+	IsForce     bool      `json:"is_force"`
+	UploadedBy  int64     `json:"uploaded_by"`
+	Status      int       `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	TargetChip  string    `json:"target_chip"`
 	MainVersion string    `json:"main_version"`
 }
 
 type DeviceUpgrade struct {
-	ID              int64      `json:"id"`
-	DeviceSN        string     `json:"device_sn"`
-	FirmwareID      int64      `json:"firmware_id"`
-	FirmwareVersion string     `json:"firmware_version"`
-	TargetChip      string     `json:"target_chip"`
-	OldVersion      string     `json:"old_version"`
-	Status          string     `json:"status"` // pending/downloading/upgrading/success/failed/cancelled
-	Progress        int        `json:"progress"`
-	ErrorMessage    string     `json:"error_message"`
-	RetryCount      int        `json:"retry_count"`
-	PushedBy        *int64     `json:"pushed_by"`
-	Source          string     `json:"source"` // admin/app/local
-	StartedAt       *time.Time `json:"started_at"`
-	CompletedAt     *time.Time `json:"completed_at"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	UpgradePackageID *int64    `json:"upgrade_package_id,omitempty"`
-	TaskID          *int64     `json:"task_id,omitempty"`
+	ID               int64      `json:"id"`
+	DeviceSN         string     `json:"device_sn"`
+	FirmwareID       int64      `json:"firmware_id"`
+	FirmwareVersion  string     `json:"firmware_version"`
+	TargetChip       string     `json:"target_chip"`
+	OldVersion       string     `json:"old_version"`
+	Status           string     `json:"status"` // pending/downloading/upgrading/success/failed/cancelled
+	Progress         int        `json:"progress"`
+	ErrorMessage     string     `json:"error_message"`
+	RetryCount       int        `json:"retry_count"`
+	PushedBy         *int64     `json:"pushed_by"`
+	Source           string     `json:"source"` // admin/app/local
+	StartedAt        *time.Time `json:"started_at"`
+	CompletedAt      *time.Time `json:"completed_at"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+	UpgradePackageID *int64     `json:"upgrade_package_id,omitempty"`
+	TaskID           *int64     `json:"task_id,omitempty"`
 
 	// 聚合查询用, 非数据库字段
-	DeviceModel   string `json:"device_model,omitempty"`
-	TotalDevices  int    `json:"total_devices,omitempty"`
-	SuccessCount  int    `json:"success_count,omitempty"`
-	FailedCount   int    `json:"failed_count,omitempty"`
-	PendingCount  int    `json:"pending_count,omitempty"`
+	DeviceModel  string `json:"device_model,omitempty"`
+	TotalDevices int    `json:"total_devices,omitempty"`
+	SuccessCount int    `json:"success_count,omitempty"`
+	FailedCount  int    `json:"failed_count,omitempty"`
+	PendingCount int    `json:"pending_count,omitempty"`
 
 	// 设备当前芯片版本（详情查询用）
 	CurrentArmVersion string `json:"current_arm_version,omitempty"`
@@ -344,20 +347,20 @@ type DeviceUpgrade struct {
 type UpgradeTask struct {
 	ID             int64      `json:"id"`
 	Name           string     `json:"name"`
-	TaskType       string     `json:"task_type"`        // 'single' | 'package'
+	TaskType       string     `json:"task_type"` // 'single' | 'package'
 	FirmwareID     *int64     `json:"firmware_id"`
 	PackageID      *int64     `json:"package_id"`
 	Model          string     `json:"model"`
 	TargetVersion  string     `json:"target_version"`
-	Status         string     `json:"status"`           // draft/pending/scheduled/running/completed/partial_success/failed/cancelled
-	ExecuteMode    string     `json:"execute_mode"`     // 'immediate' | 'scheduled' | 'manual'
+	Status         string     `json:"status"`       // draft/pending/scheduled/running/completed/partial_success/failed/cancelled
+	ExecuteMode    string     `json:"execute_mode"` // 'immediate' | 'scheduled' | 'manual'
 	ScheduledAt    *time.Time `json:"scheduled_at"`
 	RolloutPercent int        `json:"rollout_percent"`
 	TotalDevices   int        `json:"total_devices"`
 	SuccessCount   int        `json:"success_count"`
 	FailedCount    int        `json:"failed_count"`
 	CreatedBy      *int64     `json:"created_by"`
-	Source         string     `json:"source"`           // admin/app/local
+	Source         string     `json:"source"` // admin/app/local
 	TriggeredBy    *int64     `json:"triggered_by"`
 	Notes          string     `json:"notes"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -366,9 +369,9 @@ type UpgradeTask struct {
 	UpdatedAt      time.Time  `json:"updated_at"`
 
 	// 关联信息（非数据库字段，查询时填充）
-	FirmwareVersion    string             `json:"firmware_version,omitempty"`
-	FirmwareTargetChip string             `json:"firmware_target_chip,omitempty"`
-	PackageMainVersion string             `json:"package_main_version,omitempty"`
+	FirmwareVersion    string               `json:"firmware_version,omitempty"`
+	FirmwareTargetChip string               `json:"firmware_target_chip,omitempty"`
+	PackageMainVersion string               `json:"package_main_version,omitempty"`
 	PackageItems       []UpgradePackageItem `json:"package_items,omitempty"`
 }
 
@@ -393,40 +396,40 @@ type UpgradePackage struct {
 
 // UpgradePackageItem 升级包明细
 type UpgradePackageItem struct {
-	ID               int64  `json:"id"`
-	PackageID        int64  `json:"package_id"`
-	FirmwareID       int64  `json:"firmware_id"`
-	TargetChip       string `json:"target_chip"`
-	FirmwareVersion  string `json:"firmware_version"`
-	FileURL          string `json:"file_url,omitempty"`
-	FileSize         int64  `json:"file_size,omitempty"`
-	FileMD5          string `json:"file_md5,omitempty"`
-	FileSHA256       string `json:"file_sha256,omitempty"`
+	ID              int64  `json:"id"`
+	PackageID       int64  `json:"package_id"`
+	FirmwareID      int64  `json:"firmware_id"`
+	TargetChip      string `json:"target_chip"`
+	FirmwareVersion string `json:"firmware_version"`
+	FileURL         string `json:"file_url,omitempty"`
+	FileSize        int64  `json:"file_size,omitempty"`
+	FileMD5         string `json:"file_md5,omitempty"`
+	FileSHA256      string `json:"file_sha256,omitempty"`
 }
 
 type ParallelConfig struct {
-	ID                        int64     `json:"id"`
-	GroupName                 string    `json:"group_name"`
-	PhaseConfig               string    `json:"phase_config"`
-	MasterSN                  string    `json:"master_sn"`
-	SlaveSNs                  string    `json:"slave_sns"`
-	CirculatingCurrentThreshold float64  `json:"circulating_current_threshold"`
-	LoadBalanceDeviation      float64   `json:"load_balance_deviation"`
-	CreatedBy                 int64     `json:"created_by"`
-	Status                    int       `json:"status"`
-	CreatedAt                 time.Time `json:"created_at"`
-	UpdatedAt                 time.Time `json:"updated_at"`
+	ID                          int64     `json:"id"`
+	GroupName                   string    `json:"group_name"`
+	PhaseConfig                 string    `json:"phase_config"`
+	MasterSN                    string    `json:"master_sn"`
+	SlaveSNs                    string    `json:"slave_sns"`
+	CirculatingCurrentThreshold float64   `json:"circulating_current_threshold"`
+	LoadBalanceDeviation        float64   `json:"load_balance_deviation"`
+	CreatedBy                   int64     `json:"created_by"`
+	Status                      int       `json:"status"`
+	CreatedAt                   time.Time `json:"created_at"`
+	UpdatedAt                   time.Time `json:"updated_at"`
 }
 
 type ParallelStatus struct {
-	ID                int64     `json:"id"`
-	ParallelID        int64     `json:"parallel_id"`
-	DeviceSN          string    `json:"device_sn"`
-	Role              string    `json:"role"`
-	SyncStatus        string    `json:"sync_status"`
-	OutputPower       float64   `json:"output_power"`
-	CirculatingCurrent float64  `json:"circulating_current"`
-	DataTime          time.Time `json:"data_time"`
+	ID                 int64     `json:"id"`
+	ParallelID         int64     `json:"parallel_id"`
+	DeviceSN           string    `json:"device_sn"`
+	Role               string    `json:"role"`
+	SyncStatus         string    `json:"sync_status"`
+	OutputPower        float64   `json:"output_power"`
+	CirculatingCurrent float64   `json:"circulating_current"`
+	DataTime           time.Time `json:"data_time"`
 }
 
 type SystemConfig struct {
