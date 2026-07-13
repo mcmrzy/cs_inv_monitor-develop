@@ -3,7 +3,7 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 print("=== 直接插入用户数据 ===\n")
 
@@ -35,7 +35,7 @@ for line in users_data.split('\n'):
 VALUES ({uid}, '{phone}', '{email_escaped}', '{pwd_hash_escaped}', '{nickname_escaped}', '{avatar_escaped}', {role}, {status}) 
 ON CONFLICT (phone) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash, nickname = EXCLUDED.nickname;"""
         
-        cmd = f"echo 'cskj9527' | sudo -S docker exec inv-postgres psql -U postgres -d inv_mqtt -c \"{sql}\""
+        cmd = f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec inv-postgres psql -U postgres -d inv_mqtt -c \"{sql}\""
         stdin, stdout, stderr = client.exec_command(cmd)
         out = stdout.read().decode().strip()
         err = stderr.read().decode().strip()
@@ -44,14 +44,14 @@ ON CONFLICT (phone) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUD
             print(f"    错误: {err}")
 
 # 重置序列
-client.exec_command("echo 'cskj9527' | sudo -S docker exec inv-postgres psql -U postgres -d inv_mqtt -c \"SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 1) FROM users));\"")
+client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec inv-postgres psql -U postgres -d inv_mqtt -c \"SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 1) FROM users));\"")
 
 # 验证
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker exec inv-postgres psql -U postgres -d inv_mqtt -c 'SELECT id, phone, email, nickname FROM users;'")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec inv-postgres psql -U postgres -d inv_mqtt -c 'SELECT id, phone, email, nickname FROM users;'")
 print(f"\n验证:\n{stdout.read().decode()}")
 
 # 重启服务
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d'")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d'")
 print(f"重启: {stdout.read().decode()[:200]}")
 
 time.sleep(20)

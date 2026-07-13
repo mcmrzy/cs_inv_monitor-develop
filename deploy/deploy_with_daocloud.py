@@ -6,7 +6,7 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 # 更新 Docker 镜像源配置
 print('更新 Docker 镜像源配置...')
@@ -24,13 +24,13 @@ daemon_json = '''{
 }'''
 
 # 写入配置
-stdin, stdout, stderr = client.exec_command(f"echo 'cskj9527' | sudo -S bash -c 'cat > /etc/docker/daemon.json << EOF\n{daemon_json}\nEOF'")
+stdin, stdout, stderr = client.exec_command(f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cat > /etc/docker/daemon.json << EOF\n{daemon_json}\nEOF'")
 print(stdout.read().decode())
 print(stderr.read().decode())
 
 # 重启 Docker
 print('\n重启 Docker 服务...')
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S systemctl restart docker")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S systemctl restart docker")
 print(stdout.read().decode())
 print(stderr.read().decode())
 
@@ -39,7 +39,7 @@ time.sleep(10)
 
 # 执行部署
 print('\n开始部署...')
-cmd = "echo 'cskj9527' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d --build'"
+cmd = "echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d --build'"
 stdin, stdout, stderr = client.exec_command(cmd, timeout=300)
 print(stdout.read().decode())
 print(stderr.read().decode())
@@ -50,7 +50,7 @@ time.sleep(30)
 
 # 检查服务状态
 print('\n=== 服务状态 ===')
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker ps")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker ps")
 print(stdout.read().decode())
 
 client.close()

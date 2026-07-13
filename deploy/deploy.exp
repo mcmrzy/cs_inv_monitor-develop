@@ -2,7 +2,7 @@
 
 # 部署配置
 set SERVER "cskj@192.168.8.50"
-set PASSWORD "cskj9527"
+set PASSWORD "REDACTED_ROTATE_CREDENTIAL"
 set REMOTE_DIR "/opt/inv-mqtt"
 
 # 设置超时时间

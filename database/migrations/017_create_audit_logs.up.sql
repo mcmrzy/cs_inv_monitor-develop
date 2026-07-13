@@ -1,8 +1,5 @@
 -- 017_create_audit_logs: 审计日志表
 -- 记录用户操作审计，用于安全审计和操作追溯
-
-BEGIN;
-
 -- 审计日志表
 CREATE TABLE IF NOT EXISTS audit_logs (
     id BIGSERIAL PRIMARY KEY,
@@ -29,7 +26,3 @@ COMMENT ON TABLE audit_logs IS '审计日志表 - 记录所有用户操作';
 COMMENT ON COLUMN audit_logs.action IS '操作类型: login/logout/create/update/delete/import/export/bind/unbind/command/approve/reject/reset_password';
 COMMENT ON COLUMN audit_logs.resource_type IS '资源类型: auth/device/station/alarm/firmware/user/config/system';
 COMMENT ON COLUMN audit_logs.detail IS '操作详情JSON，可包含变更前后值、操作描述等';
-
-INSERT INTO schema_migrations (version, name) VALUES (17, 'create_audit_logs') ON CONFLICT DO NOTHING;
-
-COMMIT;

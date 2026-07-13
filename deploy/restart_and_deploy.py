@@ -6,11 +6,11 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 # 重启 Docker 服务
 print('重启 Docker 服务...')
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S systemctl restart docker")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S systemctl restart docker")
 print(stdout.read().decode())
 print(stderr.read().decode())
 
@@ -24,7 +24,7 @@ print(stdout.read().decode())
 
 # 执行部署
 print('\n开始部署...')
-cmd = "echo 'cskj9527' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d --build'"
+cmd = "echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d --build'"
 stdin, stdout, stderr = client.exec_command(cmd, timeout=300)
 output = stdout.read().decode()
 error = stderr.read().decode()
@@ -41,7 +41,7 @@ time.sleep(30)
 
 # 检查服务状态
 print('\n=== 服务状态 ===')
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker ps")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker ps")
 print(stdout.read().decode())
 
 client.close()

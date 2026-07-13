@@ -1,9 +1,6 @@
 -- 001_init_schema: 基础表结构
 -- 从 schema.sql 合并，包含所有基础表定义
 -- 执行方式: psql -U postgres -d inv_mqtt -f 001_init_schema.up.sql
-
-BEGIN;
-
 -- 迁移版本跟踪表
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version BIGINT PRIMARY KEY,
@@ -109,7 +106,3 @@ CREATE TABLE IF NOT EXISTS system_configs (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
-INSERT INTO schema_migrations (version, name) VALUES (1, 'init_schema') ON CONFLICT DO NOTHING;
-
-COMMIT;

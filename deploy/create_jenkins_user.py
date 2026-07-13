@@ -3,7 +3,7 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 print("=== 创建 Jenkins 新用户 ===\n")
 
@@ -16,7 +16,7 @@ fullname = "ciskj"
 # Jenkins 密码哈希格式 (bcrypt)
 # 使用 Jenkins 内置方式生成哈希
 print("[1/3] 生成密码哈希...")
-gen_hash_cmd = f"""echo 'cskj9527' | sudo -S docker exec jenkins-server java -cp /usr/share/jenkins/jenkins.war:/usr/share/jenkins/lib/*.jar hudson.security.HudsonPrivateSecurityRealm '{password}' 2>/dev/null || echo 'fallback'"""
+gen_hash_cmd = f"""echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server java -cp /usr/share/jenkins/jenkins.war:/usr/share/jenkins/lib/*.jar hudson.security.HudsonPrivateSecurityRealm '{password}' 2>/dev/null || echo 'fallback'"""
 stdin, stdout, stderr = client.exec_command(gen_hash_cmd)
 hash_result = stdout.read().decode().strip()
 
@@ -51,7 +51,7 @@ if (realm instanceof HudsonPrivateSecurityRealm) {{
 '''
 
 # 写入 Groovy 脚本到 Jenkins init 目录
-write_script_cmd = f"""echo 'cskj9527' | sudo -S docker exec jenkins-server bash -c 'cat > /var/jenkins_home/init.groovy.d/create_user.groovy << GROOVYEOF
+write_script_cmd = f"""echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server bash -c 'cat > /var/jenkins_home/init.groovy.d/create_user.groovy << GROOVYEOF
 {init_script}
 GROOVYEOF'"""
 stdin, stdout, stderr = client.exec_command(write_script_cmd)
@@ -60,7 +60,7 @@ print(f"错误: {stderr.read().decode().strip()}")
 
 # 重启 Jenkins 使脚本生效
 print("\n[3/3] 重启 Jenkins...")
-restart_cmd = "echo 'cskj9527' | sudo -S docker restart jenkins-server"
+restart_cmd = "echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker restart jenkins-server"
 stdin, stdout, stderr = client.exec_command(restart_cmd)
 print(stdout.read().decode().strip())
 
@@ -73,11 +73,11 @@ stdin, stdout, stderr = client.exec_command('docker ps --format "{{.Names}}: {{.
 print(f"Jenkins 状态: {stdout.read().decode().strip()}")
 
 # 检查用户是否创建成功
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker exec jenkins-server ls /var/jenkins_home/users/")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server ls /var/jenkins_home/users/")
 print(f"用户列表: {stdout.read().decode().strip()}")
 
 # 删除 init script 避免重复创建
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker exec jenkins-server rm -f /var/jenkins_home/init.groovy.d/create_user.groovy")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server rm -f /var/jenkins_home/init.groovy.d/create_user.groovy")
 
 print(f"\n=== 完成 ===")
 print(f"用户名: {username}")

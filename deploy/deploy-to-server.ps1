@@ -2,7 +2,7 @@
 # 服务器: cskj@192.168.8.50
 
 $SERVER = "cskj@192.168.8.50"
-$PASSWORD = "cskj9527"
+$PASSWORD = "REDACTED_ROTATE_CREDENTIAL"
 $REMOTE_DIR = "/opt/inv-mqtt"
 
 Write-Host "========================================" -ForegroundColor Cyan

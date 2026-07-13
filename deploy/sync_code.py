@@ -8,7 +8,7 @@ REMOTE_DIR = '/opt/inv-mqtt'
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 print("=== 同步最新代码到服务器 ===\n")
 
@@ -52,7 +52,7 @@ sftp.close()
 
 # 重新构建并部署
 print("\n[构建] 重新构建所有服务...")
-cmd = f"echo 'cskj9527' | sudo -S bash -c 'cd {REMOTE_DIR}/deploy && docker compose down && docker compose up -d --build'"
+cmd = f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd {REMOTE_DIR}/deploy && docker compose down && docker compose up -d --build'"
 stdin, stdout, stderr = client.exec_command(cmd, timeout=600)
 out = stdout.read().decode()
 # 只打印关键信息
@@ -65,7 +65,7 @@ print("\n等待服务启动...")
 time.sleep(40)
 
 # 检查状态
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker ps --format 'table {{.Names}}\t{{.Status}}' | grep inv")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker ps --format 'table {{.Names}}\t{{.Status}}' | grep inv")
 print(f"\n服务状态:\n{stdout.read().decode()}")
 
 client.close()

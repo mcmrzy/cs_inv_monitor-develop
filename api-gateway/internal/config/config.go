@@ -113,8 +113,8 @@ func (c *Config) DatabaseDSN() string {
 // Validate 校验关键配置项
 func (c *Config) Validate() error {
 	var missing []string
-	if c.JWT.Secret == "" || c.JWT.Secret == "CHANGE_ME" {
-		missing = append(missing, "jwt.secret (env: JWT_SECRET)")
+	if invalidRequiredSecret(c.JWT.Secret) {
+		missing = append(missing, "jwt.secret (env: JWT_SECRET, must not be empty or a CHANGE_ME* placeholder)")
 	}
 	if c.Backends.APIServer == "" {
 		missing = append(missing, "backends.api_server (env: API_SERVER_URL)")
@@ -122,9 +122,23 @@ func (c *Config) Validate() error {
 	if c.Backends.DeviceServer == "" {
 		missing = append(missing, "backends.device_server (env: DEVICE_SERVER_URL)")
 	}
+	if isPlaceholder(c.Database.Password) {
+		missing = append(missing, "database.password must not use a CHANGE_ME* placeholder")
+	}
+	if isPlaceholder(c.Redis.Password) {
+		missing = append(missing, "redis.password must not use a CHANGE_ME* placeholder")
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("configuration validation failed:\n  - %s",
 			strings.Join(missing, "\n  - "))
 	}
 	return nil
+}
+
+func invalidRequiredSecret(value string) bool {
+	return strings.TrimSpace(value) == "" || isPlaceholder(value)
+}
+
+func isPlaceholder(value string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(value)), "CHANGE_ME")
 }

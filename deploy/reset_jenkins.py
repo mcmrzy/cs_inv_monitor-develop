@@ -1,11 +1,11 @@
 import paramiko
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 # 重置 admin 密码为 admin123
 new_password = "admin123"
-cmd = f"echo 'cskj9527' | sudo -S docker exec jenkins-server bash -c \"java -jar /usr/share/jenkins/jenkins.war --params=hudson.security.HudsonPrivateSecurityRealm.createAccount=admin:{new_password}\" 2>/dev/null || echo 'Method1 failed'"
+cmd = f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server bash -c \"java -jar /usr/share/jenkins/jenkins.war --params=hudson.security.HudsonPrivateSecurityRealm.createAccount=admin:{new_password}\" 2>/dev/null || echo 'Method1 failed'"
 
 # 使用 Jenkins 脚本控制台重置密码
 script_console = """

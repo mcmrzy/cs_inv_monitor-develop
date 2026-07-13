@@ -77,35 +77,28 @@ func main() {
 
 	db, err := initDatabase(cfg)
 	if err != nil {
-		logger.Warn("Failed to init database, running without DB", zap.Error(err))
-	} else {
-		defer db.Close()
+		logger.Fatal("Failed to init database", zap.Error(err))
+	}
+	defer db.Close()
 
-		// 在服务器启动前执行数据库自动迁移
-		if cfg.Migration.AutoRun {
-			logger.Info("Running database migrations...",
-				zap.String("dir", cfg.Migration.Dir),
-				zap.String("schema_file", cfg.Migration.SchemaFile))
-			if err := migration.Run(context.Background(), db, cfg.Migration.Dir, cfg.Migration.SchemaFile); err != nil {
-				logger.Error("Database migration failed, server will start anyway — check /health",
-					zap.Error(err))
-			}
+	// Migrations are a startup barrier: consumers must never see a partially
+	// migrated schema, and a failed migration must never be reported healthy.
+	if cfg.Migration.AutoRun {
+		logger.Info("Running database migrations...",
+			zap.String("dir", cfg.Migration.Dir),
+			zap.String("schema_file", cfg.Migration.SchemaFile))
+		if err := migration.Run(context.Background(), db, cfg.Migration.Dir, cfg.Migration.SchemaFile, cfg.Migration.BaselineVersion); err != nil {
+			logger.Fatal("Database migration failed", zap.Error(err))
 		}
 	}
 
 	rdb, err := initRedis(cfg)
 	if err != nil {
-		logger.Warn("Failed to init redis, running without Redis", zap.Error(err))
-	} else {
-		defer rdb.Close()
+		logger.Fatal("Failed to init redis", zap.Error(err))
 	}
+	defer rdb.Close()
 
-	if db != nil && rdb != nil {
-		startFullServer(cfg, db, rdb)
-	} else {
-		logger.Warn("Starting server in limited mode (no database)")
-		startMinimalServer(cfg)
-	}
+	startFullServer(cfg, db, rdb)
 }
 
 func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {

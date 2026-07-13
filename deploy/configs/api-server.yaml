@@ -25,7 +25,7 @@ redis:
   db: 0
 
 jwt:
-  secret: "CSKJINVAPPJWTSECRET"
+  secret: ""
   expire_time: 168h
   issuer: inv-api-server
 
@@ -63,12 +63,13 @@ backends:
 migration:
   dir: /app/database/migrations
   schema_file: /app/database/schema.sql
+  baseline_version: 22
   auto_run: true
 
 # 极光推送配置
 jpush:
-  enabled: true
-  app_key: "e89e8b711cd18f666705fe7f"
-  master_secret: "b881a4cf3ba51cfef14b97c9"
+  enabled: false
+  app_key: ""
+  master_secret: ""
   timeout: 10
   dedup_ttl: 120

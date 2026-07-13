@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   postgres:
-    image: timescale/timescaledb:latest-pg16
+    image: timescale/timescaledb:2.28.2-pg18
     container_name: inv-postgres
     restart: unless-stopped
     environment:
@@ -12,11 +10,11 @@ services:
       TZ: UTC
     # 暴露端口供外部访问
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     expose:
       - "5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql/18/docker
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_NAME:-inv_mqtt}"]
       interval: 5s
@@ -30,6 +28,8 @@ services:
     container_name: inv-redis
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     # 生产环境不暴露端口，仅通过Docker内部网络访问
     # 如需本地调试，取消注释下面的行
     # ports:
@@ -39,7 +39,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
       retries: 5
     networks:
@@ -47,8 +47,8 @@ services:
 
   inv-api-server:
     build:
-      context: ../inv_api_server
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: inv_api_server/Dockerfile
     image: inv-api-server:latest
     container_name: inv-api-server
     restart: unless-stopped
@@ -66,8 +66,8 @@ services:
       INTERNAL_KEY: ${INTERNAL_KEY}
       INTERNAL_API_SECRET: ${INTERNAL_KEY}
       SERVER_URL: ${SERVER_URL:-http://192.168.8.50:8888}
-      AMAP_API_KEY: a1747dbd3566aa8883fffde623290cd9
-      WEATHER_SOURCE: amap
+      AMAP_API_KEY: ${AMAP_API_KEY:-}
+      WEATHER_SOURCE: ${WEATHER_SOURCE:-open-meteo}
       EMAIL_HOST: ${EMAIL_HOST}
       EMAIL_PORT: ${EMAIL_PORT}
       EMAIL_USER: ${EMAIL_USER}
@@ -80,7 +80,6 @@ services:
       JPUSH_DEDUP_TTL: ${JPUSH_DEDUP_TTL:-120}
     volumes:
       - firmware_data:/data/firmware
-      - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     ports:
       - "8081:8080"  # 固件下载专用端口，绕过Gateway避免传输卡顿
     expose:
@@ -121,6 +120,8 @@ services:
     expose:
       - "8081"
     depends_on:
+      inv-api-server:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:

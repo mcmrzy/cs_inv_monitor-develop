@@ -1,10 +1,10 @@
 import paramiko
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 # 获取最近的完整日志（不限过滤）
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker logs inv-api-server --tail 5 2>&1")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker logs inv-api-server --tail 5 2>&1")
 print("=== 最近日志 ===")
 print(stdout.read().decode())
 

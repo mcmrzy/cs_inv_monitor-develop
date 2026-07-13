@@ -9,7 +9,7 @@
 GO := go
 FLUTTER := flutter
 NPM := npm
-DOCKER_COMPOSE := docker compose -f deploy/docker-compose.yml
+DOCKER_COMPOSE := docker compose --env-file deploy/.secrets/.env -f deploy/docker-compose.yml
 
 # ---------- 帮助（默认目标） ----------
 help: ## 显示所有可用命令

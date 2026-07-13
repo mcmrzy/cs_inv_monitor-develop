@@ -10,7 +10,7 @@ import time
 # 服务器配置
 SERVER = "192.168.8.50"
 USERNAME = "cskj"
-PASSWORD = "cskj9527"
+PASSWORD = "REDACTED_ROTATE_CREDENTIAL"
 REMOTE_DIR = "/opt/inv-mqtt"
 
 def create_ssh_client():

@@ -3,7 +3,7 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 print("=== 通过 Jenkins Script Console 创建用户 ===\n")
 
@@ -14,7 +14,7 @@ username = "ciskj"
 password = "ciskj123"
 
 # 直接在 Jenkins 容器内执行 Groovy 脚本
-groovy_cmd = f"""echo 'cskj9527' | sudo -S docker exec jenkins-server java -jar /usr/share/jenkins/jenkins.war --argumentsRealm.passwd.{username}={password} --argumentsRealm.roles.{username}=admin 2>&1 | head -5"""
+groovy_cmd = f"""echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server java -jar /usr/share/jenkins/jenkins.war --argumentsRealm.passwd.{username}={password} --argumentsRealm.roles.{username}=admin 2>&1 | head -5"""
 stdin, stdout, stderr = client.exec_command(groovy_cmd)
 print(f"方法1输出: {stdout.read().decode().strip()[:200]}")
 
@@ -35,7 +35,7 @@ except ImportError:
 
 # 步骤2: 创建用户目录
 user_dir_hash = "ciskj_12345678901234567890"
-create_dir_cmd = f"echo 'cskj9527' | sudo -S docker exec jenkins-server mkdir -p /var/jenkins_home/users/{user_dir_hash}"
+create_dir_cmd = f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server mkdir -p /var/jenkins_home/users/{user_dir_hash}"
 stdin, stdout, stderr = client.exec_command(create_dir_cmd)
 
 # 步骤3: 创建用户 config.xml
@@ -59,7 +59,7 @@ user_config = f"""<?xml version='1.1' encoding='UTF-8'?>
 </user>"""
 
 # 写入配置文件
-write_cmd = f"""echo 'cskj9527' | sudo -S docker exec -i jenkins-server bash -c 'cat > /var/jenkins_home/users/{user_dir_hash}/config.xml' << 'XMLEOF'
+write_cmd = f"""echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec -i jenkins-server bash -c 'cat > /var/jenkins_home/users/{user_dir_hash}/config.xml' << 'XMLEOF'
 {user_config}
 XMLEOF"""
 stdin, stdout, stderr = client.exec_command(write_cmd)
@@ -86,22 +86,22 @@ users_xml = f"""<?xml version='1.1' encoding='UTF-8'?>
 </hudson.model.UserIdMapper>"""
 
 # 备份原始 users.xml
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker exec jenkins-server cp /var/jenkins_home/users/users.xml /var/jenkins_home/users/users.xml.bak")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server cp /var/jenkins_home/users/users.xml /var/jenkins_home/users/users.xml.bak")
 
 # 写入新的 users.xml
-write_users_cmd = f"""echo 'cskj9527' | sudo -S docker exec -i jenkins-server bash -c 'cat > /var/jenkins_home/users/users.xml' << 'XMLEOF'
+write_users_cmd = f"""echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec -i jenkins-server bash -c 'cat > /var/jenkins_home/users/users.xml' << 'XMLEOF'
 {users_xml}
 XMLEOF"""
 stdin, stdout, stderr = client.exec_command(write_users_cmd)
 print(f"更新 users.xml: {stderr.read().decode().strip()[:200]}")
 
 # 验证
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker exec jenkins-server ls /var/jenkins_home/users/")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec jenkins-server ls /var/jenkins_home/users/")
 print(f"\n用户目录:\n{stdout.read().decode().strip()}")
 
 # 重启 Jenkins
 print("\n重启 Jenkins...")
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker restart jenkins-server")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker restart jenkins-server")
 print(stdout.read().decode().strip())
 
 time.sleep(30)

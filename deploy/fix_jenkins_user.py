@@ -3,7 +3,7 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 # 生成 bcrypt 密码哈希
 import bcrypt
@@ -43,14 +43,14 @@ sftp.close()
 print("配置文件已写入临时目录")
 
 # 复制到 Jenkins 容器
-cmd = f"echo 'cskj9527' | sudo -S docker cp {tmp_file} jenkins-server:/var/jenkins_home/users/ciskj_12345678901234567890/config.xml"
+cmd = f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker cp {tmp_file} jenkins-server:/var/jenkins_home/users/ciskj_12345678901234567890/config.xml"
 stdin, stdout, stderr = client.exec_command(cmd)
 err = stderr.read().decode().strip()
 print(f"复制到容器: {'OK' if not err or 'sudo' in err else err}")
 
 # 重启 Jenkins
 print("重启 Jenkins...")
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker restart jenkins-server")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker restart jenkins-server")
 print(stdout.read().decode().strip())
 
 print("\n等待启动...")

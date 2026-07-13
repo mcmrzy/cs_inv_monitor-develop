@@ -2,7 +2,7 @@
 # 将公钥上传到服务器，实现免密码登录
 
 $SERVER = "cskj@192.168.8.50"
-$PASSWORD = "cskj9527"
+$PASSWORD = "REDACTED_ROTATE_CREDENTIAL"
 $PUB_KEY = Get-Content "$env:USERPROFILE\.ssh\id_rsa_deploy.pub"
 
 Write-Host "========================================" -ForegroundColor Cyan

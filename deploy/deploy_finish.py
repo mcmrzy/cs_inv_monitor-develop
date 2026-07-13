@@ -11,7 +11,7 @@ import time
 # 服务器配置
 SERVER = "192.168.8.50"
 USERNAME = "cskj"
-PASSWORD = "cskj9527"
+PASSWORD = "REDACTED_ROTATE_CREDENTIAL"
 REMOTE_DIR = "/opt/inv-mqtt"
 GIT_REPO = "https://gitee.com/your-username/cs_inv_monitor.git"  # 修改为你的 Git 仓库地址
 

@@ -11,7 +11,7 @@ import os
 
 # 配置
 SERVER = "cskj@192.168.8.50"
-PASSWORD = "cskj9527"
+PASSWORD = "REDACTED_ROTATE_CREDENTIAL"
 REMOTE_DIR = "/opt/inv-mqtt"
 
 def run_ssh_command(command, interactive=True):

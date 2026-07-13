@@ -9,7 +9,7 @@ REMOTE_DIR = '/opt/inv-mqtt'
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 print("=== 同步代码（排除 node_modules）===\n")
 
@@ -35,7 +35,7 @@ print("  Done")
 
 # 解压到服务器
 print("\n[4/6] 解压前端代码...")
-stdin, stdout, stderr = client.exec_command(f"echo 'cskj9527' | sudo -S bash -c 'cd {REMOTE_DIR} && tar -xzf /tmp/frontend.tar.gz && rm /tmp/frontend.tar.gz'")
+stdin, stdout, stderr = client.exec_command(f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd {REMOTE_DIR} && tar -xzf /tmp/frontend.tar.gz && rm /tmp/frontend.tar.gz'")
 print(stdout.read().decode().strip() or "OK")
 
 # 上传 deploy 配置
@@ -50,7 +50,7 @@ sftp.close()
 
 # 重新构建并部署
 print("\n[6/6] 重新构建并部署...")
-cmd = f"echo 'cskj9527' | sudo -S bash -c 'cd {REMOTE_DIR}/deploy && docker compose up -d --build'"
+cmd = f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd {REMOTE_DIR}/deploy && docker compose up -d --build'"
 stdin, stdout, stderr = client.exec_command(cmd, timeout=600)
 out = stdout.read().decode()
 for line in out.split('\n'):
@@ -62,7 +62,7 @@ print("\n等待服务启动...")
 time.sleep(40)
 
 # 状态检查
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker ps --format 'table {{.Names}}\t{{.Status}}' | grep inv")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker ps --format 'table {{.Names}}\t{{.Status}}' | grep inv")
 print(f"\n服务状态:\n{stdout.read().decode()}")
 
 # 清理本地 tar

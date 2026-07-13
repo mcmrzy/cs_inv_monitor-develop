@@ -58,11 +58,11 @@ type MQTTConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers   []string `mapstructure:"brokers"`
-	Enabled   bool     `mapstructure:"enabled"`
-	TelemetryTopic string `mapstructure:"telemetry_topic"`
-	AlarmTopic  string `mapstructure:"alarm_topic"`
-	CommandTopic string `mapstructure:"command_topic"`
+	Brokers        []string `mapstructure:"brokers"`
+	Enabled        bool     `mapstructure:"enabled"`
+	TelemetryTopic string   `mapstructure:"telemetry_topic"`
+	AlarmTopic     string   `mapstructure:"alarm_topic"`
+	CommandTopic   string   `mapstructure:"command_topic"`
 }
 
 type BackendsConfig struct {
@@ -84,7 +84,7 @@ func Load(configPath string) (*Config, error) {
 
 	viper.SetDefault("timezone", "Asia/Shanghai")
 	viper.SetDefault("backends.api_server", "http://inv-api-server:8080")
-	
+
 	viper.SetDefault("database.host", "postgres")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.user", "postgres")
@@ -95,12 +95,12 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("database.max_idle_conns", 30)
 	viper.SetDefault("database.conn_max_lifetime", 30*time.Minute)
 	viper.SetDefault("database.conn_max_idle_time", 10*time.Minute)
-	
+
 	viper.SetDefault("redis.host", "redis")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
-	
+
 	viper.SetDefault("mqtt.broker", "")
 	viper.SetDefault("mqtt.port", 1883)
 	viper.SetDefault("mqtt.client_id", "CSKJ-INV-SERVER-DEVICE")
@@ -108,7 +108,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("mqtt.password", "")
 	viper.SetDefault("mqtt.qos", 1)
 	viper.SetDefault("mqtt.tls_insecure", false)
-	
+
 	viper.SetDefault("kafka.enabled", true)
 	viper.SetDefault("kafka.brokers", []string{"kafka:29092"})
 	viper.SetDefault("kafka.telemetry_topic", "inv-telemetry")
@@ -120,29 +120,29 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("database.user", "DB_USER")
 	viper.BindEnv("database.password", "DB_PASSWORD")
 	viper.BindEnv("database.database", "DB_NAME")
-	
+
 	viper.BindEnv("redis.host", "REDIS_HOST")
 	viper.BindEnv("redis.port", "REDIS_PORT")
 	viper.BindEnv("redis.password", "REDIS_PASSWORD")
-	
+
 	viper.BindEnv("mqtt.broker", "MQTT_BROKER")
 	viper.BindEnv("mqtt.port", "MQTT_PORT")
 	viper.BindEnv("mqtt.client_id", "MQTT_CLIENT_ID")
 	viper.BindEnv("mqtt.username", "MQTT_USERNAME")
 	viper.BindEnv("mqtt.password", "MQTT_PASSWORD")
 	viper.BindEnv("mqtt.tls_insecure", "MQTT_TLS_INSECURE")
-	
+
 	viper.BindEnv("kafka.brokers", "KAFKA_BROKER")
 	viper.BindEnv("kafka.enabled", "KAFKA_ENABLED")
 	viper.BindEnv("kafka.telemetry_topic", "KAFKA_TELEMETRY_TOPIC")
 	viper.BindEnv("kafka.alarm_topic", "KAFKA_ALARM_TOPIC")
 	viper.BindEnv("kafka.command_topic", "KAFKA_COMMAND_TOPIC")
-	
+
 	// 将单个 broker 字符串转换为数组
 	if broker := viper.GetString("kafka.brokers"); broker != "" {
 		viper.Set("kafka.brokers", []string{broker})
 	}
-	
+
 	viper.BindEnv("backends.api_server", "API_SERVER_URL")
 	viper.BindEnv("backends.internal_key", "INTERNAL_KEY")
 
@@ -150,7 +150,7 @@ func Load(configPath string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
-	
+
 	if err := viper.ReadConfig(strings.NewReader(string(data))); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
@@ -166,8 +166,8 @@ func Load(configPath string) (*Config, error) {
 // Validate 校验关键配置项
 func (c *Config) Validate() error {
 	var missing []string
-	if c.Database.Password == "" {
-		missing = append(missing, "database.password (env: DB_PASSWORD)")
+	if invalidRequiredSecret(c.Database.Password) {
+		missing = append(missing, "database.password (env: DB_PASSWORD, must not be empty or a CHANGE_ME* placeholder)")
 	}
 	if c.Database.Host == "" {
 		missing = append(missing, "database.host (env: DB_HOST)")
@@ -184,9 +184,26 @@ func (c *Config) Validate() error {
 	if c.Backends.APIServer == "" {
 		missing = append(missing, "backends.api_server (env: API_SERVER_URL)")
 	}
+	if invalidRequiredSecret(c.Backends.InternalKey) {
+		missing = append(missing, "backends.internal_key (env: INTERNAL_KEY, must not be empty or a CHANGE_ME* placeholder)")
+	}
+	if isPlaceholder(c.Redis.Password) {
+		missing = append(missing, "redis.password must not use a CHANGE_ME* placeholder")
+	}
+	if isPlaceholder(c.MQTT.Password) {
+		missing = append(missing, "mqtt.password must not use a CHANGE_ME* placeholder")
+	}
 	if len(missing) > 0 {
 		return fmt.Errorf("configuration validation failed:\n  - %s\n\nHint: Set these via environment variables or config.yaml",
 			strings.Join(missing, "\n  - "))
 	}
 	return nil
+}
+
+func invalidRequiredSecret(value string) bool {
+	return strings.TrimSpace(value) == "" || isPlaceholder(value)
+}
+
+func isPlaceholder(value string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(value)), "CHANGE_ME")
 }

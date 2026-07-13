@@ -4,7 +4,7 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 print("=== 重新推送数据库 ===\n")
 
@@ -37,14 +37,14 @@ print("  Done")
 # 4. 恢复数据库
 print("\n[4/5] 恢复数据库...")
 # 停止服务
-client.exec_command("echo 'cskj9527' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose stop inv-api-server inv-api-gateway inv-device-server'")
+client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose stop inv-api-server inv-api-gateway inv-device-server'")
 
 # 删除旧数据库
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker exec inv-postgres psql -U postgres -c \"DROP DATABASE IF EXISTS inv_mqtt; CREATE DATABASE inv_mqtt OWNER postgres;\"")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec inv-postgres psql -U postgres -c \"DROP DATABASE IF EXISTS inv_mqtt; CREATE DATABASE inv_mqtt OWNER postgres;\"")
 print(f"  重建数据库: {stdout.read().decode().strip()}")
 
 # 导入数据
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker exec -i inv-postgres psql -U postgres -d inv_mqtt < /tmp/inv_mqtt_v2.sql")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec -i inv-postgres psql -U postgres -d inv_mqtt < /tmp/inv_mqtt_v2.sql")
 out = stdout.read().decode().strip()
 err = stderr.read().decode().strip()
 if out: print(f"  导入输出: {out[:300]}")
@@ -52,17 +52,17 @@ if err and 'sudo' not in err: print(f"  导入错误: {err[:300]}")
 
 # 5. 验证并重启
 print("\n[5/5] 验证并重启...")
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker exec inv-postgres psql -U postgres -d inv_mqtt -c 'SELECT id, phone, email FROM users;'")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker exec inv-postgres psql -U postgres -d inv_mqtt -c 'SELECT id, phone, email FROM users;'")
 print(f"  用户数据:\n{stdout.read().decode()}")
 
 # 重启服务
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d'")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d'")
 print(f"  重启: {stdout.read().decode()[:200]}")
 
 time.sleep(30)
 
 # 检查状态
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker ps --format '{{.Names}}: {{.Status}}' | grep inv")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker ps --format '{{.Names}}: {{.Status}}' | grep inv")
 print(f"\n服务状态:\n{stdout.read().decode()}")
 
 client.close()

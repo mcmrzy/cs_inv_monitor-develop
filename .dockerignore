@@ -1,0 +1,10 @@
+**
+!inv_api_server/
+!inv_api_server/**
+!database/
+!database/**
+
+inv_api_server/.gocache/
+inv_api_server/logs/
+**/*.log
+**/*.test

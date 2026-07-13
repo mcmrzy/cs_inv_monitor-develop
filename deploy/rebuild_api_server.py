@@ -8,7 +8,7 @@ REMOTE_DIR = '/opt/inv-mqtt'
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 print("=== 重新部署 API Server ===\n")
 
@@ -20,7 +20,7 @@ print("  Done")
 
 # 重新构建
 print("\n[2/3] 重新构建...")
-cmd = "echo 'cskj9527' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d --build inv-api-server'"
+cmd = "echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d --build inv-api-server'"
 stdin, stdout, stderr = client.exec_command(cmd, timeout=300)
 out = stdout.read().decode()
 for line in out.split('\n'):
@@ -33,7 +33,7 @@ time.sleep(30)
 
 # 检查状态
 stdin, stdout, stderr = client.exec_command(
-    "echo 'cskj9527' | sudo -S docker ps --format '{{.Names}}: {{.Status}}' | grep api"
+    "echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker ps --format '{{.Names}}: {{.Status}}' | grep api"
 )
 print(f"\n服务状态:\n{stdout.read().decode()}")
 

@@ -3,10 +3,10 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 # 先清空日志
-client.exec_command("echo 'cskj9527' | sudo -S bash -c 'truncate -s 0 $(docker inspect --format=\"{{.LogPath}}\" inv-api-server)'")
+client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'truncate -s 0 $(docker inspect --format=\"{{.LogPath}}\" inv-api-server)'")
 
 time.sleep(2)
 
@@ -25,7 +25,7 @@ print(stdout.read().decode())
 time.sleep(2)
 
 # 获取所有新日志
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker logs inv-api-server --tail 30 2>&1")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker logs inv-api-server --tail 30 2>&1")
 print("\n=== API Server 完整日志 ===")
 print(stdout.read().decode())
 

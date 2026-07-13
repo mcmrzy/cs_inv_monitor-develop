@@ -4,25 +4,34 @@
 """
 
 import paramiko
+import os
 import sys
 import time
 
+from secret_env import load_deploy_secrets, ssh_connect_kwargs, sudo_stdin_password
+
+load_deploy_secrets()
+
 # 服务器配置
-SERVER = "192.168.8.50"
-USERNAME = "cskj"
-PASSWORD = "cskj9527"
+SERVER = os.environ.get("DEPLOY_HOST", "")
+USERNAME = os.environ.get("DEPLOY_USER", "")
+SSH_KEY = os.environ.get("DEPLOY_SSH_KEY")
 REMOTE_DIR = "/opt/inv-mqtt"
 
 def ssh_connect():
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(SERVER, username=USERNAME, password=PASSWORD)
+    client.load_system_host_keys()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    client.connect(**ssh_connect_kwargs())
     return client
 
 def run_cmd(client, cmd, use_sudo=True):
     if use_sudo:
-        cmd = f"echo '{PASSWORD}' | sudo -S {cmd}"
+        cmd = f"sudo -S -p '' {cmd}"
     stdin, stdout, stderr = client.exec_command(cmd)
+    if use_sudo:
+        stdin.write(sudo_stdin_password() + "\n")
+        stdin.flush()
     out = stdout.read().decode('utf-8')
     err = stderr.read().decode('utf-8')
     return out, err

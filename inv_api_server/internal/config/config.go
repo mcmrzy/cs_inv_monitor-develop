@@ -10,18 +10,18 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig     `mapstructure:"server"`
-	Database DatabaseConfig   `mapstructure:"database"`
-	Redis     RedisConfig      `mapstructure:"redis"`
-	JWT       JWTConfig        `mapstructure:"jwt"`
-	SMS       SMSConfig        `mapstructure:"sms"`
-	Email     EmailConfig      `mapstructure:"email"`
-	CORS      CORSConfig       `mapstructure:"cors"`
-	Log       LogConfig        `mapstructure:"log"`
-	Timezone  string           `mapstructure:"timezone"`
-	Backends  BackendsConfig   `mapstructure:"backends"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Redis     RedisConfig     `mapstructure:"redis"`
+	JWT       JWTConfig       `mapstructure:"jwt"`
+	SMS       SMSConfig       `mapstructure:"sms"`
+	Email     EmailConfig     `mapstructure:"email"`
+	CORS      CORSConfig      `mapstructure:"cors"`
+	Log       LogConfig       `mapstructure:"log"`
+	Timezone  string          `mapstructure:"timezone"`
+	Backends  BackendsConfig  `mapstructure:"backends"`
 	Migration MigrationConfig `mapstructure:"migration"`
-	JPush     JPushConfig      `mapstructure:"jpush"`
+	JPush     JPushConfig     `mapstructure:"jpush"`
 }
 
 type CORSConfig struct {
@@ -34,7 +34,7 @@ type BackendsConfig struct {
 	ServerURL     string `mapstructure:"server_url"`     // 外部访问地址，用于ESP32下载固件
 	WeatherAPI    string `mapstructure:"weather_api"`    // 天气API地址
 	AmapAPIKey    string `mapstructure:"amap_api_key"`   // 高德地图API Key
-	UploadDir     string `mapstructure:"upload_dir"`      // 固件上传存储目录
+	UploadDir     string `mapstructure:"upload_dir"`     // 固件上传存储目录
 	WeatherSource string `mapstructure:"weather_source"` // 天气数据源: open-meteo 或 amap
 }
 
@@ -43,9 +43,10 @@ type BackendsConfig struct {
 //   - SchemaFile: 基线 schema.sql 路径，仅在首次运行时执行 (version 0)
 //   - AutoRun:    是否启用自动迁移 (默认 true，设为 false 可跳过)
 type MigrationConfig struct {
-	Dir        string `mapstructure:"dir"`         // 迁移文件目录，空则跳过
-	SchemaFile string `mapstructure:"schema_file"` // 基线 schema.sql 路径，空则跳过
-	AutoRun    bool   `mapstructure:"auto_run"`    // 默认 true
+	Dir             string `mapstructure:"dir"`              // 迁移文件目录，空则跳过
+	SchemaFile      string `mapstructure:"schema_file"`      // 新库基线 schema.sql 路径
+	BaselineVersion int64  `mapstructure:"baseline_version"` // schema.sql 已包含的最高迁移版本
+	AutoRun         bool   `mapstructure:"auto_run"`         // 默认 true
 }
 
 type ServerConfig struct {
@@ -119,7 +120,7 @@ type JPushConfig struct {
 	Enabled      bool   `mapstructure:"enabled"`
 	AppKey       string `mapstructure:"app_key"`
 	MasterSecret string `mapstructure:"master_secret"`
-	Timeout      int    `mapstructure:"timeout"`    // 秒，默认10
+	Timeout      int    `mapstructure:"timeout"`   // 秒，默认10
 	DedupTTL     int    `mapstructure:"dedup_ttl"` // 去重窗口秒数，默认120
 }
 
@@ -132,7 +133,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("backends.amap_api_key", "")
 	viper.SetDefault("backends.weather_source", "open-meteo")
 	viper.SetDefault("backends.upload_dir", "/data/firmware")
-	
+
 	viper.SetDefault("database.host", "postgres")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.user", "postgres")
@@ -143,37 +144,37 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("database.max_idle_conns", 20)
 	viper.SetDefault("database.conn_max_lifetime", 30*time.Minute)
 	viper.SetDefault("database.conn_max_idle_time", 10*time.Minute)
-	
+
 	viper.SetDefault("redis.host", "redis")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
-	
+
 	viper.SetDefault("jwt.secret", "")
 	viper.SetDefault("jwt.expire_time", 2*time.Hour)
 	viper.SetDefault("jwt.refresh_expire_time", 7*24*time.Hour)
 	viper.SetDefault("jwt.issuer", "inv-api-server")
-	
+
 	viper.SetDefault("sms.provider", "aliyun")
 	viper.SetDefault("sms.access_key", "")
 	viper.SetDefault("sms.secret_key", "")
 	viper.SetDefault("sms.sign_name", "")
 	viper.SetDefault("sms.template", "")
-	
+
 	viper.SetDefault("email.host", "smtp.qq.com")
 	viper.SetDefault("email.port", 465)
 	viper.SetDefault("email.username", "")
 	viper.SetDefault("email.password", "")
 	viper.SetDefault("email.from", "")
 	viper.SetDefault("email.use_ssl", true)
-	
+
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.filename", "logs/api-server.log")
 	viper.SetDefault("log.max_size", 100)
 	viper.SetDefault("log.max_backups", 10)
 	viper.SetDefault("log.max_age", 30)
 	viper.SetDefault("log.compress", true)
-	
+
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.read_timeout", 30*time.Second)
 	viper.SetDefault("server.write_timeout", 0*time.Second) // SSE 长连接需要无写超时
@@ -181,6 +182,7 @@ func Load(configPath string) (*Config, error) {
 
 	viper.SetDefault("migration.dir", "")
 	viper.SetDefault("migration.schema_file", "")
+	viper.SetDefault("migration.baseline_version", 0)
 	viper.SetDefault("migration.auto_run", true)
 
 	viper.SetDefault("jpush.enabled", false)
@@ -193,7 +195,7 @@ func Load(configPath string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
-	
+
 	if err := viper.ReadConfig(strings.NewReader(string(data))); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
@@ -203,24 +205,24 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("database.user", "DB_USER")
 	viper.BindEnv("database.password", "DB_PASSWORD")
 	viper.BindEnv("database.database", "DB_NAME")
-	
+
 	viper.BindEnv("redis.host", "REDIS_HOST")
 	viper.BindEnv("redis.port", "REDIS_PORT")
 	viper.BindEnv("redis.password", "REDIS_PASSWORD")
-	
+
 	viper.BindEnv("jwt.secret", "JWT_SECRET")
-	
+
 	viper.BindEnv("sms.access_key", "SMS_ACCESS_KEY")
 	viper.BindEnv("sms.secret_key", "SMS_SECRET_KEY")
 	viper.BindEnv("sms.sign_name", "SMS_SIGN_NAME")
 	viper.BindEnv("sms.template", "SMS_TEMPLATE")
-	
+
 	viper.BindEnv("email.host", "EMAIL_HOST")
 	viper.BindEnv("email.port", "EMAIL_PORT")
 	viper.BindEnv("email.username", "EMAIL_USER")
 	viper.BindEnv("email.password", "EMAIL_PASS")
 	viper.BindEnv("email.from", "EMAIL_FROM")
-	
+
 	viper.BindEnv("backends.device_server", "DEVICE_SERVER_URL")
 	viper.BindEnv("backends.internal_key", "INTERNAL_KEY")
 	viper.BindEnv("backends.server_url", "SERVER_URL")
@@ -246,11 +248,29 @@ func Load(configPath string) (*Config, error) {
 // Validate 校验关键配置项，缺失时返回明确错误信息
 func (c *Config) Validate() error {
 	var missing []string
-	if c.JWT.Secret == "" || c.JWT.Secret == "CHANGE_ME" {
-		missing = append(missing, "jwt.secret (env: JWT_SECRET, must not be empty or 'CHANGE_ME')")
+	if invalidRequiredSecret(c.JWT.Secret) {
+		missing = append(missing, "jwt.secret (env: JWT_SECRET, must not be empty or a CHANGE_ME* placeholder)")
 	}
-	if c.Database.Password == "" {
-		missing = append(missing, "database.password (env: DB_PASSWORD)")
+	if invalidRequiredSecret(c.Database.Password) {
+		missing = append(missing, "database.password (env: DB_PASSWORD, must not be empty or a CHANGE_ME* placeholder)")
+	}
+	if invalidRequiredSecret(c.Backends.InternalKey) {
+		missing = append(missing, "backends.internal_key (env: INTERNAL_KEY, must not be empty or a CHANGE_ME* placeholder)")
+	}
+	for name, value := range map[string]string{
+		"redis.password":      c.Redis.Password,
+		"sms.access_key":      c.SMS.AccessKey,
+		"sms.secret_key":      c.SMS.SecretKey,
+		"email.password":      c.Email.Password,
+		"jpush.app_key":       c.JPush.AppKey,
+		"jpush.master_secret": c.JPush.MasterSecret,
+	} {
+		if isPlaceholder(value) {
+			missing = append(missing, name+" must not use a CHANGE_ME* placeholder")
+		}
+	}
+	if c.JPush.Enabled && (c.JPush.AppKey == "" || c.JPush.MasterSecret == "") {
+		missing = append(missing, "jpush.app_key and jpush.master_secret are required when jpush.enabled=true")
 	}
 	if c.Database.Host == "" {
 		missing = append(missing, "database.host (env: DB_HOST)")
@@ -263,4 +283,12 @@ func (c *Config) Validate() error {
 			strings.Join(missing, "\n  - "))
 	}
 	return nil
+}
+
+func invalidRequiredSecret(value string) bool {
+	return strings.TrimSpace(value) == "" || isPlaceholder(value)
+}
+
+func isPlaceholder(value string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(value)), "CHANGE_ME")
 }

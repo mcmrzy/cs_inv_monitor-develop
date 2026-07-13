@@ -6,7 +6,7 @@ import time
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 # 1. 拉取镜像
 print('拉取 Docker 镜像...')
@@ -27,7 +27,7 @@ client.exec_command('docker tag registry.cn-hangzhou.aliyuncs.com/library/redis:
 
 # 3. 执行部署
 print('\n启动 Docker 服务...')
-cmd = "echo 'cskj9527' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose down && docker compose up -d --build'"
+cmd = "echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose down && docker compose up -d --build'"
 stdin, stdout, stderr = client.exec_command(cmd, timeout=300)
 print(stdout.read().decode())
 

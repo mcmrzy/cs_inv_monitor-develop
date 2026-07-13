@@ -1,8 +1,5 @@
 -- 021_expand_continuous_aggregate_offset: 扩大连续聚合刷新窗口
 -- 目的: 覆盖设备离线重连后补发的历史数据
-
-BEGIN;
-
 -- 1分钟聚合: start_offset 从 2 minutes 扩大到 10 minutes
 SELECT remove_continuous_aggregate_policy('device_telemetry_1min', if_exists => TRUE);
 SELECT add_continuous_aggregate_policy('device_telemetry_1min',
@@ -29,7 +26,3 @@ SELECT add_continuous_aggregate_policy('device_telemetry_1day',
     schedule_interval => INTERVAL '1 day',
     if_not_exists   => TRUE
 );
-
-INSERT INTO schema_migrations (version, name) VALUES (21, 'expand_continuous_aggregate_offset') ON CONFLICT DO NOTHING;
-
-COMMIT;

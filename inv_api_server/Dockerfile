@@ -1,16 +1,17 @@
 FROM docker.m.daocloud.io/library/golang:1.25-alpine AS builder
 ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY inv_api_server/go.mod inv_api_server/go.sum ./
 RUN go mod download
-COPY . .
+COPY inv_api_server/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-api-server ./cmd/main.go
 
 FROM docker.m.daocloud.io/library/alpine:3.19
 RUN apk --no-cache add ca-certificates tzdata wget
 WORKDIR /app
 COPY --from=builder /app/inv-api-server ./main
-COPY config.docker.yaml ./config.yaml
+COPY inv_api_server/config.docker.yaml ./config.yaml
+COPY database ./database
 
 ENV TZ=UTC
 

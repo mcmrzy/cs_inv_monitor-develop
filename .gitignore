@@ -65,6 +65,7 @@ inv_app/android/app/build/
 .env.local
 deploy/.env
 deploy/.env.prod
+deploy/.secrets/
 
 # AI/IDE tools
 .claude/

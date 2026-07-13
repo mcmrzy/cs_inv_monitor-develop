@@ -9,7 +9,7 @@
 ```powershell
 # SSH 登录服务器
 ssh cskj@192.168.8.50
-# 输入密码: cskj9527
+# 输入密码: REDACTED_ROTATE_CREDENTIAL
 
 # 在服务器上执行
 sudo mkdir -p /opt/inv-mqtt
@@ -30,7 +30,7 @@ git remote add deploy ssh://cskj@192.168.8.50/opt/inv-mqtt
 
 # 推送代码
 git push deploy main
-# 输入密码: cskj9527
+# 输入密码: REDACTED_ROTATE_CREDENTIAL
 ```
 
 ### 步骤 3: 在服务器上部署
@@ -38,7 +38,7 @@ git push deploy main
 ```powershell
 # SSH 登录服务器
 ssh cskj@192.168.8.50
-# 输入密码: cskj9527
+# 输入密码: REDACTED_ROTATE_CREDENTIAL
 
 # 在服务器上执行
 cd /opt
@@ -50,12 +50,12 @@ cat > .env << 'EOF'
 DB_HOST=postgres
 DB_PORT=5432
 DB_USER=postgres
-DB_PASSWORD=InvMonitor@2026!Secure
+DB_PASSWORD=REDACTED_ROTATE_CREDENTIAL
 DB_NAME=inv_mqtt
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_PASSWORD=RCq/G7b4T00dt5bprW7o34c/OOgPHPKe55Iwz3GvQYQ=
-JWT_SECRET=fq2T9il2RpZpSmUH1pLbV4cIwaEWypg3wjT629+GPeassiiW6A+wXdC+4jennVyN
+JWT_SECRET=REDACTED_ROTATE_CREDENTIAL
 API_SERVER_URL=http://inv-api-server:8080
 DEVICE_SERVER_URL=http://inv-device-server:8081
 INTERNAL_KEY=inv-monitor-internal-secret-2026
@@ -63,12 +63,12 @@ MQTT_BROKER=jiuxiaoyw.online
 MQTT_PORT=8883
 MQTT_CLIENT_ID=CSKJ-INV-SERVER-DEVICE-LOCAL
 MQTT_USERNAME=CSKJ-INV-SERVER-DEVICE
-MQTT_PASSWORD=CSKJINVSERVERDEVICE
+MQTT_PASSWORD=REDACTED_ROTATE_CREDENTIAL
 MQTT_TLS_INSECURE=true
 EMAIL_HOST=smtp.qq.com
 EMAIL_PORT=465
 EMAIL_USER=sunhaoyu0221@qq.com
-EMAIL_PASS=uqcomryxtnimbeha
+EMAIL_PASS=REDACTED_ROTATE_CREDENTIAL
 EMAIL_FROM=sunhaoyu0221@qq.com
 EOF
 
@@ -87,11 +87,11 @@ cd d:\CS_APP_PROJECT\cs_inv_monitor-develop\cs_inv_monitor-develop
 
 # 上传整个项目到服务器
 scp -r . cskj@192.168.8.50:/opt/inv-mqtt/
-# 输入密码: cskj9527
+# 输入密码: REDACTED_ROTATE_CREDENTIAL
 
 # SSH 登录服务器部署
 ssh cskj@192.168.8.50
-# 输入密码: cskj9527
+# 输入密码: REDACTED_ROTATE_CREDENTIAL
 
 # 在服务器上执行
 cd /opt/inv-mqtt/deploy

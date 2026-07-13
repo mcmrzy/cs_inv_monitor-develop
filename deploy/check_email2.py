@@ -1,15 +1,15 @@
 import paramiko
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 # 查看 API 网关日志（请求经过网关）
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker logs inv-api-gateway --tail 30 2>&1 | grep -i -E 'email|500|error|send'")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker logs inv-api-gateway --tail 30 2>&1 | grep -i -E 'email|500|error|send'")
 print("=== API Gateway 日志 ===")
 print(stdout.read().decode())
 
 # 查看 API Server 最近日志（不限过滤）
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker logs inv-api-server --tail 10 2>&1")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker logs inv-api-server --tail 10 2>&1")
 print("\n=== API Server 最近日志 ===")
 print(stdout.read().decode())
 

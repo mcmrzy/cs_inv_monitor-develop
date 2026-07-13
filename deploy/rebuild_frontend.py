@@ -7,7 +7,7 @@ LOCAL_PATH = r'd:\CS_APP_PROJECT\cs_inv_monitor-develop\cs_inv_monitor-develop'
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
 
 print("=== 重新部署前端 ===\n")
 
@@ -19,7 +19,7 @@ print("  Done")
 
 # 重新构建前端
 print("\n[2/3] 重新构建前端...")
-cmd = "echo 'cskj9527' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d --build inv-admin-frontend'"
+cmd = "echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd /opt/inv-mqtt/deploy && docker compose up -d --build inv-admin-frontend'"
 stdin, stdout, stderr = client.exec_command(cmd, timeout=300)
 output = stdout.read().decode()
 # 只打印关键信息
@@ -32,7 +32,7 @@ print("\n[3/3] 等待服务启动...")
 time.sleep(20)
 
 # 检查状态
-stdin, stdout, stderr = client.exec_command("echo 'cskj9527' | sudo -S docker ps --format 'table {{.Names}}\t{{.Status}}' | grep inv-admin")
+stdin, stdout, stderr = client.exec_command("echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker ps --format 'table {{.Names}}\t{{.Status}}' | grep inv-admin")
 print(f"\n前端状态: {stdout.read().decode().strip()}")
 
 client.close()

@@ -4,12 +4,24 @@ import subprocess
 import time
 import os
 
-LOCAL_PATH = r'd:\CS_APP_PROJECT\cs_inv_monitor-develop\cs_inv_monitor-develop'
+from secret_env import ssh_connect_kwargs, sudo_stdin_password
+
+LOCAL_PATH = os.environ.get('PROJECT_ROOT', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 REMOTE_DIR = '/opt/inv-mqtt'
 
 client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='cskj9527')
+client.load_system_host_keys()
+client.set_missing_host_key_policy(paramiko.RejectPolicy())
+client.connect(**ssh_connect_kwargs())
+
+
+def exec_sudo(command, timeout=None):
+    stdin, stdout, stderr = client.exec_command(
+        f"sudo -S -p '' {command}", timeout=timeout
+    )
+    stdin.write(sudo_stdin_password() + "\n")
+    stdin.flush()
+    return stdin, stdout, stderr
 
 print("=== 部署系统配置功能 ===\n")
 
@@ -28,13 +40,13 @@ subprocess.run(['tar', '-czf', tar_file, '--exclude=node_modules', '--exclude=di
 print("[3/5] 上传前端代码...")
 with SCPClient(client.get_transport()) as scp:
     scp.put(tar_file, remote_path='/tmp/frontend.tar.gz')
-client.exec_command(f"echo 'cskj9527' | sudo -S bash -c 'cd {REMOTE_DIR} && tar -xzf /tmp/frontend.tar.gz && rm /tmp/frontend.tar.gz'")
+exec_sudo(f"sh -c 'cd {REMOTE_DIR} && tar -xzf /tmp/frontend.tar.gz && rm /tmp/frontend.tar.gz'")
 print("  Done")
 
 # 4. 构建部署
 print("\n[4/5] 构建并部署...")
-cmd = f"echo 'cskj9527' | sudo -S bash -c 'cd {REMOTE_DIR}/deploy && docker compose up -d --build'"
-stdin, stdout, stderr = client.exec_command(cmd, timeout=600)
+cmd = f"sh -c 'cd {REMOTE_DIR}/deploy && docker compose up -d --build --wait --wait-timeout 180'"
+stdin, stdout, stderr = exec_sudo(cmd, timeout=600)
 out = stdout.read().decode()
 for line in out.split('\n'):
     if any(k in line.lower() for k in ['started', 'error', 'built', 'recreated', 'running']):
@@ -43,8 +55,8 @@ for line in out.split('\n'):
 # 5. 验证
 print("\n[5/5] 验证...")
 time.sleep(40)
-stdin, stdout, stderr = client.exec_command(
-    "echo 'cskj9527' | sudo -S docker ps --format '{{.Names}}: {{.Status}}' | grep inv"
+stdin, stdout, stderr = exec_sudo(
+    "sh -c \"docker ps --format '{{.Names}}: {{.Status}}' | grep inv\""
 )
 print(f"\n服务状态:\n{stdout.read().decode()}")
 
