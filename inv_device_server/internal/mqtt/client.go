@@ -640,6 +640,34 @@ func isCmdResultTopic(topic string) bool {
 	return false
 }
 
+// isParallelTopic 匹配 cs_inv/{sn}/parallel（并机状态上报）
+func isParallelTopic(topic string) bool {
+	parts := strings.Split(topic, "/")
+	// 匹配 cs_inv/{sn}/parallel
+	if len(parts) == 3 && parts[0] == "cs_inv" && parts[2] == "parallel" {
+		return true
+	}
+	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/parallel
+	if len(parts) == 5 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "parallel" {
+		return true
+	}
+	return false
+}
+
+// isThreePhaseTopic 匹配 cs_inv/{sn}/three_phase（三相数据上报）
+func isThreePhaseTopic(topic string) bool {
+	parts := strings.Split(topic, "/")
+	// 匹配 cs_inv/{sn}/three_phase
+	if len(parts) == 3 && parts[0] == "cs_inv" && parts[2] == "three_phase" {
+		return true
+	}
+	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/three_phase
+	if len(parts) == 5 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "three_phase" {
+		return true
+	}
+	return false
+}
+
 // parseStatusOnline 从 status 消息的 payload 中解析 online 字段
 func parseStatusOnline(payload []byte) bool {
 	var data map[string]interface{}

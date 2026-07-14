@@ -1526,6 +1526,13 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 				WHERE device_sn=$1 AND alarm_level=3 AND status=0`, req.SN)
 		}
 
+		// 写入告警恢复事件日志 (best-effort)
+		var recoverStationID sql.NullInt64
+		_ = h.db.QueryRow(ctx, `SELECT station_id FROM devices WHERE sn = $1`, req.SN).Scan(&recoverStationID)
+		now := time.Now().UTC()
+		h.writeAlarmEvent(ctx, req.SN, recoverStationID, req.Source, fmt.Sprintf("%d", req.Code),
+			0, "recovered", nil, &now, nil)
+
 		// 延迟检查：等待3秒确认没有新的告警到达，防止告警和恢复通知同时出现
 		if !isV1Recovery {
 			time.Sleep(3 * time.Second)
@@ -1687,6 +1694,11 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		response.HandleError(c, apperr.Internal("insert alarm failed", err))
 		return
 	}
+
+	// 写入告警事件日志 (best-effort，失败不影响主流程)
+	activeAt := time.Now().UTC()
+	h.writeAlarmEvent(ctx, req.SN, stationID, req.Source, faultCode,
+		alarmLevel, "active", &activeAt, nil, detailJSON)
 
 	// 告警级别为严重(fault, alarmLevel=3)时，更新设备状态为故障
 	if alarmLevel == 3 {
@@ -1901,4 +1913,481 @@ func (h *InternalHandler) getNotificationUsers(ctx context.Context, deviceSN str
 		userIDs = append(userIDs, uid)
 	}
 	return userIDs, nil
+}
+
+// =====================================================
+// 并机状态 / 三相数据 / 告警事件端点
+// =====================================================
+
+// internalParallelStateRequest 并机状态上报请求
+type internalParallelStateRequest struct {
+	MasterSN         string          `json:"master_sn"`
+	StationID        int64           `json:"station_id"`
+	Mode             string          `json:"mode"`
+	Count            int             `json:"count"`
+	TotalRatedPower  int             `json:"total_rated_power"`
+	TotalActivePower float64         `json:"total_active_power"`
+	SyncState        string          `json:"sync_state"`
+	Machines         json.RawMessage `json:"machines"`
+	ReportedAt       time.Time       `json:"reported_at"`
+}
+
+// ParallelState 接收并机状态上报 (POST /api/v1/internal/parallel-state)
+// UPSERT 到 device_parallel_state 表，检测拓扑变化并写入 device_parallel_events
+func (h *InternalHandler) ParallelState(c *gin.Context) {
+	var req internalParallelStateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+	if req.StationID == 0 {
+		response.HandleError(c, apperr.BadRequest("station_id is required"))
+		return
+	}
+	if req.MasterSN == "" {
+		response.HandleError(c, apperr.BadRequest("master_sn is required"))
+		return
+	}
+	if len(req.Machines) == 0 {
+		req.Machines = json.RawMessage("[]")
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	// 查询当前状态（用于拓扑变化检测）
+	var oldMasterSN, oldMode, oldSyncState string
+	var oldCount, oldTotalRatedPower int
+	var oldTotalActivePower float64
+	var oldMachines []byte
+	err := h.db.QueryRow(ctx, `
+		SELECT COALESCE(master_sn,''), COALESCE(mode,''), COALESCE(count,0),
+		       COALESCE(total_rated_power,0), COALESCE(total_active_power,0),
+		       COALESCE(sync_state,''), COALESCE(machines,'[]')
+		FROM device_parallel_state WHERE station_id = $1
+	`, req.StationID).Scan(&oldMasterSN, &oldMode, &oldCount, &oldTotalRatedPower,
+		&oldTotalActivePower, &oldSyncState, &oldMachines)
+
+	// UPSERT 新状态
+	_, err = h.db.Exec(ctx, `
+		INSERT INTO device_parallel_state (station_id, master_sn, mode, count, total_rated_power, total_active_power, sync_state, machines, reported_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+		ON CONFLICT (station_id) DO UPDATE SET
+			master_sn = EXCLUDED.master_sn,
+			mode = EXCLUDED.mode,
+			count = EXCLUDED.count,
+			total_rated_power = EXCLUDED.total_rated_power,
+			total_active_power = EXCLUDED.total_active_power,
+			sync_state = EXCLUDED.sync_state,
+			machines = EXCLUDED.machines,
+			reported_at = EXCLUDED.reported_at,
+			updated_at = NOW()
+	`, req.StationID, req.MasterSN, req.Mode, req.Count, req.TotalRatedPower,
+		req.TotalActivePower, req.SyncState, []byte(req.Machines), req.ReportedAt)
+	if err != nil {
+		logger.Error("ParallelState upsert failed", zap.Int64("station_id", req.StationID), zap.Error(err))
+		response.HandleError(c, apperr.Internal("upsert parallel state failed", err))
+		return
+	}
+
+	// 检测拓扑变化并写入事件日志 (best-effort)
+	topologyChanged := oldMasterSN != req.MasterSN ||
+		oldMode != req.Mode ||
+		oldCount != req.Count ||
+		oldTotalRatedPower != req.TotalRatedPower ||
+		string(oldMachines) != string(req.Machines)
+
+	if topologyChanged {
+		eventType := "topology_changed"
+		if oldMasterSN == "" {
+			eventType = "parallel_created"
+		} else if oldMasterSN != req.MasterSN {
+			eventType = "master_switched"
+		}
+
+		oldStateJSON := json.RawMessage("null")
+		if oldMasterSN != "" {
+			oldStateJSON = oldMachines
+		}
+
+		_, _ = h.db.Exec(ctx, `
+			INSERT INTO device_parallel_events (station_id, master_sn, event_type, old_state, new_state, occurred_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, req.StationID, req.MasterSN, eventType, []byte(oldStateJSON), []byte(req.Machines), req.ReportedAt)
+
+		logger.Info("Parallel topology changed",
+			zap.Int64("station_id", req.StationID),
+			zap.String("old_master", oldMasterSN),
+			zap.String("new_master", req.MasterSN),
+			zap.String("event_type", eventType))
+	}
+
+	response.Success(c, gin.H{"status": "ok"})
+}
+
+// internalThreePhaseDataRequest 三相数据上报请求
+type internalThreePhaseDataRequest struct {
+	SN               string    `json:"sn"`
+	EventTime        time.Time `json:"event_time"`
+	VoltageL1        float64   `json:"voltage_l1"`
+	VoltageL2        float64   `json:"voltage_l2"`
+	VoltageL3        float64   `json:"voltage_l3"`
+	CurrentL1        float64   `json:"current_l1"`
+	CurrentL2        float64   `json:"current_l2"`
+	CurrentL3        float64   `json:"current_l3"`
+	ActivePowerL1    float64   `json:"active_power_l1"`
+	ActivePowerL2    float64   `json:"active_power_l2"`
+	ActivePowerL3    float64   `json:"active_power_l3"`
+	TotalActivePower float64   `json:"total_active_power"`
+	LineVoltageL1L2  float64   `json:"line_voltage_l1l2"`
+	LineVoltageL2L3  float64   `json:"line_voltage_l2l3"`
+	LineVoltageL3L1  float64   `json:"line_voltage_l3l1"`
+	Frequency        float64   `json:"frequency"`
+	VoltageUnbalance float64   `json:"voltage_unbalance"`
+	CurrentUnbalance float64   `json:"current_unbalance"`
+	RawEnvelope      string    `json:"raw_envelope"`
+}
+
+// ThreePhaseData 接收三相数据上报 (POST /api/v1/internal/three-phase)
+// 写入 device_three_phase_3min 超表，使用 ON CONFLICT DO NOTHING 防止重复
+func (h *InternalHandler) ThreePhaseData(c *gin.Context) {
+	var req internalThreePhaseDataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+	if req.SN == "" {
+		response.HandleError(c, apperr.BadRequest("sn is required"))
+		return
+	}
+	if req.EventTime.IsZero() {
+		req.EventTime = time.Now().UTC()
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	var rawEnvelope interface{}
+	if req.RawEnvelope != "" {
+		rawEnvelope = req.RawEnvelope
+	}
+
+	_, err := h.db.Exec(ctx, `
+		INSERT INTO device_three_phase_3min (
+			device_sn, event_time, voltage_l1, voltage_l2, voltage_l3,
+			current_l1, current_l2, current_l3, active_power_l1, active_power_l2, active_power_l3,
+			total_active_power, line_voltage_l1l2, line_voltage_l2l3, line_voltage_l3l1,
+			frequency, voltage_unbalance, current_unbalance, raw_envelope
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::jsonb)
+		ON CONFLICT (device_sn, event_time, data_hash) DO NOTHING
+	`, req.SN, req.EventTime,
+		req.VoltageL1, req.VoltageL2, req.VoltageL3,
+		req.CurrentL1, req.CurrentL2, req.CurrentL3,
+		req.ActivePowerL1, req.ActivePowerL2, req.ActivePowerL3,
+		req.TotalActivePower, req.LineVoltageL1L2, req.LineVoltageL2L3, req.LineVoltageL3L1,
+		req.Frequency, req.VoltageUnbalance, req.CurrentUnbalance, rawEnvelope)
+	if err != nil {
+		logger.Error("ThreePhaseData insert failed", zap.String("sn", req.SN), zap.Error(err))
+		response.HandleError(c, apperr.Internal("insert three phase data failed", err))
+		return
+	}
+
+	response.Success(c, gin.H{"status": "ok"})
+}
+
+// GetParallelState 查询设备并机状态 (GET /api/v1/devices/:sn/parallel-state)
+func (h *InternalHandler) GetParallelState(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.BadRequest(c, "sn is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	// 先查询设备的 station_id，再查并机状态
+	var stationID int64
+	err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(station_id, 0) FROM devices WHERE sn = $1 AND deleted_at IS NULL`, sn,
+	).Scan(&stationID)
+	if err != nil {
+		response.NotFound(c, "device not found")
+		return
+	}
+	if stationID == 0 {
+		response.Success(c, gin.H{"has_parallel": false})
+		return
+	}
+
+	var result = make(map[string]interface{})
+	var masterSN, mode, syncState string
+	var count, totalRatedPower int
+	var totalActivePower float64
+	var machines []byte
+	var reportedAt time.Time
+
+	err = h.db.QueryRow(ctx, `
+		SELECT master_sn, COALESCE(mode,''), count, total_rated_power, total_active_power,
+		       sync_state, machines, reported_at
+		FROM device_parallel_state WHERE station_id = $1
+	`, stationID).Scan(&masterSN, &mode, &count, &totalRatedPower, &totalActivePower,
+		&syncState, &machines, &reportedAt)
+	if err != nil {
+		response.Success(c, gin.H{"has_parallel": false})
+		return
+	}
+
+	var machinesData interface{}
+	if err := json.Unmarshal(machines, &machinesData); err != nil {
+		machinesData = []interface{}{}
+	}
+
+	result["has_parallel"] = true
+	result["station_id"] = stationID
+	result["master_sn"] = masterSN
+	result["mode"] = mode
+	result["count"] = count
+	result["total_rated_power"] = totalRatedPower
+	result["total_active_power"] = totalActivePower
+	result["sync_state"] = syncState
+	result["machines"] = machinesData
+	result["reported_at"] = reportedAt
+
+	response.Success(c, result)
+}
+
+// GetThreePhaseHistory 查询设备三相历史数据 (GET /api/v1/devices/:sn/three-phase)
+func (h *InternalHandler) GetThreePhaseHistory(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.BadRequest(c, "sn is required")
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 500 {
+		pageSize = 50
+	}
+	startTime := c.Query("start_time")
+	endTime := c.Query("end_time")
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	var total int64
+	countQuery := `SELECT COUNT(*) FROM device_three_phase_3min WHERE device_sn = $1`
+	countArgs := []interface{}{sn}
+	argIdx := 2
+	if startTime != "" {
+		countQuery += fmt.Sprintf(` AND event_time >= $%d`, argIdx)
+		countArgs = append(countArgs, startTime)
+		argIdx++
+	}
+	if endTime != "" {
+		countQuery += fmt.Sprintf(` AND event_time <= $%d`, argIdx)
+		countArgs = append(countArgs, endTime)
+		argIdx++
+	}
+	_ = h.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
+
+	offset := (page - 1) * pageSize
+	dataQuery := `
+		SELECT event_time, voltage_l1, voltage_l2, voltage_l3,
+		       current_l1, current_l2, current_l3,
+		       active_power_l1, active_power_l2, active_power_l3,
+		       total_active_power, line_voltage_l1l2, line_voltage_l2l3, line_voltage_l3l1,
+		       frequency, voltage_unbalance, current_unbalance
+		FROM device_three_phase_3min WHERE device_sn = $1`
+	dataArgs := []interface{}{sn}
+	argIdx = 2
+	if startTime != "" {
+		dataQuery += fmt.Sprintf(` AND event_time >= $%d`, argIdx)
+		dataArgs = append(dataArgs, startTime)
+		argIdx++
+	}
+	if endTime != "" {
+		dataQuery += fmt.Sprintf(` AND event_time <= $%d`, argIdx)
+		dataArgs = append(dataArgs, endTime)
+		argIdx++
+	}
+	dataQuery += fmt.Sprintf(` ORDER BY event_time DESC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	dataArgs = append(dataArgs, pageSize, offset)
+
+	rows, err := h.db.Query(ctx, dataQuery, dataArgs...)
+	if err != nil {
+		logger.Error("GetThreePhaseHistory query failed", zap.String("sn", sn), zap.Error(err))
+		response.HandleError(c, apperr.Internal("query three phase history failed", err))
+		return
+	}
+	defer rows.Close()
+
+	items := []map[string]interface{}{}
+	for rows.Next() {
+		var eventTime time.Time
+		var vL1, vL2, vL3, cL1, cL2, cL3, pL1, pL2, pL3, totalP, lv12, lv23, lv31, freq, vUnb, cUnb float64
+		if err := rows.Scan(&eventTime, &vL1, &vL2, &vL3, &cL1, &cL2, &cL3, &pL1, &pL2, &pL3,
+			&totalP, &lv12, &lv23, &lv31, &freq, &vUnb, &cUnb); err != nil {
+			continue
+		}
+		items = append(items, map[string]interface{}{
+			"event_time":         eventTime,
+			"voltage_l1":         vL1,
+			"voltage_l2":         vL2,
+			"voltage_l3":         vL3,
+			"current_l1":         cL1,
+			"current_l2":         cL2,
+			"current_l3":         cL3,
+			"active_power_l1":    pL1,
+			"active_power_l2":    pL2,
+			"active_power_l3":    pL3,
+			"total_active_power": totalP,
+			"line_voltage_l1l2":  lv12,
+			"line_voltage_l2l3":  lv23,
+			"line_voltage_l3l1":  lv31,
+			"frequency":          freq,
+			"voltage_unbalance":  vUnb,
+			"current_unbalance":  cUnb,
+		})
+	}
+
+	response.Page(c, items, total, page, pageSize)
+}
+
+// GetAlarmEvents 查询设备告警事件历史 (GET /api/v1/devices/:sn/alarm-events)
+func (h *InternalHandler) GetAlarmEvents(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.BadRequest(c, "sn is required")
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 500 {
+		pageSize = 50
+	}
+	startTime := c.Query("start_time")
+	endTime := c.Query("end_time")
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	var total int64
+	countQuery := `SELECT COUNT(*) FROM device_alarm_events WHERE device_sn = $1`
+	countArgs := []interface{}{sn}
+	argIdx := 2
+	if startTime != "" {
+		countQuery += fmt.Sprintf(` AND created_at >= $%d`, argIdx)
+		countArgs = append(countArgs, startTime)
+		argIdx++
+	}
+	if endTime != "" {
+		countQuery += fmt.Sprintf(` AND created_at <= $%d`, argIdx)
+		countArgs = append(countArgs, endTime)
+		argIdx++
+	}
+	_ = h.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total)
+
+	offset := (page - 1) * pageSize
+	dataQuery := `
+		SELECT id, device_sn, station_id, source, code, level, state, active_at, recovered_at, raw_data, created_at
+		FROM device_alarm_events WHERE device_sn = $1`
+	dataArgs := []interface{}{sn}
+	argIdx = 2
+	if startTime != "" {
+		dataQuery += fmt.Sprintf(` AND created_at >= $%d`, argIdx)
+		dataArgs = append(dataArgs, startTime)
+		argIdx++
+	}
+	if endTime != "" {
+		dataQuery += fmt.Sprintf(` AND created_at <= $%d`, argIdx)
+		dataArgs = append(dataArgs, endTime)
+		argIdx++
+	}
+	dataQuery += fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	dataArgs = append(dataArgs, pageSize, offset)
+
+	rows, err := h.db.Query(ctx, dataQuery, dataArgs...)
+	if err != nil {
+		logger.Error("GetAlarmEvents query failed", zap.String("sn", sn), zap.Error(err))
+		response.HandleError(c, apperr.Internal("query alarm events failed", err))
+		return
+	}
+	defer rows.Close()
+
+	items := []map[string]interface{}{}
+	for rows.Next() {
+		var id, stationID int64
+		var source int
+		var deviceSN, code, state string
+		var level int16
+		var activeAt, recoveredAt sql.NullTime
+		var rawData []byte
+		var createdAt time.Time
+		if err := rows.Scan(&id, &deviceSN, &stationID, &source, &code, &level, &state,
+			&activeAt, &recoveredAt, &rawData, &createdAt); err != nil {
+			continue
+		}
+		var rawDataVal interface{}
+		if len(rawData) > 0 {
+			_ = json.Unmarshal(rawData, &rawDataVal)
+		}
+		item := map[string]interface{}{
+			"id":          id,
+			"device_sn":   deviceSN,
+			"station_id":  stationID,
+			"source":      source,
+			"code":        code,
+			"level":       level,
+			"state":       state,
+			"created_at":  createdAt,
+			"raw_data":    rawDataVal,
+		}
+		if activeAt.Valid {
+			item["active_at"] = activeAt.Time
+		}
+		if recoveredAt.Valid {
+			item["recovered_at"] = recoveredAt.Time
+		}
+		items = append(items, item)
+	}
+
+	response.Page(c, items, total, page, pageSize)
+}
+
+// writeAlarmEvent 写入告警事件日志 (best-effort，失败不影响主流程)
+func (h *InternalHandler) writeAlarmEvent(ctx context.Context, sn string, stationID sql.NullInt64,
+	source int, code string, level int, state string, activeAt, recoveredAt *time.Time, rawData []byte) {
+	var activeAtVal, recoveredAtVal interface{}
+	if activeAt != nil {
+		activeAtVal = *activeAt
+	}
+	if recoveredAt != nil {
+		recoveredAtVal = *recoveredAt
+	}
+	var sid interface{}
+	if stationID.Valid {
+		sid = stationID.Int64
+	}
+	var rawDataVal interface{}
+	if len(rawData) > 0 {
+		rawDataVal = rawData
+	}
+	_, err := h.db.Exec(ctx, `
+		INSERT INTO device_alarm_events (device_sn, station_id, source, code, level, state, active_at, recovered_at, raw_data)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+	`, sn, sid, source, code, level, state, activeAtVal, recoveredAtVal, rawDataVal)
+	if err != nil {
+		logger.Warn("writeAlarmEvent failed (best-effort)",
+			zap.String("sn", sn), zap.String("code", code), zap.Error(err))
+	}
 }
