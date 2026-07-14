@@ -1239,6 +1239,8 @@ const (
 	batchSize     = 500              // 数量阈值
 	batchInterval = 2 * time.Second  // 时间阈值
 	maxBufferSize = 10000            // 背压阈值
+	maxRetries    = 3                // flush 最大尝试次数（含首次）
+	httpTimeout   = 15 * time.Second // 单次 HTTP 请求超时
 )
 
 // TelemetryBatcher 遥测数据批量缓冲组件
@@ -1309,7 +1311,7 @@ func (b *TelemetryBatcher) Add(item *telemetryBatchItem) {
 	}
 }
 
-// flush 将缓冲区消息批量发送到 api_server
+// flush 将缓冲区消息批量发送到 api_server，失败时按指数退避重试
 func (b *TelemetryBatcher) flush() {
 	b.mu.Lock()
 	if len(b.buffer) == 0 {
@@ -1318,19 +1320,64 @@ func (b *TelemetryBatcher) flush() {
 	}
 	batch := b.buffer
 	b.buffer = make([]*telemetryBatchItem, 0, batchSize)
+	// 记录取批次时是否已处于背压状态，用于决定是否跳过重试
+	underBackpressure := len(batch) >= maxBufferSize
 	b.mu.Unlock()
 
-	body, err := json.Marshal(batch)
-	if err != nil {
-		logger.Error("TelemetryBatcher: failed to marshal batch",
-			zap.Int("count", len(batch)), zap.Error(err))
+	// 背压已触发时跳过重试，仅尝试一次发送，避免阻塞消费管道
+	if underBackpressure {
+		logger.Warn("TelemetryBatcher: backpressure detected, skipping retries",
+			zap.Int("count", len(batch)))
+		if err := b.sendBatch(batch); err != nil {
+			logger.Error("TelemetryBatcher: batch dropped under backpressure",
+				zap.Int("count", len(batch)), zap.Error(err))
+		}
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodPost, b.apiURL, bytes.NewReader(body))
+	// 重试逻辑：最多 maxRetries 次，指数退避（1s, 2s, 4s ...）
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+			time.Sleep(backoff)
+			logger.Warn("TelemetryBatcher: retrying batch flush",
+				zap.Int("attempt", attempt+1),
+				zap.Int("count", len(batch)),
+				zap.Duration("backoff", backoff))
+		}
+
+		if err := b.sendBatch(batch); err == nil {
+			return
+		} else {
+			lastErr = err
+			logger.Error("TelemetryBatcher: batch flush failed",
+				zap.Int("attempt", attempt+1),
+				zap.Int("count", len(batch)),
+				zap.Error(err))
+		}
+	}
+
+	// 所有重试均失败，记录错误并丢弃数据（at-most-once，Kafka offset 已提交）
+	logger.Error("TelemetryBatcher: batch flush failed after all retries, data dropped",
+		zap.Int("count", len(batch)),
+		zap.Int("retries", maxRetries),
+		zap.Error(lastErr))
+}
+
+// sendBatch 将单批数据通过 HTTP POST 发送到 api_server
+func (b *TelemetryBatcher) sendBatch(batch []*telemetryBatchItem) error {
+	body, err := json.Marshal(batch)
 	if err != nil {
-		logger.Error("TelemetryBatcher: failed to create request", zap.Error(err))
-		return
+		return fmt.Errorf("marshal batch: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.apiURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if b.internalKey != "" {
@@ -1339,20 +1386,16 @@ func (b *TelemetryBatcher) flush() {
 
 	resp, err := b.client.Do(req)
 	if err != nil {
-		logger.Error("TelemetryBatcher: failed to send batch",
-			zap.Int("count", len(batch)), zap.Error(err))
-		return
+		return fmt.Errorf("send request: %w", err)
 	}
 	respBody, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		logger.Error("TelemetryBatcher: API returned error",
-			zap.Int("status", resp.StatusCode),
-			zap.Int("count", len(batch)),
-			zap.String("response", string(respBody)))
-	} else {
-		logger.Info("TelemetryBatcher: batch sent successfully",
-			zap.Int("count", len(batch)))
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
 	}
+
+	logger.Info("TelemetryBatcher: batch sent successfully",
+		zap.Int("count", len(batch)))
+	return nil
 }

@@ -234,20 +234,47 @@ func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
 	poolConfig.MaxConnLifetime = cfg.Database.ConnMaxLifetime
 	poolConfig.MaxConnIdleTime = cfg.Database.ConnMaxIdleTime
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
-	if err != nil {
-		return nil, err
+	var pool *pgxpool.Pool
+	const maxRetries = 10
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		logger.Info("Database connecting",
+			zap.String("host", cfg.Database.Host),
+			zap.Int("port", cfg.Database.Port),
+			zap.String("database", cfg.Database.Database),
+			zap.String("user", cfg.Database.User),
+			zap.String("sslmode", cfg.Database.SSLMode),
+			zap.Int("attempt", attempt),
+			zap.Int("maxRetries", maxRetries),
+		)
+
+		pool, err = pgxpool.NewWithConfig(context.Background(), poolConfig)
+		if err != nil {
+			logger.Warn("Database pool creation failed",
+				zap.Int("attempt", attempt),
+				zap.Int("maxRetries", maxRetries),
+				zap.Error(err))
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := pool.Ping(ctx); err != nil {
+			cancel()
+			pool.Close()
+			logger.Warn("Database ping failed",
+				zap.Int("attempt", attempt),
+				zap.Int("maxRetries", maxRetries),
+				zap.Error(err))
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			continue
+		}
+		cancel()
+
+		logger.Info("Database connected successfully")
+		return pool, nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := pool.Ping(ctx); err != nil {
-		return nil, err
-	}
-
-	logger.Info("Database connected")
-	return pool, nil
+	return nil, fmt.Errorf("database connection failed after %d attempts: %w", maxRetries, err)
 }
 
 func initRedis(cfg *config.Config) (*redis.Client, error) {
