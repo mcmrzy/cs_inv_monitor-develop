@@ -45,7 +45,7 @@ func NewAdminHandler(userRepo *repository.UserRepository, modelRepo *repository.
 
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "pageSize", 10)
+	pageSize := getPageSize(c, 10)
 	keyword := c.Query("keyword")
 	role := getQueryInt(c, "role", -1)
 	status := getQueryInt(c, "status", -1)
@@ -320,7 +320,7 @@ func (h *AdminHandler) ListAllModels(c *gin.Context) {
 func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 	ctx := c.Request.Context()
 	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "pageSize", 10)
+	pageSize := getPageSize(c, 10)
 	if pageSize > 100 {
 		pageSize = 100
 	}
@@ -500,11 +500,11 @@ func (h *AdminHandler) GetSystemHealth(c *gin.Context) {
 	response.Success(c, gin.H{
 		"uptime":      int64(uptime),
 		"memoryUsage": memUsage,
-		"cpuUsage":    0.0,
+		"cpuUsage":    readSystemCPUUsage(),
 		"database":    dbOK,
 		"redis":       redisOK,
 		"mqtt":        mqttOK,
-		"version":     "1.0.0",
+		"version":     applicationVersion(),
 		"lastCheckAt": time.Now().UTC().Format(time.RFC3339),
 	})
 }
@@ -584,7 +584,7 @@ func (h *AdminHandler) UpdateSystemConfig(c *gin.Context) {
 func (h *AdminHandler) ListTenants(c *gin.Context) {
 	ctx := c.Request.Context()
 	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "pageSize", 10)
+	pageSize := getPageSize(c, 10)
 	offset := (page - 1) * pageSize
 
 	var total int64
@@ -596,7 +596,7 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, `
 		SELECT u.id, u.phone, COALESCE(u.nickname,''), COALESCE(u.email,''), u.status,
-		       COALESCE(u.created_at, NOW()), COALESCE(u.last_login_at, u.created_at)
+		       u.device_limit, u.user_limit, COALESCE(u.created_at, NOW()), COALESCE(u.last_login_at, u.created_at)
 		FROM users u
 		WHERE u.role = 1 AND u.deleted_at IS NULL
 		ORDER BY u.id DESC
@@ -626,7 +626,7 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 	for rows.Next() {
 		var t tenantItem
 		var lastLoginAt *time.Time
-		if err := rows.Scan(&t.ID, &t.Phone, &t.Nickname, &t.Email, &t.Status, &t.CreatedAt, &lastLoginAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Phone, &t.Nickname, &t.Email, &t.Status, &t.DeviceLimit, &t.UserLimit, &t.CreatedAt, &lastLoginAt); err != nil {
 			continue
 		}
 		t.LastLoginAt = lastLoginAt
@@ -663,6 +663,10 @@ func (h *AdminHandler) CreateTenant(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	if !validTenantLimit(req.DeviceLimit) || !validTenantLimit(req.UserLimit) {
+		response.HandleError(c, apperr.BadRequest("tenant limits must be between 0 and 100000"))
+		return
+	}
 
 	var exists int
 	h.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE phone = $1 AND deleted_at IS NULL`, req.Phone).Scan(&exists)
@@ -685,27 +689,24 @@ func (h *AdminHandler) CreateTenant(c *gin.Context) {
 	var userID int64
 	var createdAt, updatedAt time.Time
 	err = h.db.QueryRow(ctx, `
-		INSERT INTO users (phone, email, password_hash, nickname, role, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 1, 1, NOW(), NOW())
+		INSERT INTO users (phone, email, password_hash, nickname, role, status, device_limit, user_limit, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 1, 1, $5, $6, NOW(), NOW())
 		RETURNING id, created_at, updated_at
-	`, req.Phone, req.Email, string(hashedPassword), nickname).Scan(&userID, &createdAt, &updatedAt)
+	`, req.Phone, req.Email, string(hashedPassword), nickname, req.DeviceLimit, req.UserLimit).Scan(&userID, &createdAt, &updatedAt)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("创建租户失败", err))
 		return
 	}
 
-	// TODO: If device_limit and user_limit columns exist in users table, update them here:
-	// if req.DeviceLimit != nil || req.UserLimit != nil {
-	//     h.db.Exec(ctx, `UPDATE users SET device_limit = $1, user_limit = $2 WHERE id = $3`, req.DeviceLimit, req.UserLimit, userID)
-	// }
-
 	response.Success(c, gin.H{
-		"id":         userID,
-		"phone":      req.Phone,
-		"nickname":   nickname,
-		"role":       1,
-		"created_at": createdAt,
-		"updated_at": updatedAt,
+		"id":          userID,
+		"phone":       req.Phone,
+		"nickname":    nickname,
+		"role":        1,
+		"deviceLimit": req.DeviceLimit,
+		"userLimit":   req.UserLimit,
+		"created_at":  createdAt,
+		"updated_at":  updatedAt,
 	})
 }
 
@@ -728,6 +729,10 @@ func (h *AdminHandler) UpdateTenant(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	if !validTenantLimit(req.DeviceLimit) || !validTenantLimit(req.UserLimit) {
+		response.HandleError(c, apperr.BadRequest("tenant limits must be between 0 and 100000"))
+		return
+	}
 
 	user, err := h.userRepo.GetByID(ctx, tenantID)
 	if err != nil || user == nil {
@@ -735,7 +740,15 @@ func (h *AdminHandler) UpdateTenant(c *gin.Context) {
 		return
 	}
 
-	// TODO: If device_limit and user_limit columns exist in users table, update them:
+	_, err = h.db.Exec(ctx, `UPDATE users SET
+		device_limit=COALESCE($1,device_limit),user_limit=COALESCE($2,user_limit),updated_at=NOW()
+		WHERE id=$3 AND role=1 AND deleted_at IS NULL`, req.DeviceLimit, req.UserLimit, tenantID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("update tenant quota failed", err))
+		return
+	}
+
+	// Legacy design note (implemented above):
 	// query := `UPDATE users SET device_limit = $1, user_limit = $2, updated_at = NOW() WHERE id = $3`
 	// _, err = h.db.Exec(ctx, query, req.DeviceLimit, req.UserLimit, tenantID)
 	// if err != nil {
@@ -775,6 +788,10 @@ func (h *AdminHandler) ToggleTenant(c *gin.Context) {
 	response.SuccessWithMessage(c, "租户状态已更新", nil)
 }
 
+func validTenantLimit(value *int) bool {
+	return value == nil || (*value >= 0 && *value <= 100000)
+}
+
 func (h *AdminHandler) GetMetrics(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -800,7 +817,7 @@ func (h *AdminHandler) GetUserChildren(c *gin.Context) {
 	}
 
 	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "pageSize", 20)
+	pageSize := getPageSize(c, 20)
 
 	children, total, err := h.userRepo.ListByParentID(c.Request.Context(), userID, page, pageSize)
 	if err != nil {
@@ -939,6 +956,10 @@ func (h *AdminHandler) UpdateUserParent(c *gin.Context) {
 			response.HandleError(c, apperr.BadRequest("上级用户角色必须高于当前用户"))
 			return
 		}
+		if err := ensureTenantUserCapacity(c.Request.Context(), h.db, *req.ParentID, userID); err != nil {
+			response.HandleError(c, apperr.BadRequest(err.Error()))
+			return
+		}
 	}
 
 	if err := h.userRepo.UpdateParentID(c.Request.Context(), userID, req.ParentID); err != nil {
@@ -947,4 +968,52 @@ func (h *AdminHandler) UpdateUserParent(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "上级关系更新成功", nil)
+}
+
+// ResetUserPasswordRequest 重置用户密码请求
+type ResetUserPasswordRequest struct {
+	NewPassword string `json:"newPassword" binding:"required"`
+}
+
+// ResetUserPassword 管理员重置用户密码
+func (h *AdminHandler) ResetUserPassword(c *gin.Context) {
+	userID := parseID(c.Param("id"))
+	if userID <= 0 {
+		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		return
+	}
+
+	var req ResetUserPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+
+	if len(req.NewPassword) < 6 {
+		response.HandleError(c, apperr.BadRequest("密码长度不能少于6位"))
+		return
+	}
+
+	// 验证用户存在
+	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
+	if err != nil || user == nil {
+		response.HandleError(c, apperr.NotFound("用户不存在"))
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("密码加密失败", err))
+		return
+	}
+
+	_, err = h.db.Exec(c.Request.Context(),
+		"UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL",
+		string(hashedPassword), userID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("重置密码失败", err))
+		return
+	}
+
+	response.SuccessWithMessage(c, "密码重置成功", nil)
 }

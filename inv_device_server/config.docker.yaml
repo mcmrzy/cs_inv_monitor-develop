@@ -29,6 +29,7 @@ mqtt:
   password: ""
   qos: 1
   tls_insecure: false
+  cert_sha256: ""
 
 kafka:
   enabled: true

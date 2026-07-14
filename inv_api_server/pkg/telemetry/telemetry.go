@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -22,13 +23,16 @@ var tp *sdktrace.TracerProvider
 func Init(serviceName string) error {
 	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	if endpoint == "" {
-		endpoint = "http://localhost:4318"
+		tracer = otel.Tracer(serviceName)
+		log.Printf("[Telemetry] OpenTelemetry export disabled, service=%s", serviceName)
+		return nil
 	}
 
-	exp, err := otlptracehttp.New(context.Background(),
-		otlptracehttp.WithEndpoint(endpoint),
-		otlptracehttp.WithInsecure(),
-	)
+	options := []otlptracehttp.Option{otlptracehttp.WithEndpointURL(endpoint)}
+	if strings.HasPrefix(strings.ToLower(endpoint), "http://") {
+		options = append(options, otlptracehttp.WithInsecure())
+	}
+	exp, err := otlptracehttp.New(context.Background(), options...)
 	if err != nil {
 		return err
 	}

@@ -114,6 +114,7 @@ services:
       MQTT_USERNAME: ${MQTT_USERNAME}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
       MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
+      MQTT_CERT_SHA256: ${MQTT_CERT_SHA256:-}
       KAFKA_BROKER: jiuxiaoyw.online:9092
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}

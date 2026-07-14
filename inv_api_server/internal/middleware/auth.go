@@ -151,13 +151,14 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 		origin := c.GetHeader("Origin")
 		if originSet[origin] {
 			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Credentials", "true")
 		} else if len(allowedOrigins) == 0 {
 			c.Header("Access-Control-Allow-Origin", "*")
+			// 不设置 Allow-Credentials: true（浏览器规范禁止 * + credentials）
 		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization")
 		c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type")
-		c.Header("Access-Control-Allow-Credentials", "true")
 
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)

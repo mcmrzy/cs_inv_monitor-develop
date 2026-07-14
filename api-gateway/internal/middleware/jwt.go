@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -57,7 +56,6 @@ func JWTAuth(secret string) gin.HandlerFunc {
 
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			log.Printf("[DEBUG-INSTRUMENT] JWTAuth: %s %s - 缺少 Authorization 头", c.Request.Method, c.Request.URL.Path)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    401,
 				"message": "缺少 Authorization 请求头",
@@ -68,7 +66,6 @@ func JWTAuth(secret string) gin.HandlerFunc {
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			log.Printf("[DEBUG-INSTRUMENT] JWTAuth: %s %s - Authorization 格式错误", c.Request.Method, c.Request.URL.Path)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    401,
 				"message": "Authorization 格式错误，应为 Bearer <token>",
@@ -87,7 +84,6 @@ func JWTAuth(secret string) gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
-			log.Printf("[DEBUG-INSTRUMENT] JWTAuth: %s %s - token 无效: %v", c.Request.Method, c.Request.URL.Path, err)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    401,
 				"message": "无效的 token",
@@ -98,7 +94,6 @@ func JWTAuth(secret string) gin.HandlerFunc {
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			log.Printf("[DEBUG-INSTRUMENT] JWTAuth: %s %s - 无法解析 claims", c.Request.Method, c.Request.URL.Path)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    401,
 				"message": "无法解析 token claims",
@@ -120,9 +115,6 @@ func JWTAuth(secret string) gin.HandlerFunc {
 			c.Request.Header.Set("X-User-Sub", fmt.Sprintf("%v", sub))
 		}
 
-		log.Printf("[DEBUG-INSTRUMENT] JWTAuth: %s %s - user_id=%s role=%s",
-			c.Request.Method, c.Request.URL.Path,
-			c.GetHeader("X-User-ID"), c.GetHeader("X-User-Role"))
 		c.Next()
 	}
 }

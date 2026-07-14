@@ -11,6 +11,7 @@ import (
 	"inv-api-server/pkg/response"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -54,6 +55,8 @@ type CreateFirmwareRequest struct {
 }
 
 func (h *OTAHandler) CreateFirmware(c *gin.Context) {
+	const maxFirmwareSize = 64 << 20 // 64 MiB; prevents unbounded multipart uploads.
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxFirmwareSize)
 	contentType := c.ContentType()
 
 	// 支持 multipart/form-data 文件上传
@@ -64,8 +67,8 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		changelog := c.PostForm("changelog")
 		isForce := c.PostForm("is_force") == "true"
 
-		if model == "" || targetChip == "" {
-			response.HandleError(c, apperr.BadRequest("型号和目标芯片必填"))
+		if model == "" || targetChip == "" || version == "" {
+			response.HandleError(c, apperr.BadRequest("型号、目标芯片和版本号必填"))
 			return
 		}
 
@@ -84,6 +87,10 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			response.HandleError(c, apperr.BadRequest("请选择固件文件"))
 			return
 		}
+		if file.Size <= 0 || file.Size > maxFirmwareSize {
+			response.HandleError(c, apperr.BadRequest("固件文件大小必须在 1 字节到 64 MiB 之间"))
+			return
+		}
 
 		// 保存文件到 /data/firmware/ 目录
 		uploadDir := "/data/firmware"
@@ -94,13 +101,19 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			response.HandleError(c, apperr.BadRequest("文件扩展名包含非法字符"))
 			return
 		}
-		filename := fmt.Sprintf("%s_%s%s", model, version, ext)
+		filename := fmt.Sprintf("%s_%s_%d%s", model, version, time.Now().UnixNano(), ext)
 		savePath := filepath.Join(uploadDir, filename)
 
 		if err := c.SaveUploadedFile(file, savePath); err != nil {
 			response.HandleError(c, apperr.Internal("保存文件失败", err))
 			return
 		}
+		keepFile := false
+		defer func() {
+			if !keepFile {
+				_ = os.Remove(savePath)
+			}
+		}()
 
 		// 计算文件MD5和SHA256
 		f, err := os.Open(savePath)
@@ -130,11 +143,17 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 			FileSHA256: fmt.Sprintf("%x", sha256Hash.Sum(nil)),
 			Changelog:  changelog,
 			IsForce:    isForce,
+			UploadedBy: c.GetInt64("user_id"),
+		}
+		if err := service.ValidateFirmwareRequest(fw); err != nil {
+			response.HandleError(c, apperr.BadRequest(err.Error()))
+			return
 		}
 		if err := h.otaService.CreateFirmware(c.Request.Context(), fw); err != nil {
 			response.HandleError(c, apperr.Internal("创建固件失败", err))
 			return
 		}
+		keepFile = true
 		response.SuccessWithMessage(c, "固件上传成功", nil)
 		return
 	}
@@ -156,6 +175,11 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		FileSHA256: req.FileSHA256,
 		Changelog:  req.Changelog,
 		IsForce:    req.IsForce,
+		UploadedBy: c.GetInt64("user_id"),
+	}
+	if err := service.ValidateFirmwareRequest(fw); err != nil {
+		response.HandleError(c, apperr.BadRequest(err.Error()))
+		return
 	}
 	if err := h.otaService.CreateFirmware(c.Request.Context(), fw); err != nil {
 		response.HandleError(c, apperr.Internal("创建固件失败", err))
@@ -232,7 +256,7 @@ func (h *OTAHandler) PushUpgrade(c *gin.Context) {
 // GetUpgradeDashboard 升级管理面板（按固件分组聚合）
 func (h *OTAHandler) GetUpgradeDashboard(c *gin.Context) {
 	page := parseInt(c.DefaultQuery("page", "1"))
-	pageSize := parseInt(c.DefaultQuery("page_size", "20"))
+	pageSize := getPageSize(c, 20)
 	if pageSize > 100 {
 		pageSize = 100
 	}
@@ -340,6 +364,7 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 				"download_url": h.otaService.BuildDownloadURL(fw.FileURL),
 				"file_size":    fw.FileSize,
 				"file_md5":     fw.FileMD5,
+				"file_sha256":  fw.FileSHA256,
 				"upgrade_id":   du.ID,
 			})
 		}
@@ -347,20 +372,20 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		// 使用第一个待升级芯片的信息作为主信息
 		firstFW := pkgUpgrades[0]
 		response.Success(c, gin.H{
-			"has_update":             true,
-			"upgrade_mode":           "package",
-			"device_model":           device.Model,
-			"current_main_version":   device.MainVersion,
-			"main_version":           pkg.MainVersion,
-			"firmware_id":            firstFW.FirmwareID,
-			"version":                firstFW.FirmwareVersion,
-			"target_chip":            firstFW.TargetChip,
-			"current_version":        firstFW.OldVersion,
-			"chips_to_upgrade":       chipsToUpgrade,
-			"changelog":              pkg.Changelog,
-			"is_force":               pkg.IsForce,
-			"upgrade_id":             firstFW.ID,
-			"is_admin_push":          true,
+			"has_update":           true,
+			"upgrade_mode":         "package",
+			"device_model":         device.Model,
+			"current_main_version": device.MainVersion,
+			"main_version":         pkg.MainVersion,
+			"firmware_id":          firstFW.FirmwareID,
+			"version":              firstFW.FirmwareVersion,
+			"target_chip":          firstFW.TargetChip,
+			"current_version":      firstFW.OldVersion,
+			"chips_to_upgrade":     chipsToUpgrade,
+			"changelog":            pkg.Changelog,
+			"is_force":             pkg.IsForce,
+			"upgrade_id":           firstFW.ID,
+			"is_admin_push":        true,
 		})
 		return
 	}
@@ -384,23 +409,24 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			currentChipVersion = du.OldVersion
 		}
 		response.Success(c, gin.H{
-			"has_update":             true,
-			"upgrade_mode":           "single",
-			"device_model":           device.Model,
-			"current_main_version":   device.MainVersion,
-			"firmware_id":            fw.ID,
-			"main_version":           fw.MainVersion,
-			"version":                fw.Version,
-			"target_chip":            fw.TargetChip,
-			"current_version":        currentChipVersion,
-			"download_url":           h.otaService.BuildDownloadURL(fw.FileURL),
-			"file_name":              fw.Model + "_" + fw.Version + ".bin",
-			"file_size":              fw.FileSize,
-			"file_md5":               fw.FileMD5,
-			"changelog":              fw.Changelog,
-			"is_force":               fw.IsForce,
-			"upgrade_id":             du.ID,
-			"is_admin_push":          true,
+			"has_update":           true,
+			"upgrade_mode":         "single",
+			"device_model":         device.Model,
+			"current_main_version": device.MainVersion,
+			"firmware_id":          fw.ID,
+			"main_version":         fw.MainVersion,
+			"version":              fw.Version,
+			"target_chip":          fw.TargetChip,
+			"current_version":      currentChipVersion,
+			"download_url":         h.otaService.BuildDownloadURL(fw.FileURL),
+			"file_name":            fw.Model + "_" + fw.Version + ".bin",
+			"file_size":            fw.FileSize,
+			"file_md5":             fw.FileMD5,
+			"file_sha256":          fw.FileSHA256,
+			"changelog":            fw.Changelog,
+			"is_force":             fw.IsForce,
+			"upgrade_id":           du.ID,
+			"is_admin_push":        true,
 		})
 		return
 	}
@@ -427,8 +453,12 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			// 获取固件信息以构造下载URL
 			fw, _ := h.otaService.GetFirmware(c.Request.Context(), item.FirmwareID)
 			downloadURL := ""
+			fileSize := int64(0)
+			fileSHA256 := ""
 			if fw != nil {
 				downloadURL = h.otaService.BuildDownloadURL(fw.FileURL)
+				fileSize = fw.FileSize
+				fileSHA256 = fw.FileSHA256
 			}
 			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
 				"chip":             item.TargetChip,
@@ -437,6 +467,8 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 				"firmware_id":      item.FirmwareID,
 				"firmware_version": item.FirmwareVersion,
 				"download_url":     downloadURL,
+				"file_size":        fileSize,
+				"file_sha256":      fileSHA256,
 			})
 		}
 
@@ -447,33 +479,33 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 		}
 
 		response.Success(c, gin.H{
-			"has_update":             hasUpdate,
-			"upgrade_mode":           "package",
-			"device_model":           device.Model,
-			"current_main_version":   currentVersion,
-			"main_version":           latestVersion,
-			"changelog":              firstPkg.UserChangelog,
-			"is_force":               firstPkg.IsForce,
-			"firmware_arm":           device.FirmwareArm,
-			"firmware_esp":           device.FirmwareEsp,
-			"firmware_dsp":           device.FirmwareDSP,
-			"firmware_bms":           device.FirmwareBMS,
-			"chips_to_upgrade":       chipsToUpgrade,
-			"available_packages":     packages,
-			"message":                message,
+			"has_update":           hasUpdate,
+			"upgrade_mode":         "package",
+			"device_model":         device.Model,
+			"current_main_version": currentVersion,
+			"main_version":         latestVersion,
+			"changelog":            firstPkg.UserChangelog,
+			"is_force":             firstPkg.IsForce,
+			"firmware_arm":         device.FirmwareArm,
+			"firmware_esp":         device.FirmwareEsp,
+			"firmware_dsp":         device.FirmwareDSP,
+			"firmware_bms":         device.FirmwareBMS,
+			"chips_to_upgrade":     chipsToUpgrade,
+			"available_packages":   packages,
+			"message":              message,
 		})
 		return
 	}
 
 	response.Success(c, gin.H{
-		"has_update":             false,
-		"device_model":           device.Model,
-		"current_main_version":   device.MainVersion,
-		"firmware_arm":           device.FirmwareArm,
-		"firmware_esp":           device.FirmwareEsp,
-		"firmware_dsp":           device.FirmwareDSP,
-		"firmware_bms":           device.FirmwareBMS,
-		"message":                "暂无可用更新",
+		"has_update":           false,
+		"device_model":         device.Model,
+		"current_main_version": device.MainVersion,
+		"firmware_arm":         device.FirmwareArm,
+		"firmware_esp":         device.FirmwareEsp,
+		"firmware_dsp":         device.FirmwareDSP,
+		"firmware_bms":         device.FirmwareBMS,
+		"message":              "暂无可用更新",
 	})
 }
 
@@ -554,7 +586,7 @@ func (h *OTAHandler) GetDeviceOTAStatus(c *gin.Context) {
 func (h *OTAHandler) GetDeviceOTAHistory(c *gin.Context) {
 	sn := c.Param("sn")
 	page := parseInt(c.DefaultQuery("page", "1"))
-	pageSize := parseInt(c.DefaultQuery("page_size", "20"))
+	pageSize := getPageSize(c, 20)
 
 	history, total, err := h.otaService.GetDeviceOTAHistory(c.Request.Context(), sn, page, pageSize)
 	if err != nil {
@@ -772,15 +804,15 @@ func (h *OTAHandler) RestoreAppVersion(c *gin.Context) {
 // CreateUpgradePackage 创建升级包
 func (h *OTAHandler) CreateUpgradePackage(c *gin.Context) {
 	var req struct {
-		Model          string   `json:"model" binding:"required"`
-		FirmwareIDs    []int64  `json:"firmware_ids" binding:"required"`
-		Changelog      string   `json:"changelog"`
-		IsForce        bool     `json:"is_force"`
-		UserVersion    string   `json:"user_version"`
-		UserChangelog  string   `json:"user_changelog"`
-		RolloutType    string   `json:"rollout_type"`
-		RolloutTargets string   `json:"rollout_targets"`
-		IsPublished    bool     `json:"is_published"`
+		Model          string  `json:"model" binding:"required"`
+		FirmwareIDs    []int64 `json:"firmware_ids" binding:"required"`
+		Changelog      string  `json:"changelog"`
+		IsForce        bool    `json:"is_force"`
+		UserVersion    string  `json:"user_version"`
+		UserChangelog  string  `json:"user_changelog"`
+		RolloutType    string  `json:"rollout_type"`
+		RolloutTargets string  `json:"rollout_targets"`
+		IsPublished    bool    `json:"is_published"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid request: "+err.Error()))
@@ -992,14 +1024,24 @@ func (h *OTAHandler) CreateUpgradeTask(c *gin.Context) {
 	}
 
 	var scheduledAt *time.Time
-	if req.ExecuteMode == "scheduled" && req.ScheduledAt != "" {
+	if req.ExecuteMode == "scheduled" {
+		if strings.TrimSpace(req.ScheduledAt) == "" {
+			response.HandleError(c, apperr.BadRequest("scheduled_at is required for scheduled execution"))
+			return
+		}
 		t, err := time.Parse("2006-01-02T15:04:05Z07:00", req.ScheduledAt)
 		if err != nil {
 			t, err = time.Parse("2006-01-02 15:04:05", req.ScheduledAt)
 		}
-		if err == nil {
-			scheduledAt = &t
+		if err != nil {
+			response.HandleError(c, apperr.BadRequest("scheduled_at format must be RFC3339 or YYYY-MM-DD HH:mm:ss"))
+			return
 		}
+		if !t.After(time.Now()) {
+			response.HandleError(c, apperr.BadRequest("scheduled_at must be in the future"))
+			return
+		}
+		scheduledAt = &t
 	}
 
 	userID := c.GetInt64("user_id")
@@ -1026,7 +1068,7 @@ func (h *OTAHandler) CreateUpgradeTask(c *gin.Context) {
 // ListUpgradeTasks 升级任务列表
 func (h *OTAHandler) ListUpgradeTasks(c *gin.Context) {
 	page := parseInt(c.DefaultQuery("page", "1"))
-	pageSize := parseInt(c.DefaultQuery("page_size", "20"))
+	pageSize := getPageSize(c, 20)
 	if pageSize > 100 {
 		pageSize = 100
 	}
@@ -1375,10 +1417,10 @@ func (h *OTAHandler) ListDeviceUpgradePackages(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"device_sn":             sn,
-		"device_model":          device.Model,
-		"current_main_version":  device.MainVersion,
-		"packages":              packages,
+		"device_sn":            sn,
+		"device_model":         device.Model,
+		"current_main_version": device.MainVersion,
+		"packages":             packages,
 	})
 }
 
@@ -1453,6 +1495,7 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 		DownloadURL     string `json:"download_url"`
 		FileSize        int64  `json:"file_size"`
 		FileMD5         string `json:"file_md5"`
+		FileSHA256      string `json:"file_sha256"`
 	}
 	type availablePackage struct {
 		ID            int64      `json:"id"`
@@ -1461,7 +1504,7 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 		MainVersion   string     `json:"main_version"` // 新增：供 App 端回退
 		IsForce       bool       `json:"is_force"`
 		Model         string     `json:"model"`
-		Chips        []chipInfo `json:"chips"`
+		Chips         []chipInfo `json:"chips"`
 	}
 
 	result := make([]availablePackage, 0, len(packages))
@@ -1475,6 +1518,7 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 				DownloadURL:     h.otaService.BuildDownloadURL(item.FileURL),
 				FileSize:        item.FileSize,
 				FileMD5:         item.FileMD5,
+				FileSHA256:      item.FileSHA256,
 			})
 		}
 		result = append(result, availablePackage{
@@ -1484,7 +1528,7 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 			MainVersion:   pkg.MainVersion, // 新增
 			IsForce:       pkg.IsForce,
 			Model:         pkg.Model,
-			Chips:        chips,
+			Chips:         chips,
 		})
 	}
 

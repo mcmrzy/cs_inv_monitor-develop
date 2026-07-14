@@ -7,7 +7,7 @@ import { mockDevices, paginatedResponse } from '@/test/mocks/data'
 describe('deviceApi', () => {
   describe('getDevices', () => {
     it('should fetch device list with pagination', async () => {
-      const res = await deviceApi.getDevices({ page: 1, pageSize: 20 })
+      const res = await deviceApi.getDevices({ page: 1, page_size: 20 })
       const data = res.data?.data ?? res.data
       expect(data.items).toHaveLength(mockDevices.length)
       expect(data.total).toBe(mockDevices.length)
@@ -139,11 +139,11 @@ describe('deviceApi', () => {
   })
 
   describe('getAll', () => {
-    it('should fetch all devices with pageSize 200', async () => {
+    it('should fetch all devices with page_size 200', async () => {
       server.use(
         http.get('/api/v1/devices', ({ request }) => {
           const url = new URL(request.url)
-          const pageSize = url.searchParams.get('pageSize')
+          const pageSize = url.searchParams.get('page_size')
           return HttpResponse.json({
             code: 0,
             data: { items: mockDevices, total: mockDevices.length, requestedPageSize: pageSize },

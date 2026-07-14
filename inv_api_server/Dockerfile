@@ -4,7 +4,7 @@ WORKDIR /app
 COPY inv_api_server/go.mod inv_api_server/go.sum ./
 RUN go mod download
 COPY inv_api_server/ .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-api-server ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-api-server ./cmd
 
 FROM docker.m.daocloud.io/library/alpine:3.19
 RUN apk --no-cache add ca-certificates tzdata wget

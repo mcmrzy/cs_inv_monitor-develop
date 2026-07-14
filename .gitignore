@@ -85,6 +85,11 @@ bin/
 *.swo
 .migrate_working_dir/
 
+# Large binary artifacts
+*.hprof
+*.dump
+database/backups/
+
 # Local database/deployment and analysis artifacts
 _fix.py
 deploy/deploy_to_850.py
@@ -93,6 +98,7 @@ deploy/inv_mqtt.dump
 deploy/inv_mqtt_dump.sql
 deploy/inv_mqtt_v2.sql
 deploy/sync.dump
+database/backup-schema-before-*.sql
 inv_app/test_output.txt
 tools/data/
 docs/compose/

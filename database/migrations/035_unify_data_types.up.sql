@@ -1,0 +1,40 @@
+-- =====================================================
+-- Migration 035: Unify work_state and fault_code data types
+-- =====================================================
+-- AUDIT FINDINGS:
+--   device_telemetry.work_state   : VARCHAR(50)  (legacy table)
+--   device_telemetry_3min.work_state : SMALLINT  (new table — target type)
+--   device_telemetry.fault_code   : VARCHAR(50)  (legacy table)
+--   device_telemetry_3min.fault_code : BIGINT    (new table — target type)
+--
+-- STRATEGY:
+--   The new table device_telemetry_3min already uses the correct numeric
+--   types (SMALLINT / BIGINT). These are the target types and remain
+--   unchanged. No ALTER TABLE is needed.
+--
+-- GO CODE VERIFICATION:
+--   inv_device_server/internal/service/protocol_parser.go:
+--     Line 310: status["fault_code"] = int64(*sample.System.FaultCode)
+--     Line 316: status["work_state"] = int64(*sample.System.WorkState)
+--
+--   The Go code already converts work_state and fault_code to int64 before
+--   insertion, which is compatible with SMALLINT and BIGINT columns in
+--   PostgreSQL. No Go code changes are required.
+--
+-- LEGACY TABLE (device_telemetry):
+--   The old device_telemetry table retains VARCHAR(50) for both columns.
+--   This is intentional — the legacy table is in read-only transition mode
+--   and will eventually be dropped once all consumers migrate to
+--   device_telemetry_3min. Altering the legacy column types would require
+--   data migration (VARCHAR -> numeric) and risk data loss for any
+--   non-numeric historical values.
+--
+-- CONCLUSION:
+--   No schema changes required. This migration serves as a formal record
+--   of the data type standardization decision.
+-- =====================================================
+
+-- No-op: data types are already standardized in the target table.
+-- This file exists for migration audit trail purposes.
+
+SELECT 'Migration 035: work_state/fault_code types already standardized in device_telemetry_3min (SMALLINT/BIGINT). No ALTER required.' AS status;

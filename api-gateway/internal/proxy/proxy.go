@@ -62,7 +62,6 @@ func NewReverseProxy(target string) *ReverseProxy {
 
 func (rp *ReverseProxy) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Printf("[DEBUG-INSTRUMENT] ProxyHandler: %s %s -> %s", c.Request.Method, c.Request.URL.Path, rp.targetURL.String())
 		rp.proxy.ServeHTTP(c.Writer, c.Request)
 		c.Abort()
 	}
@@ -91,7 +90,6 @@ func (rp *ReverseProxy) RewriteHandler(targetPath string) gin.HandlerFunc {
 			if len(req.URL.Path) > 1 && strings.HasSuffix(req.URL.Path, "/") {
 				req.URL.Path = strings.TrimSuffix(req.URL.Path, "/")
 			}
-			log.Printf("[DEBUG-INSTRUMENT] RewriteHandler: %s -> %s", originalPath, req.URL.Path)
 		},
 		Transport: rp.proxy.Transport,
 		ErrorHandler: rp.proxy.ErrorHandler,

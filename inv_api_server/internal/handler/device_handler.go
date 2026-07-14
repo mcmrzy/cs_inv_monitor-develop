@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"log"
 	"regexp"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"inv-api-server/internal/middleware"
@@ -16,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/xuri/excelize/v2"
 )
 
 var deviceSNRegex = regexp.MustCompile(`^[A-Z0-9-]{8,64}$`)
@@ -46,12 +51,7 @@ func (h *DeviceHandler) List(c *gin.Context) {
 		page = 1
 	}
 
-	// 支持 pageSize 和 page_size 两种格式
-	pageSizeStr := c.Query("pageSize")
-	if pageSizeStr == "" {
-		pageSizeStr = c.DefaultQuery("page_size", "20")
-	}
-	pageSize, _ := strconv.Atoi(pageSizeStr)
+	pageSize := getPageSize(c, 20)
 	if pageSize < 1 {
 		pageSize = 20
 	}
@@ -342,6 +342,10 @@ func (h *DeviceHandler) Bind(c *gin.Context) {
 		response.Error(c, 5002, "device already bound")
 		return
 	}
+	if err := ensureTenantDeviceCapacity(c.Request.Context(), h.db, userID); err != nil {
+		response.HandleError(c, apperr.BadRequest(err.Error()))
+		return
+	}
 
 	if err := h.deviceService.Bind(c.Request.Context(), req.SN, userID, req.StationID); err != nil {
 		if err.Error() == "device already bound" {
@@ -413,13 +417,18 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 		return
 	}
 
-	if err := h.deviceService.SendCommand(c.Request.Context(), sn, req.Command, req.Params); err != nil {
+	taskID, err := h.deviceService.SendCommand(c.Request.Context(), sn, req.Command, req.Params)
+	if err != nil {
 		log.Printf("[Control] send command failed: sn=%s, err=%v", sn, err)
+		if strings.HasPrefix(err.Error(), "invalid command") {
+			response.HandleError(c, apperr.BadRequest(err.Error()))
+			return
+		}
 		response.Error(c, 5003, "发送命令失败，请稍后重试")
 		return
 	}
 
-	response.SuccessWithMessage(c, "command sent", nil)
+	response.SuccessWithMessage(c, "command sent", gin.H{"task_id": taskID})
 }
 
 func (h *DeviceHandler) GetControlFields(c *gin.Context) {
@@ -502,7 +511,7 @@ func (h *DeviceHandler) GetAlarms(c *gin.Context) {
 	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	pageSize := getPageSize(c, 20)
 	if pageSize < 1 {
 		pageSize = 20
 	}
@@ -696,7 +705,7 @@ func (h *DeviceHandler) GetCommands(c *gin.Context) {
 	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", c.DefaultQuery("page_size", "20")))
+	pageSize := getPageSize(c, 20)
 	if pageSize < 1 {
 		pageSize = 20
 	}
@@ -739,6 +748,7 @@ func (h *DeviceHandler) BatchControl(c *gin.Context) {
 	}
 
 	results := make(map[string]string)
+	taskIDs := make(map[string]string)
 	for _, sn := range req.SNs {
 		if !isAdmin && !h.deviceService.HasControlPermission(c.Request.Context(), userID, sn) {
 			results[sn] = "permission denied"
@@ -750,15 +760,17 @@ func (h *DeviceHandler) BatchControl(c *gin.Context) {
 			continue
 		}
 
-		if err := h.deviceService.SendCommand(c.Request.Context(), sn, req.Command, req.Params); err != nil {
+		taskID, err := h.deviceService.SendCommand(c.Request.Context(), sn, req.Command, req.Params)
+		if err != nil {
 			results[sn] = err.Error()
 			continue
 		}
 
 		results[sn] = "sent"
+		taskIDs[sn] = taskID
 	}
 
-	response.Success(c, gin.H{"results": results})
+	response.Success(c, gin.H{"results": results, "task_ids": taskIDs})
 }
 
 func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
@@ -778,7 +790,7 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 
 	// 分页参数
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSizeParam, _ := strconv.Atoi(c.DefaultQuery("pageSize", c.DefaultQuery("page_size", "20")))
+	pageSizeParam := getPageSize(c, 20)
 	if page < 1 {
 		page = 1
 	}
@@ -791,7 +803,7 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 		if granularity == "" {
 			granularity = "day"
 		}
-		rangeSizeStr := c.DefaultQuery("pageSize", "7")
+		rangeSizeStr := c.DefaultQuery("page_size", c.DefaultQuery("pageSize", "7"))
 		rangeSize, _ := strconv.Atoi(rangeSizeStr)
 		if rangeSize <= 0 || rangeSize > 365 {
 			rangeSize = 7
@@ -854,7 +866,7 @@ func (h *DeviceHandler) GetLifecycleHistory(c *gin.Context) {
 	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", c.DefaultQuery("page_size", "20")))
+	pageSize := getPageSize(c, 20)
 	if pageSize < 1 {
 		pageSize = 20
 	}
@@ -880,7 +892,7 @@ func (h *DeviceHandler) GetUnbindRequests(c *gin.Context) {
 	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", c.DefaultQuery("page_size", "10")))
+	pageSize := getPageSize(c, 10)
 	if pageSize < 1 {
 		pageSize = 10
 	}
@@ -1064,4 +1076,294 @@ func (h *DeviceHandler) RemoveInstaller(c *gin.Context) {
 	}
 
 	response.SuccessWithMessage(c, "installer removed successfully", nil)
+}
+
+// ImportExcel 通过 Excel 批量导入设备并绑定到当前用户。
+// Excel 格式：第一行为表头（跳过），后续每行包含：
+//   - A列: SN（必填）
+//   - B列: 型号（可选）
+//   - C列: 电站ID（可选）
+func (h *DeviceHandler) ImportExcel(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.HandleError(c, apperr.BadRequest("请选择要上传的文件"))
+		return
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		response.HandleError(c, apperr.Internal("打开文件失败", err))
+		return
+	}
+	defer src.Close()
+
+	f, err := excelize.OpenReader(src)
+	if err != nil {
+		response.HandleError(c, apperr.BadRequest("无法解析Excel文件，请确保为 .xlsx 格式"))
+		return
+	}
+	defer f.Close()
+
+	sheetName := f.GetSheetName(0)
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		response.HandleError(c, apperr.BadRequest("读取Excel数据失败"))
+		return
+	}
+
+	successCount := 0
+	failedCount := 0
+	var importErrors []string
+
+	for i, row := range rows {
+		if i == 0 {
+			// 跳过表头行
+			continue
+		}
+		if len(row) == 0 {
+			continue
+		}
+
+		sn := strings.TrimSpace(row[0])
+		if sn == "" {
+			failedCount++
+			importErrors = append(importErrors, fmt.Sprintf("第%d行: SN为空", i+1))
+			continue
+		}
+
+		if !deviceSNRegex.MatchString(sn) {
+			failedCount++
+			importErrors = append(importErrors, fmt.Sprintf("第%d行: SN格式无效: %s", i+1, sn))
+			continue
+		}
+
+		// 可选：从C列读取电站ID
+		var stationID int64
+		if len(row) > 2 {
+			sVal := strings.TrimSpace(row[2])
+			if sVal != "" {
+				stationID, _ = strconv.ParseInt(sVal, 10, 64)
+			}
+		}
+
+		// 查询设备是否存在，不存在则创建
+		device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
+		if err != nil {
+			failedCount++
+			importErrors = append(importErrors, fmt.Sprintf("第%d行: 查询设备失败: %s", i+1, sn))
+			continue
+		}
+
+		if device == nil {
+			if err := h.deviceService.EnsureDevice(c.Request.Context(), sn); err != nil {
+				failedCount++
+				importErrors = append(importErrors, fmt.Sprintf("第%d行: 创建设备失败: %s", i+1, sn))
+				continue
+			}
+			device, err = h.deviceService.GetBySN(c.Request.Context(), sn)
+			if err != nil || device == nil {
+				failedCount++
+				importErrors = append(importErrors, fmt.Sprintf("第%d行: 创建设备后查询失败: %s", i+1, sn))
+				continue
+			}
+		}
+
+		if device.UserID != 0 {
+			failedCount++
+			importErrors = append(importErrors, fmt.Sprintf("第%d行: 设备已被绑定: %s", i+1, sn))
+			continue
+		}
+
+		if err := ensureTenantDeviceCapacity(c.Request.Context(), h.db, userID); err != nil {
+			failedCount++
+			importErrors = append(importErrors, fmt.Sprintf("第%d行: %s", i+1, err.Error()))
+			continue
+		}
+
+		if err := h.deviceService.Bind(c.Request.Context(), sn, userID, stationID); err != nil {
+			failedCount++
+			importErrors = append(importErrors, fmt.Sprintf("第%d行: 绑定失败: %s - %s", i+1, sn, err.Error()))
+			continue
+		}
+
+		// 可选：如果B列有型号信息，更新设备型号
+		if len(row) > 1 {
+			modelVal := strings.TrimSpace(row[1])
+			if modelVal != "" {
+				h.deviceService.Update(c.Request.Context(), sn, modelVal, nil, "", "")
+			}
+		}
+
+		successCount++
+	}
+
+	log.Printf("[ImportExcel] userID=%d, success=%d, failed=%d", userID, successCount, failedCount)
+
+	response.Success(c, gin.H{
+		"success": successCount,
+		"failed":  failedCount,
+		"errors":  importErrors,
+	})
+}
+
+// ExportTelemetry 导出设备遥测数据为 CSV 格式。
+// 支持查询参数：start_time / startTime, end_time / endTime, granularity
+func (h *DeviceHandler) ExportTelemetry(c *gin.Context) {
+	sn := c.Param("sn")
+	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
+
+	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+
+	startTime := c.Query("start_time")
+	if startTime == "" {
+		startTime = c.Query("startTime")
+	}
+	endTime := c.Query("end_time")
+	if endTime == "" {
+		endTime = c.Query("endTime")
+	}
+	granularity := c.DefaultQuery("granularity", "")
+
+	// 提供默认时间范围（最近7天）
+	if startTime == "" || endTime == "" {
+		if granularity == "" {
+			granularity = "day"
+		}
+		now := timezone.NowUTC()
+		endTime = now.Format(time.RFC3339)
+		startTime = now.AddDate(0, 0, -7).Format(time.RFC3339)
+	}
+
+	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
+	if err != nil {
+		log.Printf("[ExportTelemetry] error: sn=%s, err=%v", sn, err)
+		response.HandleError(c, apperr.Internal("获取遥测数据失败", err))
+		return
+	}
+
+	// 收集所有字段名并排序，保证列顺序一致
+	fieldSet := make(map[string]bool)
+	for _, row := range data {
+		for k := range row {
+			fieldSet[k] = true
+		}
+	}
+	var headers []string
+	for field := range fieldSet {
+		headers = append(headers, field)
+	}
+	sort.Strings(headers)
+
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=telemetry_%s.csv", sn))
+
+	writer := csv.NewWriter(c.Writer)
+	// 写入表头
+	writer.Write(headers)
+	// 写入数据行
+	for _, row := range data {
+		record := make([]string, len(headers))
+		for i, field := range headers {
+			val := row[field]
+			if val == nil {
+				record[i] = ""
+			} else {
+				record[i] = fmt.Sprintf("%v", val)
+			}
+		}
+		writer.Write(record)
+	}
+	writer.Flush()
+}
+
+// ExportTelemetryExcel 导出设备遥测数据为 Excel(xlsx) 格式。
+// 支持查询参数：start_time / startTime, end_time / endTime, granularity
+func (h *DeviceHandler) ExportTelemetryExcel(c *gin.Context) {
+	sn := c.Param("sn")
+	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
+
+	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+
+	startTime := c.Query("start_time")
+	if startTime == "" {
+		startTime = c.Query("startTime")
+	}
+	endTime := c.Query("end_time")
+	if endTime == "" {
+		endTime = c.Query("endTime")
+	}
+	granularity := c.DefaultQuery("granularity", "")
+
+	// 提供默认时间范围（最近7天）
+	if startTime == "" || endTime == "" {
+		if granularity == "" {
+			granularity = "day"
+		}
+		now := timezone.NowUTC()
+		endTime = now.Format(time.RFC3339)
+		startTime = now.AddDate(0, 0, -7).Format(time.RFC3339)
+	}
+
+	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
+	if err != nil {
+		log.Printf("[ExportTelemetryExcel] error: sn=%s, err=%v", sn, err)
+		response.HandleError(c, apperr.Internal("获取遥测数据失败", err))
+		return
+	}
+
+	// 收集所有字段名并排序
+	fieldSet := make(map[string]bool)
+	for _, row := range data {
+		for k := range row {
+			fieldSet[k] = true
+		}
+	}
+	var headers []string
+	for field := range fieldSet {
+		headers = append(headers, field)
+	}
+	sort.Strings(headers)
+
+	f := excelize.NewFile()
+	defer f.Close()
+	sheetName := "Telemetry"
+	f.SetSheetName(f.GetSheetName(0), sheetName)
+
+	// 写入表头
+	for col, header := range headers {
+		cell, _ := excelize.CoordinatesToCellName(col+1, 1)
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	// 写入数据行
+	for rowIdx, row := range data {
+		for col, field := range headers {
+			cell, _ := excelize.CoordinatesToCellName(col+1, rowIdx+2)
+			val := row[field]
+			if val != nil {
+				f.SetCellValue(sheetName, cell, val)
+			} else {
+				f.SetCellValue(sheetName, cell, "")
+			}
+		}
+	}
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=telemetry_%s.xlsx", sn))
+
+	if err := f.Write(c.Writer); err != nil {
+		log.Printf("[ExportTelemetryExcel] write error: sn=%s, err=%v", sn, err)
+	}
 }

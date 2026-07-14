@@ -16,20 +16,17 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		
-		// 检查请求的Origin是否在允许列表中
+
+		// 仅当 Origin 在允许列表中时才设置 CORS 响应头
 		if origin != "" && originSet[origin] {
 			c.Header("Access-Control-Allow-Origin", origin)
-		} else if len(allowedOrigins) > 0 {
-			// 如果有配置的允许来源但不匹配，使用第一个作为默认（可选策略）
-			// 或者可以不设置header来拒绝请求
-			c.Header("Access-Control-Allow-Origin", allowedOrigins[0])
+			c.Header("Access-Control-Allow-Credentials", "true")
 		}
-		
+		// 不匹配的 Origin 不设置 CORS 头，浏览器会拒绝跨域请求
+
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, X-Requested-With")
 		c.Header("Access-Control-Expose-Headers", "Content-Length, Content-Type")
-		c.Header("Access-Control-Allow-Credentials", "true")
 		c.Header("Access-Control-Max-Age", "86400")
 
 		if c.Request.Method == http.MethodOptions {

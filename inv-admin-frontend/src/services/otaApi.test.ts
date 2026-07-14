@@ -12,7 +12,7 @@ describe('otaApi', () => {
       expect(data.items).toHaveLength(mockFirmwares.length)
     })
 
-    it('getAllFirmware should request with large pageSize', async () => {
+    it('getAllFirmware should request with large page_size', async () => {
       server.use(
         http.get('/api/v1/firmwares', ({ request }) => {
           const url = new URL(request.url)
@@ -21,14 +21,14 @@ describe('otaApi', () => {
             data: {
               items: mockFirmwares,
               total: mockFirmwares.length,
-              pageSize: url.searchParams.get('pageSize'),
+              page_size: url.searchParams.get('page_size'),
             },
           })
         }),
       )
 
       const res = await otaApi.getAllFirmware()
-      expect(res.data.data.pageSize).toBe('9999')
+      expect(res.data.data.page_size).toBe('9999')
     })
 
     it('deleteFirmware should delete by id', async () => {

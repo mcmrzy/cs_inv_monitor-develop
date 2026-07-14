@@ -7,20 +7,21 @@ import (
 
 // ==================== 设备信息 (cs_inv/{sn}/info) ====================
 type DeviceInfo struct {
-	SN             string  `json:"sn"`
-	Model          string  `json:"model"`
-	Manufacturer   string  `json:"manufacturer"`
-	FirmwareARM    string  `json:"firmware_arm"`
-	FirmwareESP    string  `json:"firmware_esp"`
-	FirmwareDSP    string  `json:"firmware_dsp"`
-	FirmwareBMS    string  `json:"firmware_bms"`
-	Type           string  `json:"type"`
-	RatedPower     int     `json:"rated_power"`
-	RatedVoltage   int     `json:"rated_voltage"`
-	RatedFreq      float64 `json:"rated_freq"`
-	BatteryVoltage float64 `json:"battery_voltage"`
-	BatteryType    string  `json:"battery_type"`
-	CellCount      int     `json:"cell_count"`
+	SN              string  `json:"sn"`
+	Model           string  `json:"model"`
+	Manufacturer    string  `json:"manufacturer"`
+	FirmwareARM     string  `json:"firmware_arm"`
+	FirmwareESP     string  `json:"firmware_esp"`
+	FirmwareDSP     string  `json:"firmware_dsp"`
+	FirmwareBMS     string  `json:"firmware_bms"`
+	Type            string  `json:"device_type"`
+	RatedPower      int     `json:"rated_power"`
+	RatedVoltage    int     `json:"rated_voltage"`
+	RatedFreq       float64 `json:"rated_frequency"`
+	BatteryVoltage  float64 `json:"battery_nominal_voltage"`
+	BatteryType     string  `json:"battery_type"`
+	CellCount       int     `json:"cell_count"`
+	TempSensorCount int     `json:"temp_sensor_count"`
 }
 
 // ==================== 在线状态 (cs_inv/{sn}/status) ====================
@@ -56,10 +57,10 @@ type BatteryData struct {
 
 // ==================== 光伏 MPPT (cs_inv/{sn}/data/pv) ====================
 type PVData struct {
-	PVVoltage  float64 `json:"pv_voltage"`
-	PVCurrent  float64 `json:"pv_current"`
-	PVPower    float64 `json:"pv_power"`
-	MPPTState  string  `json:"mppt_state"`
+	PVVoltage float64 `json:"pv_voltage"`
+	PVCurrent float64 `json:"pv_current"`
+	PVPower   float64 `json:"pv_power"`
+	MPPTState string  `json:"mppt_state"`
 
 	SN         string    `json:"-"`
 	ReceivedAt time.Time `json:"-"`
@@ -80,15 +81,15 @@ type SystemStatus struct {
 
 // ==================== 能量统计 (cs_inv/{sn}/data/energy) ====================
 type EnergyData struct {
-	DailyPV         float64 `json:"daily_pv"`
-	TotalPV         float64 `json:"total_pv"`
-	DailyCharge     float64 `json:"daily_charge"`
-	TotalCharge     float64 `json:"total_charge"`
-	DailyDischarge  float64 `json:"daily_discharge"`
-	TotalDischarge  float64 `json:"total_discharge"`
-	DailyLoad       float64 `json:"daily_load"`
-	TotalLoad       float64 `json:"total_load"`
-	RuntimeHours    float64 `json:"runtime_hours"`
+	DailyPV        float64 `json:"daily_pv"`
+	TotalPV        float64 `json:"total_pv"`
+	DailyCharge    float64 `json:"daily_charge"`
+	TotalCharge    float64 `json:"total_charge"`
+	DailyDischarge float64 `json:"daily_discharge"`
+	TotalDischarge float64 `json:"total_discharge"`
+	DailyLoad      float64 `json:"daily_load"`
+	TotalLoad      float64 `json:"total_load"`
+	RuntimeHours   float64 `json:"runtime_hours"`
 
 	SN         string    `json:"-"`
 	ReceivedAt time.Time `json:"-"`
@@ -118,6 +119,8 @@ type AlarmItem struct {
 type AlarmData struct {
 	Code      int         `json:"code"`
 	Level     string      `json:"level"`
+	Source    int         `json:"source,omitempty"`
+	State     *int        `json:"state,omitempty"`
 	Message   string      `json:"message"`
 	Count     int         `json:"count"`
 	Alarms    []AlarmItem `json:"alarms"`
@@ -155,34 +158,34 @@ type DeviceCommand struct {
 
 // ==================== 设备表模型 ====================
 type Device struct {
-	ID             int64      `json:"id"`
-	SN             string     `json:"sn"`
-	Model          string     `json:"model"`
-	RatedPower     float64    `json:"rated_power"`
-	FirmwareARM    string     `json:"firmware_arm"`
-	FirmwareESP    string     `json:"firmware_esp"`
-	FirmwareDSP    string     `json:"firmware_dsp"`
-	FirmwareBMS    string     `json:"firmware_bms"`
-	Timezone       string     `json:"timezone"`
-	Status         int        `json:"status"`
-	LastOnlineAt   *time.Time `json:"last_online_at"`
-	IPAddress      string     `json:"ip_address"`
-	City           string     `json:"city"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID           int64      `json:"id"`
+	SN           string     `json:"sn"`
+	Model        string     `json:"model"`
+	RatedPower   float64    `json:"rated_power"`
+	FirmwareARM  string     `json:"firmware_arm"`
+	FirmwareESP  string     `json:"firmware_esp"`
+	FirmwareDSP  string     `json:"firmware_dsp"`
+	FirmwareBMS  string     `json:"firmware_bms"`
+	Timezone     string     `json:"timezone"`
+	Status       int        `json:"status"`
+	LastOnlineAt *time.Time `json:"last_online_at"`
+	IPAddress    string     `json:"ip_address"`
+	City         string     `json:"city"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // ==================== 运行时聚合缓存 ====================
 type DeviceRealtime struct {
-	DeviceSN string     `json:"device_sn"`
-	AC       *ACData    `json:"ac,omitempty"`
-	Battery  *BatteryData `json:"battery,omitempty"`
-	PV       *PVData    `json:"pv,omitempty"`
-	SysStatus *SystemStatus `json:"sys_status,omitempty"`
-	Energy   *EnergyData `json:"energy,omitempty"`
-	Cells    *CellsData  `json:"cells,omitempty"`
+	DeviceSN     string        `json:"device_sn"`
+	AC           *ACData       `json:"ac,omitempty"`
+	Battery      *BatteryData  `json:"battery,omitempty"`
+	PV           *PVData       `json:"pv,omitempty"`
+	SysStatus    *SystemStatus `json:"sys_status,omitempty"`
+	Energy       *EnergyData   `json:"energy,omitempty"`
+	Cells        *CellsData    `json:"cells,omitempty"`
 	OnlineStatus *OnlineStatus `json:"online_status,omitempty"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	UpdatedAt    time.Time     `json:"updated_at"`
 }
 
 // ==================== JSON 辅助 ====================

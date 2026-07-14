@@ -770,23 +770,18 @@ func (r *StationRepository) getStatisticsLegacy(ctx context.Context, stationID i
 		query := `
 			SELECT
 				DATE_TRUNC('hour', telem.time AT TIME ZONE $4) as hour_time,
-				AVG(COALESCE((telem.data->'data'->>'pv_power_total')::float, (telem.data->'pv_data'->>'pv_power_total')::float)) FILTER (WHERE telem.topic = 'data/pv') as avg_pv_power,
-				AVG(COALESCE((telem.data->'data'->>'power')::float, (telem.data->'ac_data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as avg_ac_power,
-				AVG(COALESCE(
-					(telem.data->'data'->>'voltage')::float * (telem.data->'data'->>'current')::float,
-					(telem.data->'batt_data'->>'voltage')::float * (telem.data->'batt_data'->>'current')::float,
-					0
-				)) FILTER (WHERE telem.topic = 'data/battery') as avg_batt_power,
-				MAX(COALESCE((telem.data->'data'->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
-				MAX(COALESCE((telem.data->'data'->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
-				MAX(COALESCE((telem.data->'data'->>'daily_discharge')::float, (telem.data->'energy_data'->>'daily_discharge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_discharge,
-				MAX(COALESCE((telem.data->'data'->>'daily_load')::float, (telem.data->'energy_data'->>'daily_load')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_load,
-				COUNT(DISTINCT telem.device_sn) FILTER (WHERE telem.topic IN ('data/pv', 'data/ac')) as device_count
-			FROM device_telemetry telem
+				AVG(telem.pv_power) as avg_pv_power,
+				AVG(telem.total_active_power) as avg_ac_power,
+				AVG(telem.battery_power) as avg_batt_power,
+				MAX(telem.daily_energy) as max_daily_pv,
+				MAX(telem.daily_charge_energy) as max_daily_charge,
+				MAX(telem.daily_discharge_energy) as max_daily_discharge,
+				MAX(telem.daily_load_energy) as max_daily_load,
+				COUNT(DISTINCT telem.device_sn) FILTER (WHERE telem.pv_power IS NOT NULL OR telem.total_active_power IS NOT NULL) as device_count
+			FROM v_device_telemetry_compat telem
 			WHERE telem.device_sn = ANY($1)
 				AND telem.time >= $2::timestamp
 				AND telem.time <= $3::timestamp
-				AND telem.topic IN ('data/pv', 'data/ac', 'data/battery', 'data/energy')
 			GROUP BY DATE_TRUNC('hour', telem.time AT TIME ZONE $4)
 			ORDER BY hour_time
 		`
@@ -831,19 +826,18 @@ func (r *StationRepository) getStatisticsLegacy(ctx context.Context, stationID i
 
 	default:
 		query := `
-			SELECT 
+			SELECT
 				DATE(telem.time AT TIME ZONE $4) as day_date,
-				MAX(COALESCE((telem.data->'data'->>'daily_pv')::float, (telem.data->'energy_data'->>'daily_pv')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_pv,
-				MAX(COALESCE((telem.data->'data'->>'power')::float, (telem.data->'ac_data'->>'power')::float)) FILTER (WHERE telem.topic = 'data/ac') as max_ac_power,
-				MAX(COALESCE((telem.data->'data'->>'daily_charge')::float, (telem.data->'energy_data'->>'daily_charge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_charge,
-				MAX(COALESCE((telem.data->'data'->>'daily_discharge')::float, (telem.data->'energy_data'->>'daily_discharge')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_discharge,
-				MAX(COALESCE((telem.data->'data'->>'daily_load')::float, (telem.data->'energy_data'->>'daily_load')::float)) FILTER (WHERE telem.topic = 'data/energy') as max_daily_load,
-				COUNT(DISTINCT telem.device_sn) FILTER (WHERE telem.topic IN ('data/pv', 'data/ac')) as device_count
-			FROM device_telemetry telem
+				MAX(telem.daily_energy) as max_daily_pv,
+				MAX(telem.total_active_power) as max_ac_power,
+				MAX(telem.daily_charge_energy) as max_daily_charge,
+				MAX(telem.daily_discharge_energy) as max_daily_discharge,
+				MAX(telem.daily_load_energy) as max_daily_load,
+				COUNT(DISTINCT telem.device_sn) FILTER (WHERE telem.pv_power IS NOT NULL OR telem.total_active_power IS NOT NULL) as device_count
+			FROM v_device_telemetry_compat telem
 			WHERE telem.device_sn = ANY($1)
 				AND telem.time >= $2::timestamp
 				AND telem.time <= $3::timestamp
-				AND telem.topic IN ('data/pv', 'data/ac', 'data/energy')
 			GROUP BY DATE(telem.time AT TIME ZONE $4)
 			ORDER BY day_date
 		`
@@ -1352,22 +1346,18 @@ func (r *DeviceRepository) getStationPowerBreakdownLegacy(ctx context.Context, s
 		return
 	}
 
-	// 从 device_telemetry 获取最新数据（按 topic 分别取每个设备的最新值）
+	// 从 v_device_telemetry_compat 获取最新数据（每个设备取最新一条记录）
 	query := `
 		SELECT
-			COALESCE(SUM(CASE WHEN telem.topic = 'data/pv' THEN COALESCE((telem.data->'data'->>'pv_power_total')::float, (telem.data->'pv_data'->>'pv_power_total')::float) END), 0),
-			COALESCE(SUM(CASE WHEN telem.topic = 'data/ac' THEN COALESCE((telem.data->'data'->>'power')::float, (telem.data->'ac_data'->>'power')::float) END), 0),
-			COALESCE(SUM(CASE WHEN telem.topic = 'data/battery' 
-				THEN COALESCE((telem.data->'data'->>'voltage')::float, (telem.data->'batt_data'->>'voltage')::float, 0)
-					* COALESCE((telem.data->'data'->>'current')::float, (telem.data->'batt_data'->>'current')::float, 0)
-			END), 0),
-			COALESCE(AVG(CASE WHEN telem.topic = 'data/battery' THEN NULLIF(COALESCE((telem.data->'data'->>'soc')::float, (telem.data->'batt_data'->>'soc')::float), 0) END), 0)
+			COALESCE(SUM(telem.pv_power), 0),
+			COALESCE(SUM(telem.total_active_power), 0),
+			COALESCE(SUM(telem.battery_power), 0),
+			COALESCE(AVG(NULLIF(telem.battery_soc, 0)), 0)
 		FROM (
-			SELECT device_sn, telem.topic, telem.data,
-				ROW_NUMBER() OVER (PARTITION BY device_sn, telem.topic ORDER BY telem.time DESC) as rn
-			FROM device_telemetry telem
+			SELECT device_sn, pv_power, total_active_power, battery_power, battery_soc,
+				ROW_NUMBER() OVER (PARTITION BY device_sn ORDER BY time DESC) as rn
+			FROM v_device_telemetry_compat
 			WHERE device_sn IN (SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL AND status IN (1, 2))
-				AND telem.topic IN ('data/pv', 'data/ac', 'data/battery')
 		) telem
 		WHERE telem.rn = 1
 	`
@@ -1686,34 +1676,17 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 			}
 		}
 
-		pattern := "realtime:latest:" + sn + ":*"
-		var cursor uint64
-		for {
-			keys, nextCursor, err := r.cache.Scan(ctx, cursor, pattern, 100).Result()
-			if err != nil {
-				break
-			}
-			cursor = nextCursor
-			if len(keys) > 0 {
-				vals, err := r.cache.MGet(ctx, keys...).Result()
-				if err == nil {
-					for i, key := range keys {
-						if i < len(vals) && vals[i] != nil {
-							fieldName := key[len("realtime:latest:"+sn+":"):]
-							if valStr, ok := vals[i].(string); ok {
-								var fieldData map[string]interface{}
-								if json.Unmarshal([]byte(valStr), &fieldData) == nil {
-									if v, exists := fieldData["v"]; exists {
-										result[fieldName] = v
-									}
-								}
-							}
-						}
+		// Field-level cache: HGETALL realtime:fields:{sn} (O(1), replaces SCAN of per-field keys)
+		hashKey := "realtime:fields:" + sn
+		fields, err := r.cache.HGetAll(ctx, hashKey).Result()
+		if err == nil {
+			for fieldName, valStr := range fields {
+				var fieldData map[string]interface{}
+				if json.Unmarshal([]byte(valStr), &fieldData) == nil {
+					if v, exists := fieldData["v"]; exists {
+						result[fieldName] = v
 					}
 				}
-			}
-			if cursor == 0 {
-				break
 			}
 		}
 
@@ -1747,7 +1720,7 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 		return nil, err
 	}
 
-	err = r.db.QueryRow(ctx, `SELECT data FROM device_telemetry WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`, sn).Scan(&rawJSON)
+	err = r.db.QueryRow(ctx, `SELECT data FROM v_device_telemetry_compat WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`, sn).Scan(&rawJSON)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return map[string]interface{}{"device_sn": sn, "online": online}, nil
@@ -1854,6 +1827,7 @@ func (r *DeviceRepository) invalidateDeviceCache(ctx context.Context, sn string)
 	}
 	keys := []string{
 		"realtime:latest:" + sn,
+		"realtime:fields:" + sn,
 		"telemetry:latest:" + sn,
 	}
 	r.cache.Del(ctx, keys...)
@@ -2813,9 +2787,9 @@ func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64, tz str
 	energyQuery := `
 		SELECT COALESCE(SUM(today_energy), 0)
 		FROM (
-			SELECT DISTINCT ON (d.sn) (dt.data->>'daily_energy')::float as today_energy
+			SELECT DISTINCT ON (d.sn) dt.daily_energy as today_energy
 			FROM devices d
-			LEFT JOIN device_telemetry dt ON dt.device_sn = d.sn AND dt.time >= $2 AND dt.time < $3
+			LEFT JOIN v_device_telemetry_compat dt ON dt.device_sn = d.sn AND dt.time >= $2 AND dt.time < $3
 			WHERE d.deleted_at IS NULL
 			AND d.sn IN (SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)
 			ORDER BY d.sn, dt.time DESC

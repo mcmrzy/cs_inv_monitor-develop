@@ -94,7 +94,7 @@ const ParallelPage: React.FC = () => {
       parallelApi.getGroups({
         ...filters,
         page: pagination.page,
-        pageSize: pagination.pageSize,
+        page_size: pagination.pageSize,
       }),
   })
 

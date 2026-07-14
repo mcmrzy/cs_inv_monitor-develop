@@ -75,7 +75,7 @@ const AlertsPage: React.FC = () => {
   // 获取电站列表（用于电站下拉）
   const { data: stationsData } = useQuery({
     queryKey: queryKeys.stations.list(),
-    queryFn: () => api.get('/stations', { params: { pageSize: 100, all: true } }).then((r) => {
+    queryFn: () => api.get('/stations', { params: { page_size: 100, all: true } }).then((r) => {
       const d = r.data?.data ?? r.data ?? {}
       return (Array.isArray(d) ? d : (d?.items ?? d?.list ?? [])) as any[]
     }),

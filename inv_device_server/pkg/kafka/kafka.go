@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -42,7 +43,9 @@ func (p *Producer) GetWriter(topic string) *kafka.Writer {
 		BatchTimeout: 10 * time.Millisecond,
 		BatchSize:    100,
 		Async:        true,
+		ErrorLogger:  log.Default(),
 	}
+
 	p.writers[topic] = w
 	return w
 }

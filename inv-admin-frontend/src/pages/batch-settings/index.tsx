@@ -130,7 +130,7 @@ const BatchSettingsPage: React.FC = () => {
 
   const { data: stationsRes } = useQuery({
     queryKey: ['stations', 'all'],
-    queryFn: () => api.get('/stations', { params: { pageSize: 999, all: true } }).then((r) => r.data),
+    queryFn: () => api.get('/stations', { params: { page_size: 999, all: true } }).then((r) => r.data),
     staleTime: 300000,
   })
 
@@ -142,7 +142,7 @@ const BatchSettingsPage: React.FC = () => {
   const { data: devicesRes, isLoading: devicesLoading } = useQuery({
     queryKey: ['batch', 'devices', selectedStationIds],
     queryFn: () => {
-      const params: any = { pageSize: 9999 }
+      const params: any = { page_size: 9999 }
       if (selectedStationIds.length === 1) {
         params.stationId = selectedStationIds[0]
       }

@@ -19,6 +19,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -60,21 +62,14 @@ func (c *Config) Validate() error {
 	if c.Server.Port <= 0 || c.Server.Port > 65535 {
 		missing = append(missing, "server.port (must be 1-65535)")
 	}
+	if c.EMQX.Token == "" {
+		log.Printf("[WARN] EMQX token not configured, webhook authentication disabled")
+	}
+
 	if len(missing) > 0 {
-		return fmt.Errorf("configuration validation failed:\n  - %s", joinStrs(missing, "\n  - "))
+		return fmt.Errorf("configuration validation failed:\n  - %s", strings.Join(missing, "\n  - "))
 	}
 	return nil
-}
-
-func joinStrs(ss []string, sep string) string {
-	r := ""
-	for i, s := range ss {
-		if i > 0 {
-			r += sep
-		}
-		r += s
-	}
-	return r
 }
 
 type stats struct {
@@ -111,24 +106,38 @@ type KafkaBridge struct {
 	cfg             *Config
 }
 
+// kafkaErrorLogger 实现 kafka.Logger 接口，在记录 Kafka 异步写入错误的同时递增错误计数。
+// kafka-go v0.4.47 的 Writer 在 Async 模式下不暴露 Errors() channel，
+// 而是通过 ErrorLogger 回调报告异步写入失败。
+type kafkaErrorLogger struct {
+	stats *stats
+}
+
+func (l *kafkaErrorLogger) Printf(format string, args ...interface{}) {
+	log.Printf(format, args...)
+	l.stats.incErr()
+}
+
 func NewKafkaBridge(cfg *Config) *KafkaBridge {
-	return &KafkaBridge{
-		cfg: cfg,
-		telemetryWriter: &kafka.Writer{
-			Addr:         kafka.TCP(cfg.Kafka.Brokers...),
-			Topic:        cfg.Kafka.TelemetryTopic,
-			BatchSize:    cfg.Kafka.BatchSize,
-			BatchTimeout: time.Duration(cfg.Kafka.BatchTimeout) * time.Millisecond,
-			Async:        true,
-		},
-		alarmWriter: &kafka.Writer{
-			Addr:         kafka.TCP(cfg.Kafka.Brokers...),
-			Topic:        cfg.Kafka.AlarmTopic,
-			BatchSize:    cfg.Kafka.BatchSize,
-			BatchTimeout: time.Duration(cfg.Kafka.BatchTimeout) * time.Millisecond,
-			Async:        true,
-		},
+	b := &KafkaBridge{cfg: cfg}
+	errLog := &kafkaErrorLogger{stats: &b.stats}
+	b.telemetryWriter = &kafka.Writer{
+		Addr:         kafka.TCP(cfg.Kafka.Brokers...),
+		Topic:        cfg.Kafka.TelemetryTopic,
+		BatchSize:    cfg.Kafka.BatchSize,
+		BatchTimeout: time.Duration(cfg.Kafka.BatchTimeout) * time.Millisecond,
+		Async:        true,
+		ErrorLogger:  errLog,
 	}
+	b.alarmWriter = &kafka.Writer{
+		Addr:         kafka.TCP(cfg.Kafka.Brokers...),
+		Topic:        cfg.Kafka.AlarmTopic,
+		BatchSize:    cfg.Kafka.BatchSize,
+		BatchTimeout: time.Duration(cfg.Kafka.BatchTimeout) * time.Millisecond,
+		Async:        true,
+		ErrorLogger:  errLog,
+	}
+	return b
 }
 
 type EMQXWebhookMessage struct {
@@ -216,7 +225,7 @@ func (b *KafkaBridge) handleWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractSN(topic string) string {
-	parts := stringsSplit(topic, "/")
+	parts := strings.Split(topic, "/")
 	if len(parts) >= 2 {
 		return parts[1]
 	}
@@ -224,36 +233,45 @@ func extractSN(topic string) string {
 }
 
 func extractMsgType(topic string) string {
-	parts := stringsSplit(topic, "/")
+	parts := strings.Split(topic, "/")
 	if len(parts) >= 3 {
-		return stringsJoin(parts[2:], "/")
+		return strings.Join(parts[2:], "/")
 	}
 	return "unknown"
 }
 
-func stringsSplit(s, sep string) []string {
-	result := []string{}
-	start := 0
-	for i := 0; i <= len(s)-len(sep); i++ {
-		if s[i:i+len(sep)] == sep {
-			result = append(result, s[start:i])
-			start = i + len(sep)
-			i += len(sep) - 1
-		}
-	}
-	result = append(result, s[start:])
-	return result
+// recoveryMiddleware 捕获 handler 中的 panic，防止进程崩溃。
+func recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("[PANIC] %v", err)
+				http.Error(w, "internal error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
-func stringsJoin(parts []string, sep string) string {
-	if len(parts) == 0 {
-		return ""
+// applyEnvOverrides 使用环境变量覆盖配置文件中的值。
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("KAFKA_BROKERS"); v != "" {
+		cfg.Kafka.Brokers = strings.Split(v, ",")
 	}
-	result := parts[0]
-	for i := 1; i < len(parts); i++ {
-		result += sep + parts[i]
+	if v := os.Getenv("KAFKA_TELEMETRY_TOPIC"); v != "" {
+		cfg.Kafka.TelemetryTopic = v
 	}
-	return result
+	if v := os.Getenv("KAFKA_ALARM_TOPIC"); v != "" {
+		cfg.Kafka.AlarmTopic = v
+	}
+	if v := os.Getenv("EMQX_TOKEN"); v != "" {
+		cfg.EMQX.Token = v
+	}
+	if v := os.Getenv("EMQX_WEBHOOK_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.Server.Port = port
+		}
+	}
 }
 
 func main() {
@@ -266,6 +284,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	// 环境变量覆盖配置
+	applyEnvOverrides(cfg)
+
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("Config validation failed: %v", err)
 	}
@@ -276,6 +298,9 @@ func main() {
 	log.Printf("  Topics: %s, %s", cfg.Kafka.TelemetryTopic, cfg.Kafka.AlarmTopic)
 
 	bridge := NewKafkaBridge(cfg)
+
+	// Kafka Writer 的异步错误通过 ErrorLogger 回调处理（见 kafkaErrorLogger），
+	// 此处无需额外 goroutine 消费 Errors channel。
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/webhook", bridge.handleWebhook)
@@ -298,7 +323,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      mux,
+		Handler:      recoveryMiddleware(mux),
 		ReadTimeout:  time.Duration(cfg.Server.Timeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.Server.Timeout) * time.Second,
 	}

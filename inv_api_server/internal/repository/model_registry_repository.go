@@ -25,23 +25,8 @@ func (r *ModelRepository) BuildCommandArgs(ctx context.Context, sn, commandCode 
 	if !enabled {
 		return nil, true, fmt.Errorf("command is disabled")
 	}
-	var schema struct {
-		Args []struct {
-			Key string `json:"key"`
-		} `json:"args"`
-	}
-	if err := json.Unmarshal(raw, &schema); err != nil {
-		return nil, true, err
-	}
-	args := make([]interface{}, 0, len(schema.Args))
-	for _, spec := range schema.Args {
-		value, ok := params[spec.Key]
-		if !ok {
-			return nil, true, fmt.Errorf("missing command argument: %s", spec.Key)
-		}
-		args = append(args, value)
-	}
-	return args, true, nil
+	args, err := validateAndBuildCommandArgs(raw, params)
+	return args, true, err
 }
 
 func (r *ModelRepository) CommandCapability(ctx context.Context, sn, commandCode string) (bool, bool, error) {
@@ -125,6 +110,9 @@ func (r *ModelRepository) GetProtocolSchema(ctx context.Context, modelID int64) 
 				FROM device_protocol_fields f WHERE f.protocol_version_id=p.id),'[]'::jsonb))
 		FROM device_models m JOIN device_protocol_versions p ON p.id=m.heartbeat_protocol_id
 		WHERE m.id=$1`, modelID).Scan(&raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -39,7 +39,7 @@ export interface WorkOrderTemplate {
   templateId: string
   title: string
   description: string
-  priority: number
+  priority: string
   defaultFields: string[]
   estimatedHours: number
 }

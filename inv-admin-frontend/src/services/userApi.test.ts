@@ -7,7 +7,7 @@ import { mockUsers, paginatedResponse } from '@/test/mocks/data'
 describe('userApi', () => {
   describe('list', () => {
     it('should fetch user list', async () => {
-      const res = await userApi.list({ page: 1, pageSize: 20 })
+      const res = await userApi.list({ page: 1, page_size: 20 })
       const data = res.data?.data ?? res.data
       expect(data.items).toHaveLength(mockUsers.length)
       expect(data.total).toBe(mockUsers.length)

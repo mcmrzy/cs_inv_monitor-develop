@@ -65,7 +65,7 @@ const WorkOrdersPage: React.FC = () => {
   const { data: devicesRes } = useQuery({
     queryKey: ['devices', 'for-work-order', user?.id, user?.role],
     queryFn: () => {
-      const params: any = { pageSize: 200 }
+      const params: any = { page_size: 200 }
       if (isInstaller) params.installerId = user?.id
       if (isEndUser) params.userId = user?.id
       return deviceApi.getDevices(params)
@@ -103,7 +103,7 @@ const WorkOrdersPage: React.FC = () => {
     overdue: { label: t('wo.expired'), color: '#ff4d4f', icon: <WarningOutlined /> },
   }
 
-  const queryParams = { page, pageSize, status: statusFilter || undefined, priority: priorityFilter || undefined }
+  const queryParams = { page, page_size: pageSize, status: statusFilter || undefined, priority: priorityFilter || undefined }
 
   const { data: listRes, isLoading, refetch } = useQuery({
     queryKey: queryKeys.workOrders.list(queryParams),

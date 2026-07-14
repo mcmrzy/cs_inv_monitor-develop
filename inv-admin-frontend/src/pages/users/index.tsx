@@ -83,7 +83,7 @@ const UsersPage: React.FC = () => {
     2: { label: t('user.locked'), color: '#fa8c16' },
   }
 
-  const queryParams = { page, pageSize, keyword: keyword || undefined, role: roleFilter, status: statusFilter }
+  const queryParams = { page, page_size: pageSize, keyword: keyword || undefined, role: roleFilter, status: statusFilter }
 
   const { data: listRes, isLoading, refetch } = useQuery({
     queryKey: queryKeys.users.list(queryParams),
@@ -139,7 +139,7 @@ const UsersPage: React.FC = () => {
   // 获取可选的上级用户列表（角色等级高于当前创建的用户）
   const { data: parentUsers } = useQuery({
     queryKey: ['users', 'parents', currentUser?.id],
-    queryFn: () => userApi.list({ pageSize: 100, status: 1 }).then((r) => {
+    queryFn: () => userApi.list({ page_size: 100, status: 1 }).then((r) => {
       const d = (r.data?.data ?? r.data) as { items?: User[]; total?: number }
       const items = d?.items ?? []
       // 过滤出角色等级高于当前用户的用户（排除自己）

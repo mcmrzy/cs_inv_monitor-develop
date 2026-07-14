@@ -1,10 +1,17 @@
 package mqtt
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestUniqueClientIDAddsInstanceSuffix(t *testing.T) {
+	id := uniqueClientID("inv-device-server")
+	assert.True(t, strings.HasPrefix(id, "inv-device-server-"))
+	assert.Greater(t, len(id), len("inv-device-server-"))
+}
 
 func TestExtractSN(t *testing.T) {
 	tests := []struct {
@@ -107,6 +114,8 @@ func TestIsCmdResultTopic(t *testing.T) {
 	}{
 		{"cmd_result", "cs_inv/ABC123/cmd_result", true},
 		{"shared cmd_result", "$share/group/cs_inv/ABC123/cmd_result", true},
+		{"v1 cmd response", "cs_inv/ABC123/cmd/response", true},
+		{"shared v1 cmd response", "$share/group/cs_inv/ABC123/cmd/response", true},
 		{"cmd", "cs_inv/ABC123/cmd", false},
 		{"status", "cs_inv/ABC123/status", false},
 		{"empty", "", false},

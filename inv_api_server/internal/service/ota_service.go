@@ -64,9 +64,13 @@ type CreateFirmwareReq struct {
 	FileSHA256 string
 	Changelog  string
 	IsForce    bool
+	UploadedBy int64
 }
 
 func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq) error {
+	if err := ValidateFirmwareRequest(req); err != nil {
+		return err
+	}
 	// 自动生成主版本号：查询当前芯片的最大主版本号，+1
 	latestVersion, err := s.repo.GetLatestMainVersion(ctx, req.TargetChip)
 	if err != nil {
@@ -105,8 +109,49 @@ func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq)
 		FileSHA256:  req.FileSHA256,
 		Changelog:   req.Changelog,
 		IsForce:     req.IsForce,
+		UploadedBy:  req.UploadedBy,
 	}
 	return s.repo.CreateFirmware(ctx, fw)
+}
+
+var (
+	firmwareTokenPattern  = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	firmwareSHA256Pattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
+	firmwareMD5Pattern    = regexp.MustCompile(`^[a-fA-F0-9]{32}$`)
+)
+
+// ValidateFirmwareRequest applies the same integrity and addressing rules to
+// multipart uploads and JSON-created external firmware records.
+func ValidateFirmwareRequest(req *CreateFirmwareReq) error {
+	if req == nil {
+		return fmt.Errorf("固件参数不能为空")
+	}
+	req.Model = strings.TrimSpace(req.Model)
+	req.TargetChip = strings.ToLower(strings.TrimSpace(req.TargetChip))
+	req.Version = strings.TrimSpace(req.Version)
+	req.FileURL = strings.TrimSpace(req.FileURL)
+	req.FileSHA256 = strings.ToLower(strings.TrimSpace(req.FileSHA256))
+	req.FileMD5 = strings.ToLower(strings.TrimSpace(req.FileMD5))
+	if !firmwareTokenPattern.MatchString(req.Model) || !firmwareTokenPattern.MatchString(req.Version) {
+		return fmt.Errorf("型号或版本号格式无效")
+	}
+	validChip := req.TargetChip == "arm" || req.TargetChip == "esp" || req.TargetChip == "dsp" || req.TargetChip == "bms"
+	if !validChip {
+		return fmt.Errorf("目标芯片必须是 arm、esp、dsp 或 bms")
+	}
+	if req.FileSize <= 0 {
+		return fmt.Errorf("固件文件大小必须大于 0")
+	}
+	if !firmwareSHA256Pattern.MatchString(req.FileSHA256) {
+		return fmt.Errorf("固件 SHA-256 必须是 64 位十六进制字符串")
+	}
+	if req.FileMD5 != "" && !firmwareMD5Pattern.MatchString(req.FileMD5) {
+		return fmt.Errorf("固件 MD5 必须是 32 位十六进制字符串")
+	}
+	if !(strings.HasPrefix(req.FileURL, "/firmware/") || strings.HasPrefix(req.FileURL, "https://")) {
+		return fmt.Errorf("固件地址必须是 /firmware/ 路径或 HTTPS URL")
+	}
+	return nil
 }
 
 func (s *OTAService) ListFirmware(ctx context.Context, model string) ([]model.Firmware, error) {
@@ -125,7 +170,7 @@ type PushUpgradeReq struct {
 	FirmwareID int64
 	DeviceSNs  []string
 	PushedBy   int64
-	Immediate  bool // true=立即执行升级, false=仅通知
+	Immediate  bool   // true=立即执行升级, false=仅通知
 	TaskID     *int64 // 可选：已有任务ID，未传则自动创建 source='admin' 的任务
 }
 
@@ -235,8 +280,11 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 // SendUpgradeCommand 发送MQTT升级命令到设备
 func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpgrade, fw *model.Firmware, downloadURL string) {
 	cmdBody := map[string]interface{}{
-		"command":     "start",
-		"action":      "start",
+		"command": "start",
+		"action":  "start",
+		// task_id is the stable device_upgrades record identifier. Devices must
+		// echo it in cmd_ack/status so concurrent chip upgrades cannot cross-update.
+		"task_id":     strconv.FormatInt(du.ID, 10),
 		"target":      fw.TargetChip,
 		"url":         downloadURL,
 		"version":     fw.Version,
@@ -422,24 +470,24 @@ func (s *OTAService) CheckDeviceOwnership(ctx context.Context, sn string, userID
 
 // DevicePackageUpgradeInfo 设备在某升级包下的各芯片升级详情
 type DevicePackageUpgradeInfo struct {
-	DeviceSN       string                    `json:"device_sn"`
-	DeviceModel    string                    `json:"device_model"`
-	MainVersion    string                    `json:"main_version"`
-	PackageID      int64                     `json:"package_id"`
-	PackageVersion string                    `json:"package_version"`
-	Chips          []ChipUpgradeDetail       `json:"chips"`
-	OverallStatus  string                    `json:"overall_status"`  // idle/pending/upgrading/success/failed/partial
-	OverallProgress int                      `json:"overall_progress"`
+	DeviceSN        string              `json:"device_sn"`
+	DeviceModel     string              `json:"device_model"`
+	MainVersion     string              `json:"main_version"`
+	PackageID       int64               `json:"package_id"`
+	PackageVersion  string              `json:"package_version"`
+	Chips           []ChipUpgradeDetail `json:"chips"`
+	OverallStatus   string              `json:"overall_status"` // idle/pending/upgrading/success/failed/partial
+	OverallProgress int                 `json:"overall_progress"`
 }
 
 // ChipUpgradeDetail 单个芯片的升级详情
 type ChipUpgradeDetail struct {
-	Chip            string `json:"chip"`
-	CurrentVersion  string `json:"current_version"`
-	TargetVersion   string `json:"target_version"`
-	Status          string `json:"status"`     // pending/downloading/upgrading/success/failed/cancelled
-	Progress        int    `json:"progress"`
-	ErrorMessage    string `json:"error_message,omitempty"`
+	Chip           string `json:"chip"`
+	CurrentVersion string `json:"current_version"`
+	TargetVersion  string `json:"target_version"`
+	Status         string `json:"status"` // pending/downloading/upgrading/success/failed/cancelled
+	Progress       int    `json:"progress"`
+	ErrorMessage   string `json:"error_message,omitempty"`
 }
 
 // GetDevicePackageUpgradeInfo 获取设备在指定升级包下的各芯片升级进度
@@ -753,10 +801,10 @@ func (s *OTAService) UpdateUpgradePackage(ctx context.Context, id int64, userVer
 
 type PublishPackageReq struct {
 	IsPublished    bool   `json:"is_published"`
-	RolloutType    string `json:"rollout_type"`     // 'all' | 'model' | 'user' | 'device'
-	RolloutTargets string `json:"rollout_targets"`  // JSON string or comma-separated
-	AutoPush       bool   `json:"auto_push"`        // 是否立即推送
-	RolloutPercent int    `json:"rollout_percent"`  // 灰度百分比
+	RolloutType    string `json:"rollout_type"`    // 'all' | 'model' | 'user' | 'device'
+	RolloutTargets string `json:"rollout_targets"` // JSON string or comma-separated
+	AutoPush       bool   `json:"auto_push"`       // 是否立即推送
+	RolloutPercent int    `json:"rollout_percent"` // 灰度百分比
 }
 
 // PublishPackage 发布升级包：更新发布状态，可选自动推送
@@ -909,7 +957,6 @@ func (s *OTAService) parseRolloutTargets(targets string) []string {
 	}
 	return result
 }
-
 
 type PushPackageUpgradeReq struct {
 	PackageID      int64
@@ -1238,12 +1285,12 @@ func (s *OTAService) ResendPendingUpgradeCommand(ctx context.Context, sn string)
 
 type CreateUpgradeTaskReq struct {
 	Name           string
-	TaskType       string   // 'single' | 'package'
-	FirmwareID     *int64   // 单芯片模式
-	PackageID      *int64   // 升级包模式
+	TaskType       string // 'single' | 'package'
+	FirmwareID     *int64 // 单芯片模式
+	PackageID      *int64 // 升级包模式
 	Model          string
 	DeviceSNs      []string
-	ExecuteMode    string   // 'immediate' | 'scheduled' | 'manual'
+	ExecuteMode    string // 'immediate' | 'scheduled' | 'manual'
 	ScheduledAt    *time.Time
 	RolloutPercent int
 	CreatedBy      int64

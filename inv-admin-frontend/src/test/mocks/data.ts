@@ -266,6 +266,6 @@ export function paginatedResponse<T>(items: T[], total?: number): PaginatedRespo
     items,
     total: total ?? items.length,
     page: 1,
-    pageSize: 20,
+    page_size: 20,
   }
 }

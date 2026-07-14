@@ -459,7 +459,7 @@ const DevicesPage: React.FC = () => {
   const { data: commandHistoryRes } = useQuery({
     queryKey: ['commandHistory', detailSn],
     queryFn: () =>
-      commandApi.getHistory(detailSn, { pageSize: 50 }).then((res) => {
+      commandApi.getHistory(detailSn, { page_size: 50 }).then((res) => {
         const d = res.data
         const inner = d?.data ?? d
         return {

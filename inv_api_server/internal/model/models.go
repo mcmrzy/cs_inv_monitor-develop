@@ -161,7 +161,7 @@ type DeviceShare struct {
 type DeviceDayData struct {
 	DeviceSN  string    `json:"device_sn"`
 	DataDate  time.Time `json:"data_date"`
-	Data      string    `json:"data"` // JSONB - 日聚合数据，字段通过 device_model_field 表动态配置
+	Data      string    `json:"data"` // JSONB - 日聚合数据，字段通过 device_model_fields 表动态配置
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -109,6 +109,11 @@ func main() {
 
 	hub := mqtt.NewHub(rdb)
 
+	// Rebuild online device set from existing heartbeat keys (startup reconciliation)
+	if err := hub.RebuildOnlineSet(ctx); err != nil {
+		logger.Warn("Failed to rebuild online set on startup", zap.Error(err))
+	}
+
 	var mqttClient *mqtt.Client
 	if cfg.MQTT.Broker != "" {
 		mqttClient = mqtt.NewClient(&cfg.MQTT, hub)
@@ -148,6 +153,9 @@ func main() {
 		mqttClient.SetCmdResultHandler(dataService.HandleCmdResult)
 	}
 	dataService.StartMetadataRefresh(ctx)
+
+	// Start periodic online set reconciler (every 5 min, cleans stale entries)
+	go hub.StartOnlineSetReconciler(ctx)
 
 	if cfg.Kafka.Enabled {
 		protocolParser := service.NewProtocolParser(
@@ -270,21 +278,31 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 
 	router.GET("/health", func(c *gin.Context) {
 		status := gin.H{"status": "ok"}
+		httpStatus := http.StatusOK
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
 
 		if rdb != nil {
 			if err := rdb.Ping(ctx).Err(); err != nil {
 				status["redis"] = "error"
+				httpStatus = http.StatusServiceUnavailable
 			} else {
 				status["redis"] = "ok"
+			}
+			mqttStatus, err := rdb.Get(ctx, "mqtt:broker:health").Result()
+			if err != nil || mqttStatus != "ok" {
+				status["mqtt"] = "error"
+				status["status"] = "degraded"
+				httpStatus = http.StatusServiceUnavailable
+			} else {
+				status["mqtt"] = "ok"
 			}
 		}
 
 		stats := dataService.GetMQTTStats()
 		status["mqtt_clients"] = stats.OnlineClients
 
-		c.JSON(http.StatusOK, status)
+		c.JSON(httpStatus, status)
 	})
 
 	router.GET("/metrics", func(c *gin.Context) {
@@ -300,24 +318,24 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 			stats.OnlineClients, stats.CmdSent)
 	})
 
-	api := router.Group("/api/v1")
-	{
-		// 内部认证中间件：校验 X-Internal-Key
-		internalAuth := func() gin.HandlerFunc {
-			key := cfg.Backends.InternalKey
-			return func(c *gin.Context) {
-				if key == "" {
-					c.Next()
-					return
-				}
-				if c.GetHeader("X-Internal-Key") != key {
-					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-					return
-				}
+	// 内部认证中间件：校验 X-Internal-Key
+	internalAuth := func() gin.HandlerFunc {
+		key := cfg.Backends.InternalKey
+		return func(c *gin.Context) {
+			if key == "" {
 				c.Next()
+				return
 			}
+			if c.GetHeader("X-Internal-Key") != key {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+				return
+			}
+			c.Next()
 		}
+	}
 
+	api := router.Group("/api/v1").Use(internalAuth())
+	{
 		api.GET("/device/:sn/online", func(c *gin.Context) {
 			sn := c.Param("sn")
 			online := dataService.IsDeviceOnline(sn)
@@ -339,7 +357,7 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 			c.JSON(http.StatusOK, data)
 		})
 
-		api.POST("/device/:sn/command", internalAuth(), func(c *gin.Context) {
+		api.POST("/device/:sn/command", func(c *gin.Context) {
 			sn := c.Param("sn")
 
 			// 读取完整 body，OTA 命令需要原始 JSON 直接转发

@@ -57,7 +57,7 @@ export const handlers = [
   http.get(`${API_BASE}/devices`, ({ request }) => {
     const url = new URL(request.url)
     const page = Number(url.searchParams.get('page') || '1')
-    const pageSize = Number(url.searchParams.get('pageSize') || '20')
+    const pageSize = Number(url.searchParams.get('page_size') || url.searchParams.get('pageSize') || '20')
     return HttpResponse.json({
       code: 0,
       message: 'success',
