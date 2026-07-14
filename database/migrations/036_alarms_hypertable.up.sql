@@ -62,7 +62,25 @@ DO $$
 DECLARE
     r RECORD;
 BEGIN
-    -- Drop any unique index on alarms_new that does NOT include occurred_at
+    -- First drop any unique constraints on alarms_new that do NOT include occurred_at
+    FOR r IN
+        SELECT conname
+        FROM pg_constraint c
+        JOIN pg_class cl ON cl.oid = c.conrelid
+        WHERE cl.relname = 'alarms_new'
+          AND c.contype IN ('u', 'p')
+          AND NOT EXISTS (
+              SELECT 1 FROM pg_attribute a
+              WHERE a.attrelid = c.conrelid
+                AND a.attnum = ANY(c.conkey)
+                AND a.attname = 'occurred_at'
+          )
+    LOOP
+        EXECUTE format('ALTER TABLE alarms_new DROP CONSTRAINT IF EXISTS %I', r.conname);
+        RAISE NOTICE 'Dropped constraint % for hypertable compatibility', r.conname;
+    END LOOP;
+
+    -- Then drop any remaining unique index on alarms_new that does NOT include occurred_at
     FOR r IN
         SELECT i.indexname
         FROM pg_indexes i
@@ -195,4 +213,6 @@ BEGIN
 END $$;
 
 -- Update applied_at marker
-RAISE NOTICE 'Migration 036 complete: alarms is now a TimescaleDB hypertable';
+DO $$ BEGIN
+    RAISE NOTICE 'Migration 036 complete: alarms is now a TimescaleDB hypertable';
+END $$;
