@@ -249,6 +249,10 @@ func (p *ProtocolParser) processMessage(ctx context.Context, raw *RawMessage) er
 		return p.handleInfo(ctx, raw)
 	case "cmd", "cmd/response", "cmd_result":
 		return p.handleCommandResponse(ctx, raw)
+	case "parallel":
+		return p.handleParallel(ctx, raw)
+	case "three_phase":
+		return p.handleThreePhase(ctx, raw)
 	default:
 		return p.handleTelemetry(ctx, raw)
 	}
@@ -750,6 +754,243 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 	}
 
 	return p.postInternal(endpoint, payload)
+}
+
+// handleParallel 处理并机状态消息（parallel topic）
+// 解析并机拓扑数据，提取 master SN 和 station_id，
+// 通过内部 API 转发给 api_server 进行 UPSERT 和拓扑变化检测，
+// 并更新 Redis 实时缓存。
+func (p *ProtocolParser) handleParallel(ctx context.Context, raw *RawMessage) error {
+	// 更新心跳
+	if err := p.stateManager.UpdateHeartbeat(ctx, raw.SN); err != nil {
+		logger.Warn("Failed to update heartbeat", zap.String("sn", raw.SN), zap.Error(err))
+	}
+	// 通过状态管理器处理在线状态（内置防抖）
+	if err := p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
+		SN:        raw.SN,
+		Event:     EventOnlineReport,
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		logger.Warn("Failed to handle online state",
+			zap.String("sn", raw.SN),
+			zap.Error(err))
+	}
+
+	// 解析 payload，支持嵌套格式 {"data": {...}, "t": ..., "v": ...}
+	payloadBytes := raw.Payload
+	var wrapper struct {
+		T    int64           `json:"t"`
+		V    int             `json:"v"`
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(raw.Payload, &wrapper); err != nil {
+		return err
+	}
+	if len(wrapper.Data) > 0 {
+		payloadBytes = wrapper.Data
+	}
+
+	var parallel struct {
+		Enabled          bool `json:"enabled"`
+		Mode             string  `json:"mode"`
+		Count            int     `json:"count"`
+		TotalRatedPower  int     `json:"total_rated_power"`
+		TotalActivePower float64 `json:"total_active_power"`
+		SyncState        string  `json:"sync_state"`
+		Machines []struct {
+			ID    int     `json:"id"`
+			SN    string  `json:"sn"`
+			Role  string  `json:"role"`
+			Phase string  `json:"phase"`
+			Power float64 `json:"power"`
+			State int     `json:"state"`
+		} `json:"machines"`
+	}
+	if err := json.Unmarshal(payloadBytes, &parallel); err != nil {
+		return err
+	}
+
+	// 找到 master SN（从 machines 数组中 role="master" 的设备）
+	masterSN := raw.SN
+	for _, m := range parallel.Machines {
+		if m.Role == "master" {
+			masterSN = m.SN
+			break
+		}
+	}
+
+	// 查询设备的 station_id
+	stationID, _ := p.repo.GetStationIDBySN(ctx, raw.SN)
+
+	// 构建转发给 api_server 的请求 payload
+	requestPayload := map[string]interface{}{
+		"sn":                 raw.SN,
+		"master_sn":          masterSN,
+		"station_id":         stationID,
+		"enabled":            parallel.Enabled,
+		"mode":               parallel.Mode,
+		"count":              parallel.Count,
+		"total_rated_power":  parallel.TotalRatedPower,
+		"total_active_power": parallel.TotalActivePower,
+		"sync_state":         parallel.SyncState,
+		"machines":           parallel.Machines,
+		"timestamp":          wrapper.T,
+	}
+
+	// 通过内部 API 转发给 api_server（api_server 负责 UPSERT 和拓扑变化检测）
+	if err := p.postInternal("/api/v1/internal/parallel-state", requestPayload); err != nil {
+		return err
+	}
+
+	// 更新 Redis 实时缓存
+	if p.rdb != nil {
+		parallelPayload := map[string]interface{}{
+			"data": map[string]interface{}{
+				"enabled":            parallel.Enabled,
+				"mode":               parallel.Mode,
+				"count":              parallel.Count,
+				"total_rated_power":  parallel.TotalRatedPower,
+				"total_active_power": parallel.TotalActivePower,
+				"sync_state":         parallel.SyncState,
+				"machines":           parallel.Machines,
+			},
+			"timestamp": time.Now().UTC().Unix(),
+		}
+		cacheKey := "realtime:latest:" + raw.SN
+		existing, err := p.rdb.Get(ctx, cacheKey).Bytes()
+		var rt map[string]interface{}
+		if err == nil {
+			_ = json.Unmarshal(existing, &rt)
+		}
+		if rt == nil {
+			rt = make(map[string]interface{})
+		}
+		rt["parallel"] = parallelPayload
+		rt["_sn"] = raw.SN
+		rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+		mergedBytes, _ := json.Marshal(rt)
+		p.rdb.Set(ctx, cacheKey, mergedBytes, 10*time.Minute)
+	}
+
+	logger.Info("Parallel state processed",
+		zap.String("sn", raw.SN),
+		zap.String("master_sn", masterSN),
+		zap.String("mode", parallel.Mode),
+		zap.Int("count", parallel.Count),
+		zap.String("sync_state", parallel.SyncState))
+	return nil
+}
+
+// handleThreePhase 处理三相数据消息（three_phase topic）
+// 解析三相电压/电流/功率数据，校验数组长度，
+// 通过内部 API 转发给 api_server，并写入 Redis 实时缓存。
+func (p *ProtocolParser) handleThreePhase(ctx context.Context, raw *RawMessage) error {
+	// 更新心跳
+	if err := p.stateManager.UpdateHeartbeat(ctx, raw.SN); err != nil {
+		logger.Warn("Failed to update heartbeat", zap.String("sn", raw.SN), zap.Error(err))
+	}
+	// 通过状态管理器处理在线状态（内置防抖）
+	if err := p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
+		SN:        raw.SN,
+		Event:     EventOnlineReport,
+		Timestamp: time.Now().UTC(),
+	}); err != nil {
+		logger.Warn("Failed to handle online state",
+			zap.String("sn", raw.SN),
+			zap.Error(err))
+	}
+
+	// 解析 payload，支持嵌套格式 {"data": {...}, "t": ..., "v": ...}
+	payloadBytes := raw.Payload
+	var wrapper struct {
+		T    int64           `json:"t"`
+		V    int             `json:"v"`
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(raw.Payload, &wrapper); err != nil {
+		return err
+	}
+	if len(wrapper.Data) > 0 {
+		payloadBytes = wrapper.Data
+	}
+
+	var threePhase struct {
+		Voltage          []float64 `json:"voltage"`
+		Current          []float64 `json:"current"`
+		ActivePower      []float64 `json:"active_power"`
+		TotalActivePower float64   `json:"total_active_power"`
+		LineVoltage      []float64 `json:"line_voltage"`
+		Frequency        float64   `json:"frequency"`
+		VoltageUnbalance float64   `json:"voltage_unbalance"`
+		CurrentUnbalance float64   `json:"current_unbalance"`
+	}
+	if err := json.Unmarshal(payloadBytes, &threePhase); err != nil {
+		return err
+	}
+
+	// 校验三相数组长度（必须为3）
+	if len(threePhase.Voltage) != 3 || len(threePhase.Current) != 3 ||
+		len(threePhase.ActivePower) != 3 || len(threePhase.LineVoltage) != 3 {
+		return fmt.Errorf("three_phase arrays must have exactly 3 elements: voltage=%d, current=%d, active_power=%d, line_voltage=%d",
+			len(threePhase.Voltage), len(threePhase.Current),
+			len(threePhase.ActivePower), len(threePhase.LineVoltage))
+	}
+
+	// 构建转发给 api_server 的请求 payload
+	requestPayload := map[string]interface{}{
+		"sn":                 raw.SN,
+		"voltage":            threePhase.Voltage,
+		"current":            threePhase.Current,
+		"active_power":       threePhase.ActivePower,
+		"total_active_power": threePhase.TotalActivePower,
+		"line_voltage":       threePhase.LineVoltage,
+		"frequency":          threePhase.Frequency,
+		"voltage_unbalance":  threePhase.VoltageUnbalance,
+		"current_unbalance":  threePhase.CurrentUnbalance,
+		"timestamp":          wrapper.T,
+	}
+
+	// 通过内部 API 转发给 api_server
+	if err := p.postInternal("/api/v1/internal/three-phase", requestPayload); err != nil {
+		return err
+	}
+
+	// 写入 Redis 实时缓存
+	if p.rdb != nil {
+		threePhasePayload := map[string]interface{}{
+			"data": map[string]interface{}{
+				"voltage":             threePhase.Voltage,
+				"current":             threePhase.Current,
+				"active_power":        threePhase.ActivePower,
+				"total_active_power":  threePhase.TotalActivePower,
+				"line_voltage":        threePhase.LineVoltage,
+				"frequency":           threePhase.Frequency,
+				"voltage_unbalance":   threePhase.VoltageUnbalance,
+				"current_unbalance":   threePhase.CurrentUnbalance,
+			},
+			"timestamp": time.Now().UTC().Unix(),
+		}
+		cacheKey := "realtime:latest:" + raw.SN
+		existing, err := p.rdb.Get(ctx, cacheKey).Bytes()
+		var rt map[string]interface{}
+		if err == nil {
+			_ = json.Unmarshal(existing, &rt)
+		}
+		if rt == nil {
+			rt = make(map[string]interface{})
+		}
+		rt["three_phase"] = threePhasePayload
+		rt["_sn"] = raw.SN
+		rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+		mergedBytes, _ := json.Marshal(rt)
+		p.rdb.Set(ctx, cacheKey, mergedBytes, 10*time.Minute)
+	}
+
+	logger.Info("Three-phase data processed",
+		zap.String("sn", raw.SN),
+		zap.Float64("total_active_power", threePhase.TotalActivePower),
+		zap.Float64("frequency", threePhase.Frequency))
+	return nil
 }
 
 func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload map[string]interface{}, msgType string) error {
