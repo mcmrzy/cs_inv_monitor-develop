@@ -468,7 +468,7 @@ func (h *StationHandler) List(c *gin.Context) {
 	isAdmin := role == 0
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	pageSize := getPageSize(c, 20)
 
 	if page < 1 {
 		page = 1

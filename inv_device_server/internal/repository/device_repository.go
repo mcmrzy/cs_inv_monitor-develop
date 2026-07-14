@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"log"
 
 	"inv-device-server/internal/model"
 
@@ -54,9 +55,19 @@ func (r *DeviceRepository) GetAllActiveModels(ctx context.Context) ([]model.Devi
 }
 
 func (r *DeviceRepository) GetModelFields(ctx context.Context, modelID int32) ([]model.DeviceModelField, error) {
-	query := `SELECT id, model_id, field_key, field_name, field_type, COALESCE(unit, ''), sort,
-		is_show, is_control, COALESCE(parse_rule, ''), COALESCE(group_name, ''), control_params, created_at, updated_at
-		FROM device_model_field WHERE model_id = $1 ORDER BY sort, field_key`
+	// 迁移至 device_model_fields（复数，migration 023），缺失列用 NULL/默认值填充
+	query := `SELECT id, model_id, field_key,
+		COALESCE(display_name_key, '') AS field_name,
+		''::text AS field_type,
+		COALESCE(display_unit, '') AS unit,
+		sort_order AS sort,
+		is_visible AS is_show,
+		false AS is_control,
+		''::text AS parse_rule,
+		group_code AS group_name,
+		NULL::jsonb AS control_params,
+		created_at, updated_at
+		FROM device_model_fields WHERE model_id = $1 ORDER BY sort_order, field_key`
 
 	rows, err := r.db.Query(ctx, query, modelID)
 	if err != nil {
@@ -92,7 +103,7 @@ func (r *DeviceRepository) GetDeviceModelID(ctx context.Context, sn string) (int
 }
 
 func (r *DeviceRepository) GetLatestRealtimeData(ctx context.Context, sn string) (*model.DeviceRealtime, error) {
-	query := `SELECT data FROM device_telemetry WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`
+	query := `SELECT data FROM v_device_telemetry_compat WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`
 	var rawJSON string
 	err := r.db.QueryRow(ctx, query, sn).Scan(&rawJSON)
 	if err != nil {
@@ -133,8 +144,19 @@ func (r *DeviceRepository) GetAllDevices(ctx context.Context) ([]DeviceSummary, 
 }
 
 func (r *DeviceRepository) GetModelProtocols(ctx context.Context, modelID int32) ([]model.DeviceModelProtocol, error) {
-	query := `SELECT id, model_id, topic_pattern, parse_type, parse_config, is_active, created_at
-		FROM device_model_protocol WHERE model_id = $1 AND is_active = true ORDER BY id`
+	// 迁移说明：旧表 device_model_protocol 已被 device_protocol_versions 替代（migration 023）。
+	// 新表通过 device_models.heartbeat_protocol_id 关联，但不含 topic_pattern / parse_config 列。
+	// best-effort 映射：protocol_code → parse_type, status='released' → is_active。
+	query := `SELECT dpv.id, dm.id AS model_id,
+			''::text AS topic_pattern,
+			dpv.protocol_code AS parse_type,
+			''::text AS parse_config,
+			(dpv.status = 'released') AS is_active,
+			COALESCE(dpv.released_at, dpv.created_at) AS created_at
+		FROM device_protocol_versions dpv
+		JOIN device_models dm ON dm.heartbeat_protocol_id = dpv.id
+		WHERE dm.id = $1 AND dpv.status = 'released'
+		ORDER BY dpv.id`
 
 	rows, err := r.db.Query(ctx, query, modelID)
 	if err != nil {
@@ -151,6 +173,9 @@ func (r *DeviceRepository) GetModelProtocols(ctx context.Context, modelID int32)
 			return nil, err
 		}
 		protocols = append(protocols, p)
+	}
+	if len(protocols) > 0 {
+		log.Printf("[device_repository] GetModelProtocols(modelID=%d): migrated to device_protocol_versions, %d protocols found (partial column mapping: topic_pattern/parse_config unavailable)", modelID, len(protocols))
 	}
 	return protocols, nil
 }

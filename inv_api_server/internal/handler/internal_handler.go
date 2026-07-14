@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,20 +31,21 @@ type internalDeviceStatusRequest struct {
 }
 
 type internalDeviceInfoRequest struct {
-	SN             string  `json:"sn"`
-	Model          string  `json:"model"`
-	Manufacturer   string  `json:"manufacturer"`
-	FirmwareARM    string  `json:"firmware_arm"`
-	FirmwareESP    string  `json:"firmware_esp"`
-	FirmwareDSP    string  `json:"firmware_dsp"`
-	FirmwareBMS    string  `json:"firmware_bms"`
-	Type           string  `json:"type"`
-	RatedPower     int     `json:"rated_power"`
-	RatedVoltage   int     `json:"rated_voltage"`
-	RatedFreq      float64 `json:"rated_freq"`
-	BatteryVoltage float64 `json:"battery_voltage"`
-	BatteryType    string  `json:"battery_type"`
-	CellCount      int     `json:"cell_count"`
+	SN              string  `json:"sn"`
+	Model           string  `json:"model"`
+	Manufacturer    string  `json:"manufacturer"`
+	FirmwareARM     string  `json:"firmware_arm"`
+	FirmwareESP     string  `json:"firmware_esp"`
+	FirmwareDSP     string  `json:"firmware_dsp"`
+	FirmwareBMS     string  `json:"firmware_bms"`
+	Type            string  `json:"device_type"`
+	RatedPower      int     `json:"rated_power"`
+	RatedVoltage    int     `json:"rated_voltage"`
+	RatedFreq       float64 `json:"rated_frequency"`
+	BatteryVoltage  float64 `json:"battery_nominal_voltage"`
+	BatteryType     string  `json:"battery_type"`
+	CellCount       int     `json:"cell_count"`
+	TempSensorCount int     `json:"temp_sensor_count"`
 }
 
 type internalDeviceDataRequest struct {
@@ -74,6 +77,8 @@ type internalDeviceAlarmRequest struct {
 	SN        string          `json:"sn"`
 	Code      int             `json:"code"`
 	Level     string          `json:"level"`
+	Source    int             `json:"source"`
+	State     *int            `json:"state"`
 	Message   string          `json:"message"`
 	Count     int             `json:"count"`
 	Timestamp int64           `json:"timestamp"`
@@ -376,15 +381,25 @@ func (h *InternalHandler) pushRealtimeData(ctx context.Context, sn string, data 
 	}
 
 	cacheKey := "realtime:latest:" + sn
+	hashKey := "realtime:fields:" + sn
 	pipe := h.rdb.Pipeline()
 	pipe.Set(ctx, cacheKey, payload, 10*time.Minute)
+
+	// Field-level cache: use HSET for O(1) retrieval via HGETALL (replaces per-field SET keys)
+	fieldValues := make([]interface{}, 0, len(data)*2)
+	now := time.Now().UTC().Unix()
 	for k, v := range data {
 		if k == "_sn" || k == "_updated_at" {
 			continue
 		}
-		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": time.Now().UTC().Unix()})
-		pipe.Set(ctx, "realtime:latest:"+sn+":"+k, fieldBytes, 10*time.Minute)
+		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": now})
+		fieldValues = append(fieldValues, k, string(fieldBytes))
 	}
+	if len(fieldValues) > 0 {
+		pipe.HSet(ctx, hashKey, fieldValues...)
+		pipe.Expire(ctx, hashKey, 10*time.Minute)
+	}
+
 	if _, err := pipe.Exec(ctx); err != nil {
 		log.Printf("ERROR: Redis pipeline failed: %v", err)
 	}
@@ -410,10 +425,10 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 	_, err := h.db.Exec(ctx, `
 		INSERT INTO devices (
 			sn, model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
-			rated_power, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count,
+			rated_power, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count, temp_sensor_count,
 			user_id, status, last_online_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, 1, NOW(), NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, 1, NOW(), NOW(), NOW())
 		ON CONFLICT (sn) DO UPDATE SET
 			model = COALESCE(NULLIF(EXCLUDED.model, ''), devices.model),
 			manufacturer = COALESCE(NULLIF(EXCLUDED.manufacturer, ''), devices.manufacturer),
@@ -428,13 +443,14 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 			battery_voltage = CASE WHEN EXCLUDED.battery_voltage > 0 THEN EXCLUDED.battery_voltage ELSE devices.battery_voltage END,
 			battery_type = COALESCE(NULLIF(EXCLUDED.battery_type, ''), devices.battery_type),
 			cell_count = CASE WHEN EXCLUDED.cell_count > 0 THEN EXCLUDED.cell_count ELSE devices.cell_count END,
+			temp_sensor_count = CASE WHEN EXCLUDED.temp_sensor_count > 0 THEN EXCLUDED.temp_sensor_count ELSE devices.temp_sensor_count END,
 			status = CASE WHEN devices.status = 2 AND EXISTS (
 				SELECT 1 FROM alarms WHERE alarms.device_sn = $1 AND alarms.alarm_level = 3 AND alarms.status = 0
 			) THEN 2 ELSE 1 END,
 			last_online_at = NOW(),
 			updated_at = NOW()
 	`, req.SN, req.Model, req.Manufacturer, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS, req.Type,
-		req.RatedPower, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount)
+		req.RatedPower, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount, req.TempSensorCount)
 	if err != nil {
 		logger.Error("InternalDeviceInfo failed", zap.String("sn", req.SN), zap.Error(err))
 		response.HandleError(c, apperr.Internal("upsert device info failed", err))
@@ -698,14 +714,20 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 		dailyEnergy = extractFloat(dataMap, "daily_pv", "daily_energy")
 	}
 
-	_, err = h.db.Exec(ctx, `
-		INSERT INTO device_telemetry (device_sn, topic, data, total_active_power, daily_energy, work_state, fault_code, internal_temperature, grid_frequency, battery_soc, battery_power, pv_power, time, created_at)
-		VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-	`, req.SN, req.Topic, string(rawJSON), totalActivePower, dailyEnergy, workState, faultCode, internalTemp, gridFreq, battSOC, battPower, pvPower, telemetryTime)
-	if err != nil {
-		logger.Error("InternalDeviceData failed", zap.String("sn", req.SN), zap.Error(err))
-		response.HandleError(c, apperr.Internal("insert telemetry failed", err))
-		return
+	// 检查是否禁用旧表写入（双写消除阶段A）
+	disableLegacyWrite := os.Getenv("DISABLE_LEGACY_TELEMETRY_WRITE") == "true"
+	if !disableLegacyWrite {
+		_, err = h.db.Exec(ctx, `
+			INSERT INTO device_telemetry (device_sn, topic, data, total_active_power, daily_energy, work_state, fault_code, internal_temperature, grid_frequency, battery_soc, battery_power, pv_power, time, created_at)
+			VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+		`, req.SN, req.Topic, string(rawJSON), totalActivePower, dailyEnergy, workState, faultCode, internalTemp, gridFreq, battSOC, battPower, pvPower, telemetryTime)
+		if err != nil {
+			logger.Error("InternalDeviceData failed", zap.String("sn", req.SN), zap.Error(err))
+			response.HandleError(c, apperr.Internal("insert telemetry failed", err))
+			return
+		}
+	} else {
+		logger.Info("Legacy telemetry write disabled by env var", zap.String("sn", req.SN))
 	}
 
 	// 遥测数据入库即视为设备在线，刷新 last_online_at（30 秒节流避免高频更新）
@@ -768,6 +790,200 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"status": "ok"})
+}
+
+// DeviceDataBatch 批量写入遥测数据接口，使用 multi-row INSERT 提高写入效率
+func (h *InternalHandler) DeviceDataBatch(c *gin.Context) {
+	var requests []internalDeviceDataRequest
+	if err := c.ShouldBindJSON(&requests); err != nil {
+		response.BadRequest(c, "invalid request")
+		return
+	}
+	if len(requests) == 0 {
+		response.Success(c, gin.H{"count": 0, "success": 0, "failed": 0})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	disableLegacyWrite := os.Getenv("DISABLE_LEGACY_TELEMETRY_WRITE") == "true"
+
+	successCount := 0
+	failedCount := 0
+	snSet := make(map[string]bool)
+	var energyReqs []internalDeviceDataRequest
+
+	if !disableLegacyWrite {
+		// 构建 multi-row INSERT
+		var (
+			values       []interface{}
+			placeholders []string
+		)
+		validIdx := 0
+		for _, req := range requests {
+			if req.SN == "" || req.Topic == "" || req.Data == nil {
+				failedCount++
+				continue
+			}
+			rawJSON, err := json.Marshal(req.Data)
+			if err != nil {
+				failedCount++
+				continue
+			}
+
+			telemetryTime := time.Now().UTC()
+			if req.Timestamp > 0 {
+				telemetryTime = time.Unix(req.Timestamp, 0).UTC()
+			}
+
+			dataMap := req.Data
+			if nested, ok := req.Data["data"].(map[string]interface{}); ok {
+				dataMap = nested
+			}
+
+			var totalActivePower, dailyEnergy, internalTemp float64
+			var gridFreq, battSOC, battPower, pvPower float64
+			var workState, faultCode string
+
+			switch req.Topic {
+			case "data/ac":
+				totalActivePower = extractFloat(dataMap, "power", "total_active_power")
+				gridFreq = extractFloat(dataMap, "grid_freq", "grid_frequency", "freq")
+				pvPower = extractFloat(dataMap, "pv_power")
+			case "data/status":
+				workState = extractString(dataMap, "state", "work_state")
+				faultCode = extractString(dataMap, "fault_code")
+				internalTemp = extractFloat(dataMap, "temp_inv", "internal_temperature")
+				gridFreq = extractFloat(dataMap, "grid_freq", "grid_frequency", "freq")
+				battSOC = extractFloat(dataMap, "battery_soc", "batt_soc")
+				battPower = extractFloat(dataMap, "battery_power")
+				pvPower = extractFloat(dataMap, "pv_power")
+			case "data/energy":
+				dailyEnergy = extractFloat(dataMap, "daily_pv", "daily_energy")
+			}
+
+			base := validIdx * 13
+			placeholders = append(placeholders, fmt.Sprintf(
+				"($%d, $%d, $%d::jsonb, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, NOW())",
+				base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8, base+9, base+10, base+11, base+12, base+13,
+			))
+			values = append(values, req.SN, req.Topic, string(rawJSON), totalActivePower, dailyEnergy, workState, faultCode, internalTemp, gridFreq, battSOC, battPower, pvPower, telemetryTime)
+
+			snSet[req.SN] = true
+			if req.Topic == "data/energy" {
+				energyReqs = append(energyReqs, req)
+			}
+			validIdx++
+		}
+
+		if validIdx > 0 {
+			query := fmt.Sprintf(`
+				INSERT INTO device_telemetry (device_sn, topic, data, total_active_power, daily_energy, work_state, fault_code, internal_temperature, grid_frequency, battery_soc, battery_power, pv_power, time, created_at)
+				VALUES %s
+			`, strings.Join(placeholders, ", "))
+
+			_, err := h.db.Exec(ctx, query, values...)
+			if err != nil {
+				logger.Error("DeviceDataBatch insert failed", zap.Error(err))
+				failedCount += validIdx
+			} else {
+				successCount = validIdx
+			}
+		}
+	} else {
+		logger.Info("Legacy telemetry write disabled by env var", zap.Int("batch_count", len(requests)))
+		for _, req := range requests {
+			if req.SN == "" || req.Topic == "" || req.Data == nil {
+				failedCount++
+				continue
+			}
+			snSet[req.SN] = true
+			if req.Topic == "data/energy" {
+				energyReqs = append(energyReqs, req)
+			}
+			successCount++
+		}
+	}
+
+	// 批量更新 last_online_at（30 秒节流）
+	if len(snSet) > 0 {
+		sns := make([]string, 0, len(snSet))
+		for sn := range snSet {
+			sns = append(sns, sn)
+		}
+		_, _ = h.db.Exec(ctx, `
+			UPDATE devices SET last_online_at = NOW(), updated_at = NOW()
+			WHERE sn = ANY($1) AND (last_online_at IS NULL OR last_online_at < NOW() - INTERVAL '30 seconds')
+		`, sns)
+	}
+
+	// 处理 energy 记录的 device_day_data 和 station_day_data
+	for _, req := range energyReqs {
+		h.handleBatchEnergyData(ctx, req)
+	}
+
+	response.Success(c, gin.H{
+		"count":   len(requests),
+		"success": successCount,
+		"failed":  failedCount,
+	})
+}
+
+// handleBatchEnergyData 处理批量接口中 energy 记录的 device_day_data 和 station_day_data 写入
+func (h *InternalHandler) handleBatchEnergyData(ctx context.Context, req internalDeviceDataRequest) {
+	var telemetryTime time.Time
+	if req.Timestamp > 0 {
+		telemetryTime = time.Unix(req.Timestamp, 0).UTC()
+	} else {
+		telemetryTime = time.Now().UTC()
+	}
+
+	var deviceTZ string
+	err := h.db.QueryRow(ctx, `SELECT COALESCE(timezone, '') FROM devices WHERE sn = $1`, req.SN).Scan(&deviceTZ)
+	if err != nil || deviceTZ == "" {
+		deviceTZ = timezone.AsiaShanghai
+	}
+	dataDate := timezone.InTimezone(telemetryTime, deviceTZ).Format("2006-01-02")
+
+	runMinutes := int(req.RuntimeHours * 60)
+	dayDataJSON, _ := json.Marshal(map[string]interface{}{
+		"energy_produce":  req.DailyPV,
+		"daily_charge":    req.DailyCharge,
+		"daily_discharge": req.DailyDischarge,
+		"daily_load":      req.DailyLoad,
+		"run_minutes":     runMinutes,
+	})
+
+	_, err = h.db.Exec(ctx, `
+		INSERT INTO device_day_data (device_sn, data_date, data, created_at)
+		VALUES ($1, $2::date, $3::jsonb, NOW())
+		ON CONFLICT (device_sn, data_date) DO UPDATE SET
+			data = EXCLUDED.data
+	`, req.SN, dataDate, string(dayDataJSON))
+	if err != nil {
+		logger.Error("DeviceDataBatch upsert day data failed", zap.String("sn", req.SN), zap.Error(err))
+		return
+	}
+
+	if req.StationID > 0 && req.DailyPV > 0 {
+		_, err = h.db.Exec(ctx, `
+			INSERT INTO station_day_data (station_id, data_date, energy_produce, income, device_count, online_count, fault_count, created_at)
+			VALUES ($1, $2::date, $3, 0, 0, 0, 0, NOW())
+			ON CONFLICT (station_id, data_date) DO UPDATE SET
+				energy_produce = (
+					SELECT COALESCE(SUM((data->>'energy_produce')::numeric), 0)
+					FROM device_day_data
+					WHERE device_sn IN (
+						SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL
+					) AND data_date = $2::date
+				),
+				income = station_day_data.income + EXCLUDED.income
+		`, req.StationID, dataDate, req.DailyPV)
+		if err != nil {
+			logger.Error("DeviceDataBatch upsert station data failed", zap.Int64("station_id", req.StationID), zap.Error(err))
+		}
+	}
 }
 
 func (h *InternalHandler) DeviceCmdStatus(c *gin.Context) {
@@ -914,6 +1130,7 @@ func (h *InternalHandler) insertNotification(ctx context.Context, sn string, sta
 
 type internalOTAStatusRequest struct {
 	DeviceSN   string `json:"device_sn"`
+	TaskID     string `json:"task_id"`     // device_upgrades.id echoed by the device
 	FirmwareID *int64 `json:"firmware_id"` // 可选，设备上报时可能携带
 	Status     string `json:"status"`
 	Progress   int    `json:"progress"`
@@ -951,15 +1168,23 @@ func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 		zap.String("task_id", req.TaskID),
 		zap.String("message", req.Message))
 
-	// 更新 device_upgrades 表：标记为升级中（设备已确认收到命令）
+	// 更新唯一一条 device_upgrades 记录。旧设备没有 task_id 时只更新最近
+	// 一条 pending 记录，绝不能把同一设备的多个芯片任务全部推进。
 	if req.Ack {
+		upgradeID, _ := strconv.ParseInt(req.TaskID, 10, 64)
 		tag, err := h.db.Exec(ctx, `
 			UPDATE device_upgrades SET
 				status = 'upgrading',
 				started_at = CASE WHEN started_at IS NULL THEN NOW() ELSE started_at END,
 				updated_at = NOW()
-			WHERE device_sn = $1 AND status = 'pending'
-		`, req.DeviceSN)
+			WHERE id = COALESCE(
+				(SELECT id FROM device_upgrades
+				 WHERE id = NULLIF($2, 0) AND device_sn = $1 AND status = 'pending'),
+				(SELECT id FROM device_upgrades
+				 WHERE device_sn = $1 AND status = 'pending'
+				 ORDER BY updated_at DESC, id DESC LIMIT 1)
+			)
+		`, req.DeviceSN, upgradeID)
 		if err != nil {
 			logger.Error("OTACmdAck update failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 			response.HandleError(c, apperr.Internal("update OTA cmd ack failed", err))
@@ -979,6 +1204,10 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	}
 	if req.DeviceSN == "" {
 		response.HandleError(c, apperr.BadRequest("device_sn is required"))
+		return
+	}
+	if req.Progress < 0 || req.Progress > 100 {
+		response.HandleError(c, apperr.BadRequest("progress must be between 0 and 100"))
 		return
 	}
 
@@ -1002,7 +1231,9 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 		return
 	}
 
-	// 直接更新 device_upgrades 表
+	// 精确更新设备回传的升级记录。兼容旧固件：task_id 缺失时先按
+	// firmware_id 定位，再退化到最近一条活跃记录，但始终只更新一条。
+	upgradeID, _ := strconv.ParseInt(req.TaskID, 10, 64)
 	tag, err := h.db.Exec(ctx, `
 		UPDATE device_upgrades SET
 			status = $2::varchar,
@@ -1011,8 +1242,19 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 			started_at = CASE WHEN started_at IS NULL AND $2::varchar IN ('downloading','upgrading') THEN NOW() ELSE started_at END,
 			completed_at = CASE WHEN $2::varchar IN ('success', 'failed') THEN NOW() ELSE completed_at END,
 			updated_at = NOW()
-		WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
-	`, req.DeviceSN, dbStatus, req.Progress, req.Message)
+		WHERE id = COALESCE(
+			(SELECT id FROM device_upgrades
+			 WHERE id = NULLIF($5, 0) AND device_sn = $1
+			   AND status NOT IN ('success', 'failed', 'cancelled')),
+			(SELECT id FROM device_upgrades
+			 WHERE firmware_id = $6 AND device_sn = $1
+			   AND status NOT IN ('success', 'failed', 'cancelled')
+			 ORDER BY updated_at DESC, id DESC LIMIT 1),
+			(SELECT id FROM device_upgrades
+			 WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
+			 ORDER BY updated_at DESC, id DESC LIMIT 1)
+		)
+	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID)
 	if err != nil {
 		logger.Error("InternalOTAStatus failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 		response.HandleError(c, apperr.Internal("update OTA status failed", err))
@@ -1268,18 +1510,26 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		12: 1, // 恢复并网运行 → 提示
 	}
 
-	// code=0 或 level="normal" → 告警清除，恢复设备状态
-	if req.Code == 0 || req.Level == "normal" {
+	// V1 state=0 recovers only the matching (source, code) alarm. Legacy
+	// code=0/normal remains a device-wide clear during the migration window.
+	isV1Recovery := req.State != nil && *req.State == 0
+	if isV1Recovery || req.Code == 0 || req.Level == "normal" {
 		logger.Info("Device alarm cleared", zap.String("sn", req.SN))
 
 		// 将该设备的未处理严重告警标记为已恢复（status=2）
-		h.db.Exec(ctx, `
-			UPDATE alarms SET status = 2, recovered_at = NOW()
-			WHERE device_sn = $1 AND alarm_level = 3 AND status = 0
-		`, req.SN)
+		if isV1Recovery {
+			h.db.Exec(ctx, `UPDATE alarms SET status=2,recovered_at=NOW(),event_state='recovered'
+				WHERE device_sn=$1 AND alarm_source=$2 AND fault_code=$3 AND status=0`,
+				req.SN, req.Source, fmt.Sprintf("%d", req.Code))
+		} else {
+			h.db.Exec(ctx, `UPDATE alarms SET status=2,recovered_at=NOW(),event_state='recovered'
+				WHERE device_sn=$1 AND alarm_level=3 AND status=0`, req.SN)
+		}
 
 		// 延迟检查：等待3秒确认没有新的告警到达，防止告警和恢复通知同时出现
-		time.Sleep(3 * time.Second)
+		if !isV1Recovery {
+			time.Sleep(3 * time.Second)
+		}
 
 		// 检查是否还有未恢复的严重告警（包括延迟期间新到达的告警）
 		var activeAlarmCount int
@@ -1400,8 +1650,8 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	// 去重：同一设备+告警级别在 10 秒内不重复写入
 	var exists bool
 	h.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM alarms WHERE device_sn=$1 AND alarm_level=$2 AND occurred_at > NOW() - INTERVAL '10 seconds')`,
-		req.SN, alarmLevel,
+		`SELECT EXISTS(SELECT 1 FROM alarms WHERE device_sn=$1 AND alarm_source=$2 AND fault_code=$3 AND status=0)`,
+		req.SN, req.Source, fmt.Sprintf("%d", req.Code),
 	).Scan(&exists)
 	if exists {
 		logger.Info("Alarm dedup: same device+level within 10s",
@@ -1414,6 +1664,8 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	// 构建 fault_detail JSON
 	detailJSON, _ := json.Marshal(map[string]interface{}{
 		"code":      req.Code,
+		"source":    req.Source,
+		"state":     req.State,
 		"level":     req.Level,
 		"message":   req.Message,
 		"count":     req.Count,
@@ -1427,9 +1679,9 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	}
 
 	_, err := h.db.Exec(ctx, `
-		INSERT INTO alarms (device_sn, type, level, alarm_level, station_id, user_id, fault_code, fault_message, fault_detail, message, status, occurred_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, NOW(), NOW())
-	`, req.SN, alarmType, alarmLevel, alarmLevel, stationID, userID, faultCode, faultMessage, string(detailJSON), faultMessage)
+		INSERT INTO alarms (device_sn, type, level, alarm_level, alarm_source, event_state, station_id, user_id, fault_code, fault_message, fault_detail, message, status, occurred_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9, $10, $11, 0, NOW(), NOW())
+	`, req.SN, alarmType, alarmLevel, alarmLevel, req.Source, stationID, userID, faultCode, faultMessage, string(detailJSON), faultMessage)
 	if err != nil {
 		logger.Error("InternalDeviceAlarm insert failed", zap.String("sn", req.SN), zap.Error(err))
 		response.HandleError(c, apperr.Internal("insert alarm failed", err))

@@ -6,7 +6,7 @@ COPY go.sum* ./
 RUN go mod download 2>/dev/null || go mod tidy 2>/dev/null || true
 COPY . .
 RUN go mod tidy 2>/dev/null || true
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-device-server ./cmd/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-device-server ./cmd
 
 FROM docker.m.daocloud.io/library/alpine:3.19
 RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \

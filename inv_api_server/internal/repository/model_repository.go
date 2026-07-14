@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"inv-api-server/internal/model"
 
@@ -122,11 +123,19 @@ func (r *ModelRepository) DeleteModel(ctx context.Context, id int64) error {
 
 func (r *ModelRepository) GetFieldsByModelID(ctx context.Context, modelID int64) ([]model.DeviceModelField, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule,
-			COALESCE(group_name, ''), COALESCE(control_params, '{}')
-		FROM device_model_field
+		SELECT id, model_id, field_key,
+			COALESCE(display_name_key, '') AS field_name,
+			NULL AS field_type,
+			COALESCE(display_unit, '') AS unit,
+			sort_order AS sort,
+			is_visible AS is_show,
+			false AS is_control,
+			NULL AS parse_rule,
+			COALESCE(group_code, '') AS group_name,
+			'{}'::jsonb AS control_params
+		FROM device_model_fields
 		WHERE model_id = $1
-		ORDER BY sort, id`, modelID)
+		ORDER BY sort_order, id`, modelID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,53 +158,49 @@ func (r *ModelRepository) GetFieldsByModelID(ctx context.Context, modelID int64)
 }
 
 func (r *ModelRepository) CreateField(ctx context.Context, f *model.DeviceModelField) error {
+	groupCode := f.GroupName
+	if groupCode == "" {
+		groupCode = "general"
+	}
 	return r.db.QueryRow(ctx, `
-		INSERT INTO device_model_field (model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule, group_name)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO device_model_fields (model_id, field_key, display_name_key, display_unit, sort_order, is_visible, group_code)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id`,
-		f.ModelID, f.FieldKey, f.FieldName, f.FieldType, f.Unit, f.Sort, f.IsShow, f.IsControl, f.ParseRule, f.GroupName).Scan(&f.ID)
+		f.ModelID, f.FieldKey, f.FieldName, f.Unit, f.Sort, f.IsShow, groupCode).Scan(&f.ID)
 }
 
 func (r *ModelRepository) UpdateField(ctx context.Context, fieldID int64, name *string, fieldType *string,
 	unit *string, sort *int, isShow *bool, isControl *bool, parseRule *string, groupName *string) error {
 
 	if name != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET field_name = $1 WHERE id = $2`, *name, fieldID); err != nil {
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_fields SET display_name_key = $1, updated_at = NOW() WHERE id = $2`, *name, fieldID); err != nil {
 			return err
 		}
 	}
-	if fieldType != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET field_type = $1 WHERE id = $2`, *fieldType, fieldID); err != nil {
-			return err
-		}
-	}
+	// fieldType: no equivalent column in device_model_fields (deprecated)
 	if unit != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET unit = $1 WHERE id = $2`, *unit, fieldID); err != nil {
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_fields SET display_unit = $1, updated_at = NOW() WHERE id = $2`, *unit, fieldID); err != nil {
 			return err
 		}
 	}
 	if sort != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET sort = $1 WHERE id = $2`, *sort, fieldID); err != nil {
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_fields SET sort_order = $1, updated_at = NOW() WHERE id = $2`, *sort, fieldID); err != nil {
 			return err
 		}
 	}
 	if isShow != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET is_show = $1 WHERE id = $2`, *isShow, fieldID); err != nil {
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_fields SET is_visible = $1, updated_at = NOW() WHERE id = $2`, *isShow, fieldID); err != nil {
 			return err
 		}
 	}
-	if isControl != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET is_control = $1 WHERE id = $2`, *isControl, fieldID); err != nil {
-			return err
-		}
-	}
-	if parseRule != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET parse_rule = $1 WHERE id = $2`, *parseRule, fieldID); err != nil {
-			return err
-		}
-	}
+	// isControl: no equivalent column in device_model_fields (deprecated)
+	// parseRule: no equivalent column in device_model_fields (deprecated)
 	if groupName != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_field SET group_name = $1 WHERE id = $2`, *groupName, fieldID); err != nil {
+		groupCode := *groupName
+		if groupCode == "" {
+			groupCode = "general"
+		}
+		if _, err := r.db.Exec(ctx, `UPDATE device_model_fields SET group_code = $1, updated_at = NOW() WHERE id = $2`, groupCode, fieldID); err != nil {
 			return err
 		}
 	}
@@ -203,7 +208,7 @@ func (r *ModelRepository) UpdateField(ctx context.Context, fieldID int64, name *
 }
 
 func (r *ModelRepository) DeleteField(ctx context.Context, fieldID int64) error {
-	_, err := r.db.Exec(ctx, `DELETE FROM device_model_field WHERE id = $1`, fieldID)
+	_, err := r.db.Exec(ctx, `DELETE FROM device_model_fields WHERE id = $1`, fieldID)
 	return err
 }
 
@@ -232,11 +237,15 @@ func (r *ModelRepository) GetModelIDByDeviceSN(ctx context.Context, sn string) (
 
 func (r *ModelRepository) GetControlFieldsByModelID(ctx context.Context, modelID int64) ([]model.DeviceModelField, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule,
-			COALESCE(group_name, ''), COALESCE(control_params, '{}')
-		FROM device_model_field
-		WHERE model_id = $1 AND is_control = true
-		ORDER BY sort, id`, modelID)
+		SELECT id, model_id, command_code AS field_key,
+			COALESCE(display_name_key, '') AS field_name,
+			'' AS field_type, '' AS unit, 0 AS sort,
+			true AS is_show, true AS is_control,
+			NULL AS parse_rule, '' AS group_name,
+			'{}'::jsonb AS control_params
+		FROM device_model_commands
+		WHERE model_id = $1 AND is_enabled = true
+		ORDER BY command_code, id`, modelID)
 	if err != nil {
 		return nil, err
 	}
@@ -262,11 +271,16 @@ func (r *ModelRepository) GetControlFieldsByModelID(ctx context.Context, modelID
 
 func (r *ModelRepository) GetProtocolsByModelID(ctx context.Context, modelID int64) ([]model.DeviceModelProtocol, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT id, model_id, topic_pattern, parse_type, COALESCE(parse_config, '{}'), is_active,
-			TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS')
-		FROM device_model_protocol
-		WHERE model_id = $1
-		ORDER BY id`, modelID)
+		SELECT p.id, $1 AS model_id,
+			p.protocol_code AS topic_pattern,
+			p.status AS parse_type,
+			'{}'::jsonb AS parse_config,
+			(p.status = 'released') AS is_active,
+			COALESCE(TO_CHAR(p.released_at, 'YYYY-MM-DD HH24:MI:SS'), TO_CHAR(p.created_at, 'YYYY-MM-DD HH24:MI:SS'))
+		FROM device_protocol_versions p
+		JOIN device_models m ON m.heartbeat_protocol_id = p.id
+		WHERE m.id = $1
+		ORDER BY p.id`, modelID)
 	if err != nil {
 		return nil, err
 	}
@@ -288,42 +302,15 @@ func (r *ModelRepository) GetProtocolsByModelID(ctx context.Context, modelID int
 }
 
 func (r *ModelRepository) CreateProtocol(ctx context.Context, p *model.DeviceModelProtocol) error {
-	configJSON, _ := json.Marshal(p.ParseConfig)
-	return r.db.QueryRow(ctx, `
-		INSERT INTO device_model_protocol (model_id, topic_pattern, parse_type, parse_config, is_active)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, created_at`,
-		p.ModelID, p.TopicPattern, p.ParseType, configJSON, p.IsActive).Scan(&p.ID, &p.CreatedAt)
+	return fmt.Errorf("CreateProtocol is deprecated, use CreateProtocolVersion + BindProtocolVersion instead")
 }
 
 func (r *ModelRepository) UpdateProtocol(ctx context.Context, id int64, topicPattern *string, parseType *string, parseConfig map[string]interface{}, isActive *bool) error {
-	if topicPattern != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_protocol SET topic_pattern = $1 WHERE id = $2`, *topicPattern, id); err != nil {
-			return err
-		}
-	}
-	if parseType != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_protocol SET parse_type = $1 WHERE id = $2`, *parseType, id); err != nil {
-			return err
-		}
-	}
-	if parseConfig != nil {
-		configJSON, _ := json.Marshal(parseConfig)
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_protocol SET parse_config = $1 WHERE id = $2`, configJSON, id); err != nil {
-			return err
-		}
-	}
-	if isActive != nil {
-		if _, err := r.db.Exec(ctx, `UPDATE device_model_protocol SET is_active = $1 WHERE id = $2`, *isActive, id); err != nil {
-			return err
-		}
-	}
-	return nil
+	return fmt.Errorf("UpdateProtocol is deprecated, use protocol version API instead")
 }
 
 func (r *ModelRepository) DeleteProtocol(ctx context.Context, id int64) error {
-	_, err := r.db.Exec(ctx, `DELETE FROM device_model_protocol WHERE id = $1`, id)
-	return err
+	return fmt.Errorf("DeleteProtocol is deprecated, use protocol version API instead")
 }
 
 // GetModelIDByDeviceSNWithFields returns model ID and whether the device has a model configured
@@ -360,7 +347,7 @@ func (r *ModelRepository) BatchUpsertFields(ctx context.Context, modelID int64, 
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, `DELETE FROM device_model_field WHERE model_id = $1`, modelID); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM device_model_fields WHERE model_id = $1`, modelID); err != nil {
 		return err
 	}
 
@@ -369,15 +356,15 @@ func (r *ModelRepository) BatchUpsertFields(ctx context.Context, modelID int64, 
 		if f.IsShow != nil {
 			isShow = *f.IsShow
 		}
-		isControl := false
-		if f.IsControl != nil {
-			isControl = *f.IsControl
+		groupCode := f.GroupName
+		if groupCode == "" {
+			groupCode = "general"
 		}
 
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO device_model_field (model_id, field_key, field_name, field_type, unit, sort, is_show, is_control, parse_rule, group_name)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			modelID, f.FieldKey, f.FieldName, f.FieldType, f.Unit, f.Sort, isShow, isControl, f.ParseRule, f.GroupName); err != nil {
+			INSERT INTO device_model_fields (model_id, field_key, display_name_key, display_unit, sort_order, is_visible, group_code)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			modelID, f.FieldKey, f.FieldName, f.Unit, f.Sort, isShow, groupCode); err != nil {
 			return err
 		}
 	}

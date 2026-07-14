@@ -3,13 +3,20 @@ package telemetry
 import "time"
 
 const (
-	QualityClockSkew uint32 = 1 << iota
+	QualityNullValue uint32 = 1 << iota
 	QualityOutOfRange
-	QualityDuplicate
+	QualityClockInvalid
 	QualityOutOfOrder
-	QualityInconsistent
-	QualityPartial
-	QualityBackfill
+	QualityCounterReset
+	QualityCommFault
+)
+
+// Compatibility aliases used by the storage and query layers.
+const (
+	QualityClockSkew    = QualityClockInvalid
+	QualityInconsistent = QualityOutOfRange
+	QualityPartial      = QualityNullValue
+	QualityBackfill     = QualityOutOfOrder
 )
 
 type Sample struct {
@@ -19,6 +26,8 @@ type Sample struct {
 	EventTime       time.Time
 	ReceivedAt      time.Time
 	QualityFlags    uint32
+	DataHash        string
+	RawEnvelope     []byte
 	AC              AC
 	Battery         Battery
 	PV              PV
@@ -42,13 +51,14 @@ type Battery struct {
 	ProtectStatus, FaultCode                              *uint32
 	MaxChargeCurrent, MaxDischargeCurrent                 *float64
 	ChargeVoltageRef, DischargeCutoffVoltage, Temperature *float64
+	ChargeRequestCurrentX10, ChargeRequestVoltageX10      *uint32
 }
 
 type PV struct {
-	PV1Voltage, PV1Current, PV1Power, PV1VoltageMax, PV1PowerMax *float64
-	PV2Voltage, PV2Current, PV2Power, PV2VoltageMax, PV2PowerMax *float64
-	TotalPower                                                   *float64
-	MPPTState                                                    *uint8
+	PV1Voltage, PV1Current, PV1Power *float64
+	PV2Voltage, PV2Current, PV2Power *float64
+	TotalPower                       *float64
+	MPPTState                        *uint8
 }
 
 type System struct {
@@ -61,6 +71,7 @@ type System struct {
 	RuntimeHours         *uint32
 	FanSpeedPercent      *uint8
 	Efficiency           *float64
+	SystemMode           *uint32
 }
 
 type Energy struct {
@@ -68,6 +79,10 @@ type Energy struct {
 	DailyCharge, TotalCharge       *float64
 	DailyDischarge, TotalDischarge *float64
 	DailyLoad, TotalLoad           *float64
+	TotalChargeCapacity            *float64
+	TotalDischargeCapacity         *float64
+	TotalChargeTime                *uint32
+	TotalDischargeTime             *uint32
 }
 
 type Cells struct {

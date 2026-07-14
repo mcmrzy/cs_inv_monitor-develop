@@ -151,8 +151,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
 	otaHandler := handler.NewOTAHandler(otaService, db, jpushService)
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
-	alertRuleHandler := handler.NewAlertRuleHandler()
-	workOrderHandler := handler.NewWorkOrderHandler()
+	alertRuleHandler := handler.NewAlertRuleHandler(db)
+	workOrderHandler := handler.NewWorkOrderHandler(db)
+	parallelHandler := handler.NewParallelHandler()
 
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
@@ -163,6 +164,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	// OTA 升级超时清理：每 5 分钟扫描卡住的升级记录并更新关联任务统计
 	go runOTATimeoutCleanup(db, heartbeatDone)
+	// OTA 定时任务：领取并执行到期任务，重启后也会恢复已到期但未执行的任务。
+	go runOTAScheduler(db, otaService, heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
 		DB:                  db,
@@ -185,6 +188,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		DashboardHandler:    dashboardHandler,
 		AlertRuleHandler:    alertRuleHandler,
 		WorkOrderHandler:    workOrderHandler,
+		ParallelHandler:     parallelHandler,
 	})
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
 	serve(cfg, router)
@@ -378,6 +382,70 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 	}
 }
 
+// runOTAScheduler atomically claims due scheduled tasks. A task left pending
+// by a process crash is reclaimable after five minutes.
+func runOTAScheduler(db *pgxpool.Pool, otaService *service.OTAService, done chan struct{}) {
+	run := func() {
+		rows, err := db.Query(context.Background(), `
+			WITH due AS (
+				SELECT id FROM upgrade_tasks
+				WHERE execute_mode = 'scheduled'
+				  AND scheduled_at IS NOT NULL
+				  AND scheduled_at <= NOW()
+				  AND (status = 'scheduled' OR (status = 'pending' AND updated_at < NOW() - INTERVAL '5 minutes'))
+				ORDER BY scheduled_at, id
+				FOR UPDATE SKIP LOCKED
+				LIMIT 20
+			)
+			UPDATE upgrade_tasks t
+			SET status = 'pending', updated_at = NOW()
+			FROM due
+			WHERE t.id = due.id
+			RETURNING t.id
+		`)
+		if err != nil {
+			logger.Warn("OTA scheduler claim failed", zap.Error(err))
+			return
+		}
+		var taskIDs []int64
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err == nil {
+				taskIDs = append(taskIDs, id)
+			}
+		}
+		rows.Close()
+		for _, taskID := range taskIDs {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			err := otaService.ExecuteTask(ctx, taskID)
+			cancel()
+			if err != nil {
+				logger.Error("Scheduled OTA task execution failed", zap.Int64("task_id", taskID), zap.Error(err))
+				_, _ = db.Exec(context.Background(), `
+					UPDATE upgrade_tasks SET status = 'failed', notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $2),
+					completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND status IN ('pending','running')
+				`, taskID, "定时执行失败: "+err.Error())
+			}
+		}
+		if len(taskIDs) > 0 {
+			logger.Info("OTA scheduled tasks dispatched", zap.Int("count", len(taskIDs)))
+		}
+	}
+
+	run()
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			logger.Info("OTA scheduler stopped")
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
 func startMinimalServer(cfg *config.Config) {
 	router := setupRouterMinimal(cfg)
 	serve(cfg, router)
@@ -538,6 +606,7 @@ type RouterDeps struct {
 	DashboardHandler    *handler.DashboardHandler
 	AlertRuleHandler    *handler.AlertRuleHandler
 	WorkOrderHandler    *handler.WorkOrderHandler
+	ParallelHandler     *handler.ParallelHandler
 }
 
 func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
@@ -582,6 +651,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/device-status", internalHandler.DeviceStatus)
 		internal.POST("/device-info", internalHandler.DeviceInfo)
 		internal.POST("/device-data", internalHandler.DeviceData)
+		internal.POST("/device-data-batch", internalHandler.DeviceDataBatch)
 		internal.POST("/device-cmd-status", internalHandler.DeviceCmdStatus)
 		internal.POST("/device-cmd-result", internalHandler.DeviceCmdResult)
 		internal.POST("/device-alarm", internalHandler.DeviceAlarm)
@@ -669,6 +739,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.GET("/devices/:sn/commands", deps.DeviceHandler.GetCommands)
 			auth.GET("/devices/:sn/commands/history", deps.DeviceHandler.GetCommands)
 			auth.GET("/devices/:sn/telemetry", deps.DeviceHandler.GetTelemetry)
+			auth.GET("/devices/:sn/telemetry/export", deps.DeviceHandler.ExportTelemetry)
+			auth.GET("/devices/:sn/telemetry/export-excel", deps.DeviceHandler.ExportTelemetryExcel)
 			auth.GET("/devices/:sn/lifecycle", deps.DeviceHandler.GetLifecycleHistory)
 			auth.GET("/devices/:sn/history", deps.DeviceHandler.GetHistory)
 			auth.GET("/devices/:sn/alarms", deps.DeviceHandler.GetAlarms)
@@ -684,6 +756,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/devices/:sn/assign-installer", deps.DeviceHandler.AssignInstaller)
 			auth.DELETE("/devices/:sn/installer", deps.DeviceHandler.RemoveInstaller)
 			auth.POST("/devices/batch-assign-installer", deps.DeviceHandler.BatchAssignInstaller)
+			auth.POST("/devices/import-excel", deps.DeviceHandler.ImportExcel)
 
 			auth.GET("/alarms", deps.AlarmHandler.List)
 			auth.DELETE("/alarms/clear", deps.AlarmHandler.ClearAll)
@@ -703,23 +776,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/notifications/clear", deps.NotificationHandler.ClearAll)
 			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
 
-			auth.GET("/models", deps.ModelHandler.ListModels)
-			auth.POST("/models", deps.ModelHandler.CreateModel)
-			auth.GET("/models/:id", deps.ModelHandler.GetModel)
-			auth.PUT("/models/:id", deps.ModelHandler.UpdateModel)
-			auth.DELETE("/models/:id", deps.ModelHandler.DeleteModel)
-			auth.GET("/models/:id/fields", deps.ModelHandler.GetModelFields)
-			auth.GET("/models/by-code/:code/fields", deps.ModelHandler.GetFieldsByModelCode)
-			auth.POST("/models/:id/fields", deps.ModelHandler.CreateField)
-			auth.PUT("/models/:id/fields/:fieldId", deps.ModelHandler.UpdateField)
-			auth.DELETE("/models/:id/fields/:fieldId", deps.ModelHandler.DeleteField)
-			auth.PUT("/models/:id/fields/batch", deps.ModelHandler.BatchUpdateFields)
-
-			// Protocol CRUD
-			auth.GET("/models/:id/protocols", deps.ModelHandler.GetProtocols)
-			auth.POST("/models/:id/protocols", deps.ModelHandler.CreateProtocol)
-			auth.PUT("/models/:id/protocols/:protocolId", deps.ModelHandler.UpdateProtocol)
-			auth.DELETE("/models/:id/protocols/:protocolId", deps.ModelHandler.DeleteProtocol)
+			registerModelRoutes(auth, deps.ModelHandler)
 
 			auth.GET("/dashboard/statistics", deps.DashboardHandler.GetStatistics)
 			auth.GET("/dashboard/device-distribution", deps.DashboardHandler.GetDeviceDistribution)
@@ -743,6 +800,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/work-orders", deps.WorkOrderHandler.Create)
 			auth.GET("/work-orders/:id", deps.WorkOrderHandler.GetByID)
 			auth.PUT("/work-orders/:id", deps.WorkOrderHandler.Update)
+			auth.PATCH("/work-orders/:id", deps.WorkOrderHandler.Update)
+			auth.PATCH("/work-orders/:id/status", deps.WorkOrderHandler.Update)
+			auth.POST("/work-orders/:id/escalate", deps.WorkOrderHandler.Escalate)
+			auth.POST("/work-orders/:id/attachments", deps.WorkOrderHandler.UploadAttachments)
 			auth.DELETE("/work-orders/:id", deps.WorkOrderHandler.Delete)
 		}
 
@@ -784,6 +845,16 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
 			usersGroup.PUT("/:id/parent", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserParent)
+			usersGroup.PUT("/:id/password", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ResetUserPassword)
+		}
+
+		parallelGroup := api.Group("/parallel-groups").Use(middleware.Auth(deps.JWTService))
+		{
+			parallelGroup.GET("", deps.ParallelHandler.List)
+			parallelGroup.GET("/:id", deps.ParallelHandler.Get)
+			parallelGroup.POST("", deps.ParallelHandler.Create)
+			parallelGroup.PUT("/:id", deps.ParallelHandler.Update)
+			parallelGroup.DELETE("/:id", deps.ParallelHandler.Delete)
 		}
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService))
@@ -896,7 +967,12 @@ func setupRouterMinimal(cfg *config.Config) *gin.Engine {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
-	router.Use(middleware.CORS([]string{}))
+	// 使用配置的 CORS origins，或默认仅允许 localhost
+	corsOrigins := cfg.CORS.AllowedOrigins
+	if len(corsOrigins) == 0 {
+		corsOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
+	}
+	router.Use(middleware.CORS(corsOrigins))
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "db": false})

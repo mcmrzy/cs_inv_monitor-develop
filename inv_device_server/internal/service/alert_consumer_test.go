@@ -62,6 +62,36 @@ func TestGetKeys(t *testing.T) {
 	assert.Contains(t, keys, "c")
 }
 
+func TestParseAlarmV1(t *testing.T) {
+	alarm, matched, err := parseAlarmV1("SN001", map[string]interface{}{
+		"t": float64(1783676930), "v": float64(1),
+		"data": map[string]interface{}{
+			"source": float64(1), "code": float64(8),
+			"level": float64(2), "state": float64(1),
+		},
+	})
+	assert.True(t, matched)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, alarm.Source)
+	assert.Equal(t, 8, alarm.Code)
+	assert.Equal(t, "fault", alarm.Level)
+	assert.Equal(t, 1, *alarm.State)
+	assert.Equal(t, int64(1783676930), alarm.Timestamp)
+}
+
+func TestParseAlarmV1Recovery(t *testing.T) {
+	alarm, matched, err := parseAlarmV1("SN001", map[string]interface{}{
+		"v": float64(1), "data": map[string]interface{}{
+			"source": float64(0), "code": float64(3),
+			"level": float64(1), "state": float64(0),
+		},
+	})
+	assert.True(t, matched)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, *alarm.State)
+	assert.Equal(t, 3, alarm.Code)
+}
+
 func TestAlertConsumer_PostInternalAlarm(t *testing.T) {
 	handler := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)

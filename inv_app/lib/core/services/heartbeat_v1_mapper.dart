@@ -5,12 +5,17 @@ class HeartbeatV1Mapper {
     if ((payload['v'] as num?)?.toInt() != 1) {
       throw const FormatException('unsupported heartbeat version');
     }
-    final ac = _group(payload, 'ac', 8);
-    final bat = _group(payload, 'bat', 21);
-    final pv = _group(payload, 'pv', 12);
-    final sys = _group(payload, 'sys', 10);
-    final eng = _group(payload, 'eng', 8);
-    final cells = payload['cells'];
+    final rawData = payload['data'];
+    if (rawData is! Map) {
+      throw const FormatException('heartbeat data envelope is required');
+    }
+    final data = Map<String, dynamic>.from(rawData);
+    final ac = _group(data, 'ac', 8);
+    final bat = _group(data, 'bat', 23);
+    final pv = _group(data, 'pv', 7);
+    final sys = _group(data, 'sys', 11);
+    final eng = _group(data, 'eng', 12);
+    final cells = data['cells'];
     if (cells is! List ||
         cells.length != 2 ||
         cells[0] is! List ||
@@ -20,17 +25,13 @@ class HeartbeatV1Mapper {
     }
     final voltages = _numberList(cells[0] as List);
     final temperatures = _numberList(cells[1] as List);
-    if (voltages.length != temperatures.length) {
-      throw const FormatException('cell array lengths differ');
-    }
-
     final timestamp = (payload['t'] as num?)?.toInt();
     final updatedAt = timestamp == null
         ? DateTime.now()
         : DateTime.fromMillisecondsSinceEpoch(timestamp * 1000, isUtc: true);
     final workState = _integer(sys[0]);
     final batteryState = _integer(bat[13]);
-    final mpptState = _integer(pv[11]);
+    final mpptState = _integer(pv[6]);
 
     return InverterRealtime(
       deviceSN: deviceSN,
@@ -66,19 +67,17 @@ class HeartbeatV1Mapper {
         chargeVoltageRef: _number(bat[18]),
         dischargeCutoffVoltage: _number(bat[19]),
         temperature: _number(bat[20]),
+        chargeRequestCurrentX10: _integer(bat[21]),
+        chargeRequestVoltageX10: _integer(bat[22]),
       ),
       pv: PVData(
         pvVoltage: _number(pv[0]),
         pvCurrent: _number(pv[1]),
         pv1Power: _number(pv[2]),
-        pv1VoltageMax: _number(pv[3]),
-        pv1PowerMax: _number(pv[4]),
-        pv2Voltage: _number(pv[5]),
-        pv2Current: _number(pv[6]),
-        pv2Power: _number(pv[7]),
-        pv2VoltageMax: _number(pv[8]),
-        pv2PowerMax: _number(pv[9]),
-        pvPower: _number(pv[10]),
+        pv2Voltage: _number(pv[3]),
+        pv2Current: _number(pv[4]),
+        pv2Power: _number(pv[5]),
+        pvPower: _number(pv[2]) + _number(pv[5]),
         mpptState: _mpptState(mpptState),
       ),
       sysStatus: SystemStatus(
@@ -92,6 +91,7 @@ class HeartbeatV1Mapper {
         runtimeHours: _integer(sys[7]),
         fanSpeedPercent: _number(sys[8]),
         efficiency: _number(sys[9]),
+        systemMode: _integer(sys[10]),
       ),
       energy: EnergyData(
         dailyPV: _number(eng[0]),
@@ -102,10 +102,17 @@ class HeartbeatV1Mapper {
         totalDischarge: _number(eng[5]),
         dailyLoad: _number(eng[6]),
         totalLoad: _number(eng[7]),
+        totalChargeCapacity: _number(eng[8]),
+        totalDischargeCapacity: _number(eng[9]),
+        totalChargeTime: _integer(eng[10]),
+        totalDischargeTime: _integer(eng[11]),
         runtimeHours: _integer(sys[7]),
       ),
       cells: CellsData(
-          cellCount: voltages.length, voltages: voltages, temps: temperatures),
+          cellCount: voltages.length,
+          tempSensorCount: temperatures.length,
+          voltages: voltages,
+          temps: temperatures),
       onlineStatus: const OnlineStatus(online: true),
       loadPower: _number(ac[2]),
       updatedAt: updatedAt,

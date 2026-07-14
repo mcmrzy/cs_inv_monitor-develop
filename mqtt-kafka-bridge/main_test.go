@@ -31,7 +31,7 @@ func TestStringsSplit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := stringsSplit(tt.s, tt.sep)
+			got := strings.Split(tt.s, tt.sep)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -54,7 +54,7 @@ func TestStringsJoin(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := stringsJoin(tt.parts, tt.sep)
+			got := strings.Join(tt.parts, tt.sep)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -500,7 +500,7 @@ func TestJoinStrs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := joinStrs(tt.ss, tt.sep)
+			got := strings.Join(tt.ss, tt.sep)
 			assert.Equal(t, tt.want, got)
 		})
 	}

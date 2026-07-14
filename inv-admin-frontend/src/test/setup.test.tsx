@@ -91,7 +91,7 @@ describe('MSW Mock Server', () => {
         HttpResponse.json({
           code: 0,
           message: 'success',
-          data: { items: customDevices, total: 1, page: 1, pageSize: 20 },
+          data: { items: customDevices, total: 1, page: 1, page_size: 20 },
         }),
       ),
     )

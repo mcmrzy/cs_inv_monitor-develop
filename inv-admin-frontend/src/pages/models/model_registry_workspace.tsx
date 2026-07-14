@@ -71,10 +71,7 @@ const ModelRegistryWorkspace: React.FC = () => {
     queryKey: ['model-protocol-schema', selectedModel?.id],
     enabled: !!selectedModel,
     retry: false,
-    queryFn: async () => {
-      try { return unwrap<Record<string, unknown>>(await modelApi.getProtocolSchema(selectedModel!.id)) }
-      catch { return null }
-    },
+    queryFn: async () => unwrap<Record<string, unknown> | null>(await modelApi.getProtocolSchema(selectedModel!.id)),
   })
   const migrationQuery = useQuery<Record<string, unknown>>({
     queryKey: ['model-migration-report', selectedModel?.id],
@@ -170,6 +167,21 @@ const ModelRegistryWorkspace: React.FC = () => {
     () => (versionsQuery.data || []).filter((item) => item.status === 'released'),
     [versionsQuery.data],
   )
+
+  const failedQuery = [
+    modelsQuery, catalogQuery, versionsQuery, capabilitiesQuery,
+    commandsQuery, schemaQuery, migrationQuery, previewQuery,
+  ].find((query) => query.isError)
+  const queryErrorMessage = (() => {
+    if (!failedQuery?.error) return ''
+    const error = failedQuery.error as {
+      message?: string
+      response?: { status?: number; data?: { message?: string } }
+    }
+    const detail = error.response?.data?.message || error.message || '未知错误'
+    const status = error.response?.status ? `HTTP ${error.response.status}: ` : ''
+    return `${status}${detail}`
+  })()
 
   const openModelModal = (model?: DeviceModelItem) => {
     setSelectedModel(model || null)
@@ -325,6 +337,15 @@ const ModelRegistryWorkspace: React.FC = () => {
 
   return <div>
     {contextHolder}
+    {failedQuery && <Alert
+      type="error"
+      showIcon
+      closable
+      style={{ marginBottom: 16 }}
+      message="型号配置数据加载失败"
+      description={queryErrorMessage}
+      action={<Button size="small" onClick={() => queryClient.refetchQueries({ type: 'active' })}>重新加载</Button>}
+    />}
     <Space align="center" style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
       <div><Title level={3} style={{ margin: 0, letterSpacing: 0 }}>型号与协议治理</Title><Text type="secondary">统一维护型号能力、标准字段和已发布协议版本</Text></div>
     </Space>

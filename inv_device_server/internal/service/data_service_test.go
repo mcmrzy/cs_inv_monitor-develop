@@ -2,11 +2,13 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"inv-device-server/internal/mqtt"
 
@@ -171,7 +173,7 @@ func TestDataService_HandleOTAStatus_Failed(t *testing.T) {
 	assert.Equal(t, float64(1), received["err_code"])
 }
 
-func TestDataService_HandleOTAStatus_FirmwareID(t *testing.T) {
+func TestDataService_HandleOTAStatus_Identifiers(t *testing.T) {
 	var received map[string]interface{}
 	handler := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
@@ -183,10 +185,36 @@ func TestDataService_HandleOTAStatus_FirmwareID(t *testing.T) {
 
 	service := NewDataService(nil, nil, mqtt.NewHub(nil), nil, handler.URL, "test-key")
 
-	payload := []byte(`{"state":"upgrading","progress":10,"firmware_id":42}`)
+	payload := []byte(`{"state":"upgrading","progress":10,"firmware_id":42,"task_id":"123"}`)
 	service.HandleOTAStatus("SN001", payload)
 
 	assert.Equal(t, float64(42), received["firmware_id"])
+	assert.Equal(t, "123", received["task_id"])
+}
+
+func TestNormalizeCommandResultPayloadV1Envelope(t *testing.T) {
+	payload := []byte(`{"t":1783676931,"v":1,"data":{"task_id":"task-1","cmd":"set_power_limit","stage":"completed","success":true,"code":"OK","message":"","result":[]}}`)
+	normalized, err := normalizeCommandResultPayload("SN001", payload)
+	assert.NoError(t, err)
+
+	var got map[string]interface{}
+	assert.NoError(t, json.Unmarshal(normalized, &got))
+	assert.Equal(t, "SN001", got["sn"])
+	assert.Equal(t, "task-1", got["task_id"])
+	assert.Equal(t, "success", got["result"])
+	assert.Equal(t, float64(1783676931), got["timestamp"])
+	assert.IsType(t, []interface{}{}, got["data"])
+}
+
+func TestNormalizeCommandResultPayloadLegacyFlat(t *testing.T) {
+	payload := []byte(`{"task_id":"task-2","cmd":"query","success":false,"result":"failed"}`)
+	normalized, err := normalizeCommandResultPayload("SN002", payload)
+	assert.NoError(t, err)
+
+	var got map[string]interface{}
+	assert.NoError(t, json.Unmarshal(normalized, &got))
+	assert.Equal(t, "SN002", got["sn"])
+	assert.Equal(t, "failed", got["result"])
 }
 
 func TestDataService_SendCommand(t *testing.T) {
@@ -232,6 +260,26 @@ func TestDataService_FlushPendingCommands_NoRedis(t *testing.T) {
 	service := NewDataService(nil, nil, mqtt.NewHub(nil), nil, "", "")
 	// nil redis 应直接返回，不 panic
 	service.FlushPendingCommands(t.Context(), "SN001")
+}
+
+func TestDecodePendingCommandPreservesTaskIDPayload(t *testing.T) {
+	raw := []byte(`{"command":"set_power_limit","params":{"limit":80},"task_id":"task-offline-1"}`)
+	cmd, err := decodePendingCommand("SN001", raw)
+	assert.NoError(t, err)
+	assert.Equal(t, "SN001", cmd.DeviceSN)
+	assert.Equal(t, "set_power_limit", cmd.CmdType)
+	assert.JSONEq(t, string(raw), string(cmd.RawPayload))
+}
+
+func TestDecodePendingCommandRejectsMissingTaskID(t *testing.T) {
+	_, err := decodePendingCommand("SN001", []byte(`{"command":"set_power_limit"}`))
+	assert.Error(t, err)
+}
+
+func TestDecodePendingCommandRejectsExpiredCommand(t *testing.T) {
+	raw := []byte(fmt.Sprintf(`{"command":"set_power_limit","task_id":"expired-1","t":%d}`, time.Now().Add(-301*time.Second).Unix()))
+	_, err := decodePendingCommand("SN001", raw)
+	assert.ErrorContains(t, err, "expired")
 }
 
 func TestDataService_IsOnlineViaRedis_NoRedis(t *testing.T) {

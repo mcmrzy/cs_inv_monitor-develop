@@ -11,7 +11,7 @@ export const otaApi = {
     }),
   createFirmware: (data: any) => api.post('/firmwares', data),
   deleteFirmware: (id: string | number) => api.delete(`/firmwares/${id}`),
-  getAllFirmware: () => api.get('/firmwares', { params: { pageSize: 9999 } }),
+  getAllFirmware: () => api.get('/firmwares', { params: { page_size: 9999 } }),
 
   // 升级管理（替代旧 /tasks）
   getUpgradeDashboard: (params?: any) => api.get('/ota/upgrades/dashboard', { params }),

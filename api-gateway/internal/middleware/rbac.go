@@ -255,7 +255,6 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 
 		userID := c.GetHeader("X-User-ID")
 		if userID == "" {
-			log.Printf("[DEBUG-INSTRUMENT] RBACGuard: %s %s - 无 X-User-ID 头，跳过检查", c.Request.Method, c.Request.URL.Path)
 			c.Next()
 			return
 		}
@@ -271,7 +270,6 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		}
 
 		if resource == "" {
-			log.Printf("[DEBUG-INSTRUMENT] RBACGuard: %s %s - 无匹配资源，跳过检查", c.Request.Method, path)
 			c.Next()
 			return
 		}
@@ -279,11 +277,7 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		action := r.getActionFromMethod(c.Request.Method)
 		headerRole := c.GetHeader("X-User-Role")
 
-		log.Printf("[DEBUG-INSTRUMENT] RBACGuard: %s %s - user=%s resource=%s action=%s headerRole=%s",
-			c.Request.Method, path, userID, resource, action, headerRole)
-
 		if !r.hasPermission(userID, resource, action, headerRole) {
-			log.Printf("[DEBUG-INSTRUMENT] RBACGuard: %s %s - 权限拒绝!", c.Request.Method, path)
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    403,
 				"message": "权限不足，无法访问该资源",
@@ -292,7 +286,6 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 			return
 		}
 
-		log.Printf("[DEBUG-INSTRUMENT] RBACGuard: %s %s - 权限通过", c.Request.Method, path)
 		c.Next()
 	}
 }

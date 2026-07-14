@@ -137,7 +137,7 @@ const MonitoringPage: React.FC = () => {
 
   const { data: stationsRaw } = useQuery({
     queryKey: ['monitoring', 'stations'],
-    queryFn: () => api.get('/stations', { params: { pageSize: 100, all: true } }).then((r) => r.data),
+    queryFn: () => api.get('/stations', { params: { page_size: 100, all: true } }).then((r) => r.data),
     staleTime: 60_000,
     refetchOnMount: true,
   })
@@ -154,7 +154,7 @@ const MonitoringPage: React.FC = () => {
   /* ---------- 电站下设备列表 ---------- */
   const { data: devicesRes } = useQuery({
     queryKey: ['monitoring', 'devices', selectedStationId],
-    queryFn: () => deviceApi.getDevices({ station_id: selectedStationId, pageSize: 200 }).then((r) => {
+    queryFn: () => deviceApi.getDevices({ station_id: selectedStationId, page_size: 200 }).then((r) => {
       const d = r.data?.data ?? r.data
       return (d?.items ?? []) as DeviceItem[]
     }),
@@ -395,7 +395,7 @@ const MonitoringPage: React.FC = () => {
         params.startTime = start
         params.endTime = end
       }
-      params.pageSize = 1000
+      params.page_size = 1000
       const res = await deviceApi.getTelemetry(selectedDeviceSn, params)
       const payload = res.data?.data ?? res.data
       const items = Array.isArray(payload) ? payload : (payload?.items ?? [])
@@ -562,7 +562,7 @@ const MonitoringPage: React.FC = () => {
     queryFn: () => {
       const params: any = {
         page: historyPage,
-        pageSize: historyPageSize,
+        page_size: historyPageSize,
         startTime: historyRange[0].toISOString(),
         endTime: historyRange[1].toISOString(),
         granularity: 'hour',
@@ -1068,7 +1068,7 @@ const MonitoringPage: React.FC = () => {
   const { data: alarmsRes, isLoading: alarmsLoading } = useQuery({
     queryKey: ['monitoring', 'alarms', selectedDeviceSn, alarmLevel, alarmPage, alarmPageSize],
     queryFn: () => {
-      const params: any = { page: alarmPage, pageSize: alarmPageSize }
+      const params: any = { page: alarmPage, page_size: alarmPageSize }
       if (alarmLevel) params.alarmLevel = alarmLevel
       return alertApi.list({ ...params, deviceSn: selectedDeviceSn }).then((r) => {
         const d = r.data?.data ?? r.data

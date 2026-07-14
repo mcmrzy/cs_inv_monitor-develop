@@ -52,8 +52,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
   void _requestList() {
     context.read<OtaBloc>().add(
-      LoadAvailablePackages(sn: widget.sn),
-    );
+          LoadAvailablePackages(sn: widget.sn),
+        );
   }
 
   /// 恢复升级包的下载状态（从 SharedPreferences 持久化记录中检查）
@@ -75,7 +75,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       if (chip is Map) {
         final firmwareId = chip['firmware_id'] as int? ?? 0;
         if (firmwareId > 0) {
-          final downloaded = await _downloadService.isFirmwareDownloaded(firmwareId);
+          final downloaded =
+              await _downloadService.isFirmwareDownloaded(firmwareId);
           if (!downloaded) {
             allDownloaded = false;
             break;
@@ -99,14 +100,14 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         : (pkg is Map && pkg['items'] is List)
             ? (pkg['items'] as List)
             : <dynamic>[];
-    
+
     if (chips.isEmpty) {
       print('[PreDownload] No chips found in package: $pkg');
       return;
     }
-    
+
     final packageId = (pkg is Map) ? (pkg['id'] as int? ?? 0) : 0;
-    
+
     setState(() {
       _downloadingIds.add(packageId);
       _downloadingProgress[packageId] = 0.0;
@@ -123,7 +124,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     try {
       int downloadedCount = 0;
       final totalItems = chips.length;
-      
+
       for (final chip in chips) {
         if (chip is Map) {
           final firmwareId = chip['firmware_id'] as int? ?? 0;
@@ -131,21 +132,25 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           final chipName = chip['target_chip'] as String? ?? 'firmware';
           final version = chip['firmware_version'] as String? ?? '';
           final fileName = '${chipName}_$version.bin';
-          
-          print('[PreDownload] Chip: $chipName, firmwareId: $firmwareId, url: $downloadUrl');
-          
+
+          print(
+              '[PreDownload] Chip: $chipName, firmwareId: $firmwareId, url: $downloadUrl');
+
           if (firmwareId > 0 && downloadUrl.isNotEmpty) {
             // 检查是否已下载
-            final alreadyDownloaded = await _downloadService.isFirmwareDownloaded(firmwareId);
+            final alreadyDownloaded =
+                await _downloadService.isFirmwareDownloaded(firmwareId);
             if (!alreadyDownloaded) {
               await _downloadService.downloadFirmware(
                 url: downloadUrl,
                 fileName: fileName,
                 firmwareId: firmwareId,
+                expectedSize: (chip['file_size'] as num?)?.toInt(),
+                expectedSha256: chip['file_sha256'] as String?,
               );
             }
             downloadedCount++;
-            
+
             // 更新进度
             if (mounted) {
               setState(() {
@@ -153,7 +158,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               });
             }
           } else {
-            print('[PreDownload] Skipping chip $chipName: invalid firmwareId or downloadUrl');
+            print(
+                '[PreDownload] Skipping chip $chipName: invalid firmwareId or downloadUrl');
           }
         }
       }
@@ -163,7 +169,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           _downloadedCache[packageId] = true;
           _downloadingIds.remove(packageId);
         });
-        
+
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -178,7 +184,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         setState(() {
           _downloadingIds.remove(packageId);
         });
-        
+
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -194,13 +200,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   /// Returns -1 if a < b, 0 if equal, 1 if a > b.
   int _compareVersions(String a, String b) {
     List<int> parseSegments(String v) {
-      final cleaned = v.startsWith('V') || v.startsWith('v')
-          ? v.substring(1)
-          : v;
-      return cleaned
-          .split('.')
-          .map((s) => int.tryParse(s) ?? 0)
-          .toList();
+      final cleaned =
+          v.startsWith('V') || v.startsWith('v') ? v.substring(1) : v;
+      return cleaned.split('.').map((s) => int.tryParse(s) ?? 0).toList();
     }
 
     final segA = parseSegments(a);
@@ -266,15 +268,15 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         if (confirmed == true && context.mounted) {
           // 使用 package_id 触发升级 (POST /ota/trigger)
           context.read<OtaBloc>().add(
-            OTATriggerRequested(sn: widget.sn, packageId: packageId),
-          );
+                OTATriggerRequested(sn: widget.sn, packageId: packageId),
+              );
         }
       });
     } else {
       // 使用 package_id 触发升级 (POST /ota/trigger)
       context.read<OtaBloc>().add(
-        OTATriggerRequested(sn: widget.sn, packageId: packageId),
-      );
+            OTATriggerRequested(sn: widget.sn, packageId: packageId),
+          );
     }
   }
 
@@ -306,7 +308,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             curr is OTATriggered || curr is OTAProgress || curr is OTAComplete,
         listener: (context, state) {
           // Once install is triggered, pop back to OTA page immediately.
-          if (state is OTATriggered || state is OTAProgress || state is OTAComplete) {
+          if (state is OTATriggered ||
+              state is OTAProgress ||
+              state is OTAComplete) {
             Navigator.pop(context);
           }
         },
@@ -318,13 +322,16 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             curr is OTATriggered,
         builder: (context, state) {
           // Initial kick
-          if (state is OTAInitial || state is OTAUpToDate || state is OTAUpdateAvailable) {
+          if (state is OTAInitial ||
+              state is OTAUpToDate ||
+              state is OTAUpdateAvailable) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) _requestList();
             });
           }
 
-          if (state is OTAAvailablePackagesLoading || state is OTAFirmwareInstalling) {
+          if (state is OTAAvailablePackagesLoading ||
+              state is OTAFirmwareInstalling) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -339,8 +346,11 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   ),
                   SizedBox(height: 16.h),
                   Text(
-                    state is OTAFirmwareInstalling ? '正在安装固件...' : '正在加载升级包列表...',
-                    style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+                    state is OTAFirmwareInstalling
+                        ? '正在安装固件...'
+                        : '正在加载升级包列表...',
+                    style: TextStyle(
+                        fontSize: 14.sp, color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -352,11 +362,13 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline_rounded, size: 48.sp, color: AppColors.error),
+                  Icon(Icons.error_outline_rounded,
+                      size: 48.sp, color: AppColors.error),
                   SizedBox(height: 12.h),
                   Text(
                     l10n.translateError(state.message),
-                    style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+                    style: TextStyle(
+                        fontSize: 14.sp, color: AppColors.textSecondary),
                   ),
                   SizedBox(height: 20.h),
                   ElevatedButton(
@@ -379,11 +391,13 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.inventory_2_outlined, size: 56.sp, color: AppColors.textHint),
+                    Icon(Icons.inventory_2_outlined,
+                        size: 56.sp, color: AppColors.textHint),
                     SizedBox(height: 12.h),
                     Text(
                       '暂无可用的升级包',
-                      style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+                      style: TextStyle(
+                          fontSize: 14.sp, color: AppColors.textSecondary),
                     ),
                   ],
                 ),
@@ -411,11 +425,13 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             decoration: BoxDecoration(
               color: const Color(0xFFECFDF5),
               borderRadius: BorderRadius.circular(14.r),
-              border: Border.all(color: AppColors.successLight.withValues(alpha: 0.3)),
+              border: Border.all(
+                  color: AppColors.successLight.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline_rounded, size: 20.sp, color: AppColors.successLight),
+                Icon(Icons.info_outline_rounded,
+                    size: 20.sp, color: AppColors.successLight),
                 SizedBox(width: 10.w),
                 Expanded(
                   child: Column(
@@ -441,7 +457,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     ],
                   ),
                 ),
-                Icon(Icons.check_circle_rounded, size: 22.sp, color: AppColors.successLight),
+                Icon(Icons.check_circle_rounded,
+                    size: 22.sp, color: AppColors.successLight),
               ],
             ),
           ),
@@ -455,15 +472,20 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   Widget _buildPackageCard(BuildContext context, dynamic pkg) {
     final id = (pkg is Map) ? (pkg['id'] as int? ?? 0) : 0;
     // 优先使用 user_version，回退到 main_version
-    final userVersion = (pkg is Map) ? (pkg['user_version'] as String? ?? '') : '';
-    final mainVersion = (pkg is Map) ? (pkg['main_version'] as String? ?? '') : '';
+    final userVersion =
+        (pkg is Map) ? (pkg['user_version'] as String? ?? '') : '';
+    final mainVersion =
+        (pkg is Map) ? (pkg['main_version'] as String? ?? '') : '';
     final displayVersion = userVersion.isNotEmpty ? userVersion : mainVersion;
     // 优先使用 user_changelog，回退到 changelog
-    final userChangelog = (pkg is Map) ? (pkg['user_changelog'] as String? ?? '') : '';
+    final userChangelog =
+        (pkg is Map) ? (pkg['user_changelog'] as String? ?? '') : '';
     final changelog = (pkg is Map) ? (pkg['changelog'] as String? ?? '') : '';
-    final displayChangelog = userChangelog.isNotEmpty ? userChangelog : changelog;
+    final displayChangelog =
+        userChangelog.isNotEmpty ? userChangelog : changelog;
     final isForce = (pkg is Map) ? (pkg['is_force'] as bool? ?? false) : false;
-    final createdAtRaw = (pkg is Map) ? (pkg['created_at'] as String? ?? '') : '';
+    final createdAtRaw =
+        (pkg is Map) ? (pkg['created_at'] as String? ?? '') : '';
     // 后端返回chips字段，前端也兼容items字段
     final items = (pkg is Map && pkg['chips'] is List)
         ? (pkg['chips'] as List)
@@ -541,7 +563,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                 ),
               if (isCurrent)
                 Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 3.h),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 10.w, vertical: 3.h),
                   decoration: BoxDecoration(
                     color: AppColors.successLight.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20.r),
@@ -565,8 +588,13 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               spacing: 8.w,
               runSpacing: 6.h,
               children: items.map((item) {
-                final chip = ((item is Map) ? (item['target_chip'] as String? ?? '') : '').toUpperCase();
-                final fwVer = (item is Map) ? (item['firmware_version'] as String? ?? '-') : '-';
+                final chip = ((item is Map)
+                        ? (item['target_chip'] as String? ?? '')
+                        : '')
+                    .toUpperCase();
+                final fwVer = (item is Map)
+                    ? (item['firmware_version'] as String? ?? '-')
+                    : '-';
                 return Container(
                   padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                   decoration: BoxDecoration(
@@ -587,7 +615,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                       SizedBox(width: 4.w),
                       Text(
                         fwVer,
-                        style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+                        style: TextStyle(
+                            fontSize: 11.sp, color: AppColors.textSecondary),
                       ),
                     ],
                   ),
@@ -615,7 +644,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           SizedBox(height: 12.h),
           Row(
             children: [
-              Icon(Icons.calendar_today_outlined, size: 14.sp, color: AppColors.textHint),
+              Icon(Icons.calendar_today_outlined,
+                  size: 14.sp, color: AppColors.textHint),
               SizedBox(width: 4.w),
               Text(
                 dateStr,
@@ -632,18 +662,21 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(4.r),
                           child: LinearProgressIndicator(
-                            value: downloadProgress > 0 ? downloadProgress : null,
+                            value:
+                                downloadProgress > 0 ? downloadProgress : null,
                             minHeight: 4.h,
                             backgroundColor: const Color(0xFFE5E7EB),
-                            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                                AppColors.primary),
                           ),
                         ),
                         SizedBox(height: 2.h),
                         Text(
-                          downloadProgress > 0 
-                            ? '${(downloadProgress * 100).toStringAsFixed(0)}%'
-                            : '下载中...',
-                          style: TextStyle(fontSize: 10.sp, color: AppColors.primary),
+                          downloadProgress > 0
+                              ? '${(downloadProgress * 100).toStringAsFixed(0)}%'
+                              : '下载中...',
+                          style: TextStyle(
+                              fontSize: 10.sp, color: AppColors.primary),
                         ),
                       ],
                     ),
@@ -652,7 +685,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   GestureDetector(
                     onTap: () => _navigateToLocalOTA(pkg),
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
                       decoration: BoxDecoration(
                         color: AppColors.successLight,
                         borderRadius: BorderRadius.circular(8.r),
@@ -671,7 +705,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   GestureDetector(
                     onTap: () => _preDownloadPackage(pkg),
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
                       decoration: BoxDecoration(
                         color: Colors.transparent,
                         borderRadius: BorderRadius.circular(8.r),
@@ -698,7 +733,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     );
   }
 
-  Widget _buildInstallButton(BuildContext context, int packageId, String version, bool isRollbackVer) {
+  Widget _buildInstallButton(
+      BuildContext context, int packageId, String version, bool isRollbackVer) {
     final bgColor = isRollbackVer ? AppColors.warning : AppColors.primary;
     return GestureDetector(
       onTap: () => _installPackage(context, packageId, version),
@@ -781,12 +817,14 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text('选择要安装的固件', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
+          title: Text('选择要安装的固件',
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: validChips.map((chip) {
               final chipMap = chip as Map;
-              final chipName = (chipMap['target_chip'] as String? ?? '').toUpperCase();
+              final chipName =
+                  (chipMap['target_chip'] as String? ?? '').toUpperCase();
               final fwVer = chipMap['firmware_version'] as String? ?? '-';
               return ListTile(
                 leading: Container(
@@ -799,12 +837,18 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   child: Center(
                     child: Text(
                       chipName.isNotEmpty ? chipName.substring(0, 1) : '?',
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary),
                     ),
                   ),
                 ),
-                title: Text(chipName, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.sp)),
-                subtitle: Text('v$fwVer', style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary)),
+                title: Text(chipName,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 14.sp)),
+                subtitle: Text('v$fwVer',
+                    style: TextStyle(
+                        fontSize: 12.sp, color: AppColors.textSecondary)),
                 onTap: () {
                   Navigator.pop(ctx);
                   _jumpToLocalOTA(chipMap);
@@ -813,7 +857,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             }).toList(),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           ],
         );
       },

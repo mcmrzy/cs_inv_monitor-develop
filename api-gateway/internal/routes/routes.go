@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"log"
 	"net/http"
 	"time"
 
@@ -93,6 +92,10 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	publicGroup.Any("/api/v1/auth/email-register", p.Handler())
 	publicGroup.Any("/api/v1/auth/email-login", p.Handler())
 	publicGroup.Any("/api/v1/auth/send-email-code", p.Handler())
+	publicGroup.Any("/api/v1/auth/email-reset-password", p.Handler())
+	publicGroup.Any("/api/v1/auth/phone-code-login", p.Handler())
+	publicGroup.Any("/api/v1/auth/email-code-login", p.Handler())
+	publicGroup.Any("/api/v1/auth/refresh", p.Handler())
 	publicGroup.GET("/api/v1/timezones", p.Handler())
 	publicGroup.Any("/api/v1/captcha/*action", p.Handler())
 	publicGroup.Any("/uploads/*action", p.Handler())
@@ -103,7 +106,6 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/auth/logout", p.Handler())
 	userGroup.Any("/api/v1/auth/change-password", p.Handler())
 	userGroup.Any("/api/v1/auth/profile", p.Handler())
-	userGroup.Any("/api/v1/auth/refresh", p.Handler())
 
 	userGroup.Any("/api/v1/stations/*action", p.Handler())
 	userGroup.Any("/api/v1/stations", p.Handler())
@@ -119,6 +121,9 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/alert-rules", p.Handler())
 	userGroup.Any("/api/v1/models/*action", p.Handler())
 	userGroup.Any("/api/v1/models", p.Handler())
+	userGroup.Any("/api/v1/field-catalog", p.Handler())
+	userGroup.Any("/api/v1/protocol-versions/*action", p.Handler())
+	userGroup.Any("/api/v1/protocol-versions", p.Handler())
 	userGroup.Any("/api/v1/dashboard/*action", p.Handler())
 	userGroup.Any("/api/v1/dashboard", p.Handler())
 	userGroup.Any("/api/v1/ota/*action", p.Handler())
@@ -161,10 +166,6 @@ func registerDeviceRoutes(userGroup *gin.RouterGroup, p *proxy.ReverseProxy) {
 
 func registerFallback(r *gin.Engine) {
 	r.NoRoute(func(c *gin.Context) {
-		log.Printf("[DEBUG-INSTRUMENT] NoRoute: %s %s (headers: Authorization=%v, X-User-ID=%v)",
-			c.Request.Method, c.Request.URL.Path,
-			c.GetHeader("Authorization") != "",
-			c.GetHeader("X-User-ID"))
 		c.JSON(http.StatusNotFound, gin.H{
 			"code":    404,
 			"message": "接口不存在",
@@ -208,6 +209,10 @@ func buildAPIDoc() APIDoc {
 			{Path: "/api/v1/auth/email-register", Method: "POST", Description: "邮箱注册", Auth: false, Role: "public", Backend: "api-server"},
 			{Path: "/api/v1/auth/email-login", Method: "POST", Description: "邮箱登录", Auth: false, Role: "public", Backend: "api-server"},
 			{Path: "/api/v1/auth/send-email-code", Method: "POST", Description: "发送邮箱验证码", Auth: false, Role: "public", Backend: "api-server"},
+			{Path: "/api/v1/auth/email-reset-password", Method: "POST", Description: "邮箱重置密码", Auth: false, Role: "public", Backend: "api-server"},
+			{Path: "/api/v1/auth/phone-code-login", Method: "POST", Description: "手机验证码登录", Auth: false, Role: "public", Backend: "api-server"},
+			{Path: "/api/v1/auth/email-code-login", Method: "POST", Description: "邮箱验证码登录", Auth: false, Role: "public", Backend: "api-server"},
+			{Path: "/api/v1/auth/refresh", Method: "POST", Description: "刷新令牌", Auth: false, Role: "public", Backend: "api-server"},
 			{Path: "/api/v1/auth/logout", Method: "POST", Description: "用户登出", Auth: true, Role: "user", Backend: "api-server"},
 
 			{Path: "/api/v1/captcha/generate", Method: "GET", Description: "生成验证码图片", Auth: false, Role: "public", Backend: "api-server"},
@@ -278,6 +283,10 @@ func buildRouteGroups() map[string][]RouteGroup {
 					{Path: "/api/v1/auth/email-register", Method: "ALL", Description: "邮箱注册", Backend: "api-server"},
 					{Path: "/api/v1/auth/email-login", Method: "ALL", Description: "邮箱登录", Backend: "api-server"},
 					{Path: "/api/v1/auth/send-email-code", Method: "ALL", Description: "发送邮箱验证码", Backend: "api-server"},
+					{Path: "/api/v1/auth/email-reset-password", Method: "ALL", Description: "邮箱重置密码", Backend: "api-server"},
+					{Path: "/api/v1/auth/phone-code-login", Method: "ALL", Description: "手机验证码登录", Backend: "api-server"},
+					{Path: "/api/v1/auth/email-code-login", Method: "ALL", Description: "邮箱验证码登录", Backend: "api-server"},
+					{Path: "/api/v1/auth/refresh", Method: "ALL", Description: "刷新令牌", Backend: "api-server"},
 					{Path: "/api/v1/captcha/*", Method: "ALL", Description: "验证码", Backend: "api-server"},
 					{Path: "/api/v1/timezones", Method: "GET", Description: "时区列表", Backend: "api-server"},
 					{Path: "/uploads/*", Method: "ALL", Description: "上传文件目录", Backend: "api-server"},
@@ -291,7 +300,6 @@ func buildRouteGroups() map[string][]RouteGroup {
 					{Path: "/api/v1/auth/logout", Method: "ALL", Description: "用户登出", Backend: "api-server"},
 					{Path: "/api/v1/auth/change-password", Method: "ALL", Description: "修改密码", Backend: "api-server"},
 					{Path: "/api/v1/auth/profile", Method: "ALL", Description: "用户资料", Backend: "api-server"},
-					{Path: "/api/v1/auth/refresh", Method: "ALL", Description: "刷新令牌", Backend: "api-server"},
 					{Path: "/api/v1/stations", Method: "ALL", Description: "电站管理", Backend: "api-server"},
 					{Path: "/api/v1/devices", Method: "ALL", Description: "设备管理", Backend: "api-server"},
 					{Path: "/api/v1/alarms", Method: "ALL", Description: "告警管理", Backend: "api-server"},

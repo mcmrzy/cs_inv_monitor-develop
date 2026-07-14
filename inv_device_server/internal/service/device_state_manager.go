@@ -153,10 +153,15 @@ func (m *DeviceStateManager) GetDeviceState(ctx context.Context, sn string) Devi
 }
 
 // UpdateHeartbeat 更新设备心跳
-// 刷新Redis心跳key的TTL
+// 刷新Redis心跳key的TTL，同时将设备SN加入在线集合（二级索引）
 func (m *DeviceStateManager) UpdateHeartbeat(ctx context.Context, sn string) error {
 	key := fmt.Sprintf("device:heartbeat:%s", sn)
-	return m.rdb.Set(ctx, key, time.Now().Unix(), 10*time.Minute).Err()
+	// Pipeline: set heartbeat TTL + SADD to online set (secondary index for O(1) retrieval)
+	pipe := m.rdb.Pipeline()
+	pipe.Set(ctx, key, time.Now().Unix(), 10*time.Minute)
+	pipe.SAdd(ctx, "device:online_set", sn)
+	_, err := pipe.Exec(ctx)
+	return err
 }
 
 // HasHeartbeat 检查设备是否有活跃的心跳

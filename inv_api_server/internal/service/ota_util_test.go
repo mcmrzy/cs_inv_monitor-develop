@@ -65,6 +65,40 @@ func TestBuildDownloadURL_ServerURL尾部斜杠处理(t *testing.T) {
 	assert.Equal(t, "https://api.example.com/firmware/v2.0.0.bin", result)
 }
 
+func TestValidateFirmwareRequest(t *testing.T) {
+	valid := func() *CreateFirmwareReq {
+		return &CreateFirmwareReq{
+			Model: "CS-48V", TargetChip: "ARM", Version: "V1.2.3",
+			FileURL: "/firmware/fw.bin", FileSize: 1024,
+			FileMD5:    "0123456789abcdef0123456789abcdef",
+			FileSHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		}
+	}
+
+	req := valid()
+	assert.NoError(t, ValidateFirmwareRequest(req))
+	assert.Equal(t, "arm", req.TargetChip)
+
+	tests := []struct {
+		name string
+		edit func(*CreateFirmwareReq)
+	}{
+		{"芯片无效", func(r *CreateFirmwareReq) { r.TargetChip = "linux" }},
+		{"版本为空", func(r *CreateFirmwareReq) { r.Version = "" }},
+		{"SHA256为空", func(r *CreateFirmwareReq) { r.FileSHA256 = "" }},
+		{"SHA256格式无效", func(r *CreateFirmwareReq) { r.FileSHA256 = "xyz" }},
+		{"文件为空", func(r *CreateFirmwareReq) { r.FileSize = 0 }},
+		{"不安全HTTP地址", func(r *CreateFirmwareReq) { r.FileURL = "http://example.test/fw.bin" }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := valid()
+			tc.edit(r)
+			assert.Error(t, ValidateFirmwareRequest(r))
+		})
+	}
+}
+
 // ==================== parseRolloutTargets ====================
 
 func TestParseRolloutTargets_JSON数组(t *testing.T) {

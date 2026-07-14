@@ -10,11 +10,15 @@ import (
 )
 
 var resourceActionMap = map[string][2]string{
-	"/api/v1/admin/":    {"admin", "manage"},
-	"/api/v1/users/":    {"users", "view"},
-	"/api/v1/ota/":      {"ota", "view"},
-	"/api/v1/parallel/": {"parallel", "view"},
-	"/api/v1/models":    {"devices", "manage"},
+	"/api/v1/admin/":            {"admin", "manage"},
+	"/api/v1/users/":            {"users", "view"},
+	"/api/v1/ota/":              {"ota", "view"},
+	"/api/v1/parallel/":         {"parallel", "view"},
+	"/api/v1/models":            {"models", "view"},
+	"/api/v1/field-catalog":     {"models", "view"},
+	"/api/v1/protocol-versions": {"models", "view"},
+	"/api/v1/alert-rules":       {"alert_rules", "view"},
+	"/api/v1/work-orders":       {"work_orders", "view"},
 }
 
 func getActionFromMethod(method string) string {

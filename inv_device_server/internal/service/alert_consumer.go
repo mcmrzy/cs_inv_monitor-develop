@@ -30,21 +30,21 @@ type AlertConsumer struct {
 }
 
 type RawAlertMessage struct {
-	SN        string      `json:"sn"`
-	Source    string      `json:"source"`
-	MsgType   string      `json:"msg_type"`
-	Payload   interface{} `json:"payload"`
-	ReceivedAt string     `json:"received_at"`
+	SN         string      `json:"sn"`
+	Source     string      `json:"source"`
+	MsgType    string      `json:"msg_type"`
+	Payload    interface{} `json:"payload"`
+	ReceivedAt string      `json:"received_at"`
 }
 
 // 新告警格式 (MQTT payload)
 type RawAlarmPayload struct {
-	Code      int                    `json:"code"`
-	Level     string                 `json:"level"`
-	Message   string                 `json:"message"`
-	Count     int                    `json:"count"`
+	Code      int                      `json:"code"`
+	Level     string                   `json:"level"`
+	Message   string                   `json:"message"`
+	Count     int                      `json:"count"`
 	Alarms    []map[string]interface{} `json:"alarms"`
-	Timestamp int64                  `json:"timestamp"`
+	Timestamp int64                    `json:"timestamp"`
 }
 
 func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis.Client, apiServer string, internalKey string) *AlertConsumer {
@@ -164,6 +164,19 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 		payloadMap = v
 	case string:
 		json.Unmarshal([]byte(v), &payloadMap)
+	}
+
+	// Final V1 alarm envelope: {t,v,data:{source,code,level,state}}.
+	if alarm, matched, err := parseAlarmV1(raw.SN, payloadMap); matched {
+		if err != nil {
+			logger.Error("Invalid V1 alarm payload", zap.String("sn", raw.SN), zap.Error(err))
+		} else if err := a.postInternalAlarm(alarm); err != nil {
+			logger.Error("Failed to post V1 alarm", zap.String("sn", raw.SN), zap.Error(err))
+		}
+		if err := a.consumer.CommitMessages(ctx, m); err != nil {
+			logger.Warn("Failed to commit alert message", zap.Error(err))
+		}
+		return
 	}
 
 	// 空 payload 或空对象 → 告警清除
@@ -329,6 +342,36 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 	if err := a.consumer.CommitMessages(ctx, m); err != nil {
 		logger.Warn("Failed to commit alert message", zap.Error(err))
 	}
+}
+
+func parseAlarmV1(sn string, payload map[string]interface{}) (*model.AlarmData, bool, error) {
+	version, hasVersion := toInt(payload["v"])
+	data, hasData := payload["data"].(map[string]interface{})
+	if !hasVersion || !hasData {
+		return nil, false, nil
+	}
+	if version != 1 {
+		return nil, true, fmt.Errorf("unsupported alarm version %d", version)
+	}
+	source, sourceOK := toInt(data["source"])
+	code, codeOK := toInt(data["code"])
+	level, levelOK := toInt(data["level"])
+	state, stateOK := toInt(data["state"])
+	if !sourceOK || !codeOK || !levelOK || !stateOK {
+		return nil, true, fmt.Errorf("source, code, level and state must be integers")
+	}
+	if source < 0 || source > 3 || code < 0 || level < 1 || level > 2 || state < 0 || state > 1 {
+		return nil, true, fmt.Errorf("alarm fields are outside the V1 enum range")
+	}
+	levelName := "warning"
+	if level == 2 {
+		levelName = "fault"
+	}
+	timestamp, _ := toInt(payload["t"])
+	return &model.AlarmData{
+		SN: sn, Source: source, Code: code, Level: levelName, State: &state,
+		Timestamp: int64(timestamp), ReceivedAt: timezone.NowUTC(),
+	}, true, nil
 }
 
 func (a *AlertConsumer) postInternalAlarm(alarm *model.AlarmData) error {

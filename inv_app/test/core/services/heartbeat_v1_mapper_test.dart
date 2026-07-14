@@ -6,48 +6,51 @@ void main() {
     final result = HeartbeatV1Mapper.parse('CS12345678', {
       'v': 1,
       't': 1783676930,
-      'seq': 12,
-      'ac': [221.5, 8.88, 1947.9, 1967.6, 50.08, 0.99, 31.4, 2.5],
-      'bat': [
-        75,
-        96,
-        51.2,
-        25.5,
-        1305.6,
-        100,
-        200,
-        10,
-        32,
-        25,
-        3.4,
-        3.2,
-        0.2,
-        1,
-        0,
-        0,
-        60,
-        120,
-        56.8,
-        44,
-        28
-      ],
-      'pv': [
-        85.3,
-        12.5,
-        1066.3,
-        90,
-        1100,
-        82.1,
-        11.8,
-        969.0,
-        88,
-        1000,
-        2035.3,
-        0
-      ],
-      'sys': [1, 0, 0, 48.5, 55.2, 32.6, 380, 8640, 40, 94.6],
-      'eng': [12.3, 2400, 3.2, 500, 2.1, 420, 10.2, 2200],
-      'cells': [List.filled(16, 3.2), List.filled(16, 26.0)],
+      'data': {
+        'ac': [221.5, 8.88, 1947.9, 1967.6, 50.08, 0.99, 31.4, 2.5],
+        'bat': [
+          75,
+          96,
+          51.2,
+          25.5,
+          1305.6,
+          100,
+          200,
+          10,
+          32,
+          25,
+          3.4,
+          3.2,
+          0.2,
+          1,
+          0,
+          0,
+          60,
+          120,
+          56.8,
+          44,
+          28,
+          600,
+          568
+        ],
+        'pv': [85.3, 12.5, 1066.3, 82.1, 11.8, 969.0, 0],
+        'sys': [1, 0, 0, 48.5, 55.2, 32.6, 380, 8640, 40, 94.6, 2],
+        'eng': [
+          12.3,
+          2400,
+          3.2,
+          500,
+          2.1,
+          420,
+          10.2,
+          2200,
+          1800,
+          1700,
+          600,
+          550
+        ],
+        'cells': [List.filled(16, 3.2), List.filled(4, 26.0)],
+      },
     });
 
     expect(result.ac?.power, 1947.9);
@@ -62,11 +65,19 @@ void main() {
     expect(result.energy?.dailyPV, 12.3);
     expect(result.energy?.totalLoad, 2200);
     expect(result.cells?.cellCount, 16);
+    expect(result.cells?.tempSensorCount, 4);
+    expect(result.battery?.chargeRequestVoltageX10, 568);
+    expect(result.sysStatus?.systemMode, 2);
+    expect(result.energy?.totalDischargeTime, 550);
   });
 
   test('rejects an invalid fixed array length', () {
     expect(
-      () => HeartbeatV1Mapper.parse('CS12345678', {'v': 1, 't': 1, 'ac': []}),
+      () => HeartbeatV1Mapper.parse('CS12345678', {
+        'v': 1,
+        't': 1,
+        'data': {'ac': []}
+      }),
       throwsFormatException,
     );
   });

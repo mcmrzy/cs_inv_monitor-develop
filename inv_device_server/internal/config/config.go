@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -55,6 +56,7 @@ type MQTTConfig struct {
 	Password    string `mapstructure:"password"`
 	QoS         byte   `mapstructure:"qos"`
 	TLSInsecure bool   `mapstructure:"tls_insecure"`
+	CertSHA256  string `mapstructure:"cert_sha256"`
 }
 
 type KafkaConfig struct {
@@ -108,6 +110,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("mqtt.password", "")
 	viper.SetDefault("mqtt.qos", 1)
 	viper.SetDefault("mqtt.tls_insecure", false)
+	viper.SetDefault("mqtt.cert_sha256", "")
 
 	viper.SetDefault("kafka.enabled", true)
 	viper.SetDefault("kafka.brokers", []string{"kafka:29092"})
@@ -131,6 +134,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("mqtt.username", "MQTT_USERNAME")
 	viper.BindEnv("mqtt.password", "MQTT_PASSWORD")
 	viper.BindEnv("mqtt.tls_insecure", "MQTT_TLS_INSECURE")
+	viper.BindEnv("mqtt.cert_sha256", "MQTT_CERT_SHA256")
 
 	viper.BindEnv("kafka.brokers", "KAFKA_BROKER")
 	viper.BindEnv("kafka.enabled", "KAFKA_ENABLED")
@@ -192,6 +196,12 @@ func (c *Config) Validate() error {
 	}
 	if isPlaceholder(c.MQTT.Password) {
 		missing = append(missing, "mqtt.password must not use a CHANGE_ME* placeholder")
+	}
+	if c.MQTT.TLSInsecure {
+		pin, err := hex.DecodeString(strings.TrimSpace(c.MQTT.CertSHA256))
+		if err != nil || len(pin) != 32 {
+			missing = append(missing, "mqtt.cert_sha256 (env: MQTT_CERT_SHA256, a 64-character SHA-256 pin is required when tls_insecure=true)")
+		}
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("configuration validation failed:\n  - %s\n\nHint: Set these via environment variables or config.yaml",

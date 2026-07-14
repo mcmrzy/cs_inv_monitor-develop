@@ -38,6 +38,22 @@ func getQueryInt(c *gin.Context, key string, defaultValue int) int {
 	return v
 }
 
+// getPageSize 统一解析分页大小参数，优先使用 page_size，向后兼容 pageSize。
+func getPageSize(c *gin.Context, defaultValue int) int {
+	s := c.Query("page_size")
+	if s == "" {
+		s = c.Query("pageSize") // 向后兼容 camelCase
+	}
+	if s == "" {
+		return defaultValue
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}
+
 func getQueryInt64(c *gin.Context, key string, defaultValue int64) int64 {
 	s := c.Query(key)
 	if s == "" {
@@ -57,7 +73,7 @@ func parsePagination(c *gin.Context) (page, pageSize int) {
 	if page < 1 {
 		page = 1
 	}
-	pageSize = getQueryInt(c, "pageSize", 20)
+	pageSize = getPageSize(c, 20)
 	if pageSize < 1 {
 		pageSize = 20
 	}

@@ -587,8 +587,8 @@
       <div class="table"><table>
         <thead><tr><th>对象</th><th>来源</th><th>关键字段</th><th>写入规则</th></tr></thead>
         <tbody>
-          <tr><td><code>device_telemetry</code>（TimescaleDB 超表）</td><td><code>heartbeat</code>、<code>three_phase</code></td><td>device_sn、topic、protocol_version、data_hash、data JSONB、常用标准列、quality_flags、time、received_at</td><td>按采样时间写入；相同 <code>sn + topic + t + data_hash</code> 仅在短期窗口内去重</td></tr>
-          <tr><td><code>device_cell_telemetry</code>（TimescaleDB 超表）</td><td><code>heartbeat.cells</code></td><td>device_sn、sample_time、cell_index、voltage、temperature、quality_flags</td><td>按电芯下标拆行；温度点与电芯不一一对应时单独保存 temperature_index</td></tr>
+          <tr><td><code>device_telemetry_3min</code>（TimescaleDB 超表）</td><td><code>heartbeat</code></td><td>device_sn、topic、protocol_version、data_hash、raw_envelope JSONB、常用标准列、quality_flags、event_time、received_at</td><td>每台设备每次 3 分钟采样写一行；相同 <code>sn + topic + t + data_hash</code> 去重</td></tr>
+          <tr><td><code>device_cell_samples</code>（TimescaleDB 超表）</td><td><code>heartbeat.data.cells</code></td><td>device_sn、event_time、data_hash、voltages JSONB、temperatures JSONB、quality_flags</td><td>每台设备每次采样写一行；电芯电压和温度点分别按原下标保存在数组中，不逐电芯拆行</td></tr>
           <tr><td><code>device_parallel_state</code></td><td><code>parallel</code></td><td>station_id、master_sn、mode、count、sync_state、machines、reported_at</td><td>按电站 UPSERT；通过完整成员列表识别主机切换，同时保留拓扑变更历史</td></tr>
           <tr><td><code>devices</code> / 设备能力表</td><td><code>info</code></td><td>型号、厂商、固件版本、额定参数、电芯数、温度点数</td><td>按 SN UPSERT；能力变化留审计记录</td></tr>
           <tr><td><code>device_alarms</code></td><td><code>alarm</code></td><td>device_sn、source、code、level、active_at、recovered_at、raw_data</td><td>发生时创建/激活，恢复时关闭；重复事件幂等</td></tr>
@@ -600,7 +600,7 @@
       </table></div>
 
       <h3>9.3 遥测标准列</h3>
-      <p><code>device_telemetry.data</code> 保存完整上行信封；以下高频查询字段同时提取为类型化列：</p>
+      <p><code>device_telemetry_3min.raw_envelope</code> 保存完整 <code>{t,v,data}</code> 上行信封；以下高频查询字段同时提取为类型化列：</p>
       <div class="table"><table>
         <thead><tr><th>列</th><th>来源</th><th>用途</th></tr></thead>
         <tbody>
@@ -629,8 +629,8 @@
         <thead><tr><th>数据层级</th><th>策略</th><th>保留期</th></tr></thead>
         <tbody>
           <tr><td>原始 Heartbeat</td><td>7 天后压缩；保留 JSONB 与标准列</td><td>90 天</td></tr>
-          <tr><td>电芯明细</td><td>正常样本 7 天后清理；越界/故障窗口转存事件证据</td><td>正常 7 天，异常 90 天</td></tr>
-          <tr><td>1 分钟聚合</td><td>连续聚合功率、SOC、温度、频率</td><td>180 天</td></tr>
+          <tr><td>电芯数组快照</td><td>与每次 3 分钟 Heartbeat 对齐；电压与温度数组独立保存</td><td>90 天</td></tr>
+          <tr><td>3 分钟原始层</td><td>直接保存设备采样；因源采样周期为 3 分钟，不创建 1 分钟聚合</td><td>90 天</td></tr>
           <tr><td>1 小时聚合</td><td>连续聚合均值、最值、增量</td><td>2 年</td></tr>
           <tr><td>1 日聚合</td><td>日能源、运行时长、可用率</td><td>长期保留</td></tr>
           <tr><td>告警/命令/配置/OTA</td><td>关系表与审计记录</td><td>按业务合规要求长期保留</td></tr>
@@ -709,7 +709,7 @@
     </main>
   </div>
 
-  <footer>辰烁科技 48V 离网逆变器遥测协议与存储规范 · V1.0.26.713 · 最终规范</footer>
+  <footer>辰烁科技 48V 离网逆变器遥测协议与存储规范 · V1.0.26.713 · 最终规范<br>最后修改时间：2026-07-13 19:56:44（Asia/Shanghai）</footer>
 </div>
 </body>
 </html>

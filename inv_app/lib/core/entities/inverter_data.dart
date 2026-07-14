@@ -66,6 +66,8 @@ class BatteryData {
   final double chargeVoltageRef;
   final double dischargeCutoffVoltage;
   final double temperature;
+  final int chargeRequestCurrentX10;
+  final int chargeRequestVoltageX10;
 
   const BatteryData({
     this.soc = 0,
@@ -89,6 +91,8 @@ class BatteryData {
     this.chargeVoltageRef = 0,
     this.dischargeCutoffVoltage = 0,
     this.temperature = 0,
+    this.chargeRequestCurrentX10 = 0,
+    this.chargeRequestVoltageX10 = 0,
   });
 
   factory BatteryData.fromJson(Map<String, dynamic> json) {
@@ -116,6 +120,10 @@ class BatteryData {
       dischargeCutoffVoltage:
           (json['discharge_cutoff_voltage'] as num?)?.toDouble() ?? 0,
       temperature: (json['temperature'] as num?)?.toDouble() ?? 0,
+      chargeRequestCurrentX10:
+          (json['charge_request_current_x10'] as num?)?.toInt() ?? 0,
+      chargeRequestVoltageX10:
+          (json['charge_request_voltage_x10'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -141,6 +149,8 @@ class BatteryData {
         'charge_voltage_ref': chargeVoltageRef,
         'discharge_cutoff_voltage': dischargeCutoffVoltage,
         'temperature': temperature,
+        'charge_request_current_x10': chargeRequestCurrentX10,
+        'charge_request_voltage_x10': chargeRequestVoltageX10,
       };
 }
 
@@ -217,6 +227,7 @@ class SystemStatus {
   final double dcBusVoltage;
   final int runtimeHours;
   final double fanSpeedPercent;
+  final int systemMode;
 
   const SystemStatus({
     this.state = '',
@@ -229,6 +240,7 @@ class SystemStatus {
     this.dcBusVoltage = 0,
     this.runtimeHours = 0,
     this.fanSpeedPercent = 0,
+    this.systemMode = 0,
   });
 
   factory SystemStatus.fromJson(Map<String, dynamic> json) {
@@ -244,6 +256,7 @@ class SystemStatus {
       dcBusVoltage: (json['dc_bus_voltage'] as num?)?.toDouble() ?? 0,
       runtimeHours: (json['runtime_hours'] as num?)?.toInt() ?? 0,
       fanSpeedPercent: (json['fan_speed_percent'] as num?)?.toDouble() ?? 0,
+      systemMode: (json['system_mode'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -258,6 +271,7 @@ class SystemStatus {
         'dc_bus_voltage': dcBusVoltage,
         'runtime_hours': runtimeHours,
         'fan_speed_percent': fanSpeedPercent,
+        'system_mode': systemMode,
       };
 
   bool get hasFault => faultCode != 0;
@@ -277,6 +291,10 @@ class EnergyData {
   final double totalDischarge;
   final double dailyLoad;
   final double totalLoad;
+  final double totalChargeCapacity;
+  final double totalDischargeCapacity;
+  final int totalChargeTime;
+  final int totalDischargeTime;
 
   const EnergyData({
     this.dailyPV = 0,
@@ -292,6 +310,10 @@ class EnergyData {
     this.totalDischarge = 0,
     this.dailyLoad = 0,
     this.totalLoad = 0,
+    this.totalChargeCapacity = 0,
+    this.totalDischargeCapacity = 0,
+    this.totalChargeTime = 0,
+    this.totalDischargeTime = 0,
   });
 
   factory EnergyData.fromJson(Map<String, dynamic> json) {
@@ -309,6 +331,12 @@ class EnergyData {
       totalDischarge: (json['total_discharge'] as num?)?.toDouble() ?? 0,
       dailyLoad: (json['daily_load'] as num?)?.toDouble() ?? 0,
       totalLoad: (json['total_load'] as num?)?.toDouble() ?? 0,
+      totalChargeCapacity:
+          (json['total_charge_capacity'] as num?)?.toDouble() ?? 0,
+      totalDischargeCapacity:
+          (json['total_discharge_capacity'] as num?)?.toDouble() ?? 0,
+      totalChargeTime: (json['total_charge_time'] as num?)?.toInt() ?? 0,
+      totalDischargeTime: (json['total_discharge_time'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -326,16 +354,22 @@ class EnergyData {
         'total_discharge': totalDischarge,
         'daily_load': dailyLoad,
         'total_load': totalLoad,
+        'total_charge_capacity': totalChargeCapacity,
+        'total_discharge_capacity': totalDischargeCapacity,
+        'total_charge_time': totalChargeTime,
+        'total_discharge_time': totalDischargeTime,
       };
 }
 
 class CellsData {
   final int cellCount;
+  final int tempSensorCount;
   final List<double> voltages;
   final List<double> temps;
 
   const CellsData({
     this.cellCount = 0,
+    this.tempSensorCount = 0,
     this.voltages = const [],
     this.temps = const [],
   });
@@ -343,6 +377,9 @@ class CellsData {
   factory CellsData.fromJson(Map<String, dynamic> json) {
     return CellsData(
       cellCount: (json['cell_count'] as num?)?.toInt() ?? 0,
+      tempSensorCount: (json['temp_sensor_count'] as num?)?.toInt() ??
+          (json['temps'] as List<dynamic>?)?.length ??
+          0,
       voltages: (json['voltages'] as List<dynamic>?)
               ?.map((e) => (e as num).toDouble())
               .toList() ??
@@ -356,6 +393,7 @@ class CellsData {
 
   Map<String, dynamic> toJson() => {
         'cell_count': cellCount,
+        'temp_sensor_count': tempSensorCount,
         'voltages': voltages,
         'temps': temps,
       };

@@ -54,13 +54,16 @@ func TestCriticalTablesExist(t *testing.T) {
 		"device_telemetry",
 		"device_models",
 		"device_model_field",
-		"device_model_protocol",
+		"device_protocol_versions",
 		"device_alarms",
 		"device_cmd_logs",
 		"device_day_data",
 		"station_day_data",
 		"firmware_versions",
-		"ota_records",
+		"device_upgrades",
+		"device_telemetry_3min",
+		"device_latest_state",
+		"user_device_rel",
 		"system_configs",
 		"notifications",
 		"alarm_notifications",
@@ -185,6 +188,7 @@ func TestTimescaleDBContinuousAggregates(t *testing.T) {
 		"device_telemetry_1min",
 		"device_telemetry_1hour",
 		"device_telemetry_1day",
+		"device_telemetry_hour",
 	}
 
 	for _, agg := range aggregates {

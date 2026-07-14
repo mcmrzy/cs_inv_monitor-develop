@@ -78,6 +78,12 @@ func (s *DataService) HandleCmdResult(sn string, payload []byte) {
 	if s.apiServer == "" {
 		return
 	}
+	normalizedPayload, err := normalizeCommandResultPayload(sn, payload)
+	if err != nil {
+		logger.Warn("Invalid command result payload", zap.String("sn", sn), zap.Error(err))
+		return
+	}
+	payload = normalizedPayload
 
 	// 直接转发原始 JSON 给 API Server，由 API Server 更新 command_logs 和插入通知
 	url := s.apiServer + "/api/v1/internal/device-cmd-result"
@@ -96,17 +102,6 @@ func (s *DataService) HandleCmdResult(sn string, payload []byte) {
 			req.Header.Set("X-Internal-Key", s.internalKey)
 		}
 		// 附加 sn 到请求体（设备上报的 payload 可能不包含 sn）
-		var payloadMap map[string]interface{}
-		if err := json.Unmarshal(payload, &payloadMap); err == nil {
-			if _, ok := payloadMap["sn"]; !ok {
-				payloadMap["sn"] = sn
-				if newPayload, err := json.Marshal(payloadMap); err == nil {
-					req.Body = io.NopCloser(bytes.NewReader(newPayload))
-					req.ContentLength = int64(len(newPayload))
-				}
-			}
-		}
-
 		resp, err := s.httpClient.Do(req)
 		if err != nil {
 			logger.Warn("notify cmd result failed, retrying",
@@ -141,29 +136,92 @@ func (s *DataService) FlushPendingCommands(ctx context.Context, sn string) {
 			return
 		}
 
-		var cmdData struct {
-			Command string                 `json:"command"`
-			Params  map[string]interface{} `json:"params"`
-		}
-		if err := json.Unmarshal([]byte(result), &cmdData); err != nil {
+		cmd, err := decodePendingCommand(sn, []byte(result))
+		if err != nil {
 			logger.Warn("Failed to unmarshal pending command", zap.String("sn", sn), zap.Error(err))
 			continue
 		}
 
-		// 下发命令
-		cmd := &mqtt.DeviceCommand{
-			DeviceSN: sn,
-			CmdType:  cmdData.Command,
-			Params:   cmdData.Params,
-		}
 		s.hub.GetCmdChan() <- cmd
 
 		logger.Info("Flushed pending command for online device",
-			zap.String("sn", sn), zap.String("cmd", cmdData.Command))
+			zap.String("sn", sn), zap.String("cmd", cmd.CmdType))
 
 		// 小延迟避免瞬间发送太多命令
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+func decodePendingCommand(sn string, raw []byte) (*mqtt.DeviceCommand, error) {
+	var queued struct {
+		Command   string                 `json:"command"`
+		Params    map[string]interface{} `json:"params"`
+		TaskID    string                 `json:"task_id"`
+		CreatedAt int64                  `json:"t"`
+		ExpiresAt int64                  `json:"expires_at"`
+	}
+	if err := json.Unmarshal(raw, &queued); err != nil {
+		return nil, err
+	}
+	if queued.Command == "" || queued.TaskID == "" {
+		return nil, fmt.Errorf("queued command and task_id are required")
+	}
+	now := time.Now().Unix()
+	if (queued.ExpiresAt > 0 && now > queued.ExpiresAt) ||
+		(queued.ExpiresAt == 0 && queued.CreatedAt > 0 && now-queued.CreatedAt > 300) {
+		return nil, fmt.Errorf("queued command %s has expired", queued.TaskID)
+	}
+	return &mqtt.DeviceCommand{
+		DeviceSN: sn,
+		CmdType:  queued.Command,
+		Params:   queued.Params,
+		// buildMqttPayload reads the original task_id and keeps it unchanged.
+		RawPayload: append([]byte(nil), raw...),
+	}, nil
+}
+
+// normalizeCommandResultPayload converts the final V1 {t,v,data} response
+// envelope into the flat internal API contract while retaining legacy flat
+// cmd_result compatibility. The V1 result array is stored as response data;
+// the internal result string remains a lifecycle status.
+func normalizeCommandResultPayload(sn string, payload []byte) ([]byte, error) {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &root); err != nil {
+		return nil, err
+	}
+	body := root
+	if rawData, ok := root["data"]; ok {
+		var candidate map[string]json.RawMessage
+		if json.Unmarshal(rawData, &candidate) == nil {
+			if _, hasTaskID := candidate["task_id"]; hasTaskID {
+				body = candidate
+				if _, exists := body["timestamp"]; !exists {
+					if timestamp, ok := root["t"]; ok {
+						body["timestamp"] = timestamp
+					}
+				}
+			}
+		}
+	}
+
+	if _, exists := body["sn"]; !exists {
+		body["sn"], _ = json.Marshal(sn)
+	}
+	if rawResult, ok := body["result"]; ok {
+		var resultString string
+		if json.Unmarshal(rawResult, &resultString) != nil {
+			body["data"] = rawResult
+			var success bool
+			_ = json.Unmarshal(body["success"], &success)
+			if success {
+				resultString = "success"
+			} else {
+				resultString = "failed"
+			}
+			body["result"], _ = json.Marshal(resultString)
+		}
+	}
+	return json.Marshal(body)
 }
 
 func (s *DataService) GetRealtimeFromRedis(ctx context.Context, sn string) (*model.DeviceRealtime, error) {
@@ -368,13 +426,13 @@ func (s *DataService) HandleOTAStatus(sn string, payload []byte) {
 	// 解析设备上报的 OTA 状态，转换为 API Server 期望的格式
 	// 设备可能发送嵌套格式: {"data": {...}, "timestamp": ...}
 	// 或者扁平格式: {"device_id":"...", "state":"upgrading", "progress":45, ...}
-	
+
 	// 先尝试解析嵌套格式
 	var envelope struct {
 		Data      json.RawMessage `json:"data"`
 		Timestamp int64           `json:"timestamp"`
 	}
-	
+
 	var actualPayload []byte
 	if err := json.Unmarshal(payload, &envelope); err == nil && envelope.Data != nil {
 		// 嵌套格式，使用 data 字段的内容
@@ -414,6 +472,9 @@ func (s *DataService) HandleOTAStatus(sn string, payload []byte) {
 		"device_sn": sn,
 		"status":    devicePayload.State,
 		"progress":  devicePayload.Progress,
+	}
+	if devicePayload.TaskID != "" {
+		apiPayload["task_id"] = devicePayload.TaskID
 	}
 
 	// 传递 firmware_id（如果设备上报了）
@@ -478,7 +539,15 @@ func (s *DataService) GetOnlineSNsFromRedis(ctx context.Context) []string {
 	if s.rdb == nil {
 		return nil
 	}
-	var sns []string
+
+	// Primary: O(1) retrieval from Redis Set (secondary index maintained by Hub)
+	sns, err := s.rdb.SMembers(ctx, "device:online_set").Result()
+	if err == nil && len(sns) > 0 {
+		return sns
+	}
+
+	// Fallback: scan heartbeat keys when set is empty (e.g. before initial rebuild)
+	var result []string
 	var cursor uint64
 	for {
 		keys, nextCursor, err := s.rdb.Scan(ctx, cursor, "device:heartbeat:*", 1000).Result()
@@ -486,12 +555,12 @@ func (s *DataService) GetOnlineSNsFromRedis(ctx context.Context) []string {
 			break
 		}
 		for _, key := range keys {
-			sns = append(sns, strings.TrimPrefix(key, "device:heartbeat:"))
+			result = append(result, strings.TrimPrefix(key, "device:heartbeat:"))
 		}
 		cursor = nextCursor
 		if cursor == 0 {
 			break
 		}
 	}
-	return sns
+	return result
 }

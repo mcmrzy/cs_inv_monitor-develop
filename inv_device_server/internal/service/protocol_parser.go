@@ -36,6 +36,7 @@ type ProtocolParser struct {
 	apiServer   string
 	internalKey string
 	httpClient  *http.Client
+	batcher     *TelemetryBatcher
 
 	snModelCache map[string]int32
 	snCacheMu    sync.RWMutex
@@ -85,6 +86,7 @@ func NewProtocolParser(
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
+		batcher:      NewTelemetryBatcher(apiServer, internalKey),
 		snModelCache: make(map[string]int32),
 		parseEngine:  NewParseRuleEngine(),
 		stateManager: NewDeviceStateManager(rdb, apiServer, internalKey),
@@ -99,6 +101,7 @@ func (p *ProtocolParser) Start(ctx context.Context) {
 	}
 	go p.consume(ctx)
 	go p.refreshModelCache(ctx)
+	go p.batcher.Start(ctx)
 }
 
 func (p *ProtocolParser) worker(ctx context.Context, id int) {
@@ -275,13 +278,19 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 			receivedAt = parsed.UTC()
 		}
 	}
-	cellCount, err := p.repo.GetDeviceCellCount(ctx, raw.SN)
+	cellCount, tempSensorCount, err := p.repo.GetDeviceCellCounts(ctx, raw.SN)
 	if err != nil || cellCount <= 0 {
 		cellCount = 16
 	}
-	sample, err := telemetryv2.ParseHeartbeat(raw.SN, raw.Payload, cellCount, receivedAt)
+	if tempSensorCount <= 0 {
+		tempSensorCount = 4
+	}
+	sample, err := telemetryv2.ParseHeartbeat(raw.SN, raw.Payload, cellCount, tempSensorCount, receivedAt)
 	if err != nil {
-		return err
+		if saveErr := p.repo.SaveIngestError(ctx, raw.SN, raw.MsgType, raw.Payload, "INVALID_HEARTBEAT", err.Error()); saveErr != nil {
+			return fmt.Errorf("%v; save ingest error: %w", err, saveErr)
+		}
+		return nil
 	}
 	if err := p.repo.SaveTelemetryV2(ctx, sample); err != nil {
 		return err
@@ -412,20 +421,21 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 	if p.rdb != nil {
 		infoPayload := map[string]interface{}{
 			"data": map[string]interface{}{
-				"model":           info.Model,
-				"manufacturer":    info.Manufacturer,
-				"firmware_arm":    info.FirmwareARM,
-				"firmware_esp":    info.FirmwareESP,
-				"firmware_dsp":    info.FirmwareDSP,
-				"firmware_bms":    info.FirmwareBMS,
-				"type":            info.Type,
-				"rated_power":     info.RatedPower,
-				"rated_voltage":   info.RatedVoltage,
-				"rated_freq":      info.RatedFreq,
-				"battery_voltage": info.BatteryVoltage,
-				"battery_type":    info.BatteryType,
-				"cell_count":      info.CellCount,
-				"sn":              info.SN,
+				"model":                   info.Model,
+				"manufacturer":            info.Manufacturer,
+				"firmware_arm":            info.FirmwareARM,
+				"firmware_esp":            info.FirmwareESP,
+				"firmware_dsp":            info.FirmwareDSP,
+				"firmware_bms":            info.FirmwareBMS,
+				"device_type":             info.Type,
+				"rated_power":             info.RatedPower,
+				"rated_voltage":           info.RatedVoltage,
+				"rated_frequency":         info.RatedFreq,
+				"battery_nominal_voltage": info.BatteryVoltage,
+				"battery_type":            info.BatteryType,
+				"cell_count":              info.CellCount,
+				"temp_sensor_count":       info.TempSensorCount,
+				"sn":                      info.SN,
 			},
 			"timestamp": time.Now().UTC().Unix(),
 		}
@@ -599,10 +609,10 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 		topic = "data/unknown"
 	}
 
-	req := map[string]interface{}{
-		"sn":    raw.SN,
-		"topic": topic,
-		"data":  parsedPayload,
+	item := &telemetryBatchItem{
+		SN:   raw.SN,
+		Topic: topic,
+		Data: parsedPayload,
 	}
 
 	var timestamp int64
@@ -619,7 +629,7 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 	if timestamp <= 0 {
 		timestamp = time.Now().Unix()
 	}
-	req["timestamp"] = timestamp
+	item.Timestamp = timestamp
 
 	if topic == "data/energy" {
 		var energy model.EnergyData
@@ -632,29 +642,23 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 		}
 		rawBytes, _ := json.Marshal(dataToUnmarshal)
 		if err := json.Unmarshal(rawBytes, &energy); err == nil {
-			req["daily_pv"] = energy.DailyPV
-			req["total_pv"] = energy.TotalPV
-			req["daily_charge"] = energy.DailyCharge
-			req["total_charge"] = energy.TotalCharge
-			req["daily_discharge"] = energy.DailyDischarge
-			req["total_discharge"] = energy.TotalDischarge
-			req["daily_load"] = energy.DailyLoad
-			req["total_load"] = energy.TotalLoad
-			req["runtime_hours"] = energy.RuntimeHours
+			item.DailyPV = energy.DailyPV
+			item.TotalPV = energy.TotalPV
+			item.DailyCharge = energy.DailyCharge
+			item.TotalCharge = energy.TotalCharge
+			item.DailyDischarge = energy.DailyDischarge
+			item.TotalDischarge = energy.TotalDischarge
+			item.DailyLoad = energy.DailyLoad
+			item.TotalLoad = energy.TotalLoad
+			item.RuntimeHours = energy.RuntimeHours
 		}
 		stationID, _ := p.repo.GetStationIDBySN(ctx, raw.SN)
 		if stationID > 0 {
-			req["station_id"] = stationID
+			item.StationID = stationID
 		}
 	}
 
-	if err := p.postInternal("/api/v1/internal/device-data", req); err != nil {
-		logger.Error("Failed to post telemetry data to API server",
-			zap.String("sn", raw.SN),
-			zap.String("topic", topic),
-			zap.Error(err))
-		return err
-	}
+	p.batcher.Add(item)
 
 	if err := p.cacheRealtime(ctx, raw.SN, parsedPayload, raw.MsgType); err != nil {
 		logger.Debug("Redis cache failed", zap.String("sn", raw.SN), zap.Error(err))
@@ -709,9 +713,13 @@ func (p *ProtocolParser) applyFieldMapping(modelID int32, payload map[string]int
 }
 
 func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMessage) error {
+	normalizedPayload, err := normalizeCommandResultPayload(raw.SN, raw.Payload)
+	if err != nil {
+		return err
+	}
 	var resp model.CommandResponse
-	if err := json.Unmarshal(raw.Payload, &resp); err != nil {
-		return nil
+	if err := json.Unmarshal(normalizedPayload, &resp); err != nil {
+		return err
 	}
 
 	// 确定 result 字段值（兼容新旧格式）
@@ -823,6 +831,14 @@ func (p *ProtocolParser) cacheRealtime(ctx context.Context, sn string, payload m
 
 	pubChannel := "realtime:channel:" + sn
 	_ = p.rdb.Publish(ctx, pubChannel, string(mergedBytes)).Err()
+
+	// 缓存最近100条消息用于 WebSocket 重连回填
+	historyKey := fmt.Sprintf("realtime:history:%s", sn)
+	histPipe := p.rdb.Pipeline()
+	histPipe.LPush(ctx, historyKey, string(mergedBytes))
+	histPipe.LTrim(ctx, historyKey, 0, 99) // 只保留最近100条
+	histPipe.Expire(ctx, historyKey, 10*time.Minute)
+	_, _ = histPipe.Exec(ctx)
 
 	return nil
 }
@@ -957,5 +973,145 @@ func extractUnixTimestamp(m map[string]interface{}, key string) int64 {
 		return n
 	default:
 		return 0
+	}
+}
+
+// telemetryBatchItem 遥测批量写入数据项，与 api_server 的 internalDeviceDataRequest 结构对应
+type telemetryBatchItem struct {
+	SN             string                 `json:"sn"`
+	Topic          string                 `json:"topic"`
+	Data           map[string]interface{} `json:"data"`
+	DailyPV        float64                `json:"daily_pv"`
+	TotalPV        float64                `json:"total_pv"`
+	DailyCharge    float64                `json:"daily_charge"`
+	TotalCharge    float64                `json:"total_charge"`
+	DailyDischarge float64                `json:"daily_discharge"`
+	TotalDischarge float64                `json:"total_discharge"`
+	DailyLoad      float64                `json:"daily_load"`
+	TotalLoad      float64                `json:"total_load"`
+	RuntimeHours   float64                `json:"runtime_hours"`
+	StationID      int64                  `json:"station_id"`
+	Timestamp      int64                  `json:"timestamp"`
+}
+
+const (
+	batchSize     = 500              // 数量阈值
+	batchInterval = 2 * time.Second  // 时间阈值
+	maxBufferSize = 10000            // 背压阈值
+)
+
+// TelemetryBatcher 遥测数据批量缓冲组件
+// 将逐条 HTTP POST 改为批量发送，减少 api_server 的写入压力
+type TelemetryBatcher struct {
+	mu          sync.Mutex
+	buffer      []*telemetryBatchItem
+	flushCh     chan struct{}
+	client      *http.Client
+	apiURL      string
+	internalKey string
+}
+
+// NewTelemetryBatcher 创建批量缓冲器
+func NewTelemetryBatcher(apiServer, internalKey string) *TelemetryBatcher {
+	return &TelemetryBatcher{
+		buffer:  make([]*telemetryBatchItem, 0, batchSize),
+		flushCh: make(chan struct{}, 1),
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 50,
+				IdleConnTimeout:     90 * time.Second,
+			},
+		},
+		apiURL:      strings.TrimRight(apiServer, "/") + "/api/v1/internal/device-data-batch",
+		internalKey: internalKey,
+	}
+}
+
+// Start 启动定时 flush goroutine，每 batchInterval 触发一次
+func (b *TelemetryBatcher) Start(ctx context.Context) {
+	ticker := time.NewTicker(batchInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			b.flush() // 关闭前最后一次 flush
+			return
+		case <-ticker.C:
+			b.flush()
+		case <-b.flushCh:
+			b.flush()
+		}
+	}
+}
+
+// Add 添加消息到缓冲，达到 batchSize 时触发 flush；超过 maxBufferSize 时阻塞（背压）
+func (b *TelemetryBatcher) Add(item *telemetryBatchItem) {
+	for {
+		b.mu.Lock()
+		if len(b.buffer) < maxBufferSize {
+			b.buffer = append(b.buffer, item)
+			shouldFlush := len(b.buffer) >= batchSize
+			b.mu.Unlock()
+			if shouldFlush {
+				select {
+				case b.flushCh <- struct{}{}:
+				default:
+				}
+			}
+			return
+		}
+		b.mu.Unlock()
+		// 缓冲已满，等待 flush 释放空间后重试
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// flush 将缓冲区消息批量发送到 api_server
+func (b *TelemetryBatcher) flush() {
+	b.mu.Lock()
+	if len(b.buffer) == 0 {
+		b.mu.Unlock()
+		return
+	}
+	batch := b.buffer
+	b.buffer = make([]*telemetryBatchItem, 0, batchSize)
+	b.mu.Unlock()
+
+	body, err := json.Marshal(batch)
+	if err != nil {
+		logger.Error("TelemetryBatcher: failed to marshal batch",
+			zap.Int("count", len(batch)), zap.Error(err))
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodPost, b.apiURL, bytes.NewReader(body))
+	if err != nil {
+		logger.Error("TelemetryBatcher: failed to create request", zap.Error(err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if b.internalKey != "" {
+		req.Header.Set("X-Internal-Key", b.internalKey)
+	}
+
+	resp, err := b.client.Do(req)
+	if err != nil {
+		logger.Error("TelemetryBatcher: failed to send batch",
+			zap.Int("count", len(batch)), zap.Error(err))
+		return
+	}
+	respBody, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		logger.Error("TelemetryBatcher: API returned error",
+			zap.Int("status", resp.StatusCode),
+			zap.Int("count", len(batch)),
+			zap.String("response", string(respBody)))
+	} else {
+		logger.Info("TelemetryBatcher: batch sent successfully",
+			zap.Int("count", len(batch)))
 	}
 }
