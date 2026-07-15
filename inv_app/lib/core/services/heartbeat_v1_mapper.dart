@@ -35,6 +35,7 @@ class HeartbeatV1Mapper {
 
     return InverterRealtime(
       deviceSN: deviceSN,
+      protocolVersion: (payload['v'] as num).toInt(),
       ac: ACData(
         voltage: _number(ac[0]),
         current: _number(ac[1]),

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CS-INV 光伏逆变器物联网 - 数据链路与数据库设计文档</title>
+<style>
+:root{--pri:#1a237e;--pri2:#3949ab;--acc:#0d47a1;--bg:#f5f7fa;--card:#fff;--bd:#e0e4ea;--txt:#212121;--txt2:#546e7a;--code-bg:#f0f2f5;--ok:#2e7d32;--warn:#e65100;--info:#0277bd}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--txt);line-height:1.7;font-size:15px}a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}.ctn{max-width:1200px;margin:0 auto;padding:0 24px}
+header{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;padding:48px 0 36px;position:relative;overflow:hidden}header::after{content:'';position:absolute;bottom:-60px;right:-60px;width:240px;height:240px;background:rgba(255,255,255,.06);border-radius:50%}header h1{font-size:2.1rem;font-weight:700;margin-bottom:6px;position:relative;z-index:1}header p{font-size:1.02rem;opacity:.88;position:relative;z-index:1}.badge{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:4px;padding:2px 10px;font-size:.8rem;margin:4px 4px 0 0}
+nav.toc{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:22px 28px;margin:28px 0;box-shadow:0 1px 4px rgba(0,0,0,.05)}nav.toc h2{font-size:1.05rem;color:var(--pri);margin-bottom:10px;border-bottom:2px solid var(--pri);padding-bottom:5px}nav.toc ol{padding-left:18px}nav.toc li{margin:3px 0}nav.toc a{color:var(--txt);font-size:.93rem}
+section{margin:36px 0}h2.st{font-size:1.4rem;color:var(--pri);border-left:4px solid var(--pri);padding-left:14px;margin-bottom:18px}h3{font-size:1.12rem;color:var(--pri2);margin:22px 0 10px;padding-bottom:4px;border-bottom:1px dashed var(--bd)}h4{font-size:1rem;color:var(--txt);margin:14px 0 8px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:18px 22px;margin:14px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)}.hl{background:linear-gradient(135deg,#e8eaf6,#e3f2fd);border-left:4px solid var(--acc);padding:12px 16px;border-radius:0 6px 6px 0;margin:10px 0}.wb{background:#fff3e0;border-left:4px solid var(--warn);padding:12px 16px;border-radius:0 6px 6px 0;margin:10px 0}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:.9rem}th{background:var(--pri);color:#fff;padding:9px 11px;text-align:left;font-weight:600}td{padding:8px 11px;border-bottom:1px solid var(--bd)}tr:nth-child(even){background:#f8f9fb}tr:hover{background:#eef1f7}
+code{font-family:'Cascadia Code','Consolas',monospace;background:var(--code-bg);padding:1px 5px;border-radius:3px;font-size:.86em;color:#c62828}pre{background:#1e293b;color:#e2e8f0;padding:14px 18px;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.55;margin:10px 0}pre code{background:none;color:inherit;padding:0}
+.arch-layers{display:flex;flex-direction:column;gap:8px}.al{border:2px solid;border-radius:10px;padding:12px 16px;position:relative}.al .ll{position:absolute;top:-12px;left:18px;background:var(--bg);padding:0 8px;font-weight:700;font-size:.83rem}.le{border-color:#4caf50;background:rgba(76,175,80,.06)}.le .ll{color:#2e7d32}.lg{border-color:#ff9800;background:rgba(255,152,0,.06)}.lg .ll{color:#e65100}.ls{border-color:#2196f3;background:rgba(33,150,243,.06)}.ls .ll{color:#1565c0}.lm{border-color:#9c27b0;background:rgba(156,39,176,.06)}.lm .ll{color:#7b1fa2}.ld{border-color:#f44336;background:rgba(244,67,54,.06)}.ld .ll{color:#c62828}
+.an{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:4px}.nd{background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:7px 12px;text-align:center;min-width:110px;font-size:.83rem;box-shadow:0 1px 2px rgba(0,0,0,.06)}.nd .nt{font-weight:700;font-size:.88rem;margin-bottom:2px}.nd .nx{color:var(--txt2);font-size:.76rem}
+.aa{display:flex;justify-content:center;padding:3px 0;position:relative}.aa::before{content:'';display:block;width:2px;height:16px;background:var(--pri);margin:0 auto}.aa::after{content:'';display:block;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid var(--pri);margin:0 auto;margin-top:-1px}.arl{text-align:center;font-size:.7rem;color:var(--txt2);margin:-1px 0 2px;font-style:italic}
+.fl{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:12px 0;padding:8px;background:#fafbfd;border-radius:6px;border:1px solid var(--bd)}.fn{background:var(--pri);color:#fff;padding:5px 10px;border-radius:5px;font-size:.8rem;white-space:nowrap}.fn.a{background:var(--acc)}.fn.g{background:var(--ok)}.fn.o{background:var(--warn)}.fa{color:var(--pri);font-weight:700;font-size:1rem;padding:0 2px}
+.cc{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:18px 22px;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)}.cc h4{color:var(--pri);margin-top:0}dl.cd{display:grid;grid-template-columns:150px 1fr;gap:5px 14px;font-size:.88rem;margin:8px 0}dl.cd dt{font-weight:600;color:var(--txt2)}dl.cd dd{color:var(--txt)}
+.kg{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0}.kp{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:14px;text-align:center}.kp .kv{font-size:1.7rem;font-weight:700;color:var(--pri)}.kp .kl{font-size:.8rem;color:var(--txt2);margin-top:3px}
+.tag{display:inline-block;background:#e8eaf6;color:var(--pri);padding:1px 7px;border-radius:3px;font-size:.76rem;margin:2px}
+footer{text-align:center;padding:28px 0;color:var(--txt2);font-size:.83rem;border-top:1px solid var(--bd);margin-top:36px}
+@media(max-width:768px){header h1{font-size:1.4rem}.ctn{padding:0 12px}.an{flex-direction:column;align-items:center}.fl{flex-direction:column;align-items:flex-start}table{font-size:.8rem}th,td{padding:5px 7px}dl.cd{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="ctn">
+<h1>CS-INV 光伏逆变器物联网监控系统</h1>
+<p>数据链路与数据库设计文档</p>
+<div style="margin-top:10px"><span class="badge">PostgreSQL 18</span><span class="badge">TimescaleDB 2.28.2</span><span class="badge">Redis 7</span><span class="badge">Go (Gin)</span><span class="badge">Kafka</span><span class="badge">EMQX 5.x</span><span class="badge">Flutter</span></div>
+</div></header>
+<div class="ctn">
+<nav class="toc"><h2>目 录</h2><ol>
+<li><a href="#arch">系统架构总览</a><ol style="list-style-type:lower-alpha"><li><a href="#at">核心服务拓扑</a></li><li><a href="#ad">系统架构分层图</a></li><li><a href="#af">数据流全景</a></li></ol></li>
+<li><a href="#chains">五条核心数据链路</a><ol style="list-style-type:lower-alpha"><li><a href="#c1">设备数据上报</a></li><li><a href="#c2">API 请求</a></li><li><a href="#c3">控制命令下发</a></li><li><a href="#c4">告警数据</a></li><li><a href="#c5">OTA 升级</a></li></ol></li>
+<li><a href="#db">数据库设计</a><ol style="list-style-type:lower-alpha"><li><a href="#dt">遥测数据域</a></li><li><a href="#dd">衍生数据与维护链</a></li><li><a href="#da">告警域</a></li><li><a href="#du">用户与权限域</a></li><li><a href="#dv">设备与型号域</a></li><li><a href="#do">OTA 升级域</a></li><li><a href="#dp">并机拓扑与三相域</a></li></ol></li>
+<li><a href="#ht">Hypertable 全景配置</a></li>
+<li><a href="#rd">Redis 缓存策略</a></li>
+<li><a href="#mg">数据库迁移演进时间线</a></li>
+<li><a href="#hl">设计亮点与注意事项</a></li>
+</ol></nav>
+
+<section id="arch"><h2 class="st">1. 系统架构总览</h2>
+<h3 id="at">1.1 核心服务拓扑</h3>
+<div class="kg"><div class="kp"><div class="kv">6</div><div class="kl">核心服务</div></div><div class="kp"><div class="kv">45</div><div class="kl">迁移文件</div></div><div class="kp"><div class="kv">4</div><div class="kl">Hypertable</div></div><div class="kp"><div class="kv">65+</div><div class="kl">遥测列数</div></div></div>
+<table><tr><th>服务</th><th>端口</th><th>职责</th><th>技术栈</th></tr>
+<tr><td><code>api-gateway</code></td><td>8888</td><td>反向代理、JWT 验证、RBAC 权限、路径级限流</td><td>Go + Gin + Redis</td></tr>
+<tr><td><code>inv-api-server</code></td><td>8080</td><td>RESTful API、设备/用户/OTA/Dashboard</td><td>Go + Gin + pgx</td></tr>
+<tr><td><code>inv-device-server</code></td><td>8081</td><td>Kafka 消费、协议解析、MQTT Hub、命令下发</td><td>Go + Kafka + MQTT</td></tr>
+<tr><td><code>inv-admin-frontend</code></td><td>3000</td><td>管理后台 Web 前端</td><td>React + Vite + Ant Design</td></tr>
+<tr><td><code>inv-postgres</code></td><td>5432</td><td>主数据库 (TimescaleDB)</td><td>PostgreSQL 18 + TimescaleDB 2.28.2</td></tr>
+<tr><td><code>inv-redis</code></td><td>6379</td><td>设备影子、RBAC 缓存、告警去重、命令队列</td><td>Redis 7 (allkeys-lru)</td></tr></table>
+
+<h3 id="ad">1.2 系统架构分层图</h3>
+<div class="card"><div class="arch-layers">
+<div class="al le"><span class="ll">外部接入层</span><div class="an">
+<div class="nd"><div class="nt">IoT 设备</div><div class="nx">ESP32 / ARM<br>MQTT 协议</div></div>
+<div class="nd"><div class="nt">Flutter APP</div><div class="nx">iOS / Android<br>MQTT + HTTP</div></div>
+<div class="nd"><div class="nt">管理后台</div><div class="nx">React SPA<br>HTTP REST</div></div></div></div>
+<div class="aa"></div><div class="arl">MQTT (cs_inv/{sn}/data/*) &amp; HTTP REST</div>
+
+<div class="al lg"><span class="ll">接入网关层</span><div class="an">
+<div class="nd" style="min-width:260px"><div class="nt">API Gateway :8888</div><div class="nx">JWT 验证 &middot; RBAC 权限 &middot; 路径级限流<br>login 10QPS &middot; send-code 2QPS<br>三级路由: public / user / admin</div></div></div></div>
+<div class="aa"></div><div class="arl">反向代理 HTTP &rarr; 内部服务</div>
+
+<div class="al ls"><span class="ll">业务服务层</span><div class="an">
+<div class="nd"><div class="nt">inv-api-server :8080</div><div class="nx">REST API 服务<br>设备/用户/OTA/告警</div></div>
+<div class="nd"><div class="nt">inv-device-server :8081</div><div class="nx">Kafka 有序消费<br>协议解析 &middot; MQTT Hub</div></div>
+<div class="nd"><div class="nt">mqtt-kafka-bridge</div><div class="nx">MQTT &rarr; Kafka<br>inv-telemetry &middot; inv-alerts</div></div></div></div>
+<div class="aa"></div><div class="arl">Kafka Topics &amp; MQTT Pub/Sub</div>
+
+<div class="al lm"><span class="ll">消息中间件层</span><div class="an">
+<div class="nd"><div class="nt">EMQX Broker</div><div class="nx">MQTT 5.x<br>JWT HS256 认证<br>$share 共享订阅</div></div>
+<div class="nd"><div class="nt">Kafka</div><div class="nx">inv-telemetry (遥测)<br>inv-alerts (告警)<br>有序分区消费</div></div></div></div>
+<div class="aa"></div><div class="arl">SQL / Redis Protocol</div>
+
+<div class="al ld"><span class="ll">数据存储层</span><div class="an">
+<div class="nd" style="min-width:220px"><div class="nt">PostgreSQL 18 + TimescaleDB 2.28.2</div><div class="nx">数据库: inv_mqtt<br>4 个 Hypertable &middot; 65+ 列宽表<br>触发器衍生 &middot; 连续聚合</div></div>
+<div class="nd" style="min-width:180px"><div class="nt">Redis 7</div><div class="nx">maxmemory 512mb<br>allkeys-lru &middot; appendonly yes<br>设备影子 &middot; 缓存 &middot; 队列</div></div></div></div>
+</div></div>
+
+<h3 id="af">1.3 数据流全景</h3>
+<div class="card">
+<div class="fl"><span class="fn g">设备 MQTT</span><span class="fa">&rarr;</span><span class="fn">EMQX</span><span class="fa">&rarr;</span><span class="fn a">Bridge</span><span class="fa">&rarr;</span><span class="fn a">Kafka</span><span class="fa">&rarr;</span><span class="fn">Device Server</span><span class="fa">&rarr;</span><span class="fn o">API Server</span><span class="fa">&rarr;</span><span class="fn" style="background:#c62828">PG + Redis</span></div>
+<div class="fl"><span class="fn" style="background:#c62828">前端/APP</span><span class="fa">&rarr;</span><span class="fn o">Gateway :8888</span><span class="fa">&rarr;</span><span class="fn">API Server :8080</span><span class="fa">&rarr;</span><span class="fn" style="background:#c62828">PG / Redis</span></div>
+<div class="fl"><span class="fn" style="background:#c62828">客户端</span><span class="fa">&rarr;</span><span class="fn o">Gateway</span><span class="fa">&rarr;</span><span class="fn">API Server</span><span class="fa">&rarr;</span><span class="fn">Device Server</span><span class="fa">&rarr;</span><span class="fn g">MQTT Pub &rarr; 设备</span></div>
+</div></section>
+
+<section id="chains"><h2 class="st">2. 五条核心数据链路</h2>
+
+<div class="cc" id="c1"><h4>链路 1：设备数据上报（Telemetry Ingest）</h4>
+<div class="fl"><span class="fn g">设备 MQTT</span><span class="fa">&rarr;</span><span class="fn">EMQX</span><span class="fa">&rarr;</span><span class="fn a">Bridge</span><span class="fa">&rarr;</span><span class="fn a">Kafka inv-telemetry</span><span class="fa">&rarr;</span><span class="fn">ProtocolParser</span><span class="fa">&rarr;</span><span class="fn o">API Server HTTP</span><span class="fa">&rarr;</span><span class="fn" style="background:#c62828">PG + Redis</span></div>
+<dl class="cd">
+<dt>MQTT Topic</dt><dd><code>cs_inv/{sn}/data/heartbeat</code> &mdash; 3 分钟采样</dd>
+<dt>有序消费</dt><dd><code>runOrderedKafkaConsumer</code> 严格保序：FetchMessage &rarr; process &rarr; CommitMessages，指数退避（base 250ms, max 5s）</dd>
+<dt>Heartbeat V1</dt><dd>6 个分组：ac(8) / bat(23) / pv(7) / sys(11) / eng(12) / cells(2)</dd>
+<dt>协议解析</dt><dd>ParseRuleEngine 根据 <code>device_protocol_fields</code> 动态映射，范围校验 + NaN 过滤 + 时钟守卫</dd>
+<dt>SHA256 去重</dt><dd><code>data_hash = SHA256(sn|event_time|seq)</code>，ON CONFLICT DO NOTHING</dd>
+<dt>唯一约束</dt><dd><code>PRIMARY KEY (device_sn, event_time)</code>，唯一索引 uq(sn, event_time, data_hash)</dd>
+<dt>时钟守卫</dt><dd>偏差 &gt; &plusmn;5min &rarr; quality_flags |= 0x0004</dd>
+<dt>串行锁</dt><dd><code>pg_advisory_xact_lock</code> 保证同设备衍生写入串行</dd>
+<dt>HTTP 内部调用</dt><dd>X-Internal-Key 头 &rarr; <code>/api/v1/internal/telemetry-v2</code></dd></dl>
+<div class="hl"><strong>quality_flags 位掩码:</strong> Bit0(0x01) OutOfRange | Bit1(0x02) NaN | Bit2(0x04) ClockInvalid | Bit3(0x08) Backfill</div></div>
+
+<div class="cc" id="c2"><h4>链路 2：API 请求（REST API）</h4>
+<div class="fl"><span class="fn" style="background:#c62828">前端/APP</span><span class="fa">&rarr;</span><span class="fn o">Gateway :8888</span><span class="fa">&rarr;</span><span class="fn">API Server :8080</span><span class="fa">&rarr;</span><span class="fn" style="background:#c62828">PG / Redis</span></div>
+<dl class="cd">
+<dt>三级路由</dt><dd><strong>public</strong>(无认证) &middot; <strong>user</strong>(JWT+RBAC) &middot; <strong>admin</strong>(JWT+RBAC+role&le;1)</dd>
+<dt>JWT</dt><dd>HS256，与 EMQX 共享 Secret，注入 X-User-ID / X-User-Role</dd>
+<dt>RBAC</dt><dd>三元组 (role, resource, action)，Redis TTL 300s</dd>
+<dt>限流</dt><dd>login 10QPS &middot; send-code 2QPS &middot; 默认 50QPS</dd></dl>
+<table><tr><th>级别</th><th>认证</th><th>权限</th><th>典型路径</th></tr>
+<tr><td>Public</td><td>无</td><td>无</td><td>/api/v1/auth/login, /register</td></tr>
+<tr><td>User</td><td>JWT</td><td>JWT+RBAC</td><td>/api/v1/devices/*, /stations/*</td></tr>
+<tr><td>Admin</td><td>JWT</td><td>role&le;1</td><td>/api/v1/admin/users, /admin/models</td></tr></table></div>
+
+<div class="cc" id="c3"><h4>链路 3：控制命令下发（Command &amp; Control）</h4>
+<div class="fl"><span class="fn" style="background:#c62828">客户端</span><span class="fa">&rarr;</span><span class="fn o">Gateway</span><span class="fa">&rarr;</span><span class="fn">API Server</span><span class="fa">&rarr;</span><span class="fn">Device Server</span><span class="fa">&rarr;</span><span class="fn g">MQTT Pub &rarr; 设备</span></div>
+<dl class="cd">
+<dt>命令模型</dt><dd><code>device_model_commands</code>: JSONB parameter_schema / response_schema, 风险 1~3</dd>
+<dt>生命周期</dt><dd><code>device_commands</code>: pending &rarr; queued &rarr; sent &rarr; acknowledged &rarr; completed/timeout</dd>
+<dt>MQTT</dt><dd>Pub <code>cs_inv/{sn}/cmd/{code}</code> QoS 1</dd>
+<dt>离线队列</dt><dd>Redis List <code>device:cmd:queue:{sn}</code>，上线 FlushPendingCommands</dd>
+<dt>设备影子</dt><dd><code>device_control_state</code>: desired/reported 双状态</dd></dl></div>
+
+<div class="cc" id="c4"><h4>链路 4：告警数据（Alert Pipeline）</h4>
+<div class="fl"><span class="fn g">设备 alarm</span><span class="fa">&rarr;</span><span class="fn">EMQX</span><span class="fa">&rarr;</span><span class="fn a">Bridge</span><span class="fa">&rarr;</span><span class="fn a">Kafka inv-alerts</span><span class="fa">&rarr;</span><span class="fn">AlertConsumer</span><span class="fa">&rarr;</span><span class="fn o">API Server</span><span class="fa">&rarr;</span><span class="fn" style="background:#c62828">不可变事件 &rarr; 可变投影</span></div>
+<dl class="cd">
+<dt>Topic</dt><dd><code>cs_inv/{sn}/data/alarm</code></dd>
+<dt>格式</dt><dd>RawAlarmPayload{code, level, message, count, alarms[], timestamp}</dd>
+<dt>去重</dt><dd>Redis <code>alert:dedup:{MD5}</code> TTL 60s</dd>
+<dt>单事务双模型</dt><dd>先追加 <code>device_alarm_events</code> 不可变审计事件，再更新 <code>alarms</code> 当前生命周期/人工处理投影；两表不是等待合并的新旧表</dd>
+<dt>投影列兼容</dt><dd><code>normalize_alarms_compat_columns()</code> 仅同步 <code>alarms</code> 内的 alarm_level/level 等别名列，不负责跨表同步</dd>
+<dt>快照</dt><dd><code>device_alarm_snapshots</code> before/after 遥测快照</dd></dl></div>
+
+<div class="cc" id="c5"><h4>链路 5：OTA 升级</h4>
+<div class="fl"><span class="fn" style="background:#c62828">上传固件</span><span class="fa">&rarr;</span><span class="fn">API Server</span><span class="fa">&rarr;</span><span class="fn" style="background:#c62828">firmware_versions</span></div>
+<div class="fl"><span class="fn" style="background:#c62828">创建任务</span><span class="fa">&rarr;</span><span class="fn">API Server</span><span class="fa">&rarr;</span><span class="fn g">MQTT</span><span class="fa">&rarr;</span><span class="fn g">设备</span><span class="fa">&rarr;</span><span class="fn g">上报进度</span><span class="fa">&rarr;</span><span class="fn">状态同步</span></div>
+<dl class="cd">
+<dt>固件</dt><dd><code>firmware_versions</code>: UNIQUE(model, version), MD5</dd>
+<dt>灰度</dt><dd>upgrade_packages: 4 种 (all/model/user/device)</dd>
+<dt>状态机</dt><dd>upgrade_tasks: draft &rarr; pending &rarr; running &rarr; completed/failed</dd>
+<dt>4 固件版本</dt><dd>devices: ARM/ESP/DSP/BMS</dd></dl></div>
+</section>
+
+<section id="db"><h2 class="st">3. 数据库设计</h2>
+<div class="hl"><strong>引擎:</strong> PostgreSQL 18 + TimescaleDB 2.28.2 &nbsp;|&nbsp; <strong>数据库:</strong> inv_mqtt &nbsp;|&nbsp; <strong>基线版本:</strong> 22 &nbsp;|&nbsp; <strong>当前迁移:</strong> 047</div>
+
+<h3 id="dt">3.1 遥测数据域 &mdash; 列式宽表架构</h3>
+<div class="card">
+<h4>核心表 device_telemetry_3min（Hypertable, 65+ 强类型列）</h4>
+<table><tr><th>分组</th><th>列数</th><th>典型字段</th></tr>
+<tr><td>AC 交流侧</td><td>8</td><td>ac_voltage REAL, ac_current REAL, ac_active_power REAL, ac_frequency REAL, ac_power_factor REAL, load_percent REAL, ac_apparent_power REAL, ac_voltage_thd REAL</td></tr>
+<tr><td>电池/BMS</td><td>23</td><td>battery_soc REAL, battery_voltage REAL, battery_current REAL, battery_power REAL, battery_cycle_count INTEGER, cell_voltage_max/min/diff REAL, battery_state SMALLINT, battery_protect_status BIGINT, bms_fault_code BIGINT, charge_request_current_x10 BIGINT, charge_request_voltage_x10 BIGINT</td></tr>
+<tr><td>PV 光伏侧</td><td>7</td><td>pv1_voltage/current/power REAL, pv2_voltage/current/power REAL, mppt_state SMALLINT</td></tr>
+<tr><td>系统状态</td><td>11</td><td>work_state SMALLINT, fault_code BIGINT, alarm_code BIGINT, inverter_temperature REAL, mos_temperature REAL, ambient_temperature REAL, dc_bus_voltage REAL, runtime_hours BIGINT, fan_speed_percent SMALLINT, efficiency REAL, system_mode BIGINT</td></tr>
+<tr><td>能量累计</td><td>12</td><td>daily_pv_energy/total_pv_energy DOUBLE, daily_charge_energy/total_charge_energy DOUBLE, daily_discharge/total_discharge DOUBLE, daily_load/total_load DOUBLE, total_charge_capacity DOUBLE, total_discharge_capacity DOUBLE, total_charge_time BIGINT, total_discharge_time BIGINT</td></tr>
+<tr><td>元数据</td><td>~8</td><td>device_sn VARCHAR(50), protocol_version SMALLINT, sequence_no BIGINT, event_time TIMESTAMPTZ, received_at TIMESTAMPTZ, quality_flags INTEGER, topic VARCHAR(64), data_hash VARCHAR(64), raw_envelope JSONB</td></tr></table>
+<div class="hl"><strong>唯一约束:</strong> PRIMARY KEY (device_sn, event_time) + UNIQUE INDEX uq(device_sn, event_time, data_hash)<br>
+<strong>Chunk:</strong> 1 天 | <strong>压缩:</strong> 3 天后 (segmentby=device_sn) | <strong>保留:</strong> 90 天</div></div>
+
+<div class="card"><h4>宽表字段晋升策略</h4>
+<p>标准且稳定的高频查询、连续聚合和告警字段保留类型化列。实验性、型号专属或低频字段放入受控 <code>data.ext</code> 对象，使用厂商命名空间，并在 <code>telemetry_field_catalog</code> 登记；完整值由 <code>raw_envelope</code> 保存，不因每个扩展字段执行 <code>ALTER TABLE</code>。只有形成稳定查询/聚合需求后，才通过新迁移晋升为类型化列并同步协议映射。</p></div>
+
+<div class="card">
+<h4>旧架构 vs 新架构对比</h4>
+<table><tr><th>维度</th><th>旧 (JSONB 行式)</th><th>新 (列式宽表)</th></tr>
+<tr><td>表名</td><td>device_telemetry</td><td>device_telemetry_3min</td></tr>
+<tr><td>数据模型</td><td>1 个 JSONB data 列</td><td>65+ 独立类型化列</td></tr>
+<tr><td>查询</td><td>data-&gt;&gt;'key' 提取</td><td>直接列访问</td></tr>
+<tr><td>聚合</td><td>JSONB 抽取 + CAST</td><td>直接列级 AVG/MAX</td></tr>
+<tr><td>去重</td><td>无</td><td>SHA256 data_hash</td></tr>
+<tr><td>质量标记</td><td>无</td><td>quality_flags 位掩码</td></tr>
+<tr><td>兼容性</td><td colspan="2">v_device_telemetry_compat 视图桥接旧查询</td></tr></table></div>
+
+<h3 id="dd">3.2 衍生数据与维护链</h3>
+<div class="card">
+<table><tr><th>衍生表</th><th>维护方式</th><th>说明</th></tr>
+<tr><td><code>device_latest_state</code></td><td>触发器 <code>maintain_telemetry_v2_derived()</code></td><td>每设备一行最新快照，quality_flags&amp;8 (Backfill) 时跳过</td></tr>
+<tr><td><code>device_energy_day</code></td><td>触发器 UPSERT</td><td>日能量统计，取 GREATEST 保证单调递增</td></tr>
+<tr><td><code>device_energy_month</code></td><td>定时任务 <code>refresh_device_energy_month()</code></td><td>月能量统计，每日 2:10 CST 刷新，回溯 4 个月</td></tr>
+<tr><td><code>device_cell_samples</code></td><td>直接写入</td><td>电芯采样 Hypertable，voltages/temperatures JSONB 数组</td></tr>
+<tr><td><code>device_latest_cells</code></td><td>触发器 <code>maintain_latest_cells()</code></td><td>每设备最新电芯数据</td></tr>
+<tr><td><code>device_telemetry_hour</code></td><td>连续聚合 Materialized View</td><td>小时级聚合，10 分钟刷新，offset 2 天</td></tr></table>
+
+<h4>衍生数据维护链流程图</h4>
+<pre><code>device_telemetry_3min INSERT
+  ├─ 触发器 maintain_telemetry_v2_derived()
+  │    ├─ pg_advisory_xact_lock('telemetry:v1:' || device_sn)
+  │    ├─ device_latest_state UPSERT (quality_flags&amp;8==0 时)
+  │    └─ device_energy_day UPSERT
+  │              └─ 定时任务(每日 2:10 CST) → device_energy_month
+  └─ 连续聚合 → device_telemetry_hour (10min 刷新)
+
+device_cell_samples INSERT
+  └─ 触发器 maintain_latest_cells()
+       ├─ pg_advisory_xact_lock('cells:v1:' || device_sn)
+       └─ device_latest_cells UPSERT</code></pre>
+<div class="hl"><strong>迁移 047 锁隔离：</strong>同一数据流、同一设备仍严格串行；遥测、电芯和 <code>alarm-lifecycle:v1:{sn}:{source}:{code}</code> 告警生命周期使用不同命名空间，不再因 SN 相同而跨流互相阻塞。</div>
+</div>
+
+<h3 id="da">3.3 告警域</h3>
+<div class="card">
+<table><tr><th>表</th><th>类型</th><th>说明</th></tr>
+<tr><td><code>alarms</code></td><td>可变业务投影 / Hypertable</td><td>供告警列表、当前生命周期与确认/忽略等人工处理使用；生命周期字段可重建，人工处理字段需单独保全</td></tr>
+<tr><td><code>device_alarm_events</code></td><td>不可变事件日志 / 普通表</td><td>active/recovered 完整信封审计，SHA256 data_hash 与事件幂等键；业务代码只追加不更新</td></tr>
+<tr><td><code>device_alarm_snapshots</code></td><td>普通表</td><td>告警前后遥测快照 (before/after), FK &rarr; device_alarm_events</td></tr>
+<tr><td><code>alert_rules</code></td><td>普通表</td><td>JSONB conditions, cooldown_minutes 1~1440, severity 分级</td></tr></table>
+<div class="hl"><strong>兼容触发器</strong> <code>normalize_alarms_compat_columns()</code>: BEFORE INSERT/UPDATE 双向同步 alarm_level&harr;level, fault_message&harr;message, 校验 status IN (0,1,2) 和 event_state IN ('active','recovered')</div>
+<div class="hl"><strong>一致性边界：</strong><code>IngestAlarmV1</code> 在同一事务中以事件 INSERT 为幂等屏障，写快照并完成乱序判断后才更新 <code>alarms</code> 投影；任一步失败均回滚。生产路由不再编译或挂载旧 best-effort <code>DeviceAlarm</code>。</div>
+<h4>投影校验与重建计划</h4>
+<ol><li>按 <code>(device_sn, source, code, event_time, id)</code> 重放事件；同时间戳 recovered 为终态，乱序旧事件不倒退投影。</li><li>先生成影子投影，对比 active/recovered 与发生/恢复时间；差异为零才在维护窗口切换。</li><li><code>status/handled_at/handled_by</code> 不从设备事件猜测，必须从原投影及操作审计保留；证据不足则人工复核。</li><li>每日只读检查最新事件/投影状态、活动唯一性和快照（含明确 missing）完整性；事件错误使用补偿事件，不原地修改。</li></ol>
+</div>
+
+<h3 id="du">3.4 用户与权限域</h3>
+<div class="card">
+<table><tr><th>表/视图</th><th>说明</th></tr>
+<tr><td><code>users</code></td><td>5 级角色: 1(原厂) 2(运营) 3(安装商) 4(业主) 5(访客), parent_id 层级, 软删除 deleted_at</td></tr>
+<tr><td><code>role_permissions</code></td><td>RBAC 三元组 (role, resource, action, is_allowed), 种子数据覆盖 13+ 资源域</td></tr>
+<tr><td><code>v_user_device_access</code></td><td>视图：合并直接拥有 + 委托绑定的设备访问权限</td></tr>
+<tr><td><code>user_operation_logs</code></td><td>用户操作日志</td></tr>
+<tr><td><code>audit_logs</code></td><td>系统审计日志</td></tr></table></div>
+
+<h3 id="dv">3.5 设备与型号域</h3>
+<div class="card">
+<table><tr><th>表</th><th>说明</th></tr>
+<tr><td><code>device_models</code></td><td>JSONB data_fields + field_mapping + mqtt_topics, heartbeat_protocol_id FK, rated_power_w, 配置驱动零代码新型号接入</td></tr>
+<tr><td><code>device_model_fields</code></td><td>引用 telemetry_field_catalog, 排序/可见性/图表/告警规则配置</td></tr>
+<tr><td><code>device_model_commands</code></td><td>JSONB parameter_schema / response_schema, risk_level 1~3, timeout 1~3600s</td></tr>
+<tr><td><code>telemetry_field_catalog</code></td><td>全局遥测字段字典 (56+ 条目), field_type (float/integer/boolean/bitmask), allowed_aggregates</td></tr>
+<tr><td><code>device_protocol_versions</code></td><td>协议版本管理, schema_hash SHA256, status draft/released/retired</td></tr>
+<tr><td><code>device_protocol_fields</code></td><td>协议字段映射: group_code + field_index &rarr; field_key, wire_type, scale, min/max</td></tr>
+<tr><td><code>devices</code></td><td>4 固件版本 (ARM/ESP/DSP/BMS), 时区继承电站, station_id FK</td></tr>
+<tr><td><code>stations</code></td><td>经纬度, 装机容量 capacity, 峰谷电价, 时区 timezone</td></tr></table></div>
+
+<h3 id="do">3.6 OTA 升级域</h3>
+<div class="card">
+<table><tr><th>表</th><th>说明</th></tr>
+<tr><td><code>firmware_versions</code></td><td>UNIQUE(model, version), file_md5, changelog, is_force</td></tr>
+<tr><td><code>upgrade_packages</code></td><td>升级包主表, 4 种灰度类型</td></tr>
+<tr><td><code>upgrade_package_items</code></td><td>升级包明细: 目标设备/型号/用户</td></tr>
+<tr><td><code>upgrade_tasks</code></td><td>任务状态机: draft &rarr; pending &rarr; running &rarr; completed/failed</td></tr>
+<tr><td><code>device_upgrades</code></td><td>设备升级记录: 进度/结果/版本变更</td></tr></table></div>
+
+<h3 id="dp">3.7 并机拓扑与三相域</h3>
+<div class="card">
+<table><tr><th>表</th><th>类型</th><th>说明</th></tr>
+<tr><td><code>device_parallel_state</code></td><td>普通表 (PK station_id)</td><td>电站级并机拓扑: master_sn, mode(standalone/single_phase/three_phase), machines JSONB[], sync_state</td></tr>
+<tr><td><code>device_parallel_events</code></td><td>普通表</td><td>拓扑变更历史: topology_changed/master_switched/member_added/member_removed 等</td></tr>
+<tr><td><code>device_three_phase_3min</code></td><td>Hypertable (7天 chunk)</td><td>三相电遥测: voltage/current/active_power L1/L2/L3, line_voltage, frequency, unbalance; 3 天压缩, 90 天保留</td></tr></table>
+</div></section>
+
+<section id="ht"><h2 class="st">4. Hypertable 全景配置</h2>
+<table><tr><th>超表</th><th>分区列</th><th>Chunk 间隔</th><th>压缩策略</th><th>保留策略</th><th>segmentby</th></tr>
+<tr><td><code>device_telemetry_3min</code></td><td>event_time</td><td>1 天</td><td>3 天后</td><td>90 天</td><td>device_sn</td></tr>
+<tr><td><code>device_cell_samples</code></td><td>event_time</td><td>1 天</td><td>7 天后</td><td>90 天</td><td>device_sn</td></tr>
+<tr><td><code>device_three_phase_3min</code></td><td>event_time</td><td>7 天</td><td>3 天后</td><td>90 天</td><td>device_sn</td></tr>
+<tr><td><code>alarms</code></td><td>occurred_at</td><td>7 天</td><td>30 天后</td><td>1 年</td><td>device_sn</td></tr></table>
+<div class="hl">所有 Hypertable 均配置 <code>compress_orderby = 'event_time DESC'</code> (或 occurred_at DESC)，压缩后按 device_sn 分段，优化单设备时间范围查询。</div></section>
+
+<section id="rd"><h2 class="st">5. Redis 缓存策略</h2>
+<table><tr><th>Key 模式</th><th>用途</th><th>TTL / 策略</th></tr>
+<tr><td><code>device:heartbeat:{sn}</code></td><td>心跳存活检测</td><td>按上报频率刷新</td></tr>
+<tr><td><code>device:online_set</code></td><td>在线设备 SN 集合 (Set)</td><td>Hub 维护</td></tr>
+<tr><td><code>realtime:latest:{sn}</code></td><td>最新遥测缓存</td><td>写入更新</td></tr>
+<tr><td><code>device:cmd:queue:{sn}</code></td><td>离线命令队列 (List)</td><td>命令 300s 过期</td></tr>
+<tr><td><code>alert:dedup:{md5}</code></td><td>告警去重</td><td>60s</td></tr>
+<tr><td><code>rbac:*</code></td><td>RBAC 权限缓存</td><td>300s</td></tr></table>
+<div class="hl"><strong>Redis 配置:</strong> maxmemory 512mb | allkeys-lru 淘汰策略 | appendonly yes (AOF 持久化)</div></section>
+
+<section id="mg"><h2 class="st">6. 数据库迁移演进时间线</h2>
+<p style="margin-bottom:12px">基线版本 22，共 45 个迁移文件，分为 5 个阶段：</p>
+<table><tr><th>阶段</th><th>迁移</th><th>核心变更</th></tr>
+<tr><td rowspan="4"><strong>基础建表</strong></td><td>001</td><td>初始 schema: users, stations, devices, alarms, firmware_versions, system_configs</td></tr>
+<tr><td>002-005</td><td>性能索引, TimescaleDB 压缩, 能量列, 日数据 JSONB</td></tr>
+<tr><td>006-009</td><td>OTA 重构 (ota_records &rarr; device_upgrades), 升级包/任务表</td></tr>
+<tr><td>010</td><td>DSP/BMS 固件版本字段</td></tr>
+<tr><td rowspan="4"><strong>权限运营</strong></td><td>011-015</td><td>分组名, role_permissions, OTA 来源增强, 用户版本回填, 设备信息列</td></tr>
+<tr><td>016</td><td>全局时间戳修复 TIMESTAMP &rarr; TIMESTAMPTZ</td></tr>
+<tr><td>017-019</td><td>audit_logs, users.parent_id, 设备安装商字段</td></tr>
+<tr><td>020-022</td><td>RBAC 种子数据补充, 连续聚合 offset 扩展, 离线缓存表</td></tr>
+<tr style="background:#e8eaf6"><td rowspan="4"><strong>遥测 V2 革命</strong></td><td><strong>023</strong></td><td><strong>列式宽表 device_telemetry_3min (65+ 列), 型号注册 (device_model_fields/commands), telemetry_field_catalog (56+ 条目), device_protocol_versions/fields, device_latest_state, device_energy_day/month, 连续聚合 device_telemetry_hour</strong></td></tr>
+<tr style="background:#e8eaf6"><td><strong>024</strong></td><td><strong>旧模型数据迁移 (device_model_field &rarr; device_model_fields), 迁移报告, RBAC 扩展</strong></td></tr>
+<tr style="background:#e8eaf6"><td><strong>025</strong></td><td><strong>触发器下沉: maintain_telemetry_v2_derived() (latest_state + energy_day), maintain_latest_cells(), refresh_device_energy_month() 定时任务</strong></td></tr>
+<tr style="background:#e8eaf6"><td><strong>026</strong></td><td><strong>HTML V1 协议对齐: data_hash SHA256, raw_envelope JSONB, 扩展字段 (system_mode, charge_request_*), device_ingest_errors 表, 协议字段重映射</strong></td></tr>
+<tr><td rowspan="4"><strong>告警治理</strong></td><td>027</td><td>alarms 表增加 alarm_source + event_state (V1 生命周期)</td></tr>
+<tr><td>028-030</td><td>alert_rules, work_orders + events + attachments, tenant_quotas</td></tr>
+<tr><td>031-032</td><td>缺失 Schema 对象修复, 剩余时间戳 TIMESTAMPTZ 修复</td></tr>
+<tr><td>033</td><td>v_device_telemetry_compat 兼容视图 + v_device_latest 重建</td></tr>
+<tr><td rowspan="5"><strong>协议合规</strong></td><td>034</td><td>清理废弃表: DROP ota_records, device_model_protocol, device_model_field</td></tr>
+<tr><td>035</td><td>数据类型统一: work_state SMALLINT, fault_code BIGINT (仅决策记录)</td></tr>
+<tr><td>036</td><td>alarms 转 Hypertable: PK(id,occurred_at), 7 天 chunk, 30 天压缩, 1 年保留</td></tr>
+<tr><td>037-038</td><td>协议字段修复 (PV 7 字段), 新增 4 命令, 5 张协议表 (alarm_events/snapshots, parallel_state/events, three_phase_3min)</td></tr>
+<tr><td>039-045</td><td>重建协议表 (增强 CHECK 约束 + 触发器), 兼容列同步, 视图修复, RBAC 修复, 基线索引修复, 终端型号读取权限</td></tr></table></section>
+
+<section id="hl"><h2 class="st">7. 设计亮点与注意事项</h2>
+<div class="card">
+<h4>设计亮点</h4>
+<table><tr><th>#</th><th>亮点</th><th>说明</th></tr>
+<tr><td>1</td><td><strong>配置驱动型号注册</strong></td><td>device_models + device_protocol_fields + device_model_fields 全配置化，零代码新型号接入</td></tr>
+<tr><td>2</td><td><strong>触发器下沉衍生逻辑</strong></td><td>latest_state / energy_day 由 PostgreSQL 触发器维护，强一致性，应用层无需关心</td></tr>
+<tr><td>3</td><td><strong>多层数据质量守卫</strong></td><td>范围校验 (protocol min/max) + 时钟守卫 (&plusmn;5min) + NaN 过滤 + quality_flags 位掩码</td></tr>
+<tr><td>4</td><td><strong>SHA256 去重 + 有序 Kafka 消费</strong></td><td>data_hash 幂等写入 + runOrderedKafkaConsumer 严格保序，数据不乱序不重复</td></tr>
+<tr><td>5</td><td><strong>设备影子模型</strong></td><td>device_control_state desired/reported 双状态，IoT 标准模式，支持离线命令队列</td></tr>
+<tr><td>6</td><td><strong>连续聚合</strong></td><td>device_telemetry_hour Materialized View 自动维护小时级聚合，Dashboard 查询毫秒级</td></tr>
+<tr><td>7</td><td><strong>兼容视图桥接</strong></td><td>v_device_telemetry_compat 将宽表列重构为旧 JSONB 结构，读路径平滑迁移</td></tr>
+<tr><td>8</td><td><strong>告警事件溯源 + 业务投影</strong></td><td>同事务先追加 device_alarm_events，再更新 alarms；事件负责审计与重放，投影负责列表和人工处理</td></tr></table>
+</div>
+<div class="card">
+<h4>注意事项</h4>
+<table><tr><th>#</th><th>事项</th><th>说明</th></tr>
+<tr><td>1</td><td><strong>旧 device_telemetry 表保留</strong></td><td>过渡期只读，v_device_telemetry_compat 视图已桥接到新表</td></tr>
+<tr><td>2</td><td><strong>alarms 列别名兼容</strong></td><td>alarm_level/level、fault_message/message 通过触发器同步；这是单表列兼容，不是两张告警表的兼容双写</td></tr>
+<tr><td>3</td><td><strong>宽表 Schema 变更成本</strong></td><td>已采用“稳定核心列 + raw_envelope + 字段目录”晋升策略；厂商扩展不再要求每次 ALTER TABLE</td></tr>
+<tr><td>4</td><td><strong>同设备串行锁</strong></td><td>迁移 047 已按 telemetry/cells/alarm 生命周期划分命名空间，只保留同流同设备顺序；继续监控单设备异常突发造成的同流等待</td></tr>
+<tr><td>5</td><td><strong>alarms_old 备份表</strong></td><td>迁移 036 保留 alarms_old 用于回滚安全，生产环境确认后可清理</td></tr>
+<tr><td>6</td><td><strong>QualityBackfill 位</strong></td><td>quality_flags Bit3(0x08) 标记回填数据，触发器跳过 latest_state 更新</td></tr></table>
+</div></section>
+
+<footer>
+<p>CS-INV 光伏逆变器物联网监控系统 &mdash; 数据链路与数据库设计文档</p>
+<p>最后修改时间：2026-07-15 11:08:03（Asia/Shanghai） &nbsp;|&nbsp; 基于代码库迁移文件 001~047 及实际 Go 源码编写</p>
+</footer>
+</div>
+</body>
+</html>

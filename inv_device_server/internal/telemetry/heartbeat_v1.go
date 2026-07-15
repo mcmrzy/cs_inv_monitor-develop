@@ -29,6 +29,10 @@ type heartbeatData struct {
 	System  []json.RawMessage `json:"sys"`
 	Energy  []json.RawMessage `json:"eng"`
 	Cells   []json.RawMessage `json:"cells"`
+	// Extensions is the only forward-compatible extension point in V1. Core
+	// positional arrays remain exact; vendor fields are namespaced under ext and
+	// are retained by RawEnvelope without widening the telemetry table.
+	Extensions json.RawMessage `json:"ext,omitempty"`
 }
 
 func ParseHeartbeat(deviceSN string, payload []byte, cellCount, tempSensorCount int, receivedAt time.Time) (*Sample, error) {
@@ -49,6 +53,12 @@ func ParseHeartbeat(deviceSN string, payload []byte, cellCount, tempSensorCount 
 		return nil, fmt.Errorf("%w: missing device sn", ErrInvalidHeartbeat)
 	}
 	data := raw.Data
+	if len(data.Extensions) > 0 {
+		var extensions map[string]json.RawMessage
+		if err := json.Unmarshal(data.Extensions, &extensions); err != nil || extensions == nil {
+			return nil, fmt.Errorf("%w: ext must be a JSON object", ErrInvalidHeartbeat)
+		}
+	}
 	for name, pair := range map[string]struct{ got, want int }{
 		"ac": {len(data.AC), 8}, "bat": {len(data.Battery), 23}, "pv": {len(data.PV), 7},
 		"sys": {len(data.System), 11}, "eng": {len(data.Energy), 12}, "cells": {len(data.Cells), 2},

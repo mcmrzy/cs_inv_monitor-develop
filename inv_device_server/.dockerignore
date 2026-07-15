@@ -3,6 +3,7 @@
 *.db
 logs/
 .git/
+.gocache*/
 .idea/
 .vscode/
 *.md

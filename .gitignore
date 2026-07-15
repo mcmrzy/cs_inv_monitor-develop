@@ -114,3 +114,14 @@ inv-admin-frontend/public/images/royburi-solar-2666770.jpg
 inv-admin-frontend/public/images/solarimo-solar-4824562_1920.jpg
 inv-admin-frontend/public/images/login/login-bg-6.png
 inv-admin-frontend/public/images/login/login-bg-7.png
+
+.gocache-*/
+*.tsbuildinfo
+**/analyze_output*.txt
+inv_app/doc/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+!deploy/configs/

@@ -103,7 +103,36 @@ func (r *DeviceRepository) GetDeviceModelID(ctx context.Context, sn string) (int
 }
 
 func (r *DeviceRepository) GetLatestRealtimeData(ctx context.Context, sn string) (*model.DeviceRealtime, error) {
-	query := `SELECT data FROM v_device_telemetry_compat WHERE device_sn = $1 ORDER BY time DESC LIMIT 1`
+	query := `
+		SELECT jsonb_build_object(
+			'device_sn', s.device_sn,
+			'ac', jsonb_build_object(
+				'voltage', s.ac_voltage, 'current', s.ac_current,
+				'power', s.ac_active_power, 'frequency', s.ac_frequency,
+				'load_percent', s.load_percent),
+			'battery', jsonb_build_object(
+				'soc', s.battery_soc, 'soh', s.battery_soh,
+				'voltage', s.battery_voltage, 'current', s.battery_current),
+			'pv', jsonb_build_object(
+				'pv_voltage', s.pv1_voltage, 'pv_current', s.pv1_current,
+				'pv_power', s.pv_total_power, 'mppt_state', COALESCE(s.mppt_state::text, '')),
+			'sys_status', jsonb_build_object(
+				'state', COALESCE(s.work_state::text, ''), 'fault_code', s.fault_code,
+				'alarm_code', s.alarm_code, 'temp_inv', s.inverter_temperature,
+				'temp_mos', s.mos_temperature, 'efficiency', s.efficiency),
+			'energy', jsonb_build_object(
+				'daily_pv', s.daily_pv_energy, 'total_pv', s.total_pv_energy,
+				'daily_charge', s.daily_charge_energy, 'total_charge', s.total_charge_energy,
+				'daily_discharge', s.daily_discharge_energy, 'total_discharge', s.total_discharge_energy,
+				'daily_load', s.daily_load_energy, 'total_load', s.total_load_energy,
+				'runtime_hours', s.runtime_hours),
+			'cells', CASE WHEN c.device_sn IS NULL THEN NULL ELSE jsonb_build_object(
+				'cell_count', jsonb_array_length(c.voltages),
+				'voltages', c.voltages, 'temps', c.temperatures) END,
+			'updated_at', s.updated_at)
+		FROM device_latest_state s
+		LEFT JOIN device_latest_cells c ON c.device_sn=s.device_sn
+		WHERE s.device_sn=$1`
 	var rawJSON string
 	err := r.db.QueryRow(ctx, query, sn).Scan(&rawJSON)
 	if err != nil {

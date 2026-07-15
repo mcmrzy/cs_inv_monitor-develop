@@ -165,7 +165,7 @@ cs_inv_monitor/
 │
 ├── database/                         # 数据库
 │   ├── schema.sql                    # 初始化建表（20+ 表/视图/触发器）
-│   ├── migration_timescaledb.sql     # TimescaleDB 超表 + 压缩 + 连续聚合
+│   ├── migration_timescaledb.sql     # TimescaleDB 兼容引导（实际结构由编号迁移管理）
 │   └── migrations/                   # 增量迁移（001-011）
 │
 ├── deploy/                           # 部署与运维
@@ -213,9 +213,9 @@ for f in database/migrations/*.up.sql; do
   psql -U postgres -d inv_mqtt -f "$f"
 done
 
-# 可选：启用 TimescaleDB 时序优化
+# 启用 TimescaleDB 扩展；后续时序结构和策略由编号迁移统一管理
 psql -U postgres -d inv_mqtt -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
-psql -U postgres -d inv_mqtt -f database/migration_timescaledb.sql
+# migration_timescaledb.sql 仅作为旧环境兼容引导，不再作为当前结构的独立迁移入口
 ```
 
 ### 2. 后端启动
@@ -491,7 +491,7 @@ INV-MQTT/
 │
 ├── database/                         # 数据库脚本
 │   ├── schema.sql                    # 初始化建表（20+ 表、视图、触发器、清理函数）
-│   ├── migration_timescaledb.sql     # TimescaleDB 超表 + 压缩 + 连续聚合
+│   ├── migration_timescaledb.sql     # TimescaleDB 兼容引导（实际结构由编号迁移管理）
 │   └── migration_*.sql               # 增量迁移脚本
 │
 ├── docs/                             # 文档
@@ -544,9 +544,9 @@ INV-MQTT/
 psql -U postgres -c "CREATE DATABASE inv_mqtt;"
 psql -U postgres -d inv_mqtt -f database/schema.sql
 
-# 可选：启用 TimescaleDB 时序优化（需先安装 timescaledb 扩展）
+# 启用 TimescaleDB 扩展；后续时序结构和策略由编号迁移统一管理
 psql -U postgres -d inv_mqtt -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
-psql -U postgres -d inv_mqtt -f database/migration_timescaledb.sql
+# migration_timescaledb.sql 仅作为旧环境兼容引导，不再作为当前结构的独立迁移入口
 ```
 
 ### 2. 配置 EMQX JWT 认证
@@ -761,3 +761,7 @@ OTA（Over-The-Air）支持通过管理后台远程升级设备固件，支持 A
 - [EMQX Rule Engine SQL](docs/emqx_rule_engine_sql.md) — 规则引擎 SQL 参考
 - [架构升级任务清单](docs/架构升级任务清单.md) — 架构升级执行手册
 - [架构流程文档](光伏逆变器物联网监控系统 — 流程文档.md) — 系统架构与数据流程说明
+
+---
+
+最后修改时间：2026-07-14 20:22:00（Asia/Shanghai）

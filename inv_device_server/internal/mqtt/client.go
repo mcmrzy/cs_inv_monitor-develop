@@ -397,12 +397,11 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	c.cm = cm
-
-	if err = cm.AwaitConnection(ctx); err != nil {
-		return fmt.Errorf("await MQTT connection: %w", err)
-	}
-
+	// autopaho owns the reconnect loop. Do not block process startup waiting for
+	// the broker: the HTTP liveness/readiness endpoint must remain available and
+	// report MQTT as not ready while reconnection continues.
 	go c.handleCommands(ctx)
+	logger.Info("MQTT connection manager started; initial connection is asynchronous")
 	return nil
 }
 

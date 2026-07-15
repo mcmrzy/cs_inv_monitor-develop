@@ -63,10 +63,16 @@ func (c *PermChecker) CheckPermission(userID int64, resource string, action stri
 			continue
 		}
 
-		for _, p := range perms {
-			if p.Resource == resource && p.Action == action {
-				return true
-			}
+		if includesPermission(perms, resource, action) {
+			return true
+		}
+
+		// An additive migration can make a shared Redis entry incomplete. Refresh
+		// the authoritative table before denying so a pre-migration cache never
+		// causes a user to remain locked out for the cache TTL.
+		perms, err = c.refreshRolePerms(ctx, roleID)
+		if err == nil && includesPermission(perms, resource, action) {
+			return true
 		}
 	}
 
@@ -114,13 +120,6 @@ func (c *PermChecker) loadUserRoles(ctx context.Context, userID int64) ([]int64,
 func (c *PermChecker) loadRolePerms(ctx context.Context, roleID int64) ([]repository.PermissionEntry, error) {
 	cacheKey := prefix + fmt.Sprintf("%d", roleID)
 
-	c.mu.RLock()
-	if entry, ok := c.memCache[cacheKey]; ok && time.Since(entry.loadedAt) < c.cacheTTL {
-		c.mu.RUnlock()
-		return entry.perms, nil
-	}
-	c.mu.RUnlock()
-
 	if c.rdb != nil {
 		cached, err := c.rdb.Get(ctx, cacheKey).Result()
 		if err == nil {
@@ -132,7 +131,23 @@ func (c *PermChecker) loadRolePerms(ctx context.Context, roleID int64) ([]reposi
 				return perms, nil
 			}
 		}
+		// Redis deletion is the invalidation signal shared with the admin and
+		// gateway processes. Never fall back to stale process memory after a miss.
+		return c.refreshRolePerms(ctx, roleID)
 	}
+
+	c.mu.RLock()
+	if entry, ok := c.memCache[cacheKey]; ok && time.Since(entry.loadedAt) < c.cacheTTL {
+		c.mu.RUnlock()
+		return entry.perms, nil
+	}
+	c.mu.RUnlock()
+
+	return c.refreshRolePerms(ctx, roleID)
+}
+
+func (c *PermChecker) refreshRolePerms(ctx context.Context, roleID int64) ([]repository.PermissionEntry, error) {
+	cacheKey := prefix + fmt.Sprintf("%d", roleID)
 
 	perms, err := c.userRepo.GetRolePermissions(ctx, roleID)
 	if err != nil {
@@ -149,6 +164,15 @@ func (c *PermChecker) loadRolePerms(ctx context.Context, roleID int64) ([]reposi
 	c.mu.Unlock()
 
 	return perms, nil
+}
+
+func includesPermission(perms []repository.PermissionEntry, resource, action string) bool {
+	for _, p := range perms {
+		if p.Resource == resource && p.Action == action {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *PermChecker) InvalidateUser(userID int64) {

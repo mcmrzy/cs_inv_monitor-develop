@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -20,21 +21,21 @@ import (
 )
 
 type AlertConsumer struct {
-	consumer    *kafka.Reader
-	rdb         *redis.Client
-	apiServer   string
-	internalKey string
-	httpClient  *http.Client
-	workerCount int
-	msgChan     chan kafka.Message
+	consumer     kafkaMessageReader
+	rdb          *redis.Client
+	ingestErrors ingestErrorStore
+	apiServer    string
+	internalKey  string
+	httpClient   *http.Client
 }
 
 type RawAlertMessage struct {
-	SN         string      `json:"sn"`
-	Source     string      `json:"source"`
-	MsgType    string      `json:"msg_type"`
-	Payload    interface{} `json:"payload"`
-	ReceivedAt string      `json:"received_at"`
+	SN         string          `json:"sn"`
+	Source     string          `json:"source"`
+	MsgType    string          `json:"msg_type"`
+	MQTTTopic  string          `json:"mqtt_topic"`
+	Payload    json.RawMessage `json:"payload"`
+	ReceivedAt string          `json:"received_at"`
 }
 
 // 新告警格式 (MQTT payload)
@@ -47,7 +48,7 @@ type RawAlarmPayload struct {
 	Timestamp int64                    `json:"timestamp"`
 }
 
-func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis.Client, apiServer string, internalKey string) *AlertConsumer {
+func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis.Client, ingestErrors ingestErrorStore, apiServer string, internalKey string) *AlertConsumer {
 	return &AlertConsumer{
 		consumer: kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  brokers,
@@ -56,9 +57,10 @@ func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis
 			MinBytes: 10e3,
 			MaxBytes: 10e6,
 		}),
-		rdb:         rdb,
-		apiServer:   strings.TrimRight(apiServer, "/"),
-		internalKey: internalKey,
+		rdb:          rdb,
+		ingestErrors: ingestErrors,
+		apiServer:    strings.TrimRight(apiServer, "/"),
+		internalKey:  internalKey,
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 			Transport: &http.Transport{
@@ -67,134 +69,119 @@ func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
-		workerCount: 5,
-		msgChan:     make(chan kafka.Message, 2000),
 	}
 }
 
 func (a *AlertConsumer) Start(ctx context.Context) {
-	for i := 0; i < a.workerCount; i++ {
-		go a.worker(ctx, i)
-	}
-	go a.consume(ctx)
+	go runOrderedKafkaConsumer(ctx, "alert-consumer", a.consumer, a.processAlert, 250*time.Millisecond)
 }
 
-func (a *AlertConsumer) worker(ctx context.Context, id int) {
-	logger.Info("Alert consumer worker started", zap.Int("worker_id", id))
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info("Alert consumer worker stopped", zap.Int("worker_id", id))
-			return
-		case m := <-a.msgChan:
-			a.processAlert(ctx, m)
+func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) error {
+	err := a.deliverAlert(ctx, m)
+	if err == nil {
+		return nil
+	}
+	code := ""
+	cause := err
+	if permanent, ok := asPermanentMessage(err); ok {
+		code, cause = permanent.code, permanent.err
+	} else {
+		var httpErr *downstreamHTTPError
+		if errors.As(err, &httpErr) && httpErr.permanent() {
+			code, cause = "DOWNSTREAM_HTTP_4XX", httpErr
 		}
 	}
-}
-
-func (a *AlertConsumer) consume(ctx context.Context) {
-	logger.Info("Alert consumer started", zap.Int("workers", a.workerCount))
-
-	for {
-		select {
-		case <-ctx.Done():
-			a.consumer.Close()
-			logger.Info("Alert consumer stopped")
-			return
-		default:
-			m, err := a.consumer.FetchMessage(ctx)
-			if err != nil {
-				logger.Error("Kafka fetch alert error", zap.Error(err))
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-
-			select {
-			case a.msgChan <- m:
-			case <-ctx.Done():
-				a.consumer.Close()
-				logger.Info("Alert consumer stopped")
-				return
-			}
-		}
+	if code == "" {
+		return err
 	}
+	var metadata struct {
+		SN string `json:"sn"`
+	}
+	_ = json.Unmarshal(m.Value, &metadata)
+	if a.ingestErrors == nil {
+		return fmt.Errorf("permanent alert error cannot be audited (%s): %w", code, cause)
+	}
+	if saveErr := a.ingestErrors.SaveIngestError(ctx, metadata.SN, m.Topic, m.Value, code, cause.Error()); saveErr != nil {
+		return fmt.Errorf("save permanent alert ingest error %s: %w", code, saveErr)
+	}
+	logger.Warn("Permanent alert message isolated in device_ingest_errors",
+		zap.String("sn", metadata.SN), zap.String("topic", m.Topic), zap.String("error_code", code), zap.Error(cause))
+	return nil
 }
 
-func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
-	// 消息去重：使用消息内容的 hash 作为唯一标识
+func (a *AlertConsumer) deliverAlert(ctx context.Context, m kafka.Message) error {
+	hash := md5.Sum(m.Value)
+	msgKey := fmt.Sprintf("alert:dedup:%x", hash)
 	if a.rdb != nil {
-		// 计算消息内容的 MD5 hash
-		hash := md5.Sum(m.Value)
-		msgKey := fmt.Sprintf("alert:dedup:%x", hash)
-		exists, _ := a.rdb.Exists(ctx, msgKey).Result()
-		if exists > 0 {
-			logger.Info("Alert message already processed, skipping",
+		exists, err := a.rdb.Exists(ctx, msgKey).Result()
+		if err != nil {
+			logger.Warn("Alert dedup lookup failed; proceeding with idempotent delivery", zap.Error(err))
+		} else if exists > 0 {
+			logger.Info("Alert message already delivered, skipping duplicate",
 				zap.String("topic", m.Topic),
 				zap.Int("partition", m.Partition),
 				zap.Int64("offset", m.Offset))
-			if err := a.consumer.CommitMessages(ctx, m); err != nil {
-				logger.Warn("Failed to commit alert message", zap.Error(err))
-			}
-			return
+			return nil
 		}
-		// 标记消息已处理，TTL 60秒
-		a.rdb.Set(ctx, msgKey, "1", 60*time.Second)
 	}
 
 	var raw RawAlertMessage
 	if err := json.Unmarshal(m.Value, &raw); err != nil {
-		logger.Error("Failed to unmarshal alert", zap.Error(err), zap.String("raw", string(m.Value)))
-		if err := a.consumer.CommitMessages(ctx, m); err != nil {
-			logger.Warn("Failed to commit alert message", zap.Error(err))
-		}
-		return
+		return permanentMessage("INVALID_ALERT_BRIDGE_JSON", fmt.Errorf("decode alert bridge message: %w", err))
 	}
 
-	if raw.SN == "" {
-		if err := a.consumer.CommitMessages(ctx, m); err != nil {
-			logger.Warn("Failed to commit alert message", zap.Error(err))
-		}
-		return
+	if strings.TrimSpace(raw.SN) == "" {
+		return permanentMessage("MISSING_DEVICE_SN", fmt.Errorf("alert bridge message is missing device sn"))
 	}
+	receivedAt := timezone.NowUTC()
+	if parsed, err := time.Parse(time.RFC3339Nano, raw.ReceivedAt); err == nil {
+		receivedAt = parsed.UTC()
+	} else if !m.Time.IsZero() {
+		receivedAt = m.Time.UTC()
+	}
+	legacyTimestamp := receivedAt.Unix()
 
-	// 将 payload 统一转为 map
+	// 将 payload 统一转为 map，并保留 V1 原始信封供 API 审计存储。
+	payloadBytes := bytes.TrimSpace(raw.Payload)
+	if len(payloadBytes) > 0 && payloadBytes[0] == '"' {
+		var encoded string
+		if err := json.Unmarshal(payloadBytes, &encoded); err != nil {
+			return permanentMessage("INVALID_ALARM_PAYLOAD", fmt.Errorf("decode string alarm payload: %w", err))
+		}
+		payloadBytes = []byte(encoded)
+	}
 	var payloadMap map[string]interface{}
-	switch v := raw.Payload.(type) {
-	case map[string]interface{}:
-		payloadMap = v
-	case string:
-		json.Unmarshal([]byte(v), &payloadMap)
+	if len(payloadBytes) == 0 || bytes.Equal(payloadBytes, []byte("null")) {
+		// Legacy devices use an empty payload to report recovery.
+	} else if err := json.Unmarshal(payloadBytes, &payloadMap); err != nil {
+		return permanentMessage("INVALID_ALARM_PAYLOAD", fmt.Errorf("decode alarm payload object: %w", err))
+	} else if payloadMap == nil {
+		return permanentMessage("INVALID_ALARM_PAYLOAD", fmt.Errorf("alarm payload must be a JSON object"))
 	}
 
 	// Final V1 alarm envelope: {t,v,data:{source,code,level,state}}.
-	if alarm, matched, err := parseAlarmV1(raw.SN, payloadMap); matched {
+	if _, matched, err := parseAlarmV1(raw.SN, payloadMap); matched {
 		if err != nil {
-			logger.Error("Invalid V1 alarm payload", zap.String("sn", raw.SN), zap.Error(err))
-		} else if err := a.postInternalAlarm(alarm); err != nil {
-			logger.Error("Failed to post V1 alarm", zap.String("sn", raw.SN), zap.Error(err))
+			return permanentMessage("INVALID_ALARM_V1", fmt.Errorf("invalid V1 alarm payload: %w", err))
 		}
-		if err := a.consumer.CommitMessages(ctx, m); err != nil {
-			logger.Warn("Failed to commit alert message", zap.Error(err))
+		if err := a.postInternalAlarmEnvelope(raw, payloadBytes); err != nil {
+			return fmt.Errorf("post V1 alarm: %w", err)
 		}
-		return
+		a.markAlertProcessed(ctx, msgKey)
+		return nil
 	}
 
 	// 空 payload 或空对象 → 告警清除
 	if len(payloadMap) == 0 {
-		// 防抖：检查是否刚刚发送过恢复通知（10秒内不重复）
+		clearKey := fmt.Sprintf("alarm:clear:%s", raw.SN)
 		if a.rdb != nil {
-			clearKey := fmt.Sprintf("alarm:clear:%s", raw.SN)
-			exists, _ := a.rdb.Exists(ctx, clearKey).Result()
-			if exists > 0 {
+			exists, err := a.rdb.Exists(ctx, clearKey).Result()
+			if err == nil && exists > 0 {
 				logger.Info("Alarm clear already sent recently, skipping", zap.String("sn", raw.SN))
-				if err := a.consumer.CommitMessages(ctx, m); err != nil {
-					logger.Warn("Failed to commit alert message", zap.Error(err))
-				}
-				return
+				a.markAlertProcessed(ctx, msgKey)
+				return nil
 			}
-			a.rdb.Set(ctx, clearKey, "1", 10*time.Second)
 		}
-		logger.Info("Device alarm cleared (empty payload)", zap.String("sn", raw.SN))
 		alarm := &model.AlarmData{
 			SN:         raw.SN,
 			Code:       0,
@@ -202,15 +189,19 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 			Message:    "设备故障恢复",
 			Count:      0,
 			Alarms:     nil,
-			ReceivedAt: timezone.NowUTC(),
+			Timestamp:  legacyTimestamp,
+			ReceivedAt: receivedAt,
 		}
 		if err := a.postInternalAlarm(alarm); err != nil {
-			logger.Error("Failed to post alarm clear", zap.String("sn", raw.SN), zap.Error(err))
+			return fmt.Errorf("post empty-payload alarm clear: %w", err)
 		}
-		if err := a.consumer.CommitMessages(ctx, m); err != nil {
-			logger.Warn("Failed to commit alert message", zap.Error(err))
+		if a.rdb != nil {
+			if err := a.rdb.Set(ctx, clearKey, "1", 10*time.Second).Err(); err != nil {
+				logger.Warn("Failed to mark alarm clear dedup after delivery", zap.Error(err))
+			}
 		}
-		return
+		a.markAlertProcessed(ctx, msgKey)
+		return nil
 	}
 
 	// 解析新告警格式
@@ -224,25 +215,28 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 			dataMap["timestamp"] = ts
 		}
 	}
-	dataJSON, _ := json.Marshal(dataMap)
-	json.Unmarshal(dataJSON, &alarmPayload)
+	dataJSON, err := json.Marshal(dataMap)
+	if err != nil {
+		return permanentMessage("INVALID_LEGACY_ALARM", fmt.Errorf("encode legacy alarm payload: %w", err))
+	}
+	if err := json.Unmarshal(dataJSON, &alarmPayload); err != nil {
+		return permanentMessage("INVALID_LEGACY_ALARM", fmt.Errorf("decode legacy alarm payload: %w", err))
+	}
+	if alarmPayload.Timestamp <= 0 {
+		alarmPayload.Timestamp = legacyTimestamp
+	}
 
 	// code=0 且 level="normal" → 告警清除
 	if alarmPayload.Code == 0 && alarmPayload.Level == "normal" {
-		// 防抖：检查是否刚刚发送过恢复通知（10秒内不重复）
+		clearKey := fmt.Sprintf("alarm:clear:%s", raw.SN)
 		if a.rdb != nil {
-			clearKey := fmt.Sprintf("alarm:clear:%s", raw.SN)
-			exists, _ := a.rdb.Exists(ctx, clearKey).Result()
-			if exists > 0 {
+			exists, lookupErr := a.rdb.Exists(ctx, clearKey).Result()
+			if lookupErr == nil && exists > 0 {
 				logger.Info("Alarm clear already sent recently, skipping", zap.String("sn", raw.SN))
-				if err := a.consumer.CommitMessages(ctx, m); err != nil {
-					logger.Warn("Failed to commit alert message", zap.Error(err))
-				}
-				return
+				a.markAlertProcessed(ctx, msgKey)
+				return nil
 			}
-			a.rdb.Set(ctx, clearKey, "1", 10*time.Second)
 		}
-		logger.Info("Device alarm cleared (code=0)", zap.String("sn", raw.SN))
 		alarm := &model.AlarmData{
 			SN:         raw.SN,
 			Code:       0,
@@ -251,15 +245,18 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 			Count:      0,
 			Alarms:     nil,
 			Timestamp:  alarmPayload.Timestamp,
-			ReceivedAt: timezone.NowUTC(),
+			ReceivedAt: receivedAt,
 		}
 		if err := a.postInternalAlarm(alarm); err != nil {
-			logger.Error("Failed to post alarm clear", zap.String("sn", raw.SN), zap.Error(err))
+			return fmt.Errorf("post code-zero alarm clear: %w", err)
 		}
-		if err := a.consumer.CommitMessages(ctx, m); err != nil {
-			logger.Warn("Failed to commit alert message", zap.Error(err))
+		if a.rdb != nil {
+			if err := a.rdb.Set(ctx, clearKey, "1", 10*time.Second).Err(); err != nil {
+				logger.Warn("Failed to mark alarm clear dedup after delivery", zap.Error(err))
+			}
 		}
-		return
+		a.markAlertProcessed(ctx, msgKey)
+		return nil
 	}
 
 	// 有 alarms 数组时，逐个上报（过滤掉 code=0 的清除条目，避免与故障告警在同一消息中同时发送导致乱序）
@@ -298,20 +295,16 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 				Count:      alarmPayload.Count,
 				Alarms:     nil,
 				Timestamp:  alarmPayload.Timestamp,
-				ReceivedAt: timezone.NowUTC(),
+				ReceivedAt: receivedAt,
 			}
 			if err := a.postInternalAlarm(alarm); err != nil {
-				logger.Error("Failed to post alarm item",
-					zap.String("sn", raw.SN),
-					zap.Int("code", code),
-					zap.Error(err))
-			} else {
-				logger.Info("Alarm item recorded",
-					zap.String("sn", raw.SN),
-					zap.Int("code", code),
-					zap.String("level", level),
-					zap.String("message", message))
+				return fmt.Errorf("post alarm item code %d: %w", code, err)
 			}
+			logger.Info("Alarm item recorded",
+				zap.String("sn", raw.SN),
+				zap.Int("code", code),
+				zap.String("level", level),
+				zap.String("message", message))
 		}
 	} else {
 		// 没有 alarms 数组，使用顶层字段
@@ -323,24 +316,28 @@ func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) {
 			Count:      alarmPayload.Count,
 			Alarms:     nil,
 			Timestamp:  alarmPayload.Timestamp,
-			ReceivedAt: timezone.NowUTC(),
+			ReceivedAt: receivedAt,
 		}
 		if err := a.postInternalAlarm(alarm); err != nil {
-			logger.Error("Failed to post alarm",
-				zap.String("sn", raw.SN),
-				zap.Int("code", alarmPayload.Code),
-				zap.Error(err))
-		} else {
-			logger.Info("Alarm recorded",
-				zap.String("sn", raw.SN),
-				zap.Int("code", alarmPayload.Code),
-				zap.String("level", alarmPayload.Level),
-				zap.String("message", alarmPayload.Message))
+			return fmt.Errorf("post alarm code %d: %w", alarmPayload.Code, err)
 		}
+		logger.Info("Alarm recorded",
+			zap.String("sn", raw.SN),
+			zap.Int("code", alarmPayload.Code),
+			zap.String("level", alarmPayload.Level),
+			zap.String("message", alarmPayload.Message))
 	}
 
-	if err := a.consumer.CommitMessages(ctx, m); err != nil {
-		logger.Warn("Failed to commit alert message", zap.Error(err))
+	a.markAlertProcessed(ctx, msgKey)
+	return nil
+}
+
+func (a *AlertConsumer) markAlertProcessed(ctx context.Context, key string) {
+	if a.rdb == nil {
+		return
+	}
+	if err := a.rdb.Set(ctx, key, "1", 60*time.Second).Err(); err != nil {
+		logger.Warn("Failed to mark alert dedup after successful delivery", zap.Error(err))
 	}
 }
 
@@ -374,12 +371,66 @@ func parseAlarmV1(sn string, payload map[string]interface{}) (*model.AlarmData, 
 	}, true, nil
 }
 
+type internalAlarmEnvelopeRequest struct {
+	SN         string          `json:"sn"`
+	Topic      string          `json:"topic"`
+	ReceivedAt time.Time       `json:"received_at"`
+	Envelope   json.RawMessage `json:"envelope"`
+}
+
+func (a *AlertConsumer) postInternalAlarmEnvelope(raw RawAlertMessage, envelope json.RawMessage) error {
+	receivedAt := timezone.NowUTC()
+	if parsed, err := time.Parse(time.RFC3339Nano, raw.ReceivedAt); err == nil {
+		receivedAt = parsed.UTC()
+	}
+	return a.postInternalAlarmRequest(internalAlarmEnvelopeRequest{
+		SN: raw.SN, Topic: "alarm", ReceivedAt: receivedAt, Envelope: envelope,
+	})
+}
+
 func (a *AlertConsumer) postInternalAlarm(alarm *model.AlarmData) error {
+	timestamp := alarm.Timestamp
+	if timestamp <= 0 {
+		timestamp = timezone.NowUTC().Unix()
+	}
+	state := 1
+	if alarm.State != nil {
+		state = *alarm.State
+	} else if alarm.Level == "normal" || alarm.Code == 0 {
+		state = 0
+	}
+	level := 1
+	if alarm.Level == "fault" || alarm.Level == "critical" {
+		level = 2
+	}
+	envelope, err := json.Marshal(map[string]interface{}{
+		"t": timestamp,
+		"v": 1,
+		"data": map[string]interface{}{
+			"source": alarm.Source,
+			"code":   alarm.Code,
+			"level":  level,
+			"state":  state,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("marshal legacy alarm envelope: %w", err)
+	}
+	receivedAt := alarm.ReceivedAt
+	if receivedAt.IsZero() {
+		receivedAt = timezone.NowUTC()
+	}
+	return a.postInternalAlarmRequest(internalAlarmEnvelopeRequest{
+		SN: alarm.SN, Topic: "alarm", ReceivedAt: receivedAt.UTC(), Envelope: envelope,
+	})
+}
+
+func (a *AlertConsumer) postInternalAlarmRequest(payload internalAlarmEnvelopeRequest) error {
 	if a.apiServer == "" {
-		return nil
+		return fmt.Errorf("API server URL is empty")
 	}
 
-	body, err := json.Marshal(alarm)
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
@@ -400,7 +451,7 @@ func (a *AlertConsumer) postInternalAlarm(alarm *model.AlarmData) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		return fmt.Errorf("internal api status %d", resp.StatusCode)
+		return &downstreamHTTPError{status: resp.StatusCode}
 	}
 
 	return nil

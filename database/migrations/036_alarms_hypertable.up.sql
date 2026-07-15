@@ -201,6 +201,12 @@ DROP INDEX IF EXISTS alarms_new_user_id_idx;
 DROP INDEX IF EXISTS alarms_new_status_idx;
 DROP INDEX IF EXISTS alarms_new_occurred_at_idx;
 DROP INDEX IF EXISTS alarms_new_device_sn_alarm_source_fault_code_idx;
+-- Baseline schema may already contain migration-002's composite indexes.
+-- LIKE INCLUDING ALL copies them under alarms_new_* names; remove those
+-- copies so migration 039/044 can restore the canonical names without
+-- retaining semantically duplicate indexes.
+DROP INDEX IF EXISTS alarms_new_device_sn_created_at_idx;
+DROP INDEX IF EXISTS alarms_new_status_created_at_idx;
 
 -- Fix sequence ownership: alarms_id_seq was owned by alarms_old.id
 -- Reassign to alarms.id so the new table controls the sequence

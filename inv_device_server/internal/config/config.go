@@ -199,8 +199,8 @@ func (c *Config) Validate() error {
 	}
 	if c.MQTT.TLSInsecure {
 		pin, err := hex.DecodeString(strings.TrimSpace(c.MQTT.CertSHA256))
-		if err != nil || len(pin) != 32 {
-			missing = append(missing, "mqtt.cert_sha256 (env: MQTT_CERT_SHA256, a 64-character SHA-256 pin is required when tls_insecure=true)")
+		if err != nil || len(pin) != 32 || allZero(pin) || isPlaceholder(c.MQTT.CertSHA256) {
+			missing = append(missing, "mqtt.cert_sha256 (env: MQTT_CERT_SHA256, a non-placeholder 64-character SHA-256 pin is required when tls_insecure=true)")
 		}
 	}
 	if len(missing) > 0 {
@@ -208,6 +208,18 @@ func (c *Config) Validate() error {
 			strings.Join(missing, "\n  - "))
 	}
 	return nil
+}
+
+func allZero(value []byte) bool {
+	if len(value) == 0 {
+		return true
+	}
+	for _, b := range value {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func invalidRequiredSecret(value string) bool {

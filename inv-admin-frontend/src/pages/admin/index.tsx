@@ -361,7 +361,14 @@ const ALL_PERMISSION_DEFS = [
   { resource: 'audit', action: 'view', label: 'admin.perm.audit.view' },
   { resource: 'admin', action: 'view', label: 'admin.perm.admin.view' }, { resource: 'admin', action: 'manage', label: 'admin.perm.admin.manage' },
 ]
-const ROLE_TABS = [{ key: '0', label: 'admin.superAdminRole' }, { key: '1', label: 'admin.agentRole' }, { key: '2', label: 'admin.installerRole' }, { key: '3', label: 'admin.endUserRole' }]
+const ROLE_TABS = [
+  { key: '0', label: 'admin.superAdminRole' },
+  { key: '1', label: 'admin.adminRole' },
+  { key: '2', label: 'admin.operatorRole' },
+  { key: '3', label: 'admin.dealerRole' },
+  { key: '4', label: 'admin.installerRole' },
+  { key: '5', label: 'admin.endUserRole' },
+]
 
 const PermissionTab: React.FC = () => {
   const { t } = useTranslation()
@@ -430,7 +437,7 @@ const PermissionTab: React.FC = () => {
           <Col>
             <Space>
               <span style={{ fontWeight: 500 }}>{t('admin.selectRole')}：</span>
-              <Select value={selectedRole} onChange={(val) => {
+              <Select value={selectedRole} virtual={false} onChange={(val) => {
                 if (hasChanged()) Modal.confirm({ title: t('admin.unsavedChanges'), content: t('admin.unsavedHint'), onOk: () => setSelectedRole(val) })
                 else setSelectedRole(val)
               }} style={{ width: 160 }} options={ROLE_TABS.map((r) => ({ label: t(r.label), value: r.key }))} />

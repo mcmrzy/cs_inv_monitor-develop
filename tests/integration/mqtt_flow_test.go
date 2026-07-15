@@ -341,7 +341,7 @@ func TestTelemetryEndToEnd(t *testing.T) {
 	defer cancel()
 
 	var count int
-	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM device_telemetry WHERE device_sn = $1`, testSN).Scan(&count)
+	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM device_telemetry_3min WHERE device_sn = $1`, testSN).Scan(&count)
 	if err != nil {
 		t.Logf("DB query failed (device server may not be running): %v", err)
 	} else if count > 0 {

@@ -39,14 +39,14 @@ const useAuthStore = create<AuthState>()(
 
       hasPermission: (perm: string): boolean => {
         const state = get()
-        if ((state.user?.role ?? 99) <= 1) return true  // super_admin + admin
+        if (state.user?.role === 0) return true  // only super_admin bypasses permission checks
         if (!Array.isArray(state.permissions)) return false
         return state.permissions.includes(perm)
       },
 
       hasAnyPermission: (...perms: string[]): boolean => {
         const state = get()
-        if ((state.user?.role ?? 99) <= 1) return true  // super_admin + admin
+        if (state.user?.role === 0) return true  // only super_admin bypasses permission checks
         if (!Array.isArray(state.permissions)) return false
         return perms.some(p => state.permissions.includes(p))
       },

@@ -553,6 +553,8 @@ class DeviceInfo {
 
 class InverterRealtime {
   final String deviceSN;
+  final int? protocolVersion;
+  final int? qualityFlags;
   final ACData? ac;
   final BatteryData? battery;
   final PVData? pv;
@@ -567,6 +569,8 @@ class InverterRealtime {
 
   const InverterRealtime({
     required this.deviceSN,
+    this.protocolVersion,
+    this.qualityFlags,
     this.ac,
     this.battery,
     this.pv,
@@ -587,6 +591,8 @@ class InverterRealtime {
 
     return InverterRealtime(
       deviceSN: json['device_sn'] as String? ?? '',
+      protocolVersion: (json['protocol_version'] as num?)?.toInt(),
+      qualityFlags: (json['quality_flags'] as num?)?.toInt(),
       ac: json['ac'] != null
           ? ACData.fromJson(json['ac'] as Map<String, dynamic>)
           : null,
@@ -622,6 +628,8 @@ class InverterRealtime {
 
   Map<String, dynamic> toJson() => {
         'device_sn': deviceSN,
+        'protocol_version': protocolVersion,
+        'quality_flags': qualityFlags,
         'ac': ac?.toJson(),
         'battery': battery?.toJson(),
         'pv': pv?.toJson(),

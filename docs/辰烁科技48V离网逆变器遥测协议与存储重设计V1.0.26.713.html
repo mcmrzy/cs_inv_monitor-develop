@@ -53,7 +53,7 @@
       <div class="grid">
         <div class="card"><b>单一实时快照</b><span>整机实时数据统一由 <code>heartbeat</code> 上报，每 180 秒一次。</span></div>
         <div class="card"><b>单一上行信封</b><span>所有设备上行消息统一使用外层 <code>t / v / data</code> 结构。</span></div>
-        <div class="card"><b>单一字段版本</b><span>Heartbeat 固定为 <code>ac[8]</code>、<code>bat[23]</code>、<code>pv[7]</code>、<code>sys[11]</code>、<code>eng[12]</code>、<code>cells[2]</code>。</span></div>
+        <div class="card"><b>单一字段版本</b><span>Heartbeat 核心固定为 <code>ac[8]</code>、<code>bat[23]</code>、<code>pv[7]</code>、<code>sys[11]</code>、<code>eng[12]</code>、<code>cells[2]</code>；低频厂商字段仅允许进入可选 <code>ext</code> 对象。</span></div>
       </div>
 
       <div class="note warn"><b>规范用语：</b>“必须”表示强制要求；“应”表示无特殊理由不得偏离；“可”表示可选能力。示例中的数值仅用于说明格式，不构成设备量程定义。</div>
@@ -601,6 +601,7 @@
 
       <h3>9.3 遥测标准列</h3>
       <p><code>device_telemetry_3min.raw_envelope</code> 保存完整 <code>{t,v,data}</code> 上行信封；以下高频查询字段同时提取为类型化列：</p>
+      <div class="note"><b>宽表演进规则：</b>固定数组中的稳定、高频查询/聚合字段使用类型化列。实验性、型号专属或尚未晋升的字段只能放入可选 <code>data.ext</code> JSON 对象，键使用厂商命名空间，并登记到 <code>telemetry_field_catalog</code>；其完整值随 <code>raw_envelope</code> 保存，不要求每次新增字段都执行 <code>ALTER TABLE</code>。只有字段成为稳定查询、聚合或告警条件后，才通过新迁移晋升为类型化列。</div>
       <div class="table"><table>
         <thead><tr><th>列</th><th>来源</th><th>用途</th></tr></thead>
         <tbody>
@@ -665,7 +666,7 @@
       <h2 id="compat">11. 版本与兼容规则</h2>
       <ul>
         <li>V1 的数组下标、长度、类型和单位永久冻结，不得在尾部追加字段。</li>
-        <li>新增可选信息优先使用新的具名对象或新 Topic；破坏性变化必须发布 V2。</li>
+        <li>新增可选信息优先使用 <code>data.ext</code> 具名对象或新 Topic；<code>ext</code> 必须为 JSON 对象，扩展键使用厂商命名空间，任意未知同级键仍拒绝；破坏性变化必须发布 V2。</li>
         <li>设备必须忽略未知的 JSON 顶层键；服务端按设备型号与外层 <code>v</code> 选择映射。</li>
         <li>旧 Topic 或旧信封只允许在服务端兼容层接收，不得由采用本文版本的新设备继续发送。</li>
         <li>协议升级必须同步更新设备固件、ESP32、Device Server、API、Web/App、字段模型和自动化测试样例。</li>
@@ -675,7 +676,7 @@
       <h2 id="acceptance">12. 交付验收标准</h2>
       <ol>
         <li>所有上行 Topic 使用外层 <code>{t,v,data}</code> 信封，<code>data</code> 内不重复时间和协议版本。</li>
-        <li>Heartbeat 精确包含 <code>ac[8]</code>、<code>bat[23]</code>、<code>pv[7]</code>、<code>sys[11]</code>、<code>eng[12]</code>、<code>cells[2]</code>，不包含 <code>brt</code>。</li>
+        <li>Heartbeat 核心固定包含 <code>ac[8]</code>、<code>bat[23]</code>、<code>pv[7]</code>、<code>sys[11]</code>、<code>eng[12]</code>、<code>cells[2]</code>，可选包含具名对象 <code>ext</code>，不包含 <code>brt</code>。</li>
         <li>设备启动和 <code>query_telemetry</code> 均能触发 Heartbeat；稳定运行每 180 秒上报，允许调度误差 ±5 秒。</li>
         <li>告警发生与恢复形成闭环；网络状态使用 Retain 和 LWT；业务健康与网络在线分开判断。</li>
         <li>命令在 2 秒内 ACK，按 task_id 幂等，有最终结果；参数范围、安全互锁、超时和过期机制有效。</li>
@@ -709,7 +710,7 @@
     </main>
   </div>
 
-  <footer>辰烁科技 48V 离网逆变器遥测协议与存储规范 · V1.0.26.713 · 最终规范<br>最后修改时间：2026-07-13 19:56:44（Asia/Shanghai）</footer>
+  <footer>辰烁科技 48V 离网逆变器遥测协议与存储规范 · V1.0.26.713 · 最终规范<br>最后修改时间：2026-07-15 10:57:21（Asia/Shanghai）</footer>
 </div>
 </body>
 </html>

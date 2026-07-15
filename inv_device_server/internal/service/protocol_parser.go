@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -22,29 +25,23 @@ import (
 	"go.uber.org/zap"
 )
 
-type parsedMessage struct {
-	msg kafka.Message
-	raw RawMessage
-}
-
 type ProtocolParser struct {
-	consumer    *kafka.Reader
-	repo        *repository.DeviceRepository
-	metaRepo    *repository.MetadataRepository
-	rdb         *redis.Client
-	hub         *mqtt.Hub
-	apiServer   string
-	internalKey string
-	httpClient  *http.Client
-	batcher     *TelemetryBatcher
+	consumer     kafkaMessageReader
+	repo         *repository.DeviceRepository
+	ingestErrors ingestErrorStore
+	metaRepo     *repository.MetadataRepository
+	rdb          *redis.Client
+	hub          *mqtt.Hub
+	apiServer    string
+	internalKey  string
+	httpClient   *http.Client
+	batcher      *TelemetryBatcher
 
 	snModelCache map[string]int32
 	snCacheMu    sync.RWMutex
 	parseEngine  *ParseRuleEngine
 	stateManager *DeviceStateManager // 集中式状态管理器
 
-	workerCount int
-	msgChan     chan *parsedMessage
 }
 
 type RawMessage struct {
@@ -64,7 +61,7 @@ func NewProtocolParser(
 	apiServer string,
 	internalKey string,
 ) *ProtocolParser {
-	return &ProtocolParser{
+	parser := &ProtocolParser{
 		consumer: kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  brokers,
 			Topic:    topic,
@@ -90,54 +87,16 @@ func NewProtocolParser(
 		snModelCache: make(map[string]int32),
 		parseEngine:  NewParseRuleEngine(),
 		stateManager: NewDeviceStateManager(rdb, apiServer, internalKey),
-		workerCount:  10,
-		msgChan:      make(chan *parsedMessage, 5000),
 	}
+	if repo != nil {
+		parser.ingestErrors = repo
+	}
+	return parser
 }
 
 func (p *ProtocolParser) Start(ctx context.Context) {
-	for i := 0; i < p.workerCount; i++ {
-		go p.worker(ctx, i)
-	}
-	go p.consume(ctx)
+	go runOrderedKafkaConsumer(ctx, "protocol-parser", p.consumer, p.processKafkaMessage, 250*time.Millisecond)
 	go p.refreshModelCache(ctx)
-	go p.batcher.Start(ctx)
-}
-
-func (p *ProtocolParser) worker(ctx context.Context, id int) {
-	logger.Info("Protocol parser worker started", zap.Int("worker_id", id))
-	retryCounts := make(map[string]int)
-	const maxRetries = 3
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info("Protocol parser worker stopped", zap.Int("worker_id", id))
-			return
-		case pm := <-p.msgChan:
-			msgKey := fmt.Sprintf("%s:%d:%d", pm.msg.Topic, pm.msg.Partition, pm.msg.Offset)
-			if err := p.processMessage(ctx, &pm.raw); err != nil {
-				retryCounts[msgKey]++
-				if retryCounts[msgKey] >= maxRetries {
-					logger.Error("Message processing failed after max retries, skipping",
-						zap.String("sn", pm.raw.SN),
-						zap.String("msg_type", pm.raw.MsgType),
-						zap.Int("retries", retryCounts[msgKey]),
-						zap.Error(err))
-					_ = p.consumer.CommitMessages(ctx, pm.msg)
-					delete(retryCounts, msgKey)
-				} else {
-					logger.Warn("Message processing failed, will retry on redelivery",
-						zap.String("sn", pm.raw.SN),
-						zap.String("msg_type", pm.raw.MsgType),
-						zap.Int("retry", retryCounts[msgKey]),
-						zap.Error(err))
-				}
-				continue
-			}
-			delete(retryCounts, msgKey)
-			_ = p.consumer.CommitMessages(ctx, pm.msg)
-		}
-	}
 }
 
 func (p *ProtocolParser) refreshModelCache(ctx context.Context) {
@@ -190,47 +149,39 @@ func (p *ProtocolParser) getModelID(ctx context.Context, sn string) int32 {
 	return modelID
 }
 
-func (p *ProtocolParser) consume(ctx context.Context) {
-	logger.Info("Protocol parser consumer started", zap.Int("workers", p.workerCount))
-
-	for {
-		select {
-		case <-ctx.Done():
-			p.consumer.Close()
-			logger.Info("Protocol parser consumer stopped")
-			return
-		default:
-			m, err := p.consumer.FetchMessage(ctx)
-			if err != nil {
-				logger.Error("Kafka fetch message error", zap.Error(err))
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-
-			var raw RawMessage
-			if err := json.Unmarshal(m.Value, &raw); err != nil {
-				logger.Error("Failed to unmarshal raw message",
-					zap.Error(err),
-					zap.String("topic", m.Topic),
-					zap.Int64("offset", m.Offset))
-				_ = p.consumer.CommitMessages(ctx, m)
-				continue
-			}
-
-			if raw.SN == "" {
-				_ = p.consumer.CommitMessages(ctx, m)
-				continue
-			}
-
-			select {
-			case p.msgChan <- &parsedMessage{msg: m, raw: raw}:
-			case <-ctx.Done():
-				p.consumer.Close()
-				logger.Info("Protocol parser consumer stopped")
-				return
-			}
-		}
+func (p *ProtocolParser) processKafkaMessage(ctx context.Context, message kafka.Message) error {
+	var raw RawMessage
+	if err := json.Unmarshal(message.Value, &raw); err != nil {
+		return p.isolatePermanentMessage(ctx, "", message.Topic, message.Value,
+			"INVALID_BRIDGE_JSON", fmt.Errorf("decode bridge message: %w", err))
 	}
+	if strings.TrimSpace(raw.SN) == "" {
+		return p.isolatePermanentMessage(ctx, "", message.Topic, message.Value,
+			"MISSING_DEVICE_SN", fmt.Errorf("bridge message is missing device sn"))
+	}
+	err := p.processMessage(ctx, &raw)
+	if permanent, ok := asPermanentMessage(err); ok {
+		return p.isolatePermanentMessage(ctx, raw.SN, raw.MsgType, raw.Payload, permanent.code, permanent.err)
+	}
+	var httpErr *downstreamHTTPError
+	if errors.As(err, &httpErr) && httpErr.permanent() {
+		return p.isolatePermanentMessage(ctx, raw.SN, raw.MsgType, raw.Payload, "DOWNSTREAM_HTTP_4XX", httpErr)
+	}
+	return err
+}
+
+func (p *ProtocolParser) isolatePermanentMessage(
+	ctx context.Context, sn, topic string, payload []byte, code string, cause error,
+) error {
+	if p.ingestErrors == nil {
+		return fmt.Errorf("permanent ingest error cannot be audited (%s): %w", code, cause)
+	}
+	if err := p.ingestErrors.SaveIngestError(ctx, sn, topic, payload, code, cause.Error()); err != nil {
+		return fmt.Errorf("save permanent ingest error %s: %w", code, err)
+	}
+	logger.Warn("Permanent Kafka message isolated in device_ingest_errors",
+		zap.String("sn", sn), zap.String("topic", topic), zap.String("error_code", code), zap.Error(cause))
+	return nil
 }
 
 func (p *ProtocolParser) processMessage(ctx context.Context, raw *RawMessage) error {
@@ -261,7 +212,7 @@ func (p *ProtocolParser) processMessage(ctx context.Context, raw *RawMessage) er
 func (p *ProtocolParser) handleReportedConfig(ctx context.Context, raw *RawMessage) error {
 	cfg, err := telemetryv2.ParseReportedConfig(raw.Payload)
 	if err != nil {
-		return err
+		return permanentMessage("INVALID_REPORTED_CONFIG", err)
 	}
 	if err := p.repo.SaveReportedConfig(ctx, raw.SN, cfg); err != nil {
 		return err
@@ -325,7 +276,8 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 
 	if p.rdb != nil && sample.QualityFlags&telemetryv2.QualityBackfill == 0 {
 		latest := map[string]interface{}{
-			"device_sn": raw.SN, "event_time": sample.EventTime, "quality_flags": sample.QualityFlags,
+			"device_sn": raw.SN, "protocol_version": sample.ProtocolVersion,
+			"event_time": sample.EventTime, "quality_flags": sample.QualityFlags,
 			"ac_power": sample.AC.ActivePower, "pv_total_power": sample.PV.TotalPower,
 			"battery_soc": sample.Battery.SOC, "battery_power": sample.Battery.Power,
 			"work_state": sample.System.WorkState, "fault_code": sample.System.FaultCode,
@@ -471,9 +423,7 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 
 func (p *ProtocolParser) postInternal(path string, payload interface{}) error {
 	if p.apiServer == "" {
-		logger.Warn("API server URL is empty, skipping internal API call",
-			zap.String("path", path))
-		return nil
+		return fmt.Errorf("API server URL is empty for internal call %s", path)
 	}
 	if p.internalKey == "" {
 		logger.Warn("Internal API key is empty, API server will likely reject this call",
@@ -527,7 +477,7 @@ func (p *ProtocolParser) postInternal(path string, payload interface{}) error {
 				zap.String("path", path),
 				zap.Int("status", resp.StatusCode),
 				zap.String("response", string(bodyBytes)))
-			return fmt.Errorf("internal api status %d: %s", resp.StatusCode, string(bodyBytes))
+			return &downstreamHTTPError{status: resp.StatusCode, body: string(bodyBytes)}
 		}
 		return nil
 	}
@@ -614,9 +564,9 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 	}
 
 	item := &telemetryBatchItem{
-		SN:   raw.SN,
+		SN:    raw.SN,
 		Topic: topic,
-		Data: parsedPayload,
+		Data:  parsedPayload,
 	}
 
 	var timestamp int64
@@ -662,7 +612,13 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 		}
 	}
 
-	p.batcher.Add(item)
+	// Kafka offset acknowledgement must reflect durable downstream acceptance.
+	// The previous fire-and-forget batch buffer could drop a batch after the
+	// offset had already been committed, so the ordered consumer uses a
+	// synchronous, acknowledged send here.
+	if err := p.batcher.Send(ctx, item); err != nil {
+		return err
+	}
 
 	if err := p.cacheRealtime(ctx, raw.SN, parsedPayload, raw.MsgType); err != nil {
 		logger.Debug("Redis cache failed", zap.String("sn", raw.SN), zap.Error(err))
@@ -756,128 +712,339 @@ func (p *ProtocolParser) handleCommandResponse(ctx context.Context, raw *RawMess
 	return p.postInternal(endpoint, payload)
 }
 
+const maxV1PayloadBytes = 16 * 1024
+
+var v1DeviceSNPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,50}$`)
+
+type v1UpstreamEnvelope struct {
+	T    int64           `json:"t"`
+	V    int             `json:"v"`
+	Data json.RawMessage `json:"data"`
+}
+
+type internalEnvelopeRequest struct {
+	SN         string          `json:"sn"`
+	Topic      string          `json:"topic"`
+	ReceivedAt time.Time       `json:"received_at"`
+	Envelope   json.RawMessage `json:"envelope"`
+}
+
+type parallelMachineV1 struct {
+	ID    int     `json:"id"`
+	SN    string  `json:"sn"`
+	Role  string  `json:"role"`
+	Phase *string `json:"phase"`
+	Power float64 `json:"power"`
+	State int     `json:"state"`
+}
+
+type parallelDataV1 struct {
+	Enabled          bool                `json:"enabled"`
+	Mode             string              `json:"mode"`
+	Count            int                 `json:"count"`
+	TotalRatedPower  uint64              `json:"total_rated_power"`
+	TotalActivePower float64             `json:"total_active_power"`
+	SyncState        string              `json:"sync_state"`
+	Machines         []parallelMachineV1 `json:"machines"`
+}
+
+type threePhaseDataV1 struct {
+	Voltage          []float64 `json:"voltage"`
+	Current          []float64 `json:"current"`
+	ActivePower      []float64 `json:"active_power"`
+	TotalActivePower float64   `json:"total_active_power"`
+	LineVoltage      []float64 `json:"line_voltage"`
+	Frequency        float64   `json:"frequency"`
+	VoltageUnbalance float64   `json:"voltage_unbalance"`
+	CurrentUnbalance float64   `json:"current_unbalance"`
+}
+
+func parseV1UpstreamEnvelope(payload json.RawMessage) (*v1UpstreamEnvelope, error) {
+	if len(payload) == 0 {
+		return nil, fmt.Errorf("empty V1 envelope")
+	}
+	if len(payload) > maxV1PayloadBytes {
+		return nil, fmt.Errorf("V1 envelope exceeds %d bytes", maxV1PayloadBytes)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return nil, fmt.Errorf("invalid V1 envelope: %w", err)
+	}
+	if fields == nil {
+		return nil, fmt.Errorf("V1 envelope must be an object")
+	}
+	for _, name := range []string{"t", "v", "data"} {
+		value, ok := fields[name]
+		if !ok || string(bytes.TrimSpace(value)) == "null" {
+			return nil, fmt.Errorf("V1 envelope field %q is required", name)
+		}
+	}
+	var envelope v1UpstreamEnvelope
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return nil, fmt.Errorf("invalid V1 envelope fields: %w", err)
+	}
+	if envelope.T <= 0 {
+		return nil, fmt.Errorf("V1 envelope t must be greater than zero")
+	}
+	if envelope.V != 1 {
+		return nil, fmt.Errorf("unsupported V1 envelope version %d", envelope.V)
+	}
+	data := bytes.TrimSpace(envelope.Data)
+	if len(data) < 2 || data[0] != '{' || data[len(data)-1] != '}' {
+		return nil, fmt.Errorf("V1 envelope data must be an object")
+	}
+	return &envelope, nil
+}
+
+func decodeStrictV1Data(raw json.RawMessage, dst interface{}, requiredFields ...string) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return fmt.Errorf("data must be a JSON object")
+	}
+	for _, name := range requiredFields {
+		value, ok := fields[name]
+		if !ok || string(bytes.TrimSpace(value)) == "null" {
+			return fmt.Errorf("data field %q is required", name)
+		}
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return fmt.Errorf("invalid data object: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("invalid trailing JSON data")
+	}
+	return nil
+}
+
+func rawMessageReceivedAt(raw *RawMessage) (time.Time, error) {
+	if raw.ReceivedAt == "" {
+		return time.Now().UTC(), nil
+	}
+	receivedAt, err := time.Parse(time.RFC3339Nano, raw.ReceivedAt)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid received_at: %w", err)
+	}
+	return receivedAt.UTC(), nil
+}
+
+func finite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
+}
+
+func powerTotalsMatch(parts []float64, total float64) bool {
+	var sum float64
+	for _, part := range parts {
+		sum += part
+	}
+	tolerance := math.Max(1, math.Abs(sum)*0.005)
+	return math.Abs(sum-total) <= tolerance
+}
+
+func validateParallelV1(sn string, data *parallelDataV1) error {
+	if !v1DeviceSNPattern.MatchString(sn) {
+		return fmt.Errorf("invalid topic device SN")
+	}
+	if data.Count < 0 || data.Count > 8 || len(data.Machines) != data.Count {
+		return fmt.Errorf("parallel count must match a machines array of 0 to 8 entries")
+	}
+	if data.TotalRatedPower > math.MaxUint32 || !finite(data.TotalActivePower) || data.TotalActivePower < 0 {
+		return fmt.Errorf("parallel total power is invalid")
+	}
+	if data.Mode != "standalone" && data.Mode != "single_phase" && data.Mode != "three_phase" {
+		return fmt.Errorf("invalid parallel mode %q", data.Mode)
+	}
+	if data.SyncState != "idle" && data.SyncState != "synced" && data.SyncState != "syncing" && data.SyncState != "fault" {
+		return fmt.Errorf("invalid parallel sync_state %q", data.SyncState)
+	}
+	if !data.Enabled {
+		if data.Mode != "standalone" || data.Count != 0 || data.TotalRatedPower != 0 ||
+			data.TotalActivePower != 0 || data.SyncState != "idle" || len(data.Machines) != 0 {
+			return fmt.Errorf("disabled parallel topology must use the standalone zero-value form")
+		}
+		return nil
+	}
+	if data.Mode == "standalone" || data.Count == 0 || data.TotalRatedPower == 0 {
+		return fmt.Errorf("enabled parallel topology requires members, rated power and a parallel mode")
+	}
+
+	seenIDs := make(map[int]struct{}, data.Count)
+	seenSNs := make(map[string]struct{}, data.Count)
+	phaseSeen := map[string]bool{"L1": false, "L2": false, "L3": false}
+	masterCount := 0
+	powers := make([]float64, 0, data.Count)
+	previousID := -1
+	for index, machine := range data.Machines {
+		if machine.ID < 0 || machine.ID > 7 || machine.ID <= previousID {
+			return fmt.Errorf("parallel machines must have unique IDs 0..7 in ascending order")
+		}
+		previousID = machine.ID
+		if _, exists := seenIDs[machine.ID]; exists {
+			return fmt.Errorf("duplicate parallel machine ID %d", machine.ID)
+		}
+		seenIDs[machine.ID] = struct{}{}
+		if !v1DeviceSNPattern.MatchString(machine.SN) {
+			return fmt.Errorf("invalid parallel machine SN at index %d", index)
+		}
+		if _, exists := seenSNs[machine.SN]; exists {
+			return fmt.Errorf("duplicate parallel machine SN %q", machine.SN)
+		}
+		seenSNs[machine.SN] = struct{}{}
+		if machine.Role != "master" && machine.Role != "slave" {
+			return fmt.Errorf("invalid parallel machine role %q", machine.Role)
+		}
+		if machine.Role == "master" {
+			masterCount++
+			if machine.ID != 0 || machine.SN != sn {
+				return fmt.Errorf("parallel master must be machine 0 and match the topic SN")
+			}
+		} else if machine.ID == 0 {
+			return fmt.Errorf("parallel machine 0 must be the master")
+		}
+		if machine.State != 0 && machine.State != 2 && machine.State != 3 {
+			return fmt.Errorf("invalid parallel machine state %d", machine.State)
+		}
+		if !finite(machine.Power) || machine.Power < 0 {
+			return fmt.Errorf("parallel machine power must be finite and non-negative")
+		}
+		powers = append(powers, machine.Power)
+		switch data.Mode {
+		case "single_phase":
+			if machine.Phase != nil {
+				return fmt.Errorf("single-phase parallel machines must use null phase")
+			}
+		case "three_phase":
+			if machine.Phase == nil || (*machine.Phase != "L1" && *machine.Phase != "L2" && *machine.Phase != "L3") {
+				return fmt.Errorf("three-phase parallel machines require phase L1, L2 or L3")
+			}
+			phaseSeen[*machine.Phase] = true
+		}
+	}
+	if masterCount != 1 {
+		return fmt.Errorf("parallel topology must contain exactly one master")
+	}
+	if data.Mode == "three_phase" && (!phaseSeen["L1"] || !phaseSeen["L2"] || !phaseSeen["L3"]) {
+		return fmt.Errorf("three-phase parallel topology must include L1, L2 and L3")
+	}
+	if !powerTotalsMatch(powers, data.TotalActivePower) {
+		return fmt.Errorf("parallel total_active_power does not match member power")
+	}
+	return nil
+}
+
+func validateThreePhaseV1(data *threePhaseDataV1) error {
+	if len(data.Voltage) != 3 || len(data.Current) != 3 || len(data.ActivePower) != 3 || len(data.LineVoltage) != 3 {
+		return fmt.Errorf("three_phase arrays must have exactly 3 elements")
+	}
+	for _, values := range [][]float64{data.Voltage, data.Current, data.ActivePower, data.LineVoltage} {
+		for _, value := range values {
+			if !finite(value) {
+				return fmt.Errorf("three_phase values must be finite numbers")
+			}
+		}
+	}
+	for _, values := range [][]float64{data.Voltage, data.Current, data.LineVoltage} {
+		for _, value := range values {
+			if value < 0 {
+				return fmt.Errorf("three_phase voltage and current values must not be negative")
+			}
+		}
+	}
+	for _, value := range data.ActivePower {
+		if value < 0 {
+			return fmt.Errorf("three_phase active power values must not be negative")
+		}
+	}
+	if !finite(data.TotalActivePower) || !finite(data.Frequency) || !finite(data.VoltageUnbalance) || !finite(data.CurrentUnbalance) {
+		return fmt.Errorf("three_phase scalar values must be finite numbers")
+	}
+	if data.TotalActivePower < 0 || data.Frequency < 0 || data.VoltageUnbalance < 0 || data.VoltageUnbalance > 100 ||
+		data.CurrentUnbalance < 0 || data.CurrentUnbalance > 100 {
+		return fmt.Errorf("three_phase scalar values are outside the V1 range")
+	}
+	if !powerTotalsMatch(data.ActivePower, data.TotalActivePower) {
+		return fmt.Errorf("three_phase total_active_power does not match phase power")
+	}
+	return nil
+}
+
+func (p *ProtocolParser) markValidUplink(ctx context.Context, sn string) {
+	if p.stateManager == nil {
+		return
+	}
+	if err := p.stateManager.UpdateHeartbeat(ctx, sn); err != nil {
+		logger.Warn("Failed to update heartbeat", zap.String("sn", sn), zap.Error(err))
+	}
+	if err := p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
+		SN: sn, Event: EventOnlineReport, Timestamp: time.Now().UTC(),
+	}); err != nil {
+		logger.Warn("Failed to handle online state", zap.String("sn", sn), zap.Error(err))
+	}
+}
+
+func (p *ProtocolParser) cacheProtocolSnapshot(ctx context.Context, sn, topic string, eventTime int64, data interface{}) {
+	if p.rdb == nil {
+		return
+	}
+	cacheKey := "realtime:latest:" + sn
+	existing, err := p.rdb.Get(ctx, cacheKey).Bytes()
+	var realtime map[string]interface{}
+	if err == nil {
+		_ = json.Unmarshal(existing, &realtime)
+	}
+	if realtime == nil {
+		realtime = make(map[string]interface{})
+	}
+	// An offline device can replay old messages after reconnecting. Keep Redis
+	// aligned with the database's latest-event semantics and never let an older
+	// protocol snapshot replace a newer one.
+	if current, ok := realtime[topic].(map[string]interface{}); ok {
+		if timestamp, ok := current["timestamp"].(float64); ok && int64(timestamp) > eventTime {
+			return
+		}
+	}
+	realtime[topic] = map[string]interface{}{"data": data, "timestamp": eventTime}
+	realtime["_sn"] = sn
+	realtime["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+	encoded, err := json.Marshal(realtime)
+	if err == nil {
+		_ = p.rdb.Set(ctx, cacheKey, encoded, 10*time.Minute).Err()
+	}
+}
+
 // handleParallel 处理并机状态消息（parallel topic）
 // 解析并机拓扑数据，提取 master SN 和 station_id，
 // 通过内部 API 转发给 api_server 进行 UPSERT 和拓扑变化检测，
 // 并更新 Redis 实时缓存。
 func (p *ProtocolParser) handleParallel(ctx context.Context, raw *RawMessage) error {
-	// 更新心跳
-	if err := p.stateManager.UpdateHeartbeat(ctx, raw.SN); err != nil {
-		logger.Warn("Failed to update heartbeat", zap.String("sn", raw.SN), zap.Error(err))
+	envelope, err := parseV1UpstreamEnvelope(raw.Payload)
+	if err != nil {
+		return permanentMessage("INVALID_PARALLEL", fmt.Errorf("parallel: %w", err))
 	}
-	// 通过状态管理器处理在线状态（内置防抖）
-	if err := p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
-		SN:        raw.SN,
-		Event:     EventOnlineReport,
-		Timestamp: time.Now().UTC(),
-	}); err != nil {
-		logger.Warn("Failed to handle online state",
-			zap.String("sn", raw.SN),
-			zap.Error(err))
+	var data parallelDataV1
+	if err := decodeStrictV1Data(envelope.Data, &data,
+		"enabled", "mode", "count", "total_rated_power", "total_active_power", "sync_state", "machines"); err != nil {
+		return permanentMessage("INVALID_PARALLEL", fmt.Errorf("parallel: %w", err))
 	}
-
-	// 解析 payload，支持嵌套格式 {"data": {...}, "t": ..., "v": ...}
-	payloadBytes := raw.Payload
-	var wrapper struct {
-		T    int64           `json:"t"`
-		V    int             `json:"v"`
-		Data json.RawMessage `json:"data"`
+	if err := validateParallelV1(raw.SN, &data); err != nil {
+		return permanentMessage("INVALID_PARALLEL", fmt.Errorf("parallel: %w", err))
 	}
-	if err := json.Unmarshal(raw.Payload, &wrapper); err != nil {
+	receivedAt, err := rawMessageReceivedAt(raw)
+	if err != nil {
+		return permanentMessage("INVALID_PARALLEL", fmt.Errorf("parallel: %w", err))
+	}
+	request := internalEnvelopeRequest{
+		SN: raw.SN, Topic: "parallel", ReceivedAt: receivedAt,
+		Envelope: append(json.RawMessage(nil), raw.Payload...),
+	}
+	if err := p.postInternal("/api/v1/internal/parallel-state", request); err != nil {
 		return err
 	}
-	if len(wrapper.Data) > 0 {
-		payloadBytes = wrapper.Data
-	}
-
-	var parallel struct {
-		Enabled          bool `json:"enabled"`
-		Mode             string  `json:"mode"`
-		Count            int     `json:"count"`
-		TotalRatedPower  int     `json:"total_rated_power"`
-		TotalActivePower float64 `json:"total_active_power"`
-		SyncState        string  `json:"sync_state"`
-		Machines []struct {
-			ID    int     `json:"id"`
-			SN    string  `json:"sn"`
-			Role  string  `json:"role"`
-			Phase string  `json:"phase"`
-			Power float64 `json:"power"`
-			State int     `json:"state"`
-		} `json:"machines"`
-	}
-	if err := json.Unmarshal(payloadBytes, &parallel); err != nil {
-		return err
-	}
-
-	// 找到 master SN（从 machines 数组中 role="master" 的设备）
-	masterSN := raw.SN
-	for _, m := range parallel.Machines {
-		if m.Role == "master" {
-			masterSN = m.SN
-			break
-		}
-	}
-
-	// 查询设备的 station_id
-	stationID, _ := p.repo.GetStationIDBySN(ctx, raw.SN)
-
-	// 构建转发给 api_server 的请求 payload
-	requestPayload := map[string]interface{}{
-		"sn":                 raw.SN,
-		"master_sn":          masterSN,
-		"station_id":         stationID,
-		"enabled":            parallel.Enabled,
-		"mode":               parallel.Mode,
-		"count":              parallel.Count,
-		"total_rated_power":  parallel.TotalRatedPower,
-		"total_active_power": parallel.TotalActivePower,
-		"sync_state":         parallel.SyncState,
-		"machines":           parallel.Machines,
-		"timestamp":          wrapper.T,
-	}
-
-	// 通过内部 API 转发给 api_server（api_server 负责 UPSERT 和拓扑变化检测）
-	if err := p.postInternal("/api/v1/internal/parallel-state", requestPayload); err != nil {
-		return err
-	}
-
-	// 更新 Redis 实时缓存
-	if p.rdb != nil {
-		parallelPayload := map[string]interface{}{
-			"data": map[string]interface{}{
-				"enabled":            parallel.Enabled,
-				"mode":               parallel.Mode,
-				"count":              parallel.Count,
-				"total_rated_power":  parallel.TotalRatedPower,
-				"total_active_power": parallel.TotalActivePower,
-				"sync_state":         parallel.SyncState,
-				"machines":           parallel.Machines,
-			},
-			"timestamp": time.Now().UTC().Unix(),
-		}
-		cacheKey := "realtime:latest:" + raw.SN
-		existing, err := p.rdb.Get(ctx, cacheKey).Bytes()
-		var rt map[string]interface{}
-		if err == nil {
-			_ = json.Unmarshal(existing, &rt)
-		}
-		if rt == nil {
-			rt = make(map[string]interface{})
-		}
-		rt["parallel"] = parallelPayload
-		rt["_sn"] = raw.SN
-		rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
-		mergedBytes, _ := json.Marshal(rt)
-		p.rdb.Set(ctx, cacheKey, mergedBytes, 10*time.Minute)
-	}
-
-	logger.Info("Parallel state processed",
-		zap.String("sn", raw.SN),
-		zap.String("master_sn", masterSN),
-		zap.String("mode", parallel.Mode),
-		zap.Int("count", parallel.Count),
-		zap.String("sync_state", parallel.SyncState))
+	p.markValidUplink(ctx, raw.SN)
+	p.cacheProtocolSnapshot(ctx, raw.SN, "parallel", envelope.T, data)
+	logger.Info("Parallel state processed", zap.String("sn", raw.SN), zap.String("mode", data.Mode),
+		zap.Int("count", data.Count), zap.String("sync_state", data.SyncState))
 	return nil
 }
 
@@ -885,111 +1052,37 @@ func (p *ProtocolParser) handleParallel(ctx context.Context, raw *RawMessage) er
 // 解析三相电压/电流/功率数据，校验数组长度，
 // 通过内部 API 转发给 api_server，并写入 Redis 实时缓存。
 func (p *ProtocolParser) handleThreePhase(ctx context.Context, raw *RawMessage) error {
-	// 更新心跳
-	if err := p.stateManager.UpdateHeartbeat(ctx, raw.SN); err != nil {
-		logger.Warn("Failed to update heartbeat", zap.String("sn", raw.SN), zap.Error(err))
+	envelope, err := parseV1UpstreamEnvelope(raw.Payload)
+	if err != nil {
+		return permanentMessage("INVALID_THREE_PHASE", fmt.Errorf("three_phase: %w", err))
 	}
-	// 通过状态管理器处理在线状态（内置防抖）
-	if err := p.stateManager.HandleStateChange(ctx, &StateChangeRequest{
-		SN:        raw.SN,
-		Event:     EventOnlineReport,
-		Timestamp: time.Now().UTC(),
-	}); err != nil {
-		logger.Warn("Failed to handle online state",
-			zap.String("sn", raw.SN),
-			zap.Error(err))
+	if !v1DeviceSNPattern.MatchString(raw.SN) {
+		return permanentMessage("INVALID_THREE_PHASE", fmt.Errorf("three_phase: invalid topic device SN"))
 	}
-
-	// 解析 payload，支持嵌套格式 {"data": {...}, "t": ..., "v": ...}
-	payloadBytes := raw.Payload
-	var wrapper struct {
-		T    int64           `json:"t"`
-		V    int             `json:"v"`
-		Data json.RawMessage `json:"data"`
+	var data threePhaseDataV1
+	if err := decodeStrictV1Data(envelope.Data, &data,
+		"voltage", "current", "active_power", "total_active_power", "line_voltage", "frequency",
+		"voltage_unbalance", "current_unbalance"); err != nil {
+		return permanentMessage("INVALID_THREE_PHASE", fmt.Errorf("three_phase: %w", err))
 	}
-	if err := json.Unmarshal(raw.Payload, &wrapper); err != nil {
+	if err := validateThreePhaseV1(&data); err != nil {
+		return permanentMessage("INVALID_THREE_PHASE", fmt.Errorf("three_phase: %w", err))
+	}
+	receivedAt, err := rawMessageReceivedAt(raw)
+	if err != nil {
+		return permanentMessage("INVALID_THREE_PHASE", fmt.Errorf("three_phase: %w", err))
+	}
+	request := internalEnvelopeRequest{
+		SN: raw.SN, Topic: "three_phase", ReceivedAt: receivedAt,
+		Envelope: append(json.RawMessage(nil), raw.Payload...),
+	}
+	if err := p.postInternal("/api/v1/internal/three-phase", request); err != nil {
 		return err
 	}
-	if len(wrapper.Data) > 0 {
-		payloadBytes = wrapper.Data
-	}
-
-	var threePhase struct {
-		Voltage          []float64 `json:"voltage"`
-		Current          []float64 `json:"current"`
-		ActivePower      []float64 `json:"active_power"`
-		TotalActivePower float64   `json:"total_active_power"`
-		LineVoltage      []float64 `json:"line_voltage"`
-		Frequency        float64   `json:"frequency"`
-		VoltageUnbalance float64   `json:"voltage_unbalance"`
-		CurrentUnbalance float64   `json:"current_unbalance"`
-	}
-	if err := json.Unmarshal(payloadBytes, &threePhase); err != nil {
-		return err
-	}
-
-	// 校验三相数组长度（必须为3）
-	if len(threePhase.Voltage) != 3 || len(threePhase.Current) != 3 ||
-		len(threePhase.ActivePower) != 3 || len(threePhase.LineVoltage) != 3 {
-		return fmt.Errorf("three_phase arrays must have exactly 3 elements: voltage=%d, current=%d, active_power=%d, line_voltage=%d",
-			len(threePhase.Voltage), len(threePhase.Current),
-			len(threePhase.ActivePower), len(threePhase.LineVoltage))
-	}
-
-	// 构建转发给 api_server 的请求 payload
-	requestPayload := map[string]interface{}{
-		"sn":                 raw.SN,
-		"voltage":            threePhase.Voltage,
-		"current":            threePhase.Current,
-		"active_power":       threePhase.ActivePower,
-		"total_active_power": threePhase.TotalActivePower,
-		"line_voltage":       threePhase.LineVoltage,
-		"frequency":          threePhase.Frequency,
-		"voltage_unbalance":  threePhase.VoltageUnbalance,
-		"current_unbalance":  threePhase.CurrentUnbalance,
-		"timestamp":          wrapper.T,
-	}
-
-	// 通过内部 API 转发给 api_server
-	if err := p.postInternal("/api/v1/internal/three-phase", requestPayload); err != nil {
-		return err
-	}
-
-	// 写入 Redis 实时缓存
-	if p.rdb != nil {
-		threePhasePayload := map[string]interface{}{
-			"data": map[string]interface{}{
-				"voltage":             threePhase.Voltage,
-				"current":             threePhase.Current,
-				"active_power":        threePhase.ActivePower,
-				"total_active_power":  threePhase.TotalActivePower,
-				"line_voltage":        threePhase.LineVoltage,
-				"frequency":           threePhase.Frequency,
-				"voltage_unbalance":   threePhase.VoltageUnbalance,
-				"current_unbalance":   threePhase.CurrentUnbalance,
-			},
-			"timestamp": time.Now().UTC().Unix(),
-		}
-		cacheKey := "realtime:latest:" + raw.SN
-		existing, err := p.rdb.Get(ctx, cacheKey).Bytes()
-		var rt map[string]interface{}
-		if err == nil {
-			_ = json.Unmarshal(existing, &rt)
-		}
-		if rt == nil {
-			rt = make(map[string]interface{})
-		}
-		rt["three_phase"] = threePhasePayload
-		rt["_sn"] = raw.SN
-		rt["_updated_at"] = time.Now().UTC().Format(time.RFC3339)
-		mergedBytes, _ := json.Marshal(rt)
-		p.rdb.Set(ctx, cacheKey, mergedBytes, 10*time.Minute)
-	}
-
-	logger.Info("Three-phase data processed",
-		zap.String("sn", raw.SN),
-		zap.Float64("total_active_power", threePhase.TotalActivePower),
-		zap.Float64("frequency", threePhase.Frequency))
+	p.markValidUplink(ctx, raw.SN)
+	p.cacheProtocolSnapshot(ctx, raw.SN, "three_phase", envelope.T, data)
+	logger.Info("Three-phase data processed", zap.String("sn", raw.SN),
+		zap.Float64("total_active_power", data.TotalActivePower), zap.Float64("frequency", data.Frequency))
 	return nil
 }
 
@@ -1236,29 +1329,21 @@ type telemetryBatchItem struct {
 }
 
 const (
-	batchSize     = 500              // 数量阈值
-	batchInterval = 2 * time.Second  // 时间阈值
-	maxBufferSize = 10000            // 背压阈值
-	maxRetries    = 3                // flush 最大尝试次数（含首次）
-	httpTimeout   = 15 * time.Second // 单次 HTTP 请求超时
+	maxRetries  = 3                // API 最大尝试次数（含首次）
+	httpTimeout = 15 * time.Second // 单次 HTTP 请求超时
 )
 
-// TelemetryBatcher 遥测数据批量缓冲组件
-// 将逐条 HTTP POST 改为批量发送，减少 api_server 的写入压力
+// TelemetryBatcher sends the API's batch-shaped payload synchronously. It
+// intentionally contains no fire-and-forget buffer because Kafka offsets must
+// not be committed before durable downstream acceptance.
 type TelemetryBatcher struct {
-	mu          sync.Mutex
-	buffer      []*telemetryBatchItem
-	flushCh     chan struct{}
 	client      *http.Client
 	apiURL      string
 	internalKey string
 }
 
-// NewTelemetryBatcher 创建批量缓冲器
 func NewTelemetryBatcher(apiServer, internalKey string) *TelemetryBatcher {
 	return &TelemetryBatcher{
-		buffer:  make([]*telemetryBatchItem, 0, batchSize),
-		flushCh: make(chan struct{}, 1),
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 			Transport: &http.Transport{
@@ -1272,107 +1357,33 @@ func NewTelemetryBatcher(apiServer, internalKey string) *TelemetryBatcher {
 	}
 }
 
-// Start 启动定时 flush goroutine，每 batchInterval 触发一次
-func (b *TelemetryBatcher) Start(ctx context.Context) {
-	ticker := time.NewTicker(batchInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			b.flush() // 关闭前最后一次 flush
-			return
-		case <-ticker.C:
-			b.flush()
-		case <-b.flushCh:
-			b.flush()
-		}
-	}
-}
-
-// Add 添加消息到缓冲，达到 batchSize 时触发 flush；超过 maxBufferSize 时阻塞（背压）
-func (b *TelemetryBatcher) Add(item *telemetryBatchItem) {
-	for {
-		b.mu.Lock()
-		if len(b.buffer) < maxBufferSize {
-			b.buffer = append(b.buffer, item)
-			shouldFlush := len(b.buffer) >= batchSize
-			b.mu.Unlock()
-			if shouldFlush {
-				select {
-				case b.flushCh <- struct{}{}:
-				default:
-				}
-			}
-			return
-		}
-		b.mu.Unlock()
-		// 缓冲已满，等待 flush 释放空间后重试
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-// flush 将缓冲区消息批量发送到 api_server，失败时按指数退避重试
-func (b *TelemetryBatcher) flush() {
-	b.mu.Lock()
-	if len(b.buffer) == 0 {
-		b.mu.Unlock()
-		return
-	}
-	batch := b.buffer
-	b.buffer = make([]*telemetryBatchItem, 0, batchSize)
-	// 记录取批次时是否已处于背压状态，用于决定是否跳过重试
-	underBackpressure := len(batch) >= maxBufferSize
-	b.mu.Unlock()
-
-	// 背压已触发时跳过重试，仅尝试一次发送，避免阻塞消费管道
-	if underBackpressure {
-		logger.Warn("TelemetryBatcher: backpressure detected, skipping retries",
-			zap.Int("count", len(batch)))
-		if err := b.sendBatch(batch); err != nil {
-			logger.Error("TelemetryBatcher: batch dropped under backpressure",
-				zap.Int("count", len(batch)), zap.Error(err))
-		}
-		return
-	}
-
-	// 重试逻辑：最多 maxRetries 次，指数退避（1s, 2s, 4s ...）
+// Send delivers one telemetry item and returns only after the API accepted it.
+// It is used by the Kafka consumer so an offset is never committed for a
+// message that only exists in an in-memory batch buffer.
+func (b *TelemetryBatcher) Send(ctx context.Context, item *telemetryBatchItem) error {
 	var lastErr error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
-			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
-			time.Sleep(backoff)
-			logger.Warn("TelemetryBatcher: retrying batch flush",
-				zap.Int("attempt", attempt+1),
-				zap.Int("count", len(batch)),
-				zap.Duration("backoff", backoff))
+			if !waitConsumerRetry(ctx, retryBackoff(time.Second, attempt)) {
+				return ctx.Err()
+			}
 		}
-
-		if err := b.sendBatch(batch); err == nil {
-			return
+		if err := b.sendBatchContext(ctx, []*telemetryBatchItem{item}); err == nil {
+			return nil
 		} else {
 			lastErr = err
-			logger.Error("TelemetryBatcher: batch flush failed",
-				zap.Int("attempt", attempt+1),
-				zap.Int("count", len(batch)),
-				zap.Error(err))
 		}
 	}
-
-	// 所有重试均失败，记录错误并丢弃数据（at-most-once，Kafka offset 已提交）
-	logger.Error("TelemetryBatcher: batch flush failed after all retries, data dropped",
-		zap.Int("count", len(batch)),
-		zap.Int("retries", maxRetries),
-		zap.Error(lastErr))
+	return fmt.Errorf("send telemetry after %d attempts: %w", maxRetries, lastErr)
 }
 
-// sendBatch 将单批数据通过 HTTP POST 发送到 api_server
-func (b *TelemetryBatcher) sendBatch(batch []*telemetryBatchItem) error {
+func (b *TelemetryBatcher) sendBatchContext(parent context.Context, batch []*telemetryBatchItem) error {
 	body, err := json.Marshal(batch)
 	if err != nil {
 		return fmt.Errorf("marshal batch: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), httpTimeout)
+	ctx, cancel := context.WithTimeout(parent, httpTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.apiURL, bytes.NewReader(body))
@@ -1392,7 +1403,7 @@ func (b *TelemetryBatcher) sendBatch(batch []*telemetryBatchItem) error {
 	resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(respBody))
+		return &downstreamHTTPError{status: resp.StatusCode, body: string(respBody)}
 	}
 
 	logger.Info("TelemetryBatcher: batch sent successfully",

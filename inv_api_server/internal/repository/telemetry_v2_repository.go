@@ -56,7 +56,12 @@ func (r *DeviceRepository) GetStatistics(ctx context.Context, sn, startDate, end
 	var dailyEnergy, monthlyEnergy, totalEnergy, dailyDischarge float64
 	err := r.db.QueryRow(ctx, `
 		SELECT COALESCE(MAX(pv_energy) FILTER (WHERE stat_date=$2::date),0),
-		       COALESCE(SUM(pv_energy) FILTER (WHERE stat_date >= $3::date),0),
+		       COALESCE(
+		           (SELECT m.pv_energy FROM device_energy_month m
+		            WHERE m.device_sn=$1 AND m.stat_month=$3::date),
+		           SUM(pv_energy) FILTER (WHERE stat_date >= $3::date),
+		           0
+		       ),
 		       COALESCE(SUM(pv_energy),0),
 		       COALESCE(MAX(discharge_energy) FILTER (WHERE stat_date=$2::date),0)
 		FROM device_energy_day WHERE device_sn=$1`, sn, today, monthStart).
@@ -237,6 +242,8 @@ func maxFloat(a, b float64) float64 {
 
 func (r *DeviceRepository) getTelemetryV2(ctx context.Context, sn, startTime, endTime string) ([]map[string]interface{}, error) {
 	rows, err := r.db.Query(ctx, `
+		-- Keep protocol_version and quality_flags in the JSON contract. Clients use
+		-- them to explain parser version and degraded/late samples.
 		SELECT to_jsonb(t) - 'device_sn' - 'received_at' || jsonb_build_object('time', t.event_time)
 		FROM device_telemetry_3min t
 		WHERE device_sn=$1 AND event_time >= $2::timestamptz AND event_time <= $3::timestamptz

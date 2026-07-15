@@ -159,7 +159,7 @@ services:
       inv-api-server:
         condition: service_healthy
       inv-device-server:
-        condition: service_healthy
+        condition: service_started
     networks:
       - inv-net
 

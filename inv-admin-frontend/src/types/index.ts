@@ -1,8 +1,10 @@
 export enum Role {
   SUPER_ADMIN = 0,
-  AGENT = 1,
-  INSTALLER = 2,
-  END_USER = 3,
+  ADMIN = 1,
+  OPERATOR = 2,
+  DEALER = 3,
+  INSTALLER = 4,
+  END_USER = 5,
 }
 
 export interface User {

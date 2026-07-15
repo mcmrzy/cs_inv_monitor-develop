@@ -21,6 +21,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Self-registered accounts are terminal users. Elevated partner, installer,
+// operator, and administrator roles must only be assigned by an authorized
+// administrator after registration.
+const defaultSelfRegisteredRole = 5
+
 // isProduction 检查是否为生产环境
 func isProduction() bool {
 	return os.Getenv("GIN_MODE") == "release" || os.Getenv("APP_ENV") == "production"
@@ -42,22 +47,22 @@ func clearAuthCookies(c *gin.Context) {
 }
 
 type AuthHandler struct {
-	userService     *service.UserService
-	jwtService      *service.JWTService
-	smsService      *service.SMSService
-	emailService    *service.EmailService
-	rbacCache       *service.RBACCacheService
-	captchaHandler  *CaptchaHandler
+	userService    *service.UserService
+	jwtService     *service.JWTService
+	smsService     *service.SMSService
+	emailService   *service.EmailService
+	rbacCache      *service.RBACCacheService
+	captchaHandler *CaptchaHandler
 }
 
 func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService, rbacCache *service.RBACCacheService, captchaHandler *CaptchaHandler) *AuthHandler {
 	return &AuthHandler{
-		userService:     userService,
-		jwtService:      jwtService,
-		smsService:      smsService,
-		emailService:    emailService,
-		rbacCache:       rbacCache,
-		captchaHandler:  captchaHandler,
+		userService:    userService,
+		jwtService:     jwtService,
+		smsService:     smsService,
+		emailService:   emailService,
+		rbacCache:      rbacCache,
+		captchaHandler: captchaHandler,
 	}
 }
 
@@ -72,6 +77,28 @@ type LoginResponse struct {
 	User         *model.User `json:"user"`
 	ExpiresIn    int64       `json:"expires_in"`
 	Permissions  []string    `json:"permissions"`
+}
+
+// loadUserPermissions keeps every login and registration response on the same
+// RBAC contract.  Return an empty JSON array on an infrastructure error instead
+// of silently returning null; the gateway still performs the authoritative
+// permission check for every protected request.
+func (h *AuthHandler) loadUserPermissions(ctx context.Context, userID int64) []string {
+	permissions := make([]string, 0)
+	if h.rbacCache == nil {
+		return permissions
+	}
+
+	loaded, err := h.rbacCache.GetUserPermissions(ctx, userID)
+	if err != nil {
+		logger.Warn("Failed to load permissions for auth response",
+			zap.Int64("user_id", userID), zap.Error(err))
+		return permissions
+	}
+	if loaded == nil {
+		return permissions
+	}
+	return loaded
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -158,7 +185,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}()
 
 	// 获取用户权限列表
-	permissions, _ := h.rbacCache.GetUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 
 	// 设置 httpOnly cookie（同时返回 body 保持兼容）
 	setAuthCookies(c, token, refreshToken, 2*time.Hour, 7*24*time.Hour)
@@ -211,7 +238,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	user := &model.User{
 		Phone:        req.Phone,
 		PasswordHash: string(hashedPassword),
-		Role:         3,
+		Role:         defaultSelfRegisteredRole,
 		Status:       1,
 	}
 
@@ -246,11 +273,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}()
 
 	user.PasswordHash = ""
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 	response.Success(c, LoginResponse{
 		AccessToken:  token,
 		RefreshToken: refreshToken,
 		User:         user,
 		ExpiresIn:    7200,
+		Permissions:  permissions,
 	})
 }
 
@@ -717,7 +746,7 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
 		Nickname:     req.Nickname,
-		Role:         3,
+		Role:         defaultSelfRegisteredRole,
 		Status:       1,
 	}
 
@@ -753,11 +782,13 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 	}()
 
 	user.PasswordHash = ""
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 	response.Success(c, LoginResponse{
 		AccessToken:  token,
 		RefreshToken: refreshToken,
 		User:         user,
 		ExpiresIn:    7200,
+		Permissions:  permissions,
 	})
 }
 
@@ -839,11 +870,13 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	}()
 
 	user.PasswordHash = ""
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 	response.Success(c, LoginResponse{
 		AccessToken:  token,
 		RefreshToken: refreshToken,
 		User:         user,
 		ExpiresIn:    7200,
+		Permissions:  permissions,
 	})
 }
 
@@ -907,7 +940,7 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 		h.rbacCache.CacheUserPermissions(ctx, user.ID)
 	}()
 
-	permissions, _ := h.rbacCache.GetUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 
 	setAuthCookies(c, token, refreshToken, 2*time.Hour, 7*24*time.Hour)
 
@@ -990,7 +1023,7 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 		h.rbacCache.CacheUserPermissions(ctx, user.ID)
 	}()
 
-	permissions, _ := h.rbacCache.GetUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 
 	setAuthCookies(c, token, refreshToken, 2*time.Hour, 7*24*time.Hour)
 

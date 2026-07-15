@@ -29,6 +29,9 @@ import 'package:inv_app/features/device/data/datasources/device_remote_data_sour
 import 'package:inv_app/features/device/data/repositories/device_repository_impl.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
+import 'package:inv_app/features/device_protocol/data/datasources/device_protocol_remote_data_source.dart';
+import 'package:inv_app/features/device_protocol/data/repositories/device_protocol_repository_impl.dart';
+import 'package:inv_app/features/device_protocol/domain/repositories/device_protocol_repository.dart';
 import 'package:inv_app/features/alarm/data/datasources/alarm_remote_data_source.dart';
 import 'package:inv_app/features/alarm/data/repositories/alarm_repository_impl.dart';
 import 'package:inv_app/features/alarm/domain/repositories/alarm_repository.dart';
@@ -318,6 +321,10 @@ class ServiceLocator {
       () => DeviceRemoteDataSourceImpl(getIt()),
     );
 
+    getIt.registerLazySingleton<DeviceProtocolRemoteDataSource>(
+      () => DeviceProtocolRemoteDataSourceImpl(getIt()),
+    );
+
     getIt.registerLazySingleton<AlarmRemoteDataSource>(
       () => AlarmRemoteDataSourceImpl(getIt()),
     );
@@ -350,6 +357,10 @@ class ServiceLocator {
 
     getIt.registerLazySingleton<DeviceRepository>(
       () => DeviceRepositoryImpl(getIt(), getIt()),
+    );
+
+    getIt.registerLazySingleton<DeviceProtocolRepository>(
+      () => DeviceProtocolRepositoryImpl(getIt(), getIt()),
     );
 
     getIt.registerLazySingleton<AlarmRepository>(

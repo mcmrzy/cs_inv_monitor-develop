@@ -393,7 +393,7 @@ export const handlers = [
     return HttpResponse.json({
       code: 0, message: 'success',
       data: paginatedResponse([
-        { id: 2, phone: '13800000002', nickname: '测试代理商', email: 'agent@example.com', status: 1, subUserCount: 2, deviceCount: 5, deviceLimit: 100, userLimit: 50, createdAt: '2025-01-01T00:00:00Z', lastLoginAt: '2026-01-01T00:00:00Z' },
+        { id: 2, phone: '13800000002', nickname: '测试管理员', email: 'admin2@example.com', status: 1, subUserCount: 2, deviceCount: 5, deviceLimit: 100, userLimit: 50, createdAt: '2025-01-01T00:00:00Z', lastLoginAt: '2026-01-01T00:00:00Z' },
       ], 1),
     })
   }),

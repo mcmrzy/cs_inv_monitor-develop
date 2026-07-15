@@ -1,19 +1,24 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"inv-device-server/internal/config"
 	"inv-device-server/internal/model"
 	"inv-device-server/pkg/logger"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
@@ -102,10 +107,15 @@ func TestAlertConsumer_PostInternalAlarm(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		defer r.Body.Close()
 
-		var alarm model.AlarmData
-		err := json.Unmarshal(body, &alarm)
+		var request internalAlarmEnvelopeRequest
+		err := json.Unmarshal(body, &request)
 		assert.NoError(t, err)
-		assert.Equal(t, "SN001", alarm.SN)
+		assert.Equal(t, "SN001", request.SN)
+		assert.Equal(t, "alarm", request.Topic)
+		assert.False(t, request.ReceivedAt.IsZero())
+		var envelope map[string]interface{}
+		require.NoError(t, json.Unmarshal(request.Envelope, &envelope))
+		assert.Equal(t, float64(1), envelope["v"])
 
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -113,7 +123,7 @@ func TestAlertConsumer_PostInternalAlarm(t *testing.T) {
 
 	consumer := NewAlertConsumer(
 		[]string{"localhost:9092"}, "topic", "group",
-		nil, handler.URL, "test-key",
+		nil, nil, handler.URL, "test-key",
 	)
 
 	alarm := &model.AlarmData{
@@ -129,12 +139,13 @@ func TestAlertConsumer_PostInternalAlarm(t *testing.T) {
 func TestAlertConsumer_PostInternalAlarm_EmptyAPIServer(t *testing.T) {
 	consumer := NewAlertConsumer(
 		[]string{"localhost:9092"}, "topic", "group",
-		nil, "", "",
+		nil, nil, "", "",
 	)
 
 	alarm := &model.AlarmData{SN: "SN001"}
 	err := consumer.postInternalAlarm(alarm)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "API server URL is empty")
 }
 
 func TestAlertConsumer_PostInternalAlarm_APIError(t *testing.T) {
@@ -145,7 +156,7 @@ func TestAlertConsumer_PostInternalAlarm_APIError(t *testing.T) {
 
 	consumer := NewAlertConsumer(
 		[]string{"localhost:9092"}, "topic", "group",
-		nil, handler.URL, "",
+		nil, nil, handler.URL, "",
 	)
 
 	alarm := &model.AlarmData{SN: "SN001"}
@@ -157,9 +168,147 @@ func TestAlertConsumer_PostInternalAlarm_APIError(t *testing.T) {
 func TestNewAlertConsumer(t *testing.T) {
 	consumer := NewAlertConsumer(
 		[]string{"localhost:9092"}, "topic", "group",
-		redis.NewClient(&redis.Options{}), "http://api", "key",
+		redis.NewClient(&redis.Options{}), nil, "http://api", "key",
 	)
 	assert.NotNil(t, consumer)
-	assert.Equal(t, 5, consumer.workerCount)
-	assert.NotNil(t, consumer.msgChan)
+	assert.NotNil(t, consumer.consumer)
+}
+
+func TestAlertConsumer_FailedDeliveryDoesNotCommitOrFetchPastMessage(t *testing.T) {
+	requestSeen := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		select {
+		case requestSeen <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	reader := &scriptedKafkaReader{messages: []kafka.Message{{
+		Topic: "alerts", Partition: 0, Offset: 1,
+		Value: []byte(`{"sn":"SN001","msg_type":"alarm","received_at":"2026-07-14T12:00:00Z","payload":{"t":1784030400,"v":1,"data":{"source":1,"code":8,"level":2,"state":1}}}`),
+	}, {
+		Topic: "alerts", Partition: 0, Offset: 2,
+		Value: []byte(`{"sn":"SN001","payload":null}`),
+	}}}
+	consumer := NewAlertConsumer([]string{"unused"}, "alerts", "group", nil, nil, server.URL, "key")
+	consumer.consumer = reader
+	ctx, cancel := context.WithCancel(context.Background())
+	consumer.Start(ctx)
+	select {
+	case <-requestSeen:
+	case <-time.After(time.Second):
+		t.Fatal("alert delivery was not attempted")
+	}
+	cancel()
+	time.Sleep(20 * time.Millisecond)
+	fetches, events := reader.snapshot()
+	assert.Equal(t, 1, fetches)
+	assert.Equal(t, []string{"fetch:1"}, events)
+}
+
+func TestAlertConsumer_SuccessfulDeliveryCommitsThenFetchesNext(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := &scriptedKafkaReader{messages: []kafka.Message{{
+		Topic: "alerts", Partition: 0, Offset: 10,
+		Value: []byte(`{"sn":"SN001","received_at":"2026-07-14T12:00:00Z","payload":{"t":1784030400,"v":1,"data":{"source":1,"code":8,"level":2,"state":1}}}`),
+	}, {
+		Topic: "alerts", Partition: 0, Offset: 11,
+		Value: []byte(`{"sn":"SN001","received_at":"2026-07-14T12:03:00Z","payload":{"t":1784030580,"v":1,"data":{"source":1,"code":8,"level":2,"state":0}}}`),
+	}}}
+	reader.onCommitSuccess = func(message kafka.Message) {
+		if message.Offset == 11 {
+			cancel()
+		}
+	}
+	consumer := NewAlertConsumer([]string{"unused"}, "alerts", "group", nil, nil, server.URL, "key")
+	consumer.consumer = reader
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Millisecond)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("alert consumer did not finish")
+	}
+	_, events := reader.snapshot()
+	assert.Equal(t, int32(2), requests.Load())
+	assert.Equal(t, []string{"fetch:10", "commit:10", "fetch:11", "commit:11"}, events)
+}
+
+func TestAlertConsumer_HTTP4xxAuditedBeforeCommit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := &scriptedKafkaReader{messages: []kafka.Message{{
+		Topic: "alerts", Partition: 0, Offset: 60,
+		Value: []byte(`{"sn":"SN001","received_at":"2026-07-14T12:00:00Z","payload":{"t":1784030400,"v":1,"data":{"source":1,"code":8,"level":2,"state":1}}}`),
+	}}}
+	reader.onCommitSuccess = func(kafka.Message) { cancel() }
+	store := &fakeIngestErrorStore{}
+	consumer := NewAlertConsumer([]string{"unused"}, "alerts", "group", nil, store, server.URL, "key")
+	consumer.consumer = reader
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Millisecond)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("alert consumer did not finish")
+	}
+
+	_, events := reader.snapshot()
+	assert.Equal(t, []string{"fetch:60", "commit:60"}, events)
+	store.mu.Lock()
+	require.Len(t, store.records, 1)
+	assert.Equal(t, "DOWNSTREAM_HTTP_4XX", store.records[0].code)
+	assert.Equal(t, "SN001", store.records[0].sn)
+	store.mu.Unlock()
+}
+
+func TestAlertConsumer_AuditFailureRetainsOffset(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := &scriptedKafkaReader{messages: []kafka.Message{{
+		Topic: "alerts", Partition: 0, Offset: 70, Value: []byte("not-json"),
+	}, {
+		Topic: "alerts", Partition: 0, Offset: 71, Value: []byte(`{"sn":"SN001","payload":null}`),
+	}}}
+	store := &fakeIngestErrorStore{err: assert.AnError, called: make(chan struct{}, 1)}
+	consumer := NewAlertConsumer([]string{"unused"}, "alerts", "group", nil, store, "http://api", "key")
+	consumer.consumer = reader
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Second)
+	}()
+	select {
+	case <-store.called:
+	case <-time.After(time.Second):
+		t.Fatal("alert ingest error audit was not attempted")
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("alert consumer did not stop")
+	}
+
+	fetches, events := reader.snapshot()
+	assert.Equal(t, 1, fetches)
+	assert.Equal(t, []string{"fetch:70"}, events)
 }

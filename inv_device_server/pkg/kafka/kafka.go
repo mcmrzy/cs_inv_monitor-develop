@@ -84,8 +84,14 @@ func (p *Producer) Close() error {
 }
 
 type Consumer struct {
-	reader  *kafka.Reader
+	reader  messageReader
 	handler func(context.Context, []byte) error
+}
+
+type messageReader interface {
+	FetchMessage(context.Context) (kafka.Message, error)
+	CommitMessages(context.Context, ...kafka.Message) error
+	Close() error
 }
 
 func NewConsumer(brokers []string, topic string, groupID string) *Consumer {
@@ -109,26 +115,73 @@ func (c *Consumer) Start(ctx context.Context) error {
 		return fmt.Errorf("no handler set")
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return c.reader.Close()
-		default:
-			m, err := c.reader.FetchMessage(ctx)
-			if err != nil {
-				return fmt.Errorf("fetch message: %w", err)
+	defer c.reader.Close()
+	for ctx.Err() == nil {
+		m, err := c.reader.FetchMessage(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
 			}
-
-			if err := c.handler(ctx, m.Value); err != nil {
-				continue
+			log.Printf("kafka consumer fetch failed, retrying: %v", err)
+			if !waitRetry(ctx, 250*time.Millisecond) {
+				return nil
 			}
+			continue
+		}
 
-			if err := c.reader.CommitMessages(ctx, m); err != nil {
+		attempt := 0
+		for {
+			attempt++
+			if err := c.handler(ctx, m.Value); err == nil {
+				break
+			} else {
+				log.Printf("kafka handler failed; retaining topic=%s partition=%d offset=%d attempt=%d: %v",
+					m.Topic, m.Partition, m.Offset, attempt, err)
+			}
+			if !waitRetry(ctx, consumerBackoff(attempt)) {
+				return nil
+			}
+		}
+
+		commitAttempt := 0
+		for {
+			commitAttempt++
+			if err := c.reader.CommitMessages(ctx, m); err == nil {
+				break
+			} else {
+				log.Printf("kafka commit failed; blocking next message topic=%s partition=%d offset=%d attempt=%d: %v",
+					m.Topic, m.Partition, m.Offset, commitAttempt, err)
+			}
+			if !waitRetry(ctx, consumerBackoff(commitAttempt)) {
+				return nil
 			}
 		}
 	}
+	return nil
 }
 
 func (c *Consumer) Close() error {
 	return c.reader.Close()
+}
+
+func consumerBackoff(attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	shift := attempt - 1
+	if shift > 4 {
+		shift = 4
+	}
+	return 250 * time.Millisecond * time.Duration(1<<shift)
+}
+
+func waitRetry(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }

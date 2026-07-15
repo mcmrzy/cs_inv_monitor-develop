@@ -30,6 +30,7 @@ import StatusBadge from '@/components/StatusBadge'
 import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
+import { decodeTelemetryQuality } from '@/utils/telemetryQuality'
 
 const { Text, Title } = Typography
 const { RangePicker } = DatePicker
@@ -191,8 +192,8 @@ const DevicesPage: React.FC = () => {
   const isEndUser = user?.role === Role.END_USER
   const isInstaller = user?.role === Role.INSTALLER
   const isSuperAdmin = user?.role === Role.SUPER_ADMIN
-  const isAgent = user?.role === Role.AGENT
-  const canDirectUnbind = isSuperAdmin || isAgent
+  const isAdmin = user?.role === Role.ADMIN
+  const canDirectUnbind = isSuperAdmin || isAdmin
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
@@ -556,7 +557,7 @@ const DevicesPage: React.FC = () => {
   const { data: installersRes } = useQuery({
     queryKey: ['users', 'installers'],
     queryFn: () =>
-      userApi.list({ role: 2, pageSize: 100 }).then((res) => {
+      userApi.list({ role: Role.INSTALLER, pageSize: 100 }).then((res) => {
         const d = res.data?.data ?? res.data
         const items = Array.isArray(d) ? d : (d?.items ?? [])
         return items as Array<{ id: number; nickname: string; phone: string }>
@@ -1455,6 +1456,47 @@ const DevicesPage: React.FC = () => {
     }
   }, [deviceDetailRaw, detailDevice, realtimeData])
   const currentStatus = deviceDetail?.status ?? 0
+  const latestTelemetrySample = telemetryData.length > 0 ? telemetryData[telemetryData.length - 1] : undefined
+  const telemetryMetadata = useMemo(() => {
+    const realtime = realtimeData?._raw ?? {}
+    const protocolVersion = realtime.protocol_version ?? latestTelemetrySample?.protocol_version
+    const rawQualityFlags = realtime.quality_flags ?? latestTelemetrySample?.quality_flags
+    return {
+      protocolVersion: protocolVersion == null || protocolVersion === '' ? null : String(protocolVersion),
+      quality: decodeTelemetryQuality(rawQualityFlags),
+    }
+  }, [latestTelemetrySample, realtimeData])
+
+  const renderTelemetryMetadata = () => {
+    const { protocolVersion, quality } = telemetryMetadata
+    return (
+      <Card size="small" title={t('dev.telemetryMetadata')} style={{ marginBottom: 16 }}>
+        <Descriptions column={2} size="small">
+          <Descriptions.Item label={t('dev.protocolVersion')}>
+            {protocolVersion ? <Tag color="blue">V{protocolVersion}</Tag> : <Text type="secondary">{t('dev.notReported')}</Text>}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('dev.samplingCycle')}>
+            <Tag>3 {t('dev.minutes')}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('dev.dataQuality')} span={2}>
+            {quality.isNormal === null ? (
+              <Text type="secondary">{t('dev.notReported')}</Text>
+            ) : quality.isNormal ? (
+              <Tag color="success">{t('dev.qualityNormal')} (0)</Tag>
+            ) : (
+              <Space size={[4, 4]} wrap>
+                {quality.flags.map((flag) => <Tag color="warning" key={flag.key}>{flag.label}</Tag>)}
+                {quality.unknownMask !== 0 && (
+                  <Tag color="error">{t('dev.unknownQualityFlag')} 0x{quality.unknownMask.toString(16).toUpperCase()}</Tag>
+                )}
+                <Text type="secondary">mask=0x{quality.value!.toString(16).toUpperCase()}</Text>
+              </Space>
+            )}
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+    )
+  }
 
   const drawerTabItems = [
     {
@@ -1489,6 +1531,8 @@ const DevicesPage: React.FC = () => {
               </Descriptions.Item>
             </Descriptions>
           </Card>
+
+          {renderTelemetryMetadata()}
 
           {modelFields?.cache && modelFields.cache.showFields.length > 0 && (
             <Card size="small" title={`${detailDevice?.model ?? ''} ${t('dev.statusOverview')}`} style={{ marginBottom: 16 }}>
@@ -1934,7 +1978,7 @@ const DevicesPage: React.FC = () => {
                       {t('dev.addDevice')}
                     </Button>
                   )}
-                  {(isSuperAdmin || isAgent) && (
+                  {(isSuperAdmin || isAdmin) && (
                     <Button icon={<UploadOutlined />} onClick={() => {
                       setImportModalOpen(true)
                       setImportFile(null)

@@ -654,9 +654,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/device-data-batch", internalHandler.DeviceDataBatch)
 		internal.POST("/device-cmd-status", internalHandler.DeviceCmdStatus)
 		internal.POST("/device-cmd-result", internalHandler.DeviceCmdResult)
-		internal.POST("/device-alarm", internalHandler.DeviceAlarm)
-		internal.POST("/parallel-state", internalHandler.ParallelState)
-		internal.POST("/three-phase", internalHandler.ThreePhaseData)
+		internal.POST("/device-alarm", internalHandler.IngestAlarmV1)
+		internal.POST("/parallel-state", internalHandler.IngestParallelV1)
+		internal.POST("/three-phase", internalHandler.IngestThreePhaseV1)
 		internal.POST("/ota-status", internalHandler.OTAStatus)
 		internal.POST("/ota-cmd-ack", internalHandler.OTACmdAck)
 	}
@@ -749,6 +749,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.GET("/devices/:sn/alarm-events", internalHandler.GetAlarmEvents)
 			auth.GET("/devices/:sn/parallel-state", internalHandler.GetParallelState)
 			auth.GET("/devices/:sn/three-phase", internalHandler.GetThreePhaseHistory)
+			auth.GET("/alarm-events/:id", internalHandler.GetAlarmEventDetail)
 			auth.GET("/devices/:sn/statistics", deps.DeviceHandler.GetStatistics)
 			auth.POST("/devices/add-to-station", deps.DeviceHandler.AddToStation)
 			auth.POST("/devices/:sn/remove-from-station", deps.DeviceHandler.RemoveFromStation)
@@ -781,7 +782,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/notifications/clear", deps.NotificationHandler.ClearAll)
 			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
 
-			registerModelRoutes(auth, deps.ModelHandler)
+			registerModelRoutes(auth, deps.ModelHandler, deps.PermChecker)
 
 			auth.GET("/dashboard/statistics", deps.DashboardHandler.GetStatistics)
 			auth.GET("/dashboard/device-distribution", deps.DashboardHandler.GetDeviceDistribution)
