@@ -1,10 +1,10 @@
-FROM docker.m.daocloud.io/library/node:20-alpine AS builder
+FROM docker.m.daocloud.io/library/node:20.19-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install --registry=https://registry.npmmirror.com
+RUN npm ci --registry=https://registry.npmjs.org
 
 COPY . .
 

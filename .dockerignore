@@ -3,6 +3,9 @@
 !inv_api_server/**
 !database/
 !database/**
+!deploy/
+!deploy/postgres/
+!deploy/postgres/**
 
 inv_api_server/.gocache/
 inv_api_server/.gocache*/
