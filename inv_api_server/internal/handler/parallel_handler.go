@@ -1,60 +1,170 @@
 package handler
 
 import (
-	"net/http"
+	"errors"
+	"strconv"
+
+	"inv-api-server/internal/middleware"
+	"inv-api-server/internal/service"
+	"inv-api-server/pkg/apperr"
+	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
-// ParallelHandler 处理并联组相关的请求。
-// 当前为占位实现，List 返回空列表避免前端 404，
-// 其余方法返回 501 Not Implemented。
-type ParallelHandler struct{}
-
-func NewParallelHandler() *ParallelHandler {
-	return &ParallelHandler{}
+// ParallelHandler 处理并联组（parallel-groups）的 CRUD 请求。
+type ParallelHandler struct {
+	parallelService *service.ParallelService
 }
 
-// List 返回空的并联组列表，让前端不报 404
+func NewParallelHandler(parallelService *service.ParallelService) *ParallelHandler {
+	return &ParallelHandler{parallelService: parallelService}
+}
+
+// List 返回分页的并联组列表（仅管理员可查看）
 func (h *ParallelHandler) List(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"code":    0,
-		"message": "success",
-		"data": gin.H{
-			"items": []interface{}{},
-			"total": 0,
-		},
-	})
+	if middleware.GetRole(c) > 1 {
+		response.HandleError(c, apperr.Forbidden("仅管理员可操作"))
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize := getPageSize(c, 20)
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	search := c.Query("search")
+	var stationID *int64
+	if sidStr := c.Query("station_id"); sidStr != "" {
+		if sid, err := strconv.ParseInt(sidStr, 10, 64); err == nil && sid > 0 {
+			stationID = &sid
+		}
+	}
+
+	groups, total, err := h.parallelService.List(c.Request.Context(), page, pageSize, search, stationID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询并联组列表失败", err))
+		return
+	}
+	response.Page(c, groups, total, page, pageSize)
 }
 
-// Get 返回单个并联组详情（未实现）
+// Get 返回单个并联组详情（仅管理员可查看）
 func (h *ParallelHandler) Get(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"code":    501,
-		"message": "not implemented",
-	})
+	if middleware.GetRole(c) > 1 {
+		response.HandleError(c, apperr.Forbidden("仅管理员可操作"))
+		return
+	}
+
+	id, ok := parseParallelGroupID(c)
+	if !ok {
+		return
+	}
+
+	group, err := h.parallelService.GetByID(c.Request.Context(), id)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询并联组失败", err))
+		return
+	}
+	if group == nil {
+		response.HandleError(c, apperr.NotFound("并联组不存在"))
+		return
+	}
+	response.Success(c, group)
 }
 
-// Create 创建并联组（未实现）
+// Create 创建并联组（仅管理员）
 func (h *ParallelHandler) Create(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"code":    501,
-		"message": "not implemented",
-	})
+	if middleware.GetRole(c) > 1 {
+		response.HandleError(c, apperr.Forbidden("仅管理员可操作"))
+		return
+	}
+
+	var req service.CreateParallelGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("无效的请求参数: "+err.Error()))
+		return
+	}
+
+	group, err := h.parallelService.Create(c.Request.Context(), &req)
+	if err != nil {
+		if errors.Is(err, service.ErrValidation) {
+			response.HandleError(c, apperr.BadRequest(err.Error()))
+			return
+		}
+		response.HandleError(c, apperr.Internal("创建并联组失败", err))
+		return
+	}
+	response.SuccessWithMessage(c, "并联组创建成功", group)
 }
 
-// Update 更新并联组（未实现）
+// Update 更新并联组（仅管理员）
 func (h *ParallelHandler) Update(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"code":    501,
-		"message": "not implemented",
-	})
+	if middleware.GetRole(c) > 1 {
+		response.HandleError(c, apperr.Forbidden("仅管理员可操作"))
+		return
+	}
+
+	id, ok := parseParallelGroupID(c)
+	if !ok {
+		return
+	}
+
+	var req service.UpdateParallelGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("无效的请求参数: "+err.Error()))
+		return
+	}
+
+	if err := h.parallelService.Update(c.Request.Context(), id, &req); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.HandleError(c, apperr.NotFound("并联组不存在"))
+			return
+		}
+		if errors.Is(err, service.ErrValidation) {
+			response.HandleError(c, apperr.BadRequest(err.Error()))
+			return
+		}
+		response.HandleError(c, apperr.Internal("更新并联组失败", err))
+		return
+	}
+	response.SuccessWithMessage(c, "并联组更新成功", gin.H{"id": id})
 }
 
-// Delete 删除并联组（未实现）
+// Delete 删除并联组（仅管理员）
 func (h *ParallelHandler) Delete(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"code":    501,
-		"message": "not implemented",
-	})
+	if middleware.GetRole(c) > 1 {
+		response.HandleError(c, apperr.Forbidden("仅管理员可操作"))
+		return
+	}
+
+	id, ok := parseParallelGroupID(c)
+	if !ok {
+		return
+	}
+
+	if err := h.parallelService.Delete(c.Request.Context(), id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.HandleError(c, apperr.NotFound("并联组不存在"))
+			return
+		}
+		response.HandleError(c, apperr.Internal("删除并联组失败", err))
+		return
+	}
+	response.SuccessWithMessage(c, "并联组已删除", gin.H{"id": id})
+}
+
+// parseParallelGroupID extracts and validates the group ID from the URL path.
+func parseParallelGroupID(c *gin.Context) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		response.HandleError(c, apperr.BadRequest("无效的并联组ID"))
+		return 0, false
+	}
+	return id, true
 }

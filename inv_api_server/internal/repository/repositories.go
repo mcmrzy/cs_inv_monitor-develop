@@ -1338,6 +1338,23 @@ func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
 	return err
 }
 
+// Create inserts a new device with the specified fields. The device is created
+// as unbound (user_id = 0, status = 0). Returns an error if the SN already exists.
+func (r *DeviceRepository) Create(ctx context.Context, sn, model string, ratedPower *float64, firmwareArm, firmwareEsp string) error {
+	query := `INSERT INTO devices (sn, model, rated_power, firmware_arm, firmware_esp, user_id, status, created_at, updated_at)
+		VALUES ($1, $2, COALESCE($3, 0), $4, $5, 0, 0, NOW(), NOW())
+		ON CONFLICT (sn) DO NOTHING`
+	tag, err := r.db.Exec(ctx, query, sn, model, ratedPower, firmwareArm, firmwareEsp)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("device already exists: %s", sn)
+	}
+	r.invalidateDeviceCache(ctx, sn)
+	return nil
+}
+
 func (r *DeviceRepository) Bind(ctx context.Context, sn string, userID, stationID int64) error {
 	query := `UPDATE devices SET user_id = $1, station_id = $2, timezone = COALESCE((SELECT timezone FROM stations WHERE id = $2), 'Asia/Shanghai'), updated_at = NOW() WHERE sn = $3 AND user_id = 0`
 	tag, err := r.db.Exec(ctx, query, userID, stationID, sn)
@@ -2599,6 +2616,26 @@ func (r *AlarmRepository) GetStats(ctx context.Context, userID int64, role ...in
 		"handled":   handled,
 		"critical":  critical,
 	}, nil
+}
+
+func (r *DeviceRepository) RequestUnbind(ctx context.Context, deviceSN string, requestedBy int64, reason string) (int64, error) {
+	// Check for existing pending request to prevent duplicates (code-level guard).
+	var existing int64
+	checkQuery := `SELECT COUNT(*) FROM device_unbind_requests WHERE device_sn = $1 AND status = 'pending'`
+	if err := r.db.QueryRow(ctx, checkQuery, deviceSN).Scan(&existing); err != nil {
+		return 0, err
+	}
+	if existing > 0 {
+		return 0, fmt.Errorf("该设备已有待审核的解绑请求")
+	}
+
+	var id int64
+	query := `INSERT INTO device_unbind_requests (device_sn, requested_by, reason, status, created_at)
+		VALUES ($1, $2, $3, 'pending', NOW()) RETURNING id`
+	if err := r.db.QueryRow(ctx, query, deviceSN, requestedBy, reason).Scan(&id); err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 func (r *DeviceRepository) GetUnbindRequests(ctx context.Context, page, pageSize int) ([]map[string]interface{}, int64, error) {

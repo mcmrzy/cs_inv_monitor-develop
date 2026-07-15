@@ -159,7 +159,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
 	alertRuleHandler := handler.NewAlertRuleHandler(db)
 	workOrderHandler := handler.NewWorkOrderHandler(db)
-	parallelHandler := handler.NewParallelHandler()
+	parallelRepo := repository.NewParallelRepository(db)
+	parallelService := service.NewParallelService(parallelRepo)
+	parallelHandler := handler.NewParallelHandler(parallelService)
 
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
@@ -738,11 +740,13 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.GET("/stations/:id/statistics", deps.StationHandler.GetStatistics)
 
 			auth.GET("/devices", deps.DeviceHandler.List)
+			auth.POST("/devices", deps.DeviceHandler.Create)
 			auth.GET("/devices/:sn", deps.DeviceHandler.GetDetail)
 			auth.GET("/devices/:sn/realtime", deps.DeviceHandler.GetRealtimeData)
 			auth.POST("/devices/bind", deps.DeviceHandler.Bind)
 			auth.POST("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
 			auth.DELETE("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
+			auth.POST("/devices/:sn/request-unbind", deps.DeviceHandler.RequestUnbind)
 			auth.DELETE("/devices/:sn", deps.DeviceHandler.DeleteDevice)
 			auth.PUT("/devices/:sn", deps.DeviceHandler.Update)
 			auth.POST("/devices/:sn/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.Control)
@@ -886,6 +890,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			parallelGroup.GET("/:id", deps.ParallelHandler.Get)
 			parallelGroup.POST("", deps.ParallelHandler.Create)
 			parallelGroup.PUT("/:id", deps.ParallelHandler.Update)
+			parallelGroup.PATCH("/:id", deps.ParallelHandler.Update)
 			parallelGroup.DELETE("/:id", deps.ParallelHandler.Delete)
 		}
 
