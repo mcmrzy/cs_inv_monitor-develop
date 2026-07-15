@@ -40,6 +40,15 @@ func (w *gzipWriter) Write(data []byte) (int, error) {
 	return w.ResponseWriter.Write(data)
 }
 
+// WriteHeader intercepts WriteHeader to ensure gzip headers are set before the
+// response headers are flushed. This is critical for reverse-proxy scenarios
+// where httputil.ReverseProxy may flush headers (via maxLatencyWriter's
+// delayedFlush goroutine) before the first Write call reaches gzipWriter.
+func (w *gzipWriter) WriteHeader(code int) {
+	w.ensureChecked()
+	w.ResponseWriter.WriteHeader(code)
+}
+
 func (w *gzipWriter) WriteString(s string) (int, error) {
 	w.ensureChecked()
 	if w.gzActive {
@@ -49,7 +58,11 @@ func (w *gzipWriter) WriteString(s string) (int, error) {
 }
 
 // Flush implements http.Flusher to support SSE and streaming responses.
+// ensureChecked is called first so that when a reverse proxy's maxLatencyWriter
+// fires a delayedFlush before the first Write, the Content-Encoding header is
+// already set and Content-Length is removed before headers are flushed.
 func (w *gzipWriter) Flush() {
+	w.ensureChecked()
 	if w.gzActive {
 		w.writer.Flush()
 	}
