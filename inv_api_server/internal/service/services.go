@@ -31,6 +31,19 @@ func generateTaskID() string {
 	return id.String()
 }
 
+// jitterSeconds returns a random offset in [0, max) seconds for cache TTL jitter.
+// This prevents cache stampede from synchronized expiry across multiple keys.
+func jitterSeconds(max int) int {
+	if max <= 0 {
+		return 0
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return max / 2 // fallback to midpoint
+	}
+	return int(n.Int64())
+}
+
 type UserService struct {
 	repo  *repository.UserRepository
 	cache *redis.Client
@@ -375,6 +388,12 @@ func (s *DeviceService) GetStationPowerBreakdown(ctx context.Context, stationID 
 
 func (s *DeviceService) GetRealtimeData(ctx context.Context, sn string) (map[string]interface{}, error) {
 	return s.repo.GetRealtimeData(ctx, sn)
+}
+
+// BatchGetRealtimeData fetches realtime data for multiple devices in a single
+// Redis Pipeline round-trip, eliminating N+1 queries in device list endpoints.
+func (s *DeviceService) BatchGetRealtimeData(ctx context.Context, sns []string) (map[string]map[string]interface{}, error) {
+	return s.repo.BatchGetRealtimeData(ctx, sns)
 }
 
 func (s *DeviceService) EnsureDevice(ctx context.Context, sn string) error {

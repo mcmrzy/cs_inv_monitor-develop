@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/lib/echarts'
 import { AlertOutlined } from '@ant-design/icons'
 import useTranslation from '@/hooks/useTranslation'
 

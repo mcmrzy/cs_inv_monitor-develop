@@ -413,6 +413,9 @@ func (h *InternalHandler) pushRealtimeData(ctx context.Context, sn string, data 
 
 	pubChannel := "realtime:channel:" + sn
 	_ = h.rdb.Publish(ctx, pubChannel, string(payload)).Err()
+
+	// 通知 Dashboard SSE 订阅者：设备数据更新，触发仪表盘刷新
+	_ = h.rdb.Publish(ctx, "dashboard:events", sn).Err()
 }
 
 func (h *InternalHandler) DeviceInfo(c *gin.Context) {

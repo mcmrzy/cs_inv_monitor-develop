@@ -232,9 +232,26 @@ func (h *AlarmHandler) Ignore(c *gin.Context) {
 }
 
 func (h *AlarmHandler) Delete(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid alarm id"))
+		return
+	}
+
+	// Ownership check: non-admin users can only delete their own alarms
+	alarm, err := h.alarmService.GetByID(c.Request.Context(), alarmID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("system error", err))
+		return
+	}
+	if alarm == nil {
+		response.HandleError(c, apperr.NotFound("alarm not found"))
+		return
+	}
+	if role > 1 && alarm.UserID != userID {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
 
@@ -247,6 +264,12 @@ func (h *AlarmHandler) Delete(c *gin.Context) {
 }
 
 func (h *AlarmHandler) ClearAll(c *gin.Context) {
+	// Only admin can clear all alarms
+	if middleware.GetRole(c) != 0 {
+		response.HandleError(c, apperr.Forbidden("admin only"))
+		return
+	}
+
 	if err := h.alarmService.ClearAll(c.Request.Context()); err != nil {
 		response.HandleError(c, apperr.Internal("clear failed", err))
 		return

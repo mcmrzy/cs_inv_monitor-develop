@@ -19,7 +19,7 @@ vi.mock('@/components/SliderCaptcha/SliderCaptchaModal', () => ({
 }))
 
 // Mock echarts to avoid canvas issues in jsdom
-vi.mock('echarts-for-react', () => ({
+vi.mock('@/lib/echarts', () => ({
   default: () => <div data-testid="echarts-mock">chart</div>,
 }))
 

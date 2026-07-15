@@ -205,6 +205,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("database.user", "DB_USER")
 	viper.BindEnv("database.password", "DB_PASSWORD")
 	viper.BindEnv("database.database", "DB_NAME")
+	viper.BindEnv("database.ssl_mode", "DB_SSL_MODE")
 
 	viper.BindEnv("redis.host", "REDIS_HOST")
 	viper.BindEnv("redis.port", "REDIS_PORT")

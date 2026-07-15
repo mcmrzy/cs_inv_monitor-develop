@@ -1330,6 +1330,148 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 	return nil, err
 }
 
+// BatchGetRealtimeData fetches realtime data for multiple devices in a single round-trip
+// using Redis Pipeline, eliminating the N+1 query pattern where each device triggers
+// individual EXISTS/GET/HGETALL calls.
+//
+// For a list of N devices this performs:
+//   - 1 DB query to fetch all device statuses
+//   - 1 Redis Pipeline with EXISTS + GET + HGETALL for all devices
+//
+// instead of N × (1 DB query + 4 Redis calls).
+func (r *DeviceRepository) BatchGetRealtimeData(ctx context.Context, sns []string) (map[string]map[string]interface{}, error) {
+	if len(sns) == 0 {
+		return make(map[string]map[string]interface{}), nil
+	}
+
+	result := make(map[string]map[string]interface{}, len(sns))
+
+	// Step 1: Batch-fetch device statuses from DB (single query instead of N)
+	statusMap := make(map[string]int, len(sns))
+	rows, err := r.db.Query(ctx,
+		`SELECT sn, status FROM devices WHERE sn = ANY($1) AND deleted_at IS NULL`, sns)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var sn string
+			var status int
+			if err := rows.Scan(&sn, &status); err == nil {
+				statusMap[sn] = status
+			}
+		}
+	}
+
+	if r.cache == nil {
+		// No Redis: return minimal data from DB
+		for _, sn := range sns {
+			online := false
+			if status, ok := statusMap[sn]; ok && status == 1 {
+				online = true
+			}
+			result[sn] = map[string]interface{}{"device_sn": sn, "online": online}
+		}
+		return result, nil
+	}
+
+	// Step 2: Use Redis Pipeline to batch all per-device lookups
+	pipe := r.cache.Pipeline()
+
+	// Prepare pipeline commands for each device
+	type pipeCmds struct {
+		exists    *redis.IntCmd
+		validGet  *redis.StringCmd
+		latestGet *redis.StringCmd
+		fieldsHGA *redis.MapStringStringCmd
+	}
+	cmds := make(map[string]*pipeCmds, len(sns))
+
+	for _, sn := range sns {
+		c := &pipeCmds{}
+		c.exists = pipe.Exists(ctx, "device:heartbeat:"+sn)
+		c.validGet = pipe.Get(ctx, "realtime:last_valid:"+sn)
+		c.latestGet = pipe.Get(ctx, "realtime:latest:"+sn)
+		c.fieldsHGA = pipe.HGetAll(ctx, "realtime:fields:"+sn)
+		cmds[sn] = c
+	}
+
+	// Execute pipeline (single round-trip)
+	_, _ = pipe.Exec(ctx)
+
+	// Step 3: Assemble results from pipeline responses
+	for _, sn := range sns {
+		c := cmds[sn]
+		online := false
+		if status, ok := statusMap[sn]; ok && status == 1 {
+			online = true
+		}
+		if c.exists.Val() > 0 {
+			online = true
+		}
+
+		data := make(map[string]interface{})
+		data["online"] = online
+		data["device_sn"] = sn
+
+		// Priority 1: realtime:last_valid (valid data cache)
+		if validCached := c.validGet.Val(); validCached != "" {
+			var m map[string]interface{}
+			if json.Unmarshal([]byte(validCached), &m) == nil {
+				for k, v := range m {
+					if nested, ok := v.(map[string]interface{}); ok {
+						if innerData, exists := nested["data"].(map[string]interface{}); exists {
+							data[k] = innerData
+						} else {
+							data[k] = v
+						}
+					} else {
+						data[k] = v
+					}
+				}
+				data["_data_source"] = "last_valid"
+			}
+		}
+
+		// Priority 2: realtime:latest (if valid cache was empty)
+		if len(data) <= 3 {
+			if cached := c.latestGet.Val(); cached != "" {
+				var m map[string]interface{}
+				if json.Unmarshal([]byte(cached), &m) == nil {
+					for k, v := range m {
+						if nested, ok := v.(map[string]interface{}); ok {
+							if innerData, exists := nested["data"].(map[string]interface{}); exists {
+								data[k] = innerData
+							} else {
+								data[k] = v
+							}
+						} else {
+							data[k] = v
+						}
+					}
+				}
+			}
+		}
+
+		// Priority 3: field-level hash cache (HGETALL)
+		fields := c.fieldsHGA.Val()
+		for fieldName, valStr := range fields {
+			var fieldData map[string]interface{}
+			if json.Unmarshal([]byte(valStr), &fieldData) == nil {
+				if v, exists := fieldData["v"]; exists {
+					data[fieldName] = v
+				}
+			}
+		}
+
+		if len(data) > 3 {
+			result[sn] = normalizeRealtimeData(data)
+		} else {
+			result[sn] = data
+		}
+	}
+
+	return result, nil
+}
+
 func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
 	query := `INSERT INTO devices (sn, model, rated_power, user_id, status, created_at, updated_at)
 		VALUES ($1, '', 0, 0, 0, NOW(), NOW())
@@ -1648,491 +1790,17 @@ func (r *DeviceRepository) InsertNotification(ctx context.Context, sn string, st
 	return err
 }
 
-func getJSONFloat(data map[string]interface{}, keys ...string) float64 {
-	for _, key := range keys {
-		if v, ok := data[key]; ok {
-			switch val := v.(type) {
-			case float64:
-				return val
-			case json.Number:
-				f, _ := val.Float64()
-				return f
-			}
-		}
-	}
-	return 0
-}
-
-func getJSONString(data map[string]interface{}, keys ...string) string {
-	for _, key := range keys {
-		if v, ok := data[key]; ok {
-			if s, ok := v.(string); ok && s != "" {
-				return s
-			}
-		}
-	}
-	return ""
-}
-
-func getJSONInt(data map[string]interface{}, keys ...string) int64 {
-	for _, key := range keys {
-		if v, ok := data[key]; ok {
-			switch val := v.(type) {
-			case float64:
-				return int64(val)
-			case json.Number:
-				i, _ := val.Int64()
-				return i
-			case int64:
-				return val
-			case int:
-				return int64(val)
-			}
-		}
-	}
-	return 0
-}
-
-func getJSONBool(data map[string]interface{}, keys ...string) (bool, bool) {
-	for _, key := range keys {
-		if v, ok := data[key]; ok {
-			switch val := v.(type) {
-			case bool:
-				return val, true
-			case float64:
-				return val != 0, true
-			}
-		}
-	}
-	return false, false
-}
-
-// skipRawFields 非遥测字段集合，这些字段不应出现在遥测数据表格中
-var skipRawFields = map[string]bool{
-	// 设备信息（通过 info topic 注册到 devices 表，不在遥测流中）
-	"sn": true, "model": true, "manufacturer": true,
-	"firmware_arm": true, "firmware_esp": true, "firmware_dsp": true, "firmware_bms": true,
-	"type": true, "rated_power": true, "rated_voltage": true, "rated_freq": true,
-	"battery_voltage": true, "battery_type": true, "cell_count": true,
-	// 通用非数据字段
-	"timestamp": true, "topic": true, "device_sn": true,
-	"created_at": true, "updated_at": true, "time": true,
-	// 数组类型字段（不适合表格列展示）
-	"voltages": true, "temps": true, "machines": true,
-	// OTA 相关
-	"progress": true, "status_message": true, "ack": true,
-	"file_md5": true, "file_sha256": true, "file_size": true,
-	"target": true, "task_id": true, "url": true, "version": true,
-	// 命令/消息相关
-	"error_message": true, "message": true, "cmd": true,
-	"current_version": true, "device_id": true,
-}
-
+// GetTelemetryData returns time-series telemetry rows for a device.  It reads
+// directly from the device_telemetry_3min wide table via getTelemetryV2, which
+// serialises typed columns to JSON in a single to_jsonb() call — avoiding the
+// per-row jsonb_build_object reconstruction that the legacy
+// legacy compatibility view performed at the database level.
+//
+// The granularity parameter is accepted for API backward-compatibility but no
+// longer affects the query: device_telemetry_3min is already bucketed at
+// 3-minute intervals, so all granularities return the same pre-aggregated rows.
 func (r *DeviceRepository) GetTelemetryData(ctx context.Context, sn, startTime, endTime, granularity string) ([]map[string]interface{}, error) {
-	if data, err := r.getTelemetryV2(ctx, sn, startTime, endTime); err != nil {
-		return nil, err
-	} else if len(data) > 0 {
-		return data, nil
-	}
-
-	query := `
-		SELECT time, topic, data
-		FROM v_device_telemetry_compat
-		WHERE device_sn = $1 AND time >= $2 AND time <= $3
-		ORDER BY time ASC
-	`
-
-	rows, err := r.db.Query(ctx, query, sn, startTime, endTime)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	// 按时间窗口聚合，将不同 topic 的数据合并到同一时间槽
-	type timeSlot struct {
-		time              time.Time
-		data              map[string]interface{}
-		maxDailyPV        float64
-		maxDailyDischarge float64
-	}
-
-	slots := make(map[string]*timeSlot)
-	var orderedKeys []string
-
-	for rows.Next() {
-		var dataTime time.Time
-		var topic string
-		var dataJSON []byte
-
-		if err := rows.Scan(&dataTime, &topic, &dataJSON); err != nil {
-			return nil, err
-		}
-
-		var rawData map[string]interface{}
-		if len(dataJSON) > 0 {
-			json.Unmarshal(dataJSON, &rawData)
-		}
-		if rawData == nil {
-			continue
-		}
-
-		// 数据可能是嵌套格式 {"data": {...}, "timestamp": ...}，需要提取内层 data
-		if nestedData, ok := rawData["data"].(map[string]interface{}); ok {
-			rawData = nestedData
-		}
-
-		// 根据 granularity 选择聚合粒度
-		var key string
-		var rounded time.Time
-		// roundTo3Minute 将时间向下取整到3分钟窗口，确保同一轮上报的不同topic数据能合并
-		roundTo3Minute := func(t time.Time) time.Time {
-			minute := t.Minute()
-			roundedMinute := minute - (minute % 3)
-			return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), roundedMinute, 0, 0, t.Location())
-		}
-		switch granularity {
-		case "hour":
-			rounded = roundTo3Minute(dataTime)
-			key = rounded.Format(time.RFC3339)
-		case "week", "month":
-			rounded = time.Date(dataTime.Year(), dataTime.Month(), dataTime.Day(), 0, 0, 0, 0, dataTime.Location())
-			key = rounded.Format("2006-01-02")
-		default: // "day" or empty
-			// 判断时间跨度，超过2天按天聚合
-			startT, _ := time.Parse(time.RFC3339, startTime)
-			endT, _ := time.Parse(time.RFC3339, endTime)
-			if !startT.IsZero() && !endT.IsZero() && endT.Sub(startT) > 48*time.Hour {
-				rounded = time.Date(dataTime.Year(), dataTime.Month(), dataTime.Day(), 0, 0, 0, 0, dataTime.Location())
-				key = rounded.Format("2006-01-02")
-			} else {
-				rounded = roundTo3Minute(dataTime)
-				key = rounded.Format(time.RFC3339)
-			}
-		}
-
-		if _, exists := slots[key]; !exists {
-			slots[key] = &timeSlot{time: rounded, data: make(map[string]interface{})}
-			orderedKeys = append(orderedKeys, key)
-		}
-		slot := slots[key]
-
-		// mappedKeys 记录已被标准化映射的原始字段名，避免 pass-through 产生重复列
-		mappedKeys := make(map[string]bool)
-
-		// setFloat 设置浮点字段（零值也写入，保留夜间 0W 等有效读数）
-		setFloat := func(stdKey string, val float64, rawKeys ...string) {
-			slot.data[stdKey] = val
-			for _, rk := range rawKeys {
-				mappedKeys[rk] = true
-			}
-		}
-
-		// setString 设置字符串字段
-		setString := func(stdKey string, val string, rawKeys ...string) {
-			if val != "" {
-				slot.data[stdKey] = val
-			}
-			for _, rk := range rawKeys {
-				mappedKeys[rk] = true
-			}
-		}
-
-		// setInt 设置整数字段
-		setInt := func(stdKey string, val int64, rawKeys ...string) {
-			if val != 0 {
-				slot.data[stdKey] = val
-			}
-			for _, rk := range rawKeys {
-				mappedKeys[rk] = true
-			}
-		}
-
-		// 根据 topic 提取对应字段，映射为前端标准化的字段名
-		switch topic {
-		case "data/ac":
-			setFloat("ac_voltage", getJSONFloat(rawData, "ac_voltage", "voltage"), "ac_voltage", "voltage")
-			setFloat("ac_current", getJSONFloat(rawData, "ac_current", "current"), "ac_current", "current")
-			setFloat("ac_power", getJSONFloat(rawData, "ac_power", "power"), "ac_power", "power")
-			setFloat("ac_frequency", getJSONFloat(rawData, "ac_frequency", "frequency"), "ac_frequency", "frequency")
-			setFloat("apparent_power", getJSONFloat(rawData, "apparent_power", "apparent"), "apparent_power", "apparent")
-			setFloat("power_factor", getJSONFloat(rawData, "power_factor", "pf"), "power_factor", "pf")
-			setFloat("load_rate", getJSONFloat(rawData, "load_rate", "load_percent"), "load_rate", "load_percent")
-			setFloat("voltage_thd", getJSONFloat(rawData, "voltage_thd", "thd_v"), "voltage_thd", "thd_v")
-
-			// Field aliases for device_model_field compatibility
-			if v, ok := slot.data["apparent_power"]; ok {
-				slot.data["ac_apparent"] = v
-			}
-			if v, ok := slot.data["power_factor"]; ok {
-				slot.data["ac_pf"] = v
-			}
-			if v, ok := slot.data["load_rate"]; ok {
-				slot.data["ac_load_percent"] = v
-			}
-			if v, ok := slot.data["voltage_thd"]; ok {
-				slot.data["ac_thd_v"] = v
-			}
-			if v, ok := slot.data["ac_voltage"]; ok {
-				slot.data["voltage"] = v
-			}
-			if v, ok := slot.data["ac_current"]; ok {
-				slot.data["current"] = v
-			}
-			if v, ok := slot.data["ac_power"]; ok {
-				slot.data["power"] = v
-			}
-
-		case "data/battery":
-			setFloat("battery_soc", getJSONFloat(rawData, "batt_soc", "soc", "battery_soc"), "batt_soc", "soc", "battery_soc")
-			setFloat("battery_voltage", getJSONFloat(rawData, "batt_voltage", "voltage", "battery_voltage"), "batt_voltage", "voltage", "battery_voltage")
-			setFloat("battery_current", getJSONFloat(rawData, "batt_current", "current", "battery_current"), "batt_current", "current", "battery_current")
-			setFloat("battery_capacity", getJSONFloat(rawData, "batt_capacity", "capacity_remain", "remaining_capacity", "battery_capacity"), "batt_capacity", "capacity_remain", "remaining_capacity", "battery_capacity")
-			setFloat("battery_health", getJSONFloat(rawData, "batt_soh", "soh", "battery_health"), "batt_soh", "soh", "battery_health")
-			setFloat("rated_capacity", getJSONFloat(rawData, "capacity_total", "rated_capacity"), "capacity_total", "rated_capacity")
-			setFloat("charge_discharge_power", getJSONFloat(rawData, "batt_power", "power", "charge_discharge_power"), "batt_power", "power", "charge_discharge_power")
-			setInt("cycle_count", getJSONInt(rawData, "cycle_count"), "cycle_count")
-			setFloat("cell_max_temp", getJSONFloat(rawData, "temp_max", "cell_max_temp"), "temp_max", "cell_max_temp")
-			setFloat("cell_min_temp", getJSONFloat(rawData, "temp_min", "cell_min_temp"), "temp_min", "cell_min_temp")
-			setFloat("cell_max_voltage", getJSONFloat(rawData, "cell_volt_max"), "cell_volt_max")
-			setFloat("cell_min_voltage", getJSONFloat(rawData, "cell_volt_min"), "cell_volt_min")
-			setFloat("cell_voltage_diff", getJSONFloat(rawData, "cell_volt_diff"), "cell_volt_diff")
-			setString("charge_status", getJSONString(rawData, "charge_state", "charge_status"), "charge_state", "charge_status")
-			setFloat("battery_avg_temp", getJSONFloat(rawData, "temp_battery", "battery_avg_temp"), "temp_battery", "battery_avg_temp")
-			setInt("bms_fault_code", getJSONInt(rawData, "bms_fault_code"), "bms_fault_code")
-			setFloat("protect_status", getJSONFloat(rawData, "protect_status"), "protect_status")
-			// remaining_capacity 已映射到 battery_capacity
-			setFloat("max_chg_current", getJSONFloat(rawData, "max_chg_current"), "max_chg_current")
-			setFloat("max_dischg_current", getJSONFloat(rawData, "max_dischg_current"), "max_dischg_current")
-			setFloat("charge_volt_ref", getJSONFloat(rawData, "charge_volt_ref"), "charge_volt_ref")
-			setFloat("dischg_cut_volt", getJSONFloat(rawData, "dischg_cut_volt"), "dischg_cut_volt")
-
-			// Field aliases for device_model_field compatibility
-			if v, ok := slot.data["battery_soc"]; ok {
-				slot.data["batt_soc"] = v
-			}
-			if v, ok := slot.data["battery_voltage"]; ok {
-				slot.data["batt_voltage"] = v
-			}
-			if v, ok := slot.data["battery_current"]; ok {
-				slot.data["batt_current"] = v
-			}
-			if v, ok := slot.data["charge_discharge_power"]; ok {
-				slot.data["batt_power"] = v
-			}
-			if v, ok := slot.data["cycle_count"]; ok {
-				slot.data["batt_cycle_count"] = v
-			}
-			if v, ok := slot.data["cell_max_temp"]; ok {
-				slot.data["batt_temp_max"] = v
-			}
-			if v, ok := slot.data["cell_min_temp"]; ok {
-				slot.data["batt_temp_min"] = v
-			}
-			if v, ok := slot.data["cell_max_voltage"]; ok {
-				slot.data["batt_cell_volt_max"] = v
-			}
-			if v, ok := slot.data["cell_min_voltage"]; ok {
-				slot.data["batt_cell_volt_min"] = v
-			}
-			if v, ok := slot.data["charge_status"]; ok {
-				slot.data["batt_charge_state"] = v
-			}
-			if v, ok := slot.data["battery_health"]; ok {
-				slot.data["batt_soh"] = v
-			}
-			if v, ok := slot.data["battery_avg_temp"]; ok {
-				slot.data["batt_temp_battery"] = v
-			}
-			if v, ok := slot.data["rated_capacity"]; ok {
-				slot.data["batt_capacity_total"] = v
-			}
-			if v, ok := slot.data["battery_capacity"]; ok {
-				slot.data["batt_capacity_remain"] = v
-			}
-
-		case "data/pv":
-			setFloat("pv1_voltage", getJSONFloat(rawData, "pv1_voltage", "pv_voltage"), "pv1_voltage", "pv_voltage")
-			setFloat("pv1_current", getJSONFloat(rawData, "pv1_current", "pv_current"), "pv1_current", "pv_current")
-			setFloat("pv1_power", getJSONFloat(rawData, "pv1_power", "pv_power"), "pv1_power", "pv_power")
-			setFloat("pv2_voltage", getJSONFloat(rawData, "pv2_voltage"), "pv2_voltage")
-			setFloat("pv2_current", getJSONFloat(rawData, "pv2_current"), "pv2_current")
-			setFloat("pv2_power", getJSONFloat(rawData, "pv2_power"), "pv2_power")
-			setFloat("pv_total_power", getJSONFloat(rawData, "pv_power_total", "pv_total_power"), "pv_power_total", "pv_total_power")
-			setString("mppt_status", getJSONString(rawData, "mppt_state", "mppt_status"), "mppt_state", "mppt_status")
-			setFloat("pv1_voltage_max", getJSONFloat(rawData, "pv1_voltage_max"), "pv1_voltage_max")
-			setFloat("pv1_power_max", getJSONFloat(rawData, "pv1_power_max"), "pv1_power_max")
-			setFloat("pv2_voltage_max", getJSONFloat(rawData, "pv2_voltage_max"), "pv2_voltage_max")
-			setFloat("pv2_power_max", getJSONFloat(rawData, "pv2_power_max"), "pv2_power_max")
-
-			// Field aliases for device_model_field compatibility
-			if v, ok := slot.data["pv1_voltage"]; ok {
-				slot.data["pv_pv1_voltage"] = v
-			}
-			if v, ok := slot.data["pv1_current"]; ok {
-				slot.data["pv_pv1_current"] = v
-			}
-			if v, ok := slot.data["pv1_power"]; ok {
-				slot.data["pv_pv1_power"] = v
-			}
-			if v, ok := slot.data["pv2_voltage"]; ok {
-				slot.data["pv_pv2_voltage"] = v
-			}
-			if v, ok := slot.data["pv2_current"]; ok {
-				slot.data["pv_pv2_current"] = v
-			}
-			if v, ok := slot.data["pv2_power"]; ok {
-				slot.data["pv_pv2_power"] = v
-			}
-
-		case "data/status":
-			setString("run_status", getJSONString(rawData, "state", "run_status"), "state", "run_status")
-			setInt("fault_code", getJSONInt(rawData, "fault_code"), "fault_code")
-			setInt("alarm_code", getJSONInt(rawData, "alarm_code"), "alarm_code")
-			setFloat("inverter_temp", getJSONFloat(rawData, "temp_inv", "sys_temp_inv", "inverter_temp"), "temp_inv", "sys_temp_inv", "inverter_temp")
-			setFloat("heatsink_temp", getJSONFloat(rawData, "temp_mos", "heatsink_temp"), "temp_mos", "heatsink_temp")
-			setFloat("ambient_temp", getJSONFloat(rawData, "temp_ambient", "ambient_temp"), "temp_ambient", "ambient_temp")
-			setFloat("dc_bus_voltage", getJSONFloat(rawData, "dc_bus_voltage"), "dc_bus_voltage")
-			setFloat("vbus1", getJSONFloat(rawData, "vbus1"), "vbus1")
-			setFloat("vbus2", getJSONFloat(rawData, "vbus2"), "vbus2")
-			setFloat("efficiency", getJSONFloat(rawData, "efficiency", "sys_efficiency"), "efficiency", "sys_efficiency")
-			setFloat("run_time", getJSONFloat(rawData, "runtime_hours", "run_time"), "runtime_hours", "run_time")
-			setFloat("fan_speed", getJSONFloat(rawData, "fan_speed"), "fan_speed")
-
-			// Field aliases for device_model_field compatibility
-			if v, ok := slot.data["inverter_temp"]; ok {
-				slot.data["temp_inv"] = v
-			}
-			if v, ok := slot.data["heatsink_temp"]; ok {
-				slot.data["temp_mos"] = v
-			}
-			if v, ok := slot.data["ambient_temp"]; ok {
-				slot.data["temp_env"] = v
-			}
-			if v, ok := slot.data["run_status"]; ok {
-				slot.data["work_state"] = v
-			}
-
-		case "data/energy":
-			dailyPV := getJSONFloat(rawData, "daily_pv", "energy_daily_pv")
-			if dailyPV > slot.maxDailyPV {
-				slot.maxDailyPV = dailyPV
-			}
-			mappedKeys["daily_pv"] = true
-			mappedKeys["energy_daily_pv"] = true
-			dailyDischarge := getJSONFloat(rawData, "daily_discharge", "energy_daily_discharge")
-			if dailyDischarge > slot.maxDailyDischarge {
-				slot.maxDailyDischarge = dailyDischarge
-			}
-			mappedKeys["daily_discharge"] = true
-			mappedKeys["energy_daily_discharge"] = true
-			setFloat("total_energy", getJSONFloat(rawData, "total_pv", "energy_total_pv"), "total_pv", "energy_total_pv")
-			setFloat("daily_charge", getJSONFloat(rawData, "daily_charge", "energy_daily_charge"), "daily_charge", "energy_daily_charge")
-			setFloat("total_charge", getJSONFloat(rawData, "total_charge", "energy_total_charge"), "total_charge", "energy_total_charge")
-			setFloat("total_discharge", getJSONFloat(rawData, "total_discharge", "energy_total_discharge"), "total_discharge", "energy_total_discharge")
-			setFloat("daily_consumption", getJSONFloat(rawData, "daily_load", "energy_daily_load"), "daily_load", "energy_daily_load")
-			setFloat("total_consumption", getJSONFloat(rawData, "total_load", "energy_total_load"), "total_load", "energy_total_load")
-			setFloat("total_run_time", getJSONFloat(rawData, "runtime_hours", "total_run_time"), "runtime_hours", "total_run_time")
-
-		case "data/control":
-			setFloat("power_limit", getJSONFloat(rawData, "power_limit"), "power_limit")
-			if v, ok := getJSONBool(rawData, "charge_enable"); ok {
-				slot.data["charge_enable"] = v
-			}
-			mappedKeys["charge_enable"] = true
-			if v, ok := getJSONBool(rawData, "discharge_enable"); ok {
-				slot.data["discharge_enable"] = v
-			}
-			mappedKeys["discharge_enable"] = true
-			if v, ok := getJSONBool(rawData, "grid_charge_enable"); ok {
-				slot.data["grid_charge_enable"] = v
-			}
-			mappedKeys["grid_charge_enable"] = true
-			setFloat("max_charge_current", getJSONFloat(rawData, "max_charge_current"), "max_charge_current")
-			setFloat("max_discharge_current", getJSONFloat(rawData, "max_discharge_current"), "max_discharge_current")
-		}
-
-		// 透传原始数据中未被映射且非元数据的字段（如 data/cells 的 cell_count 等）
-		for rawKey, rawVal := range rawData {
-			if mappedKeys[rawKey] || skipRawFields[rawKey] {
-				continue
-			}
-			if _, exists := slot.data[rawKey]; !exists {
-				switch v := rawVal.(type) {
-				case float64:
-					if v != 0 {
-						slot.data[rawKey] = v
-					}
-				case string:
-					if v != "" {
-						slot.data[rawKey] = v
-					}
-				case bool:
-					slot.data[rawKey] = v
-				case nil:
-					// skip nil
-				default:
-					// 跳过数组、嵌套对象等复杂类型
-				}
-			}
-		}
-	}
-
-	// 跨时间槽向前继承：对于每个时间槽，如果某个标准字段不存在但前一个时间槽有该字段，则从前一个时间槽复制过来
-	carryFields := []string{
-		// ac
-		"ac_voltage", "ac_current", "ac_power", "ac_frequency", "apparent_power", "power_factor", "load_rate", "voltage_thd",
-		"voltage", "current", "power",
-		"ac_apparent", "ac_pf", "ac_load_percent", "ac_thd_v",
-		// battery
-		"battery_soc", "battery_voltage", "battery_current", "battery_capacity", "battery_health",
-		"rated_capacity", "charge_discharge_power", "cell_max_temp", "cell_min_temp",
-		"cell_max_voltage", "cell_min_voltage", "cell_voltage_diff", "charge_status",
-		"battery_avg_temp", "bms_fault_code", "protect_status", "max_chg_current",
-		"max_dischg_current", "charge_volt_ref", "dischg_cut_volt",
-		"batt_soc", "batt_voltage", "batt_current", "batt_power", "batt_cycle_count", "batt_temp_max",
-		// pv
-		"pv1_voltage", "pv1_current", "pv1_power", "pv2_voltage", "pv2_current", "pv2_power",
-		"pv_total_power", "pv_power_total", "mppt_status",
-		"pv1_voltage_max", "pv1_power_max", "pv2_voltage_max", "pv2_power_max",
-		"pv_pv1_voltage", "pv_pv1_current", "pv_pv1_power", "pv_pv2_voltage", "pv_pv2_current", "pv_pv2_power",
-		// status
-		"run_status", "fault_code", "alarm_code", "inverter_temp", "heatsink_temp", "ambient_temp",
-		"dc_bus_voltage", "efficiency", "run_time", "fan_speed",
-		"temp_inv", "temp_mos", "temp_env", "work_state",
-		// energy
-		"total_energy", "daily_charge", "total_charge", "total_discharge",
-		"daily_consumption", "total_consumption", "total_run_time",
-		"total_pv", "total_load",
-	}
-	for i := 1; i < len(orderedKeys); i++ {
-		prevSlot := slots[orderedKeys[i-1]]
-		currSlot := slots[orderedKeys[i]]
-		for _, field := range carryFields {
-			if _, exists := currSlot.data[field]; !exists {
-				if prevVal, exists := prevSlot.data[field]; exists {
-					currSlot.data[field] = prevVal
-				}
-			}
-		}
-	}
-
-	// 构建结果数组
-	results := make([]map[string]interface{}, 0, len(orderedKeys))
-	for _, key := range orderedKeys {
-		slot := slots[key]
-		// 对于按天/周/月聚合的场景，填充能量字段
-		if slot.maxDailyPV > 0 {
-			slot.data["energy"] = slot.maxDailyPV
-		}
-		if slot.maxDailyDischarge > 0 {
-			slot.data["discharge"] = slot.maxDailyDischarge
-		}
-		slot.data["time"] = slot.time
-		slot.data["timestamp"] = slot.time
-		results = append(results, slot.data)
-	}
-
-	return results, nil
+	return r.getTelemetryV2(ctx, sn, startTime, endTime)
 }
 
 func (r *DeviceRepository) GetLifecycleHistory(ctx context.Context, sn string, page, pageSize int) ([]map[string]interface{}, int64, error) {

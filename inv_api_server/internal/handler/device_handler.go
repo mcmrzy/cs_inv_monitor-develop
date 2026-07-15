@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -87,92 +86,21 @@ func (h *DeviceHandler) List(c *gin.Context) {
 		return
 	}
 
+	// Batch-fetch realtime data for all devices (eliminates N+1 Redis calls)
+	sns := make([]string, len(devices))
+	for i, d := range devices {
+		sns[i] = d.SN
+	}
+	rtDataMap, _ := h.deviceService.BatchGetRealtimeData(c.Request.Context(), sns)
+
 	for _, device := range devices {
-		rtData, err := h.deviceService.GetRealtimeData(c.Request.Context(), device.SN)
-		if err == nil && rtData != nil {
-
-			// 使用实时数据的 online 字段修正设备状态：
-			// - Redis 说离线且数据库不是离线 → 快速标记为离线（比定时任务更快）
-			// - Redis 说在线 → 保持数据库状态（可能是 1=在线 或 2=故障）
-			if online, ok := rtData["online"].(bool); ok {
-				if !online && device.Status != 0 {
-					device.Status = 0
-				}
-			}
-
-			// 注意：设备信息（model、manufacturer、firmware_arm等）已持久化在数据库中，
-			// 不再从Redis提取。设备连接时会通过info主题更新数据库。
-
-			// 从嵌套的 energy 对象读取日发电量（支持 {"energy": {...}} 和 {"energy": {"data": {...}}} 两种格式）
-			var energyData map[string]interface{}
-			if v, ok := rtData["energy"].(map[string]interface{}); ok {
-				energyData = v
-				if innerData, ok := v["data"].(map[string]interface{}); ok {
-					energyData = innerData
-				}
-			}
-			if energyData != nil {
-				if v, ok := energyData["daily_pv"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.DailyEnergy = f
-					}
-				}
-			}
-
-			// 从嵌套的 ac 对象读取当前功率（支持 {"ac": {...}} 和 {"ac": {"data": {...}}} 两种格式）
-			var acData map[string]interface{}
-			if v, ok := rtData["ac"].(map[string]interface{}); ok {
-				acData = v
-				if innerData, ok := v["data"].(map[string]interface{}); ok {
-					acData = innerData
-				}
-			}
-			if acData != nil {
-				if v, ok := acData["power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.CurrentPower = f
-					}
-				}
-			}
-
-			// 兼容旧的扁平格式
-			if device.CurrentPower == 0 {
-				if v, ok := rtData["power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.CurrentPower = f
-					}
-				} else if v, ok := rtData["ac_power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.CurrentPower = f
-					}
-				} else if v, ok := rtData["total_active_power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.CurrentPower = f
-					}
-				}
-			}
+		rtData := rtDataMap[device.SN]
+		if rtData != nil {
+			enrichDeviceWithRealtime(device, rtData)
 		}
 	}
 
 	response.Page(c, devices, total, page, pageSize)
-}
-
-func toFloat64(v interface{}) (float64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return val, true
-	case float32:
-		return float64(val), true
-	case int:
-		return float64(val), true
-	case int64:
-		return float64(val), true
-	case json.Number:
-		f, err := val.Float64()
-		return f, err == nil
-	default:
-		return 0, false
-	}
 }
 
 func (h *DeviceHandler) GetDetail(c *gin.Context) {
@@ -463,6 +391,25 @@ type UpdateDeviceRequest struct {
 
 func (h *DeviceHandler) Update(c *gin.Context) {
 	sn := c.Param("sn")
+	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
+
+	// Ownership check: non-admin users can only update their own devices
+	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("system error", err))
+		return
+	}
+	if device == nil {
+		response.HandleError(c, apperr.NotFound("device not found"))
+		return
+	}
+	if !isAdmin && device.UserID != userID {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+
 	var req UpdateDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid request body"))
@@ -1002,6 +949,12 @@ type AssignInstallerRequest struct {
 
 // AssignInstaller 分配设备给安装商
 func (h *DeviceHandler) AssignInstaller(c *gin.Context) {
+	// Only admin can assign installers
+	if middleware.GetRole(c) != 0 {
+		response.HandleError(c, apperr.Forbidden("admin only"))
+		return
+	}
+
 	sn := c.Param("sn")
 	if sn == "" {
 		response.HandleError(c, apperr.BadRequest("device sn is required"))
@@ -1039,6 +992,12 @@ type BatchAssignInstallerRequest struct {
 
 // BatchAssignInstaller 批量分配设备给安装商
 func (h *DeviceHandler) BatchAssignInstaller(c *gin.Context) {
+	// Only admin can batch assign installers
+	if middleware.GetRole(c) != 0 {
+		response.HandleError(c, apperr.Forbidden("admin only"))
+		return
+	}
+
 	var req BatchAssignInstallerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid request"))
@@ -1062,6 +1021,12 @@ func (h *DeviceHandler) BatchAssignInstaller(c *gin.Context) {
 
 // RemoveInstaller 移除设备的安装商分配
 func (h *DeviceHandler) RemoveInstaller(c *gin.Context) {
+	// Only admin can remove installers
+	if middleware.GetRole(c) != 0 {
+		response.HandleError(c, apperr.Forbidden("admin only"))
+		return
+	}
+
 	sn := c.Param("sn")
 	if sn == "" {
 		response.HandleError(c, apperr.BadRequest("device sn is required"))

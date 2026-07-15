@@ -11,7 +11,7 @@ import {
   RiseOutlined, FallOutlined, BulbOutlined, FieldTimeOutlined,
   DownloadOutlined, ApartmentOutlined, BarChartOutlined, FilterOutlined,
 } from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/lib/echarts'
 import dayjs from 'dayjs'
 import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'

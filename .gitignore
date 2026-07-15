@@ -21,6 +21,7 @@ Thumbs.db
 
 # Go
 vendor/
+.gocache-*/
 
 # Android
 **/android/app/debug
@@ -41,9 +42,21 @@ vendor/
 **/logs/*.log
 *_logs.txt
 
+# Test / analysis output
+**/analyze_output*.txt
+*.tsbuildinfo
+
 # Config with secrets
 **/config.yaml
 !**/config.docker.yaml
+
+# SSL certificates and private keys
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+!deploy/configs/
 
 # Python
 *.pyc
@@ -59,6 +72,7 @@ inv_app/.dart_tool/
 inv_app/.flutter-plugins*
 inv_app/android/.gradle/
 inv_app/android/app/build/
+inv_app/doc/
 
 # Environment config
 .env

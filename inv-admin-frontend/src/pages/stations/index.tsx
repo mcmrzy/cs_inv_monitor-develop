@@ -12,7 +12,7 @@ import {
   ApartmentOutlined, DesktopOutlined, CheckCircleOutlined, ThunderboltOutlined,
   SunOutlined, ArrowUpOutlined, FireOutlined, PlusOutlined, DeleteOutlined,
 } from '@ant-design/icons'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/lib/echarts'
 import dayjs from 'dayjs'
 import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
@@ -24,6 +24,7 @@ import { formatInTimezone, TIMEZONE_LIST, getTimezoneLabel } from '@/utils/timez
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import useLocaleStore from '@/stores/localeStore'
+import StatisticCard from '@/components/StatisticCard'
 
 const { Title, Text } = Typography
 
@@ -811,52 +812,44 @@ const StationsPage: React.FC = () => {
       <>
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={12} sm={6}>
-            <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-              <Statistic
-                title={t('station.todayGen')}
-                value={stats?.today ?? 0}
-                precision={1}
-                suffix="kWh"
-                prefix={<SunOutlined />}
-                valueStyle={{ color: '#fa8c16', fontSize: 20 }}
-              />
-            </Card>
+            <StatisticCard size="small"
+              title={t('station.todayGen')}
+              value={stats?.today ?? 0}
+              precision={1}
+              suffix="kWh"
+              prefix={<SunOutlined />}
+              valueStyle={{ color: '#fa8c16', fontSize: 20 }}
+            />
           </Col>
           <Col xs={12} sm={6}>
-            <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-              <Statistic
-                title={t('station.monthGen')}
-                value={stats?.month ?? 0}
-                precision={1}
-                suffix="kWh"
-                prefix={<ThunderboltOutlined />}
-                valueStyle={{ color: '#1677ff', fontSize: 20 }}
-              />
-            </Card>
+            <StatisticCard size="small"
+              title={t('station.monthGen')}
+              value={stats?.month ?? 0}
+              precision={1}
+              suffix="kWh"
+              prefix={<ThunderboltOutlined />}
+              valueStyle={{ color: '#1677ff', fontSize: 20 }}
+            />
           </Col>
           <Col xs={12} sm={6}>
-            <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-              <Statistic
-                title={t('station.yearGen')}
-                value={stats?.year ?? 0}
-                precision={0}
-                suffix="kWh"
-                prefix={<ArrowUpOutlined />}
-                valueStyle={{ color: '#52c41a', fontSize: 20 }}
-              />
-            </Card>
+            <StatisticCard size="small"
+              title={t('station.yearGen')}
+              value={stats?.year ?? 0}
+              precision={0}
+              suffix="kWh"
+              prefix={<ArrowUpOutlined />}
+              valueStyle={{ color: '#52c41a', fontSize: 20 }}
+            />
           </Col>
           <Col xs={12} sm={6}>
-            <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-              <Statistic
-                title={t('station.totalGen')}
-                value={stats?.total ?? 0}
-                precision={0}
-                suffix="kWh"
-                prefix={<ThunderboltOutlined />}
-                valueStyle={{ color: '#722ed1', fontSize: 20 }}
-              />
-            </Card>
+            <StatisticCard size="small"
+              title={t('station.totalGen')}
+              value={stats?.total ?? 0}
+              precision={0}
+              suffix="kWh"
+              prefix={<ThunderboltOutlined />}
+              valueStyle={{ color: '#722ed1', fontSize: 20 }}
+            />
           </Col>
         </Row>
         <Card
@@ -927,45 +920,37 @@ const StationsPage: React.FC = () => {
       {/* 汇总卡片 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={6}>
-          <Card hoverable size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic
-              title={t('station.stationTotal')}
-              value={summary?.totalStations ?? stations.length}
-              prefix={<ApartmentOutlined />}
-              valueStyle={{ color: '#1677ff' }}
-            />
-          </Card>
+          <StatisticCard size="small"
+            title={t('station.stationTotal')}
+            value={summary?.totalStations ?? stations.length}
+            prefix={<ApartmentOutlined />}
+            valueStyle={{ color: '#1677ff' }}
+          />
         </Col>
         <Col xs={12} sm={6}>
-          <Card hoverable size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic
-              title={t('station.deviceTotal')}
-              value={summary?.totalDevices ?? stations.reduce((s: number, st: StationItem) => s + (st.device_count ?? 0), 0)}
-              prefix={<DesktopOutlined />}
-              valueStyle={{ color: '#722ed1' }}
-            />
-          </Card>
+          <StatisticCard size="small"
+            title={t('station.deviceTotal')}
+            value={summary?.totalDevices ?? stations.reduce((s: number, st: StationItem) => s + (st.device_count ?? 0), 0)}
+            prefix={<DesktopOutlined />}
+            valueStyle={{ color: '#722ed1' }}
+          />
         </Col>
         <Col xs={12} sm={6}>
-          <Card hoverable size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic
-              title={t('station.deviceOnline')}
-              value={summary?.onlineDevices ?? stations.reduce((s: number, st: StationItem) => s + (st.online_count ?? 0), 0)}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
+          <StatisticCard size="small"
+            title={t('station.deviceOnline')}
+            value={summary?.onlineDevices ?? stations.reduce((s: number, st: StationItem) => s + (st.online_count ?? 0), 0)}
+            prefix={<CheckCircleOutlined />}
+            valueStyle={{ color: '#52c41a' }}
+          />
         </Col>
         <Col xs={12} sm={6}>
-          <Card hoverable size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic
-              title={t('station.todayGen_kWh')}
-              value={summary?.todayGeneration ?? stations.reduce((s: number, st: StationItem) => s + (st.today_generation ?? 0), 0)}
-              precision={1}
-              prefix={<SunOutlined />}
-              valueStyle={{ color: '#fa8c16' }}
-            />
-          </Card>
+          <StatisticCard size="small"
+            title={t('station.todayGen_kWh')}
+            value={summary?.todayGeneration ?? stations.reduce((s: number, st: StationItem) => s + (st.today_generation ?? 0), 0)}
+            precision={1}
+            prefix={<SunOutlined />}
+            valueStyle={{ color: '#fa8c16' }}
+          />
         </Col>
       </Row>
 

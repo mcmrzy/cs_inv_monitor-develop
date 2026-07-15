@@ -31,6 +31,7 @@ func Setup(cfg Config) *gin.Engine {
 
 	r.Use(middleware.TrailingSlashHandler())
 	r.Use(gin.Recovery())
+	r.Use(middleware.GzipMiddleware())
 	r.Use(middleware.CORS(cfg.AllowedOrigins))
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.RequestLogger())

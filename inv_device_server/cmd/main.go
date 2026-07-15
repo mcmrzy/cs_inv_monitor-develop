@@ -73,6 +73,9 @@ func main() {
 	if insecure := os.Getenv("MQTT_TLS_INSECURE"); insecure == "true" {
 		cfg.MQTT.TLSInsecure = true
 	}
+	if skipVerify := os.Getenv("MQTT_TLS_SKIP_VERIFY"); skipVerify == "true" {
+		cfg.MQTT.TLSSkipVerify = true
+	}
 
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(os.Stderr, "[FATAL] %v\n", err)
@@ -137,18 +140,24 @@ func main() {
 	metaRepo := repository.NewMetadataRepository(deviceRepo)
 	dataService := service.NewDataService(deviceRepo, metaRepo, hub, rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
 
+	// 创建共享的设备状态管理器：MQTT 层和 Kafka 消费层使用同一实例
+	stateManager := service.NewDeviceStateManager(rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
+
 	// 注册 OTA 状态回调：MQTT 收到设备 OTA 状态后转发给 API Server
 	if mqttClient != nil {
 		mqttClient.SetOtaStatusHandler(dataService.HandleOTAStatus)
 		mqttClient.SetOtaCmdAckHandler(dataService.HandleOTACmdAck)
+		// 设备状态变更统一通过 DeviceStateManager 处理（内置防抖、状态转换、LWT 竞态条件处理）
 		mqttClient.SetStatusChangeHandler(func(sn string, online bool) {
-			status := 0
 			if online {
-				status = 1
 				// 设备上线时，检查并下发离线命令队列中的积压命令
 				go dataService.FlushPendingCommands(ctx, sn)
 			}
-			dataService.SyncDeviceStatus(ctx, sn, status)
+			// 通过状态管理器统一处理状态变更（防抖 + 状态转换 + API 通知）
+			if err := stateManager.HandleMQTTStatusChange(ctx, sn, online); err != nil {
+				logger.Warn("Failed to handle MQTT status change",
+					zap.String("sn", sn), zap.Bool("online", online), zap.Error(err))
+			}
 		})
 		mqttClient.SetCmdResultHandler(dataService.HandleCmdResult)
 	}
@@ -161,6 +170,8 @@ func main() {
 		protocolParser := service.NewProtocolParser(
 			cfg.Kafka.Brokers, cfg.Kafka.TelemetryTopic, "inv-device-server-parser",
 			deviceRepo, metaRepo, rdb, hub, cfg.Backends.APIServer, cfg.Backends.InternalKey)
+		// 注入共享的状态管理器实例，确保 MQTT 层和 Kafka 消费层使用同一状态机
+		protocolParser.SetStateManager(stateManager)
 		protocolParser.Start(ctx)
 
 		alertConsumer := service.NewAlertConsumer(
