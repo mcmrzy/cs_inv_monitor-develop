@@ -410,6 +410,11 @@ func (s *DeviceService) EnsureDevice(ctx context.Context, sn string) error {
 	return s.repo.EnsureDevice(ctx, sn)
 }
 
+// Create creates a new device with the specified fields.
+func (s *DeviceService) Create(ctx context.Context, sn, model string, ratedPower *float64, firmwareArm, firmwareEsp string) error {
+	return s.repo.Create(ctx, sn, model, ratedPower, firmwareArm, firmwareEsp)
+}
+
 func (s *DeviceService) Bind(ctx context.Context, sn string, userID, stationID int64) error {
 	return s.repo.Bind(ctx, sn, userID, stationID)
 }
@@ -693,6 +698,10 @@ func (s *DeviceService) Delete(ctx context.Context, sn string) error {
 
 func (s *DeviceService) Update(ctx context.Context, sn string, model string, ratedPower *float64, firmwareArm string, firmwareEsp string) error {
 	return s.repo.Update(ctx, sn, model, ratedPower, firmwareArm, firmwareEsp)
+}
+
+func (s *DeviceService) RequestUnbind(ctx context.Context, deviceSN string, requestedBy int64, reason string) (int64, error) {
+	return s.repo.RequestUnbind(ctx, deviceSN, requestedBy, reason)
 }
 
 func (s *DeviceService) GetUnbindRequests(ctx context.Context, page, pageSize int) ([]map[string]interface{}, int64, error) {

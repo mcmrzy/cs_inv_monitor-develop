@@ -319,6 +319,46 @@ func (h *DeviceHandler) Unbind(c *gin.Context) {
 	response.SuccessWithMessage(c, "device unbound success", nil)
 }
 
+func (h *DeviceHandler) RequestUnbind(c *gin.Context) {
+	sn := c.Param("sn")
+	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
+
+	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("system error", err))
+		return
+	}
+
+	if device == nil {
+		response.HandleError(c, apperr.NotFound("device not found"))
+		return
+	}
+
+	if !isAdmin && device.UserID != userID {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	c.ShouldBindJSON(&req)
+
+	id, err := h.deviceService.RequestUnbind(c.Request.Context(), sn, userID, req.Reason)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("create unbind request failed", err))
+		return
+	}
+
+	response.Success(c, map[string]interface{}{
+		"id":        id,
+		"device_sn": sn,
+		"status":    "pending",
+	})
+}
+
 type ControlRequest struct {
 	Command string                 `json:"command" binding:"required"`
 	Params  map[string]interface{} `json:"params"`
@@ -425,6 +465,63 @@ func (h *DeviceHandler) GetControlCapabilities(c *gin.Context) {
 
 // DEPRECATED: Device params removed. Use MQTT direct configuration.
 // func (h *DeviceHandler) GetParams(c *gin.Context) {}
+
+type CreateDeviceRequest struct {
+	SN              string   `json:"sn" binding:"required"`
+	Model           string   `json:"model"`
+	RatedPower      *float64 `json:"ratedPower"`
+	FirmwareVersion string   `json:"firmwareVersion"`
+	HardwareVersion string   `json:"hardwareVersion"`
+}
+
+// Create creates a new device. Only admin and installer (role <= 4) can create devices.
+func (h *DeviceHandler) Create(c *gin.Context) {
+	role := middleware.GetRole(c)
+	if role > 4 {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+
+	var req CreateDeviceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request body"))
+		return
+	}
+
+	if !deviceSNRegex.MatchString(req.SN) {
+		response.HandleError(c, apperr.BadRequest("invalid SN format"))
+		return
+	}
+
+	// Check if device already exists
+	existing, err := h.deviceService.GetBySN(c.Request.Context(), req.SN)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("system error", err))
+		return
+	}
+	if existing != nil {
+		response.HandleError(c, apperr.BadRequest("device already exists"))
+		return
+	}
+
+	if err := h.deviceService.Create(c.Request.Context(), req.SN, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			response.HandleError(c, apperr.BadRequest("device already exists"))
+			return
+		}
+		response.HandleError(c, apperr.Internal("failed to create device", err))
+		return
+	}
+
+	// Fetch the created device to return in response
+	device, err := h.deviceService.GetBySN(c.Request.Context(), req.SN)
+	if err != nil || device == nil {
+		response.SuccessWithMessage(c, "device created", nil)
+		return
+	}
+
+	response.SuccessWithMessage(c, "device created", device)
+}
 
 type UpdateDeviceRequest struct {
 	Model           string   `json:"model"`
