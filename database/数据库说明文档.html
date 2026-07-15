@@ -86,9 +86,9 @@
                     <div class="card-desc">device_telemetry、device_alarms、device_cmd_logs</div>
                 </div>
                 <div class="card">
-                    <div class="card-title">连续聚合视图</div>
+                    <div class="card-title">遥测存储层级</div>
                     <div class="card-value">3</div>
-                    <div class="card-desc">1min、1hour、1day 降采样</div>
+                    <div class="card-desc">3 分钟原始层、小时汇总、日能源汇总</div>
                 </div>
                 <div class="card">
                     <div class="card-title">索引数量</div>
@@ -734,72 +734,28 @@ ALTER TABLE device_telemetry SET (
             </div>
 
             <div style="margin-top: 20px;">
-                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">4. 连续聚合视图</h3>
+                <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">4. 三层遥测存储与汇总</h3>
                 <div class="grid" style="margin-bottom: 16px;">
                     <div class="card">
-                        <div class="card-title">device_telemetry_1min</div>
-                        <div class="card-desc">1分钟降采样，自动刷新间隔1分钟</div>
+                        <div class="card-title">device_telemetry_3min</div>
+                        <div class="card-desc">直接保存每台设备每次 3 分钟采样；不创建 1 分钟聚合</div>
                     </div>
                     <div class="card">
-                        <div class="card-title">device_telemetry_1hour</div>
-                        <div class="card-desc">1小时降采样，自动刷新间隔1小时</div>
+                        <div class="card-title">device_telemetry_hour</div>
+                        <div class="card-desc">按设备、自然小时生成遥测汇总</div>
                     </div>
                     <div class="card">
-                        <div class="card-title">device_telemetry_1day</div>
-                        <div class="card-desc">1天降采样，自动刷新间隔1天</div>
+                        <div class="card-title">device_energy_day</div>
+                        <div class="card-desc">按设备、自然日保存能源汇总</div>
                     </div>
                 </div>
                 <div class="code-block">
-                    <code>-- 1分钟聚合
-CREATE MATERIALIZED VIEW IF NOT EXISTS device_telemetry_1min
-WITH (timescaledb.continuous) AS
-SELECT
-    time_bucket('1 minute', time) AS bucket,
-    device_sn,
-    AVG(total_active_power) AS avg_active_power,
-    MAX(total_active_power) AS max_active_power,
-    AVG(internal_temperature) AS avg_temperature,
-    LAST(daily_energy, time) - FIRST(daily_energy, time) AS energy_delta,
-    LAST(work_state, time) AS work_state,
-    LAST(fault_code, time) AS fault_code
-FROM device_telemetry
-GROUP BY bucket, device_sn;
-
-SELECT add_continuous_aggregate_policy('device_telemetry_1min',
-    start_offset    => INTERVAL '2 minutes',
-    end_offset      => INTERVAL '1 minute',
-    schedule_interval => INTERVAL '1 minute',
-    if_not_exists   => TRUE
-);
-
--- 1小时聚合
-CREATE MATERIALIZED VIEW IF NOT EXISTS device_telemetry_1hour
-WITH (timescaledb.continuous) AS
-SELECT
-    time_bucket('1 hour', time) AS bucket,
-    device_sn,
-    AVG(total_active_power) AS avg_active_power,
-    MAX(total_active_power) AS max_active_power,
-    AVG(internal_temperature) AS avg_temperature,
-    LAST(daily_energy, time) - FIRST(daily_energy, time) AS energy_delta,
-    COUNT(*) AS sample_count,
-    SUM(CASE WHEN total_active_power > 0 THEN 1 ELSE 0 END) AS run_minutes
-FROM device_telemetry
-GROUP BY bucket, device_sn;
-
--- 1天聚合
-CREATE MATERIALIZED VIEW IF NOT EXISTS device_telemetry_1day
-WITH (timescaledb.continuous) AS
-SELECT
-    time_bucket('1 day', time) AS bucket,
-    device_sn,
-    AVG(total_active_power) AS avg_active_power,
-    MAX(total_active_power) AS max_active_power,
-    AVG(internal_temperature) AS avg_temperature,
-    LAST(daily_energy, time) - FIRST(daily_energy, time) AS daily_energy,
-    SUM(CASE WHEN total_active_power > 0 THEN 1 ELSE 0 END) AS run_minutes
-FROM device_telemetry
-GROUP BY bucket, device_sn;</code>
+                    <code>-- 权威结构由 database/migrations/ 中的编号迁移创建和升级。
+-- device_telemetry_3min：保存完整 {t,v,data} 原始信封和常用类型化列。
+-- device_cell_samples：每设备每次采样一行，电压/温度数组按原下标保存，不逐电芯拆行。
+-- device_telemetry_hour：从 3 分钟事实数据生成小时汇总。
+-- device_energy_day：从事实数据或小时结果生成日能源汇总。
+-- 源采样周期为 3 分钟，因此不得创建 device_telemetry_1min。</code>
                 </div>
             </div>
 
@@ -944,6 +900,10 @@ $$ LANGUAGE plpgsql;</code>
             </div>
         </div>
     </div>
+
+    <footer style="text-align:center;color:#586069;font-size:0.9em;margin:32px 0 20px;">
+        最后修改时间：2026-07-14 20:22:00（Asia/Shanghai）
+    </footer>
 
     <script>
         function showSection(id) {

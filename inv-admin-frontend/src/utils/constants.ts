@@ -1,9 +1,11 @@
 
 export const ROLE_MAP: Record<string, string> = {
   0: '超级管理员',
-  1: '代理商',
-  2: '安装商',
-  3: '终端用户',
+  1: '管理员',
+  2: '运营商',
+  3: '经销商',
+  4: '安装商',
+  5: '终端用户',
 }
 
 export const DEVICE_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -114,8 +116,10 @@ export const TASK_STATUS_MAP: Record<string, { label: string; color: string }> =
 export const ROLE_COLORS: Record<string, string> = {
   0: '#eb2f96',
   1: '#722ed1',
-  2: '#1677ff',
-  3: '#52c41a',
+  2: '#13c2c2',
+  3: '#fa8c16',
+  4: '#1677ff',
+  5: '#52c41a',
 }
 
 export const CHART_COLORS = ['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#eb2f96', '#13c2c2']

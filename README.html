@@ -293,9 +293,9 @@ psql -U postgres -d inv_mqtt -f database/schema.sql
 psql -U postgres -d inv_mqtt -f database/migrations/001_init_schema.up.sql
 # ... 依次执行后续迁移文件
 
-# 可选：启用 TimescaleDB 时序优化
+# 启用 TimescaleDB 扩展；后续时序结构和策略由编号迁移统一管理
 psql -U postgres -d inv_mqtt -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
-psql -U postgres -d inv_mqtt -f database/migration_timescaledb.sql</code></pre>
+# migration_timescaledb.sql 仅作为旧环境兼容引导，不再作为当前结构的独立迁移入口</code></pre>
 
 <h3 id="emqx-config">2. 配置 EMQX JWT 认证</h3>
 
@@ -617,7 +617,7 @@ Flutter App ← MQTT 直连 EMQX（JWT 认证，订阅 cs_inv/{sn}/#）</code></
 │
 ├── database/                         # 数据库脚本
 │   ├── schema.sql                    # 初始化建表（20+ 表、视图、触发器、清理函数）
-│   ├── migration_timescaledb.sql     # TimescaleDB 超表 + 压缩 + 连续聚合
+│   ├── migration_timescaledb.sql     # TimescaleDB 兼容引导（实际结构由编号迁移管理）
 │   └── migrations/                   # 增量迁移脚本（001~011）
 │
 ├── deploy/                           # 部署与运维
@@ -682,7 +682,8 @@ Flutter App ← MQTT 直连 EMQX（JWT 认证，订阅 cs_inv/{sn}/#）</code></
 <hr>
 
 <p style="text-align:center;color:#586069;font-size:0.9em;margin-top:32px;">
-  CS-INV 光伏逆变器物联网监控系统 · CS-INV IoT Monitoring Platform
+  CS-INV 光伏逆变器物联网监控系统 · CS-INV IoT Monitoring Platform<br>
+  最后修改时间：2026-07-14 20:22:00（Asia/Shanghai）
 </p>
 
 </div>

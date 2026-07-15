@@ -117,7 +117,7 @@ const StationsPage: React.FC = () => {
   const { t } = useTranslation()
   const { lang } = useLocaleStore()
   const { timezone } = useTimezoneStore()
-  const isAdmin = user && (user.role === Role.SUPER_ADMIN || user.role === Role.AGENT)
+  const isAdmin = user && (user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN)
 
   /* ---------- 详情抽屉 ---------- */
   const [drawerOpen, setDrawerOpen] = useState(false)

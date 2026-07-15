@@ -1,16 +1,55 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type fakeMessageWriter struct {
+	mu       sync.Mutex
+	messages []kafka.Message
+	err      error
+	waitCtx  bool
+}
+
+func (w *fakeMessageWriter) WriteMessages(ctx context.Context, messages ...kafka.Message) error {
+	if w.waitCtx {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, message := range messages {
+		message.Key = append([]byte(nil), message.Key...)
+		message.Value = append([]byte(nil), message.Value...)
+		w.messages = append(w.messages, message)
+	}
+	return w.err
+}
+
+func (w *fakeMessageWriter) Close() error { return nil }
+
+func newTestBridge(cfg *Config) (*KafkaBridge, *fakeMessageWriter, *fakeMessageWriter) {
+	telemetry := &fakeMessageWriter{}
+	alarm := &fakeMessageWriter{}
+	return &KafkaBridge{
+		cfg:             cfg,
+		telemetryWriter: telemetry,
+		alarmWriter:     alarm,
+	}, telemetry, alarm
+}
 
 // ===================== stringsSplit =====================
 
@@ -382,7 +421,7 @@ func TestWebhook_Unauthorized(t *testing.T) {
 	cfg.Kafka.TelemetryTopic = "t"
 	cfg.Kafka.AlarmTopic = "a"
 	cfg.EMQX.Token = "my-secret"
-	bridge := NewKafkaBridge(cfg)
+	bridge, _, _ := newTestBridge(cfg)
 
 	body := `{"topic":"cs_inv/SN1/data","payload":"{}"}`
 
@@ -404,15 +443,14 @@ func TestWebhook_Unauthorized(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer my-secret")
 	rec = httptest.NewRecorder()
 	bridge.handleWebhook(rec, req)
-	// Will fail at kafka write (no kafka running), but not unauthorized
-	assert.NotEqual(t, http.StatusUnauthorized, rec.Code)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
 
 	// Correct raw token
 	req = httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
 	req.Header.Set("Authorization", "my-secret")
 	rec = httptest.NewRecorder()
 	bridge.handleWebhook(rec, req)
-	assert.NotEqual(t, http.StatusUnauthorized, rec.Code)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
 }
 
 // ===================== Message format =====================
@@ -466,8 +504,8 @@ func TestWebhook_MessageFormat(t *testing.T) {
 
 func TestWebhook_AlarmRouting(t *testing.T) {
 	tests := []struct {
-		topic       string
-		wantAlarm   bool
+		topic     string
+		wantAlarm bool
 	}{
 		{"cs_inv/SN1/data", false},
 		{"cs_inv/SN1/alarm", true},
@@ -482,6 +520,130 @@ func TestWebhook_AlarmRouting(t *testing.T) {
 			assert.Equal(t, tt.wantAlarm, isAlarm)
 		})
 	}
+}
+
+func TestNewKafkaBridge_UsesConfirmedHashWrites(t *testing.T) {
+	cfg := &Config{}
+	cfg.Kafka.Brokers = []string{"localhost:9092"}
+	cfg.Kafka.TelemetryTopic = "telemetry"
+	cfg.Kafka.AlarmTopic = "alarm"
+	cfg.Kafka.BatchSize = 10
+	cfg.Kafka.BatchTimeout = 25
+
+	bridge := NewKafkaBridge(cfg)
+	t.Cleanup(func() {
+		require.NoError(t, bridge.telemetryWriter.Close())
+		require.NoError(t, bridge.alarmWriter.Close())
+	})
+
+	for _, writer := range []messageWriter{bridge.telemetryWriter, bridge.alarmWriter} {
+		kw, ok := writer.(*kafka.Writer)
+		require.True(t, ok)
+		assert.False(t, kw.Async, "HTTP success must wait for Kafka acknowledgement")
+		assert.Equal(t, kafka.RequireAll, kw.RequiredAcks)
+		assert.Equal(t, 5, kw.MaxAttempts)
+		assert.Equal(t, 100*time.Millisecond, kw.WriteBackoffMin)
+		assert.Equal(t, 2*time.Second, kw.WriteBackoffMax)
+		_, ok = kw.Balancer.(*kafka.Hash)
+		assert.True(t, ok, "device SN key must select a stable partition")
+	}
+
+	balancer := &kafka.Hash{}
+	partitions := []int{0, 1, 2, 3}
+	first := balancer.Balance(kafka.Message{Key: []byte("SN-001")}, partitions...)
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, first, balancer.Balance(kafka.Message{Key: []byte("SN-001")}, partitions...))
+	}
+}
+
+func TestWebhook_PublishesOnlyAfterWriterSuccess(t *testing.T) {
+	cfg := &Config{}
+	cfg.Server.Timeout = 1
+	cfg.Kafka.TelemetryTopic = "telemetry"
+	cfg.Kafka.AlarmTopic = "alarm"
+	bridge, telemetry, alarm := newTestBridge(cfg)
+
+	body := `{"clientid":"client-1","topic":"cs_inv/SN-001/data","payload":"{\"voltage\":48.2}","qos":1}`
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	bridge.handleWebhook(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	require.Len(t, telemetry.messages, 1)
+	assert.Empty(t, alarm.messages)
+	assert.Equal(t, "SN-001", string(telemetry.messages[0].Key))
+
+	var got map[string]interface{}
+	require.NoError(t, json.Unmarshal(telemetry.messages[0].Value, &got))
+	assert.Equal(t, "SN-001", got["sn"])
+	assert.Equal(t, "data", got["msg_type"])
+
+	bridge.stats.mu.Lock()
+	assert.Equal(t, int64(1), bridge.stats.messagesIn)
+	assert.Equal(t, int64(1), bridge.stats.messagesOut)
+	assert.Equal(t, int64(0), bridge.stats.errors)
+	bridge.stats.mu.Unlock()
+}
+
+func TestWebhook_WriterFailureIsRetryableHTTPError(t *testing.T) {
+	cfg := &Config{}
+	cfg.Server.Timeout = 1
+	cfg.Kafka.TelemetryTopic = "telemetry"
+	cfg.Kafka.AlarmTopic = "alarm"
+	bridge, telemetry, _ := newTestBridge(cfg)
+	telemetry.err = errors.New("broker unavailable")
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(
+		`{"topic":"cs_inv/SN-002/data","payload":"{}"}`,
+	))
+	rec := httptest.NewRecorder()
+	bridge.handleWebhook(rec, req)
+
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+	bridge.stats.mu.Lock()
+	assert.Equal(t, int64(1), bridge.stats.messagesIn)
+	assert.Equal(t, int64(0), bridge.stats.messagesOut)
+	assert.Equal(t, int64(1), bridge.stats.errors)
+	bridge.stats.mu.Unlock()
+}
+
+func TestWebhook_UsesRequestCancellationForKafkaWrite(t *testing.T) {
+	cfg := &Config{}
+	cfg.Server.Timeout = 30
+	cfg.Kafka.TelemetryTopic = "telemetry"
+	cfg.Kafka.AlarmTopic = "alarm"
+	bridge, telemetry, _ := newTestBridge(cfg)
+	telemetry.waitCtx = true
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(
+		`{"topic":"cs_inv/SN-003/data","payload":"{}"}`,
+	)).WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	started := time.Now()
+	bridge.handleWebhook(rec, req)
+	assert.Less(t, time.Since(started), time.Second)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+func TestWebhook_RejectsTopicWithoutDeviceOrMessageType(t *testing.T) {
+	cfg := &Config{}
+	cfg.Kafka.TelemetryTopic = "telemetry"
+	cfg.Kafka.AlarmTopic = "alarm"
+	bridge, telemetry, alarm := newTestBridge(cfg)
+
+	for _, topic := range []string{"cs_inv", "cs_inv//data", ""} {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(
+			`{"topic":"`+topic+`","payload":"{}"}`,
+		))
+		rec := httptest.NewRecorder()
+		bridge.handleWebhook(rec, req)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, topic)
+	}
+	assert.Empty(t, telemetry.messages)
+	assert.Empty(t, alarm.messages)
 }
 
 // ===================== joinStrs =====================

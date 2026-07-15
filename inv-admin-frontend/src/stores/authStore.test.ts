@@ -104,11 +104,17 @@ describe('authStore', () => {
     })
 
     it('should check permission in list for non-admin', () => {
-      const normalUser = { ...mockUser, role: Role.AGENT }
+      const normalUser = { ...mockUser, role: Role.ADMIN }
       const { login } = useAuthStore.getState()
       login('token', 'refresh', normalUser, ['devices:view', 'alerts:view'])
 
       expect(useAuthStore.getState().hasPermission('devices:view')).toBe(true)
+      expect(useAuthStore.getState().hasPermission('admin:view')).toBe(false)
+    })
+
+    it('does not let role 1 bypass explicit permissions', () => {
+      const admin = { ...mockUser, role: Role.ADMIN }
+      useAuthStore.getState().login('token', 'refresh', admin, ['devices:view'])
       expect(useAuthStore.getState().hasPermission('admin:view')).toBe(false)
     })
 
@@ -132,7 +138,7 @@ describe('authStore', () => {
     })
 
     it('should return true when any permission matches', () => {
-      const normalUser = { ...mockUser, role: Role.AGENT }
+      const normalUser = { ...mockUser, role: Role.ADMIN }
       const { login } = useAuthStore.getState()
       login('token', 'refresh', normalUser, ['devices:view'])
 
@@ -140,7 +146,7 @@ describe('authStore', () => {
     })
 
     it('should return false when no permissions match', () => {
-      const normalUser = { ...mockUser, role: Role.AGENT }
+      const normalUser = { ...mockUser, role: Role.ADMIN }
       const { login } = useAuthStore.getState()
       login('token', 'refresh', normalUser, ['devices:view'])
 

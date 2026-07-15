@@ -29,7 +29,7 @@ describe('userApi', () => {
       const res = await userApi.getInstallers()
       const data = res.data?.data ?? res.data
       expect(data.items).toHaveLength(1)
-      expect(data.items[0].role).toBe(2)
+      expect(data.items[0].role).toBe(4)
     })
   })
 
@@ -68,7 +68,7 @@ describe('userApi', () => {
         email: 'new@csergy.com',
         nickname: '新用户',
         password: 'Pass123',
-        role: 3,
+        role: 5,
       })
       expect(res.data.code).toBe(0)
       expect(res.data.data.nickname).toBe('新用户')

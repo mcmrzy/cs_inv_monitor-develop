@@ -118,6 +118,9 @@ CREATE TABLE stations (
 CREATE INDEX idx_stations_user ON stations(user_id);
 CREATE INDEX idx_stations_location ON stations(province, city, district);
 CREATE INDEX idx_stations_timezone ON stations(timezone);
+CREATE INDEX IF NOT EXISTS idx_stations_user_deleted
+    ON stations(user_id, deleted_at)
+    WHERE deleted_at IS NULL;
 
 -- ============================================
 -- 3. 设备型号注册表与协议定义
@@ -281,6 +284,7 @@ CREATE TABLE devices (
     mac_address VARCHAR(17),
     station_id BIGINT,
     user_id BIGINT NOT NULL,
+    installer_id BIGINT,                                  -- 安装商ID (migration 019/043)
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Shanghai', -- 设备所在时区, 继承自所属电站
     status SMALLINT NOT NULL DEFAULT 0, -- 0:离线 1:在线 2:故障
     last_online_at TIMESTAMPTZ,
@@ -294,7 +298,29 @@ CREATE INDEX idx_devices_station ON devices(station_id);
 CREATE INDEX idx_devices_user ON devices(user_id);
 CREATE INDEX idx_devices_status ON devices(status);
 CREATE INDEX idx_devices_timezone ON devices(timezone);
+CREATE INDEX IF NOT EXISTS idx_devices_installer ON devices(installer_id);
 CREATE INDEX IF NOT EXISTS idx_devices_model_id ON devices(model_id) WHERE model_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_devices_user_station_deleted
+    ON devices(user_id, station_id, deleted_at)
+    WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_devices_status_online
+    ON devices(status, last_online_at DESC)
+    WHERE status = 1;
+
+-- Canonical object-level device access (migration 041).
+-- Covers direct owners and delegated bindings, but never exposes soft-deleted devices.
+CREATE OR REPLACE VIEW v_user_device_access (user_id, device_sn) AS
+SELECT d.user_id, d.sn
+FROM devices d
+WHERE d.deleted_at IS NULL
+UNION
+SELECT udr.user_id, d.sn
+FROM user_device_rel udr
+JOIN devices d ON d.sn = udr.device_sn
+WHERE d.deleted_at IS NULL;
+
+COMMENT ON VIEW v_user_device_access IS
+    'Canonical object-level device access: direct ownership plus delegated bindings, excluding soft-deleted devices';
 
 -- [已废弃] device_realtime_data / device_minute_data / device_hour_data / device_params
 --   已由 device_telemetry_3min 超表 + TimescaleDB 连续聚合替代
@@ -302,30 +328,6 @@ CREATE INDEX IF NOT EXISTS idx_devices_model_id ON devices(model_id) WHERE model
 -- ============================================
 -- 5. 时序遥测数据表
 -- ============================================
-
--- 设备遥测数据表（旧版 JSONB 超表，过渡期保留可读）
-CREATE TABLE IF NOT EXISTS device_telemetry (
-    id          BIGSERIAL,
-    device_sn   VARCHAR(50) NOT NULL,
-    model_code  VARCHAR(50),           -- 关联设备型号
-    topic       VARCHAR(200),           -- 来源 Topic
-    data        JSONB NOT NULL,         -- 原始 JSON 数据（完整保留）
-    total_active_power DECIMAL(12,2) DEFAULT 0,
-    daily_energy       DECIMAL(14,4) DEFAULT 0,
-    work_state         VARCHAR(50),
-    fault_code         VARCHAR(50),
-    internal_temperature DECIMAL(6,1) DEFAULT 0,
-    grid_frequency       NUMERIC(6,2),
-    battery_soc          NUMERIC(4,1),
-    battery_power        NUMERIC(10,2),
-    pv_power             NUMERIC(10,2),
-    time               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_telemetry_sn_time ON device_telemetry(device_sn, time DESC);
-CREATE INDEX IF NOT EXISTS idx_telemetry_model ON device_telemetry(model_code);
-CREATE INDEX IF NOT EXISTS idx_telemetry_time ON device_telemetry(time DESC);
 
 -- 设备遥测数据表 V2（三分钟采样，HTML V1 规范）(migration 023 + 026)
 -- 替代旧版 device_telemetry JSONB 超表
@@ -534,36 +536,9 @@ CREATE TABLE IF NOT EXISTS device_ingest_errors (
 CREATE INDEX IF NOT EXISTS idx_device_ingest_errors_sn_received ON device_ingest_errors(device_sn, received_at DESC);
 CREATE INDEX IF NOT EXISTS idx_device_ingest_errors_received ON device_ingest_errors(received_at DESC);
 
--- 三相数据超表（每3分钟采样）(migration 038)
--- 存储并机三相模式下各相电压、电流、功率及不平衡度
-CREATE TABLE IF NOT EXISTS device_three_phase_3min (
-    device_sn           VARCHAR(50) NOT NULL,
-    event_time          TIMESTAMPTZ NOT NULL,
-    received_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    data_hash           VARCHAR(64) NOT NULL DEFAULT '',
-    raw_envelope        JSONB NOT NULL DEFAULT '{}'::jsonb,
-    voltage_l1          DOUBLE PRECISION,
-    voltage_l2          DOUBLE PRECISION,
-    voltage_l3          DOUBLE PRECISION,
-    current_l1          DOUBLE PRECISION,
-    current_l2          DOUBLE PRECISION,
-    current_l3          DOUBLE PRECISION,
-    active_power_l1     DOUBLE PRECISION,
-    active_power_l2     DOUBLE PRECISION,
-    active_power_l3     DOUBLE PRECISION,
-    total_active_power  DOUBLE PRECISION,
-    line_voltage_l1l2   DOUBLE PRECISION,
-    line_voltage_l2l3   DOUBLE PRECISION,
-    line_voltage_l3l1   DOUBLE PRECISION,
-    frequency           DOUBLE PRECISION,
-    voltage_unbalance   DOUBLE PRECISION,
-    current_unbalance   DOUBLE PRECISION,
-    quality_flags       INTEGER NOT NULL DEFAULT 0
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_three_phase_unique
-    ON device_three_phase_3min(device_sn, event_time, data_hash);
-CREATE INDEX IF NOT EXISTS idx_three_phase_device_time
-    ON device_three_phase_3min(device_sn, event_time DESC);
+-- 协议缺失功能表不属于 baseline_version=22。
+-- device_three_phase_3min 由 migration 038 首次创建，并由 migration 039
+-- 立即按最终统一契约重建；最终运行态以 039 为准。
 
 -- TimescaleDB 超表配置 (migration 023)
 DO $$
@@ -596,55 +571,14 @@ BEGIN
             PERFORM add_retention_policy('device_cell_samples', INTERVAL '90 days');
         END IF;
 
-        -- device_three_phase_3min: 7-day chunks, compress 3d, retain 90d (migration 038)
-        PERFORM create_hypertable('device_three_phase_3min', 'event_time',
-            chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);
-        ALTER TABLE device_three_phase_3min SET (
-            timescaledb.compress,
-            timescaledb.compress_segmentby = 'device_sn',
-            timescaledb.compress_orderby = 'event_time DESC'
-        );
-        IF NOT EXISTS (SELECT 1 FROM timescaledb_information.jobs WHERE proc_name = 'policy_compression' AND hypertable_name = 'device_three_phase_3min') THEN
-            PERFORM add_compression_policy('device_three_phase_3min', INTERVAL '3 days');
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM timescaledb_information.jobs WHERE proc_name = 'policy_retention' AND hypertable_name = 'device_three_phase_3min') THEN
-            PERFORM add_retention_policy('device_three_phase_3min', INTERVAL '90 days');
-        END IF;
     END IF;
 END $$;
 
 -- ============================================
--- 5.1 并机拓扑表 (migration 038)
+-- 5.1 并机拓扑表
 -- ============================================
-
--- 并机拓扑当前状态表（每电站一行）
-CREATE TABLE IF NOT EXISTS device_parallel_state (
-    station_id          BIGINT PRIMARY KEY,
-    master_sn           VARCHAR(50) NOT NULL,
-    mode                VARCHAR(20) NOT NULL,      -- standalone/single_phase/three_phase
-    count               SMALLINT NOT NULL DEFAULT 0,
-    total_rated_power   INTEGER NOT NULL DEFAULT 0,
-    total_active_power  DOUBLE PRECISION NOT NULL DEFAULT 0,
-    sync_state          VARCHAR(20) NOT NULL DEFAULT 'idle',
-    machines            JSONB NOT NULL DEFAULT '[]'::jsonb,
-    reported_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 并机拓扑变更历史表
-CREATE TABLE IF NOT EXISTS device_parallel_events (
-    id              BIGSERIAL PRIMARY KEY,
-    station_id      BIGINT NOT NULL,
-    master_sn       VARCHAR(50) NOT NULL,
-    event_type      VARCHAR(32) NOT NULL,          -- topology_changed/master_switched/member_added/member_removed/sync_state_changed/disabled
-    mode            VARCHAR(20),
-    count           SMALLINT,
-    sync_state      VARCHAR(20),
-    machines_before JSONB,
-    machines_after  JSONB,
-    occurred_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_parallel_events_station_time
-    ON device_parallel_events(station_id, occurred_at DESC);
+-- device_parallel_state / device_parallel_events 不属于 baseline_version=22。
+-- 两表由 migration 038 首次创建，并由 migration 039 立即按最终统一契约重建。
 
 -- ============================================
 -- 6. 告警相关表
@@ -665,7 +599,15 @@ CREATE TABLE alarms (
     recovered_at TIMESTAMPTZ,
     handled_at TIMESTAMPTZ,
     handled_by BIGINT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- V1 alarm lifecycle columns (migration 027)
+    alarm_source SMALLINT NOT NULL DEFAULT 0, -- 0:PCS 1:BMS 2:MPPT 3:COMM
+    event_state VARCHAR(16) NOT NULL DEFAULT 'active', -- active/recovered
+    -- Compatibility columns (migration 039) — kept in sync by trg_alarms_compat_columns
+    type VARCHAR(32) NOT NULL DEFAULT 'device_fault',
+    level SMALLINT NOT NULL DEFAULT 2,
+    message TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_alarms_device ON alarms(device_sn);
@@ -673,6 +615,14 @@ CREATE INDEX idx_alarms_station ON alarms(station_id);
 CREATE INDEX idx_alarms_user ON alarms(user_id);
 CREATE INDEX idx_alarms_status ON alarms(status);
 CREATE INDEX idx_alarms_time ON alarms(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_alarms_device_time
+    ON alarms(device_sn, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_alarms_pending
+    ON alarms(status, created_at DESC)
+    WHERE status = 0;
+CREATE INDEX IF NOT EXISTS idx_alarms_v1_active
+    ON alarms(device_sn, alarm_source, fault_code)
+    WHERE event_state = 'active';
 
 -- 告警通知记录表
 CREATE TABLE alarm_notifications (
@@ -726,74 +676,9 @@ CREATE TABLE IF NOT EXISTS alert_rules (
 CREATE INDEX IF NOT EXISTS idx_alert_rules_owner ON alert_rules(created_by, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alert_rules_target ON alert_rules(device_sn, station_id) WHERE enabled;
 
--- 告警事件日志表 (migration 038)
--- TimescaleDB hypertable，按 active_at 分区，7天chunk，30天后压缩，保留1年
--- 复合主键 (id, active_at) 满足超表对分区列的唯一约束要求
-CREATE TABLE IF NOT EXISTS device_alarm_events (
-    id            BIGSERIAL,
-    device_sn     VARCHAR(50) NOT NULL,
-    station_id    BIGINT,
-    source        SMALLINT NOT NULL,        -- 0 PCS, 1 BMS, 2 MPPT, 3 COMM
-    code          INTEGER NOT NULL,         -- 告警码
-    level         SMALLINT NOT NULL,       -- 1 warning, 2 fault
-    state         SMALLINT NOT NULL,       -- 1 active, 0 recovered
-    active_at     TIMESTAMPTZ NOT NULL,    -- 告警发生时间
-    recovered_at  TIMESTAMPTZ,             -- 恢复时间
-    raw_data      JSONB,                   -- 原始告警信封
-    received_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (id, active_at)
-);
-CREATE INDEX IF NOT EXISTS idx_alarm_events_device_time
-    ON device_alarm_events(device_sn, active_at DESC);
-CREATE INDEX IF NOT EXISTS idx_alarm_events_active
-    ON device_alarm_events(device_sn, source, code) WHERE state = 1;
-
--- device_alarm_events 超表配置: 7天chunk, 30天后压缩, 保留1年 (migration 038)
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
-        PERFORM create_hypertable('device_alarm_events', 'active_at',
-            chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE);
-        ALTER TABLE device_alarm_events SET (
-            timescaledb.compress,
-            timescaledb.compress_segmentby = 'device_sn',
-            timescaledb.compress_orderby = 'active_at DESC'
-        );
-        IF NOT EXISTS (SELECT 1 FROM timescaledb_information.jobs WHERE proc_name = 'policy_compression' AND hypertable_name = 'device_alarm_events') THEN
-            PERFORM add_compression_policy('device_alarm_events', INTERVAL '30 days');
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM timescaledb_information.jobs WHERE proc_name = 'policy_retention' AND hypertable_name = 'device_alarm_events') THEN
-            PERFORM add_retention_policy('device_alarm_events', INTERVAL '1 year');
-        END IF;
-    END IF;
-END $$;
-
--- 告警快照表 (migration 038)
--- 记录告警发生前后的设备状态快照，用于故障诊断
-CREATE TABLE IF NOT EXISTS device_alarm_snapshots (
-    id                   BIGSERIAL PRIMARY KEY,
-    device_sn            VARCHAR(50) NOT NULL,
-    alarm_event_id       BIGINT,                  -- 关联 device_alarm_events.id
-    snapshot_type        VARCHAR(16) NOT NULL,    -- 'before' 或 'after'
-    ac_voltage           DOUBLE PRECISION,
-    ac_current           DOUBLE PRECISION,
-    ac_active_power      DOUBLE PRECISION,
-    ac_frequency         DOUBLE PRECISION,
-    battery_soc          DOUBLE PRECISION,
-    battery_voltage      DOUBLE PRECISION,
-    battery_current      DOUBLE PRECISION,
-    battery_temperature  DOUBLE PRECISION,
-    internal_temperature DOUBLE PRECISION,
-    dc_bus_voltage       DOUBLE PRECISION,
-    work_state           SMALLINT,
-    fault_code           INTEGER,
-    raw_snapshot         JSONB NOT NULL,          -- 完整heartbeat快照
-    captured_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_alarm_snapshots_event
-    ON device_alarm_snapshots(alarm_event_id);
-CREATE INDEX IF NOT EXISTS idx_alarm_snapshots_device_time
-    ON device_alarm_snapshots(device_sn, captured_at DESC);
+-- device_alarm_events / device_alarm_snapshots 不属于 baseline_version=22。
+-- 两表由 migration 038 首次创建，并由 migration 039 立即按最终统一契约重建；
+-- 039 将告警事件恢复为普通 PostgreSQL 表，并为快照建立可级联外键。
 
 -- ============================================
 -- 7. OTA升级相关表
@@ -989,6 +874,81 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 
 CREATE INDEX IF NOT EXISTS idx_role_permissions_role ON role_permissions(role);
 
+-- RBAC 默认权限种子（migrations 012 + 020）。
+-- baseline_version=22 的新库不会执行 012/020 的迁移正文，因此基线必须自带
+-- 同一组默认值；已有记录代表管理员配置，冲突时不得覆盖。
+INSERT INTO role_permissions (role, resource, action, is_allowed)
+SELECT defaults.role, defaults.resource, allowed.action, true
+FROM (VALUES
+    (1, 'stations',     ARRAY['view', 'create', 'edit', 'delete']),
+    (1, 'devices',      ARRAY['view', 'create', 'edit', 'delete']),
+    (1, 'alerts',       ARRAY['view', 'edit']),
+    (1, 'ota',          ARRAY['view', 'create', 'edit']),
+    (1, 'firmware',     ARRAY['view', 'create']),
+    (1, 'users',        ARRAY['view', 'create', 'edit']),
+    (1, 'admin',        ARRAY['view']),
+    (1, 'parallel',     ARRAY['view', 'create', 'edit']),
+    (1, 'notifications', ARRAY['view', 'create', 'edit', 'delete']),
+    (1, 'alert_rules',  ARRAY['view', 'create', 'edit', 'delete']),
+    (1, 'work_orders',  ARRAY['view', 'create', 'edit', 'delete']),
+    (1, 'models',       ARRAY['view', 'create', 'edit', 'delete']),
+    (1, 'dashboard',    ARRAY['view']),
+
+    (2, 'stations',     ARRAY['view', 'create', 'edit']),
+    (2, 'devices',      ARRAY['view', 'create', 'edit']),
+    (2, 'alerts',       ARRAY['view', 'edit']),
+    (2, 'ota',          ARRAY['view', 'create']),
+    (2, 'firmware',     ARRAY['view']),
+    (2, 'users',        ARRAY['view']),
+    (2, 'parallel',     ARRAY['view', 'create']),
+    (2, 'notifications', ARRAY['view', 'create', 'edit']),
+    (2, 'alert_rules',  ARRAY['view', 'create', 'edit']),
+    (2, 'work_orders',  ARRAY['view', 'create', 'edit']),
+    (2, 'models',       ARRAY['view']),
+    (2, 'dashboard',    ARRAY['view']),
+
+    (3, 'stations',     ARRAY['view', 'create', 'edit']),
+    (3, 'devices',      ARRAY['view', 'create', 'edit']),
+    (3, 'alerts',       ARRAY['view', 'edit']),
+    (3, 'ota',          ARRAY['view', 'create']),
+    (3, 'firmware',     ARRAY['view']),
+    (3, 'users',        ARRAY['view']),
+    (3, 'parallel',     ARRAY['view', 'create']),
+    (3, 'notifications', ARRAY['view', 'create', 'edit']),
+    (3, 'alert_rules',  ARRAY['view', 'create', 'edit']),
+    (3, 'work_orders',  ARRAY['view', 'create', 'edit']),
+    (3, 'models',       ARRAY['view']),
+    (3, 'dashboard',    ARRAY['view']),
+
+    (4, 'stations',     ARRAY['view']),
+    (4, 'devices',      ARRAY['view', 'create', 'edit']),
+    (4, 'alerts',       ARRAY['view']),
+    (4, 'ota',          ARRAY['view']),
+    (4, 'notifications', ARRAY['view']),
+    (4, 'alert_rules',  ARRAY['view']),
+    (4, 'work_orders',  ARRAY['view', 'create', 'edit']),
+    (4, 'models',       ARRAY['view']),
+    (4, 'dashboard',    ARRAY['view']),
+
+    (5, 'stations',     ARRAY['view']),
+    (5, 'devices',      ARRAY['view']),
+    (5, 'alerts',       ARRAY['view']),
+    (5, 'ota',          ARRAY['view']),
+    (5, 'notifications', ARRAY['view']),
+    (5, 'alert_rules',  ARRAY['view']),
+    (5, 'work_orders',  ARRAY['view']),
+    (5, 'dashboard',    ARRAY['view'])
+) AS defaults(role, resource, actions)
+CROSS JOIN LATERAL unnest(defaults.actions) AS allowed(action)
+ON CONFLICT (role, resource, action) DO NOTHING;
+
+-- 当前产品额外权限（不属于 migrations 012/020 的 110 条历史默认权限）
+-- 终端用户需要只读型号字典，供设备详情解析型号、字段定义和字段目录。
+-- 已存在的行代表管理员配置，冲突时不得覆盖（包括显式拒绝）。
+INSERT INTO role_permissions (role, resource, action, is_allowed)
+VALUES (5, 'models', 'view', true)
+ON CONFLICT (role, resource, action) DO NOTHING;
+
 -- ============================================
 -- 10. 审计日志表 (migration 017)
 -- ============================================
@@ -1055,42 +1015,26 @@ CREATE TABLE IF NOT EXISTS device_alarms (
 
 CREATE INDEX IF NOT EXISTS idx_device_alarms_sn ON device_alarms(device_sn);
 CREATE INDEX IF NOT EXISTS idx_device_alarms_created ON device_alarms(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_device_alarms_sn_time
+    ON device_alarms(device_sn, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS device_cmd_logs (
     id BIGSERIAL PRIMARY KEY,
     device_sn VARCHAR(50) NOT NULL,
+    task_id VARCHAR(64),
     cmd VARCHAR(50) NOT NULL,
+    params JSONB DEFAULT '{}'::jsonb,
+    status VARCHAR(20) DEFAULT 'pending',
     result VARCHAR(20),
     message TEXT,
+    data JSONB DEFAULT '{}'::jsonb,
     sent_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_cmd_logs_sn ON device_cmd_logs(device_sn);
-
--- 设备日数据表（JSONB 格式，Go 代码 internal_handler.go 仍引用）
-CREATE TABLE IF NOT EXISTS device_day_data (
-    device_sn VARCHAR(50) NOT NULL,
-    data_date DATE NOT NULL,
-    data JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (device_sn, data_date)
-);
-
-CREATE INDEX IF NOT EXISTS idx_device_day_data_date ON device_day_data(data_date);
-
-CREATE TABLE IF NOT EXISTS station_day_data (
-    station_id BIGINT NOT NULL,
-    data_date DATE NOT NULL,
-    energy_produce DECIMAL(12,4) DEFAULT 0,
-    income DECIMAL(12,4) DEFAULT 0,
-    device_count INTEGER DEFAULT 0,
-    online_count INTEGER DEFAULT 0,
-    fault_count INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    PRIMARY KEY (station_id, data_date)
-);
-
-CREATE INDEX IF NOT EXISTS idx_station_day_data_date ON station_day_data(data_date);
+CREATE INDEX IF NOT EXISTS idx_cmd_logs_task_id ON device_cmd_logs(task_id);
+CREATE INDEX IF NOT EXISTS idx_cmd_logs_status ON device_cmd_logs(status);
+CREATE INDEX IF NOT EXISTS idx_cmd_logs_sn_created ON device_cmd_logs(device_sn, sent_at DESC);
 
 -- ============================================
 -- 13. 视图
@@ -1145,6 +1089,36 @@ DO $$ BEGIN
     CREATE TRIGGER update_system_configs_updated_at BEFORE UPDATE ON system_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 END $$;
 
+-- alarms 兼容列同步触发器 (migration 027+039)
+-- 保持 alarm_level↔level、fault_message↔message 同步，验证 status/event_state 枚举值
+CREATE OR REPLACE FUNCTION normalize_alarms_compat_columns()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status NOT IN (0, 1, 2) THEN
+        RAISE EXCEPTION 'alarms.status must be 0 (unhandled), 1 (handled), or 2 (ignored)'
+            USING ERRCODE = '23514';
+    END IF;
+    IF NEW.event_state NOT IN ('active', 'recovered') THEN
+        RAISE EXCEPTION 'alarms.event_state must be active or recovered'
+            USING ERRCODE = '23514';
+    END IF;
+    NEW.alarm_level := COALESCE(NEW.alarm_level, NEW.level);
+    NEW.level := NEW.alarm_level;
+    NEW.fault_message := COALESCE(NULLIF(NEW.fault_message, ''), NEW.message, '');
+    NEW.message := NEW.fault_message;
+    NEW.type := COALESCE(NULLIF(NEW.type, ''), 'device_fault');
+    NEW.updated_at := NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS trg_alarms_compat_columns ON alarms;
+    CREATE TRIGGER trg_alarms_compat_columns
+    BEFORE INSERT OR UPDATE ON alarms
+    FOR EACH ROW EXECUTE FUNCTION normalize_alarms_compat_columns();
+END $$;
+
 -- 设备时区同步函数 (migration 031)
 -- 设备 station_id 变更时自动从电站同步时区
 CREATE OR REPLACE FUNCTION sync_device_timezone()
@@ -1183,5 +1157,5 @@ $$ LANGUAGE plpgsql;
 --   - refresh_device_energy_month() 存储过程 (migration 025) — 刷新 device_energy_month
 --   - device_telemetry_hour 连续聚合物化视图 (migration 023) — 小时级聚合
 --   - telemetry_field_catalog / device_protocol_versions / device_protocol_fields 等种子数据 (migration 023/026)
---   - role_permissions 种子数据 (migration 012/024)
+--   - role_permissions 种子数据 (migrations 012/020/024)
 -- ============================================

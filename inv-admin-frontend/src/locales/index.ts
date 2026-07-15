@@ -16,6 +16,7 @@ import batchSettings from './batchSettings'
 import operationLogs from './operationLogs'
 import models from './models'
 import bigScreen from './bigScreen'
+import protocol from './protocol'
 
 const merge = (...objs: Record<string, string>[]) => Object.assign({}, ...objs)
 
@@ -38,6 +39,7 @@ const locales: Record<Lang, Record<string, string>> = {
     operationLogs.zh,
     models.zh,
     bigScreen.zh,
+    protocol.zh,
   ),
   en: merge(
     common.en,
@@ -57,6 +59,7 @@ const locales: Record<Lang, Record<string, string>> = {
     operationLogs.en,
     models.en,
     bigScreen.en,
+    protocol.en,
   ),
 }
 

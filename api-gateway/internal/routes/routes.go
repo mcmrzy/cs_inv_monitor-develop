@@ -198,6 +198,9 @@ func buildAPIDoc() APIDoc {
 		Description: "光伏逆变器监控系统 API 网关 — 统一入口，角色组分级 + RBAC 权限控制，业务接口统一转发至 api-server",
 		BaseURL:     "/api/v1",
 		Endpoints: []Endpoint{
+			{Path: "/api/v1/devices/:sn/alarm-events", Method: "GET", Description: "Device alarm event history", Auth: true, Role: "user", Backend: "api-server"},
+			{Path: "/api/v1/devices/:sn/parallel-state", Method: "GET", Description: "Device parallel state", Auth: true, Role: "user", Backend: "api-server"},
+			{Path: "/api/v1/devices/:sn/three-phase", Method: "GET", Description: "Device three-phase telemetry", Auth: true, Role: "user", Backend: "api-server"},
 			{Path: "/health", Method: "GET", Description: "健康检查", Auth: false, Role: "public", Backend: "gateway"},
 			{Path: "/metrics", Method: "GET", Description: "Prometheus 指标", Auth: false, Role: "public", Backend: "gateway"},
 			{Path: "/api/docs", Method: "GET", Description: "API 文档", Auth: false, Role: "public", Backend: "gateway"},

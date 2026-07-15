@@ -1,35 +1,34 @@
 import { BrowserRouter, Router, Routes, Route, Navigate } from 'react-router-dom'
 import type { History } from '@remix-run/router'
-import { useEffect, useState } from 'react'
-import { ConfigProvider, App as AntApp } from 'antd'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { ConfigProvider, App as AntApp, Spin } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import enUS from 'antd/locale/en_US'
 import MainLayout from '@/layouts/MainLayout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import ErrorBoundary from '@/components/ErrorBoundary'
-import LoginPage from '@/pages/login'
-import UnauthorizedPage from '@/pages/unauthorized'
-import DashboardPage from '@/pages/dashboard'
-import DevicesPage from '@/pages/devices'
-import OtaPage from '@/pages/ota'
-import AlertsPage from '@/pages/alerts'
-
-import UsersPage from '@/pages/users'
-import AdminPage from '@/pages/admin'
-import WorkOrdersPage from '@/pages/work-orders'
-import BigScreenPage from '@/pages/big-screen'
-import ParallelPage from '@/pages/parallel'
-
-import StationsPage from '@/pages/stations'
-import ModelsPage from '@/pages/models'
-import MonitoringPage from '@/pages/monitoring'
-import RemoteSettingsPage from '@/pages/remote-settings'
-import BatchSettingsPage from '@/pages/batch-settings'
-import OperationLogsPage from '@/pages/operation-logs'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { Role } from '@/types'
+
+const LoginPage = lazy(() => import('@/pages/login'))
+const UnauthorizedPage = lazy(() => import('@/pages/unauthorized'))
+const DashboardPage = lazy(() => import('@/pages/dashboard'))
+const DevicesPage = lazy(() => import('@/pages/devices'))
+const OtaPage = lazy(() => import('@/pages/ota'))
+const AlertsPage = lazy(() => import('@/pages/alerts'))
+const UsersPage = lazy(() => import('@/pages/users'))
+const AdminPage = lazy(() => import('@/pages/admin'))
+const WorkOrdersPage = lazy(() => import('@/pages/work-orders'))
+const BigScreenPage = lazy(() => import('@/pages/big-screen'))
+const ParallelPage = lazy(() => import('@/pages/parallel'))
+const StationsPage = lazy(() => import('@/pages/stations'))
+const ModelsPage = lazy(() => import('@/pages/models'))
+const MonitoringPage = lazy(() => import('@/pages/monitoring'))
+const RemoteSettingsPage = lazy(() => import('@/pages/remote-settings'))
+const BatchSettingsPage = lazy(() => import('@/pages/batch-settings'))
+const OperationLogsPage = lazy(() => import('@/pages/operation-logs'))
 
 const RoleRedirect: React.FC = () => {
   const user = useAuthStore((s) => s.user)
@@ -156,15 +155,17 @@ const App: React.FC<{ history?: History }> = ({ history }) => {
     >
       <AntApp>
         <ErrorBoundary>
-          {history ? (
-            <MemoryRouterWrapper history={history}>
-              <AppRoutes />
-            </MemoryRouterWrapper>
-          ) : (
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          )}
+          <Suspense fallback={<div style={{ minHeight: 240, display: 'grid', placeItems: 'center' }}><Spin size="large" /></div>}>
+            {history ? (
+              <MemoryRouterWrapper history={history}>
+                <AppRoutes />
+              </MemoryRouterWrapper>
+            ) : (
+              <BrowserRouter>
+                <AppRoutes />
+              </BrowserRouter>
+            )}
+          </Suspense>
         </ErrorBoundary>
       </AntApp>
     </ConfigProvider>

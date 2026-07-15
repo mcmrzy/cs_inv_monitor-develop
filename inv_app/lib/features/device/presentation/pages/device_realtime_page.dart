@@ -8,6 +8,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
+import 'package:inv_app/core/utils/telemetry_quality.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceRealtimePage extends StatefulWidget {
@@ -35,10 +36,22 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   static const _groupStyles = {
     'ac_params': {'icon': Icons.bolt_rounded, 'color': Color(0xFF8B5CF6)},
     'pv_params': {'icon': Icons.wb_sunny_outlined, 'color': Color(0xFFF59E0B)},
-    'battery_params': {'icon': Icons.battery_charging_full, 'color': Color(0xFF10B981)},
-    'system_status': {'icon': Icons.info_outline_rounded, 'color': Color(0xFF06B6D4)},
-    'energy_stats': {'icon': Icons.show_chart_rounded, 'color': Color(0xFF3B82F6)},
-    'device_info': {'icon': Icons.device_hub_rounded, 'color': Color(0xFF6B7280)},
+    'battery_params': {
+      'icon': Icons.battery_charging_full,
+      'color': Color(0xFF10B981)
+    },
+    'system_status': {
+      'icon': Icons.info_outline_rounded,
+      'color': Color(0xFF06B6D4)
+    },
+    'energy_stats': {
+      'icon': Icons.show_chart_rounded,
+      'color': Color(0xFF3B82F6)
+    },
+    'device_info': {
+      'icon': Icons.device_hub_rounded,
+      'color': Color(0xFF6B7280)
+    },
     'control_cmd': {'icon': Icons.tune_rounded, 'color': Color(0xFFEF4444)},
   };
 
@@ -74,7 +87,15 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   ///   - 中文显示名: 交流参数, 光伏参数, ...
   static String _normalizeGroupName(String raw) {
     // 已经是内部 key，直接返回
-    const internalKeys = {'ac_params', 'pv_params', 'battery_params', 'system_status', 'energy_stats', 'device_info', 'control_cmd'};
+    const internalKeys = {
+      'ac_params',
+      'pv_params',
+      'battery_params',
+      'system_status',
+      'energy_stats',
+      'device_info',
+      'control_cmd'
+    };
     if (internalKeys.contains(raw)) return raw;
     // Admin 前端格式 models.xxx → 内部 key
     const adminKeyMap = {
@@ -153,7 +174,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         final data = res.data['data'] as Map<String, dynamic>? ?? {};
 
         // 解析 realtime_data
-        final realtimeRaw = data['realtime_data'] as Map<String, dynamic>? ?? {};
+        final realtimeRaw =
+            data['realtime_data'] as Map<String, dynamic>? ?? {};
         Map<String, dynamic> flatData = {};
 
         // realtime_data 可能是嵌套结构（ac/pv/energy 对象），展平它
@@ -161,7 +183,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         realtimeRaw.forEach((key, value) {
           if (value is Map<String, dynamic>) {
             // 检查是否有 data 子字段（新格式）
-            if (value.containsKey('data') && value['data'] is Map<String, dynamic>) {
+            if (value.containsKey('data') &&
+                value['data'] is Map<String, dynamic>) {
               final innerData = value['data'] as Map<String, dynamic>;
               innerData.forEach((subKey, subValue) {
                 final flatKey = '${key}_$subKey';
@@ -195,7 +218,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           if (fields.isNotEmpty) {
             _modelFields = fields;
           }
-          _online = data['online_status']?['online'] == true || data['device']?['status'] == 1;
+          _online = data['online_status']?['online'] == true ||
+              data['device']?['status'] == 1;
           _modelName = data['device']?['model'] as String?;
           _loading = false;
           _error = null;
@@ -235,7 +259,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             if (rt.onlineStatus != null) {
               _online = rt.onlineStatus!.online;
             }
-            if (rt.deviceInfo?.model != null && rt.deviceInfo!.model.isNotEmpty) {
+            if (rt.deviceInfo?.model != null &&
+                rt.deviceInfo!.model.isNotEmpty) {
               _modelName = rt.deviceInfo!.model;
             }
             // API 未成功获取字段配置时，使用默认配置
@@ -259,6 +284,12 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   /// key 与 _fieldNameMap 中的键保持一致
   Map<String, dynamic> _inverterToFlatMap(InverterRealtime rt) {
     final map = <String, dynamic>{};
+    if (rt.protocolVersion != null) {
+      map['protocol_version'] = rt.protocolVersion;
+    }
+    if (rt.qualityFlags != null) {
+      map['quality_flags'] = rt.qualityFlags;
+    }
     // AC
     if (rt.ac != null) {
       map['ac_voltage'] = rt.ac!.voltage;
@@ -326,7 +357,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       final value = _realtimeData[key];
       if (value != null && value != 0 && value != '' && value != 0.0) {
         final idx = sortIdx++;
-        final fType = value is int ? 'int' : (value is num ? 'float' : 'string');
+        final fType =
+            value is int ? 'int' : (value is num ? 'float' : 'string');
         fields.add(
           DeviceModelField(
             id: idx,
@@ -479,9 +511,17 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   String _inferGroupFromFieldKey(String fieldKey) {
     if (fieldKey.startsWith('ac_')) return 'ac_params';
     if (fieldKey.startsWith('pv_')) return 'pv_params';
-    if (fieldKey.startsWith('batt_') || fieldKey.startsWith('battery_')) return 'battery_params';
-    if (fieldKey.startsWith('energy_') || fieldKey.startsWith('daily_') || fieldKey.startsWith('total_')) return 'energy_stats';
-    if (fieldKey.startsWith('sys_') || fieldKey.startsWith('state') || fieldKey.startsWith('work_') || fieldKey.startsWith('fault_') || fieldKey.startsWith('internal_') || fieldKey.startsWith('temp_')) return 'system_status';
+    if (fieldKey.startsWith('batt_') || fieldKey.startsWith('battery_'))
+      return 'battery_params';
+    if (fieldKey.startsWith('energy_') ||
+        fieldKey.startsWith('daily_') ||
+        fieldKey.startsWith('total_')) return 'energy_stats';
+    if (fieldKey.startsWith('sys_') ||
+        fieldKey.startsWith('state') ||
+        fieldKey.startsWith('work_') ||
+        fieldKey.startsWith('fault_') ||
+        fieldKey.startsWith('internal_') ||
+        fieldKey.startsWith('temp_')) return 'system_status';
     if (fieldKey.startsWith('load_')) return 'ac_params';
     if (fieldKey.startsWith('meter_')) return 'ac_params';
     return 'device_info';
@@ -493,7 +533,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     for (final field in _modelFields) {
       // 先规范化 group_name，再用于分组
       final rawGroup = field.groupName.isNotEmpty ? field.groupName : '';
-      final group = rawGroup.isNotEmpty ? _normalizeGroupName(rawGroup) : _inferGroupFromFieldKey(field.fieldKey);
+      final group = rawGroup.isNotEmpty
+          ? _normalizeGroupName(rawGroup)
+          : _inferGroupFromFieldKey(field.fieldKey);
       groups.putIfAbsent(group, () => []).add(field);
     }
     // 按 sort 排序每个组内的字段
@@ -547,11 +589,16 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         children: [
           Icon(Icons.cloud_off_rounded, size: 44.sp, color: AppColors.textHint),
           SizedBox(height: 12.h),
-          Text(_error!, style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
+          Text(_error!,
+              style:
+                  TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
           SizedBox(height: 16.h),
           OutlinedButton(
             onPressed: () {
-              setState(() { _loading = true; _error = null; });
+              setState(() {
+                _loading = true;
+                _error = null;
+              });
               _fetchDeviceDetail();
             },
             child: Text(l10n.retry),
@@ -572,11 +619,16 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           // 顶部状态卡片
           _buildStatusCard(),
           SizedBox(height: 12.h),
+          _buildTelemetryMetadataCard(),
+          SizedBox(height: 12.h),
           // 参数设置入口
           _buildSettingsEntry(),
+          SizedBox(height: 12.h),
+          _buildProtocolEntry(),
           SizedBox(height: 16.h),
           // 动态分组
-          ...groups.entries.map((entry) => _buildGroupCard(entry.key, entry.value)),
+          ...groups.entries
+              .map((entry) => _buildGroupCard(entry.key, entry.value)),
         ],
       ),
     );
@@ -599,16 +651,22 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
               color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12.r),
             ),
-            child: Icon(Icons.solar_power_rounded, size: 28.w, color: Colors.white),
+            child: Icon(Icons.solar_power_rounded,
+                size: 28.w, color: Colors.white),
           ),
           SizedBox(width: 14.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(sn, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: Colors.white)),
+                Text(sn,
+                    style: TextStyle(
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white)),
                 if (model.isNotEmpty)
-                  Text(model, style: TextStyle(fontSize: 12.sp, color: Colors.white70)),
+                  Text(model,
+                      style: TextStyle(fontSize: 12.sp, color: Colors.white70)),
               ],
             ),
           ),
@@ -620,7 +678,10 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             ),
             child: Text(
               _online ? l10n.online : l10n.offline,
-              style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w500, color: Colors.white),
+              style: TextStyle(
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white),
             ),
           ),
         ],
@@ -643,7 +704,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10.r),
               ),
-              child: Icon(Icons.tune_rounded, size: 20.sp, color: AppColors.primary),
+              child: Icon(Icons.tune_rounded,
+                  size: 20.sp, color: AppColors.primary),
             ),
             SizedBox(width: 12.w),
             Expanded(
@@ -652,17 +714,162 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 children: [
                   Text(
                     l10n.paramSettings,
-                    style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                    style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary),
                   ),
                   SizedBox(height: 2.h),
                   Text(
                     l10n.settingsEntryDesc,
-                    style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                    style:
+                        TextStyle(fontSize: 12.sp, color: AppColors.textHint),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, size: 20.sp, color: AppColors.textHint),
+            Icon(Icons.chevron_right_rounded,
+                size: 20.sp, color: AppColors.textHint),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTelemetryMetadataCard() {
+    final l10n = AppLocalizations.of(context)!;
+    final protocolVersion = _realtimeData['protocol_version'];
+    final quality = decodeTelemetryQuality(_realtimeData['quality_flags']);
+    final qualityColor = quality.isNormal == null
+        ? AppColors.textHint
+        : quality.isNormal!
+            ? AppColors.success
+            : AppColors.warning;
+
+    String qualityText;
+    if (quality.isNormal == null) {
+      qualityText = l10n.str('telemetry_not_reported');
+    } else if (quality.isNormal!) {
+      qualityText = '${l10n.str('telemetry_quality_normal')} (0)';
+    } else {
+      final parts = quality.flags.map((flag) => flag.label).toList();
+      if (quality.unknownMask != 0) {
+        parts.add(
+            '${l10n.str('telemetry_unknown_quality')} 0x${quality.unknownMask.toRadixString(16).toUpperCase()}');
+      }
+      qualityText = parts.join(' · ');
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16.w),
+      decoration: AppColor.card(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.verified_outlined,
+                  size: 18.sp, color: AppColors.primary),
+              SizedBox(width: 8.w),
+              Text(
+                l10n.str('telemetry_metadata'),
+                style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          Row(
+            children: [
+              Expanded(
+                child: _metadataValue(
+                  l10n.str('telemetry_protocol_version'),
+                  protocolVersion == null
+                      ? l10n.str('telemetry_not_reported')
+                      : 'V$protocolVersion',
+                ),
+              ),
+              Expanded(
+                child: _metadataValue(
+                    l10n.str('telemetry_sampling_interval'), '3 min'),
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          Text(l10n.str('telemetry_data_quality'),
+              style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+          SizedBox(height: 4.h),
+          Text(
+            qualityText,
+            style: TextStyle(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w500,
+                color: qualityColor),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metadataValue(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label,
+            style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+        SizedBox(height: 3.h),
+        Text(value,
+            style: TextStyle(
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
+      ],
+    );
+  }
+
+  Widget _buildProtocolEntry() {
+    return GestureDetector(
+      onTap: () => context.push('/device/${widget.sn}/protocol'),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+        decoration: AppColor.card(context),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(8.w),
+              decoration: BoxDecoration(
+                color: AppColors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10.r),
+              ),
+              child: Icon(Icons.monitor_heart_outlined,
+                  size: 20.sp, color: AppColors.blue),
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '协议遥测',
+                    style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary),
+                  ),
+                  SizedBox(height: 2.h),
+                  Text(
+                    '告警生命周期、并机当前态与三相 3 分钟历史',
+                    style:
+                        TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                size: 20.sp, color: AppColors.textHint),
           ],
         ),
       ),
@@ -670,7 +877,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   }
 
   Widget _buildGroupCard(String groupName, List<DeviceModelField> fields) {
-    final style = _groupStyles[groupName] ?? {'icon': Icons.device_hub, 'color': AppColors.primary};
+    final style = _groupStyles[groupName] ??
+        {'icon': Icons.device_hub, 'color': AppColors.primary};
     final icon = style['icon'] as IconData;
     final color = style['color'] as Color;
     final displayName = _localizedGroupName(groupName);
@@ -695,7 +903,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                   child: Icon(icon, size: 16.sp, color: color),
                 ),
                 SizedBox(width: 10.w),
-                Text(displayName, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(displayName,
+                    style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
               ],
             ),
           ),
@@ -716,17 +928,24 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(_displayName(field), style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
+          Text(_displayName(field),
+              style:
+                  TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 displayValue,
-                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary),
               ),
               if (field.unit.isNotEmpty) ...[
                 SizedBox(width: 4.w),
-                Text(field.unit, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                Text(field.unit,
+                    style:
+                        TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
               ],
             ],
           ),
@@ -747,7 +966,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         return value.toString();
       case 'bool':
         final l10n = AppLocalizations.of(context)!;
-        return value == true || value == 1 || value == 'true' ? l10n.yesLabel : l10n.noLabel;
+        return value == true || value == 1 || value == 'true'
+            ? l10n.yesLabel
+            : l10n.noLabel;
       default:
         return value.toString();
     }

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -173,7 +174,7 @@ func TestRBACGuard_SuperAdmin_Bypass(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestRBACGuard_HeaderRole_SuperAdmin(t *testing.T) {
+func TestRBACGuard_StaleHeaderRoleCannotGrantSuperAdmin(t *testing.T) {
 	rbac := NewRBACMiddleware(nil, nil, 300)
 	router := newTestRouter(rbac)
 
@@ -183,7 +184,72 @@ func TestRBACGuard_HeaderRole_SuperAdmin(t *testing.T) {
 	req.Header.Set("X-User-Role", "0") // super_admin via header
 	router.ServeHTTP(w, req)
 
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestRBACGuard_EmptyCachedRoleIsNotSuperAdmin(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	rbac := NewRBACMiddleware(rdb, nil, 300)
+	mr.Set("gw:user_roles:42", "[]")
+	router := newTestRouter(rbac)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
+	req.Header.Set("X-User-ID", "42")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestRBACGuard_RoleOneStillRequiresPermission(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	rbac := NewRBACMiddleware(rdb, nil, 300)
+	mr.Set("gw:user_roles:1", "[1]")
+	mr.Set("gw:role_perms:1", "[]")
+	router := newTestRouter(rbac)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
+	req.Header.Set("X-User-ID", "1")
+	req.Header.Set("X-User-Role", "1")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestRBACGuard_StaleNegativeCacheRefreshesAuthoritativePermissions(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	rbac := NewRBACMiddleware(rdb, nil, 300)
+	mr.Set("gw:user_roles:42", "[5]")
+	mr.Set("gw:role_perms:5", "[]")
+	queries := 0
+	rbac.queryRolePermissions = func(_ context.Context, role int) ([]PermissionEntry, error) {
+		queries++
+		assert.Equal(t, 5, role)
+		return []PermissionEntry{{Resource: "devices", Action: "view"}}, nil
+	}
+	router := newTestRouter(rbac)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/devices/INV001/alarm-events", nil)
+	req.Header.Set("X-User-ID", "42")
+	req.Header.Set("X-User-Role", "5")
+	router.GET("/api/v1/devices/:sn/alarm-events", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.ServeHTTP(w, req)
+
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 1, queries)
 }
 
 func TestRBACGuard_NoDBConnection_Forbidden(t *testing.T) {
@@ -200,7 +266,7 @@ func TestRBACGuard_NoDBConnection_Forbidden(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
-func TestRBACGuard_UnmatchedResource_PassThrough(t *testing.T) {
+func TestRBACGuard_UnmatchedResource_FailsClosed(t *testing.T) {
 	rbac := NewRBACMiddleware(nil, nil, 300)
 	router := gin.New()
 	router.Use(rbac.RBACGuard())
@@ -213,8 +279,24 @@ func TestRBACGuard_UnmatchedResource_PassThrough(t *testing.T) {
 	req.Header.Set("X-User-ID", "42")
 	router.ServeHTTP(w, req)
 
-	// 无匹配资源时跳过 RBAC 检查
-	assert.Equal(t, http.StatusOK, w.Code)
+	// An authenticated business route without an explicit policy must fail closed.
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestRBACGuard_AuthenticatedOnlyPath(t *testing.T) {
+	rbac := NewRBACMiddleware(nil, nil, 300)
+	router := gin.New()
+	router.Use(rbac.RBACGuard())
+	router.POST("/api/v1/auth/logout", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	req.Header.Set("X-User-ID", "42")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
 func TestRBACGuard_PermissionCheck_WithRedisCache(t *testing.T) {
@@ -269,7 +351,7 @@ func TestRBACGuard_PermissionDenied(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
-func TestRBACGuard_MemoryCache(t *testing.T) {
+func TestRBACGuard_RedisInvalidationOverridesMemoryCache(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	defer rdb.Close()
@@ -302,6 +384,10 @@ func TestRBACGuard_MemoryCache(t *testing.T) {
 
 	// 删除 Redis 缓存
 	mr.Del("gw:role_perms:1")
+	rbac.queryRolePermissions = func(_ context.Context, role int) ([]PermissionEntry, error) {
+		assert.Equal(t, 1, role)
+		return []PermissionEntry{}, nil
+	}
 
 	// 第二次请求 - 应使用内存缓存
 	w2 := httptest.NewRecorder()
@@ -309,7 +395,7 @@ func TestRBACGuard_MemoryCache(t *testing.T) {
 	req2.Header.Set("X-User-ID", "5")
 	req2.Header.Set("X-User-Role", "1") // 角色 1，使用内存缓存
 	router.ServeHTTP(w2, req2)
-	assert.Equal(t, http.StatusOK, w2.Code)
+	assert.Equal(t, http.StatusForbidden, w2.Code)
 }
 
 func TestInvalidateUserCache(t *testing.T) {
@@ -376,4 +462,89 @@ func TestResourceActionMap(t *testing.T) {
 		assert.Equal(t, resource, resourceActionMap[prefix],
 			"prefix %s should map to resource %s", prefix, resource)
 	}
+}
+
+func TestResourceForPath_UsesMostSpecificPrefix(t *testing.T) {
+	assert.Equal(t, "devices", resourceForPath("/api/v1/devices/INV001/three-phase"))
+	assert.Equal(t, "firmware", resourceForPath("/api/v1/ota/firmwares/12"))
+	assert.Empty(t, resourceForPath("/api/v1/unknown"))
+}
+
+func TestResourceForPath_ExactRootsAliasesAndProtocolRoutes(t *testing.T) {
+	tests := map[string]string{
+		"/api/v1/stations":                      "stations",
+		"/api/v1/notifications":                 "notifications",
+		"/api/v1/alerts":                        "alerts",
+		"/api/v1/alerts/9/acknowledge":          "alerts",
+		"/api/v1/alarm-events/42":               "alerts",
+		"/api/v1/parallel-groups":               "parallel",
+		"/api/v1/parallel-groups/7":             "parallel",
+		"/api/v1/models":                        "models",
+		"/api/v1/field-catalog":                 "models",
+		"/api/v1/protocol-versions":             "models",
+		"/api/v1/protocol-versions/2/release":   "models",
+		"/api/v1/devices/INV001/alarm-events":   "devices",
+		"/api/v1/devices/INV001/parallel-state": "devices",
+		"/api/v1/devices/INV001/three-phase":    "devices",
+	}
+
+	for path, want := range tests {
+		t.Run(path, func(t *testing.T) {
+			assert.Equal(t, want, resourceForPath(path))
+		})
+	}
+}
+
+func TestResourceForPath_RequiresPathBoundary(t *testing.T) {
+	assert.Empty(t, resourceForPath("/api/v1/stations-archive"))
+	assert.Empty(t, resourceForPath("/api/v1/alerts-export"))
+	assert.Empty(t, resourceForPath("/api/v1/parallel-groups-legacy"))
+	assert.Empty(t, resourceForPath("/api/v1/field-catalogue"))
+}
+
+func TestGetActionForRequest(t *testing.T) {
+	rbac := &RBACMiddleware{}
+	assert.Equal(t, "manage", rbac.getActionForRequest("/api/v1/admin/system-health", http.MethodGet))
+	assert.Equal(t, "manage", rbac.getActionForRequest("/api/v1/admin/permissions/2", http.MethodPut))
+	assert.Equal(t, "manage", rbac.getActionForRequest("/api/v1/admin/tenants", http.MethodPost))
+	assert.Equal(t, "view", rbac.getActionForRequest("/api/v1/users", http.MethodGet))
+	assert.Equal(t, "edit", rbac.getActionForRequest("/api/v1/users/2", http.MethodPatch))
+	assert.Equal(t, "edit", rbac.getActionForRequest("/api/v1/alerts/1/acknowledge", http.MethodPost))
+	assert.Equal(t, "edit", rbac.getActionForRequest("/api/v1/alarms/1/ignore", http.MethodPost))
+	assert.Equal(t, "create", rbac.getActionForRequest("/api/v1/alerts", http.MethodPost))
+	assert.Equal(t, "view", rbac.getActionForRequest("/api/v1/devices/INV001/three-phase", http.MethodGet))
+
+	controlRequests := []struct {
+		path   string
+		method string
+	}{
+		{"/api/v1/ota/upgrades/retry", http.MethodPost},
+		{"/api/v1/ota/upgrades/cancel", http.MethodPost},
+		{"/api/v1/ota/packages/12/publish", http.MethodPatch},
+		{"/api/v1/ota/packages/12/rollback", http.MethodPost},
+		{"/api/v1/ota/tasks/9/execute", http.MethodPost},
+		{"/api/v1/ota/tasks/9/cancel", http.MethodPost},
+		{"/api/v1/ota/tasks/9/retry", http.MethodPost},
+		{"/api/v1/ota/rollback", http.MethodPost},
+		{"/api/v1/ota/rollback-to-published", http.MethodPost},
+		{"/api/v1/ota/app/versions/3/rollout", http.MethodPut},
+		{"/api/v1/ota/app/versions/3/rollback", http.MethodPost},
+		{"/api/v1/ota/app/versions/3/restore", http.MethodPost},
+	}
+	for _, tt := range controlRequests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			assert.Equal(t, "control", rbac.getActionForRequest(tt.path, tt.method))
+		})
+	}
+
+	assert.Equal(t, "create", rbac.getActionForRequest("/api/v1/ota/tasks", http.MethodPost))
+	assert.Equal(t, "edit", rbac.getActionForRequest("/api/v1/work-orders/9/cancel", http.MethodPatch))
+}
+
+func TestAuthenticatedOnlyPaths_AreExact(t *testing.T) {
+	assert.True(t, isAuthenticatedOnlyPath("/api/v1/auth/logout"))
+	assert.True(t, isAuthenticatedOnlyPath("/api/v1/auth/change-password"))
+	assert.True(t, isAuthenticatedOnlyPath("/api/v1/auth/profile"))
+	assert.False(t, isAuthenticatedOnlyPath("/api/v1/auth/profile/export"))
+	assert.False(t, isAuthenticatedOnlyPath("/api/v1/auth/unknown"))
 }

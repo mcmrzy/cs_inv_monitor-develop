@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION maintain_telemetry_v2_derived()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM pg_advisory_xact_lock(hashtextextended(NEW.device_sn,0));
-    IF (NEW.quality_flags & 64)=0 THEN
+    IF (NEW.quality_flags & 8)=0 THEN
         DELETE FROM device_latest_state
         WHERE device_sn=NEW.device_sn AND event_time<=NEW.event_time;
         INSERT INTO device_latest_state

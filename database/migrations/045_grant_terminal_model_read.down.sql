@@ -1,0 +1,4 @@
+-- Intentionally irreversible.
+-- Migration 045 cannot distinguish its additive default from a permission
+-- subsequently confirmed or customized by an administrator. Deleting the row
+-- during rollback could therefore revoke an intentional production setting.

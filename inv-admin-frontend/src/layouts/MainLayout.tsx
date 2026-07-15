@@ -89,7 +89,7 @@ const MainLayout: React.FC = () => {
 
   const siderCollapsed = isMobile ? mobileCollapsed : collapsed
 
-  const isAdminRole = user && (user.role === Role.SUPER_ADMIN || user.role === Role.AGENT)
+  const isAdminRole = user && (user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN)
 
   const filterMenuItems = (items: MenuItem[]): any[] => {
     return items

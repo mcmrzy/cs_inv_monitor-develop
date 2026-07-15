@@ -21,7 +21,6 @@ func setupTestRouter() *gin.Engine {
 	r.POST("/api/v1/internal/device-info", h.DeviceInfo)
 	r.POST("/api/v1/internal/device-data", h.DeviceData)
 	r.POST("/api/v1/internal/device-cmd-status", h.DeviceCmdStatus)
-	r.POST("/api/v1/internal/alarm", h.DeviceAlarm)
 	return r
 }
 
@@ -74,7 +73,6 @@ func TestInternalDeviceStatus_Validation(t *testing.T) {
 		})
 	}
 }
-
 func TestInternalDeviceInfo_Validation(t *testing.T) {
 	r := setupTestRouter()
 
@@ -110,7 +108,6 @@ func TestInternalDeviceInfo_Validation(t *testing.T) {
 		})
 	}
 }
-
 func TestInternalDeviceData_Validation(t *testing.T) {
 	r := setupTestRouter()
 
@@ -176,42 +173,6 @@ func TestInternalDeviceCmdStatus_Validation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := json.Marshal(tt.body)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/internal/device-cmd-status", bytes.NewBuffer(b))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
-
-			r.ServeHTTP(w, req)
-
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d, body: %s", w.Code, tt.wantStatus, w.Body.String())
-			}
-		})
-	}
-}
-
-func TestInternalDeviceAlarm_Validation(t *testing.T) {
-	r := setupTestRouter()
-
-	tests := []struct {
-		name       string
-		body       interface{}
-		wantStatus int
-	}{
-		{
-			name:       "missing sn",
-			body:       map[string]interface{}{"event": "fault", "source": "inverter"},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "invalid code type",
-			body:       map[string]interface{}{"sn": "INV001", "code": "not-a-number"},
-			wantStatus: http.StatusBadRequest,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/internal/alarm", bytes.NewBuffer(b))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 

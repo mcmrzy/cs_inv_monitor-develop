@@ -33,10 +33,20 @@ interface UserRecord {
 }
 
 const ROLE_TO_NUMERIC: Record<Role, number> = {
-  [Role.SUPER_ADMIN]: 0, [Role.AGENT]: 1, [Role.INSTALLER]: 2, [Role.END_USER]: 3,
+  [Role.SUPER_ADMIN]: 0,
+  [Role.ADMIN]: 1,
+  [Role.OPERATOR]: 2,
+  [Role.DEALER]: 3,
+  [Role.INSTALLER]: 4,
+  [Role.END_USER]: 5,
 }
 const ROLE_ORDER: Record<string, number> = {
-  [Role.SUPER_ADMIN]: 0, [Role.AGENT]: 1, [Role.INSTALLER]: 2, [Role.END_USER]: 3,
+  [Role.SUPER_ADMIN]: 0,
+  [Role.ADMIN]: 1,
+  [Role.OPERATOR]: 2,
+  [Role.DEALER]: 3,
+  [Role.INSTALLER]: 4,
+  [Role.END_USER]: 5,
 }
 
 
@@ -49,8 +59,10 @@ function canManageUser(currentRole: Role | undefined, targetRole: Role): boolean
 function getAssignableRoles(currentRole: Role | undefined): Role[] {
   if (currentRole === undefined) return []
   switch (currentRole) {
-    case Role.SUPER_ADMIN: return [Role.SUPER_ADMIN, Role.AGENT, Role.INSTALLER, Role.END_USER]
-    case Role.AGENT: return [Role.INSTALLER, Role.END_USER]
+    case Role.SUPER_ADMIN: return [Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATOR, Role.DEALER, Role.INSTALLER, Role.END_USER]
+    case Role.ADMIN: return [Role.OPERATOR, Role.DEALER, Role.INSTALLER, Role.END_USER]
+    case Role.OPERATOR: return [Role.DEALER, Role.INSTALLER, Role.END_USER]
+    case Role.DEALER: return [Role.INSTALLER, Role.END_USER]
     case Role.INSTALLER: return [Role.END_USER]
     default: return []
   }
@@ -228,9 +240,11 @@ const UsersPage: React.FC = () => {
   const roleTabs = [
     { key: 'all', label: t('user.allUsers') },
     { key: '0', label: t('user.superAdmin') },
-    { key: '1', label: t('user.agent') },
-    { key: '2', label: t('user.installer') },
-    { key: '3', label: t('user.endUser') },
+    { key: '1', label: t('user.admin') },
+    { key: '2', label: t('user.operator') },
+    { key: '3', label: t('user.dealer') },
+    { key: '4', label: t('user.installer') },
+    { key: '5', label: t('user.endUser') },
   ]
 
   const handleTabChange = (key: string) => {
@@ -257,7 +271,14 @@ const UsersPage: React.FC = () => {
           <Col>
             <Select allowClear placeholder={t('user.filterRole')} style={{ width: 140 }}
               value={roleFilter} onChange={(val) => { setRoleFilter(val); setPage(1) }}
-              options={[{ label: t('user.superAdmin'), value: 0 }, { label: t('user.agent'), value: 1 }, { label: t('user.installer'), value: 2 }, { label: t('user.endUser'), value: 3 }]} />
+              options={[
+                { label: t('user.superAdmin'), value: Role.SUPER_ADMIN },
+                { label: t('user.admin'), value: Role.ADMIN },
+                { label: t('user.operator'), value: Role.OPERATOR },
+                { label: t('user.dealer'), value: Role.DEALER },
+                { label: t('user.installer'), value: Role.INSTALLER },
+                { label: t('user.endUser'), value: Role.END_USER },
+              ]} />
           </Col>
           <Col>
             <Select allowClear placeholder={t('user.filterStatus')} style={{ width: 120 }}

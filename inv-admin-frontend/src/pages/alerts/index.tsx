@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Button, Select, Tag, Space, Row, Col, DatePicker,
-  Statistic, Typography, App, Empty, Tabs,
+  Statistic, Typography, App, Empty, Tabs, Drawer, Alert as AntAlert, Tooltip, Descriptions,
 } from 'antd'
 import { ReloadOutlined, CheckOutlined, StopOutlined, AlertOutlined, DeleteOutlined, ClearOutlined, BellOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -10,6 +10,7 @@ import dayjs from 'dayjs'
 import api from '@/services/api'
 import { alertApi, notificationApi } from '@/services/alertApi'
 import { deviceApi } from '@/services/deviceApi'
+import { getApiErrorMessage, protocolApi, type AlarmEvent } from '@/services/protocolApi'
 import { ALARM_LEVEL_MAP, getAlarmLevelDisplay } from '@/utils/constants'
 import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
@@ -18,7 +19,7 @@ import useTranslation from '@/hooks/useTranslation'
 import useTimezoneStore from '@/stores/timezoneStore'
 
 const { RangePicker } = DatePicker
-const { Title } = Typography
+const { Title, Text } = Typography
 
 interface NotificationItem {
   id: number
@@ -43,6 +44,9 @@ const AlertsPage: React.FC = () => {
   const [keyword, setKeyword] = useState<string>()
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
   const [activeTab, setActiveTab] = useState<string>('all')
+  const [traceSN, setTraceSN] = useState<string>()
+  const [traceOpen, setTraceOpen] = useState(false)
+  const [selectedEventID, setSelectedEventID] = useState<number>()
 
   const ALERT_STATUS_MAP: Record<string, { label: string; color: string }> = {
     '0': { label: t('alert.unprocessed'), color: '#ff4d4f' },
@@ -63,7 +67,7 @@ const AlertsPage: React.FC = () => {
   }
 
   // 获取设备列表（用于 SN 下拉）
-  const { data: devicesData } = useQuery({
+  const { data: devicesData, error: devicesError } = useQuery({
     queryKey: queryKeys.devices.allDevices(),
     queryFn: () => deviceApi.getAll().then((r) => {
       const d = r.data?.data ?? r.data ?? {}
@@ -73,7 +77,7 @@ const AlertsPage: React.FC = () => {
   })
 
   // 获取电站列表（用于电站下拉）
-  const { data: stationsData } = useQuery({
+  const { data: stationsData, error: stationsError } = useQuery({
     queryKey: queryKeys.stations.list(),
     queryFn: () => api.get('/stations', { params: { page_size: 100, all: true } }).then((r) => {
       const d = r.data?.data ?? r.data ?? {}
@@ -117,7 +121,7 @@ const AlertsPage: React.FC = () => {
   }
 
   // 告警列表
-  const { data: listRes, isLoading, refetch } = useQuery({
+  const { data: listRes, isLoading, refetch, error: listError } = useQuery({
     queryKey: queryKeys.alerts.list(queryParams),
     queryFn: () => alertApi.list(queryParams).then((r) => {
       const d = r.data?.data ?? r.data ?? {}
@@ -130,7 +134,7 @@ const AlertsPage: React.FC = () => {
   })
 
   // 通知列表
-  const { data: notifyRes, isLoading: notifyLoading, refetch: refetchNotify } = useQuery({
+  const { data: notifyRes, isLoading: notifyLoading, refetch: refetchNotify, error: notifyError } = useQuery({
     queryKey: ['notifications', 'list', notifyQueryParams],
     queryFn: () => notificationApi.list(notifyQueryParams).then((r) => {
       const d = r.data?.data ?? r.data ?? {}
@@ -191,6 +195,101 @@ const AlertsPage: React.FC = () => {
     onError: () => { message.error(t('alert.operationFailed')) },
   })
 
+  const traceQuery = useQuery({
+    queryKey: ['protocol', 'alarm-events', traceSN, dateRange?.[0]?.toISOString(), dateRange?.[1]?.toISOString()],
+    queryFn: () => protocolApi.getAlarmEvents(traceSN!, {
+      page: 1,
+      page_size: 200,
+      start_time: dateRange?.[0]?.startOf('day').toISOString(),
+      end_time: dateRange?.[1]?.endOf('day').toISOString(),
+    }),
+    enabled: Boolean(traceSN && traceOpen),
+    retry: false,
+  })
+
+  const eventDetailQuery = useQuery({
+    queryKey: ['protocol', 'alarm-event-detail', selectedEventID],
+    queryFn: () => protocolApi.getAlarmEventDetail(selectedEventID!),
+    enabled: Boolean(traceOpen && selectedEventID),
+    retry: false,
+  })
+
+  const openTrace = (sn?: string) => {
+    if (!sn) return
+    setTraceSN(sn)
+    setSelectedEventID(undefined)
+    setTraceOpen(true)
+  }
+
+  const renderSnapshot = (snapshotType: 'before' | 'after') => {
+    const snapshot = eventDetailQuery.data?.snapshots.find((item) => item.snapshot_type === snapshotType)
+    const raw = snapshot?.raw_snapshot
+    const missing = raw?.missing === true
+    const label = snapshotType === 'before' ? t('alert.snapshotBefore') : t('alert.snapshotAfter')
+    if (!snapshot) {
+      return <Card size="small" title={label}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('alert.snapshotNotCaptured')} /></Card>
+    }
+    if (missing) {
+      return (
+        <Card size="small" title={label}>
+          <AntAlert type="warning" showIcon message={t('alert.snapshotMissing')} description={String(raw?.reason || t('alert.snapshotMissingUnknown'))} />
+        </Card>
+      )
+    }
+    const metric = (value: number | null | undefined, unit = '') => value == null ? '-' : `${value}${unit}`
+    return (
+      <Card size="small" title={label} extra={snapshot.captured_at ? formatInTimezone(snapshot.captured_at, timezone, 'YYYY-MM-DD HH:mm:ss') : undefined}>
+        <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} bordered>
+          <Descriptions.Item label={t('alert.acVoltage')}>{metric(snapshot.ac_voltage, ' V')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.acCurrent')}>{metric(snapshot.ac_current, ' A')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.acPower')}>{metric(snapshot.ac_active_power, ' W')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.frequency')}>{metric(snapshot.ac_frequency, ' Hz')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.batterySoc')}>{metric(snapshot.battery_soc, '%')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.batteryVoltage')}>{metric(snapshot.battery_voltage, ' V')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.batteryCurrent')}>{metric(snapshot.battery_current, ' A')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.batteryTemperature')}>{metric(snapshot.battery_temperature, ' °C')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.internalTemperature')}>{metric(snapshot.internal_temperature, ' °C')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.dcBusVoltage')}>{metric(snapshot.dc_bus_voltage, ' V')}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.workState')}>{metric(snapshot.work_state)}</Descriptions.Item>
+          <Descriptions.Item label={t('alert.snapshotFaultCode')}>{metric(snapshot.fault_code)}</Descriptions.Item>
+        </Descriptions>
+      </Card>
+    )
+  }
+
+  const traceColumns: ColumnsType<AlarmEvent> = [
+    { title: t('alert.source'), dataIndex: 'source', width: 70 },
+    { title: t('alert.faultCode'), dataIndex: 'code', width: 90 },
+    {
+      title: t('alert.alertLevel'), dataIndex: 'level', width: 90,
+      render: (value: number) => <Tag color={value === 1 ? 'red' : value === 2 ? 'orange' : 'blue'}>{value}</Tag>,
+    },
+    {
+      title: t('alert.lifecycleState'), dataIndex: 'state', width: 110,
+      render: (value: string) => <Tag color={String(value) === '0' || value === 'recovered' ? 'success' : 'error'}>{String(value) === '0' ? 'recovered' : String(value) === '1' ? 'active' : value}</Tag>,
+    },
+    {
+      title: t('alert.eventTime'), dataIndex: 'event_time', width: 170,
+      render: (value: string) => value ? formatInTimezone(value, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('alert.receivedAt'), dataIndex: 'received_at', width: 170,
+      render: (value: string) => value ? formatInTimezone(value, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('alert.activeAt'), dataIndex: 'active_at', width: 170,
+      render: (value: string) => value ? formatInTimezone(value, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('alert.recoveredAt'), dataIndex: 'recovered_at', width: 170,
+      render: (value: string) => value ? formatInTimezone(value, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+    },
+    {
+      title: t('alert.dataHash'), dataIndex: 'data_hash', width: 190,
+      render: (value: string) => <Tooltip title={value}><Text code copyable>{value ? `${value.slice(0, 12)}…` : '-'}</Text></Tooltip>,
+    },
+  ]
+
   // 告警表格列
   const alarmColumns: ColumnsType<any> = [
     {
@@ -233,6 +332,7 @@ const AlertsPage: React.FC = () => {
               >{t('alert.ignore')}</Button>
             </>
           )}
+          <Button type="link" size="small" onClick={() => openTrace(record.device_sn)}>{t('alert.trace')}</Button>
           <Button type="link" size="small" danger icon={<DeleteOutlined />}
             onClick={() => deleteAlarmMutation.mutate(record.id)}
           >{t('alert.delete') || '删除'}</Button>
@@ -344,6 +444,9 @@ const AlertsPage: React.FC = () => {
               >{t('alert.ignore')}</Button>
             </>
           )}
+          {record._type === 'alarm' && (
+            <Button type="link" size="small" onClick={() => openTrace(record.device_sn)}>{t('alert.trace')}</Button>
+          )}
           <Button type="link" size="small" danger icon={<DeleteOutlined />}
             onClick={() => record._type === 'notification'
               ? deleteNotifyMutation.mutate(record.id)
@@ -403,6 +506,14 @@ const AlertsPage: React.FC = () => {
       </Row>
 
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
+        {(devicesError || stationsError) && (
+          <AntAlert
+            type="warning"
+            showIcon
+            message={getApiErrorMessage(devicesError || stationsError)}
+            style={{ marginBottom: 12 }}
+          />
+        )}
         <Row gutter={16} align="middle">
           <Col>
             <Select allowClear showSearch placeholder={t('alert.stationFilter') || '选择电站'} style={{ width: 160 }}
@@ -473,6 +584,14 @@ const AlertsPage: React.FC = () => {
             { key: 'notification', label: t('alert.tabNotification') || '通知' },
           ]}
         />
+        {((activeTab !== 'notification' && listError) || (activeTab !== 'alarm' && notifyError)) && (
+          <AntAlert
+            type="error"
+            showIcon
+            message={getApiErrorMessage(activeTab === 'notification' ? notifyError : listError || notifyError)}
+            style={{ marginBottom: 12 }}
+          />
+        )}
         <Table
           rowKey={(record) => `${record._type || 'alarm'}-${record.id}`}
           columns={getColumns()}
@@ -487,6 +606,55 @@ const AlertsPage: React.FC = () => {
           }}
         />
       </Card>
+      <Drawer
+        title={`${t('alert.traceTitle')}${traceSN ? ` · ${traceSN}` : ''}`}
+        width="min(1100px, 94vw)"
+        open={traceOpen}
+        onClose={() => setTraceOpen(false)}
+      >
+        <Text type="secondary">{t('alert.traceHint')}</Text>
+        {traceQuery.isError && (
+          <AntAlert type="error" showIcon message={t('alert.traceLoadFailed')} description={getApiErrorMessage(traceQuery.error)} style={{ margin: '16px 0' }} />
+        )}
+        <Table
+          style={{ marginTop: 16 }}
+          rowKey={(event) => event.id}
+          columns={traceColumns}
+          dataSource={traceQuery.data?.items ?? []}
+          loading={traceQuery.isLoading}
+          scroll={{ x: 1350 }}
+          size="small"
+          locale={{ emptyText: <Empty description={t('alert.noTraceData')} /> }}
+          pagination={{ pageSize: 20, showSizeChanger: true }}
+          rowSelection={{
+            type: 'radio',
+            selectedRowKeys: selectedEventID ? [selectedEventID] : [],
+            onChange: (keys) => setSelectedEventID(Number(keys[0])),
+          }}
+          onRow={(event) => ({ onClick: () => setSelectedEventID(event.id), style: { cursor: 'pointer' } })}
+        />
+        {selectedEventID && (
+          <Card title={`${t('alert.snapshotTitle')} #${selectedEventID}`} style={{ marginTop: 16 }} loading={eventDetailQuery.isLoading}>
+            {eventDetailQuery.isError && (
+              <AntAlert
+                type="error"
+                showIcon
+                message={t('alert.snapshotLoadFailed')}
+                description={getApiErrorMessage(eventDetailQuery.error)}
+              />
+            )}
+            {eventDetailQuery.data && (
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                <Text type="secondary">{t('alert.snapshotHint')}</Text>
+                <Row gutter={[16, 16]}>
+                  <Col xs={24} xl={12}>{renderSnapshot('before')}</Col>
+                  <Col xs={24} xl={12}>{renderSnapshot('after')}</Col>
+                </Row>
+              </Space>
+            )}
+          </Card>
+        )}
+      </Drawer>
     </div>
   )
 }

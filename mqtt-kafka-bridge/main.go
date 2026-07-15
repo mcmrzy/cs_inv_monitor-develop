@@ -31,9 +31,9 @@ import (
 
 type Config struct {
 	Server struct {
-		Port    int    `yaml:"port"`
-		Workers int    `yaml:"workers"`
-		Timeout int    `yaml:"timeout"`
+		Port    int `yaml:"port"`
+		Workers int `yaml:"workers"`
+		Timeout int `yaml:"timeout"`
 	} `yaml:"server"`
 	Kafka struct {
 		Brokers        []string `yaml:"brokers"`
@@ -100,44 +100,38 @@ func (s *stats) incErr() {
 }
 
 type KafkaBridge struct {
-	telemetryWriter *kafka.Writer
-	alarmWriter     *kafka.Writer
+	telemetryWriter messageWriter
+	alarmWriter     messageWriter
 	stats           stats
 	cfg             *Config
 }
 
-// kafkaErrorLogger 实现 kafka.Logger 接口，在记录 Kafka 异步写入错误的同时递增错误计数。
-// kafka-go v0.4.47 的 Writer 在 Async 模式下不暴露 Errors() channel，
-// 而是通过 ErrorLogger 回调报告异步写入失败。
-type kafkaErrorLogger struct {
-	stats *stats
+type messageWriter interface {
+	WriteMessages(context.Context, ...kafka.Message) error
+	Close() error
 }
 
-func (l *kafkaErrorLogger) Printf(format string, args ...interface{}) {
-	log.Printf(format, args...)
-	l.stats.incErr()
+func newKafkaWriter(cfg *Config, topic string) *kafka.Writer {
+	return &kafka.Writer{
+		Addr:            kafka.TCP(cfg.Kafka.Brokers...),
+		Topic:           topic,
+		Balancer:        &kafka.Hash{},
+		BatchSize:       cfg.Kafka.BatchSize,
+		BatchTimeout:    time.Duration(cfg.Kafka.BatchTimeout) * time.Millisecond,
+		RequiredAcks:    kafka.RequireAll,
+		MaxAttempts:     5,
+		WriteBackoffMin: 100 * time.Millisecond,
+		WriteBackoffMax: 2 * time.Second,
+		Async:           false,
+	}
 }
 
 func NewKafkaBridge(cfg *Config) *KafkaBridge {
-	b := &KafkaBridge{cfg: cfg}
-	errLog := &kafkaErrorLogger{stats: &b.stats}
-	b.telemetryWriter = &kafka.Writer{
-		Addr:         kafka.TCP(cfg.Kafka.Brokers...),
-		Topic:        cfg.Kafka.TelemetryTopic,
-		BatchSize:    cfg.Kafka.BatchSize,
-		BatchTimeout: time.Duration(cfg.Kafka.BatchTimeout) * time.Millisecond,
-		Async:        true,
-		ErrorLogger:  errLog,
+	return &KafkaBridge{
+		cfg:             cfg,
+		telemetryWriter: newKafkaWriter(cfg, cfg.Kafka.TelemetryTopic),
+		alarmWriter:     newKafkaWriter(cfg, cfg.Kafka.AlarmTopic),
 	}
-	b.alarmWriter = &kafka.Writer{
-		Addr:         kafka.TCP(cfg.Kafka.Brokers...),
-		Topic:        cfg.Kafka.AlarmTopic,
-		BatchSize:    cfg.Kafka.BatchSize,
-		BatchTimeout: time.Duration(cfg.Kafka.BatchTimeout) * time.Millisecond,
-		Async:        true,
-		ErrorLogger:  errLog,
-	}
-	return b
 }
 
 type EMQXWebhookMessage struct {
@@ -172,6 +166,12 @@ func (b *KafkaBridge) handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	sn := extractSN(msg.Topic)
 	msgType := extractMsgType(msg.Topic)
+	if sn == "" || msgType == "unknown" {
+		b.stats.incErr()
+		http.Error(w, "invalid mqtt topic", http.StatusBadRequest)
+		return
+	}
+	b.stats.incIn()
 
 	var payloadObj interface{}
 	if msg.Payload != "" {
@@ -213,14 +213,20 @@ func (b *KafkaBridge) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		Value: body,
 	}
 
-	if err := writer.WriteMessages(context.Background(), kafkaMsg); err != nil {
+	writeTimeout := time.Duration(b.cfg.Server.Timeout) * time.Second
+	if writeTimeout <= 0 {
+		writeTimeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), writeTimeout)
+	defer cancel()
+	if err := writer.WriteMessages(ctx, kafkaMsg); err != nil {
 		b.stats.incErr()
 		log.Printf("Kafka write error: %v", err)
 		http.Error(w, "kafka error", http.StatusBadGateway)
 		return
 	}
 
-	b.stats.incIn()
+	b.stats.incOut(1)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -299,9 +305,6 @@ func main() {
 
 	bridge := NewKafkaBridge(cfg)
 
-	// Kafka Writer 的异步错误通过 ErrorLogger 回调处理（见 kafkaErrorLogger），
-	// 此处无需额外 goroutine 消费 Errors channel。
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/webhook", bridge.handleWebhook)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -311,9 +314,9 @@ func main() {
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
 		bridge.stats.mu.Lock()
 		data := map[string]interface{}{
-			"messages_in":    bridge.stats.messagesIn,
-			"messages_out":   bridge.stats.messagesOut,
-			"errors":         bridge.stats.errors,
+			"messages_in":     bridge.stats.messagesIn,
+			"messages_out":    bridge.stats.messagesOut,
+			"errors":          bridge.stats.errors,
 			"last_message_at": bridge.stats.lastMessageAt.Format(time.RFC3339),
 		}
 		bridge.stats.mu.Unlock()

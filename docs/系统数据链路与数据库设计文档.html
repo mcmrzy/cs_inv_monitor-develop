@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS-INV 光伏逆变器物联网监控系统 - 数据链路与数据库设计</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding-top: 70px;
+        }
+
+        /* 固定导航栏 */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            padding: 0 2rem;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .navbar-brand {
+            color: #fff;
+            font-size: 1.3rem;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .navbar-nav {
+            display: flex;
+            gap: 1.5rem;
+            list-style: none;
+        }
+
+        .navbar-nav a {
+            color: rgba(255,255,255,0.9);
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: color 0.3s;
+        }
+
+        .navbar-nav a:hover {
+            color: #fff;
+            text-shadow: 0 0 5px rgba(255,255,255,0.5);
+        }
+
+        /* 主容器 */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* 标题样式 */
+        .page-title {
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            color: #fff;
+            padding: 3rem 2rem;
+            border-radius: 12px;
+            margin-bottom: 3rem;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(26,35,126,0.3);
+        }
+
+        .page-title h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .page-title .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.95;
+        }
+
+        /* 章节标题 */
+        .chapter-title {
+            font-size: 2rem;
+            color: #1a237e;
+            margin: 3rem 0 1.5rem 0;
+            padding-left: 1rem;
+            border-left: 5px solid #283593;
+            position: relative;
+        }
+
+        .chapter-title::before {
+            content: '';
+            position: absolute;
+            left: -5px;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            background: linear-gradient(180deg, #283593 0%, #1a237e 100%);
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            color: #283593;
+            margin: 2rem 0 1rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        /* 卡片样式 */
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            border-left: 4px solid #283593;
+        }
+
+        .card.highlight {
+            border-left-color: #ff6f00;
+            background: linear-gradient(to right, #fff5e6 0%, #fff 100%);
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            color: #1a237e;
+            margin-bottom: 0.8rem;
+            font-weight: 600;
+        }
+
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        th {
+            background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+            color: #fff;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        td {
+            padding: 0.8rem 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tr:nth-child(odd) {
+            background: #f9f9f9;
+        }
+
+        tr:nth-child(even) {
+            background: #fff;
+        }
+
+        tr:hover {
+            background: #f0f4ff;
+        }
+
+        /* 代码样式 */
+        code {
+            font-family: "Consolas", "Monaco", "Courier New", monospace;
+            background: #f5f5f5;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.9em;
+            color: #c62828;
+        }
+
+        pre {
+            background: #263238;
+            color: #aed581;
+            padding: 1.2rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            line-height: 1.5;
+        }
+
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+        }
+
+        /* 流程图样式 */
+        .flow-diagram {
+            background: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            margin: 1.5rem 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .flow-box {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 2px solid #283593;
+            border-radius: 6px;
+            padding: 0.8rem 1.2rem;
+            margin: 0.5rem 0;
+            text-align: center;
+            position: relative;
+            font-weight: 500;
+        }
+
+        .flow-arrow {
+            text-align: center;
+            font-size: 1.5rem;
+            color: #283593;
+            margin: 0.3rem 0;
+        }
+
+        .flow-arrow::before {
+            content: '↓';
+        }
+
+        /* 架构图样式 */
+        .arch-layer {
+            background: #fff;
+            border: 2px solid #283593;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .arch-layer-title {
+            background: #283593;
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .arch-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .arch-item {
+            background: linear-gradient(135deg, #e8eaf6 0%, #c5cae9 100%);
+            border: 1px solid #3949ab;
+            border-radius: 6px;
+            padding: 1rem;
+            flex: 1;
+            min-width: 200px;
+            text-align: center;
+        }
+
+        .arch-item-title {
+            font-weight: 600;
+            color: #1a237e;
+            margin-bottom: 0.3rem;
+        }
+
+        .arch-item-desc {
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .page-title h1 {
+                font-size: 1.8rem;
+            }
+
+            .chapter-title {
+                font-size: 1.5rem;
+            }
+
+            table {
+                font-size: 0.85rem;
+            }
+
+            th, td {
+                padding: 0.5rem;
+            }
+
+            .navbar-nav {
+                gap: 0.8rem;
+                font-size: 0.85rem;
+            }
+        }
+
+        /* 页脚 */
+        .footer {
+            background: #1a237e;
+            color: #fff;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 3rem;
+            border-radius: 8px;
+        }
+
+        .footer p {
+            margin: 0.3rem 0;
+        }
+
+        /* 列表样式 */
+        ul, ol {
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+        }
+
+        li {
+            margin: 0.3rem 0;
+        }
+
+        /* 徽章 */
+        .badge {
+            display: inline-block;
+            background: #283593;
+            color: #fff;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin: 0.2rem;
+        }
+
+        .badge.warning {
+            background: #ff6f00;
+        }
+
+        .badge.success {
+            background: #2e7d32;
+        }
+
+        .badge.info {
+            background: #0277bd;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <a href="#top" class="navbar-brand">CS-INV 技术文档</a>
+        <ul class="navbar-nav">
+            <li><a href="#chapter1">系统架构</a></li>
+            <li><a href="#chapter2">数据链路</a></li>
+            <li><a href="#chapter3">数据库设计</a></li>
+            <li><a href="#chapter4">Hypertable</a></li>
+            <li><a href="#chapter5">Redis</a></li>
+            <li><a href="#chapter6">触发器</a></li>
+            <li><a href="#chapter7">迁移演进</a></li>
+            <li><a href="#chapter8">设计亮点</a></li>
+            <li><a href="#chapter9">旧表遗留</a></li>
+            <li><a href="#chapter10">文件索引</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <a id="top"></a>
+
+        <!-- 页面标题 -->
+        <div class="page-title">
+            <h1>CS-INV 光伏逆变器物联网监控系统</h1>
+            <p class="subtitle">数据链路与数据库设计文档 · 版本 1.0 · 2026-07-15</p>
+        </div>
+
+        <!-- 第1章：系统架构总览 -->
+        <h2 class="chapter-title" id="chapter1">第1章 系统架构总览</h2>
+
+        <div class="card">
+            <div class="card-title">整体架构分层</div>
+            <p>系统采用五层架构设计，从外部接入到数据存储形成完整的数据流闭环。</p>
+        </div>
+
+        <!-- 外部层 -->
+        <div class="arch-layer">
+            <span class="arch-layer-title">外部层（External Layer）</span>
+            <div class="arch-items">
+                <div class="arch-item">
+                    <div class="arch-item-title">IoT 设备</div>
+                    <div class="arch-item-desc">ESP32/ARM 逆变器<br>MQTT 协议</div>
+                </div>
+                <div class="arch-item">
+                    <div class="arch-item-title">前端管理后台</div>
+                    <div class="arch-item-desc">React + Ant Design<br>HTTP 协议</div>
+                </div>
+                <div class="arch-item">
+                    <div class="arch-item-title">Flutter 移动 APP</div>
+                    <div class="arch-item-desc">跨平台客户端<br>HTTP / MQTT</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow"></div>
+
+        <!-- 接入层 -->
+        <div class="arch-layer">
+            <span class="arch-layer-title">接入层（Gateway Layer）</span>
+            <div class="arch-items">
+                <div class="arch-item">
+                    <div class="arch-item-title">API Gateway</div>
+                    <div class="arch-item-desc">端口 8888<br>JWT认证 · RBAC权限<br>限流 · 反向代理</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow"></div>
+
+        <!-- 服务层 -->
+        <div class="arch-layer">
+            <span class="arch-layer-title">服务层（Service Layer）</span>
+            <div class="arch-items">
+                <div class="arch-item">
+                    <div class="arch-item-title">inv-api-server</div>
+                    <div class="arch-item-desc">端口 8080（内部）<br>业务API · 设备管理<br>遥测查询 · OTA</div>
+                </div>
+                <div class="arch-item">
+                    <div class="arch-item-title">inv-device-server</div>
+                    <div class="arch-item-desc">端口 8081（内部）<br>设备通信 · MQTT/Kafka消费<br>协议解析</div>
+                </div>
+                <div class="arch-item">
+                    <div class="arch-item-title">mqtt-kafka-bridge</div>
+                    <div class="arch-item-desc">端口 18088<br>EMQX Webhook → Kafka<br>消息桥接</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow"></div>
+
+        <!-- 消息层 -->
+        <div class="arch-layer">
+            <span class="arch-layer-title">消息层（Message Layer）</span>
+            <div class="arch-items">
+                <div class="arch-item">
+                    <div class="arch-item-title">EMQX Broker</div>
+                    <div class="arch-item-desc">MQTT · TLS 8883<br>设备消息路由</div>
+                </div>
+                <div class="arch-item">
+                    <div class="arch-item-title">Kafka</div>
+                    <div class="arch-item-desc">inv-telemetry Topic<br>inv-alerts Topic</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flow-arrow"></div>
+
+        <!-- 数据层 -->
+        <div class="arch-layer">
+            <span class="arch-layer-title">数据层（Data Layer）</span>
+            <div class="arch-items">
+                <div class="arch-item">
+                    <div class="arch-item-title">PostgreSQL 18 + TimescaleDB 2.28.2</div>
+                    <div class="arch-item-desc">业务数据 · 时序数据<br>Hypertable · 连续聚合</div>
+                </div>
+                <div class="arch-item">
+                    <div class="arch-item-title">Redis 7</div>
+                    <div class="arch-item-desc">实时缓存 · 设备状态<br>权限缓存 · 消息队列</div>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="section-title">服务拓扑表</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>容器名</th>
+                    <th>角色</th>
+                    <th>对外端口</th>
+                    <th>技术栈</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>inv-api-gateway</code></td>
+                    <td>统一入口网关</td>
+                    <td>8888</td>
+                    <td>Go/Gin</td>
+                </tr>
+                <tr>
+                    <td><code>inv-api-server</code></td>
+                    <td>业务API服务</td>
+                    <td>8080（内部）</td>
+                    <td>Go/Gin</td>
+                </tr>
+                <tr>
+                    <td><code>inv-device-server</code></td>
+                    <td>设备通信服务</td>
+                    <td>8081（内部）</td>
+                    <td>Go</td>
+                </tr>
+                <tr>
+                    <td><code>inv-admin-frontend</code></td>
+                    <td>管理后台</td>
+                    <td>3000</td>
+                    <td>React+Nginx</td>
+                </tr>
+                <tr>
+                    <td><code>inv-postgres</code></td>
+                    <td>时序数据库</td>
+                    <td>5432</td>
+                    <td>PG18+TimescaleDB 2.28.2</td>
+                </tr>
+                <tr>
+                    <td><code>inv-redis</code></td>
+                    <td>缓存</td>
+                    <td>6379</td>
+                    <td>Redis 7</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 第2章：五条核心数据链路 -->
+        <h2 class="chapter-title" id="chapter2">第2章 五条核心数据链路</h2>
+
+        <div class="card">
+            <div class="card-title">链路1：设备数据上报链路</div>
+            <div class="flow-diagram">
+                <div class="flow-box">设备（MQTT, <code>cs_inv/{sn}/heartbeat</code>）</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">EMQX Broker（TLS 8883）</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">mqtt-kafka-bridge（Webhook POST :18088）</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">Kafka <code>inv-telemetry</code> Topic</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">inv-device-server（有序Kafka消费者 <code>runOrderedKafkaConsumer</code>）</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">协议解析（Heartbeat V1: <code>ac[8]/bat[23]/pv[7]/sys[11]/eng[12]/cells[2]</code>）</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">SHA256 <code>data_hash</code> 去重 + 时钟守卫（±5min）</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">HTTP内部调用 inv-api-server</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">PostgreSQL 写入 <code>device_telemetry_3min</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">触发器自动维护 <code>device_latest_state</code> + <code>device_energy_day</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">Redis缓存更新（<code>realtime:latest:{sn}</code>）</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">链路2：API请求链路</div>
+            <div class="flow-diagram">
+                <div class="flow-box">前端/APP</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box"><code>api-gateway:8888</code>（JWT+RBAC+限流）</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">反向代理 → <code>inv-api-server:8080</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">PostgreSQL 查询 / Redis 缓存</div>
+            </div>
+            <ul style="margin-top: 1rem;">
+                <li><strong>三级路由：</strong><code>public</code>（无认证）、<code>user</code>（JWT+RBAC）、<code>admin</code>（JWT+RBAC+role≤1）</li>
+                <li><strong>限流策略：</strong><code>login</code> 10QPS、<code>send-code</code> 2QPS</li>
+                <li><strong>RBAC Redis缓存 TTL：</strong>300s</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-title">链路3：控制命令下发链路</div>
+            <div class="flow-diagram">
+                <div class="flow-box">客户端</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box"><code>api-gateway</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box"><code>inv-api-server</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">HTTP调用 <code>inv-device-server</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">MQTT Publish <code>cs_inv/{sn}/cmd</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">设备执行 → <code>cs_inv/{sn}/cmd_result</code> 上报</div>
+            </div>
+            <ul style="margin-top: 1rem;">
+                <li><strong>离线命令队列：</strong>Redis List <code>device:cmd:queue:{sn}</code></li>
+                <li><strong>设备上线：</strong><code>FlushPendingCommands</code>，命令过期 300s</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-title">链路4：告警数据链路</div>
+            <div class="flow-diagram">
+                <div class="flow-box">设备 MQTT <code>cs_inv/{sn}/data/alarm</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">EMQX → mqtt-kafka-bridge → Kafka <code>inv-alerts</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">AlertConsumer（Redis MD5去重 TTL 60s）</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">HTTP POST <code>/api/v1/internal/device-alarm</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box"><code>inv-api-server</code> 同事务：先追加 <code>device_alarm_events</code> 不可变事件，再更新 <code>alarms</code> 当前生命周期/人工处理投影（不是旧新表兼容双写）</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">链路5：OTA升级链路</div>
+            <div class="flow-diagram">
+                <div class="flow-box">管理后台上传固件</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box"><code>inv-api-server</code> → <code>firmware_versions</code>表</div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">创建升级任务 → <code>upgrade_tasks</code> + <code>device_upgrades</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">MQTT下发 <code>cs_inv/{sn}/ota</code></div>
+                <div class="flow-arrow"></div>
+                <div class="flow-box">设备执行 → 上报ACK/进度 → 状态同步</div>
+            </div>
+        </div>
+        <p class="footer">最后修改时间：2026-07-15 11:08:03（Asia/Shanghai）</p>

@@ -63,7 +63,9 @@ func (r *DeviceRepository) SaveTelemetryV2(ctx context.Context, s *telemetry.Sam
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, s.DeviceSN); err != nil {
+	// Keep heartbeat writes for the same device ordered without sharing the
+	// advisory-lock key used by alarms or other device streams.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "telemetry:v1:"+s.DeviceSN); err != nil {
 		return err
 	}
 	var latestTime time.Time

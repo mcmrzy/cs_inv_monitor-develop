@@ -867,4 +867,11 @@ const Map<String, String> zh = {
   'setting_restart_confirm': '确定要执行故障复位吗？逆变器将短暂重启。',
   'setting_advanced_hint': '以下参数可能影响设备安全运行，请谨慎修改',
   'setting_restart_btn': '执行复位',
+  'telemetry_metadata': '遥测元数据',
+  'telemetry_protocol_version': '协议版本',
+  'telemetry_sampling_interval': '采样周期',
+  'telemetry_data_quality': '数据质量',
+  'telemetry_quality_normal': '正常',
+  'telemetry_not_reported': '设备尚未上报',
+  'telemetry_unknown_quality': '未知质量位',
 };

@@ -20,6 +20,7 @@ import 'package:inv_app/features/station/presentation/pages/station_detail_page.
 import 'package:inv_app/features/station/presentation/pages/create_station_page.dart';
 import 'package:inv_app/features/station/presentation/pages/edit_station_page.dart';
 import 'package:inv_app/features/device/presentation/pages/device_realtime_page.dart';
+import 'package:inv_app/features/device_protocol/presentation/pages/device_protocol_page.dart';
 import 'package:inv_app/features/device/presentation/pages/wifi_config_page.dart';
 import 'package:inv_app/features/device/presentation/pages/add_device_page.dart';
 import 'package:inv_app/features/dashboard/presentation/pages/dashboard_overview_page.dart';
@@ -168,6 +169,14 @@ class AppRouter {
         pageBuilder: (context, state) {
           final sn = state.pathParameters['sn']!;
           return _slidePage(state, DeviceControlPageWrapper(deviceSN: sn));
+        },
+      ),
+      GoRoute(
+        path: '/device/:sn/protocol',
+        name: 'deviceProtocol',
+        pageBuilder: (context, state) {
+          final sn = state.pathParameters['sn']!;
+          return _slidePage(state, DeviceProtocolPage(sn: sn));
         },
       ),
       GoRoute(
@@ -676,5 +685,4 @@ class DeviceControlPageWrapper extends StatelessWidget {
     return DeviceControlPage(deviceSN: deviceSN);
   }
 }
-
 

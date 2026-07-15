@@ -867,4 +867,11 @@ const Map<String, String> en = {
   'setting_restart_confirm': 'Execute fault reset? The inverter will briefly restart.',
   'setting_advanced_hint': 'These parameters may affect device safety. Modify with caution.',
   'setting_restart_btn': 'Execute Reset',
+  'telemetry_metadata': 'Telemetry Metadata',
+  'telemetry_protocol_version': 'Protocol Version',
+  'telemetry_sampling_interval': 'Sampling Interval',
+  'telemetry_data_quality': 'Data Quality',
+  'telemetry_quality_normal': 'Normal',
+  'telemetry_not_reported': 'Not reported',
+  'telemetry_unknown_quality': 'Unknown quality bit',
 };

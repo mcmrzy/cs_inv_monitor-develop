@@ -428,3 +428,162 @@ func TestTimestampTimezoneBoundary(t *testing.T) {
 	assert.Equal(t, time.December, utc.Month())
 	assert.Equal(t, 31, utc.Day())
 }
+
+const validParallelEnvelope = `{
+  "t":1783676930,
+  "v":1,
+  "data":{
+    "enabled":true,
+    "mode":"three_phase",
+    "count":3,
+    "total_rated_power":18600,
+    "total_active_power":15200,
+    "sync_state":"synced",
+    "machines":[
+      {"id":0,"sn":"MASTER001","role":"master","phase":"L1","power":5100,"state":2},
+      {"id":1,"sn":"SLAVE002","role":"slave","phase":"L2","power":5050,"state":2},
+      {"id":2,"sn":"SLAVE003","role":"slave","phase":"L3","power":5050,"state":2}
+    ]
+  }
+}`
+
+const validThreePhaseEnvelope = `{
+  "t":1783676930,
+  "v":1,
+  "data":{
+    "voltage":[220.1,219.9,220.0],
+    "current":[8.1,8.0,7.9],
+    "active_power":[1760,1740,1720],
+    "total_active_power":5220,
+    "line_voltage":[381.1,380.9,381.0],
+    "frequency":50.0,
+    "voltage_unbalance":0.2,
+    "current_unbalance":1.1
+  }
+}`
+
+func TestParseV1UpstreamEnvelope_StrictMetadata(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		wantErr string
+	}{
+		{name: "missing t", payload: `{"v":1,"data":{}}`, wantErr: `field "t" is required`},
+		{name: "zero t", payload: `{"t":0,"v":1,"data":{}}`, wantErr: "t must be greater than zero"},
+		{name: "fractional t", payload: `{"t":1.5,"v":1,"data":{}}`, wantErr: "invalid V1 envelope fields"},
+		{name: "wrong version", payload: `{"t":1,"v":2,"data":{}}`, wantErr: "unsupported V1 envelope version"},
+		{name: "missing data", payload: `{"t":1,"v":1}`, wantErr: `field "data" is required`},
+		{name: "array data", payload: `{"t":1,"v":1,"data":[]}`, wantErr: "data must be an object"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseV1UpstreamEnvelope(json.RawMessage(tt.payload))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestHandleParallel_ForwardsCompleteEnvelopeContract(t *testing.T) {
+	var request internalEnvelopeRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/internal/parallel-state", r.URL.Path)
+		assert.Equal(t, "contract-key", r.Header.Get("X-Internal-Key"))
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	parser := &ProtocolParser{apiServer: server.URL, internalKey: "contract-key", httpClient: server.Client()}
+	raw := &RawMessage{
+		SN: "MASTER001", MsgType: "parallel", ReceivedAt: "2026-07-14T10:20:30.123456789Z",
+		Payload: json.RawMessage(validParallelEnvelope),
+	}
+	require.NoError(t, parser.handleParallel(context.Background(), raw))
+	assert.Equal(t, "MASTER001", request.SN)
+	assert.Equal(t, "parallel", request.Topic)
+	assert.Equal(t, "2026-07-14T10:20:30.123456789Z", request.ReceivedAt.Format(time.RFC3339Nano))
+	assert.JSONEq(t, validParallelEnvelope, string(request.Envelope))
+
+	var forwarded map[string]json.RawMessage
+	encoded, err := json.Marshal(request)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(encoded, &forwarded))
+	assert.ElementsMatch(t, []string{"sn", "topic", "received_at", "envelope"}, mapKeys(forwarded))
+}
+
+func TestHandleParallel_RejectsInvalidTopology(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		wantErr string
+	}{
+		{name: "legacy flat payload", payload: `{"enabled":false,"mode":"standalone","count":0}`, wantErr: `field "t" is required`},
+		{name: "unknown field", payload: `{"t":1,"v":1,"data":{"enabled":false,"mode":"standalone","count":0,"total_rated_power":0,"total_active_power":0,"sync_state":"idle","machines":[],"extra":1}}`, wantErr: "unknown field"},
+		{name: "disabled not zero form", payload: `{"t":1,"v":1,"data":{"enabled":false,"mode":"single_phase","count":0,"total_rated_power":0,"total_active_power":0,"sync_state":"idle","machines":[]}}`, wantErr: "standalone zero-value form"},
+		{name: "sender is not master", payload: validParallelEnvelope, wantErr: "match the topic SN"},
+		{name: "missing L3", payload: `{"t":1,"v":1,"data":{"enabled":true,"mode":"three_phase","count":3,"total_rated_power":18600,"total_active_power":3,"sync_state":"synced","machines":[{"id":0,"sn":"MASTER001","role":"master","phase":"L1","power":1,"state":2},{"id":1,"sn":"S2","role":"slave","phase":"L2","power":1,"state":2},{"id":2,"sn":"S3","role":"slave","phase":"L2","power":1,"state":2}]}}`, wantErr: "include L1, L2 and L3"},
+		{name: "negative total power", payload: `{"t":1,"v":1,"data":{"enabled":true,"mode":"single_phase","count":1,"total_rated_power":6200,"total_active_power":-1,"sync_state":"synced","machines":[{"id":0,"sn":"MASTER001","role":"master","phase":null,"power":-1,"state":2}]}}`, wantErr: "total power is invalid"},
+		{name: "negative machine power", payload: `{"t":1,"v":1,"data":{"enabled":true,"mode":"single_phase","count":2,"total_rated_power":12400,"total_active_power":1,"sync_state":"synced","machines":[{"id":0,"sn":"MASTER001","role":"master","phase":null,"power":-1,"state":2},{"id":1,"sn":"S2","role":"slave","phase":null,"power":2,"state":2}]}}`, wantErr: "non-negative"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sn := "MASTER001"
+			if tt.name == "sender is not master" {
+				sn = "SLAVE002"
+			}
+			parser := &ProtocolParser{}
+			err := parser.handleParallel(context.Background(), &RawMessage{SN: sn, Payload: json.RawMessage(tt.payload)})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestHandleThreePhase_ForwardsCompleteEnvelopeContract(t *testing.T) {
+	var request internalEnvelopeRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/v1/internal/three-phase", r.URL.Path)
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	parser := &ProtocolParser{apiServer: server.URL, httpClient: server.Client()}
+	raw := &RawMessage{SN: "MASTER001", MsgType: "three_phase", Payload: json.RawMessage(validThreePhaseEnvelope)}
+	require.NoError(t, parser.handleThreePhase(context.Background(), raw))
+	assert.Equal(t, "MASTER001", request.SN)
+	assert.Equal(t, "three_phase", request.Topic)
+	assert.False(t, request.ReceivedAt.IsZero())
+	assert.JSONEq(t, validThreePhaseEnvelope, string(request.Envelope))
+}
+
+func TestHandleThreePhase_RejectsInvalidData(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		wantErr string
+	}{
+		{name: "wrong version", payload: `{"t":1,"v":2,"data":{}}`, wantErr: "unsupported V1 envelope version"},
+		{name: "wrong array length", payload: `{"t":1,"v":1,"data":{"voltage":[220,220],"current":[1,1,1],"active_power":[100,100,100],"total_active_power":300,"line_voltage":[380,380,380],"frequency":50,"voltage_unbalance":0,"current_unbalance":0}}`, wantErr: "exactly 3 elements"},
+		{name: "invalid unbalance", payload: `{"t":1,"v":1,"data":{"voltage":[220,220,220],"current":[1,1,1],"active_power":[100,100,100],"total_active_power":300,"line_voltage":[380,380,380],"frequency":50,"voltage_unbalance":101,"current_unbalance":0}}`, wantErr: "outside the V1 range"},
+		{name: "power mismatch", payload: `{"t":1,"v":1,"data":{"voltage":[220,220,220],"current":[1,1,1],"active_power":[100,100,100],"total_active_power":400,"line_voltage":[380,380,380],"frequency":50,"voltage_unbalance":0,"current_unbalance":0}}`, wantErr: "does not match phase power"},
+		{name: "negative phase power", payload: `{"t":1,"v":1,"data":{"voltage":[220,220,220],"current":[1,1,1],"active_power":[-100,100,100],"total_active_power":100,"line_voltage":[380,380,380],"frequency":50,"voltage_unbalance":0,"current_unbalance":0}}`, wantErr: "active power values must not be negative"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := &ProtocolParser{}
+			err := parser.handleThreePhase(context.Background(), &RawMessage{SN: "MASTER001", Payload: json.RawMessage(tt.payload)})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func mapKeys(values map[string]json.RawMessage) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
+}

@@ -1,0 +1,4 @@
+-- Intentionally irreversible.
+-- Rows inserted by the repair are indistinguishable from permissions subsequently
+-- customized by an administrator. Deleting matching rows could therefore remove
+-- user configuration; rollback safely leaves the additive defaults in place.

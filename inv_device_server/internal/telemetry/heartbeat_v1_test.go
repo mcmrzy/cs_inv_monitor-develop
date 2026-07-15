@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 	"time"
@@ -62,4 +63,17 @@ func TestParseHeartbeatPreservesOutOfRangeValue(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 9.99, *s.AC.PowerFactor)
 	require.NotZero(t, s.QualityFlags&QualityOutOfRange)
+}
+
+func TestParseHeartbeatAcceptsNamespacedExtensionsAndPreservesEnvelope(t *testing.T) {
+	payload := []byte(`{"t":1783676930,"v":1,"data":{"ac":[221.5,8.88,1947.9,1967.6,50.08,0.99,31.4,2.5],"bat":[75,96,51.2,25.5,1305.6,78.5,100,152,28.5,25,3.35,3.28,0.07,1,0,0,60,120,54.6,44,26.5,600,546],"pv":[85.3,12.5,1066.3,82.1,11.8,969,0],"sys":[1,0,0,48.5,55.2,32,380,8640,60,94.6,1],"eng":[8.56,1250.3,7.8,1100.5,6.2,980.8,6,950.2,20500,19800,12000,11500],"cells":[[3.32,3.33],[26.5]],"ext":{"vendor.example":{"dc_ripple_v":0.23}}}}`)
+	s, err := ParseHeartbeat("H1CNA00135000014", payload, 2, 1, time.Unix(1783676935, 0))
+	require.NoError(t, err)
+	require.JSONEq(t, string(payload), string(s.RawEnvelope))
+}
+
+func TestParseHeartbeatRejectsNonObjectExtensions(t *testing.T) {
+	payload := bytes.Replace([]byte(validHeartbeat), []byte(`"cells":[[3.32,3.33],[26.5]]`), []byte(`"cells":[[3.32,3.33],[26.5]],"ext":[1,2]`), 1)
+	_, err := ParseHeartbeat("H1CNA00135000014", payload, 2, 1, time.Unix(1783676935, 0))
+	require.ErrorContains(t, err, "ext must be a JSON object")
 }

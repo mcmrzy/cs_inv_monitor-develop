@@ -22,14 +22,14 @@ export const mockAdminUser: User = {
   createdAt: '2025-01-01T00:00:00Z',
 }
 
-/** 代理商用户 */
-export const mockAgentUser: User = {
+/** 管理员用户 */
+export const mockManagerUser: User = {
   id: '2',
   phone: '13800000002',
-  email: 'agent@example.com',
-  nickname: '测试代理商',
+  email: 'manager@example.com',
+  nickname: '测试管理员',
   avatar: '',
-  role: Role.AGENT,
+  role: Role.ADMIN,
   status: 1,
   timezone: 'Asia/Shanghai',
   lastLoginAt: '2026-01-01T00:00:00Z',
@@ -67,7 +67,7 @@ export const mockEndUser: User = {
 }
 
 /** 用户列表 */
-export const mockUsers: User[] = [mockAdminUser, mockAgentUser, mockInstallerUser, mockEndUser]
+export const mockUsers: User[] = [mockAdminUser, mockManagerUser, mockInstallerUser, mockEndUser]
 
 /** 在线设备 */
 export const mockOnlineDevice: Device = {
