@@ -187,7 +187,7 @@ function DynamicTable<T extends Record<string, any>>({
         pagination={pagination}
         onRow={onRow}
         scroll={{ x: scrollX }}
-        size="small"
+        size="middle"
         bordered
       />
     </div>

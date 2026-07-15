@@ -16,7 +16,7 @@ import {
   DisconnectOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/lib/echarts'
 import { deviceApi } from '@/services/deviceApi'
 import api from '@/services/api'
 import { commandApi } from '@/services/commandApi'

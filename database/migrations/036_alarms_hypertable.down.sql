@@ -87,4 +87,6 @@ CREATE INDEX IF NOT EXISTS idx_alarms_v1_active
     ON alarms(device_sn, alarm_source, fault_code)
     WHERE status = 0;
 
-RAISE NOTICE 'Migration 036 down complete: alarms restored as regular table';
+DO $$ BEGIN
+    RAISE NOTICE 'Migration 036 down complete: alarms restored as regular table';
+END $$;

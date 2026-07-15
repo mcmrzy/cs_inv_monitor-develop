@@ -58,6 +58,7 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-inv_mqtt}
+      DB_SSL_MODE: ${DB_SSL_MODE:-disable}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -105,6 +106,7 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-inv_mqtt}
+      DB_SSL_MODE: ${DB_SSL_MODE:-disable}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -115,6 +117,9 @@ services:
       MQTT_PASSWORD: ${MQTT_PASSWORD}
       MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
       MQTT_CERT_SHA256: ${MQTT_CERT_SHA256:-}
+      # DEV/TEST ONLY: set MQTT_TLS_SKIP_VERIFY=true to skip all TLS cert
+      # verification. Never enable in production — use cert pinning instead.
+      MQTT_TLS_SKIP_VERIFY: ${MQTT_TLS_SKIP_VERIFY:-false}
       KAFKA_BROKER: jiuxiaoyw.online:9092
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}
@@ -149,6 +154,7 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-inv_mqtt}
+      DB_SSL_MODE: ${DB_SSL_MODE:-disable}
     ports:
       - "8888:8080"
     depends_on:

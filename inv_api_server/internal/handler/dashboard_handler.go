@@ -923,6 +923,7 @@ func toFloat64Dashboard(v interface{}) (float64, bool) {
 }
 
 // SSE 实现 Server-Sent Events 端点，实时推送 Dashboard 数据更新
+// 优化：使用 Redis Pub/Sub 订阅事件驱动推送 + 30s 轮询回退
 func (h *DashboardHandler) SSE(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	ctx := c.Request.Context()
@@ -944,13 +945,46 @@ func (h *DashboardHandler) SSE(c *gin.Context) {
 	fmt.Fprintf(c.Writer, "event: connected\ndata: {\"status\":\"connected\"}\n\n")
 	flusher.Flush()
 
-	ticker := time.NewTicker(10 * time.Second)
+	// 事件驱动：订阅 Redis Pub/Sub 频道，实时推送仪表盘更新
+	var pubsub *redis.PubSub
+	var pubsubCh <-chan *redis.Message
+	if h.rdb != nil {
+		pubsub = h.rdb.Subscribe(ctx, "dashboard:events")
+		pubsubCh = pubsub.Channel()
+		defer pubsub.Close()
+	}
+
+	// 回退轮询：30秒（从原10秒延长，因为事件驱动已覆盖实时性）
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
 	heartbeatTicker := time.NewTicker(30 * time.Second)
 	defer heartbeatTicker.Stop()
 
 	eventID := 0
+	lastPush := time.Time{}
+	// 防抖：避免短时间内重复推送（最小间隔 2 秒）
+	const debounceInterval = 2 * time.Second
+
+	pushUpdate := func() {
+		// 防抖：距离上次推送不足 2 秒则跳过
+		if time.Since(lastPush) < debounceInterval {
+			return
+		}
+		lastPush = time.Now()
+
+		eventID++
+		data := h.collectDashboardSSEData(ctx, userID)
+		data["event_id"] = eventID
+
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return
+		}
+
+		fmt.Fprintf(c.Writer, "event: dashboard_update\nid: %d\ndata: %s\n\n", eventID, jsonData)
+		flusher.Flush()
+	}
 
 	for {
 		select {
@@ -964,18 +998,12 @@ func (h *DashboardHandler) SSE(c *gin.Context) {
 			fmt.Fprintf(c.Writer, ": heartbeat\n\n")
 			flusher.Flush()
 		case <-ticker.C:
-			// 定时推送 Dashboard 数据更新
-			eventID++
-			data := h.collectDashboardSSEData(ctx, userID)
-			data["event_id"] = eventID
-
-			jsonData, err := json.Marshal(data)
-			if err != nil {
-				continue
-			}
-
-			fmt.Fprintf(c.Writer, "event: dashboard_update\nid: %d\ndata: %s\n\n", eventID, jsonData)
-			flusher.Flush()
+			// 回退轮询：定期推送 Dashboard 数据更新
+			pushUpdate()
+		case msg := <-pubsubCh:
+			// 事件驱动：收到 Redis Pub/Sub 事件时立即推送
+			_ = msg
+			pushUpdate()
 		}
 	}
 }

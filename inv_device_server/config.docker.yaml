@@ -28,8 +28,17 @@ mqtt:
   username: ""
   password: ""
   qos: 1
+  # TLS mode — choose exactly one (see MQTTConfig docs in internal/config/config.go):
+  #   1. tls_skip_verify=true  → skip ALL certificate verification (DEV/TEST ONLY).
+  #      Set via env MQTT_TLS_SKIP_VERIFY=true. Never use in production.
+  #   2. tls_insecure=true     → certificate pinning: broker leaf cert is verified
+  #      against cert_sha256. Requires a valid 64-char hex SHA-256 pin.
+  #      Set via env MQTT_TLS_INSECURE=true and MQTT_CERT_SHA256=<pin>.
+  #   3. both false (default)  → standard CA-based TLS verification (port 8883).
+  #      Use when the broker has a certificate signed by a trusted public CA.
   tls_insecure: false
   cert_sha256: ""
+  tls_skip_verify: false
 
 kafka:
   enabled: true

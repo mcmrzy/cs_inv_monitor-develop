@@ -18,6 +18,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
 import { Role } from '@/types'
 import { queryKeys } from '@/utils/queryKeys'
+import StatisticCard from '@/components/StatisticCard'
 
 const { Title, Text } = Typography
 
@@ -78,10 +79,10 @@ const HealthTab: React.FC = () => {
   return (
     <div>
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}><Card size="small" bordered={false} style={{ borderRadius: 12 }}><Statistic title={t('admin.uptime')} value={health ? formatUptime(health.uptime, t) : '-'} loading={isLoading} /></Card></Col>
-        <Col span={6}><Card size="small" bordered={false} style={{ borderRadius: 12 }}><Statistic title={t('admin.memoryUsage')} value={health?.memoryUsage ?? 0} suffix="%" precision={1} loading={isLoading} /></Card></Col>
-        <Col span={6}><Card size="small" bordered={false} style={{ borderRadius: 12 }}><Statistic title={t('admin.cpuUsage')} value={health?.cpuUsage ?? 0} suffix="%" precision={1} loading={isLoading} /></Card></Col>
-        <Col span={6}><Card size="small" bordered={false} style={{ borderRadius: 12 }}><Statistic title={t('admin.systemVersion')} value={health?.version ?? '-'} loading={isLoading} /></Card></Col>
+        <Col span={6}><StatisticCard size="small" title={t('admin.uptime')} value={health ? formatUptime(health.uptime, t) : '-'} loading={isLoading} /></Col>
+        <Col span={6}><StatisticCard size="small" title={t('admin.memoryUsage')} value={health?.memoryUsage ?? 0} suffix="%" precision={1} loading={isLoading} /></Col>
+        <Col span={6}><StatisticCard size="small" title={t('admin.cpuUsage')} value={health?.cpuUsage ?? 0} suffix="%" precision={1} loading={isLoading} /></Col>
+        <Col span={6}><StatisticCard size="small" title={t('admin.systemVersion')} value={health?.version ?? '-'} loading={isLoading} /></Col>
       </Row>
       <Row gutter={16} style={{ marginBottom: 16 }}>
         {[
@@ -264,7 +265,7 @@ const TenantTab: React.FC = () => {
         </Row>
       </Card>
 
-      <Table<Tenant> rowKey="id" columns={columns} dataSource={listRes?.items ?? []} loading={isLoading} size="small"
+      <Table<Tenant> rowKey="id" columns={columns} dataSource={listRes?.items ?? []} loading={isLoading} size="middle"
         locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         pagination={{ current: page, pageSize, total: listRes?.total ?? 0, showSizeChanger: true, showTotal: (tt) => t('common.total', { total: tt }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
 

@@ -50,3 +50,4 @@ database:
   user: "${DB_USER}"
   password: "${DB_PASSWORD}"
   name: "${DB_NAME}"
+  ssl_mode: "${DB_SSL_MODE}"

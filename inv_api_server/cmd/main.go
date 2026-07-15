@@ -132,7 +132,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	stationService := service.NewStationService(stationRepo)
 	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
 	alarmService := service.NewAlarmService(alarmRepo)
-	modelService := service.NewModelService(modelRepo)
+	modelService := service.NewModelServiceWithCache(modelRepo, rdb)
 	rbacCache := service.NewRBACCacheService(rdb, userRepo)
 	permChecker := service.NewPermChecker(rdb, userRepo)
 

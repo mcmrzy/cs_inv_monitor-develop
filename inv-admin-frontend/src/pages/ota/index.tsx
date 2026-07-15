@@ -989,7 +989,7 @@ const FirmwareTab: React.FC = () => {
           <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
         </Row>
       </Card>
-      <Table<Firmware> rowKey="id" columns={columns} dataSource={firmwareData} loading={isLoading} size="small"
+      <Table<Firmware> rowKey="id" columns={columns} dataSource={firmwareData} loading={isLoading} size="middle"
         pagination={{ current: page, pageSize, total: firmwareTotal, showSizeChanger: true, showTotal: (total) => t('common.total', { total }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
 
       <Modal title={t('ota.uploadFirmwareTitle')} open={uploadOpen}
@@ -1564,7 +1564,7 @@ const AppVersionTab: React.FC = () => {
           <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
         </Row>
       </Card>
-      <Table rowKey="id" columns={columns} dataSource={versionData} loading={isLoading} size="small" pagination={false} />
+      <Table rowKey="id" columns={columns} dataSource={versionData} loading={isLoading} size="middle" pagination={false} />
 
       <Modal title={t('ota.publishAppVersion')} open={createOpen} onCancel={() => { setCreateOpen(false); form.resetFields() }}
         onOk={handleCreate} confirmLoading={createMutation.isPending} destroyOnClose width={560}>

@@ -17,6 +17,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import type { Alert } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
 import useTimezoneStore from '@/stores/timezoneStore'
+import StatisticCard from '@/components/StatisticCard'
 
 const { RangePicker } = DatePicker
 const { Title, Text } = Typography
@@ -474,34 +475,22 @@ const AlertsPage: React.FC = () => {
       </Title>
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={4}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('alert.total')} value={(stats?.total ?? 0) + (notifyStats?.total ?? 0)} />
-          </Card>
+          <StatisticCard size="small" title={t('alert.total')} value={(stats?.total ?? 0) + (notifyStats?.total ?? 0)} />
         </Col>
         <Col span={4}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('alert.unprocessed')} value={stats?.unhandled ?? 0} valueStyle={{ color: '#ff4d4f' }} />
-          </Card>
+          <StatisticCard size="small" title={t('alert.unprocessed')} value={stats?.unhandled ?? 0} valueStyle={{ color: '#ff4d4f' }} />
         </Col>
         <Col span={4}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('alert.processed')} value={stats?.handled ?? 0} valueStyle={{ color: '#52c41a' }} />
-          </Card>
+          <StatisticCard size="small" title={t('alert.processed')} value={stats?.handled ?? 0} valueStyle={{ color: '#52c41a' }} />
         </Col>
         <Col span={4}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('alert.criticalCount')} value={stats?.critical ?? 0} valueStyle={{ color: '#ff4d4f' }} />
-          </Card>
+          <StatisticCard size="small" title={t('alert.criticalCount')} value={stats?.critical ?? 0} valueStyle={{ color: '#ff4d4f' }} />
         </Col>
         <Col span={4}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('alert.notifyCount') || '通知数'} value={notifyStats?.total ?? 0} prefix={<BellOutlined />} />
-          </Card>
+          <StatisticCard size="small" title={t('alert.notifyCount') || '通知数'} value={notifyStats?.total ?? 0} prefix={<BellOutlined />} />
         </Col>
         <Col span={4}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('alert.unreadNotify') || '未读通知'} value={notifyStats?.unread ?? 0} valueStyle={{ color: '#1890ff' }} />
-          </Card>
+          <StatisticCard size="small" title={t('alert.unreadNotify') || '未读通知'} value={notifyStats?.unread ?? 0} valueStyle={{ color: '#1890ff' }} />
         </Col>
       </Row>
 

@@ -600,21 +600,19 @@ CREATE TABLE alarms (
     handled_at TIMESTAMPTZ,
     handled_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    -- V1 alarm lifecycle columns (migration 027)
-    alarm_source SMALLINT NOT NULL DEFAULT 0, -- 0:PCS 1:BMS 2:MPPT 3:COMM
-    event_state VARCHAR(16) NOT NULL DEFAULT 'active', -- active/recovered
-    -- Compatibility columns (migration 039) — kept in sync by trg_alarms_compat_columns
-    type VARCHAR(32) NOT NULL DEFAULT 'device_fault',
-    level SMALLINT NOT NULL DEFAULT 2,
-    message TEXT NOT NULL DEFAULT '',
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    alarm_source SMALLINT NOT NULL DEFAULT 0,          -- (migration 027) V1 alarm source: 0 PCS, 1 BMS, 2 MPPT, 3 COMM
+    event_state VARCHAR(16) NOT NULL DEFAULT 'active', -- (migration 027) V1 lifecycle state: active or recovered
+    type VARCHAR(32) NOT NULL DEFAULT 'device_fault',  -- (migration 039) compat type column
+    level SMALLINT NOT NULL,                           -- (migration 039) compat level column
+    message TEXT NOT NULL,                             -- (migration 039) compat message column
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()      -- (migration 039) compat updated_at column
 );
 
 CREATE INDEX idx_alarms_device ON alarms(device_sn);
 CREATE INDEX idx_alarms_station ON alarms(station_id);
 CREATE INDEX idx_alarms_user ON alarms(user_id);
 CREATE INDEX idx_alarms_status ON alarms(status);
-CREATE INDEX idx_alarms_time ON alarms(occurred_at);
+CREATE INDEX idx_alarms_time ON alarms(occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alarms_device_time
     ON alarms(device_sn, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alarms_pending
@@ -623,6 +621,9 @@ CREATE INDEX IF NOT EXISTS idx_alarms_pending
 CREATE INDEX IF NOT EXISTS idx_alarms_v1_active
     ON alarms(device_sn, alarm_source, fault_code)
     WHERE event_state = 'active';
+-- Hypertable-optimized indexes using the partitioning column occurred_at
+-- are added by migration 048 (idx_alarms_device_occurred,
+-- idx_alarms_pending_occurred, idx_alarms_station_occurred).
 
 -- 告警通知记录表
 CREATE TABLE alarm_notifications (
@@ -1089,8 +1090,29 @@ DO $$ BEGIN
     CREATE TRIGGER update_system_configs_updated_at BEFORE UPDATE ON system_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 END $$;
 
--- alarms 兼容列同步触发器 (migration 027+039)
--- 保持 alarm_level↔level、fault_message↔message 同步，验证 status/event_state 枚举值
+-- 设备时区同步函数 (migration 031)
+-- 设备 station_id 变更时自动从电站同步时区
+CREATE OR REPLACE FUNCTION sync_device_timezone()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.station_id IS NOT NULL AND (OLD.station_id IS NULL OR OLD.station_id != NEW.station_id) THEN
+        SELECT COALESCE(s.timezone, 'Asia/Shanghai')
+        INTO NEW.timezone
+        FROM stations s
+        WHERE s.id = NEW.station_id;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_device_timezone ON devices;
+CREATE TRIGGER trg_sync_device_timezone
+    BEFORE INSERT OR UPDATE OF station_id ON devices
+    FOR EACH ROW EXECUTE FUNCTION sync_device_timezone();
+
+-- 告警兼容列规范化函数 (migration 039)
+-- 在 INSERT/UPDATE 前同步 alarm_level<->level、fault_message<->message，
+-- 校验 status 和 event_state 枚举值，并自动填充 type 和 updated_at。
 CREATE OR REPLACE FUNCTION normalize_alarms_compat_columns()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1112,32 +1134,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DO $$ BEGIN
-    DROP TRIGGER IF EXISTS trg_alarms_compat_columns ON alarms;
-    CREATE TRIGGER trg_alarms_compat_columns
+DROP TRIGGER IF EXISTS trg_alarms_compat_columns ON alarms;
+CREATE TRIGGER trg_alarms_compat_columns
     BEFORE INSERT OR UPDATE ON alarms
     FOR EACH ROW EXECUTE FUNCTION normalize_alarms_compat_columns();
-END $$;
-
--- 设备时区同步函数 (migration 031)
--- 设备 station_id 变更时自动从电站同步时区
-CREATE OR REPLACE FUNCTION sync_device_timezone()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF NEW.station_id IS NOT NULL AND (OLD.station_id IS NULL OR OLD.station_id != NEW.station_id) THEN
-        SELECT COALESCE(s.timezone, 'Asia/Shanghai')
-        INTO NEW.timezone
-        FROM stations s
-        WHERE s.id = NEW.station_id;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_sync_device_timezone ON devices;
-CREATE TRIGGER trg_sync_device_timezone
-    BEFORE INSERT OR UPDATE OF station_id ON devices
-    FOR EACH ROW EXECUTE FUNCTION sync_device_timezone();
 
 -- 清理过期数据函数
 CREATE OR REPLACE FUNCTION clean_expired_data()

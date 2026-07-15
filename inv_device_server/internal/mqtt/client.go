@@ -259,8 +259,11 @@ func NewClient(cfg *config.MQTTConfig, hub *Hub) *Client {
 }
 
 func (c *Client) Connect(ctx context.Context) error {
+	// Determine whether TLS is needed: port 8883 implies TLS, or either
+	// TLS mode flag is explicitly enabled.
+	useTLS := c.config.TLSInsecure || c.config.TLSSkipVerify || c.config.Port == 8883
 	scheme := "mqtt"
-	if c.config.TLSInsecure || c.config.Port == 8883 {
+	if useTLS {
 		scheme = "tls"
 	}
 
@@ -269,9 +272,19 @@ func (c *Client) Connect(ctx context.Context) error {
 		return fmt.Errorf("parse MQTT broker URL: %w", err)
 	}
 
-	// 配置 TLS（跳过证书验证）
+	// TLS configuration — three modes (see MQTTConfig docs in config.go):
+	//   1. tls_skip_verify=true  → skip all verification (DEV/TEST ONLY)
+	//   2. tls_insecure=true     → certificate pinning via cert_sha256 (PRODUCTION)
+	//   3. both false + port 8883 → standard CA-based verification (PRODUCTION)
 	var tlsConfig *tls.Config
-	if c.config.TLSInsecure {
+	if c.config.TLSSkipVerify {
+		// ⚠ DEVELOPMENT / TESTING ONLY — completely skips certificate
+		// verification. Never use in production.
+		logger.Warn("MQTT TLS verification is disabled (tls_skip_verify=true) — this is insecure and must NOT be used in production")
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: true,
+		}
+	} else if c.config.TLSInsecure {
 		expectedPin, err := hex.DecodeString(strings.TrimSpace(c.config.CertSHA256))
 		if err != nil || len(expectedPin) != sha256.Size {
 			return fmt.Errorf("MQTT certificate SHA-256 pin is required in pinned TLS mode")
@@ -301,6 +314,8 @@ func (c *Client) Connect(ctx context.Context) error {
 			},
 		}
 	}
+	// When neither flag is set but port is 8883, tlsConfig stays nil and Go
+	// uses the default TLS verification with the system CA store.
 
 	cliCfg := autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{serverURL},

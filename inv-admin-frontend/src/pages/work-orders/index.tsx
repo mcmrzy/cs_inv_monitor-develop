@@ -22,6 +22,7 @@ import { queryKeys } from '@/utils/queryKeys'
 import type { WorkOrder, User } from '@/types'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
+import StatisticCard from '@/components/StatisticCard'
 
 const { TextArea } = Input
 const { Title } = Typography
@@ -249,10 +250,10 @@ const WorkOrdersPage: React.FC = () => {
     <div>
       <Title level={4} style={{ marginBottom: 16 }}><FileTextOutlined style={{ marginRight: 8 }} />{t('wo.title')}</Title>
       <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}><Card size="small" bordered={false} style={{ borderRadius: 12 }}><Statistic title={t('wo.pending')} value={stats?.open ?? 0} valueStyle={{ color: '#1677ff' }} /></Card></Col>
-        <Col span={6}><Card size="small" bordered={false} style={{ borderRadius: 12 }}><Statistic title={t('wo.processing')} value={stats?.inProgress ?? 0} valueStyle={{ color: '#1677ff' }} /></Card></Col>
-        <Col span={6}><Card size="small" bordered={false} style={{ borderRadius: 12 }}><Statistic title={t('wo.resolved')} value={stats?.resolved ?? 0} valueStyle={{ color: '#52c41a' }} /></Card></Col>
-        <Col span={6}><Card size="small" bordered={false} style={{ borderRadius: 12 }}><Statistic title={t('wo.closed')} value={stats?.closed ?? 0} /></Card></Col>
+        <Col span={6}><StatisticCard size="small" title={t('wo.pending')} value={stats?.open ?? 0} valueStyle={{ color: '#1677ff' }} /></Col>
+        <Col span={6}><StatisticCard size="small" title={t('wo.processing')} value={stats?.inProgress ?? 0} valueStyle={{ color: '#1677ff' }} /></Col>
+        <Col span={6}><StatisticCard size="small" title={t('wo.resolved')} value={stats?.resolved ?? 0} valueStyle={{ color: '#52c41a' }} /></Col>
+        <Col span={6}><StatisticCard size="small" title={t('wo.closed')} value={stats?.closed ?? 0} /></Col>
       </Row>
 
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
@@ -272,7 +273,7 @@ const WorkOrdersPage: React.FC = () => {
       </Card>
 
       {viewMode === 'table' ? (
-        <Table<WorkOrder> rowKey="id" columns={columns} dataSource={data} loading={isLoading} size="small"
+        <Table<WorkOrder> rowKey="id" columns={columns} dataSource={data} loading={isLoading} size="middle"
           locale={{ emptyText: <Empty description={t('wo.noOrders')} /> }}
           pagination={{ current: page, pageSize, total, showSizeChanger: true, showTotal: (totalCount) => t('common.total', { total: totalCount }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
       ) : renderKanban()}

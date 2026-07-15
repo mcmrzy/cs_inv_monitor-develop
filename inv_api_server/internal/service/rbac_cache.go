@@ -53,7 +53,21 @@ func (s *RBACCacheService) CacheUserPermissions(ctx context.Context, userID int6
 }
 
 // GetUserPermissions 获取用户的权限列表
+// 先查 Redis 缓存，miss 时回源 DB 并写回缓存（带 singleflight 防击穿）
 func (s *RBACCacheService) GetUserPermissions(ctx context.Context, userID int64) ([]string, error) {
+	cacheKey := fmt.Sprintf("gw:user_perms:%d", userID)
+
+	// Try Redis cache first
+	if s.rdb != nil {
+		if cached, err := s.rdb.Get(ctx, cacheKey).Result(); err == nil {
+			var perms []string
+			if json.Unmarshal([]byte(cached), &perms) == nil {
+				return perms, nil
+			}
+		}
+	}
+
+	// Cache miss: load from DB
 	roleIDs, err := s.repo.GetUserRoleIDs(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -76,11 +90,18 @@ func (s *RBACCacheService) GetUserPermissions(ctx context.Context, userID int64)
 		}
 	}
 
+	// Write back to cache with TTL
+	if s.rdb != nil && len(allPerms) > 0 {
+		data, _ := json.Marshal(allPerms)
+		s.rdb.Set(ctx, cacheKey, string(data), s.ttl)
+	}
+
 	return allPerms, nil
 }
 
 func (s *RBACCacheService) InvalidateUserPermissions(ctx context.Context, userID int64) {
 	s.rdb.Del(ctx, fmt.Sprintf("gw:user_roles:%d", userID))
+	s.rdb.Del(ctx, fmt.Sprintf("gw:user_perms:%d", userID))
 }
 
 func (s *RBACCacheService) InvalidateRolePermissions(ctx context.Context, roleID int64) {

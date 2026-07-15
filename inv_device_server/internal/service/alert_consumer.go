@@ -27,6 +27,10 @@ type AlertConsumer struct {
 	apiServer    string
 	internalKey  string
 	httpClient   *http.Client
+	dlq          DeadLetterQueue
+	metrics      *IngestMetrics
+	maxRetries   int
+	baseBackoff  time.Duration
 }
 
 type RawAlertMessage struct {
@@ -69,11 +73,38 @@ func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
+		maxRetries:  DefaultMaxRetries,
+		baseBackoff: DefaultBaseBackoff,
 	}
 }
 
+// WithDLQ sets the dead-letter queue for messages that exhaust retries.
+func (a *AlertConsumer) WithDLQ(dlq DeadLetterQueue) *AlertConsumer {
+	a.dlq = dlq
+	return a
+}
+
+// WithMetrics sets the monitoring metrics tracker.
+func (a *AlertConsumer) WithMetrics(metrics *IngestMetrics) *AlertConsumer {
+	a.metrics = metrics
+	return a
+}
+
+// WithMaxRetries overrides the default maximum retry count.
+func (a *AlertConsumer) WithMaxRetries(n int) *AlertConsumer {
+	a.maxRetries = n
+	return a
+}
+
+// WithBaseBackoff overrides the default exponential backoff base duration.
+func (a *AlertConsumer) WithBaseBackoff(d time.Duration) *AlertConsumer {
+	a.baseBackoff = d
+	return a
+}
+
 func (a *AlertConsumer) Start(ctx context.Context) {
-	go runOrderedKafkaConsumer(ctx, "alert-consumer", a.consumer, a.processAlert, 250*time.Millisecond)
+	go runOrderedKafkaConsumerWithRetry(ctx, "alert-consumer", a.consumer, a.processAlert,
+		a.maxRetries, a.baseBackoff, a.dlq, a.metrics)
 }
 
 func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) error {

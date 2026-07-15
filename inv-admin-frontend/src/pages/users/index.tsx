@@ -292,7 +292,7 @@ const UsersPage: React.FC = () => {
         </Row>
       </Card>
 
-      <Table<User> rowKey="id" columns={columns} dataSource={data} loading={isLoading} size="small"
+      <Table<User> rowKey="id" columns={columns} dataSource={data} loading={isLoading} size="middle"
           locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         pagination={{ current: page, pageSize, total, showSizeChanger: true, showTotal: (totalCount) => t('common.total', { total: totalCount }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
 

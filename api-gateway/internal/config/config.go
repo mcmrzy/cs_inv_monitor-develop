@@ -26,6 +26,7 @@ type DatabaseConfig struct {
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	Name     string `yaml:"name"`
+	SSLMode  string `yaml:"ssl_mode"`
 }
 
 type ServerConfig struct {
@@ -93,6 +94,7 @@ func Load(path string) (*Config, error) {
 	cfg.Database.Port = 5432
 	cfg.Database.User = "postgres"
 	cfg.Database.Name = "inv_mqtt"
+	cfg.Database.SSLMode = "disable"
 	cfg.CORS.AllowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
 
 	if err := yaml.Unmarshal([]byte(expanded), cfg); err != nil {
@@ -106,8 +108,12 @@ func (c *Config) RedisAddr() string {
 }
 
 func (c *Config) DatabaseDSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable&timezone=UTC",
-		c.Database.User, c.Database.Password, c.Database.Host, c.Database.Port, c.Database.Name)
+	sslMode := c.Database.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&timezone=UTC",
+		c.Database.User, c.Database.Password, c.Database.Host, c.Database.Port, c.Database.Name, sslMode)
 }
 
 // Validate 校验关键配置项

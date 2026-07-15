@@ -512,21 +512,22 @@ const ModelsPage: React.FC = () => {
     <>
       {contextHolder}
 
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <Title level={4} style={{ margin: 0 }}>{t('models.title')}</Title>
+        <Space>
+          <Input.Search placeholder={t('models.searchModel')} allowClear style={{ width: 220 }}
+            onSearch={setKeyword} onChange={(e) => !e.target.value && setKeyword('')} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingModel(null); modelForm.resetFields(); modelForm.setFieldsValue({ category: 'inverter', rated_power_kw: 0 }); setModelModalOpen(true) }}>
+            {t('models.addModel')}
+          </Button>
+        </Space>
+      </div>
+
       <Card
         bordered={false}
         style={{ borderRadius: 12 }}
-        title={t('models.title')}
-        extra={
-          <Space>
-            <Input.Search placeholder={t('models.searchModel')} allowClear style={{ width: 220 }}
-              onSearch={setKeyword} onChange={(e) => !e.target.value && setKeyword('')} />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingModel(null); modelForm.resetFields(); modelForm.setFieldsValue({ category: 'inverter', rated_power_kw: 0 }); setModelModalOpen(true) }}>
-              {t('models.addModel')}
-            </Button>
-          </Space>
-        }
       >
-        <Table rowKey="id" columns={modelColumns} dataSource={filteredModels} loading={isLoading} size="small"
+        <Table rowKey="id" columns={modelColumns} dataSource={filteredModels} loading={isLoading} size="middle"
           pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => t('common.total', { total }) }}
           scroll={{ x: 1000 }}
           locale={{ emptyText: <Empty description={t('common.noData')} /> }} />

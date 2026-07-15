@@ -49,14 +49,26 @@ type RedisConfig struct {
 }
 
 type MQTTConfig struct {
-	Broker      string `mapstructure:"broker"`
-	Port        int    `mapstructure:"port"`
+	Broker string `mapstructure:"broker"`
+	Port   int    `mapstructure:"port"`
 	ClientID    string `mapstructure:"client_id"`
 	Username    string `mapstructure:"username"`
 	Password    string `mapstructure:"password"`
 	QoS         byte   `mapstructure:"qos"`
-	TLSInsecure bool   `mapstructure:"tls_insecure"`
+
+	// TLSInsecure enables certificate-pinning mode: the broker's leaf
+	// certificate is verified against CertSHA256 instead of relying on a
+	// CA chain. This is the production mode for brokers that use a private
+	// CA or a certificate without DNS SANs.
+	TLSInsecure bool `mapstructure:"tls_insecure"`
 	CertSHA256  string `mapstructure:"cert_sha256"`
+
+	// TLSSkipVerify completely disables TLS certificate verification.
+	// This is a temporary development/testing convenience for brokers
+	// with self-signed certificates where obtaining the SHA-256 pin is
+	// impractical. WARNING: never enable this in production — it makes
+	// the connection vulnerable to man-in-the-middle attacks.
+	TLSSkipVerify bool `mapstructure:"tls_skip_verify"`
 }
 
 type KafkaConfig struct {
@@ -111,6 +123,9 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("mqtt.qos", 1)
 	viper.SetDefault("mqtt.tls_insecure", false)
 	viper.SetDefault("mqtt.cert_sha256", "")
+	// TLSSkipVerify defaults to false; only enable in dev/test via
+	// the MQTT_TLS_SKIP_VERIFY=true environment variable.
+	viper.SetDefault("mqtt.tls_skip_verify", false)
 
 	viper.SetDefault("kafka.enabled", true)
 	viper.SetDefault("kafka.brokers", []string{"kafka:29092"})
@@ -123,6 +138,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("database.user", "DB_USER")
 	viper.BindEnv("database.password", "DB_PASSWORD")
 	viper.BindEnv("database.database", "DB_NAME")
+	viper.BindEnv("database.ssl_mode", "DB_SSL_MODE")
 
 	viper.BindEnv("redis.host", "REDIS_HOST")
 	viper.BindEnv("redis.port", "REDIS_PORT")
@@ -135,6 +151,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("mqtt.password", "MQTT_PASSWORD")
 	viper.BindEnv("mqtt.tls_insecure", "MQTT_TLS_INSECURE")
 	viper.BindEnv("mqtt.cert_sha256", "MQTT_CERT_SHA256")
+	viper.BindEnv("mqtt.tls_skip_verify", "MQTT_TLS_SKIP_VERIFY")
 
 	viper.BindEnv("kafka.brokers", "KAFKA_BROKER")
 	viper.BindEnv("kafka.enabled", "KAFKA_ENABLED")
@@ -196,6 +213,13 @@ func (c *Config) Validate() error {
 	}
 	if isPlaceholder(c.MQTT.Password) {
 		missing = append(missing, "mqtt.password must not use a CHANGE_ME* placeholder")
+	}
+	// TLS mode validation — three mutually exclusive modes:
+	//   1. tls_skip_verify=true  → skip all verification (DEV/TEST ONLY)
+	//   2. tls_insecure=true     → certificate pinning via cert_sha256 (PRODUCTION)
+	//   3. both false            → standard CA-based verification (PRODUCTION)
+	if c.MQTT.TLSInsecure && c.MQTT.TLSSkipVerify {
+		missing = append(missing, "mqtt.tls_insecure and mqtt.tls_skip_verify are mutually exclusive; choose one TLS mode")
 	}
 	if c.MQTT.TLSInsecure {
 		pin, err := hex.DecodeString(strings.TrimSpace(c.MQTT.CertSHA256))

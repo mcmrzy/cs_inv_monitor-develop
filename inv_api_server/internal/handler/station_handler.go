@@ -315,100 +315,17 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 
 	devices, _ := h.deviceService.GetByStationID(c.Request.Context(), stationID)
 
-	// 丰富设备实时数据（与设备列表API保持一致）
+	// Batch-fetch realtime data for all devices (eliminates N+1 Redis calls)
+	sns := make([]string, len(devices))
+	for i, d := range devices {
+		sns[i] = d.SN
+	}
+	rtDataMap, _ := h.deviceService.BatchGetRealtimeData(c.Request.Context(), sns)
+
 	for _, device := range devices {
-		rtData, err := h.deviceService.GetRealtimeData(c.Request.Context(), device.SN)
-		if err == nil && rtData != nil {
-			// 使用 Redis 在线状态修正设备状态：离线时快速标记
-			if online, ok := rtData["online"].(bool); ok {
-				if !online && device.Status != 0 {
-					device.Status = 0
-				}
-			}
-
-			// 从嵌套的 info 对象读取设备信息（支持 {"info": {...}} 和 {"info": {"data": {...}}} 两种格式）
-			var info map[string]interface{}
-			if v, ok := rtData["info"].(map[string]interface{}); ok {
-				info = v
-				if innerData, ok := v["data"].(map[string]interface{}); ok {
-					info = innerData
-				}
-			}
-			if info != nil {
-				if v, ok := info["model"]; ok && v != nil {
-					if s, ok := v.(string); ok && s != "" && device.Model == "" {
-						device.Model = s
-					}
-				}
-				if v, ok := info["rated_power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok && f > 0 && device.RatedPower == 0 {
-						device.RatedPower = f
-					}
-				}
-				if v, ok := info["firmware_arm"]; ok && v != nil {
-					if s, ok := v.(string); ok && s != "" && device.FirmwareArm == "" {
-						device.FirmwareArm = s
-					}
-				}
-			}
-
-			// 从嵌套的 energy 对象读取日发电量（支持 {"energy": {...}} 和 {"energy": {"data": {...}}} 两种格式）
-			var energyData map[string]interface{}
-			if v, ok := rtData["energy"].(map[string]interface{}); ok {
-				energyData = v
-				if innerData, ok := v["data"].(map[string]interface{}); ok {
-					energyData = innerData
-				}
-			}
-			if energyData != nil {
-				if v, ok := energyData["daily_pv"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.DailyEnergy = f
-					}
-				}
-			}
-
-			// 从嵌套的 ac 对象读取当前功率（支持 {"ac": {...}} 和 {"ac": {"data": {...}}} 两种格式）
-			var acData map[string]interface{}
-			if v, ok := rtData["ac"].(map[string]interface{}); ok {
-				acData = v
-				if innerData, ok := v["data"].(map[string]interface{}); ok {
-					acData = innerData
-				}
-			}
-			if acData != nil {
-				if v, ok := acData["power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.CurrentPower = f
-					}
-				}
-			}
-
-			// 兼容旧的扁平格式
-			if device.CurrentPower == 0 {
-				if v, ok := rtData["power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.CurrentPower = f
-					}
-				} else if v, ok := rtData["ac_power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.CurrentPower = f
-					}
-				} else if v, ok := rtData["total_active_power"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.CurrentPower = f
-					}
-				}
-			}
-
-			// 兼容扁平格式的 daily_energy
-			if device.DailyEnergy == 0 {
-				if v, ok := rtData["daily_energy"]; ok && v != nil {
-					if f, ok := toFloat64(v); ok {
-						device.DailyEnergy = f
-					}
-				}
-			}
+		rtData := rtDataMap[device.SN]
+		if rtData != nil {
+			enrichDeviceWithRealtime(device, rtData)
 		}
 	}
 

@@ -19,14 +19,30 @@ export default defineConfig({
     },
   },
   build: {
+    target: 'es2020',
+    chunkSizeWarningLimit: 1000,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: false,
+        drop_debugger: true,
+        pure_funcs: undefined,
+      },
+      format: {
+        comments: false,
+      },
+    },
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
-          if (id.includes('/echarts/') || id.includes('echarts-for-react')) return 'vendor-charts'
-          if (id.includes('/antd/') || id.includes('@ant-design') || id.includes('/rc-')) return 'vendor-antd'
-          if (id.includes('/react/') || id.includes('react-dom') || id.includes('react-router')) return 'vendor-react'
+          if (id.includes('/echarts/') || id.includes('zrender/')) return 'vendor-charts'
+          if (id.includes('/antd/') || id.includes('@ant-design') || id.includes('/rc-') || id.includes('rc-util')) return 'vendor-antd'
+          if (id.includes('/react/') || id.includes('react-dom') || id.includes('react-router') || id.includes('@remix-run')) return 'vendor-react'
           if (id.includes('@tanstack') || id.includes('/axios/')) return 'vendor-data'
+          if (id.includes('/leaflet/') || id.includes('react-leaflet')) return 'vendor-maps'
+          if (id.includes('/dayjs/')) return 'vendor-utils'
+          if (id.includes('rc-slider-captcha') || id.includes('create-puzzle')) return 'vendor-captcha'
           return undefined
         },
       },

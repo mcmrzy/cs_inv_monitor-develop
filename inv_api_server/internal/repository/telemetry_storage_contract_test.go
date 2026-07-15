@@ -17,11 +17,12 @@ func TestRepositoryDoesNotReintroduceDeadLegacyTelemetryMethods(t *testing.T) {
 		t.Fatalf("dead legacy repository methods were reintroduced: %q", names)
 	}
 
-	// The only deliberate compatibility-view read is the dynamic legacy history
-	// response in GetTelemetryData. Realtime, overview and statistics must use
-	// the canonical wide/aggregate tables directly.
-	if count := strings.Count(string(source), "v_device_telemetry_compat"); count != 1 {
-		t.Fatalf("compatibility-view read count = %d, want exactly 1", count)
+	// The compatibility view v_device_telemetry_compat must not appear in any
+	// runtime query. GetTelemetryData reads device_telemetry_3min directly via
+	// getTelemetryV2, avoiding the per-row jsonb_build_object reconstruction
+	// that the view performed at the database level.
+	if count := strings.Count(string(source), "v_device_telemetry_compat"); count != 0 {
+		t.Fatalf("compatibility-view read count = %d, want 0 — runtime code must query device_telemetry_3min directly", count)
 	}
 }
 

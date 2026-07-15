@@ -10,7 +10,7 @@ import {
   DesktopOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/lib/echarts'
 import { dashboardApi } from '@/services/dashboardApi'
 import { ALARM_LEVEL_MAP, HERO_GRADIENTS, getAlarmLevelDisplay } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
