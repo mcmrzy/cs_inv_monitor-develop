@@ -1330,6 +1330,148 @@ func (r *DeviceRepository) GetRealtimeData(ctx context.Context, sn string) (map[
 	return nil, err
 }
 
+// BatchGetRealtimeData fetches realtime data for multiple devices in a single round-trip
+// using Redis Pipeline, eliminating the N+1 query pattern where each device triggers
+// individual EXISTS/GET/HGETALL calls.
+//
+// For a list of N devices this performs:
+//   - 1 DB query to fetch all device statuses
+//   - 1 Redis Pipeline with EXISTS + GET + HGETALL for all devices
+//
+// instead of N × (1 DB query + 4 Redis calls).
+func (r *DeviceRepository) BatchGetRealtimeData(ctx context.Context, sns []string) (map[string]map[string]interface{}, error) {
+	if len(sns) == 0 {
+		return make(map[string]map[string]interface{}), nil
+	}
+
+	result := make(map[string]map[string]interface{}, len(sns))
+
+	// Step 1: Batch-fetch device statuses from DB (single query instead of N)
+	statusMap := make(map[string]int, len(sns))
+	rows, err := r.db.Query(ctx,
+		`SELECT sn, status FROM devices WHERE sn = ANY($1) AND deleted_at IS NULL`, sns)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var sn string
+			var status int
+			if err := rows.Scan(&sn, &status); err == nil {
+				statusMap[sn] = status
+			}
+		}
+	}
+
+	if r.cache == nil {
+		// No Redis: return minimal data from DB
+		for _, sn := range sns {
+			online := false
+			if status, ok := statusMap[sn]; ok && status == 1 {
+				online = true
+			}
+			result[sn] = map[string]interface{}{"device_sn": sn, "online": online}
+		}
+		return result, nil
+	}
+
+	// Step 2: Use Redis Pipeline to batch all per-device lookups
+	pipe := r.cache.Pipeline()
+
+	// Prepare pipeline commands for each device
+	type pipeCmds struct {
+		exists    *redis.IntCmd
+		validGet  *redis.StringCmd
+		latestGet *redis.StringCmd
+		fieldsHGA *redis.MapStringStringCmd
+	}
+	cmds := make(map[string]*pipeCmds, len(sns))
+
+	for _, sn := range sns {
+		c := &pipeCmds{}
+		c.exists = pipe.Exists(ctx, "device:heartbeat:"+sn)
+		c.validGet = pipe.Get(ctx, "realtime:last_valid:"+sn)
+		c.latestGet = pipe.Get(ctx, "realtime:latest:"+sn)
+		c.fieldsHGA = pipe.HGetAll(ctx, "realtime:fields:"+sn)
+		cmds[sn] = c
+	}
+
+	// Execute pipeline (single round-trip)
+	_, _ = pipe.Exec(ctx)
+
+	// Step 3: Assemble results from pipeline responses
+	for _, sn := range sns {
+		c := cmds[sn]
+		online := false
+		if status, ok := statusMap[sn]; ok && status == 1 {
+			online = true
+		}
+		if c.exists.Val() > 0 {
+			online = true
+		}
+
+		data := make(map[string]interface{})
+		data["online"] = online
+		data["device_sn"] = sn
+
+		// Priority 1: realtime:last_valid (valid data cache)
+		if validCached := c.validGet.Val(); validCached != "" {
+			var m map[string]interface{}
+			if json.Unmarshal([]byte(validCached), &m) == nil {
+				for k, v := range m {
+					if nested, ok := v.(map[string]interface{}); ok {
+						if innerData, exists := nested["data"].(map[string]interface{}); exists {
+							data[k] = innerData
+						} else {
+							data[k] = v
+						}
+					} else {
+						data[k] = v
+					}
+				}
+				data["_data_source"] = "last_valid"
+			}
+		}
+
+		// Priority 2: realtime:latest (if valid cache was empty)
+		if len(data) <= 3 {
+			if cached := c.latestGet.Val(); cached != "" {
+				var m map[string]interface{}
+				if json.Unmarshal([]byte(cached), &m) == nil {
+					for k, v := range m {
+						if nested, ok := v.(map[string]interface{}); ok {
+							if innerData, exists := nested["data"].(map[string]interface{}); exists {
+								data[k] = innerData
+							} else {
+								data[k] = v
+							}
+						} else {
+							data[k] = v
+						}
+					}
+				}
+			}
+		}
+
+		// Priority 3: field-level hash cache (HGETALL)
+		fields := c.fieldsHGA.Val()
+		for fieldName, valStr := range fields {
+			var fieldData map[string]interface{}
+			if json.Unmarshal([]byte(valStr), &fieldData) == nil {
+				if v, exists := fieldData["v"]; exists {
+					data[fieldName] = v
+				}
+			}
+		}
+
+		if len(data) > 3 {
+			result[sn] = normalizeRealtimeData(data)
+		} else {
+			result[sn] = data
+		}
+	}
+
+	return result, nil
+}
+
 func (r *DeviceRepository) EnsureDevice(ctx context.Context, sn string) error {
 	query := `INSERT INTO devices (sn, model, rated_power, user_id, status, created_at, updated_at)
 		VALUES ($1, '', 0, 0, 0, NOW(), NOW())

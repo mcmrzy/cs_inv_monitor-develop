@@ -27,6 +27,10 @@ type AlertConsumer struct {
 	apiServer    string
 	internalKey  string
 	httpClient   *http.Client
+	dlq          DeadLetterQueue
+	metrics      *IngestMetrics
+	maxRetries   int
+	baseBackoff  time.Duration
 }
 
 type RawAlertMessage struct {
@@ -69,6 +73,8 @@ func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
+		maxRetries:  DefaultMaxRetries,
+		baseBackoff: DefaultBaseBackoff,
 	}
 }
 

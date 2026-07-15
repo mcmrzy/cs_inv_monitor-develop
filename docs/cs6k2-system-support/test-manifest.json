@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "product": "CS-I10-6k2",
+  "description": "CS6K2 system-support quality gates. Required gate failure blocks release evidence.",
+  "profiles": {
+    "static": "Repository policy, secrets, vet, type/build/analyze and production compose validation.",
+    "unit": "Go race/coverage, React/Vitest, Flutter and API security unit tests.",
+    "integration": "Test compose validation and strict integration tests; mandatory skips fail.",
+    "full": "All static, unit and integration gates."
+  },
+  "gates": [
+    {
+      "id": "G-STRUCTURE",
+      "title": "Required CS6K2 documents and project structure",
+      "kind": "internal",
+      "handler": "structure",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "requirements"
+    },
+    {
+      "id": "G-REPO-POLICY",
+      "title": "CI, Makefile and integration-test policy audit",
+      "kind": "internal",
+      "handler": "repository_policy",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "security"
+    },
+    {
+      "id": "G-SECRET-SCAN",
+      "title": "High-confidence tracked credential pattern scan (paths only)",
+      "kind": "internal",
+      "handler": "secret_scan",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "security"
+    },
+    {
+      "id": "G-MIGRATION-PAIRS",
+      "title": "Migration up/down pair inventory",
+      "kind": "internal",
+      "handler": "migration_pairs",
+      "profiles": ["static", "full"],
+      "required": false,
+      "evidence": "deployment"
+    },
+    {
+      "id": "G-GO-VET-API",
+      "title": "Go vet inv_api_server",
+      "kind": "command",
+      "command": "go",
+      "args": ["vet", "./..."],
+      "working_directory": "inv_api_server",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-GO-VET-DEVICE",
+      "title": "Go vet inv_device_server",
+      "kind": "command",
+      "command": "go",
+      "args": ["vet", "./..."],
+      "working_directory": "inv_device_server",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-GO-VET-GATEWAY",
+      "title": "Go vet api-gateway",
+      "kind": "command",
+      "command": "go",
+      "args": ["vet", "./..."],
+      "working_directory": "api-gateway",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-GO-VET-BRIDGE",
+      "title": "Go vet mqtt-kafka-bridge",
+      "kind": "command",
+      "command": "go",
+      "args": ["vet", "./..."],
+      "working_directory": "mqtt-kafka-bridge",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-WEB-BUILD-CHECK",
+      "title": "React TypeScript check and production build",
+      "kind": "command",
+      "command": "npm",
+      "args": ["run", "build:check"],
+      "working_directory": "inv-admin-frontend",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-FLUTTER-ANALYZE",
+      "title": "Flutter static analysis",
+      "kind": "command",
+      "command": "flutter",
+      "args": ["analyze"],
+      "working_directory": "inv_app",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-PROD-COMPOSE",
+      "title": "Production compose renders successfully",
+      "kind": "command",
+      "command": "docker",
+      "args": ["compose", "-f", "deploy/docker-compose.prod.yml", "config"],
+      "working_directory": ".",
+      "profiles": ["static", "full"],
+      "required": true,
+      "evidence": "deployment"
+    },
+    {
+      "id": "G-GO-UNIT-API",
+      "title": "inv_api_server unit/race/coverage",
+      "kind": "command",
+      "command": "go",
+      "args": ["test", "-race", "-cover", "-count=1", "./..."],
+      "working_directory": "inv_api_server",
+      "profiles": ["unit", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-GO-UNIT-DEVICE",
+      "title": "inv_device_server unit/race/coverage",
+      "kind": "command",
+      "command": "go",
+      "args": ["test", "-race", "-cover", "-count=1", "./..."],
+      "working_directory": "inv_device_server",
+      "profiles": ["unit", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-GO-UNIT-GATEWAY",
+      "title": "api-gateway unit/race/coverage",
+      "kind": "command",
+      "command": "go",
+      "args": ["test", "-race", "-cover", "-count=1", "./..."],
+      "working_directory": "api-gateway",
+      "profiles": ["unit", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-GO-UNIT-BRIDGE",
+      "title": "mqtt-kafka-bridge unit/race/coverage",
+      "kind": "command",
+      "command": "go",
+      "args": ["test", "-race", "-cover", "-count=1", "./..."],
+      "working_directory": "mqtt-kafka-bridge",
+      "profiles": ["unit", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-API-SECURITY-UNIT",
+      "title": "API security test suite",
+      "kind": "command",
+      "command": "go",
+      "args": ["test", "-v", "-count=1", "./tests/security/..."],
+      "working_directory": "inv_api_server",
+      "profiles": ["unit", "full"],
+      "required": true,
+      "evidence": "security"
+    },
+    {
+      "id": "G-WEB-UNIT",
+      "title": "React/Vitest unit suite",
+      "kind": "command",
+      "command": "npm",
+      "args": ["run", "test:run"],
+      "working_directory": "inv-admin-frontend",
+      "profiles": ["unit", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-FLUTTER-UNIT",
+      "title": "Flutter unit suite with coverage",
+      "kind": "command",
+      "command": "flutter",
+      "args": ["test", "--coverage"],
+      "working_directory": "inv_app",
+      "profiles": ["unit", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-TEST-COMPOSE",
+      "title": "Integration-test compose renders successfully",
+      "kind": "command",
+      "command": "docker",
+      "args": ["compose", "-f", "deploy/docker-compose.test.yml", "config"],
+      "working_directory": ".",
+      "profiles": ["integration", "full"],
+      "required": true,
+      "evidence": "ci"
+    },
+    {
+      "id": "G-INTEGRATION",
+      "title": "Strict Go integration suite",
+      "kind": "command",
+      "command": "go",
+      "args": ["test", "-v", "-tags=integration", "-count=1", "./..."],
+      "working_directory": "tests/integration",
+      "profiles": ["integration", "full"],
+      "required": true,
+      "fail_on_skip": true,
+      "evidence": "ci"
+    }
+  ]
+}
+
