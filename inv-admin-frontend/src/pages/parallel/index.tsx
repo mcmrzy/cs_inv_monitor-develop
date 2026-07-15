@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { type Dayjs } from 'dayjs'
-import ReactECharts from 'echarts-for-react'
+import ReactECharts from '@/lib/echarts'
 import { ClusterOutlined } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import {

@@ -8,9 +8,18 @@ name: inv-monitor-prod
 services:
   # ---------- PostgreSQL (TimescaleDB) ----------
   postgres:
-    image: timescale/timescaledb:2.28.2-pg18
+    build:
+      context: ..
+      dockerfile: deploy/postgres/Dockerfile
+    image: inv-postgres-tls:2.28.2-pg18
     container_name: inv-postgres
-    command: postgres -c max_connections=300 -c shared_buffers=256MB
+    command: >-
+      postgres
+      -c max_connections=300
+      -c shared_buffers=256MB
+      -c ssl=on
+      -c ssl_cert_file=/var/lib/postgresql/tls/server.crt
+      -c ssl_key_file=/var/lib/postgresql/tls/server.key
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
