@@ -6,7 +6,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { type Dayjs } from 'dayjs'
-import ReactECharts from '@/lib/echarts'
+import ReactECharts from 'echarts-for-react'
 import { ClusterOutlined } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import {
@@ -18,7 +18,6 @@ import {
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
-import StatisticCard from '@/components/StatisticCard'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
@@ -192,10 +191,10 @@ const ParallelPage: React.FC = () => {
       {hasReportedState && state && (
         <>
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-            <Col xs={24} sm={12} lg={6}><StatisticCard title={t('parallel.enabled')} value={state.enabled ? t('common.yes') : t('common.no')} /></Col>
-            <Col xs={24} sm={12} lg={6}><StatisticCard title={t('parallel.mode')} value={state.mode || '-'} /></Col>
-            <Col xs={24} sm={12} lg={6}><StatisticCard title={t('parallel.machineCount')} value={state.count ?? 0} /></Col>
-            <Col xs={24} sm={12} lg={6}><StatisticCard title={t('parallel.activePower')} value={state.total_active_power ?? 0} suffix="W" precision={1} /></Col>
+            <Col xs={24} sm={12} lg={6}><Card><Statistic title={t('parallel.enabled')} value={state.enabled ? t('common.yes') : t('common.no')} /></Card></Col>
+            <Col xs={24} sm={12} lg={6}><Card><Statistic title={t('parallel.mode')} value={state.mode || '-'} /></Card></Col>
+            <Col xs={24} sm={12} lg={6}><Card><Statistic title={t('parallel.machineCount')} value={state.count ?? 0} /></Card></Col>
+            <Col xs={24} sm={12} lg={6}><Card><Statistic title={t('parallel.activePower')} value={state.total_active_power ?? 0} suffix="W" precision={1} /></Card></Col>
           </Row>
           <Card title={t('parallel.currentState')} style={{ marginBottom: 16 }} loading={stateQuery.isLoading}>
             <Descriptions column={{ xs: 1, sm: 2, lg: 4 }} bordered size="small">

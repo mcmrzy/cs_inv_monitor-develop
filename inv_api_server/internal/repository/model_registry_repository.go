@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -160,6 +161,9 @@ func (r *ModelRepository) UpdateCommandCapability(ctx context.Context, modelID i
 		UPDATE device_model_commands SET timeout_seconds=COALESCE($3,timeout_seconds),
 			requires_online=COALESCE($4,requires_online),is_enabled=COALESCE($5,is_enabled),updated_at=NOW()
 		WHERE model_id=$1 AND command_code=$2`, modelID, commandCode, in.TimeoutSeconds, in.RequiresOnline, in.IsEnabled)
+	if err == nil {
+		r.invalidateCommandSpecCacheByCommandCode(ctx, commandCode)
+	}
 	return err
 }
 
@@ -269,6 +273,7 @@ func (r *ModelRepository) UpsertModelCommand(ctx context.Context, modelID, opera
 		risk_level=EXCLUDED.risk_level,requires_online=EXCLUDED.requires_online,is_enabled=EXCLUDED.is_enabled,updated_at=NOW()`,
 		modelID, in.CommandCode, in.DisplayNameKey, in.ParameterSchema, in.ResponseSchema, in.TimeoutSeconds, in.RiskLevel, in.RequiresOnline, in.IsEnabled)
 	if err == nil {
+		r.invalidateCommandSpecCacheByCommandCode(ctx, in.CommandCode)
 		_, _ = r.db.Exec(ctx, `INSERT INTO audit_logs(operator_id,action,resource_type,resource_id,detail)
 		VALUES($1,'upsert','device_model_command',$2,jsonb_build_object('command_code',$3))`, operatorID, modelID, in.CommandCode)
 	}
@@ -423,4 +428,171 @@ func (r *ModelRepository) GetModelDataPreview(ctx context.Context, modelID int64
 	var out map[string]any
 	err = json.Unmarshal(raw, &out)
 	return out, err
+}
+
+// GetCommandPermissionCode returns the permission_code for a specific command on a device.
+// Returns empty string if the command is not found or has no permission_code configured.
+func (r *ModelRepository) GetCommandPermissionCode(ctx context.Context, sn, commandCode string) (string, error) {
+	var permCode *string
+	err := r.db.QueryRow(ctx, `
+		SELECT c.permission_code FROM devices d
+		JOIN device_model_commands c ON c.model_id = d.model_id
+		WHERE d.sn = $1 AND d.deleted_at IS NULL AND c.command_code = $2`, sn, commandCode).Scan(&permCode)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if permCode == nil {
+		return "", nil
+	}
+	return *permCode, nil
+}
+
+// CommandCapability represents the full capability metadata of a device model command.
+type CommandCapability struct {
+	CommandCode       string          `json:"command_code"`
+	DisplayNameKey    string          `json:"display_name"`
+	ParameterSchema   json.RawMessage `json:"parameter_schema"`
+	ResponseSchema    json.RawMessage `json:"response_schema"`
+	TimeoutSeconds    int             `json:"timeout_seconds"`
+	RiskLevel         int             `json:"risk_level"`
+	RequiresOnline    bool            `json:"requires_online"`
+	IsEnabled         bool            `json:"is_enabled"`
+	ConfigDomain      *string         `json:"config_domain,omitempty"`
+	PermissionCode    *string         `json:"permission_code,omitempty"`
+	OperationKind     *string         `json:"operation_kind,omitempty"`
+	RequiresStopped   *bool           `json:"requires_stopped,omitempty"`
+	RequiresBmsOnline *bool           `json:"requires_bms_online,omitempty"`
+	ConfirmationMode  *string         `json:"confirmation_mode,omitempty"`
+	TtlSeconds        *int            `json:"ttl_seconds,omitempty"`
+	CooldownSeconds   *int            `json:"cooldown_seconds,omitempty"`
+	UiSchema          json.RawMessage `json:"ui_schema,omitempty"`
+	MinFirmware       *string         `json:"min_firmware,omitempty"`
+}
+
+// GetCommandCapabilitiesByModelID returns all command capabilities for a given model ID.
+func (r *ModelRepository) GetCommandCapabilitiesByModelID(ctx context.Context, modelID int64) ([]CommandCapability, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT command_code, COALESCE(display_name_key,''),
+			parameter_schema, response_schema, timeout_seconds, risk_level,
+			requires_online, is_enabled,
+			config_domain, permission_code, operation_kind,
+			requires_stopped, requires_bms_online, confirmation_mode,
+			ttl_seconds, cooldown_seconds, ui_schema, min_firmware
+		FROM device_model_commands
+		WHERE model_id = $1
+		ORDER BY command_code`, modelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []CommandCapability
+	for rows.Next() {
+		var cap CommandCapability
+		if err := rows.Scan(
+			&cap.CommandCode, &cap.DisplayNameKey,
+			&cap.ParameterSchema, &cap.ResponseSchema, &cap.TimeoutSeconds, &cap.RiskLevel,
+			&cap.RequiresOnline, &cap.IsEnabled,
+			&cap.ConfigDomain, &cap.PermissionCode, &cap.OperationKind,
+			&cap.RequiresStopped, &cap.RequiresBmsOnline, &cap.ConfirmationMode,
+			&cap.TtlSeconds, &cap.CooldownSeconds, &cap.UiSchema, &cap.MinFirmware,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, cap)
+	}
+	return result, rows.Err()
+}
+
+// commandSpecCacheTTL is the Redis TTL for cached command specs.
+const commandSpecCacheTTL = 10 * time.Minute
+
+// GetCommandSpec retrieves the parameter schema, enabled flag, existence flag, and permission code
+// for a specific command on a device. Results are cached in Redis for 10 minutes.
+func (r *ModelRepository) GetCommandSpec(ctx context.Context, sn, commandCode string) (schema []byte, enabled bool, found bool, permCode string, err error) {
+	cacheKey := fmt.Sprintf("model:cmd_spec:%s:%s", sn, commandCode)
+
+	// Try Redis cache first
+	if r.rdb != nil {
+		cached, cacheErr := r.rdb.Get(ctx, cacheKey).Bytes()
+		if cacheErr == nil && len(cached) > 0 {
+			var spec struct {
+				Schema  []byte `json:"schema"`
+				Enabled bool   `json:"enabled"`
+				PermCode string `json:"perm_code"`
+			}
+			if json.Unmarshal(cached, &spec) == nil {
+				return spec.Schema, spec.Enabled, true, spec.PermCode, nil
+			}
+		}
+	}
+
+	// Cache miss: query DB
+	var rawSchema []byte
+	var rawEnabled bool
+	var rawPermCode *string
+	err = r.db.QueryRow(ctx, `
+		SELECT c.parameter_schema, c.is_enabled, c.permission_code
+		FROM devices d JOIN device_model_commands c ON c.model_id = d.model_id
+		WHERE d.sn = $1 AND d.deleted_at IS NULL AND c.command_code = $2`, sn, commandCode).Scan(&rawSchema, &rawEnabled, &rawPermCode)
+	if err == pgx.ErrNoRows {
+		return nil, false, false, "", nil
+	}
+	if err != nil {
+		return nil, false, false, "", err
+	}
+
+	pc := ""
+	if rawPermCode != nil {
+		pc = *rawPermCode
+	}
+
+	// Write to Redis cache
+	if r.rdb != nil {
+		spec := struct {
+			Schema   []byte `json:"schema"`
+			Enabled  bool   `json:"enabled"`
+			PermCode string `json:"perm_code"`
+		}{Schema: rawSchema, Enabled: rawEnabled, PermCode: pc}
+		if data, marshalErr := json.Marshal(spec); marshalErr == nil {
+			r.rdb.Set(ctx, cacheKey, data, commandSpecCacheTTL)
+		}
+	}
+
+	return rawSchema, rawEnabled, true, pc, nil
+}
+
+// invalidateCommandSpecCache deletes the cached command spec for a given SN and command code.
+func (r *ModelRepository) invalidateCommandSpecCache(ctx context.Context, sn, commandCode string) {
+	if r.rdb == nil {
+		return
+	}
+	cacheKey := fmt.Sprintf("model:cmd_spec:%s:%s", sn, commandCode)
+	r.rdb.Del(ctx, cacheKey)
+}
+
+// invalidateCommandSpecCacheByCommandCode deletes all cached command specs for a given command code
+// across all devices. Uses SCAN to avoid blocking Redis with KEYS.
+func (r *ModelRepository) invalidateCommandSpecCacheByCommandCode(ctx context.Context, commandCode string) {
+	if r.rdb == nil {
+		return
+	}
+	pattern := fmt.Sprintf("model:cmd_spec:*:%s", commandCode)
+	var cursor uint64
+	for {
+		keys, nextCursor, err := r.rdb.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return
+		}
+		if len(keys) > 0 {
+			r.rdb.Del(ctx, keys...)
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
 }

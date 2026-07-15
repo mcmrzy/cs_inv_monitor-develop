@@ -116,7 +116,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	stationRepo := repository.NewStationRepository(db)
 	deviceRepo := repository.NewDeviceRepository(db, rdb)
 	alarmRepo := repository.NewAlarmRepository(db)
-	modelRepo := repository.NewModelRepository(db)
+	modelRepo := repository.NewModelRepository(db, rdb)
+	batteryRepo := repository.NewBatteryRepository(db)
+	energyScheduleRepo := repository.NewEnergyScheduleRepository(db)
 
 	userService := service.NewUserService(userRepo, rdb)
 	jwtService := service.NewJWTService(jwtInstance, rdb)
@@ -130,11 +132,13 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	emailService := service.NewEmailService(rdb, cfg.Email, configService)
 	jpushService := service.NewJPushService(&cfg.JPush, rdb)
 	stationService := service.NewStationService(stationRepo)
-	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
-	alarmService := service.NewAlarmService(alarmRepo)
-	modelService := service.NewModelServiceWithCache(modelRepo, rdb)
-	rbacCache := service.NewRBACCacheService(rdb, userRepo)
 	permChecker := service.NewPermChecker(rdb, userRepo)
+	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, permChecker, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, db)
+	alarmService := service.NewAlarmService(alarmRepo)
+	modelService := service.NewModelService(modelRepo)
+	batteryService := service.NewBatteryService(batteryRepo)
+	energyScheduleService := service.NewEnergyScheduleService(energyScheduleRepo)
+	rbacCache := service.NewRBACCacheService(rdb, userRepo)
 
 	otaRepo := repository.NewOTARepository(db)
 	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL, db, jpushService)
@@ -148,6 +152,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	notificationHandler := handler.NewNotificationHandler(db, jpushService)
 	wsHandler := handler.NewWSHandler(rdb, jwtService)
 	modelHandler := handler.NewModelHandler(modelService)
+	batteryHandler := handler.NewBatteryHandler(batteryService)
+	energyScheduleHandler := handler.NewEnergyScheduleHandler(energyScheduleService)
 	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
 	otaHandler := handler.NewOTAHandler(otaService, db, jpushService)
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
@@ -180,6 +186,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		NotificationHandler: notificationHandler,
 		WeatherHandler:      weatherHandler,
 		ModelHandler:        modelHandler,
+		BatteryHandler:      batteryHandler,
+		EnergyScheduleHandler: energyScheduleHandler,
 		PermChecker:         permChecker,
 		AdminHandler:        adminHandler,
 		OTAHandler:          otaHandler,
@@ -598,6 +606,8 @@ type RouterDeps struct {
 	NotificationHandler *handler.NotificationHandler
 	WeatherHandler      *handler.WeatherHandler
 	ModelHandler        *handler.ModelHandler
+	BatteryHandler      *handler.BatteryHandler
+	EnergyScheduleHandler *handler.EnergyScheduleHandler
 	PermChecker         *service.PermChecker
 	AdminHandler        *handler.AdminHandler
 	OTAHandler          *handler.OTAHandler
@@ -735,9 +745,11 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
 			auth.DELETE("/devices/:sn", deps.DeviceHandler.DeleteDevice)
 			auth.PUT("/devices/:sn", deps.DeviceHandler.Update)
-			auth.POST("/devices/:sn/control", deps.DeviceHandler.Control)
-			auth.POST("/devices/batch/control", deps.DeviceHandler.BatchControl)
+			auth.POST("/devices/:sn/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.Control)
+			auth.POST("/devices/batch/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.BatchControl)
 			auth.GET("/devices/:sn/control-fields", deps.DeviceHandler.GetControlFields)
+			auth.GET("/devices/:sn/control-capabilities", deps.DeviceHandler.GetControlCapabilities)
+			auth.GET("/devices/:sn/control-state", deps.DeviceHandler.GetControlState)
 			auth.GET("/devices/:sn/commands", deps.DeviceHandler.GetCommands)
 			auth.GET("/devices/:sn/commands/history", deps.DeviceHandler.GetCommands)
 			auth.GET("/devices/:sn/telemetry", deps.DeviceHandler.GetTelemetry)
@@ -763,6 +775,20 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/devices/:sn/installer", deps.DeviceHandler.RemoveInstaller)
 			auth.POST("/devices/batch-assign-installer", deps.DeviceHandler.BatchAssignInstaller)
 			auth.POST("/devices/import-excel", deps.DeviceHandler.ImportExcel)
+
+			// 电池配置模板
+			auth.GET("/devices/:sn/battery-config", deps.BatteryHandler.GetDeviceConfig)
+			auth.PUT("/devices/:sn/battery-config", deps.BatteryHandler.BindDeviceConfig)
+			auth.GET("/battery-profiles", deps.BatteryHandler.ListProfiles)
+			auth.GET("/battery-profiles/:id", deps.BatteryHandler.GetProfile)
+			auth.POST("/battery-profiles", deps.BatteryHandler.CreateProfile)
+
+			// 能源计划与临时覆盖
+			auth.GET("/devices/:sn/energy-schedule", deps.EnergyScheduleHandler.GetSchedule)
+			auth.PUT("/devices/:sn/energy-schedule", deps.EnergyScheduleHandler.UpdateSchedule)
+			auth.POST("/devices/:sn/control-overrides", deps.EnergyScheduleHandler.CreateOverride)
+			auth.GET("/devices/:sn/control-overrides", deps.EnergyScheduleHandler.ListOverrides)
+			auth.DELETE("/devices/:sn/control-overrides/:id", deps.EnergyScheduleHandler.CancelOverride)
 
 			auth.GET("/alarms", deps.AlarmHandler.List)
 			auth.DELETE("/alarms/clear", deps.AlarmHandler.ClearAll)

@@ -332,16 +332,30 @@ const QuotaTab: React.FC = () => {
 }
 
 const RESOURCE_LABELS: Record<string, string> = {
-  devices: 'admin.deviceManagement', users: 'admin.userManagement', alerts: 'admin.alertManagement', alert_rules: 'admin.alertRule',
+  devices: 'admin.deviceManagement',
+  device_control: 'admin.deviceControl',
+  device_configure: 'admin.deviceConfigure',
+  device_service: 'admin.deviceService',
+  users: 'admin.userManagement', alerts: 'admin.alertManagement', alert_rules: 'admin.alertRule',
   work_orders: 'admin.workOrderManagement', firmware: 'admin.firmwareManagement', ota: 'admin.otaUpgrade', dashboard: 'admin.dashboardPerm',
   stations: 'admin.stationManagement', parallel: 'admin.parallelManagement', audit: 'admin.auditLog', admin: 'admin.systemManagement',
 }
-const RESOURCE_ORDER = ['devices', 'users', 'alerts', 'alert_rules', 'work_orders', 'firmware', 'ota', 'dashboard', 'stations', 'parallel', 'audit', 'admin']
+const RESOURCE_ORDER = ['devices', 'device_control', 'device_configure', 'device_service', 'users', 'alerts', 'alert_rules', 'work_orders', 'firmware', 'ota', 'dashboard', 'stations', 'parallel', 'audit', 'admin']
 const ALL_PERMISSION_DEFS = [
   { resource: 'devices', action: 'view', label: 'admin.perm.devices.view' }, { resource: 'devices', action: 'create', label: 'admin.perm.devices.create' },
   { resource: 'devices', action: 'edit', label: 'admin.perm.devices.edit' }, { resource: 'devices', action: 'delete', label: 'admin.perm.devices.delete' },
   { resource: 'devices', action: 'export', label: 'admin.perm.devices.export' }, { resource: 'devices', action: 'control', label: 'admin.perm.devices.control' },
   { resource: 'devices', action: 'manage', label: 'admin.perm.devices.manage' },
+  // ── 细粒度设备控制权限 ──
+  { resource: 'device_control', action: 'basic', label: 'admin.perm.device_control.basic' },
+  { resource: 'device_control', action: 'disruptive', label: 'admin.perm.device_control.disruptive' },
+  // ── 细粒度设备配置权限 ──
+  { resource: 'device_configure', action: 'battery', label: 'admin.perm.device_configure.battery' },
+  { resource: 'device_configure', action: 'ac_input', label: 'admin.perm.device_configure.ac_input' },
+  { resource: 'device_configure', action: 'parallel', label: 'admin.perm.device_configure.parallel' },
+  // ── 细粒度设备服务与诊断权限 ──
+  { resource: 'device_service', action: 'diagnostics', label: 'admin.perm.device_service.diagnostics' },
+  { resource: 'device_service', action: 'factory', label: 'admin.perm.device_service.factory' },
   { resource: 'users', action: 'view', label: 'admin.perm.users.view' }, { resource: 'users', action: 'create', label: 'admin.perm.users.create' },
   { resource: 'users', action: 'edit', label: 'admin.perm.users.edit' }, { resource: 'users', action: 'delete', label: 'admin.perm.users.delete' },
   { resource: 'users', action: 'manage', label: 'admin.perm.users.manage' },

@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/csv"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -328,6 +330,7 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 	role := middleware.GetRole(c)
 	isAdmin := role == 0
 
+	// 步骤1前置：RBAC devices:control + 数据归属检查（兼容现有中间件层）
 	if !isAdmin && !h.deviceService.HasControlPermission(c.Request.Context(), userID, sn) {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
@@ -339,17 +342,37 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 		return
 	}
 
-	if err := h.deviceService.ValidateControlCommand(c.Request.Context(), sn, req.Command); err != nil {
-		log.Printf("[Control] validate command failed: sn=%s, err=%v", sn, err)
-		response.HandleError(c, apperr.BadRequest("命令校验失败"))
+	// 9步校验链：ValidateAndPrepareCommand 集成步骤1-8（身份/型号/参数/关系/状态/BMS限制/拓扑/风险确认）
+	prepared, err := h.deviceService.ValidateAndPrepareCommand(c.Request.Context(), userID, sn, req.Command, req.Params)
+	if err != nil {
+		log.Printf("[Control] validate and prepare failed: sn=%s, cmd=%s, err=%v", sn, req.Command, err)
+		// 处理 CommandError 类型，返回拒绝码
+		var cmdErr *service.CommandError
+		if errors.As(err, &cmdErr) {
+			c.JSON(cmdErr.StatusCode, gin.H{
+				"code":           cmdErr.StatusCode,
+				"message":        cmdErr.Error(),
+				"reject_code":    cmdErr.Code,
+				"reject_detail":  cmdErr.Message,
+			})
+			return
+		}
+		response.HandleError(c, err)
 		return
 	}
 
-	taskID, err := h.deviceService.SendCommand(c.Request.Context(), sn, req.Command, req.Params)
+	// 步骤9：发送已校验的命令
+	taskID, err := h.deviceService.SendPreparedCommand(c.Request.Context(), sn, prepared)
 	if err != nil {
-		log.Printf("[Control] send command failed: sn=%s, err=%v", sn, err)
-		if strings.HasPrefix(err.Error(), "invalid command") {
-			response.HandleError(c, apperr.BadRequest(err.Error()))
+		log.Printf("[Control] send prepared command failed: sn=%s, cmd=%s, err=%v", sn, req.Command, err)
+		var cmdErr *service.CommandError
+		if errors.As(err, &cmdErr) {
+			c.JSON(cmdErr.StatusCode, gin.H{
+				"code":           cmdErr.StatusCode,
+				"message":        cmdErr.Error(),
+				"reject_code":    cmdErr.Code,
+				"reject_detail":  cmdErr.Message,
+			})
 			return
 		}
 		response.Error(c, 5003, "发送命令失败，请稍后重试")
@@ -377,6 +400,27 @@ func (h *DeviceHandler) GetControlFields(c *gin.Context) {
 	}
 
 	response.Success(c, fields)
+}
+
+// GetControlCapabilities returns the full command capability metadata for a device's model.
+func (h *DeviceHandler) GetControlCapabilities(c *gin.Context) {
+	sn := c.Param("sn")
+	userID := middleware.GetUserID(c)
+	role := middleware.GetRole(c)
+	isAdmin := role == 0
+
+	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+
+	caps, err := h.deviceService.GetControlCapabilitiesBySN(c.Request.Context(), sn)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询控制能力失败", err))
+		return
+	}
+
+	response.Success(c, caps)
 }
 
 // DEPRECATED: Device params removed. Use MQTT direct configuration.
@@ -705,6 +749,13 @@ func (h *DeviceHandler) BatchControl(c *gin.Context) {
 		if err := h.deviceService.ValidateControlCommand(c.Request.Context(), sn, req.Command); err != nil {
 			results[sn] = "命令校验失败"
 			continue
+		}
+
+		if !isAdmin {
+			if err := h.deviceService.CheckCommandPermission(c.Request.Context(), userID, sn, req.Command); err != nil {
+				results[sn] = err.Error()
+				continue
+			}
 		}
 
 		taskID, err := h.deviceService.SendCommand(c.Request.Context(), sn, req.Command, req.Params)

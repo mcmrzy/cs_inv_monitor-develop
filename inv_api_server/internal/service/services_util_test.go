@@ -137,23 +137,4 @@ func TestGenerateTaskID_两次生成不同值(t *testing.T) {
 	assert.NotEqual(t, id1, id2, "两次生成应不同")
 }
 
-// ==================== systemCommands ====================
 
-func TestSystemCommands_包含预期命令(t *testing.T) {
-	expectedCommands := []string{
-		"get_params", "set_params", "set_control",
-		"set_alarm", "batch_config", "reset", "restart", "ota",
-	}
-
-	for _, cmd := range expectedCommands {
-		t.Run(cmd, func(t *testing.T) {
-			assert.True(t, systemCommands[cmd], "systemCommands 应包含 %s", cmd)
-		})
-	}
-}
-
-func TestSystemCommands_不包含普通命令(t *testing.T) {
-	assert.False(t, systemCommands["unknown_cmd"])
-	assert.False(t, systemCommands[""])
-	assert.False(t, systemCommands["custom_field"])
-}

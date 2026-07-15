@@ -34,4 +34,21 @@ export const deviceApi = {
   assignInstaller: (sn: string, installerId: number) => api.post(`/devices/${sn}/assign-installer`, { installerId }),
   removeInstaller: (sn: string) => api.delete(`/devices/${sn}/installer`),
   batchAssignInstaller: (deviceSns: string[], installerId: number) => api.post('/devices/batch-assign-installer', { deviceSns, installerId }),
+  getControlCapabilities: (sn: string) => api.get(`/devices/${sn}/control-capabilities`),
+  getControlState: (sn: string) => api.get(`/devices/${sn}/control-state`),
+  getCommands: (sn: string, params?: any) => api.get(`/devices/${sn}/commands`, { params }),
+
+  // ── 能源计划 ──
+  getEnergySchedule: (sn: string) => api.get(`/devices/${sn}/energy-schedule`),
+  updateEnergySchedule: (sn: string, data: any) => api.put(`/devices/${sn}/energy-schedule`, data),
+
+  // ── 电池配置 ──
+  getBatteryProfiles: () => api.get('/battery-profiles'),
+  getBatteryConfig: (sn: string) => api.get(`/devices/${sn}/battery-config`),
+  updateBatteryConfig: (sn: string, data: any) => api.put(`/devices/${sn}/battery-config`, data),
+
+  // ── 控制覆盖 ──
+  getControlOverrides: (sn: string) => api.get(`/devices/${sn}/control-overrides`),
+  createControlOverride: (sn: string, data: any) => api.post(`/devices/${sn}/control-overrides`, data),
+  deleteControlOverride: (sn: string, id: string) => api.delete(`/devices/${sn}/control-overrides/${id}`),
 }

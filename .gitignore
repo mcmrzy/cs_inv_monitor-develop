@@ -22,6 +22,7 @@ Thumbs.db
 # Go
 vendor/
 .gocache-*/
+**/.gocache-*/
 
 # Android
 **/android/app/debug
