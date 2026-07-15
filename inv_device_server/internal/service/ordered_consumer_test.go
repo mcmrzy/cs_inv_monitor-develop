@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type scriptedKafkaReader struct {
+type orderedScriptedReader struct {
 	mu              sync.Mutex
 	messages        []kafka.Message
 	fetchIndex      int
@@ -22,21 +22,21 @@ type scriptedKafkaReader struct {
 	onCommitSuccess func(kafka.Message)
 }
 
-type ingestErrorRecord struct {
+type orderedErrorRecord struct {
 	sn, topic, code, detail string
 	payload                 []byte
 }
 
-type fakeIngestErrorStore struct {
+type orderedFakeErrorStore struct {
 	mu      sync.Mutex
 	err     error
-	records []ingestErrorRecord
+	records []orderedErrorRecord
 	called  chan struct{}
 }
 
-func (s *fakeIngestErrorStore) SaveIngestError(_ context.Context, sn, topic string, payload []byte, code, detail string) error {
+func (s *orderedFakeErrorStore) SaveIngestError(_ context.Context, sn, topic string, payload []byte, code, detail string) error {
 	s.mu.Lock()
-	s.records = append(s.records, ingestErrorRecord{
+	s.records = append(s.records, orderedErrorRecord{
 		sn: sn, topic: topic, payload: append([]byte(nil), payload...), code: code, detail: detail,
 	})
 	err := s.err
@@ -51,7 +51,7 @@ func (s *fakeIngestErrorStore) SaveIngestError(_ context.Context, sn, topic stri
 	return err
 }
 
-func (r *scriptedKafkaReader) FetchMessage(ctx context.Context) (kafka.Message, error) {
+func (r *orderedScriptedReader) FetchMessage(ctx context.Context) (kafka.Message, error) {
 	r.mu.Lock()
 	if r.fetchIndex < len(r.messages) {
 		message := r.messages[r.fetchIndex]
@@ -65,7 +65,7 @@ func (r *scriptedKafkaReader) FetchMessage(ctx context.Context) (kafka.Message, 
 	return kafka.Message{}, ctx.Err()
 }
 
-func (r *scriptedKafkaReader) CommitMessages(_ context.Context, messages ...kafka.Message) error {
+func (r *orderedScriptedReader) CommitMessages(_ context.Context, messages ...kafka.Message) error {
 	r.mu.Lock()
 	message := messages[0]
 	r.events = append(r.events, fmt.Sprintf("commit:%d", message.Offset))
@@ -82,9 +82,9 @@ func (r *scriptedKafkaReader) CommitMessages(_ context.Context, messages ...kafk
 	return nil
 }
 
-func (r *scriptedKafkaReader) Close() error { return nil }
+func (r *orderedScriptedReader) Close() error { return nil }
 
-func (r *scriptedKafkaReader) snapshot() (int, []string) {
+func (r *orderedScriptedReader) snapshot() (int, []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.fetchIndex, append([]string(nil), r.events...)
@@ -92,7 +92,7 @@ func (r *scriptedKafkaReader) snapshot() (int, []string) {
 
 func TestOrderedConsumer_FailureRetainsOffsetAndBlocksLaterMessage(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	reader := &scriptedKafkaReader{messages: []kafka.Message{
+	reader := &orderedScriptedReader{messages: []kafka.Message{
 		{Topic: "events", Partition: 0, Offset: 10},
 		{Topic: "events", Partition: 0, Offset: 11},
 	}}
@@ -128,7 +128,7 @@ func TestOrderedConsumer_FailureRetainsOffsetAndBlocksLaterMessage(t *testing.T)
 func TestOrderedConsumer_RetriesSameMessageThenCommitsBeforeNextFetch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	reader := &scriptedKafkaReader{messages: []kafka.Message{
+	reader := &orderedScriptedReader{messages: []kafka.Message{
 		{Topic: "events", Partition: 0, Offset: 20},
 		{Topic: "events", Partition: 0, Offset: 21},
 	}}
@@ -171,7 +171,7 @@ func TestOrderedConsumer_RetriesSameMessageThenCommitsBeforeNextFetch(t *testing
 func TestOrderedConsumer_CommitFailureBlocksNextFetchAndDoesNotReprocess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	reader := &scriptedKafkaReader{
+	reader := &orderedScriptedReader{
 		messages:       []kafka.Message{{Topic: "events", Partition: 1, Offset: 30}},
 		commitFailures: 1,
 	}
@@ -199,7 +199,7 @@ func TestOrderedConsumer_CommitFailureBlocksNextFetchAndDoesNotReprocess(t *test
 func TestProtocolParser_PermanentErrorIsAuditedBeforeCommitAndNextFetch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	reader := &scriptedKafkaReader{messages: []kafka.Message{
+	reader := &orderedScriptedReader{messages: []kafka.Message{
 		{Topic: "telemetry", Partition: 0, Offset: 40, Value: []byte("not-json")},
 		{Topic: "telemetry", Partition: 0, Offset: 41, Value: []byte(`{"sn":"SN001","msg_type":"unused","payload":null}`)},
 	}}
@@ -208,7 +208,7 @@ func TestProtocolParser_PermanentErrorIsAuditedBeforeCommitAndNextFetch(t *testi
 			cancel()
 		}
 	}
-	store := &fakeIngestErrorStore{}
+	store := &orderedFakeErrorStore{}
 	parser := &ProtocolParser{consumer: reader, ingestErrors: store}
 	done := make(chan struct{})
 	go func() {
@@ -232,11 +232,11 @@ func TestProtocolParser_PermanentErrorIsAuditedBeforeCommitAndNextFetch(t *testi
 
 func TestProtocolParser_AuditFailureRetainsOffset(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	reader := &scriptedKafkaReader{messages: []kafka.Message{
+	reader := &orderedScriptedReader{messages: []kafka.Message{
 		{Topic: "telemetry", Partition: 0, Offset: 50, Value: []byte("not-json")},
 		{Topic: "telemetry", Partition: 0, Offset: 51, Value: []byte(`{"sn":"SN001","payload":null}`)},
 	}}
-	store := &fakeIngestErrorStore{err: errors.New("database unavailable"), called: make(chan struct{}, 1)}
+	store := &orderedFakeErrorStore{err: errors.New("database unavailable"), called: make(chan struct{}, 1)}
 	parser := &ProtocolParser{consumer: reader, ingestErrors: store}
 	done := make(chan struct{})
 	go func() {

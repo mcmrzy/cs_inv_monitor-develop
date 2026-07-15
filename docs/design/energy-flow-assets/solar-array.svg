@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 520" role="img" aria-labelledby="title desc">
+  <title id="title">辰烁科技能量流图 - 光伏组件</title>
+  <desc id="desc">透明背景的现代半立体光伏阵列与太阳插画</desc>
+  <defs>
+    <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7fcff"/><stop offset=".52" stop-color="#b9ccd5"/><stop offset="1" stop-color="#718690"/></linearGradient>
+    <linearGradient id="cell" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0a516a"/><stop offset=".46" stop-color="#087c9c"/><stop offset="1" stop-color="#032d40"/></linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#324851"/><stop offset="1" stop-color="#101c22"/></linearGradient>
+    <radialGradient id="sun" cx="34%" cy="26%"><stop stop-color="#fffbd0"/><stop offset=".5" stop-color="#ffe66d"/><stop offset="1" stop-color="#ffac30"/></radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="170%" height="190%"><feDropShadow dx="0" dy="16" stdDeviation="13" flood-color="#163442" flood-opacity=".2"/></filter>
+  </defs>
+  <g stroke-linecap="round">
+    <g transform="translate(138 118)">
+      <circle r="63" fill="url(#sun)" stroke="#f68a25" stroke-width="11"/>
+      <g stroke="#f6a43a" stroke-width="15">
+        <path d="M0-91v-26M64-64l19-19M91 0h26M64 64l19 19M0 91v26M-64 64l-19 19M-91 0h-26M-64-64l-19-19"/>
+      </g>
+    </g>
+    <ellipse cx="342" cy="453" rx="226" ry="28" fill="#18333e" opacity=".1"/>
+    <g filter="url(#shadow)">
+      <path d="m133 389 44 21 15 64-27-8Z" fill="#354951" stroke="#192930" stroke-width="7"/>
+      <path d="m484 330 38 21-5 89-30 18Z" fill="#354951" stroke="#192930" stroke-width="7"/>
+      <path d="M84 369 230 168l330 88-81 210Z" fill="url(#edge)" stroke="#112229" stroke-width="12" stroke-linejoin="round"/>
+      <path d="M98 346 235 179l309 83-77 181Z" fill="url(#frame)" stroke="#edfaff" stroke-width="8" stroke-linejoin="round"/>
+      <g fill="url(#cell)" stroke="#063347" stroke-width="5" stroke-linejoin="round">
+        <path d="m241 193 80 21-26 49-88-24Z"/><path d="m328 216 82 22-19 52-90-25Z"/><path d="m417 240 91 24-13 55-97-27Z"/>
+        <path d="m202 246 90 24-29 52-98-27Z"/><path d="m299 272 90 25-22 55-100-28Z"/><path d="m396 299 97 27-15 58-104-30Z"/>
+        <path d="m160 303 99 27-32 57-109-31Z"/><path d="m266 332 99 28-25 60-111-32Z"/><path d="m372 362 104 30-18 36-111-6Z"/>
+      </g>
+      <g fill="#55d8ec" opacity=".72">
+        <path d="m253 197 45 12-77 38-15-4Z"/><path d="m341 221 45 12-83 41-11-3Z"/><path d="m431 245 52 14-88 42-8-3Z"/>
+        <path d="m217 251 49 13-87 39-14-4Z"/><path d="m313 277 50 14-94 43-11-3Z"/><path d="m410 304 54 15-99 46-9-3Z"/>
+        <path d="m177 308 52 14-95 43-16-5Z"/><path d="m282 337 55 16-104 47-12-4Z"/><path d="m388 367 58 17-102 45-11-4Z"/>
+      </g>
+    </g>
+  </g>
+</svg>

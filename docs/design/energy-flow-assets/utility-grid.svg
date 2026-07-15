@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 640" role="img" aria-labelledby="title desc">
+  <title id="title">辰烁科技能量流图 - 公共电网</title>
+  <desc id="desc">透明背景的现代输电铁塔插画</desc>
+  <defs>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#adbdc5"/><stop offset=".42" stop-color="#657781"/><stop offset="1" stop-color="#344650"/></linearGradient>
+    <linearGradient id="steelLight" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#d8e3e8"/><stop offset="1" stop-color="#64757e"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-20%" width="170%" height="160%"><feDropShadow dx="0" dy="15" stdDeviation="12" flood-color="#17303a" flood-opacity=".2"/></filter>
+  </defs>
+  <ellipse cx="260" cy="598" rx="176" ry="24" fill="#16313d" opacity=".1"/>
+  <g filter="url(#shadow)" stroke-linecap="round" stroke-linejoin="round">
+    <g fill="none" stroke="#354750" stroke-width="19">
+      <path d="M153 588 235 66h50l82 522"/><path d="M102 588h316"/>
+    </g>
+    <g fill="none" stroke="url(#steelLight)" stroke-width="10">
+      <path d="M153 588 235 66h50l82 522"/>
+      <path d="M178 435h164M195 330h130M211 226h98M224 144h72"/>
+      <path d="m153 588 189-153-147-105 114-104-74-82M367 588 178 435l147-105-114-104 74-82" stroke-width="7"/>
+      <path d="m171 475 171 95M349 475l-171 95M191 368l139 63M329 368l-139 63M207 263l106 63M311 263l-104 63M221 174l78 49M299 174l-78 49" stroke-width="6"/>
+    </g>
+    <g fill="url(#steel)" stroke="#3a4b53" stroke-width="6">
+      <path d="M77 437h366l-101-56H178Z"/><path d="M111 331h298l-84-50H195Z"/><path d="M133 226h254l-78-47h-98Z"/><path d="M151 143h218l-73-43h-72Z"/>
+    </g>
+    <g fill="#f6f9fa" opacity=".9">
+      <path d="m119 425 61-32h158l61 32Z"/><path d="m151 320 46-27h126l45 27Z"/><path d="m173 215 39-24h96l39 24Z"/><path d="m190 133 35-21h70l35 21Z"/>
+    </g>
+    <g stroke="#52646d" stroke-width="7">
+      <path d="M77 437H28m415 0h49M111 331H49m360 0h62M133 226H66m321 0h67M151 143H87m282 0h64"/>
+    </g>
+    <g fill="#ff9a2f" stroke="#d66b15" stroke-width="4">
+      <circle cx="28" cy="437" r="11"/><circle cx="492" cy="437" r="11"/><circle cx="49" cy="331" r="10"/><circle cx="471" cy="331" r="10"/><circle cx="66" cy="226" r="9"/><circle cx="454" cy="226" r="9"/><circle cx="87" cy="143" r="8"/><circle cx="433" cy="143" r="8"/>
+    </g>
+    <path d="M244 66 260 28l16 38Z" fill="#ff7a1a" stroke="#d95d12" stroke-width="5"/>
+  </g>
+</svg>

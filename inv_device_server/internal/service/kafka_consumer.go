@@ -12,6 +12,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// kafkaMessageReader abstracts a Kafka reader so that service-layer consumers
+// can be tested with scripted doubles instead of a live broker connection.
+// *kafka.Reader satisfies this interface at runtime.
+type kafkaMessageReader interface {
+	FetchMessage(ctx context.Context) (kafka.Message, error)
+	CommitMessages(ctx context.Context, msgs ...kafka.Message) error
+	Close() error
+}
+
 // runOrderedKafkaConsumer consumes Kafka messages in strict partition order.
 //
 // The function blocks on each message until the handler succeeds (returns nil)

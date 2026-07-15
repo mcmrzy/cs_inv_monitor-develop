@@ -46,6 +46,7 @@ vendor/
 # Test / analysis output
 **/analyze_output*.txt
 *.tsbuildinfo
+artifacts/cs6k2-audit/
 
 # Config with secrets
 **/config.yaml

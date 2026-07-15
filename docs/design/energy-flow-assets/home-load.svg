@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 540" role="img" aria-labelledby="title desc">
+  <title id="title">辰烁科技能量流图 - 家庭负载</title>
+  <desc id="desc">透明背景的温暖现代住宅与家用电器插画</desc>
+  <defs>
+    <linearGradient id="roof" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffbd2e"/><stop offset=".5" stop-color="#ff8a20"/><stop offset="1" stop-color="#e84c16"/></linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff3da"/><stop offset="1" stop-color="#edbd91"/></linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f6d5b3"/><stop offset="1" stop-color="#d69665"/></linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e8fcff"/><stop offset=".48" stop-color="#70d7eb"/><stop offset="1" stop-color="#179cb9"/></linearGradient>
+    <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f6f9fa"/><stop offset=".5" stop-color="#bdcbd1"/><stop offset="1" stop-color="#778991"/></linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="160%" height="180%"><feDropShadow dx="0" dy="17" stdDeviation="14" flood-color="#64391f" flood-opacity=".2"/></filter>
+  </defs>
+  <ellipse cx="324" cy="489" rx="252" ry="30" fill="#50331f" opacity=".1"/>
+  <g filter="url(#shadow)" stroke-linejoin="round">
+    <path d="M102 247 306 83l222 171v222H102Z" fill="url(#wall)" stroke="#c56b3c" stroke-width="8"/>
+    <path d="m528 254 54-25v205l-54 42Z" fill="url(#side)" stroke="#b9683d" stroke-width="8"/>
+    <path d="M49 253 299 37l284 192-43 56-238-162-217 182Z" fill="url(#roof)" stroke="#e75b18" stroke-width="10"/>
+    <path d="M299 37 540 285l43-56Z" fill="#ff9d20" opacity=".65"/>
+    <path d="M314 85 520 225" stroke="#ffd160" stroke-width="9" opacity=".55"/>
+    <g>
+      <rect x="384" y="264" width="99" height="82" rx="4" fill="url(#glass)" stroke="#394950" stroke-width="11"/>
+      <path d="M433.5 264v82M384 305h99" stroke="#fff" stroke-width="6"/>
+      <path d="m396 279 26-10-29 58" fill="#fff" opacity=".4"/>
+    </g>
+    <rect x="263" y="307" width="90" height="169" rx="5" fill="#8f5131" stroke="#6f3d26" stroke-width="7"/>
+    <rect x="277" y="324" width="62" height="65" rx="3" fill="#a9653d"/>
+    <circle cx="328" cy="406" r="6" fill="#ffd05a" stroke="#c78e1b" stroke-width="3"/>
+    <g>
+      <rect x="128" y="301" width="87" height="157" rx="9" fill="url(#metal)" stroke="#687980" stroke-width="7"/>
+      <path d="M128 361h87" stroke="#6e7d83" stroke-width="6"/>
+      <path d="M197 319v24M197 380v28" stroke="#45565e" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <g>
+      <rect x="221" y="335" width="31" height="98" rx="6" fill="#eff4f3" stroke="#74868c" stroke-width="6"/>
+      <circle cx="236.5" cy="355" r="6" fill="#ff8121"/>
+      <path d="M213 438h47" stroke="#394b53" stroke-width="8" stroke-linecap="round"/>
+    </g>
+    <g>
+      <rect x="400" y="387" width="97" height="60" rx="5" fill="#384a52" stroke="#22323a" stroke-width="7"/>
+      <rect x="412" y="398" width="73" height="38" fill="url(#glass)"/>
+      <path d="m419 426 19-22 14 13 12-10 15 19Z" fill="#fff" opacity=".75"/>
+      <path d="M429 447h39v15h-39" fill="#42545b"/>
+    </g>
+    <path d="M77 476h489" stroke="#a85f38" stroke-width="12" stroke-linecap="round"/>
+    <g fill="#36b9d5" stroke="#158ca5" stroke-width="4">
+      <path d="M544 367c24 2 39 15 42 37-25 3-41-9-42-37Z"/><path d="M545 407c-18-4-29 5-33 21 18 5 30-3 33-21Z"/>
+    </g>
+  </g>
+</svg>
