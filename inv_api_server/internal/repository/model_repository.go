@@ -8,14 +8,16 @@ import (
 	"inv-api-server/internal/model"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 type ModelRepository struct {
-	db *pgxpool.Pool
+	db  *pgxpool.Pool
+	rdb *redis.Client
 }
 
-func NewModelRepository(db *pgxpool.Pool) *ModelRepository {
-	return &ModelRepository{db: db}
+func NewModelRepository(db *pgxpool.Pool, rdb *redis.Client) *ModelRepository {
+	return &ModelRepository{db: db, rdb: rdb}
 }
 
 func (r *ModelRepository) ListModels(ctx context.Context) ([]model.DeviceModel, error) {
@@ -242,8 +244,8 @@ func (r *ModelRepository) GetControlFieldsByModelID(ctx context.Context, modelID
 			'' AS field_type, '' AS unit, 0 AS sort,
 			true AS is_show, true AS is_control,
 			NULL AS parse_rule, '' AS group_name,
-			'{}'::jsonb AS control_params
-		FROM device_model_commands
+			c.parameter_schema AS control_params
+		FROM device_model_commands AS c
 		WHERE model_id = $1 AND is_enabled = true
 		ORDER BY command_code, id`, modelID)
 	if err != nil {

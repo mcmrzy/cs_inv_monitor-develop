@@ -600,19 +600,21 @@ CREATE TABLE alarms (
     handled_at TIMESTAMPTZ,
     handled_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    alarm_source SMALLINT NOT NULL DEFAULT 0,          -- (migration 027) V1 alarm source: 0 PCS, 1 BMS, 2 MPPT, 3 COMM
-    event_state VARCHAR(16) NOT NULL DEFAULT 'active', -- (migration 027) V1 lifecycle state: active or recovered
-    type VARCHAR(32) NOT NULL DEFAULT 'device_fault',  -- (migration 039) compat type column
-    level SMALLINT NOT NULL,                           -- (migration 039) compat level column
-    message TEXT NOT NULL,                             -- (migration 039) compat message column
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()      -- (migration 039) compat updated_at column
+    -- V1 alarm lifecycle columns (migration 027)
+    alarm_source SMALLINT NOT NULL DEFAULT 0, -- 0:PCS 1:BMS 2:MPPT 3:COMM
+    event_state VARCHAR(16) NOT NULL DEFAULT 'active', -- active/recovered
+    -- Compatibility columns (migration 039) — kept in sync by trg_alarms_compat_columns
+    type VARCHAR(32) NOT NULL DEFAULT 'device_fault',
+    level SMALLINT NOT NULL DEFAULT 2,
+    message TEXT NOT NULL DEFAULT '',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_alarms_device ON alarms(device_sn);
 CREATE INDEX idx_alarms_station ON alarms(station_id);
 CREATE INDEX idx_alarms_user ON alarms(user_id);
 CREATE INDEX idx_alarms_status ON alarms(status);
-CREATE INDEX idx_alarms_time ON alarms(occurred_at DESC);
+CREATE INDEX idx_alarms_time ON alarms(occurred_at);
 CREATE INDEX IF NOT EXISTS idx_alarms_device_time
     ON alarms(device_sn, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_alarms_pending
@@ -621,9 +623,6 @@ CREATE INDEX IF NOT EXISTS idx_alarms_pending
 CREATE INDEX IF NOT EXISTS idx_alarms_v1_active
     ON alarms(device_sn, alarm_source, fault_code)
     WHERE event_state = 'active';
--- Hypertable-optimized indexes using the partitioning column occurred_at
--- are added by migration 048 (idx_alarms_device_occurred,
--- idx_alarms_pending_occurred, idx_alarms_station_occurred).
 
 -- 告警通知记录表
 CREATE TABLE alarm_notifications (
@@ -1088,6 +1087,36 @@ END $$;
 DO $$ BEGIN
     DROP TRIGGER IF EXISTS update_system_configs_updated_at ON system_configs;
     CREATE TRIGGER update_system_configs_updated_at BEFORE UPDATE ON system_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+END $$;
+
+-- alarms 兼容列同步触发器 (migration 027+039)
+-- 保持 alarm_level↔level、fault_message↔message 同步，验证 status/event_state 枚举值
+CREATE OR REPLACE FUNCTION normalize_alarms_compat_columns()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.status NOT IN (0, 1, 2) THEN
+        RAISE EXCEPTION 'alarms.status must be 0 (unhandled), 1 (handled), or 2 (ignored)'
+            USING ERRCODE = '23514';
+    END IF;
+    IF NEW.event_state NOT IN ('active', 'recovered') THEN
+        RAISE EXCEPTION 'alarms.event_state must be active or recovered'
+            USING ERRCODE = '23514';
+    END IF;
+    NEW.alarm_level := COALESCE(NEW.alarm_level, NEW.level);
+    NEW.level := NEW.alarm_level;
+    NEW.fault_message := COALESCE(NULLIF(NEW.fault_message, ''), NEW.message, '');
+    NEW.message := NEW.fault_message;
+    NEW.type := COALESCE(NULLIF(NEW.type, ''), 'device_fault');
+    NEW.updated_at := NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS trg_alarms_compat_columns ON alarms;
+    CREATE TRIGGER trg_alarms_compat_columns
+    BEFORE INSERT OR UPDATE ON alarms
+    FOR EACH ROW EXECUTE FUNCTION normalize_alarms_compat_columns();
 END $$;
 
 -- 设备时区同步函数 (migration 031)

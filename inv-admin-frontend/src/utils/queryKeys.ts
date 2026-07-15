@@ -15,6 +15,13 @@ export const queryKeys = {
     commandHistory: (sn: string) => ['devices', 'command-history', sn] as const,
     unbindRequests: () => ['devices', 'unbind-requests'] as const,
     allDevices: () => ['allDevices'] as const,
+    controlState: (sn: string) => ['devices', 'control-state', sn] as const,
+    controlCapabilities: (sn: string) => ['devices', 'control-capabilities', sn] as const,
+    energySchedule: (sn: string) => ['devices', 'energy-schedule', sn] as const,
+    batteryProfiles: () => ['devices', 'battery-profiles'] as const,
+    batteryConfig: (sn: string) => ['devices', 'battery-config', sn] as const,
+    controlOverrides: (sn: string) => ['devices', 'control-overrides', sn] as const,
+    commands: (sn: string, params?: Record<string, any>) => ['devices', 'commands', sn, params] as const,
   },
   alerts: {
     all: ['alerts'] as const,

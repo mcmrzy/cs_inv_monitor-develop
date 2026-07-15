@@ -18,6 +18,7 @@ import (
 	"inv-api-server/pkg/logger"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -324,21 +325,27 @@ func (s *StationService) GetStatistics(ctx context.Context, stationID int64, sta
 }
 
 type DeviceService struct {
-	repo         *repository.DeviceRepository
-	cache        *redis.Client
-	modelRepo    *repository.ModelRepository
-	deviceSrvURL string
-	internalKey  string
-	httpClient   *http.Client
+	repo                *repository.DeviceRepository
+	cache               *redis.Client
+	modelRepo           *repository.ModelRepository
+	permChecker         *PermChecker
+	deviceSrvURL        string
+	internalKey         string
+	httpClient          *http.Client
+	db                  *pgxpool.Pool
+	limitChecker        *DynamicLimitChecker
+	preconditionChecker *PreconditionChecker
 }
 
-func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, modelRepo *repository.ModelRepository, deviceSrvURL string, internalKey string) *DeviceService {
-	return &DeviceService{
+func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, modelRepo *repository.ModelRepository, permChecker *PermChecker, deviceSrvURL string, internalKey string, db *pgxpool.Pool) *DeviceService {
+	s := &DeviceService{
 		repo:         repo,
 		cache:        cache,
 		modelRepo:    modelRepo,
+		permChecker:  permChecker,
 		deviceSrvURL: deviceSrvURL,
 		internalKey:  internalKey,
+		db:           db,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
@@ -348,6 +355,9 @@ func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, mo
 			},
 		},
 	}
+	s.limitChecker = NewDynamicLimitChecker(cache, db)
+	s.preconditionChecker = NewPreconditionChecker(cache)
+	return s
 }
 
 func (s *DeviceService) GetBySN(ctx context.Context, sn string) (*model.Device, error) {
@@ -421,64 +431,61 @@ func (s *DeviceService) HasPermission(ctx context.Context, userID int64, sn stri
 }
 
 func (s *DeviceService) HasControlPermission(ctx context.Context, userID int64, sn string) bool {
+	// 先检查 RBAC devices:control 权限
+	if s.permChecker != nil && !s.permChecker.CheckPermission(userID, "devices", "control") {
+		return false
+	}
+	// 再检查数据归属
 	return s.repo.HasDataPermission(ctx, userID, sn)
 }
 
-// 系统级命令白名单，不受型号控制字段校验限制
-var systemCommands = map[string]bool{
-	"get_params":   true,
-	"set_params":   true,
-	"set_control":  true,
-	"set_alarm":    true,
-	"batch_config": true,
-	"reset":        true,
-	"restart":      true,
-	"ota":          true,
+func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, command string) error {
+	found, enabled, err := s.modelRepo.CommandCapability(ctx, sn, command)
+	if err != nil {
+		return fmt.Errorf("query command capability: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("命令 %s 不在设备型号允许的控制命令中", command)
+	}
+	if !enabled {
+		return fmt.Errorf("命令 %s 已被禁用", command)
+	}
+	return nil
 }
 
-func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, command string) error {
-	if found, enabled, err := s.modelRepo.CommandCapability(ctx, sn, command); err != nil {
-		return fmt.Errorf("query command capability: %w", err)
-	} else if found {
-		if !enabled {
-			return fmt.Errorf("command %s is disabled for this model", command)
-		}
-		return nil
-	}
-	// 系统级命令始终允许
-	if systemCommands[command] {
-		return nil
-	}
-
-	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
+// CheckCommandPermission performs fine-grained permission_code validation for a specific command.
+// If the command has no permission_code configured, the check is skipped (backward compatible).
+// The permission_code format is "resource_action" (e.g. "device_control_basic"),
+// split on the last underscore to get (resource, action).
+func (s *DeviceService) CheckCommandPermission(ctx context.Context, userID int64, sn, commandCode string) error {
+	permCode, err := s.modelRepo.GetCommandPermissionCode(ctx, sn, commandCode)
 	if err != nil {
-		return fmt.Errorf("查询设备型号失败: %w", err)
+		return fmt.Errorf("query command permission code: %w", err)
 	}
-	if modelID == 0 {
-		// 设备未配置型号，允许所有命令（向后兼容）
+	if permCode == "" {
+		// 命令未配置权限码，跳过细粒度检查（向后兼容）
 		return nil
 	}
-
-	controlFields, err := s.modelRepo.GetControlFieldsByModelID(ctx, modelID)
-	if err != nil {
-		return fmt.Errorf("查询控制字段失败: %w", err)
+	// 将权限码拆分为 (resource, action) 二元组
+	// 例如 "device_control_basic" → resource="device_control", action="basic"
+	idx := strings.LastIndex(permCode, "_")
+	if idx <= 0 || idx == len(permCode)-1 {
+		return fmt.Errorf("invalid permission_code format: %s", permCode)
 	}
-
-	if len(controlFields) == 0 {
-		// 型号未配置控制字段，允许所有命令（向后兼容）
-		return nil
+	resource, action := permCode[:idx], permCode[idx+1:]
+	if s.permChecker != nil && !s.permChecker.CheckPermission(userID, resource, action) {
+		return fmt.Errorf("缺少权限: %s", permCode)
 	}
-
-	allowed := make(map[string]bool)
-	for _, f := range controlFields {
-		allowed[f.FieldKey] = true
-	}
-
-	if !allowed[command] {
-		return fmt.Errorf("命令 %s 不在设备型号允许的控制字段中", command)
-	}
-
 	return nil
+}
+
+// GetControlCapabilitiesBySN returns all command capabilities for the device model identified by SN.
+func (s *DeviceService) GetControlCapabilitiesBySN(ctx context.Context, sn string) ([]repository.CommandCapability, error) {
+	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
+	if err != nil || modelID == 0 {
+		return []repository.CommandCapability{}, nil
+	}
+	return s.modelRepo.GetCommandCapabilitiesByModelID(ctx, modelID)
 }
 
 func (s *DeviceService) GetControlFieldsBySN(ctx context.Context, sn string) ([]model.DeviceModelField, error) {

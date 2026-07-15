@@ -27,10 +27,6 @@ type AlertConsumer struct {
 	apiServer    string
 	internalKey  string
 	httpClient   *http.Client
-	dlq          DeadLetterQueue
-	metrics      *IngestMetrics
-	maxRetries   int
-	baseBackoff  time.Duration
 }
 
 type RawAlertMessage struct {
@@ -73,8 +69,6 @@ func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
-		maxRetries:  DefaultMaxRetries,
-		baseBackoff: DefaultBaseBackoff,
 	}
 }
 
@@ -103,8 +97,7 @@ func (a *AlertConsumer) WithBaseBackoff(d time.Duration) *AlertConsumer {
 }
 
 func (a *AlertConsumer) Start(ctx context.Context) {
-	go runOrderedKafkaConsumerWithRetry(ctx, "alert-consumer", a.consumer, a.processAlert,
-		a.maxRetries, a.baseBackoff, a.dlq, a.metrics)
+	go runOrderedKafkaConsumer(ctx, "alert-consumer", a.consumer, a.processAlert, 250*time.Millisecond)
 }
 
 func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) error {

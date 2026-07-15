@@ -94,15 +94,6 @@ func NewProtocolParser(
 	return parser
 }
 
-// SetStateManager 注入外部创建的 DeviceStateManager 实例。
-// 用于依赖注入：main.go 创建共享的状态管理器后，通过此方法注入到 ProtocolParser，
-// 确保 MQTT 层和 Kafka 消费层使用同一个状态管理器实例。
-func (p *ProtocolParser) SetStateManager(sm *DeviceStateManager) {
-	if sm != nil {
-		p.stateManager = sm
-	}
-}
-
 func (p *ProtocolParser) Start(ctx context.Context) {
 	go runOrderedKafkaConsumer(ctx, "protocol-parser", p.consumer, p.processKafkaMessage, 250*time.Millisecond)
 	go p.refreshModelCache(ctx)

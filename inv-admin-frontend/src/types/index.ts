@@ -187,3 +187,59 @@ export interface ApiResponse<T> {
   message: string;
   data?: T;
 }
+
+/* ==================== Schema-driven Control Types ==================== */
+
+export interface SchemaArg {
+  key: string
+  type: 'integer' | 'number' | 'boolean' | 'string'
+  label?: string
+  description?: string
+  unit?: string
+  min?: number
+  max?: number
+  step?: number
+  default?: unknown
+  enum?: (string | number)[]
+  required?: boolean
+}
+
+export interface ParameterSchema {
+  args: SchemaArg[]
+  rules?: string[]
+}
+
+export interface CommandCapability {
+  command_code: string
+  display_name: string
+  parameter_schema: ParameterSchema | null
+  response_schema?: unknown
+  timeout_seconds: number
+  risk_level: number
+  requires_online: boolean
+  is_enabled: boolean
+  config_domain?: string
+  permission_code?: string
+  operation_kind?: string
+  requires_stopped?: boolean
+  requires_bms_online?: boolean
+  confirmation_mode?: string
+  ttl_seconds?: number
+  cooldown_seconds?: number
+  ui_schema?: { group?: string; order?: number; display_name?: string } | null
+  min_firmware?: string
+}
+
+export interface ControlState {
+  device_sn: string
+  protocol_version: number
+  desired: Record<string, unknown>
+  reported: Record<string, unknown>
+  desired_version?: number
+  reported_revision?: number
+  sync_status: string
+  desired_at?: string
+  reported_at?: string
+  last_task_id?: string
+  updated_at?: string
+}
