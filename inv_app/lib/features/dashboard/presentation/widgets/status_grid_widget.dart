@@ -116,12 +116,12 @@ class _StatusCard extends StatelessWidget {
       changeIcon = Icons.remove;
     } else if (isPositive) {
       // 对于在线数量，增加是好事；对于离线/故障/告警，增加是坏事
-      final isGood = label == '在线';
+      final isGood = isOnline;
       changeColor = isGood ? AppColors.success : AppColors.error;
       changeIcon = Icons.arrow_upward;
     } else {
       // 对于在线数量，减少是坏事；对于离线/故障/告警，减少是好事
-      final isGood = label != '在线';
+      final isGood = !isOnline;
       changeColor = isGood ? AppColors.success : AppColors.error;
       changeIcon = Icons.arrow_downward;
     }

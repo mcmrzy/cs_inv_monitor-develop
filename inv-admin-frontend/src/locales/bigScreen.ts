@@ -74,6 +74,7 @@ export default {
     'bigScreen.stations': '电站',
     'bigScreen.devices': '设备',
     'bigScreen.energy': '发电量',
+    'bigScreen.monitoringCenter': '光伏监控大屏',
   },
   en: {
     'bigScreen.title': 'Inverter IoT Monitoring Platform',
@@ -150,5 +151,6 @@ export default {
     'bigScreen.stations': 'Stations',
     'bigScreen.devices': 'Devices',
     'bigScreen.energy': 'Generation',
+    'bigScreen.monitoringCenter': 'PV Monitoring Center',
   },
 }

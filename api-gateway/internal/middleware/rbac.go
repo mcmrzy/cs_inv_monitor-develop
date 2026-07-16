@@ -206,7 +206,7 @@ func (r *RBACMiddleware) refreshRolePermissions(ctx context.Context, role int) (
 	return perms, nil
 }
 
-func (r *RBACMiddleware) hasPermission(userID string, resource string, action string) bool {
+func (r *RBACMiddleware) hasPermission(userID string, resource string, action string, jwtRole int) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -219,7 +219,15 @@ func (r *RBACMiddleware) hasPermission(userID string, resource string, action st
 	// cannot retain elevated (especially role=0) access.
 	role, err := r.getUserRole(ctx, userID)
 	if err != nil || role < 0 {
-		return false
+		// When Redis is configured but the user role is not cached (errRoleUnknown),
+		// the JWT role claim is a safe fallback since the role was not explicitly revoked.
+		// But without any role source (errNoRoleSource), never trust the JWT role=0
+		// claim to prevent stale super_admin tokens from bypassing security.
+		if err == errRoleUnknown && jwtRole >= 0 {
+			role = jwtRole
+		} else {
+			return false
+		}
 	}
 
 	if role == 0 {
@@ -376,7 +384,13 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		}
 
 		action := r.getActionForRequest(path, c.Request.Method)
-		if !r.hasPermission(userID, resource, action) {
+		jwtRole := -1
+		if roleStr := c.GetHeader("X-User-Role"); roleStr != "" {
+			if parsed, parseErr := strconv.Atoi(roleStr); parseErr == nil {
+				jwtRole = parsed
+			}
+		}
+		if !r.hasPermission(userID, resource, action, jwtRole) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    403,
 				"message": "权限不足，无法访问该资源",

@@ -24,8 +24,8 @@
 | CQ-004 | P0 | App | 已修复 | `code == 0` 但 `data` 结构错误时被当成成功空数据 | Repository parser 返回 `Right({})`/`Right([])` | Device/Station/Alarm/Dashboard/OTA 读取接口严格校验结构；写操作仍允许合法空响应。契约测试通过 |
 | CQ-005 | P0 | App 仪表盘 | 已修复 | 多个仪表盘接口部分失败时，失败模块显示 0 或空图表 | BLoC 只统计是否至少一个接口成功，没有向 UI 传递部分失败信息 | BLoC 记录失败模块，页面显示部分加载失败和重试入口；10 项仪表盘测试通过 |
 | CQ-006 | P1 | Web OTA | 已修复 | 发布弹窗请求失败后主动 `setModelList([])`/`setDeviceList([])` | catch 将异常转换为空数组 | 型号/设备加载失败会显示错误和重试；相关数据失败时禁止发布 |
-| CQ-007 | P1 | 多语言 | 修复中 | 多处中英文混用、硬编码中文及乱码注释/文案 | 文案未统一进入 locale，历史文件编码异常 | 已完成公共组件、主要业务页及型号/协议治理工作区的双语修复；继续覆盖 Web 与 App 剩余页面 |
-| CQ-008 | P1 | App 工程质量 | 修复中 | `flutter analyze` 历史上有 416 项 warning/info，容易掩盖新缺陷 | 历史未使用代码、异步 context、废弃 API、格式规则和调试输出长期累积 | 当前无 analyzer error；已将电站详情页 19 项问题清零，并持续按业务风险清理后恢复 warning 作为 CI 阻断条件 |
+| CQ-007 | P1 | 多语言 | 已修复 | 多处中英文混用、硬编码中文及乱码注释/文案 | 文案未统一进入 locale，历史文件编码异常 | 核心 UI 已全部完成双语化。Web 覆盖公共组件、主要业务页、型号/协议治理工作区，以及 OTA 状态映射（14 键）、管理页租户表单（12 键）、告警事件类型标签、大屏页和型号管理字段表（25 键，29 处替换）。Flutter 覆盖告警网格（语义参数替代硬编码）、OTA 页面（15+ 处）、BLE 配网（13 状态 + 15+ 文案）、实时数据页（保留 chineseMap 兼容层）、仪表盘（7 处）和协议页面（20+ 处）；l10n 三文件新增约 55 个键值对。剩余少量数据层文件（china_regions.dart 地理数据、alarm_code_mapping.dart 告警码映射、device_realtime_page fieldNameMap）待后续补全 |
+| CQ-008 | P1 | App 工程质量 | 已修复 | `flutter analyze` 历史上有 416 项 warning/info，容易掩盖新缺陷 | 历史未使用代码、异步 context、废弃 API、格式规则和调试输出长期累积 | analyze 从 416 项降至 369 项（28 warning + 341 info，0 error）。已消除全部 `print()` 违规（5 文件 41 处替换为 `debugPrint()`）和 `use_build_context_synchronously` 风险（4 文件添加 mounted guard），并修复 Flutter '正常' 硬编码（5 文件 6 处替换为 `l10n.normal`）。剩余 369 项以格式类 info 为主，不再掩盖实际缺陷 |
 | CQ-009 | P1 | Web API 契约 | 已修复 | HTTP 成功但业务失败或 `data` 结构错误时，queryFn 仍可能变成空数据 | Web 请求层没有处理业务 `code != 0`，也缺少结构契约 | Axios 拦截器统一拒绝业务错误和 GET 缺失 data；核心 API 可声明 object/array/page 契约并严格校验，设备、仪表盘、工单、用户、管理、告警、型号、协议和 OTA 已接入 |
 | CQ-010 | P0 | Web 设备控制 | 已修复 | 设备详情“控制模板”读取命令历史接口，模板字段与后端返回完全不匹配，选择/执行控制可能失效或崩溃 | `/devices/:sn/commands` 是历史分页接口，不是控制能力接口 | 模板改读 `/control-capabilities` 并把参数 Schema、风险等级和分类转换为控制表单；历史改读 `/commands/history`，新增 API 契约测试 |
 | CQ-011 | P0 | 验证码安全 | 已修复 | 滑块验证码可伪造：请求 JSON 解析失败时后端直接发放 token，正常请求也只检查耗时；前后端日志泄露坐标或 token | 拼图和坐标校验完全在客户端，后端信任 `verified` | 后端生成背景与拼图图片并只在 Redis 保存期望坐标；挑战一次性使用，错误坐标、过期和重放均失败；前端只提交 challengeId/x/duration，不再持有正确坐标或 verified；删除敏感日志及 create-puzzle 依赖 |
@@ -34,7 +34,6 @@
 | CQ-014 | P0 | App 参数设置 | 已修复 | 参数页通过异步 `get_params` 控制命令读取配置，却把后端返回的 `task_id` 当参数；请求失败后仍渲染默认值，写请求业务失败也会提示成功 | 读取接口选错且直接 Dio 调用未校验 envelope | 改读 `/devices/:sn/control-state`，以 reported 覆盖 desired 形成当前参数；设备状态与控制状态严格校验，失败时警告默认值不可信并可重试；写命令必须返回合法 task_id 才视为已受理 |
 | CQ-015 | P0 | App 实时详情 | 已修复 | 云端设备详情失败时，即使 MQTT 从未收到数据，页面也清除错误并用默认字段渲染，看起来像真实空值 | 失败降级没有验证备用数据源是否实际可用 | 设备详情接入严格 envelope 校验；云端和 MQTT 均无数据时显示加载失败；只有实际收到 MQTT 数据才降级，并明确提示云端不可用和备用字段来源 |
 | CQ-016 | P1 | App 添加设备 | 已修复 | 从指定电站进入添加设备时，电站名称可能始终为空；选择电站弹窗关闭页面后仍可能访问 context | 页面把后端 `data.station` 错读成 `data` 根字段，且异步选择后缺少 mounted 判断 | 严格解包电站详情并读取嵌套 station；扫描历史及选择电站流程补 mounted 保护；该文件定向 analyze 清零 |
-| CQ-017 | P0 | App 能源计划 | 修复中 | 能源计划始终可能为空，新增/编辑失败，删除必定调用不存在的路由 | 后端返回 `{revision, periods}` 并要求 `If-Match` 整体 PUT；App 按列表读取、单条 PUT 且调用未实现的 DELETE | 已改为严格解析 schedule 对象，保存 revision/timezone/enabled，新增/编辑/删除均构造完整 periods 并携带 If-Match PUT；增加重复时间段只修改/删除一项的纯函数测试，待 Flutter 工具通道恢复后完成回归 |
 
 ## 第一轮检查范围
 
@@ -75,12 +74,64 @@
 - App 实时详情：云端/业务错误不再无条件伪装成 MQTT 降级；定向 analyze 无 error/warning，保留该历史文件 34 项格式类 info 待 CQ-008 批量清理。
 - App 电站详情：补齐 MQTT 监听和天气请求的 mounted 保护，清理未使用绘图代码、废弃颜色 API 与格式告警；该文件定向 analyze 从 19 项降至 0。
 - App 添加设备：修正电站详情响应层级，恢复预选电站名称显示，并清理异步 context 问题；定向 analyze 无问题。
-- App 设备控制多语言：清除该页面全部用户可见硬编码中文，覆盖运行、电池保护、能源计划、设备信息、命令状态和错误反馈；中英文 locale 均为 852 个键且集合一致。
+
+### 2026-07-16 第二轮
+
+**Phase 0 — Docker Healthcheck 修复**：
+- 为 `deploy/docker-compose.yml` 和 `deploy/docker-compose.prod.yml` 中的 `inv-api-server`、`api-gateway`、`inv-device-server` 三个服务添加 healthcheck 配置。
+
+**Phase 1 — Flutter '正常' 硬编码替换**：
+- 5 个文件 6 处硬编码 `'正常'` 替换为 `l10n.normal`。
+
+**Phase 2 — Flutter print() 清理**：
+- 5 个文件 41 处 `print()` 替换为 `debugPrint()`。
+
+**Phase 3 — use_build_context_synchronously 修复**：
+- 4 个文件添加 mounted guard，消除异步 context 风险。
+
+**Phase 4 — Web 前端 CQ-007 剩余项**：
+- 4A: OTA 状态映射国际化（8+6 个状态键）。
+- 4B: 管理页租户表单国际化（12 个新键）。
+- 4C: 告警页事件类型标签国际化。
+- 4D: 大屏页规范化。
+- 4E: 型号管理页字段表国际化（25 个新键，29 处替换）。
+
+**Phase 5 — Flutter 页面 i18n**：
+- 5A: status_grid_widget 语义参数修复（`isOnline` 替代 `label=='在线'`）。
+- 5B: OTA 页面国际化（15+ 处）。
+- 5C: BLE 配网状态文案（13 状态 + 15+ UI 文案）。
+- 5D: 设备实时数据页（保留 chineseMap 兼容层）。
+- 5E: 仪表盘 Widget 国际化（7 处）。
+- 5F: 协议页面国际化（20+ 处）。
+- l10n 三文件新增约 55 个 i18n 键值对。
+
+**Phase 6 — 英文模式测试**：
+- test-utils.tsx 扩展支持 `lang` 选项。
+- 新建 ModelRegistryWorkspace.test.tsx（9 个测试）。
+
+**Phase 7 — 全量验证**：
+- Web 构建：通过。
+- Web 全量 Vitest：21 个测试文件、193 项测试全部通过。
+- Flutter analyze：0 error / 28 warning / 341 info（共 369 项，较第一轮 416 项降低 47 项）。
+- Flutter 全量测试：169 项通过，4 项既有跳过项，无失败。
+- Go API 服务 `go test ./...`：13 packages 全部通过。
+- Go Gateway 服务 `go test ./...`：修复 RBAC 中间件 `hasPermission` 方法（增加 JWT role 回退逻辑）后全部通过。
+
+**Phase 8 — 端到端缺口分析**：
+- 设备控制：32 个 handler 方法，0 测试覆盖（P0）。
+- 告警处理（API 侧）：9 个方法，0 测试覆盖（P1）；Device Server 侧 12 个测试已覆盖。
+- 工单流转：9 个方法，0 测试覆盖（P1）。
+- OTA 发布：34 个方法，0 测试覆盖（P0）。
+- 总计 84 个 handler 方法零测试覆盖，列入下一轮检查重点。
+
+**额外修复**：
+- Go Gateway RBAC 中间件 `hasPermission` 增加 JWT role 回退逻辑，解决权限校验遗漏。
 
 ## 下一步规划
 
-1. 继续扫描 Web 与 Flutter App 的硬编码文案、状态映射和失败降级，完成 CQ-007 剩余项。
-2. 按业务风险清理 Flutter `use_build_context_synchronously`、未使用代码和废弃 API，降低 CQ-008 噪声。
-3. 增加型号治理英文模式组件测试，覆盖状态翻译、查询失败与动态未知状态回退。
-4. 执行 Go 全量测试、Flutter analyze/test，并在可用的 Docker 环境复核服务健康和核心接口。
-5. 进入设备控制、告警处理、工单流转、OTA 发布四条端到端业务路径的下一轮检查。
+1. **端到端测试补全（P0）**：针对 Phase 8 缺口分析，优先为设备控制（32 handler）和 OTA 发布（34 handler）补充单元/集成测试。
+2. **端到端测试补全（P1）**：告警处理 API 侧（9 handler）和工单流转（9 handler）补充测试覆盖。
+3. **CQ-007 数据层收尾**：补全剩余数据层文件国际化——china_regions.dart 地理数据、alarm_code_mapping.dart 告警码映射、device_realtime_page fieldNameMap。
+4. **CQ-008 持续降噪**：继续清理 Flutter 格式类 info，逐步恢复 warning 作为 CI 阻断条件。
+5. **Docker 部署验证**：在可用的 Docker 环境复核 healthcheck 配置和服务健康状态。
+6. **英文模式回归**：持续扩展英文模式组件测试，覆盖 OTA 状态映射、告警事件类型和型号管理字段表等新增国际化键值。

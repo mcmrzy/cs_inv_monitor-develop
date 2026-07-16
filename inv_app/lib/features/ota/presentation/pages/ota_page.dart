@@ -358,7 +358,7 @@ class _OTAPageState extends State<OTAPage> {
                 children: [
                   Padding(
                     padding: EdgeInsets.only(bottom: 4.h),
-                    child: Text('芯片固件版本',
+                    child: Text(l10n.chipFirmwareVersion,
                         style: TextStyle(
                             fontSize: 12.sp,
                             color: AppColors.textHint,
@@ -436,7 +436,7 @@ class _OTAPageState extends State<OTAPage> {
                   );
                 },
                 icon: Icon(Icons.history_rounded, size: 16.sp),
-                label: Text('查看可用升级包',
+                label: Text(l10n.viewAvailableUpgrades,
                     style: TextStyle(
                         fontSize: 13.sp, fontWeight: FontWeight.w500)),
                 style: TextButton.styleFrom(
@@ -622,7 +622,7 @@ class _OTAPageState extends State<OTAPage> {
                 children: [
                   Padding(
                     padding: EdgeInsets.only(bottom: 4.h),
-                    child: Text('当前固件版本',
+                    child: Text(l10n.currentFirmwareVersion,
                         style: TextStyle(
                             fontSize: 12.sp,
                             color: AppColors.textHint,
@@ -725,7 +725,7 @@ class _OTAPageState extends State<OTAPage> {
                   );
                 },
                 icon: Icon(Icons.history_rounded, size: 16.sp),
-                label: Text('查看可用升级包',
+                label: Text(l10n.viewAvailableUpgrades,
                     style: TextStyle(
                         fontSize: 13.sp, fontWeight: FontWeight.w500)),
                 style: TextButton.styleFrom(
@@ -1003,7 +1003,7 @@ class _OTAPageState extends State<OTAPage> {
                 children: [
                   Padding(
                     padding: EdgeInsets.only(bottom: 4.h),
-                    child: Text('芯片固件版本',
+                    child: Text(l10n.chipFirmwareVersion,
                         style: TextStyle(
                             fontSize: 12.sp,
                             color: AppColors.textHint,
@@ -1071,7 +1071,7 @@ class _OTAPageState extends State<OTAPage> {
                   );
                 },
                 icon: Icon(Icons.history_rounded, size: 18.sp),
-                label: Text('查看可用升级包',
+                label: Text(l10n.viewAvailableUpgrades,
                     style: TextStyle(
                         fontSize: 14.sp, fontWeight: FontWeight.w600)),
                 style: OutlinedButton.styleFrom(

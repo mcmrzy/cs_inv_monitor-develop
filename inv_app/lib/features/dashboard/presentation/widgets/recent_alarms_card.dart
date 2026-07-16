@@ -296,7 +296,7 @@ class RecentAlarmsCard extends StatelessWidget {
       case 'info':
         return l10n.infoLevel;
       case 'normal':
-        return '正常';
+        return l10n.normal;
       default:
         return l10n.general;
     }

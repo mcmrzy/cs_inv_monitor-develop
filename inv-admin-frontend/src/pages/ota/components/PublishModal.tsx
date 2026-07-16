@@ -8,6 +8,7 @@ import { modelApi } from '@/services/modelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import type { UpgradePackage, Device, PublishPackageRequest } from '@/types'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import useTranslation from '@/hooks/useTranslation'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -24,6 +25,7 @@ type RolloutMode = 'all' | 'gray' | 'model' | 'device'
 const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose, onSuccess }) => {
   const queryClient = useQueryClient()
   const { message } = App.useApp()
+  const { t } = useTranslation()
   const [form] = Form.useForm()
 
   const [rolloutMode, setRolloutMode] = useState<RolloutMode>('all')
@@ -126,12 +128,12 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       
       // 3. 发布并推送
       await otaApi.publishPackage(Number(packageData.id), reqData)
-      message.success('已发布，用户将在App中看到更新提示')
+      message.success(t('ota.publishSuccessMsg'))
       invalidate()
       onSuccess()
     } catch (err: any) {
       if (err?.errorFields) return // 表单验证失败
-      message.error('推送失败: ' + (err?.response?.data?.message || err?.message || ''))
+      message.error(`${t('ota.publishFailPrefix')}: ` + (err?.response?.data?.message || err?.message || ''))
     } finally {
       setPublishing(false)
     }

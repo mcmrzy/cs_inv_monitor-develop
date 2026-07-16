@@ -96,25 +96,47 @@ interface FirmwareFormValues {
   changelog: string
 }
 
-// =================== 任务状态映射 ===================
-const TASK_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  draft: { label: '草稿', color: 'default' },
-  pending: { label: '待执行', color: 'processing' },
-  scheduled: { label: '定时等待', color: 'warning' },
-  running: { label: '执行中', color: 'processing' },
-  completed: { label: '已完成', color: 'success' },
-  partial_success: { label: '部分成功', color: 'warning' },
-  failed: { label: '失败', color: 'error' },
-  cancelled: { label: '已取消', color: 'default' },
+// =================== 任务状态颜色映射 ===================
+const TASK_STATUS_COLOR: Record<string, string> = {
+  draft: 'default',
+  pending: 'processing',
+  scheduled: 'warning',
+  running: 'processing',
+  completed: 'success',
+  partial_success: 'warning',
+  failed: 'error',
+  cancelled: 'default',
 }
 
-const UPGRADE_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending: { label: '待执行', color: '#1677ff' },
-  downloading: { label: '下载中', color: '#13c2c2' },
-  upgrading: { label: '升级中', color: '#fa8c16' },
-  success: { label: '成功', color: '#52c41a' },
-  failed: { label: '失败', color: '#ff4d4f' },
-  cancelled: { label: '已取消', color: '#d9d9d9' },
+const UPGRADE_STATUS_COLOR: Record<string, string> = {
+  pending: '#1677ff',
+  downloading: '#13c2c2',
+  upgrading: '#fa8c16',
+  success: '#52c41a',
+  failed: '#ff4d4f',
+  cancelled: '#d9d9d9',
+}
+
+// 任务状态 i18n key 映射
+const TASK_STATUS_I18N_KEY: Record<string, string> = {
+  draft: 'ota.taskStatusDraft',
+  pending: 'ota.taskStatusPending',
+  scheduled: 'ota.taskStatusScheduled',
+  running: 'ota.taskStatusRunning',
+  completed: 'ota.taskStatusCompleted',
+  partial_success: 'ota.taskStatusPartialSuccess',
+  failed: 'ota.taskStatusFailed',
+  cancelled: 'ota.taskStatusCancelled',
+}
+
+// 升级状态 i18n key 映射
+const UPGRADE_STATUS_I18N_KEY: Record<string, string> = {
+  pending: 'ota.upgradeStatusPending',
+  downloading: 'ota.upgradeStatusDownloading',
+  upgrading: 'ota.upgradeStatusUpgrading',
+  success: 'ota.upgradeStatusSuccess',
+  failed: 'ota.upgradeStatusFailed',
+  cancelled: 'ota.upgradeStatusCancelled',
 }
 
 // =================== 主页面 ===================
@@ -397,10 +419,9 @@ const UpgradeTasksTab: React.FC = () => {
     {
       title: t('common.status'), key: 'status', width: 100,
       render: (_: any, r: UpgradeTask) => {
-        const cfg = TASK_STATUS_MAP[r.status] || { label: r.status, color: 'default' }
-        const i18nKey = `ota.taskStatus${r.status.charAt(0).toUpperCase() + r.status.slice(1).replace(/_(\w)/g, (_: string, c: string) => c.toUpperCase())}`
-        const translated = t(i18nKey)
-        return <Tag color={cfg.color}>{translated !== i18nKey ? translated : cfg.label}</Tag>
+        const color = TASK_STATUS_COLOR[r.status] || 'default'
+        const i18nKey = TASK_STATUS_I18N_KEY[r.status]
+        return <Tag color={color}>{i18nKey ? t(i18nKey) : r.status}</Tag>
       },
     },
     {
@@ -490,7 +511,7 @@ const UpgradeTasksTab: React.FC = () => {
     { title: t('ota.targetVersion'), dataIndex: 'firmware_version', key: 'firmware_version', width: 100 },
     {
       title: t('common.status'), dataIndex: 'status', key: 'status', width: 100,
-      render: (s: string) => { const c = UPGRADE_STATUS_MAP[s] || { label: s, color: '#d9d9d9' }; return <Tag color={c.color}>{c.label}</Tag> },
+      render: (s: string) => { const color = UPGRADE_STATUS_COLOR[s] || '#d9d9d9'; const i18nKey = UPGRADE_STATUS_I18N_KEY[s]; return <Tag color={color}>{i18nKey ? t(i18nKey) : s}</Tag> },
     },
     {
       title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 150,

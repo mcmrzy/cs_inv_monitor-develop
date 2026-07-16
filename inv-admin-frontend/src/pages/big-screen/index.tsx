@@ -5,6 +5,7 @@ import { FullscreenOutlined, FullscreenExitOutlined, RocketOutlined } from '@ant
 import { dashboardApi } from '@/services/dashboardApi'
 import api from '@/services/api'
 import useLocaleStore from '@/stores/localeStore'
+import useTranslation from '@/hooks/useTranslation'
 import { KPIPanel, MapPanel, TrendPanel } from './components'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 
@@ -80,6 +81,7 @@ const BigScreenPage: React.FC = () => {
   // 2. 时钟（useRef + setInterval 避免 re-render）
   const clockRef = useRef<HTMLSpanElement>(null)
   const { lang } = useLocaleStore()
+  const { t } = useTranslation()
   useEffect(() => {
     const update = () => {
       if (clockRef.current) {
@@ -179,14 +181,14 @@ const BigScreenPage: React.FC = () => {
       <header className="bs-header">
         <div className="bs-header-left">
           <RocketOutlined className="bs-header-icon" />
-          <span className="bs-header-title">{lang === 'zh' ? '光伏监控大屏' : 'PV Monitoring Center'}</span>
+          <span className="bs-header-title">{t('bigScreen.monitoringCenter')}</span>
         </div>
         <div className="bs-header-center">
           <span ref={clockRef} className="bs-clock" />
         </div>
         <div className="bs-header-right">
           <span className="bs-online-badge">
-            {lang === 'zh' ? '在线率' : 'Online rate'} <strong>{onlineRate.toFixed(1)}%</strong>
+            {t('bigScreen.onlineRate')} <strong>{onlineRate.toFixed(1)}%</strong>
           </span>
           <button className="bs-fullscreen-btn" onClick={toggleFullscreen}>
             {isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}

@@ -48,6 +48,8 @@ export default {
     'alert.commandFailed': '命令失败',
     'alert.commandQueued': '命令排队',
     'alert.otaAvailable': 'OTA更新',
+    'alert.alarmCleared': '告警恢复',
+    'alert.deviceAlarm': '设备告警',
   },
   en: {
     'alert.title': 'Notification Center',
@@ -98,5 +100,7 @@ export default {
     'alert.commandFailed': 'Command Failed',
     'alert.commandQueued': 'Command Queued',
     'alert.otaAvailable': 'OTA Available',
+    'alert.alarmCleared': 'Alarm Cleared',
+    'alert.deviceAlarm': 'Device Alarm',
   },
 }

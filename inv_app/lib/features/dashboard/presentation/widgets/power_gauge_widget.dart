@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 发电功率仪表盘 - 大圆形进度环显示实时发电功率
 class PowerGaugeWidget extends StatefulWidget {
@@ -72,6 +73,7 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
@@ -100,7 +102,7 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
               Icon(Icons.wb_sunny_rounded, size: 20.w, color: Colors.white70),
               SizedBox(width: 8.w),
               Text(
-                '光伏发电功率',
+                l10n.pvGenerationPower,
                 style: TextStyle(
                   fontSize: 14.sp,
                   fontWeight: FontWeight.w500,
@@ -194,7 +196,7 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
                     ),
                     SizedBox(height: 4.h),
                     Text(
-                      '实时功率',
+                      l10n.realtimePower,
                       style: TextStyle(
                         fontSize: 11.sp,
                         color: Colors.white60,
@@ -211,7 +213,7 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildBottomItem(
-                '今日发电',
+                l10n.todayGeneration,
                 '${widget.todayEnergy.toStringAsFixed(1)} kWh',
               ),
               Container(
@@ -220,7 +222,7 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
                 color: Colors.white24,
               ),
               _buildBottomItem(
-                '今日收益',
+                l10n.todayRevenue,
                 '¥${widget.todayRevenue.toStringAsFixed(0)}',
               ),
             ],
