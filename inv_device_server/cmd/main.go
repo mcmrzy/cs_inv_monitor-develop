@@ -167,26 +167,21 @@ func main() {
 	go hub.StartOnlineSetReconciler(ctx)
 
 	if cfg.Kafka.Enabled {
-		groupID := cfg.Kafka.ConsumerGroupID
-		if groupID == "" {
-			groupID = "inv-device-server"
-		}
 		protocolParser := service.NewProtocolParser(
-			cfg.Kafka.Brokers, cfg.Kafka.TelemetryTopic, groupID+"-parser",
+			cfg.Kafka.Brokers, cfg.Kafka.TelemetryTopic, "inv-device-server-parser",
 			deviceRepo, metaRepo, rdb, hub, cfg.Backends.APIServer, cfg.Backends.InternalKey)
 		// 注入共享的状态管理器实例，确保 MQTT 层和 Kafka 消费层使用同一状态机
 		protocolParser.SetStateManager(stateManager)
 		protocolParser.Start(ctx)
 
 		alertConsumer := service.NewAlertConsumer(
-			cfg.Kafka.Brokers, cfg.Kafka.AlarmTopic, groupID+"-alerts", rdb, deviceRepo, cfg.Backends.APIServer, cfg.Backends.InternalKey)
+			cfg.Kafka.Brokers, cfg.Kafka.AlarmTopic, "inv-device-server-alerts", rdb, deviceRepo, cfg.Backends.APIServer, cfg.Backends.InternalKey)
 		alertConsumer.Start(ctx)
 
 		logger.Info("Kafka consumers started (protocol parser + alert consumer)",
 			zap.Strings("brokers", cfg.Kafka.Brokers),
 			zap.String("telemetry_topic", cfg.Kafka.TelemetryTopic),
-			zap.String("alarm_topic", cfg.Kafka.AlarmTopic),
-			zap.String("consumer_group", groupID))
+			zap.String("alarm_topic", cfg.Kafka.AlarmTopic))
 	} else {
 		logger.Warn("Kafka is disabled! No data will be processed. Enable Kafka to use EMQX Bridge mode.")
 	}

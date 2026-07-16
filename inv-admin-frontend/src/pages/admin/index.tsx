@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tabs, Card, Table, Button, Tag, Select, Input, Space, Row, Col,
-  Statistic, Modal, Form, Switch, InputNumber, Popconfirm, Tooltip,
+  Statistic, Modal, Form, Switch, InputNumber, Tooltip,
   Checkbox, Spin, Typography, App, Empty,
 } from 'antd'
+import Popconfirm from '@/components/LocalizedPopconfirm'
 import {
   ReloadOutlined, CheckCircleFilled, CloseCircleFilled, SyncOutlined,
   DashboardOutlined, PlusOutlined, StopOutlined, CheckCircleOutlined,
@@ -251,7 +252,7 @@ const TenantTab: React.FC = () => {
       render: (_: unknown, record: Tenant) => (
         <Space>
           <Button size="small" onClick={() => { setEditingTenant(record); editForm.setFieldsValue({ deviceLimit: record.deviceLimit, userLimit: record.userLimit }); setEditOpen(true) }}>{t('admin.quota')}</Button>
-          <Popconfirm title={record.status === 1 ? t('admin.confirmDisableTenant') : t('admin.confirmEnableTenant')} onConfirm={() => toggleMutation.mutate(record.id)}>
+          <Popconfirm title={record.status === 1 ? '确定要禁用此租户吗？' : '确定要启用此租户吗？'} onConfirm={() => toggleMutation.mutate(record.id)}>
             <Button size="small" danger={record.status === 1} icon={record.status === 1 ? <StopOutlined /> : <CheckCircleOutlined />}>{record.status === 1 ? t('common.disabled') : t('common.enabled')}</Button>
           </Popconfirm>
         </Space>
@@ -276,10 +277,10 @@ const TenantTab: React.FC = () => {
       <Modal title={t('admin.createTenant')} open={createOpen} onOk={async () => { try { createMutation.mutate(await createForm.validateFields()) } catch {} }}
         onCancel={() => { setCreateOpen(false); createForm.resetFields() }} confirmLoading={createMutation.isPending} destroyOnClose>
         <Form form={createForm} layout="vertical" preserve={false}>
-          <Form.Item name="phone" label={t('admin.tenantPhone')} rules={[{ required: true, message: t('admin.enterPhone') }]}><Input placeholder={t('admin.enterPhone')} /></Form.Item>
-          <Form.Item name="nickname" label={t('admin.tenantName')}><Input placeholder={t('admin.enterTenantName')} /></Form.Item>
-          <Form.Item name="email" label={t('admin.tenantEmail')}><Input placeholder={t('admin.enterEmail')} /></Form.Item>
-          <Form.Item name="password" label={t('admin.password')} rules={[{ required: true, message: t('admin.enterPassword') }]}><Input.Password placeholder={t('admin.enterPassword')} /></Form.Item>
+          <Form.Item name="phone" label={t('admin.tenantPhone')} rules={[{ required: true, message: '请输入手机号' }]}><Input placeholder="请输入手机号" /></Form.Item>
+          <Form.Item name="nickname" label={t('admin.tenantName')}><Input placeholder="请输入租户名称" /></Form.Item>
+          <Form.Item name="email" label={t('admin.tenantEmail')}><Input placeholder="请输入邮箱" /></Form.Item>
+          <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}><Input.Password placeholder="请输入密码" /></Form.Item>
           <Form.Item name="deviceLimit" label={t('admin.deviceQuota')} initialValue={100}><InputNumber min={0} style={{ width: '100%' }} placeholder="100" /></Form.Item>
           <Form.Item name="userLimit" label={t('admin.userQuota')} initialValue={50}><InputNumber min={0} style={{ width: '100%' }} placeholder="50" /></Form.Item>
         </Form>
@@ -287,7 +288,7 @@ const TenantTab: React.FC = () => {
 
       <Modal title={t('admin.editTenantQuota')} open={editOpen} onOk={async () => { try { updateMutation.mutate({ id: editingTenant!.id, values: await editForm.validateFields() }) } catch {} }}
         onCancel={() => { setEditOpen(false); setEditingTenant(null) }} confirmLoading={updateMutation.isPending} destroyOnClose>
-        {editingTenant && <div style={{ marginBottom: 16 }}><strong>{t('admin.tenantLabel')}</strong>{editingTenant.nickname} ({editingTenant.phone})</div>}
+        {editingTenant && <div style={{ marginBottom: 16 }}><strong>租户：</strong>{editingTenant.nickname} ({editingTenant.phone})</div>}
         <Form form={editForm} layout="vertical" preserve={false}>
           <Form.Item name="deviceLimit" label={t('admin.deviceQuota')}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="userLimit" label={t('admin.userQuota')}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
@@ -327,10 +328,10 @@ const QuotaTab: React.FC = () => {
       {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Card title={t('admin.systemQuota')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
       <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-        <Form.Item name="maxDevicesPerTenant" label={t('admin.maxDevicesPerTenant')}><InputNumber min={1} max={10000} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="maxUsersPerTenant" label={t('admin.maxUsersPerTenant')}><InputNumber min={1} max={1000} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="maxAlertsPerDay" label={t('admin.maxAlertsPerDay')}><InputNumber min={1} max={100000} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="maxOtaTasksPerMonth" label={t('admin.maxOtaTasksPerMonth')}><InputNumber min={1} max={5000} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="maxDevicesPerTenant" label="每租户最大设备数"><InputNumber min={1} max={10000} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="maxUsersPerTenant" label="每租户最大用户数"><InputNumber min={1} max={1000} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="maxAlertsPerDay" label="每日最大告警数"><InputNumber min={1} max={100000} style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="maxOtaTasksPerMonth" label="每月最大OTA任务数"><InputNumber min={1} max={5000} style={{ width: '100%' }} /></Form.Item>
         <Form.Item><Button type="primary" onClick={async () => { try { saveMutation.mutate(await form.validateFields()) } catch {} }} loading={saveMutation.isPending}>{t('common.save')}</Button></Form.Item>
       </Form>
       </Card>

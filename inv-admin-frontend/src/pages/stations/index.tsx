@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Table, Typography, Tag, Select, message, Space, Popconfirm,
+  Row, Col, Card, Table, Typography, Tag, Select, message, Space,
   Drawer, Descriptions, Tabs, Statistic, Input, Button, Form, Modal, Empty, Spin, Grid,
   Tooltip, Radio, Alert,
 } from 'antd'
+import Popconfirm from '@/components/LocalizedPopconfirm'
 import type { ColumnsType } from 'antd/es/table'
 import {
   ReloadOutlined, SwapOutlined, EyeOutlined, EditOutlined,

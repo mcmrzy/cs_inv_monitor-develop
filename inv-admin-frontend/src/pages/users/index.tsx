@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Card, Table, Button, Modal, Form, Input, Select, Tag, Space,
-  Row, Col, Popconfirm, Typography, App, Empty, Tabs, Drawer,
+  Row, Col, Typography, App, Empty, Tabs, Drawer,
 } from 'antd'
+import Popconfirm from '@/components/LocalizedPopconfirm'
 import {
   PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined,
   LockOutlined, StopOutlined, CheckCircleOutlined, TeamOutlined,

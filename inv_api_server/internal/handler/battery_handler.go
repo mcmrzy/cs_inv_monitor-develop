@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"strconv"
 
 	"inv-api-server/internal/middleware"
@@ -15,25 +14,10 @@ import (
 
 type BatteryHandler struct {
 	batteryService *service.BatteryService
-	hasPermission  func(context.Context, int64, string) bool
 }
 
-func NewBatteryHandler(batteryService *service.BatteryService, deviceRepo *repository.DeviceRepository) *BatteryHandler {
-	return &BatteryHandler{
-		batteryService: batteryService,
-		hasPermission:  deviceRepo.HasDataPermission,
-	}
-}
-
-func (h *BatteryHandler) authorizeDevice(c *gin.Context, sn string) bool {
-	if middleware.GetRole(c) == 0 {
-		return true
-	}
-	if h.hasPermission == nil || !h.hasPermission(c.Request.Context(), middleware.GetUserID(c), sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
-		return false
-	}
-	return true
+func NewBatteryHandler(batteryService *service.BatteryService) *BatteryHandler {
+	return &BatteryHandler{batteryService: batteryService}
 }
 
 // ListProfiles GET /battery-profiles
@@ -110,9 +94,6 @@ func (h *BatteryHandler) BindDeviceConfig(c *gin.Context) {
 		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
 		return
 	}
-	if !h.authorizeDevice(c, sn) {
-		return
-	}
 
 	var req repository.UpsertBatteryConfigReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -147,9 +128,6 @@ func (h *BatteryHandler) GetDeviceConfig(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
 		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
-		return
-	}
-	if !h.authorizeDevice(c, sn) {
 		return
 	}
 

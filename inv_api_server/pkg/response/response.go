@@ -3,7 +3,6 @@ package response
 import (
 	"errors"
 	"net/http"
-	"reflect"
 
 	"inv-api-server/pkg/apperr"
 
@@ -89,13 +88,6 @@ func InternalError(c *gin.Context, message string) {
 }
 
 func Page(c *gin.Context, list interface{}, total int64, page, pageSize int) {
-	// Ensure items is never null in JSON — empty slice serialises to []
-	if list == nil {
-		list = []interface{}{}
-	} else if v := reflect.ValueOf(list); v.Kind() == reflect.Slice && v.IsNil() {
-		list = []interface{}{}
-	}
-
 	c.JSON(http.StatusOK, Response{
 		Code:    0,
 		Message: "success",

@@ -2,10 +2,11 @@ import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Button, Input, Select, Space, Modal, Form,
-  Drawer, Descriptions, Slider, Tooltip, Popconfirm, message, Typography,
+  Drawer, Descriptions, Slider, Tooltip, message, Typography,
   Dropdown, Tag, DatePicker, Divider, Spin, Empty, Upload, Tabs, Timeline,
   Input as AntInput, InputNumber, Switch, Alert, List, Grid,
 } from 'antd'
+import Popconfirm from '@/components/LocalizedPopconfirm'
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import {
@@ -40,6 +41,7 @@ interface DeviceRecord {
   id: string
   sn: string
   model: string
+  model_id?: number
   ratedPower: number
   firmwareVersion: string
   hardwareVersion?: string
@@ -291,7 +293,7 @@ const DevicesPage: React.FC = () => {
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null)
 
   const [modelOptions, setModelOptions] = useState<{ label: string; value: string }[]>([])
-  const modelFields = useModelFields(detailDevice?.model, (detailDevice as any)?.model_id)
+  // modelFields hook 移到 deviceDetail useMemo 之后（line ~1500），以确保使用 API 返回的实际设备数据
 
   const buildQueryParams = useCallback(() => {
     const params: any = {
@@ -1498,6 +1500,7 @@ const DevicesPage: React.FC = () => {
       manufacturer: (base as any).manufacturer || rtInfo?.manufacturer || '',
     }
   }, [deviceDetailRaw, detailDevice, realtimeData])
+  const modelFields = useModelFields(deviceDetail?.model, (deviceDetail as any)?.model_id)
   const currentStatus = deviceDetail?.status ?? 0
   const latestTelemetrySample = telemetryData.length > 0 ? telemetryData[telemetryData.length - 1] : undefined
   const telemetryMetadata = useMemo(() => {
@@ -1578,7 +1581,7 @@ const DevicesPage: React.FC = () => {
           {renderTelemetryMetadata()}
 
           {modelFields?.cache && modelFields.cache.showFields.length > 0 && (
-            <Card size="small" title={`${detailDevice?.model ?? ''} ${t('dev.statusOverview')}`} style={{ marginBottom: 16 }}>
+            <Card size="small" title={`${deviceDetail?.model ?? ''} ${t('dev.statusOverview')}`} style={{ marginBottom: 16 }}>
               <DynamicStatCards
                 fields={modelFields.cache.showFields.slice(0, 6)}
                 data={realtimeData?._raw ?? {}}
@@ -1587,7 +1590,7 @@ const DevicesPage: React.FC = () => {
           )}
 
           {modelFields?.cache && modelFields.cache.showFields.length > 0 ? (
-            <Card size="small" title={`${detailDevice?.model ?? ''} ${t('dev.realtimeData')}`} style={{ marginBottom: 16 }}>
+            <Card size="small" title={`${deviceDetail?.model ?? ''} ${t('dev.realtimeData')}`} style={{ marginBottom: 16 }}>
               <DynamicFieldRenderer
                 fields={modelFields.cache.showFields}
                 data={realtimeData?._raw ?? {}}

@@ -127,7 +127,7 @@ func (r *ModelRepository) GetFieldsByModelID(ctx context.Context, modelID int64)
 	rows, err := r.db.Query(ctx, `
 		SELECT id, model_id, field_key,
 			COALESCE(display_name_key, '') AS field_name,
-			'' AS field_type,
+			NULL AS field_type,
 			COALESCE(display_unit, '') AS unit,
 			sort_order AS sort,
 			is_visible AS is_show,
