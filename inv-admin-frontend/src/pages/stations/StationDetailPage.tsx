@@ -243,7 +243,12 @@ const StationDetailPage: React.FC = () => {
   const lastUpdateTime = realtimeData ? new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '--'
 
   // 4宫格能量卡片数据
-  const energyCards = [
+  const energyCards: Array<{
+    key: string; label: string; color: string;
+    today: number | undefined; total: number | undefined;
+    todayLabel: string; totalLabel: string; unit: string;
+    todayDisplay?: string; totalDisplay?: string;
+  }> = [
     {
       key: 'pv',
       label: t('station.solarProduction'),
@@ -258,31 +263,38 @@ const StationDetailPage: React.FC = () => {
       key: 'battery',
       label: t('station.batteryDischarge'),
       color: '#EC4899',
-      today: station.today_discharge ?? 0,
-      total: station.total_discharge ?? 0,
-      todayLabel: t('station.todayDischarge'),
-      totalLabel: t('station.cumulative'),
+      today: station.today_discharge,
+      total: station.total_discharge,
+      todayLabel: t('station.power'),
+      totalLabel: 'SOC',
       unit: 'kWh',
+      // 后端不返回 today_discharge/total_discharge，改为展示实时功率和SOC
+      todayDisplay: station.today_discharge != null ? `${(station.today_discharge ?? 0).toFixed(1)} kWh` : `${Math.abs(aggregatedBatt).toFixed(0)} W`,
+      totalDisplay: station.total_discharge != null ? `${(station.total_discharge ?? 0).toFixed(0)} kWh` : `${Math.round(avgSoc)}%`,
     },
     {
       key: 'grid',
       label: t('station.gridExport'),
       color: '#F59E0B',
-      today: station.today_grid_export ?? 0,
-      total: station.total_grid_export ?? 0,
-      todayLabel: t('station.todayExport'),
+      today: station.today_grid_export,
+      total: station.total_grid_export,
+      todayLabel: t('station.power'),
       totalLabel: t('station.cumulative'),
       unit: 'kWh',
+      todayDisplay: station.today_grid_export != null ? `${(station.today_grid_export ?? 0).toFixed(1)} kWh` : `${aggregatedGrid.toFixed(0)} W`,
+      totalDisplay: station.total_grid_export != null ? `${(station.total_grid_export ?? 0).toFixed(0)} kWh` : '--',
     },
     {
       key: 'load',
       label: t('station.loadConsumption'),
       color: '#22C55E',
-      today: station.today_consumption ?? 0,
-      total: station.total_consumption ?? 0,
-      todayLabel: t('station.todayConsumption'),
+      today: station.today_consumption,
+      total: station.total_consumption,
+      todayLabel: t('station.power'),
       totalLabel: t('station.cumulative'),
       unit: 'kWh',
+      todayDisplay: station.today_consumption != null ? `${(station.today_consumption ?? 0).toFixed(1)} kWh` : `${aggregatedLoad.toFixed(0)} W`,
+      totalDisplay: station.total_consumption != null ? `${(station.total_consumption ?? 0).toFixed(0)} kWh` : '--',
     },
   ]
 
@@ -335,11 +347,12 @@ const StationDetailPage: React.FC = () => {
                 <Col flex={1}>
                   <Text type="secondary" style={{ fontSize: 13 }}>{card.label}</Text>
                   <div>
-                    <Text strong style={{ fontSize: 20 }}>{(card.today ?? 0).toFixed(1)}</Text>
-                    <Text type="secondary"> {card.unit}</Text>
+                    <Text strong style={{ fontSize: 20 }}>
+                      {card.todayDisplay ?? `${(card.today ?? 0).toFixed(1)} ${card.unit}`}
+                    </Text>
                   </div>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    {card.totalLabel}: {(card.total ?? 0).toFixed(0)} {card.unit}
+                    {card.totalLabel}: {card.totalDisplay ?? `${(card.total ?? 0).toFixed(0)} ${card.unit}`}
                   </Text>
                 </Col>
               </Row>
