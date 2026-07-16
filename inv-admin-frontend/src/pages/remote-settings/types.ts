@@ -1,44 +1,94 @@
-// 远程参数设置页面 - 类型定义
-import type { DeviceModelItem, ModelFieldCapability, ModelCommandCapability } from '@/services/modelApi'
+// 远程参数设置页面 - 类型定义（v1.0.26 协议）
 
-// Re-export 来自现有类型的定义，方便页面内部引用
-export type { SchemaArg } from '@/types'
-export type { DeviceModelItem, ModelFieldCapability, ModelCommandCapability }
-
-// 型号配置响应（对应后端 GET /api/v1/admin/models/:id/config）
-export interface ModelConfigResponse {
-  model: DeviceModelItem
-  fields: ModelFieldCapability[]
+// ── 控制状态（desired vs reported）──
+export interface ControlState {
+  device_sn: string
+  protocol_version?: number
+  desired: Record<string, unknown>
+  reported: Record<string, unknown>
+  sync_status: 'synced' | 'pending' | 'drifted' | 'unknown'
+  desired_version?: number
+  reported_revision?: number
+  desired_at?: string
+  reported_at?: string
+  last_task_id?: string
+  updated_at?: string
 }
 
-// 页面状态
-export type RemoteSettingsTab = 'fields' | 'commands' | 'devices'
-
-// 字段分组颜色映射
-export const GROUP_COLORS: Record<string, string> = {
-  telemetry: '#4f46e5',
-  control: '#10b981',
-  status: '#f59e0b',
-  grid: '#06b6d4',
-  battery: '#7c3aed',
-  output: '#ec4899',
-  default: '#8c8c8c',
+// ── 命令执行记录 ──
+export interface CommandRecord {
+  task_id: string
+  command_code: string
+  stage: 'pending' | 'acknowledged' | 'executing' | 'completed'
+  success?: boolean
+  code?: string
+  result?: unknown[]
+  params?: Record<string, unknown>
+  created_at: string
+  completed_at?: string
 }
 
-// 分组图标映射（Ant Design icon 名称，在组件中动态引用）
-export const GROUP_ICONS: Record<string, string> = {
-  telemetry: 'DashboardOutlined',
-  control: 'ToolOutlined',
-  status: 'InfoCircleOutlined',
-  grid: 'ThunderboltOutlined',
-  battery: 'FireOutlined',
-  output: 'ExportOutlined',
+// ── 设备信息（对齐后端 Device struct JSON 字段）──
+export interface DeviceItem {
+  id: number
+  sn: string
+  model: string
+  model_id: number
+  manufacturer: string
+  firmware_arm: string
+  firmware_esp: string
+  firmware_dsp: string
+  firmware_bms: string
+  main_version: string
+  device_type: string
+  rated_power: number
+  rated_voltage: number
+  rated_freq: number
+  battery_voltage: number
+  battery_type: string
+  cell_count: number
+  station_id?: number
+  station_name: string
+  status: number
+  current_power: number
+  daily_energy: number
+  last_online_at?: string
+  timezone: string
+  created_at: string
+  updated_at: string
+  // 前端扩展（realtime 注入）
+  realtime_power?: number
 }
 
-// 统一视觉规范
+// ── 页面 Tab ──
+export type RemoteSettingsTab = 'runtime' | 'battery' | 'status' | 'parallel'
+
+// ── 命令下发请求 ──
+export interface SendCommandRequest {
+  command_code: string
+  params?: Record<string, unknown>
+}
+
+// ── 同步状态颜色映射 ──
+export const SYNC_STATUS_MAP: Record<string, { color: string; label_zh: string }> = {
+  synced: { color: '#22c55e', label_zh: '已同步' },
+  pending: { color: '#f59e0b', label_zh: '等待同步' },
+  drifted: { color: '#ef4444', label_zh: '配置偏差' },
+  unknown: { color: '#8c8c8c', label_zh: '未知' },
+}
+
+// ── 命令阶段颜色映射 ──
+export const STAGE_MAP: Record<string, { color: string; label_zh: string }> = {
+  pending: { color: 'default', label_zh: '等待中' },
+  acknowledged: { color: 'processing', label_zh: '已确认' },
+  executing: { color: 'warning', label_zh: '执行中' },
+  completed: { color: 'success', label_zh: '已完成' },
+}
+
+// ── 统一视觉规范（保留供后续组件使用）──
 export const DS = {
-  primary: '#4f46e5',
-  primaryLight: '#eef2ff',
+  primary: '#4f6ef7',
+  primaryLight: '#eef0ff',
   secondary: '#7c3aed',
   success: '#10b981',
   warning: '#f59e0b',
@@ -58,10 +108,3 @@ export const DS = {
   shadowCardHover: '0 4px 12px rgba(0,0,0,0.10), 0 8px 24px rgba(0,0,0,0.06)',
   transition: 'all 0.2s ease',
 } as const
-
-// 命令风险等级渐变
-export const RISK_GRADIENTS: Record<number, string> = {
-  1: 'linear-gradient(90deg, #10b981, #34d399)',
-  2: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
-  3: 'linear-gradient(90deg, #ef4444, #f87171)',
-}
