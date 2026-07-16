@@ -265,7 +265,7 @@ func (h *OTAHandler) GetUpgradeDashboard(c *gin.Context) {
 		response.HandleError(c, apperr.Internal("查询升级面板失败", err))
 		return
 	}
-	response.Success(c, gin.H{"items": items, "total": total})
+	response.Page(c, items, int64(total), page, pageSize)
 }
 
 // GetFirmwareUpgradeDetails 获取指定固件的所有设备升级详情
@@ -593,7 +593,7 @@ func (h *OTAHandler) GetDeviceOTAHistory(c *gin.Context) {
 		response.HandleError(c, apperr.Internal("查询历史失败", err))
 		return
 	}
-	response.Success(c, gin.H{"items": history, "total": total})
+	response.Page(c, history, int64(total), page, pageSize)
 }
 
 // GetAllFirmware 获取所有固件（不分页，供APP选择）
@@ -1078,7 +1078,7 @@ func (h *OTAHandler) ListUpgradeTasks(c *gin.Context) {
 		response.HandleError(c, apperr.Internal("查询升级任务列表失败", err))
 		return
 	}
-	response.Success(c, gin.H{"items": tasks, "total": total})
+	response.Page(c, tasks, int64(total), page, pageSize)
 }
 
 // GetUpgradeTask 获取升级任务详情
@@ -1107,6 +1107,9 @@ func (h *OTAHandler) GetUpgradeTaskDevices(c *gin.Context) {
 	if err != nil {
 		response.HandleError(c, apperr.Internal("查询设备升级详情失败", err))
 		return
+	}
+	if devices == nil {
+		devices = []model.DeviceUpgrade{}
 	}
 	response.Success(c, gin.H{"items": devices})
 }

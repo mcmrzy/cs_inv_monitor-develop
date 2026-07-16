@@ -2410,7 +2410,7 @@ func (r *DeviceRepository) GetCommandHistory(ctx context.Context, sn string, pag
 	}
 	defer rows.Close()
 
-	var commands []map[string]interface{}
+	commands := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var id int64
 		var deviceSn, cmdName, taskID, status string
