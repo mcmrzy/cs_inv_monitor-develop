@@ -1,24 +1,22 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Typography, Tag, Button, Space, Tabs, Spin, Alert, List,
-  Empty, Divider, Form, Input, InputNumber, Select, Modal, Grid, message,
+  Card, Tag, Button, Space, Spin, Tabs, Table, Row, Col, Empty, Alert, List, Typography,
 } from 'antd'
 import {
-  ArrowLeftOutlined, EditOutlined, CloudOutlined, AlertOutlined,
-  DashboardOutlined, BarChartOutlined, DesktopOutlined, ReloadOutlined,
+  ArrowLeftOutlined, DesktopOutlined, CheckCircleOutlined,
+  SunOutlined, WarningOutlined, ThunderboltOutlined,
 } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import type { ColumnsType } from 'antd/es/table'
 import api from '@/services/api'
-import { alertApi } from '@/services/alertApi'
-import useTranslation from '@/hooks/useTranslation'
-import useTimezoneStore from '@/stores/timezoneStore'
-import useAuthStore from '@/stores/authStore'
-import useLocaleStore from '@/stores/localeStore'
-import { Role } from '@/types'
+import { deviceApi } from '@/services/deviceApi'
 import { getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
-import { formatInTimezone, TIMEZONE_LIST, getTimezoneLabel } from '@/utils/timezone'
+import { formatInTimezone } from '@/utils/timezone'
+import { safeNum } from '@/utils/format'
+import useTimezoneStore from '@/stores/timezoneStore'
+import useTranslation from '@/hooks/useTranslation'
+import useLocaleStore from '@/stores/localeStore'
 import EnergyFlowDiagram from './components/EnergyFlowDiagram'
 import PowerMetricCards from './components/PowerMetricCards'
 import EnergySummaryCards from './components/EnergySummaryCards'
@@ -28,275 +26,291 @@ import StationDevicesTab from './components/StationDevicesTab'
 
 const { Title, Text } = Typography
 
-/* ==================== 状态配置 ==================== */
-
-const getStatusConfig = (station: any, t: (key: string) => string) => {
-  if ((station.fault_count ?? 0) > 0) return { color: 'red', text: t('station.fault') }
-  if (station.device_count > 0 && (station.online_count ?? 0) === 0)
-    return { color: 'default', text: t('station.offline') }
-  if (station.status === 1) return { color: 'green', text: t('station.normal') }
-  return { color: 'default', text: t('station.stopped') }
+interface StationDetail {
+  id: number
+  name?: string
+  station_name?: string   // 后端详情 API 可能返回 station_name 而非 name
+  province?: string
+  city?: string
+  district?: string
+  address?: string
+  capacity?: number
+  panel_count?: number
+  battery_capacity?: number
+  contact_name?: string
+  contact_phone?: string
+  install_date?: string
+  timezone?: string
+  status: number
+  user_id?: number
+  device_count?: number
+  online_count?: number
+  fault_count?: number
+  today_generation?: number
+  total_generation?: number
+  today_energy?: number   // 后端详情 API 返回 today_energy
+  total_energy?: number   // 后端详情 API 返回 total_energy
+  month_energy?: number
+  year_energy?: number
+  pv_power?: number
+  load_power?: number
+  grid_power?: number
+  batt_power?: number
+  batt_soc?: number
+  created_at?: string
 }
 
-/* ==================== 告警级别辅助 ==================== */
-
-const getAlarmCfg = (alarm: any, t: (key: string) => string) => {
-  const cfg = getAlarmLevelDisplay(alarm.fault_code, alarm.alarm_level)
-  const msgKey = getAlarmMessageI18nKey(alarm.fault_code)
-  return {
-    color: cfg.color,
-    text: msgKey ? t(msgKey) : (cfg.i18nKey ? t(cfg.i18nKey) : cfg.label),
-    message: msgKey ? t(msgKey) : (alarm.fault_message || alarm.fault_code || '-'),
-  }
+interface AlarmItem {
+  id: string | number
+  device_sn?: string
+  alarm_level: number | string
+  fault_code?: string
+  fault_message?: string
+  status?: string
+  occurred_at?: string
+  created_at?: string
 }
 
-/* ==================== 主组件 ==================== */
+const extractList = (res: any): any[] => {
+  const d = res?.data?.data ?? res?.data ?? []
+  if (Array.isArray(d)) return d
+  return d?.items ?? d?.list ?? []
+}
 
 const StationDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
-  const stationId = Number(id)
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const screens = Grid.useBreakpoint()
-  const [messageApi, contextHolder] = message.useMessage()
-
   const { t } = useTranslation()
   const { lang } = useLocaleStore()
   const { timezone } = useTimezoneStore()
-  const { user, hasPermission } = useAuthStore()
-  const isAdmin = user && (user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN)
-
   const [activeTab, setActiveTab] = useState('overview')
-  const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editForm] = Form.useForm()
 
-  /* ---------- 数据获取 ---------- */
-
-  const { data: stationDetail, isLoading, error, refetch } = useQuery({
-    queryKey: ['station-detail', stationId],
-    queryFn: () => api.get(`/stations/${stationId}`, { expectedDataShape: 'object' })
-      .then(res => res?.data?.data ?? res?.data ?? {}),
-    enabled: !!stationId,
-    refetchInterval: 15000,
+  const { data: station, isLoading: stationLoading } = useQuery({
+    queryKey: ['station', id],
+    queryFn: () => api.get(`/stations/${id}`).then(res => res?.data?.data ?? res?.data),
+    enabled: !!id,
   })
 
-  const station = stationDetail?.station ?? {}
-  const devices = stationDetail?.devices ?? []
-
-  const { data: weatherData } = useQuery({
-    queryKey: ['station-weather', stationId],
-    queryFn: () => api.get(`/stations/${stationId}/weather`, { expectedDataShape: 'object' })
-      .then(res => res?.data?.data ?? res?.data ?? {}),
-    enabled: !!stationId,
-    staleTime: 300000,
+  // 设备列表（用于实时数据汇总）
+  const { data: devices = [] } = useQuery({
+    queryKey: ['station-devices-overview', id],
+    queryFn: () => api.get('/devices', { params: { station_id: id, pageSize: 999 }, expectedDataShape: 'page' }).then(extractList),
+    enabled: !!id,
   })
 
-  const { data: recentAlarms } = useQuery({
-    queryKey: ['station-recent-alarms', stationId],
-    queryFn: () => alertApi.list({ station_id: stationId, page: 1, page_size: 5 })
-      .then(res => {
-        const d = res?.data?.data ?? res?.data ?? {}
-        return d?.items ?? (Array.isArray(d) ? d : [])
-      }),
-    enabled: !!stationId,
+  // 实时数据批量获取（用于概览Tab功率/能量展示）
+  const { data: realtimeData } = useQuery({
+    queryKey: ['station-rt-overview', id],
+    queryFn: async () => {
+      const results: Record<string, any> = {}
+      await Promise.allSettled(
+        devices.map(async (dev: any) => {
+          try {
+            const res = await deviceApi.getRealtime(dev.sn)
+            results[dev.sn] = res.data?.data ?? res.data ?? {}
+          } catch { /* ignore */ }
+        })
+      )
+      return results
+    },
+    enabled: !!devices?.length,
+    refetchInterval: () => document.visibilityState === 'visible' ? 15000 : false,
   })
 
-  /* ---------- 编辑保存 ---------- */
+  // 告警数据（概览Tab显示最近5条）
+  const { data: alarms = [], isLoading: alarmsLoading } = useQuery({
+    queryKey: ['station-alarms-overview', id],
+    queryFn: () => api.get('/alarms', { params: { station_id: id, pageSize: 20 }, expectedDataShape: 'page' }).then(extractList),
+    enabled: !!id,
+  })
 
-  const handleEditSave = async () => {
-    try {
-      const values = await editForm.validateFields()
-      await api.put(`/stations/${stationId}`, values)
-      messageApi.success(t('station.updateSuccess'))
-      setEditModalOpen(false)
-      queryClient.invalidateQueries({ queryKey: ['station-detail', stationId] })
-      queryClient.invalidateQueries({ queryKey: ['stations'] })
-    } catch {
-      messageApi.error(t('station.updateFailed'))
-    }
-  }
+  // 统计数据（用于概览Tab的EnergySummaryCards）
+  const { data: statsSummary } = useQuery({
+    queryKey: ['station-stats-summary', id],
+    queryFn: async () => {
+      const res = await api.get(`/stations/${id}/statistics`, {
+        expectedDataShape: 'array',
+        params: {
+          start_date: (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split('T')[0] })(),
+          end_date: new Date().toISOString().split('T')[0],
+          period: 'day',
+        }
+      })
+      const raw = res?.data?.data ?? res?.data ?? []
+      const arr = Array.isArray(raw) ? raw : []
+      const todayStr = new Date().toISOString().split('T')[0]
+      const monthStr = todayStr.substring(0, 7)
+      const yearStr = todayStr.substring(0, 4)
+      let todayVal = 0, monthVal = 0, yearVal = 0, totalVal = 0
+      arr.forEach((item: any) => {
+        const v = safeNum(item?.daily_pv ?? item?.value ?? item?.energy_produce ?? 0)
+        const date = item.time || item.date || ''
+        totalVal += v
+        if (date.startsWith(todayStr)) todayVal = v
+        if (date.startsWith(monthStr)) monthVal += v
+        if (date.startsWith(yearStr)) yearVal += v
+      })
+      return { today: todayVal, month: monthVal, year: yearVal, total: totalVal }
+    },
+    enabled: !!id,
+  })
 
-  const openEditModal = () => {
-    editForm.setFieldsValue({
-      name: station.name || station.station_name,
-      province: station.province,
-      city: station.city,
-      district: station.district,
-      address: station.address,
-      capacity: station.capacity,
-      panel_count: station.panel_count,
-      battery_capacity: station.battery_capacity,
-      contact_name: station.contact_name,
-      contact_phone: station.contact_phone,
-      install_date: station.install_date ? dayjs(station.install_date) : undefined,
-      status: station.status,
-      timezone: station.timezone || 'Asia/Shanghai',
-    })
-    setEditModalOpen(true)
-  }
-
-  /* ---------- Loading / Error 状态 ---------- */
-
-  if (isLoading) {
+  if (stationLoading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-        <Spin size="large" tip={t('common.loading')} />
+      <div style={{ textAlign: 'center', padding: 100 }}>
+        <Spin size="large" />
       </div>
     )
   }
 
-  if (error || !stationDetail) {
-    return (
-      <div style={{ padding: 24 }}>
-        <Alert
-          type="error"
-          showIcon
-          message={t('station.listLoadFailed')}
-          action={<Button size="small" danger onClick={() => refetch()}>{t('station.retryLoad')}</Button>}
-          style={{ marginBottom: 16 }}
-        />
-      </div>
-    )
+  if (!station) {
+    return <Empty description={t('station.notFound')} />
   }
 
-  const statusCfg = getStatusConfig(station, t)
+  // 兼容后端返回 station_name 或 name
+  const stationName = station.name || station.station_name || ''
+  // 兼容后端返回 today_energy/total_energy 或 today_generation/total_generation
+  const todayEnergy = statsSummary?.today ?? station.today_generation ?? station.today_energy ?? 0
+  const totalEnergy = statsSummary?.total ?? station.total_generation ?? station.total_energy ?? 0
 
-  /* ---------- 概览 Tab ---------- */
+  // 汇总实时功率（优先使用 station 级别的实时功率字段）
+  const totalRealtimePower = station.pv_power
+    ? (station.pv_power ?? 0)
+    : Object.values(realtimeData ?? {}).reduce((sum, rt) => {
+        const p = safeNum(rt?.total_active_power ?? rt?.ac_power ?? rt?.power ?? 0)
+        return sum + p
+      }, 0)
 
+  // 汇总实时 PV 功率、负载功率、电池功率、电网功率
+  const aggregatedPv = station.pv_power ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.pv_total_power ?? rt?.pv?.data?.pv_total_power ?? 0), 0)
+  const aggregatedLoad = station.load_power ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.load_power ?? rt?.energy_consume ?? 0), 0)
+  const aggregatedBatt = station.batt_power ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.battery_power ?? (safeNum(rt?.battery_charge ?? 0) - safeNum(rt?.battery_discharge ?? 0))), 0)
+  const aggregatedGrid = station.grid_power ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.grid_power ?? 0), 0)
+  const avgSoc = (() => {
+    const stationSoc = station.batt_soc ?? 0
+    if (stationSoc > 0) return stationSoc
+    const socs = Object.values(realtimeData ?? {}).map(rt => safeNum(rt?.soc ?? rt?.batt?.data?.soc ?? 0)).filter(v => v > 0)
+    return socs.length > 0 ? socs.reduce((a, b) => a + b, 0) / socs.length : 0
+  })()
+
+  // 告警列表列定义
+  const alarmColumns: ColumnsType<AlarmItem> = [
+    {
+      title: t('common.time'),
+      dataIndex: 'occurred_at',
+      width: 160,
+      render: (v: string, r: AlarmItem) => {
+        const time = v || r.created_at
+        return time ? formatInTimezone(time, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'
+      },
+    },
+    { title: t('common.deviceSN'), dataIndex: 'device_sn', width: 140 },
+    {
+      title: t('station.alertLevel'),
+      dataIndex: 'alarm_level',
+      width: 80,
+      render: (v: number | string, record: any) => {
+        const cfg = getAlarmLevelDisplay(record.fault_code, v)
+        return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
+      },
+    },
+    {
+      title: t('station.faultMessage'),
+      dataIndex: 'fault_message',
+      ellipsis: true,
+      render: (message: string, record: AlarmItem) => {
+        const key = getAlarmMessageI18nKey(record.fault_code)
+        return key ? t(key) : message
+      },
+    },
+  ]
+
+  const recentAlarms = alarms.slice(0, 5)
+
+  /* ==================== 概览 Tab ==================== */
   const renderOverviewTab = () => (
-    <>
-      {/* 天气/容量信息条 */}
-      <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} styles={{ body: { padding: '16px 20px' } }}>
-        <Row gutter={24} align="middle">
-          <Col>
-            <Space>
-              <CloudOutlined style={{ fontSize: 20, color: '#94a3b8' }} />
-              <span>{weatherData?.temperature ? `${weatherData.temperature.toFixed(1)}°C` : '--'}</span>
-              <span style={{ color: '#94a3b8' }}>{weatherData?.description || ''}</span>
-            </Space>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* a) 天气/容量信息条 */}
+      <Card bordered={false} style={{ borderRadius: 12, background: 'linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%)' }}>
+        <Row gutter={[16, 12]} align="middle">
+          <Col xs={12} sm={6}>
+            <Space><SunOutlined style={{ color: '#f59e0b', fontSize: 18 }} /><Text>{t('station.capacity_kW')}: <strong>{station.capacity ?? '-'} kW</strong></Text></Space>
           </Col>
-          <Col flex="auto">
-            <Space split={<Divider type="vertical" />} wrap>
-              {station.capacity && (
-                <span>{t('station.capacity_kW')}: <strong>{station.capacity} kW</strong></span>
-              )}
-              <span>{t('station.deviceCount')}: <strong>{station.device_count ?? 0}</strong></span>
-              <span>{t('station.onlineCount')}: <strong style={{ color: '#52c41a' }}>{station.online_count ?? 0}</strong></span>
+          <Col xs={12} sm={6}>
+            <Space><DesktopOutlined style={{ color: '#1677ff', fontSize: 18 }} /><Text>{t('station.deviceCount')}: <strong>{station.device_count ?? 0}</strong></Text></Space>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Space><CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} /><Text>{t('station.onlineCount')}: <strong style={{ color: '#52c41a' }}>{station.online_count ?? 0}</strong></Text></Space>
+          </Col>
+          <Col xs={12} sm={6}>
+            <Space>
+              <WarningOutlined style={{ color: (station.fault_count ?? 0) > 0 ? '#ff4d4f' : '#8c8c8c', fontSize: 18 }} />
+              <Text>{t('station.faultCount')}: <strong style={{ color: (station.fault_count ?? 0) > 0 ? '#ff4d4f' : undefined }}>{station.fault_count ?? 0}</strong></Text>
             </Space>
           </Col>
         </Row>
       </Card>
 
-      {/* 能量流图 */}
-      <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
+      {/* b) 能量流图 */}
+      <Card bordered={false} style={{ borderRadius: 12 }} title={
+        <Space><ThunderboltOutlined /> {t('station.energyFlow')}</Space>
+      } size="small">
         <EnergyFlowDiagram
-          pvPower={station.pv_power ?? 0}
-          loadPower={station.load_power ?? 0}
-          battPower={station.batt_power ?? 0}
-          gridPower={station.grid_power ?? 0}
-          battSoc={station.batt_soc ?? 0}
+          pvPower={aggregatedPv}
+          loadPower={aggregatedLoad}
+          battPower={aggregatedBatt}
+          gridPower={aggregatedGrid}
+          battSoc={avgSoc}
         />
       </Card>
 
-      {/* 实时功率指标 */}
-      <div style={{ marginBottom: 16 }}>
-        <PowerMetricCards
-          totalPower={station.total_power ?? 0}
-          todayEnergy={station.today_energy ?? station.today_generation ?? 0}
-        />
-      </div>
+      {/* c) 功率指标 */}
+      <PowerMetricCards totalPower={totalRealtimePower} todayEnergy={todayEnergy} />
 
-      {/* 发电量汇总 */}
-      <div style={{ marginBottom: 16 }}>
-        <EnergySummaryCards
-          monthEnergy={station.month_energy ?? 0}
-          yearEnergy={station.year_energy ?? 0}
-          totalEnergy={station.total_energy ?? station.total_generation ?? 0}
-        />
-      </div>
+      {/* d) 发电量汇总 */}
+      <EnergySummaryCards
+        monthEnergy={statsSummary?.month ?? station.month_energy ?? 0}
+        yearEnergy={statsSummary?.year ?? station.year_energy ?? 0}
+        totalEnergy={totalEnergy}
+      />
 
-      {/* 最近告警 */}
-      <Card
-        bordered={false}
-        style={{ borderRadius: 12, marginBottom: 16 }}
-        title={
-          <Space>
-            <AlertOutlined style={{ color: '#ef4444' }} />
-            {t('station.recentAlarms')}
-          </Space>
-        }
-        extra={
-          recentAlarms?.length > 0 && (
-            <a onClick={() => setActiveTab('alarms')}>{t('station.viewAll')}</a>
-          )
-        }
-      >
-        {recentAlarms?.length > 0 ? (
-          <List
-            size="small"
+      {/* e) 最近告警（5条） */}
+      <Card bordered={false} style={{ borderRadius: 12 }} size="small" title={
+        <Space><WarningOutlined style={{ color: '#ff4d4f' }} /> {t('station.recentAlarms')}</Space>
+      } extra={alarms.length > 5 && <a onClick={() => setActiveTab('overview')}>{t('station.viewAll')}</a>}>
+        {recentAlarms.length > 0 ? (
+          <Table<AlarmItem>
+            columns={alarmColumns}
             dataSource={recentAlarms}
-            renderItem={(alarm: any) => {
-              const cfg = getAlarmCfg(alarm, t)
-              return (
-                <List.Item>
-                  <Space wrap>
-                    <Tag color={cfg.color}>{cfg.text}</Tag>
-                    <Text>{cfg.message}</Text>
-                    <Text type="secondary">
-                      {formatInTimezone(alarm.occurred_at || alarm.created_at, timezone, 'MM-DD HH:mm')}
-                    </Text>
-                  </Space>
-                </List.Item>
-              )
-            }}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            scroll={{ x: 600 }}
           />
         ) : (
           <Empty description={t('station.noAlarms')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
         )}
       </Card>
 
-      {/* 社会贡献 */}
-      <SocialContribution totalEnergy={station.total_energy ?? station.total_generation ?? 0} />
-    </>
+      {/* f) 社会贡献 */}
+      <SocialContribution totalEnergy={statsSummary?.total ?? station.total_generation ?? station.total_energy ?? 0} />
+    </div>
   )
-
-  /* ---------- 渲染 ---------- */
 
   return (
     <div style={{ padding: '0 0 24px' }}>
-      {contextHolder}
-
       {/* 顶部导航栏 */}
-      <Row align="middle" justify="space-between" style={{ marginBottom: 20 }}>
-        <Col>
-          <Space wrap>
-            <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/stations')}>
-              {t('station.backToList')}
-            </Button>
-            <Title level={4} style={{ margin: 0 }}>
-              {station.station_name || station.name || '-'}
-            </Title>
-            <Tag color={statusCfg.color}>{statusCfg.text}</Tag>
-            {station.device_count > 0 && (
-              <Tag color="blue">
-                {station.online_count ?? 0}/{station.device_count} {t('station.devicesOnline')}
-              </Tag>
-            )}
-          </Space>
-        </Col>
-        <Col>
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button>
-            {isAdmin && hasPermission('stations:edit') && (
-              <Button type="primary" icon={<EditOutlined />} onClick={openEditModal}>
-                {t('common.edit')}
-              </Button>
-            )}
-          </Space>
-        </Col>
-      </Row>
+      <Space style={{ marginBottom: 16 }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/stations')}>
+          {t('common.back')}
+        </Button>
+        <Title level={4} style={{ margin: 0 }}>{stationName}</Title>
+        <Tag color={station.status === 1 ? 'green' : 'red'}>
+          {station.status === 1 ? t('station.normal') : t('station.stopped')}
+        </Tag>
+      </Space>
 
-      {/* Tabs */}
+      {/* 三 Tab：概览 / 统计 / 关联设备 */}
       <Card bordered={false} style={{ borderRadius: 12 }}>
         <Tabs
           activeKey={activeTab}
@@ -304,109 +318,26 @@ const StationDetailPage: React.FC = () => {
           items={[
             {
               key: 'overview',
-              label: <span><DashboardOutlined /> {t('station.overview')}</span>,
+              label: t('station.overview'),
               children: renderOverviewTab(),
             },
             {
               key: 'statistics',
-              label: <span><BarChartOutlined /> {t('station.genStats')}</span>,
-              children: <StationStatisticsTab stationId={stationId} timezone={station.timezone || timezone} />,
+              label: t('station.genStats'),
+              children: (
+                <StationStatisticsTab stationId={station.id} timezone={station.timezone || 'Asia/Shanghai'} />
+              ),
             },
             {
               key: 'devices',
-              label: <span><DesktopOutlined /> {t('station.deviceList')} ({devices.length})</span>,
-              children: <StationDevicesTab stationId={stationId} timezone={station.timezone || timezone} />,
+              label: `${t('station.deviceList')} (${devices.length || station.device_count || 0})`,
+              children: (
+                <StationDevicesTab stationId={station.id} timezone={station.timezone || 'Asia/Shanghai'} />
+              ),
             },
           ]}
         />
       </Card>
-
-      {/* 编辑电站弹窗 */}
-      <Modal
-        title={t('station.editStation')}
-        open={editModalOpen}
-        onCancel={() => setEditModalOpen(false)}
-        onOk={handleEditSave}
-        width={600}
-        destroyOnClose
-      >
-        <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="name" label={t('station.stationName')} rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="capacity" label={t('station.capacity_kW')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="province" label={t('station.province')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="city" label={t('station.city')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="district" label={t('station.district')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="address" label={t('station.address')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="panel_count" label={t('station.panelCount')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="battery_capacity" label={t('station.batteryCapacity')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="status" label={t('common.status')}>
-                <Select
-                  options={[
-                    { value: 1, label: t('station.normal') },
-                    { value: 0, label: t('station.stopped') },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="timezone" label={t('station.timezone')}>
-                <Select
-                  showSearch
-                  placeholder={t('station.selectTimezone')}
-                  options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) }))}
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="contact_name" label={t('station.contact')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="contact_phone" label={t('station.contactPhone')}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
     </div>
   )
 }
