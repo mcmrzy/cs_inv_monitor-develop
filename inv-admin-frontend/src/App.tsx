@@ -24,6 +24,7 @@ const WorkOrdersPage = lazy(() => import('@/pages/work-orders'))
 const BigScreenPage = lazy(() => import('@/pages/big-screen'))
 const ParallelPage = lazy(() => import('@/pages/parallel'))
 const StationsPage = lazy(() => import('@/pages/stations'))
+const StationDetailPage = lazy(() => import('@/pages/stations/StationDetailPage'))
 const ModelsPage = lazy(() => import('@/pages/models'))
 const MonitoringPage = lazy(() => import('@/pages/monitoring'))
 const RemoteSettingsPage = lazy(() => import('@/pages/remote-settings'))
@@ -78,6 +79,7 @@ const AppRoutes: React.FC = () => (
       <Route path="/admin" element={<AdminPage />} />
       <Route path="/parallel" element={<ParallelPage />} />
       <Route path="/stations" element={<StationsPage />} />
+      <Route path="/stations/:id" element={<StationDetailPage />} />
       <Route path="/models" element={<ModelsPage />} />
       <Route path="/monitoring" element={<MonitoringPage />} />
       <Route path="/remote-settings" element={<RemoteSettingsPage />} />
@@ -119,7 +121,7 @@ const App: React.FC<{ history?: History }> = ({ history }) => {
           colorError: '#ef4444',
           colorInfo: '#4f6ef7',
           borderRadius: 10,
-          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif",
           fontSize: 14,
           colorBgLayout: '#f5f7fa',
           colorBgContainer: '#ffffff',

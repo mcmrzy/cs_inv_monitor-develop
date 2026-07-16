@@ -627,8 +627,11 @@ func (r *StationRepository) Assign(ctx context.Context, id int64, userID int64) 
 
 func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Station, error) {
 	query := `
-		SELECT id, user_id, name, province, city, district, address, capacity,
-			   panel_count, latitude, longitude, timezone, status, created_at, updated_at
+		SELECT id, user_id, name,
+			COALESCE(province, ''), COALESCE(city, ''), COALESCE(district, ''),
+			COALESCE(address, ''), COALESCE(capacity, 0), COALESCE(panel_count, 0),
+			COALESCE(latitude, 0), COALESCE(longitude, 0),
+			COALESCE(timezone, 'Asia/Shanghai'), status, created_at, updated_at
 		FROM stations WHERE id = $1 AND deleted_at IS NULL
 	`
 
