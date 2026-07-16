@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
-import { Button, Card, Empty, Typography, Space, App } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Empty, Typography, Space, App, Collapse, Badge } from 'antd'
+import {
+  ReloadOutlined, SettingOutlined, ThunderboltOutlined,
+  ToolOutlined, ArrowUpOutlined, ArrowDownOutlined,
+} from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
@@ -12,14 +15,25 @@ import ChargeSection from './components/ChargeSection'
 import DischargeSection from './components/DischargeSection'
 import OtherSection from './components/OtherSection'
 import ResetSection from './components/ResetSection'
+import { SECTION_COLORS } from './components/shared-styles'
 import type { DeviceItem } from './types'
 
 const { Title, Text } = Typography
+
+// 面板标题组件
+const SectionHeader: React.FC<{ icon: React.ReactNode; title: string; count: number; color: string }> = ({ icon, title, count, color }) => (
+  <Space size={8}>
+    <span style={{ color, fontSize: 18 }}>{icon}</span>
+    <span style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{title}</span>
+    <Badge count={count} style={{ backgroundColor: color, fontSize: 11 }} />
+  </Space>
+)
 
 const RemoteSettingsPage: React.FC = () => {
   const { message } = App.useApp()
   const [selectedSn, setSelectedSn] = useState<string | null>(null)
   const [reading, setReading] = useState(false)
+  const [activeKeys, setActiveKeys] = useState<string[]>(['general', 'application'])
 
   const { data: devicesData } = useQuery({
     queryKey: queryKeys.devices.list({ page: 1, page_size: 200 }),
@@ -40,11 +54,18 @@ const RemoteSettingsPage: React.FC = () => {
     setTimeout(() => setReading(false), 1500)
   }
 
+  const panelStyle = (color: string): React.CSSProperties => ({
+    marginBottom: 12,
+    background: '#fff',
+    borderRadius: 12,
+    borderLeft: `3px solid ${color}`,
+    overflow: 'hidden',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+  })
+
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 4 }}>
-        远程参数设置
-      </Title>
+      <Title level={4} style={{ marginBottom: 4 }}>远程参数设置</Title>
       <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
         远程配置逆变器运行参数，支持实时下发与生效
       </Text>
@@ -53,12 +74,7 @@ const RemoteSettingsPage: React.FC = () => {
 
       {selectedDevice && (
         <div style={{ marginTop: 16, marginBottom: 24 }}>
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            onClick={handleRead}
-            loading={reading}
-          >
+          <Button type="primary" icon={<ReloadOutlined />} onClick={handleRead} loading={reading}>
             读取当前设置
           </Button>
         </div>
@@ -66,24 +82,73 @@ const RemoteSettingsPage: React.FC = () => {
 
       {selectedSn ? (
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <GeneralSection deviceInfo={selectedDevice} />
-          <ApplicationSection />
-          <ParallelSection />
-          <ChargeSection />
-          <DischargeSection />
-          <OtherSection />
-          <ResetSection />
+          <Collapse
+            activeKey={activeKeys}
+            onChange={(keys) => setActiveKeys(keys as string[])}
+            style={{ background: 'transparent', border: 'none' }}
+            ghost
+          >
+            <Collapse.Panel
+              key="general"
+              header={<SectionHeader icon={<SettingOutlined />} title="通用设置" count={12} color={SECTION_COLORS.general} />}
+              style={panelStyle(SECTION_COLORS.general)}
+            >
+              <GeneralSection deviceInfo={selectedDevice} />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="application"
+              header={<SectionHeader icon={<ThunderboltOutlined />} title="应用设置" count={11} color={SECTION_COLORS.application} />}
+              style={panelStyle(SECTION_COLORS.application)}
+            >
+              <ApplicationSection />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="parallel"
+              header={<SectionHeader icon={<ToolOutlined />} title="并联设置" count={4} color={SECTION_COLORS.parallel} />}
+              style={panelStyle(SECTION_COLORS.parallel)}
+            >
+              <ParallelSection />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="charge"
+              header={<SectionHeader icon={<ArrowUpOutlined />} title="充电设置" count={27} color={SECTION_COLORS.charge} />}
+              style={panelStyle(SECTION_COLORS.charge)}
+            >
+              <ChargeSection />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="discharge"
+              header={<SectionHeader icon={<ArrowDownOutlined />} title="放电设置" count={8} color={SECTION_COLORS.discharge} />}
+              style={panelStyle(SECTION_COLORS.discharge)}
+            >
+              <DischargeSection />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="other"
+              header={<SectionHeader icon={<ToolOutlined />} title="其他设置" count={7} color={SECTION_COLORS.other} />}
+              style={panelStyle(SECTION_COLORS.other)}
+            >
+              <OtherSection />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="reset"
+              header={<SectionHeader icon={<ReloadOutlined />} title="重置操作" count={1} color={SECTION_COLORS.reset} />}
+              style={panelStyle(SECTION_COLORS.reset)}
+            >
+              <ResetSection />
+            </Collapse.Panel>
+          </Collapse>
         </div>
       ) : (
-        <Card
-          bordered={false}
-          style={{ borderRadius: 12, marginTop: 24, textAlign: 'center', padding: 48 }}
-        >
-          <Empty
-            description="请先选择一个设备"
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-          />
-        </Card>
+        <div style={{ borderRadius: 12, marginTop: 24, textAlign: 'center', padding: 48, background: '#fff' }}>
+          <Empty description="请先选择一个设备" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        </div>
       )}
     </div>
   )

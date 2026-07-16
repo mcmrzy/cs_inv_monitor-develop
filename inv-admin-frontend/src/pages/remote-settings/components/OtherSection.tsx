@@ -1,13 +1,8 @@
 import React, { useState } from 'react'
-import { Card, Button, Space, Switch, InputNumber, App, Typography } from 'antd'
-import { ToolOutlined } from '@ant-design/icons'
+import { Row, Col, InputNumber, App, Typography, Space, Button } from 'antd'
+import { FieldRow, SwitchField, SettingButton, PRIMARY, labelStyle, fieldRowStyle } from './shared-styles'
 
 const { Text } = Typography
-
-const cardStyle = { borderRadius: 12, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
-const labelStyle: React.CSSProperties = { fontSize: 13, color: '#666', marginBottom: 4, display: 'block' }
-const fieldRowStyle = { marginBottom: 12 }
-const settingBtnStyle = { background: '#4f6ef7', borderColor: '#4f6ef7' }
 
 const OtherSection: React.FC = () => {
   const { message } = App.useApp()
@@ -16,8 +11,10 @@ const OtherSection: React.FC = () => {
   const [batteryVoltageSample, setBatteryVoltageSample] = useState(false)
   const [disableExternalSample, setDisableExternalSample] = useState(false)
   const [fan1MaxSpeed, setFan1MaxSpeed] = useState<number>(100)
+  const [fan1SlopeMode, setFan1SlopeMode] = useState<'default' | 'custom'>('default')
   const [fan1Slope, setFan1Slope] = useState<number>(50)
   const [fan2MaxSpeed, setFan2MaxSpeed] = useState<number>(100)
+  const [fan2SlopeMode, setFan2SlopeMode] = useState<'default' | 'custom'>('default')
   const [fan2Slope, setFan2Slope] = useState<number>(50)
 
   const handleSet = (fieldName: string) => {
@@ -25,66 +22,91 @@ const OtherSection: React.FC = () => {
   }
 
   return (
-    <Card
-      bordered={false}
-      style={cardStyle}
-      title={
-        <Space>
-          <ToolOutlined />
-          <span style={{ fontSize: 16, fontWeight: 'bold' }}>其他设置</span>
-        </Space>
-      }
-    >
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>CT功率补偿(W)</Text>
-        <Space>
-          <InputNumber min={-199} max={199} value={ctCompensation} onChange={(v) => setCtCompensation(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('CT功率补偿')}>设置</Button>
-        </Space>
-      </div>
+    <Row gutter={[16, 8]}>
+      <FieldRow label="CT功率补偿(W)" range="[-199, 199]">
+        <InputNumber min={-199} max={199} value={ctCompensation} onChange={(v) => setCtCompensation(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('CT功率补偿')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>电池电压采样</Text>
-        <Switch checked={batteryVoltageSample} onChange={(v) => { setBatteryVoltageSample(v); handleSet('电池电压采样') }} />
-      </div>
+      <SwitchField label="电池电压采样" checked={batteryVoltageSample} onChange={(v) => { setBatteryVoltageSample(v); handleSet('电池电压采样') }} />
+      <SwitchField label="禁止外部采样" checked={disableExternalSample} onChange={(v) => { setDisableExternalSample(v); handleSet('禁止外部采样') }} />
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>禁止外部采样</Text>
-        <Switch checked={disableExternalSample} onChange={(v) => { setDisableExternalSample(v); handleSet('禁止外部采样') }} />
-      </div>
+      <FieldRow label="风扇 1 最大速度(%)" range="[10, 100]">
+        <InputNumber min={10} max={100} value={fan1MaxSpeed} onChange={(v) => setFan1MaxSpeed(v ?? 10)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('风扇1最大速度')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>风扇 1 最大速度(%)</Text>
-        <Space>
-          <InputNumber min={10} max={100} value={fan1MaxSpeed} onChange={(v) => setFan1MaxSpeed(v ?? 10)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('风扇1最大速度')}>设置</Button>
-        </Space>
-      </div>
+      {/* 转速斜率控制1 - 两个按钮 */}
+      <Col span={12}>
+        <div style={fieldRowStyle}>
+          <Text style={labelStyle}>转速斜率控制1</Text>
+          <Space size={4}>
+            <Button
+              type={fan1SlopeMode === 'default' ? 'primary' : 'default'}
+              size="small"
+              onClick={() => { setFan1SlopeMode('default'); handleSet('转速斜率控制1-默认') }}
+              style={fan1SlopeMode === 'default' ? { background: '#10b981', borderColor: '#10b981' } : {}}
+            >
+              默认
+            </Button>
+            <Button
+              type={fan1SlopeMode === 'custom' ? 'primary' : 'default'}
+              size="small"
+              onClick={() => setFan1SlopeMode('custom')}
+              style={fan1SlopeMode === 'custom' ? { background: PRIMARY, borderColor: PRIMARY } : {}}
+            >
+              新坡度
+            </Button>
+          </Space>
+          {fan1SlopeMode === 'custom' && (
+            <div style={{ marginTop: 6 }}>
+              <Space>
+                <InputNumber min={1} max={100} value={fan1Slope} onChange={(v) => setFan1Slope(v ?? 1)} style={{ width: 100 }} />
+                <SettingButton onClick={() => handleSet('转速斜率控制1')} />
+              </Space>
+            </div>
+          )}
+        </div>
+      </Col>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>转速斜率控制1</Text>
-        <Space>
-          <InputNumber min={1} max={100} value={fan1Slope} onChange={(v) => setFan1Slope(v ?? 1)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('转速斜率控制1')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="风扇 2 最大速度(%)" range="[10, 100]">
+        <InputNumber min={10} max={100} value={fan2MaxSpeed} onChange={(v) => setFan2MaxSpeed(v ?? 10)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('风扇2最大速度')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>风扇 2 最大速度(%)</Text>
-        <Space>
-          <InputNumber min={10} max={100} value={fan2MaxSpeed} onChange={(v) => setFan2MaxSpeed(v ?? 10)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('风扇2最大速度')}>设置</Button>
-        </Space>
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>转速斜率控制2</Text>
-        <Space>
-          <InputNumber min={1} max={100} value={fan2Slope} onChange={(v) => setFan2Slope(v ?? 1)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('转速斜率控制2')}>设置</Button>
-        </Space>
-      </div>
-    </Card>
+      {/* 转速斜率控制2 - 两个按钮 */}
+      <Col span={12}>
+        <div style={fieldRowStyle}>
+          <Text style={labelStyle}>转速斜率控制2</Text>
+          <Space size={4}>
+            <Button
+              type={fan2SlopeMode === 'default' ? 'primary' : 'default'}
+              size="small"
+              onClick={() => { setFan2SlopeMode('default'); handleSet('转速斜率控制2-默认') }}
+              style={fan2SlopeMode === 'default' ? { background: '#10b981', borderColor: '#10b981' } : {}}
+            >
+              默认
+            </Button>
+            <Button
+              type={fan2SlopeMode === 'custom' ? 'primary' : 'default'}
+              size="small"
+              onClick={() => setFan2SlopeMode('custom')}
+              style={fan2SlopeMode === 'custom' ? { background: PRIMARY, borderColor: PRIMARY } : {}}
+            >
+              新坡度
+            </Button>
+          </Space>
+          {fan2SlopeMode === 'custom' && (
+            <div style={{ marginTop: 6 }}>
+              <Space>
+                <InputNumber min={1} max={100} value={fan2Slope} onChange={(v) => setFan2Slope(v ?? 1)} style={{ width: 100 }} />
+                <SettingButton onClick={() => handleSet('转速斜率控制2')} />
+              </Space>
+            </div>
+          )}
+        </div>
+      </Col>
+    </Row>
   )
 }
 

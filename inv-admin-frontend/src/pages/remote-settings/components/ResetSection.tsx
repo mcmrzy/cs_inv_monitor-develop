@@ -1,23 +1,17 @@
 import React from 'react'
-import { Card, Button, Modal, App, Space, Typography } from 'antd'
-import { ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { Button, Modal, App, Typography } from 'antd'
+import { ExclamationCircleOutlined } from '@ant-design/icons'
 
-const cardStyle = { borderRadius: 12, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
+const { Text } = Typography
 
 const ResetSection: React.FC = () => {
   const { message } = App.useApp()
 
   return (
-    <Card
-      bordered={false}
-      style={cardStyle}
-      title={
-        <Space>
-          <ReloadOutlined />
-          <span style={{ fontSize: 16, fontWeight: 'bold' }}>重置操作</span>
-        </Space>
-      }
-    >
+    <div>
+      <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+        将所有系统设置恢复为出厂默认值，此操作不可撤销。
+      </Text>
       <Button
         danger
         size="large"
@@ -35,7 +29,7 @@ const ResetSection: React.FC = () => {
       >
         系统设置恢复默认值
       </Button>
-    </Card>
+    </div>
   )
 }
 

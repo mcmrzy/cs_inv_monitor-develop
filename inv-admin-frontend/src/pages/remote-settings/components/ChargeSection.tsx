@@ -1,15 +1,11 @@
 import React, { useState } from 'react'
-import { Card, Button, Space, Select, Switch, InputNumber, Divider, App, Typography } from 'antd'
-import { ArrowUpOutlined } from '@ant-design/icons'
+import { Row, Col, Select, InputNumber, Divider, App, Typography, Space } from 'antd'
+import { FieldRow, SwitchField, SettingButton, labelStyle, fieldRowStyle } from './shared-styles'
 
 const { Text } = Typography
 const { Option } = Select
 
-const cardStyle = { borderRadius: 12, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
-const labelStyle: React.CSSProperties = { fontSize: 13, color: '#666', marginBottom: 4, display: 'block' }
-const fieldRowStyle = { marginBottom: 12 }
-const settingBtnStyle = { background: '#4f6ef7', borderColor: '#4f6ef7' }
-const subTitleStyle: React.CSSProperties = { fontSize: 14, fontWeight: 600, color: '#333', marginBottom: 12 }
+const subTitleStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 8 }
 
 interface TimeRangeFieldProps {
   label: string
@@ -21,15 +17,17 @@ interface TimeRangeFieldProps {
 }
 
 const TimeRangeField: React.FC<TimeRangeFieldProps> = ({ label, h, m, onHChange, onMChange, onSet }) => (
-  <div style={fieldRowStyle}>
-    <Text style={labelStyle}>{label}</Text>
-    <Space>
-      <InputNumber min={0} max={23} value={h} onChange={onHChange} style={{ width: 70 }} addonAfter="时" />
-      <Text>:</Text>
-      <InputNumber min={0} max={59} value={m} onChange={onMChange} style={{ width: 70 }} addonAfter="分" />
-      <Button type="primary" size="small" style={settingBtnStyle} onClick={onSet}>设置</Button>
-    </Space>
-  </div>
+  <Col span={24}>
+    <div style={fieldRowStyle}>
+      <Text style={labelStyle}>{label}</Text>
+      <Space>
+        <InputNumber min={0} max={23} value={h} onChange={onHChange} style={{ width: 70 }} addonAfter="时" />
+        <Text>:</Text>
+        <InputNumber min={0} max={59} value={m} onChange={onMChange} style={{ width: 70 }} addonAfter="分" />
+        <SettingButton onClick={onSet} />
+      </Space>
+    </div>
+  </Col>
 )
 
 const ChargeSection: React.FC = () => {
@@ -79,97 +77,95 @@ const ChargeSection: React.FC = () => {
     message.success(`${fieldName} 设置已发送`)
   }
 
+  const showVoltage = acChargeControl === 'voltage' || acChargeControl === 'voltage_soc'
+  const showSoc = acChargeControl === 'soc' || acChargeControl === 'voltage_soc'
+
   return (
-    <Card
-      bordered={false}
-      style={cardStyle}
-      title={
-        <Space>
-          <ArrowUpOutlined />
-          <span style={{ fontSize: 16, fontWeight: 'bold' }}>充电设置</span>
-        </Space>
-      }
-    >
+    <Row gutter={[16, 8]}>
       {/* 主充电参数 */}
-      <Text style={subTitleStyle}>主充电参数</Text>
+      <Col span={24}><Text style={subTitleStyle}>主充电参数</Text></Col>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>充电电流限制(A)</Text>
-        <Space>
-          <InputNumber min={0} max={110} step={0.1} value={chargeCurrent} onChange={(v) => setChargeCurrent(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('充电电流限制')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="充电电流限制(A)" range="[0, 110]">
+        <InputNumber min={0} max={110} step={0.1} value={chargeCurrent} onChange={(v) => setChargeCurrent(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('充电电流限制')} />
+      </FieldRow>
 
-      <Divider />
+      <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 铅酸充电参数 */}
-      <Text style={subTitleStyle}>铅酸</Text>
+      <Col span={24}><Text style={subTitleStyle}>铅酸</Text></Col>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>充电电压(V)</Text>
-        <Space>
-          <InputNumber min={50} max={58} step={0.1} value={chargeVoltage} onChange={(v) => setChargeVoltage(v ?? 50)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('充电电压')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="充电电压(V)" range="[50, 58]">
+        <InputNumber min={50} max={58} step={0.1} value={chargeVoltage} onChange={(v) => setChargeVoltage(v ?? 50)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('充电电压')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>浮动电压(V)</Text>
-        <Space>
-          <InputNumber min={50} max={58} step={0.1} value={floatVoltage} onChange={(v) => setFloatVoltage(v ?? 50)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('浮动电压')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="浮动电压(V)" range="[50, 58]">
+        <InputNumber min={50} max={58} step={0.1} value={floatVoltage} onChange={(v) => setFloatVoltage(v ?? 50)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('浮动电压')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>均衡电压(V)</Text>
-        <Space>
-          <InputNumber min={50} max={59} step={0.1} value={equalVoltage} onChange={(v) => setEqualVoltage(v ?? 50)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('均衡电压')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="均衡电压(V)" range="[50, 59]">
+        <InputNumber min={50} max={59} step={0.1} value={equalVoltage} onChange={(v) => setEqualVoltage(v ?? 50)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('均衡电压')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>均衡周期(天)</Text>
-        <Space>
-          <InputNumber min={0} max={365} value={equalCycle} onChange={(v) => setEqualCycle(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('均衡周期')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="均衡周期(天)" range="[0, 365]">
+        <InputNumber min={0} max={365} value={equalCycle} onChange={(v) => setEqualCycle(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('均衡周期')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>均衡时间(小时)</Text>
-        <Space>
-          <InputNumber min={0} max={24} value={equalTime} onChange={(v) => setEqualTime(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('均衡时间')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="均衡时间(小时)" range="[0, 24]">
+        <InputNumber min={0} max={24} value={equalTime} onChange={(v) => setEqualTime(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('均衡时间')} />
+      </FieldRow>
 
-      <Divider />
+      <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 交流充电 */}
-      <Text style={subTitleStyle}>交流充电</Text>
+      <Col span={24}><Text style={subTitleStyle}>交流充电</Text></Col>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>AC充电控制依据</Text>
-        <Space>
-          <Select value={acChargeControl} onChange={setAcChargeControl} style={{ width: 150 }}>
-            <Option value="voltage">电池电压</Option>
-            <Option value="soc">SOC</Option>
-            <Option value="voltage_soc">电压+SOC</Option>
-          </Select>
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('AC充电控制依据')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="AC充电控制依据">
+        <Select value={acChargeControl} onChange={setAcChargeControl} style={{ width: 140 }}>
+          <Option value="voltage">电池电压</Option>
+          <Option value="soc">SOC</Option>
+          <Option value="voltage_soc">电压+SOC</Option>
+        </Select>
+        <SettingButton onClick={() => handleSet('AC充电控制依据')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>交流充电电池电流(A)</Text>
-        <Space>
-          <InputNumber min={0} max={150} step={0.1} value={acChargeCurrent} onChange={(v) => setAcChargeCurrent(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('交流充电电池电流')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="交流充电电池电流(A)" range="[0, 150]">
+        <InputNumber min={0} max={150} step={0.1} value={acChargeCurrent} onChange={(v) => setAcChargeCurrent(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('交流充电电池电流')} />
+      </FieldRow>
+
+      {/* 电压字段 - 依据为 voltage 或 voltage_soc 时显示 */}
+      {showVoltage && (
+        <>
+          <FieldRow label="交流充电开始电池电压(V)" range="[38.4, 52]">
+            <InputNumber min={38.4} max={52} step={0.1} value={acChargeStartVoltage} onChange={(v) => setAcChargeStartVoltage(v ?? 38.4)} style={{ width: 140 }} />
+            <SettingButton onClick={() => handleSet('交流充电开始电池电压')} />
+          </FieldRow>
+          <FieldRow label="交流充电结束电池电压(V)" range="[48, 59]">
+            <InputNumber min={48} max={59} step={0.1} value={acChargeEndVoltage} onChange={(v) => setAcChargeEndVoltage(v ?? 48)} style={{ width: 140 }} />
+            <SettingButton onClick={() => handleSet('交流充电结束电池电压')} />
+          </FieldRow>
+        </>
+      )}
+
+      {/* SOC字段 - 依据为 soc 或 voltage_soc 时显示 */}
+      {showSoc && (
+        <>
+          <FieldRow label="交流充电开始电池SOC(%)" range="[0, 90]">
+            <InputNumber min={0} max={90} value={acChargeStartSoc} onChange={(v) => setAcChargeStartSoc(v ?? 0)} style={{ width: 140 }} />
+            <SettingButton onClick={() => handleSet('交流充电开始电池SOC')} />
+          </FieldRow>
+          <FieldRow label="交流充电结束电池SOC(%)" range="[20, 100]">
+            <InputNumber min={20} max={100} value={acChargeEndSoc} onChange={(v) => setAcChargeEndSoc(v ?? 20)} style={{ width: 140 }} />
+            <SettingButton onClick={() => handleSet('交流充电结束电池SOC')} />
+          </FieldRow>
+        </>
+      )}
 
       <TimeRangeField label="AC充电起始时间1" h={acStart1H} m={acStart1M} onHChange={(v) => setAcStart1H(v ?? 0)} onMChange={(v) => setAcStart1M(v ?? 0)} onSet={() => handleSet('AC充电起始时间1')} />
       <TimeRangeField label="AC充电结束时间1" h={acEnd1H} m={acEnd1M} onHChange={(v) => setAcEnd1H(v ?? 0)} onMChange={(v) => setAcEnd1M(v ?? 0)} onSet={() => handleSet('AC充电结束时间1')} />
@@ -178,107 +174,51 @@ const ChargeSection: React.FC = () => {
       <TimeRangeField label="AC充电起始时间3" h={acStart3H} m={acStart3M} onHChange={(v) => setAcStart3H(v ?? 0)} onMChange={(v) => setAcStart3M(v ?? 0)} onSet={() => handleSet('AC充电起始时间3')} />
       <TimeRangeField label="AC充电结束时间3" h={acEnd3H} m={acEnd3M} onHChange={(v) => setAcEnd3H(v ?? 0)} onMChange={(v) => setAcEnd3M(v ?? 0)} onSet={() => handleSet('AC充电结束时间3')} />
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>交流充电开始电池电压(V)</Text>
-        <Space>
-          <InputNumber min={38.4} max={52} step={0.1} value={acChargeStartVoltage} onChange={(v) => setAcChargeStartVoltage(v ?? 38.4)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('交流充电开始电池电压')}>设置</Button>
-        </Space>
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>交流充电结束电池电压(V)</Text>
-        <Space>
-          <InputNumber min={48} max={59} step={0.1} value={acChargeEndVoltage} onChange={(v) => setAcChargeEndVoltage(v ?? 48)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('交流充电结束电池电压')}>设置</Button>
-        </Space>
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>交流充电开始电池SOC(%)</Text>
-        <Space>
-          <InputNumber min={0} max={90} value={acChargeStartSoc} onChange={(v) => setAcChargeStartSoc(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('交流充电开始电池SOC')}>设置</Button>
-        </Space>
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>交流充电结束电池SOC(%)</Text>
-        <Space>
-          <InputNumber min={20} max={100} value={acChargeEndSoc} onChange={(v) => setAcChargeEndSoc(v ?? 20)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('交流充电结束电池SOC')}>设置</Button>
-        </Space>
-      </div>
-
-      <Divider />
+      <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 发电机充电 */}
-      <Text style={subTitleStyle}>发电机充电</Text>
+      <Col span={24}><Text style={subTitleStyle}>发电机充电</Text></Col>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>发电机充电类型</Text>
-        <Space>
-          <Select value={genChargeType} onChange={setGenChargeType} style={{ width: 150 }}>
-            <Option value="manual">手动</Option>
-            <Option value="auto">自动</Option>
-          </Select>
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('发电机充电类型')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="发电机充电类型">
+        <Select value={genChargeType} onChange={setGenChargeType} style={{ width: 140 }}>
+          <Option value="manual">手动</Option>
+          <Option value="auto">自动</Option>
+        </Select>
+        <SettingButton onClick={() => handleSet('发电机充电类型')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>发电机充电电池电流(A)</Text>
-        <Space>
-          <InputNumber min={0} max={110} step={0.1} value={genChargeCurrent} onChange={(v) => setGenChargeCurrent(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('发电机充电电池电流')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="发电机充电电池电流(A)" range="[0, 110]">
+        <InputNumber min={0} max={110} step={0.1} value={genChargeCurrent} onChange={(v) => setGenChargeCurrent(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('发电机充电电池电流')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>发电机充电开始电池电压(V)</Text>
-        <Space>
-          <InputNumber min={38.4} max={52} step={0.1} value={genChargeStartVoltage} onChange={(v) => setGenChargeStartVoltage(v ?? 38.4)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('发电机充电开始电池电压')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="发电机充电开始电池电压(V)" range="[38.4, 52]">
+        <InputNumber min={38.4} max={52} step={0.1} value={genChargeStartVoltage} onChange={(v) => setGenChargeStartVoltage(v ?? 38.4)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('发电机充电开始电池电压')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>发电机充电结束电池电压(V)</Text>
-        <Space>
-          <InputNumber min={48} max={59} step={0.1} value={genChargeEndVoltage} onChange={(v) => setGenChargeEndVoltage(v ?? 48)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('发电机充电结束电池电压')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="发电机充电结束电池电压(V)" range="[48, 59]">
+        <InputNumber min={48} max={59} step={0.1} value={genChargeEndVoltage} onChange={(v) => setGenChargeEndVoltage(v ?? 48)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('发电机充电结束电池电压')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>发电机充电开始电池SOC(%)</Text>
-        <Space>
-          <InputNumber min={0} max={90} value={genChargeStartSoc} onChange={(v) => setGenChargeStartSoc(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('发电机充电开始电池SOC')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="发电机充电开始电池SOC(%)" range="[0, 90]">
+        <InputNumber min={0} max={90} value={genChargeStartSoc} onChange={(v) => setGenChargeStartSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('发电机充电开始电池SOC')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>发电机充电结束电池SOC(%)</Text>
-        <Space>
-          <InputNumber min={20} max={100} value={genChargeEndSoc} onChange={(v) => setGenChargeEndSoc(v ?? 20)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('发电机充电结束电池SOC')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="发电机充电结束电池SOC(%)" range="[20, 100]">
+        <InputNumber min={20} max={100} value={genChargeEndSoc} onChange={(v) => setGenChargeEndSoc(v ?? 20)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('发电机充电结束电池SOC')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>发电机额定功率(W)</Text>
-        <Space>
-          <InputNumber min={0} max={7370} value={genRatedPower} onChange={(v) => setGenRatedPower(v ?? 0)} style={{ width: 150 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('发电机额定功率')}>设置</Button>
-        </Space>
-      </div>
+      <FieldRow label="发电机额定功率(W)" range="[0, 7370]">
+        <InputNumber min={0} max={7370} value={genRatedPower} onChange={(v) => setGenRatedPower(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('发电机额定功率')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>发电机提升</Text>
-        <Switch checked={genBoost} onChange={(v) => { setGenBoost(v); handleSet('发电机提升') }} />
-      </div>
-    </Card>
+      <SwitchField label="发电机提升" checked={genBoost} onChange={(v) => { setGenBoost(v); handleSet('发电机提升') }} enableText="启用" disableText="禁用" />
+    </Row>
   )
 }
 

@@ -1,15 +1,10 @@
 import React, { useState } from 'react'
-import { Card, Button, Space, Select, Switch, App, DatePicker, Modal, Typography } from 'antd'
-import { SettingOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import { Row, Col, Select, InputNumber, DatePicker, App, Typography, Modal, Button } from 'antd'
+import { ExclamationCircleOutlined } from '@ant-design/icons'
+import { FieldRow, SwitchField, SettingButton, PRIMARY, labelStyle, fieldRowStyle } from './shared-styles'
 
 const { Text } = Typography
 const { Option } = Select
-
-const cardStyle = { borderRadius: 12, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }
-const labelStyle: React.CSSProperties = { fontSize: 13, color: '#666', marginBottom: 4, display: 'block' }
-const fieldRowStyle = { marginBottom: 12 }
-const settingBtnStyle = { background: '#4f6ef7', borderColor: '#4f6ef7' }
 
 interface Props {
   deviceInfo: any
@@ -33,133 +28,108 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
     message.success(`${fieldName} 设置已发送`)
   }
 
+  const isLeadAcid = batteryType === 'lead_acid'
+  const isLithium = batteryType === 'lifepo4' || batteryType === 'ncm' || batteryType === 'other'
+
   return (
-    <Card
-      bordered={false}
-      style={cardStyle}
-      title={
-        <Space>
-          <SettingOutlined />
-          <span style={{ fontSize: 16, fontWeight: 'bold' }}>通用设置</span>
-        </Space>
-      }
-    >
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>时间</Text>
-        <Space>
-          <DatePicker showTime value={time} onChange={setTime} style={{ width: 220 }} />
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('时间')}>设置</Button>
-        </Space>
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>PV接线方式</Text>
-        <Space>
-          <Select value={pvWiring} onChange={setPvWiring} style={{ width: 150 }}>
-            <Option value="independent">独立</Option>
-            <Option value="parallel">并联</Option>
-            <Option value="series">串联</Option>
-          </Select>
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('PV接线方式')}>设置</Button>
-        </Space>
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>型号</Text>
+    <Row gutter={[16, 8]}>
+      {/* 型号（只读） */}
+      <FieldRow label="型号">
         <Text strong>{deviceInfo?.model || deviceInfo?.device_type || '-'}</Text>
-      </div>
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>电池类型</Text>
-        <Space>
-          <Select value={batteryType} onChange={setBatteryType} style={{ width: 150 }}>
-            <Option value="lifepo4">磷酸铁锂</Option>
-            <Option value="ncm">三元锂</Option>
-            <Option value="lead_acid">铅酸</Option>
-            <Option value="other">其他</Option>
-          </Select>
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('电池类型')}>设置</Button>
-        </Space>
-      </div>
+      {/* 时间 */}
+      <FieldRow label="时间">
+        <DatePicker showTime value={time} onChange={setTime} style={{ width: 200 }} />
+        <SettingButton onClick={() => handleSet('时间')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>铅酸电池类型</Text>
-        <Space>
-          <Select value={leadAcidType} onChange={setLeadAcidType} style={{ width: 150 }}>
+      {/* PV接线方式 */}
+      <FieldRow label="PV接线方式">
+        <Select value={pvWiring} onChange={setPvWiring} style={{ width: 140 }}>
+          <Option value="independent">独立</Option>
+          <Option value="parallel">并联</Option>
+          <Option value="series">串联</Option>
+        </Select>
+        <SettingButton onClick={() => handleSet('PV接线方式')} />
+      </FieldRow>
+
+      {/* 电池类型 */}
+      <FieldRow label="电池类型">
+        <Select value={batteryType} onChange={setBatteryType} style={{ width: 140 }}>
+          <Option value="lifepo4">磷酸铁锂</Option>
+          <Option value="ncm">三元锂</Option>
+          <Option value="lead_acid">铅酸</Option>
+          <Option value="other">其他</Option>
+        </Select>
+        <SettingButton onClick={() => handleSet('电池类型')} />
+      </FieldRow>
+
+      {/* 铅酸电池类型 - 仅铅酸时显示 */}
+      {isLeadAcid && (
+        <FieldRow label="铅酸电池类型">
+          <Select value={leadAcidType} onChange={setLeadAcidType} style={{ width: 140 }}>
             <Option value="flooded">flooded</Option>
             <Option value="AGM">AGM</Option>
             <Option value="Gel">Gel</Option>
           </Select>
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('铅酸电池类型')}>设置</Button>
-        </Space>
-      </div>
+          <SettingButton onClick={() => handleSet('铅酸电池类型')} />
+        </FieldRow>
+      )}
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>锂电池类型</Text>
-        <Space>
-          <Select value={lithiumType} onChange={setLithiumType} style={{ width: 150 }}>
+      {/* 锂电池类型 - 非铅酸时显示 */}
+      {isLithium && (
+        <FieldRow label="锂电池类型">
+          <Select value={lithiumType} onChange={setLithiumType} style={{ width: 140 }}>
             <Option value="lifepo4">磷酸铁锂</Option>
             <Option value="ncm">三元锂</Option>
             <Option value="lto">钛酸锂</Option>
           </Select>
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('锂电池类型')}>设置</Button>
-        </Space>
-      </div>
+          <SettingButton onClick={() => handleSet('锂电池类型')} />
+        </FieldRow>
+      )}
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>法规</Text>
-        <Space>
-          <Select value={regulation} onChange={setRegulation} style={{ width: 150 }}>
-            <Option value="china">中国</Option>
-            <Option value="europe">欧洲</Option>
-            <Option value="australia">澳大利亚</Option>
-            <Option value="usa">美国</Option>
-          </Select>
-          <Button type="primary" size="small" style={settingBtnStyle} onClick={() => handleSet('法规')}>设置</Button>
-        </Space>
-      </div>
+      {/* 法规 */}
+      <FieldRow label="法规">
+        <Select value={regulation} onChange={setRegulation} style={{ width: 140 }}>
+          <Option value="china">中国</Option>
+          <Option value="europe">欧洲</Option>
+          <Option value="australia">澳大利亚</Option>
+          <Option value="usa">美国</Option>
+        </Select>
+        <SettingButton onClick={() => handleSet('法规')} />
+      </FieldRow>
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>节能模式</Text>
-        <Switch checked={ecoMode} onChange={(v) => { setEcoMode(v); handleSet('节能模式') }} />
-      </div>
+      {/* 开关类字段 */}
+      <SwitchField label="节能模式" checked={ecoMode} onChange={(v) => { setEcoMode(v); handleSet('节能模式') }} />
+      <SwitchField label="开机/待机" checked={standby} onChange={(v) => { setStandby(v); handleSet('开机/待机') }} enableText="开机" disableText="待机" />
+      <SwitchField label="电池节能模式" checked={batteryEco} onChange={(v) => { setBatteryEco(v); handleSet('电池节能模式') }} />
+      <SwitchField label="蜂鸣器启用" checked={buzzer} onChange={(v) => { setBuzzer(v); handleSet('蜂鸣器启用') }} />
 
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>开机/待机</Text>
-        <Switch checked={standby} onChange={(v) => { setStandby(v); handleSet('开机/待机') }} />
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>电池节能模式</Text>
-        <Switch checked={batteryEco} onChange={(v) => { setBatteryEco(v); handleSet('电池节能模式') }} />
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>重启逆变器</Text>
-        <Button
-          danger
-          size="small"
-          onClick={() => {
-            Modal.confirm({
-              title: '确认重启逆变器',
-              icon: <ExclamationCircleOutlined />,
-              content: '确定要重启逆变器吗？重启期间设备将停止工作。',
-              okText: '确认执行',
-              okType: 'danger',
-              cancelText: '取消',
-              onOk: () => message.success('重启逆变器命令已发送'),
-            })
-          }}
-        >
-          重启
-        </Button>
-      </div>
-
-      <div style={fieldRowStyle}>
-        <Text style={labelStyle}>蜂鸣器启用</Text>
-        <Switch checked={buzzer} onChange={(v) => { setBuzzer(v); handleSet('蜂鸣器启用') }} />
-      </div>
-    </Card>
+      {/* 重启逆变器 */}
+      <Col span={12}>
+        <div style={fieldRowStyle}>
+          <Text style={labelStyle}>重启逆变器</Text>
+          <Button
+            danger
+            size="small"
+            onClick={() => {
+              Modal.confirm({
+                title: '确认重启逆变器',
+                icon: <ExclamationCircleOutlined />,
+                content: '确定要重启逆变器吗？重启期间设备将停止工作。',
+                okText: '确认执行',
+                okType: 'danger',
+                cancelText: '取消',
+                onOk: () => message.success('重启逆变器命令已发送'),
+              })
+            }}
+          >
+            重启
+          </Button>
+        </div>
+      </Col>
+    </Row>
   )
 }
 
