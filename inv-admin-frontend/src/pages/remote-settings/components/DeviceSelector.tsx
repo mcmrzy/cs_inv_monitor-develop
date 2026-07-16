@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Select, Spin, Card, Tag, Row, Col, Typography, Button } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
@@ -21,8 +21,14 @@ interface StationItem {
   name: string
 }
 
+const STATION_STORAGE_KEY = 'remote-settings-station-id'
+const DEVICE_STORAGE_KEY = 'remote-settings-device-sn'
+
 const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceChange, onRead, reading }) => {
-  const [selectedStationId, setSelectedStationId] = useState<number | null>(null)
+  const [selectedStationId, setSelectedStationId] = useState<number | null>(() => {
+    const saved = localStorage.getItem(STATION_STORAGE_KEY)
+    return saved ? Number(saved) : null
+  })
 
   // 电站列表
   const { data: stationsData, isLoading: stationsLoading } = useQuery({
@@ -55,18 +61,31 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
   const selectedDevice = devices.find((d) => d.sn === selectedSn) ?? null
   const isOnline = selectedDevice ? selectedDevice.status === 1 : false
 
+  // 初始化时恢复上次选择的设备
+  useEffect(() => {
+    if (selectedStationId !== null && !selectedSn && devices.length > 0) {
+      const savedSn = localStorage.getItem(DEVICE_STORAGE_KEY)
+      if (savedSn && devices.some(d => d.sn === savedSn)) {
+        onDeviceChange(savedSn)
+      }
+    }
+  }, [selectedStationId, devicesData]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleStationChange = (val: string | undefined) => {
     if (val) {
       const id = Number(val.split(':')[0])
       setSelectedStationId(id)
+      localStorage.setItem(STATION_STORAGE_KEY, String(id))
     } else {
       setSelectedStationId(null)
+      localStorage.removeItem(STATION_STORAGE_KEY)
     }
     onDeviceChange('')
+    localStorage.removeItem(DEVICE_STORAGE_KEY)
   }
 
   return (
-    <div>
+    <div style={{ marginBottom: 24 }}>
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col>
           <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>电站选择</Text>
