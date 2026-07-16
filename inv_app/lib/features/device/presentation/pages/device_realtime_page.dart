@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/connection_mode_service.dart';
+import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/core/utils/telemetry_quality.dart';
@@ -33,6 +36,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   StreamSubscription? _realtimeSub;
   bool _hasMqttData = false;
   bool _apiUnavailable = false;
+  bool _isLocalMode = false;
 
   // 分组定义（颜色和图标）
   static const _groupStyles = {
@@ -134,9 +138,27 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   @override
   void initState() {
     super.initState();
+    _initLocalMode();
     _subscribeMqttData();
     _listenOnlineStatus();
     _fetchDeviceDetail();
+  }
+
+  /// 检测本地模式并启动 bloc 本地轮询（含逆变器连接监控）
+  Future<void> _initLocalMode() async {
+    try {
+      final modeService = getIt<ConnectionModeService>();
+      await modeService.init();
+      if (modeService.isLocal && mounted) {
+        setState(() => _isLocalMode = true);
+        // 启动 bloc 本地轮询：每 3 秒拉取逆变器实时数据并喂给连接监控
+        context.read<DeviceBloc>().add(
+          const DeviceStartLocalPoll(deviceIP: '192.168.4.1'),
+        );
+      }
+    } catch (_) {
+      // ConnectionModeService 不可用时忽略
+    }
   }
 
   void _listenOnlineStatus() {
@@ -158,6 +180,16 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
 
   @override
   void dispose() {
+    // 本地模式下停止 bloc 本地轮询和连接监控
+    if (_isLocalMode) {
+      try {
+        // 使用全局 bloc 访问，避免 context 已失效
+        final bloc = getIt.isRegistered<DeviceBloc>()
+            ? getIt<DeviceBloc>()
+            : null;
+        bloc?.add(const DeviceStopLocalPoll());
+      } catch (_) {}
+    }
     _statusSub?.cancel();
     _realtimeSub?.cancel();
     try {
@@ -559,7 +591,22 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Scaffold(
+    return BlocListener<DeviceBloc, DeviceState>(
+      listener: (context, state) {
+        if (state is DeviceLocalDisconnected) {
+          // 逆变器无响应，已自动断开设备热点并切回家用 WiFi
+          final l10n = AppLocalizations.of(context)!;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.inverterNoResponse),
+              backgroundColor: AppColors.warning,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+          context.pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
@@ -589,6 +636,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           : _error != null
               ? _buildError()
               : _buildContent(),
+    ),
     );
   }
 

@@ -86,3 +86,14 @@ class DeviceHistoryLoaded extends DeviceState {
   @override
   List<Object?> get props => [data, period, metric];
 }
+
+/// 逆变器自动断开状态：30秒后检测到 AC 电流/功率均为 0，已自动断开设备热点并切回家用 WiFi
+class DeviceLocalDisconnected extends DeviceState {
+  /// 断开原因描述
+  final String reason;
+
+  const DeviceLocalDisconnected({required this.reason});
+
+  @override
+  List<Object?> get props => [reason];
+}

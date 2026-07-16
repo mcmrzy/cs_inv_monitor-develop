@@ -1006,4 +1006,5 @@ const Map<String, String> en = {
   'current_firmware_version': 'Current Firmware Version',
   'alarm_label': 'Alarm',
   'source_label': 'Source',
+  'inverter_no_response': 'Inverter not responding, auto-disconnected from device AP and switched to home WiFi',
 };
