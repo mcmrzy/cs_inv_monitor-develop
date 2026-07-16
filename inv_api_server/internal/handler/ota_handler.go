@@ -189,13 +189,28 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 }
 
 func (h *OTAHandler) ListFirmware(c *gin.Context) {
-	model := c.Query("model")
-	list, err := h.otaService.ListFirmware(c.Request.Context(), model)
+	modelFilter := c.Query("model")
+	page := parseInt(c.DefaultQuery("page", "1"))
+	pageSize := getPageSize(c, 9999)
+	list, err := h.otaService.ListFirmware(c.Request.Context(), modelFilter)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("查询固件列表失败", err))
 		return
 	}
-	response.Success(c, list)
+	if list == nil {
+		list = []model.Firmware{}
+	}
+	total := len(list)
+	// 内存分页
+	start := (page - 1) * pageSize
+	if start > total {
+		start = total
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	response.Page(c, list[start:end], int64(total), page, pageSize)
 }
 
 func (h *OTAHandler) GetFirmware(c *gin.Context) {
@@ -602,6 +617,9 @@ func (h *OTAHandler) GetAllFirmware(c *gin.Context) {
 	if err != nil {
 		response.HandleError(c, apperr.Internal("查询固件列表失败", err))
 		return
+	}
+	if list == nil {
+		list = []model.Firmware{}
 	}
 	response.Success(c, list)
 }
