@@ -46,6 +46,7 @@ interface DeviceItem {
   id: string
   sn: string
   model: string
+  model_id?: number
   rated_power?: number
   status: number
   last_online_at?: string
@@ -188,7 +189,7 @@ const MonitoringPage: React.FC = () => {
   const selectedDevice = deviceList.find((d) => d.sn === selectedDeviceSn)
 
   /* ---------- 型号字段配置 ---------- */
-  const modelFields = useModelFields(selectedDevice?.model, (selectedDevice as any)?.model_id)
+  const modelFields = useModelFields(selectedDevice?.model, selectedDevice?.model_id)
   const showFields = modelFields.cache?.showFields ?? []
 
   // 字段标签：field_name 可能是 i18n key，优先翻译；否则回退到 field_name 或 field_key
@@ -239,23 +240,46 @@ const MonitoringPage: React.FC = () => {
 
   const rt = realtimeRes ?? {} as RealtimeData
 
-  // 灵活查找字段值：支持扁平key(ac_voltage)和嵌套key(ac.voltage)和嵌套对象(ac.voltage)
-  const getFieldValue = (data: any, fieldKey: string): any => {
+  // 灵活查找字段值：支持扁平key、嵌套路径、分组感知的深度搜索
+  // Redis 数据结构: { ac: { data: { voltage: 220 }, timestamp: ... }, batt: { data: { soc: 75 } } }
+  const CATEGORY_ALIASES: Record<string, string> = {
+    battery: 'batt', system: 'sys',
+  }
+  const getFieldValue = (data: any, fieldKey: string, group?: string): any => {
     if (data == null) return undefined
     // 1. 直接扁平 key
     if (data[fieldKey] !== undefined) return data[fieldKey]
-    // 2. 嵌套路径: "ac_voltage" -> 尝试 data.ac.voltage
+    // 2. 分组感知查找：优先在 field 所属分组的嵌套 data 中查找
+    if (group) {
+      const cat = CATEGORY_ALIASES[group] || group
+      const catData = data[cat]
+      if (catData && typeof catData === 'object') {
+        // 支持 {category}.data.{field} 和 {category}.{field} 两种结构
+        if (catData.data && typeof catData.data === 'object' && catData.data[fieldKey] !== undefined) {
+          return catData.data[fieldKey]
+        }
+        if (catData[fieldKey] !== undefined) return catData[fieldKey]
+      }
+    }
+    // 3. 嵌套路径: "ac_voltage" -> 尝试 data.ac.voltage / data.ac.data.voltage
     const parts = fieldKey.split('_')
     for (let i = 1; i < parts.length; i++) {
       const prefix = parts.slice(0, i).join('_')
       const suffix = parts.slice(i).join('_')
-      if (data[prefix] && typeof data[prefix] === 'object' && data[prefix][suffix] !== undefined) {
-        return data[prefix][suffix]
+      if (data[prefix] && typeof data[prefix] === 'object') {
+        if (data[prefix][suffix] !== undefined) return data[prefix][suffix]
+        // 支持 data[prefix].data[suffix] 结构
+        if (data[prefix].data && typeof data[prefix].data === 'object' && data[prefix].data[suffix] !== undefined) {
+          return data[prefix].data[suffix]
+        }
       }
     }
-    // 3. 遍历所有嵌套对象查找
+    // 4. 遍历所有嵌套对象查找（深度搜索，优先搜索 .data 子对象）
     for (const key of Object.keys(data)) {
       if (data[key] && typeof data[key] === 'object' && !Array.isArray(data[key])) {
+        if (data[key].data && typeof data[key].data === 'object' && data[key].data[fieldKey] !== undefined) {
+          return data[key].data[fieldKey]
+        }
         if (data[key][fieldKey] !== undefined) return data[key][fieldKey]
         // 再试一层嵌套
         for (const subKey of Object.keys(data[key])) {
@@ -322,7 +346,7 @@ const MonitoringPage: React.FC = () => {
             {/* Hero 概览卡片 — 取前6个显示字段 */}
             <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
               {showFields.slice(0, 6).map((field, idx) => {
-                const value = getFieldValue(rt, field.field_key)
+                const value = getFieldValue(rt, field.field_key, field.group_name)
                 const numValue = safeNum(value)
                 return (
                   <Col xs={12} sm={8} lg={4} key={field.id}>
@@ -356,7 +380,7 @@ const MonitoringPage: React.FC = () => {
                     >
                       <Row gutter={[16, 16]}>
                         {fields.map((field) => {
-                          const value = getFieldValue(rt, field.field_key)
+                          const value = getFieldValue(rt, field.field_key, field.group_name)
                           const precision = field.field_type === 'float' ? (field.unit === '%' ? 1 : 2) : 0
                           return (
                             <Col span={Math.floor(24 / Math.min(fields.length, 4))} key={field.id}>
