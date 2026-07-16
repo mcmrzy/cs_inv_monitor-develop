@@ -1,14 +1,15 @@
 import React, { useState } from 'react'
-import { Row, Col, InputNumber, App, Typography, Space, Button } from 'antd'
+import { Row, Col, InputNumber, App, Typography, Space, Button, Select } from 'antd'
 import { FieldRow, SwitchField, SettingButton, PRIMARY, labelStyle, fieldRowStyle } from './shared-styles'
 
 const { Text } = Typography
+const { Option } = Select
 
 const OtherSection: React.FC = () => {
   const { message } = App.useApp()
 
   const [ctCompensation, setCtCompensation] = useState<number>(0)
-  const [batteryVoltageSample, setBatteryVoltageSample] = useState(false)
+  const [batteryVoltageSample, setBatteryVoltageSample] = useState('disabled')
   const [disableExternalSample, setDisableExternalSample] = useState(false)
   const [fan1MaxSpeed, setFan1MaxSpeed] = useState<number>(100)
   const [fan1SlopeMode, setFan1SlopeMode] = useState<'default' | 'custom'>('default')
@@ -28,7 +29,14 @@ const OtherSection: React.FC = () => {
         <SettingButton onClick={() => handleSet('CT功率补偿')} />
       </FieldRow>
 
-      <SwitchField label="电池电压采样" checked={batteryVoltageSample} onChange={(v) => { setBatteryVoltageSample(v); handleSet('电池电压采样') }} />
+      <FieldRow label="电池电压采样">
+        <Select value={batteryVoltageSample} onChange={setBatteryVoltageSample} style={{ width: 140 }}>
+          <Option value="disabled">禁用</Option>
+          <Option value="battery_only">仅电池</Option>
+          <Option value="battery_and_bus">电池+母线</Option>
+        </Select>
+        <SettingButton onClick={() => handleSet('电池电压采样')} />
+      </FieldRow>
       <SwitchField label="禁止外部采样" checked={disableExternalSample} onChange={(v) => { setDisableExternalSample(v); handleSet('禁止外部采样') }} />
 
       <FieldRow label="风扇 1 最大速度(%)" range="[10, 100]">

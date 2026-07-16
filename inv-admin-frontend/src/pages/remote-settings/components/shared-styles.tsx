@@ -11,6 +11,8 @@ export const SECTION_COLORS: Record<string, string> = {
   general: '#4f6ef7',
   application: '#7c3aed',
   parallel: '#06b6d4',
+  gridConnection: '#3b82f6',
+  powerControl: '#8b5cf6',
   charge: '#10b981',
   discharge: '#f59e0b',
   other: '#6b7280',
