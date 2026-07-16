@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Row, Col, Card, Input, Typography, Space, Spin, Empty, Grid, Segmented, Statistic } from 'antd'
@@ -64,12 +64,27 @@ const MonitoringPage: React.FC = () => {
   const [filter, setFilter] = useState<FilterType>('all')
   const [keyword, setKeyword] = useState('')
 
-  /* ---------- 数据获取 ---------- */
+  /* ---------- 自动跳转上次电站 ---------- */
 
   const { data: stations = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['stations'],
     queryFn: () => api.get('/stations', { params: { all: true }, expectedDataShape: 'page' }).then(extractList),
   })
+
+  useEffect(() => {
+    if (!isLoading && stations.length > 0) {
+      const lastId = localStorage.getItem('last_selected_station')
+      // Only auto-navigate once per session to avoid trapping user
+      const alreadyRedirected = sessionStorage.getItem('monitoring_auto_nav')
+      if (lastId && !alreadyRedirected) {
+        const exists = stations.some((s: StationItem) => String(s.id) === lastId)
+        if (exists) {
+          sessionStorage.setItem('monitoring_auto_nav', '1')
+          navigate(`/stations/${lastId}`)
+        }
+      }
+    }
+  }, [isLoading, stations, navigate])
 
   const { data: summary } = useQuery({
     queryKey: ['stations', 'summary'],
@@ -286,7 +301,10 @@ const MonitoringPage: React.FC = () => {
               <Col key={station.id} xs={24} sm={12} md={8} lg={6}>
                 <StationCard
                   station={station}
-                  onClick={() => navigate(`/stations/${station.id}`)}
+                  onClick={() => {
+                    localStorage.setItem('last_selected_station', String(station.id))
+                    navigate(`/stations/${station.id}`)
+                  }}
                 />
               </Col>
             ))}

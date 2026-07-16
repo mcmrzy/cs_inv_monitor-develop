@@ -116,7 +116,11 @@ const StationDetailPage: React.FC = () => {
 
   const { data: station, isLoading: stationLoading, refetch: refetchStation } = useQuery({
     queryKey: ['station', id],
-    queryFn: () => api.get(`/stations/${id}`).then(res => res?.data?.data ?? res?.data),
+    queryFn: () => api.get(`/stations/${id}`).then(res => {
+      const payload = res?.data?.data ?? res?.data
+      // Backend GetByID wraps response in { station: {...}, devices: [...] }
+      return payload?.station ?? payload
+    }),
     enabled: !!id,
   })
 
@@ -199,8 +203,11 @@ const StationDetailPage: React.FC = () => {
   // 兼容后端返回 station_name 或 name
   const stationName = station.name || station.station_name || ''
   // 兼容后端返回 today_energy/total_energy 或 today_generation/total_generation
-  const todayEnergy = statsSummary?.today ?? station.today_generation ?? station.today_energy ?? 0
-  const totalEnergy = statsSummary?.total ?? station.total_generation ?? station.total_energy ?? 0
+  const todayEnergy = statsSummary?.today ?? station.today_energy ?? station.today_generation ?? 0
+  const totalEnergy = statsSummary?.total ?? station.total_energy ?? station.total_generation ?? 0
+
+  // 从设备列表计算 fault_count（后端 GetByID 未返回此字段）
+  const faultCount = station.fault_count ?? devices.filter((d: any) => d.status === 2).length
 
   // 汇总实时功率（优先使用 station 级别的实时功率字段）
   const totalRealtimePower = station.pv_power
@@ -241,8 +248,8 @@ const StationDetailPage: React.FC = () => {
       key: 'pv',
       label: t('station.solarProduction'),
       color: '#3B82F6',
-      today: station.today_energy ?? station.today_generation ?? 0,
-      total: station.total_energy ?? station.total_generation ?? 0,
+      today: todayEnergy,
+      total: totalEnergy,
       todayLabel: t('station.todayGeneration'),
       totalLabel: t('station.cumulative'),
       unit: 'kWh',
@@ -499,8 +506,8 @@ const StationDetailPage: React.FC = () => {
               <DesktopOutlined style={{ marginRight: 4 }} />
               {t('station.deviceCount')}: {station.device_count ?? 0} / {t('station.onlineCount')}: {station.online_count ?? 0}
             </Text>
-            {(station.fault_count ?? 0) > 0 && (
-              <Tag color="red" icon={<WarningOutlined />}>{station.fault_count} {t('station.fault')}</Tag>
+            {(faultCount ?? 0) > 0 && (
+              <Tag color="red" icon={<WarningOutlined />}>{faultCount} {t('station.fault')}</Tag>
             )}
           </Space>
         </Col>
