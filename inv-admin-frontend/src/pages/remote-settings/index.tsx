@@ -70,18 +70,10 @@ const RemoteSettingsPage: React.FC = () => {
         远程配置逆变器运行参数，支持实时下发与生效
       </Text>
 
-      <DeviceSelector selectedSn={selectedSn} onDeviceChange={setSelectedSn} />
-
-      {selectedDevice && (
-        <div style={{ marginTop: 16, marginBottom: 24 }}>
-          <Button type="primary" icon={<ReloadOutlined />} onClick={handleRead} loading={reading}>
-            读取当前设置
-          </Button>
-        </div>
-      )}
+      <DeviceSelector selectedSn={selectedSn} onDeviceChange={setSelectedSn} onRead={handleRead} reading={reading} />
 
       {selectedSn ? (
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div>
           <Collapse
             activeKey={activeKeys}
             onChange={(keys) => setActiveKeys(keys as string[])}
