@@ -978,6 +978,8 @@ class AppLocalizations {
 
     return message;
   }
+
+  String get inverterNoResponse => _localizedStrings['inverter_no_response']!;
 }
 
 class _AppLocalizationsDelegate

@@ -1006,4 +1006,5 @@ const Map<String, String> zh = {
   'current_firmware_version': '当前固件版本',
   'alarm_label': '告警',
   'source_label': '来源',
+  'inverter_no_response': '逆变器无响应，已自动断开设备热点并切回家用 WiFi',
 };

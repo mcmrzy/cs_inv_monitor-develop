@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
+import 'package:inv_app/core/services/inverter_connection_monitor.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/offline_action.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
@@ -25,6 +26,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   String? _activeSN;
   Timer? _localPollTimer;
   String? _localPollIP;
+  final InverterConnectionMonitor _connectionMonitor = InverterConnectionMonitor();
 
   DeviceBloc({
     required this.repository,
@@ -48,12 +50,14 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     on<DeviceLocalRealtimeUpdate>(_onLocalRealtimeUpdate);
     on<DeviceLocalParamsRequested>(_onLocalParamsRequested);
     on<DeviceLocalParamsUpdateRequested>(_onLocalParamsUpdateRequested);
+    on<DeviceAutoDisconnected>(_onAutoDisconnected);
   }
 
   @override
   Future<void> close() {
     _mqttSub?.cancel();
     _localPollTimer?.cancel();
+    _connectionMonitor.dispose();
     if (_activeSN != null) {
       mqttService.unsubscribeDeviceTopics(_activeSN!);
     }
@@ -331,6 +335,15 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     _localPollTimer?.cancel();
     _localPollIP = event.deviceIP;
 
+    // 启动逆变器连接监控：30秒后检测 AC 电流/功率，无响应则自动断开热点
+    _connectionMonitor.start(
+      onAutoDisconnected: () {
+        if (!isClosed) {
+          add(const DeviceAutoDisconnected());
+        }
+      },
+    );
+
     _localPollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       if (localCommunicationService == null || isClosed) return;
       try {
@@ -338,6 +351,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
         final rawData = await localCommunicationService!.getRealtimeData();
         final realtime = InverterRealtime.fromJson(rawData);
         if (!isClosed) {
+          // 将实时数据喂给连接监控器检测 AC 输出
+          _connectionMonitor.feedRealtime(realtime);
           add(DeviceLocalRealtimeUpdate(realtime));
         }
       } catch (_) {}
@@ -351,6 +366,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     _localPollTimer?.cancel();
     _localPollTimer = null;
     _localPollIP = null;
+    _connectionMonitor.stop();
   }
 
   void _onLocalRealtimeUpdate(
@@ -362,6 +378,25 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       emit(DeviceDetailLoaded(
           device: currentState.device, realtimeData: event.data));
     }
+  }
+
+  void _onAutoDisconnected(
+    DeviceAutoDisconnected event,
+    Emitter<DeviceState> emit,
+  ) {
+    // 停止本地轮询和监控
+    _localPollTimer?.cancel();
+    _localPollTimer = null;
+    _localPollIP = null;
+    _connectionMonitor.stop();
+
+    // 切换回远程模式
+    connectionModeService?.switchToRemote();
+    localCommunicationService?.disconnect();
+
+    emit(const DeviceLocalDisconnected(
+      reason: 'inverter_no_response',
+    ));
   }
 
   Future<void> _onLocalParamsRequested(

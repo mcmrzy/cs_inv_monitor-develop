@@ -164,3 +164,11 @@ class DeviceLocalParamsUpdateRequested extends DeviceEvent {
   @override
   List<Object?> get props => [deviceIP, params];
 }
+
+/// 逆变器自动断开事件：30秒后检测到 AC 电流/功率均为 0，已自动断开设备热点
+class DeviceAutoDisconnected extends DeviceEvent {
+  const DeviceAutoDisconnected();
+
+  @override
+  List<Object?> get props => [];
+}
