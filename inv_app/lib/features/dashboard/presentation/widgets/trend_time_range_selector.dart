@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 /// 趋势图时间范围选择器
 /// 支持日/周/月视图切换
@@ -16,6 +17,7 @@ class TrendTimeRangeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: EdgeInsets.all(4.w),
       decoration: BoxDecoration(
@@ -25,10 +27,10 @@ class TrendTimeRangeSelector extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildRangeButton(context, '日', 'day'),
-          _buildRangeButton(context, '30日', '30days'),
-          _buildRangeButton(context, '周', 'week'),
-          _buildRangeButton(context, '月', 'month'),
+          _buildRangeButton(context, l10n.timeDay, 'day'),
+          _buildRangeButton(context, l10n.time30Days, '30days'),
+          _buildRangeButton(context, l10n.timeWeek, 'week'),
+          _buildRangeButton(context, l10n.timeMonth, 'month'),
         ],
       ),
     );

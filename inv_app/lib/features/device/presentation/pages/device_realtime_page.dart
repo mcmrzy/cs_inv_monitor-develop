@@ -894,7 +894,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '协议遥测',
+                    AppLocalizations.of(context)!.protocolTelemetryTitle,
                     style: TextStyle(
                         fontSize: 14.sp,
                         fontWeight: FontWeight.w600,
@@ -902,7 +902,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                   ),
                   SizedBox(height: 2.h),
                   Text(
-                    '告警生命周期、并机当前态与三相 3 分钟历史',
+                    AppLocalizations.of(context)!.protocolTelemetryDesc,
                     style:
                         TextStyle(fontSize: 12.sp, color: AppColors.textHint),
                   ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -118,7 +119,7 @@ class LocalCommunicationService {
       }
       return {};
     } catch (e) {
-      print('getDeviceInfo failed: $e');
+      debugPrint('getDeviceInfo failed: $e');
       return {};
     }
   }
@@ -143,11 +144,11 @@ class LocalCommunicationService {
     void Function(int sent, int total)? onProgress,
   }) async {
     await _ensureWifiUsage();
-    print('Uploading firmware to: http://${_deviceIP}/ota/upload (target=$target)');
+    debugPrint('Uploading firmware to: http://${_deviceIP}/ota/upload (target=$target)');
   
     final file = File(filePath);
     final bytes = await file.readAsBytes();
-    print('File size: ${bytes.length} bytes');
+    debugPrint('File size: ${bytes.length} bytes');
   
     if (target == 'arm') {
       await _uploadMultipart(bytes, file.path, onProgress: onProgress);
@@ -162,7 +163,7 @@ class LocalCommunicationService {
     void Function(int sent, int total)? onProgress,
   }) async {
     final socket = await Socket.connect(_deviceIP, 80, timeout: const Duration(seconds: 10));
-    print('Socket connected for upload (octet-stream)');
+    debugPrint('Socket connected for upload (octet-stream)');
   
     final requestHeader = 'POST /ota/upload HTTP/1.0\r\n'
         'Host: ${_deviceIP}\r\n'
@@ -202,7 +203,7 @@ class LocalCommunicationService {
     body.setRange(head.length + bytes.length, body.length, tail);
   
     final socket = await Socket.connect(_deviceIP, 80, timeout: const Duration(seconds: 10));
-    print('Socket connected for upload (multipart, target=arm)');
+    debugPrint('Socket connected for upload (multipart, target=arm)');
   
     final requestHeader = 'POST /ota/upload HTTP/1.0\r\n'
         'Host: ${_deviceIP}\r\n'
@@ -236,10 +237,10 @@ class LocalCommunicationService {
         }
         await Future.delayed(const Duration(milliseconds: 5));
       }
-      print('Upload data sent ($sent bytes), waiting for response...');
+      debugPrint('Upload data sent ($sent bytes), waiting for response...');
     } catch (e) {
       if (sent >= body.length - chunkSize) {
-        print('Upload: connection reset after sending $sent/${body.length} bytes, ESP32 likely restarting');
+        debugPrint('Upload: connection reset after sending $sent/${body.length} bytes, ESP32 likely restarting');
         try { socket.destroy(); } catch (_) {}
         return;
       }
@@ -260,7 +261,7 @@ class LocalCommunicationService {
         }
       },
       onError: (e) {
-        print('Upload: connection error after all data sent (${e.runtimeType}), ESP32 likely restarting');
+        debugPrint('Upload: connection error after all data sent (${e.runtimeType}), ESP32 likely restarting');
         if (!completer.isCompleted) {
           completer.complete('');
         }
@@ -274,12 +275,12 @@ class LocalCommunicationService {
         onTimeout: () => responseBuf.toString(),
       );
     } catch (e) {
-      print('Upload: timeout/error after all data sent, assuming ESP32 restart');
+      debugPrint('Upload: timeout/error after all data sent, assuming ESP32 restart');
       try { socket.destroy(); } catch (_) {}
       return;
     }
   
-    print('Upload response: $response');
+    debugPrint('Upload response: $response');
   
     try {
       socket.destroy();
@@ -292,7 +293,7 @@ class LocalCommunicationService {
 
   Future<Map<String, dynamic>> getOTAProgress() async {
     await _ensureWifiUsage();
-    print('Getting OTA progress from: http://$_deviceIP/ota/progress');
+    debugPrint('Getting OTA progress from: http://$_deviceIP/ota/progress');
     
     try {
       final socket = await Socket.connect(_deviceIP, 80, timeout: const Duration(seconds: 5));
@@ -327,7 +328,7 @@ class LocalCommunicationService {
         },
       );
       
-      print('OTA progress response: $response');
+      debugPrint('OTA progress response: $response');
       
       try {
         socket.destroy();
@@ -349,7 +350,7 @@ class LocalCommunicationService {
       throw DeviceConnectionException('设备响应超时: $e');
     } catch (e) {
       // 其他异常（JSON解析等），返回空Map（设备过渡状态）
-      print('Get OTA progress parse failed: $e');
+      debugPrint('Get OTA progress parse failed: $e');
       return {};
     }
   }
@@ -415,15 +416,15 @@ class LocalCommunicationService {
     try {
       await _ensureWifiUsage();
       final url = 'http://$_deviceIP/ota/info';
-      print('Testing connection to: $url');
+      debugPrint('Testing connection to: $url');
       
       final socket = await Socket.connect(_deviceIP, 80, timeout: const Duration(seconds: 5));
-      print('Socket connected');
+      debugPrint('Socket connected');
       
       final request = 'GET /ota/info HTTP/1.0\r\n\r\n';
       socket.write(request);
       await socket.flush();
-      print('Request sent');
+      debugPrint('Request sent');
       
       final completer = Completer<String>();
       final buffer = StringBuffer();
@@ -451,8 +452,8 @@ class LocalCommunicationService {
         },
       );
       
-      print('Response received (${response.length} chars)');
-      print('Response: $response');
+      debugPrint('Response received (${response.length} chars)');
+      debugPrint('Response: $response');
       
       try {
         socket.destroy();
@@ -460,7 +461,7 @@ class LocalCommunicationService {
       
       return response.contains('200');
     } catch (e) {
-      print('Test connection failed: $e');
+      debugPrint('Test connection failed: $e');
       return false;
     }
   }

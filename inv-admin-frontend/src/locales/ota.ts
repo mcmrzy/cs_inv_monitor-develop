@@ -287,6 +287,16 @@ export default {
     'ota.next': '下一步',
     'ota.prev': '上一步',
     'ota.submit': '提交',
+    // 升级状态
+    'ota.upgradeStatusPending': '待执行',
+    'ota.upgradeStatusDownloading': '下载中',
+    'ota.upgradeStatusUpgrading': '升级中',
+    'ota.upgradeStatusSuccess': '成功',
+    'ota.upgradeStatusFailed': '失败',
+    'ota.upgradeStatusCancelled': '已取消',
+    // 发布弹窗
+    'ota.publishSuccessMsg': '已发布，用户将在App中看到更新提示',
+    'ota.publishFailPrefix': '推送失败',
   },
   en: {
     'ota.title': 'OTA Upgrade',
@@ -576,5 +586,15 @@ export default {
     'ota.next': 'Next',
     'ota.prev': 'Previous',
     'ota.submit': 'Submit',
+    // Upgrade statuses
+    'ota.upgradeStatusPending': 'Pending',
+    'ota.upgradeStatusDownloading': 'Downloading',
+    'ota.upgradeStatusUpgrading': 'Upgrading',
+    'ota.upgradeStatusSuccess': 'Success',
+    'ota.upgradeStatusFailed': 'Failed',
+    'ota.upgradeStatusCancelled': 'Cancelled',
+    // Publish modal
+    'ota.publishSuccessMsg': 'Published. Users will see the update prompt in the App.',
+    'ota.publishFailPrefix': 'Push failed',
   },
 }

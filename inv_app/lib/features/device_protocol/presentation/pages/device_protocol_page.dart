@@ -6,6 +6,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/device_protocol/domain/entities/device_protocol_entities.dart';
 import 'package:inv_app/features/device_protocol/domain/repositories/device_protocol_repository.dart';
 import 'package:inv_app/features/device_protocol/presentation/bloc/device_protocol_bloc.dart';
+import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceProtocolPage extends StatelessWidget {
   const DeviceProtocolPage({super.key, required this.sn});
@@ -35,13 +36,14 @@ class _DeviceProtocolView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('协议遥测'),
+        title: Text(l10n.protocolTelemetry),
         actions: [
           IconButton(
-            tooltip: '刷新',
+            tooltip: l10n.refreshLabel,
             onPressed: () => context
                 .read<DeviceProtocolBloc>()
                 .add(DeviceProtocolRequested(sn)),
@@ -65,10 +67,10 @@ class _DeviceProtocolView extends StatelessWidget {
               children: [
                 _sectionCard(
                   context,
-                  title: '告警事件生命周期',
+                  title: l10n.alarmLifecycle,
                   icon: Icons.notifications_active_outlined,
                   section: state.alarms,
-                  emptyText: '暂无告警事件',
+                  emptyText: l10n.noAlarmEvents,
                   content: (events) => Column(
                     children: events
                         .map((event) => _alarmRow(context, event))
@@ -78,19 +80,19 @@ class _DeviceProtocolView extends StatelessWidget {
                 const SizedBox(height: 12),
                 _sectionCard(
                   context,
-                  title: '并机当前态',
+                  title: l10n.parallelCurrentState,
                   icon: Icons.hub_outlined,
                   section: state.parallel,
-                  emptyText: '当前设备未启用并机',
+                  emptyText: l10n.parallelNotEnabled,
                   content: (parallel) => _parallelContent(context, parallel),
                 ),
                 const SizedBox(height: 12),
                 _sectionCard(
                   context,
-                  title: '三相历史（3 分钟采样）',
+                  title: l10n.threePhaseHistory,
                   icon: Icons.stacked_line_chart_rounded,
                   section: state.threePhase,
-                  emptyText: '暂无三相历史数据',
+                  emptyText: l10n.noThreePhaseData,
                   content: (samples) => Column(
                     children: samples
                         .map((sample) => _threePhaseRow(context, sample))
@@ -113,6 +115,7 @@ class _DeviceProtocolView extends StatelessWidget {
     required String emptyText,
     required Widget Function(T value) content,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     Widget body;
     switch (section.status) {
       case ProtocolSectionStatus.data:
@@ -126,13 +129,13 @@ class _DeviceProtocolView extends StatelessWidget {
       case ProtocolSectionStatus.forbidden:
         body = _message(
           Icons.lock_outline_rounded,
-          section.message ?? '无权限访问该设备',
+          section.message ?? l10n.noPermissionDevice,
           AppColors.warning,
         );
       case ProtocolSectionStatus.error:
         body = _message(
           Icons.error_outline_rounded,
-          section.message ?? '加载失败',
+          section.message ?? l10n.loadFailed,
           AppColors.error,
         );
     }
@@ -171,7 +174,7 @@ class _DeviceProtocolView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '离线缓存 · 缓存时间 ${_time(section.cachedAt)}',
+                  '${l10n.offlineCache} ${_time(section.cachedAt)}',
                   style: const TextStyle(
                     color: AppColors.warning,
                     fontSize: 12,
@@ -201,6 +204,7 @@ class _DeviceProtocolView extends StatelessWidget {
   }
 
   Widget _alarmRow(BuildContext context, AlarmProtocolEvent event) {
+    final l10n = AppLocalizations.of(context)!;
     final active = event.isActive;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -217,12 +221,12 @@ class _DeviceProtocolView extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '告警 ${event.code} · 来源 ${event.source}',
+                  '${l10n.alarmLabel} ${event.code} · ${l10n.sourceLabel} ${event.source}',
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
               Text(
-                active ? '发生' : '恢复',
+                active ? l10n.eventOccurred : l10n.eventRecovered,
                 style: TextStyle(
                   color: active ? AppColors.error : AppColors.success,
                   fontWeight: FontWeight.w600,
@@ -231,8 +235,8 @@ class _DeviceProtocolView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text('采样时间：${_time(event.eventTime)}'),
-          Text('接收时间：${_time(event.receivedAt)}'),
+          Text('${l10n.samplingTime}：${_time(event.eventTime)}'),
+          Text('${l10n.receiveTime}：${_time(event.receivedAt)}'),
         ],
       ),
     );
@@ -242,15 +246,16 @@ class _DeviceProtocolView extends StatelessWidget {
     BuildContext context,
     DeviceParallelState parallel,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('主机：${parallel.masterSn}'),
-        Text('模式：${parallel.mode} · 同步：${parallel.syncState}'),
+        Text('${l10n.masterHost}：${parallel.masterSn}'),
+        Text('${l10n.modeLabel}：${parallel.mode} · ${l10n.syncLabel}：${parallel.syncState}'),
         Text(
-          '设备数：${parallel.count} · 总功率：${parallel.totalActivePower.toStringAsFixed(1)} W',
+          '${l10n.deviceCount}：${parallel.count} · ${l10n.totalPower}：${parallel.totalActivePower.toStringAsFixed(1)} W',
         ),
-        Text('上报时间：${_time(parallel.reportedAt)}'),
+        Text('${l10n.reportTime}：${_time(parallel.reportedAt)}'),
         if (parallel.machines.isNotEmpty) ...[
           const Divider(height: 24),
           ...parallel.machines.map(
@@ -269,6 +274,7 @@ class _DeviceProtocolView extends StatelessWidget {
   }
 
   Widget _threePhaseRow(BuildContext context, ThreePhaseSample sample) {
+    final l10n = AppLocalizations.of(context)!;
     String triple(List<double> values, String unit) {
       return '${values.map((value) => value.toStringAsFixed(1)).join(' / ')} $unit';
     }
@@ -284,17 +290,17 @@ class _DeviceProtocolView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '采样时间：${_time(sample.eventTime)}',
+            '${l10n.samplingTime}：${_time(sample.eventTime)}',
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
-          Text('接收时间：${_time(sample.receivedAt)}'),
+          Text('${l10n.receiveTime}：${_time(sample.receivedAt)}'),
           const SizedBox(height: 6),
-          Text('相电压 L1/L2/L3：${triple(sample.voltage, 'V')}'),
-          Text('相电流 L1/L2/L3：${triple(sample.current, 'A')}'),
-          Text('有功功率 L1/L2/L3：${triple(sample.activePower, 'W')}'),
+          Text('${l10n.phaseVoltage}：${triple(sample.voltage, 'V')}'),
+          Text('${l10n.phaseCurrent}：${triple(sample.current, 'A')}'),
+          Text('${l10n.phaseActivePower}：${triple(sample.activePower, 'W')}'),
           Text(
-            '总有功：${sample.totalActivePower.toStringAsFixed(1)} W · '
-            '频率：${sample.frequency.toStringAsFixed(2)} Hz',
+            '${l10n.totalActiveLabel}：${sample.totalActivePower.toStringAsFixed(1)} W · '
+            '${l10n.frequencyLabel}：${sample.frequency.toStringAsFixed(2)} Hz',
           ),
         ],
       ),

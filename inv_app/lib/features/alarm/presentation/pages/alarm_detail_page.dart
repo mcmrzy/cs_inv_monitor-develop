@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
@@ -46,7 +46,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
       case 'info':
         return l10n.infoLevel;
       case 'normal':
-        return '正常';
+        return l10n.normal;
       default:
         return l10n.unknown;
     }
@@ -208,7 +208,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
         break;
       case 'normal':
         iconData = Icons.check_circle_outline;
-        statusText = '正常';
+        statusText = l10n.normal;
         break;
       default:
         iconData = Icons.notifications_none;

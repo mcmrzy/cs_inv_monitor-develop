@@ -737,7 +737,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         break;
       case 'normal':
         levelColor = AppColors.success;
-        levelText = '正常';
+        levelText = _l10n.normal;
         break;
       default:
         levelColor = AppColors.textHint;

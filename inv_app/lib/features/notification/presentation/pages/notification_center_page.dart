@@ -303,7 +303,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
         break;
       case 'normal':
         levelColor = AppColors.success;
-        levelText = '正常';
+        levelText = l10n.normal;
         iconData = Icons.check_circle_outline;
         break;
       default:

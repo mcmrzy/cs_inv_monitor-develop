@@ -812,6 +812,64 @@ class AppLocalizations {
 
   String get confirmExecute => _localizedStrings['confirm_execute'] ?? 'Confirm Execute';
 
+  // Phase 5 additions
+  String get pvGenerationPower => _localizedStrings['pv_generation_power'] ?? 'PV Generation Power';
+  String get time30Days => _localizedStrings['time_30_days'] ?? '30D';
+  String get confirmInstall => _localizedStrings['confirm_install'] ?? 'Confirm Install';
+  String oldVersionWarning(String version) => str('old_version_warning', {'version': version});
+  String get installingFirmware => _localizedStrings['installing_firmware'] ?? 'Installing firmware...';
+  String get loadingUpgradeList => _localizedStrings['loading_upgrade_list'] ?? 'Loading upgrade list...';
+  String get noUpgradesAvailable => _localizedStrings['no_upgrades_available'] ?? 'No upgrades available';
+  String get currentVersionLabel => _localizedStrings['current_version_badge'] ?? 'Current Version';
+  String get forceUpgrade => _localizedStrings['force_upgrade'] ?? 'Force Upgrade';
+  String get installThisVersion => _localizedStrings['install_this_version'] ?? 'Install this version';
+  String get rescan => _localizedStrings['rescan'] ?? 'Rescan';
+  String get sendFailed => _localizedStrings['send_failed'] ?? 'Send failed';
+  String get bleDiscoveringServices => _localizedStrings['ble_discovering_services'] ?? 'Discovering services...';
+  String get bleConnectedDevice => _localizedStrings['ble_connected_device'] ?? 'Device connected';
+  String get bleSuccessExclaim => _localizedStrings['ble_success_exclaim'] ?? 'Provisioning success!';
+  String get bleProvisionReady => _localizedStrings['ble_ready'] ?? 'Ready';
+  String get bleScanningShort => _localizedStrings['ble_scanning_short'] ?? 'Scanning...';
+  String get deviceConnectingWifi => _localizedStrings['device_connecting_wifi'] ?? 'Device is connecting to WiFi, please check device status';
+  String get checkDeviceWorking => _localizedStrings['check_device_working'] ?? 'Please check if the device is working properly, then rescan';
+  String get ensureProvisionMode => _localizedStrings['ensure_provision_mode'] ?? 'Please ensure the device is powered on and in provisioning mode';
+  String get bleModeDescription => _localizedStrings['ble_mode_description'] ?? 'BLE Config: Scan devices via Bluetooth, configure WiFi without switching networks';
+  String get provisioningNow => _localizedStrings['provisioning_now'] ?? 'Provisioning...';
+  String get sendWifiConfig => _localizedStrings['send_wifi_config'] ?? 'Send WiFi Config';
+  String get protocolTelemetry => _localizedStrings['protocol_telemetry'] ?? 'Protocol Telemetry';
+  String get refreshLabel => _localizedStrings['refresh_label'] ?? 'Refresh';
+  String get alarmLifecycle => _localizedStrings['alarm_lifecycle'] ?? 'Alarm Event Lifecycle';
+  String get noAlarmEvents => _localizedStrings['no_alarm_events'] ?? 'No alarm events';
+  String get parallelCurrentState => _localizedStrings['parallel_current_state'] ?? 'Parallel Current State';
+  String get parallelNotEnabled => _localizedStrings['parallel_not_enabled'] ?? 'Parallel not enabled for this device';
+  String get threePhaseHistory => _localizedStrings['three_phase_history'] ?? 'Three-phase History (3min sampling)';
+  String get noThreePhaseData => _localizedStrings['no_three_phase_data'] ?? 'No three-phase history data';
+  String get noPermissionDevice => _localizedStrings['no_permission_device'] ?? 'No permission to access this device';
+  String get loadFailed => _localizedStrings['load_failed'] ?? 'Load failed';
+  String get offlineCache => _localizedStrings['offline_cache'] ?? 'Offline cache · Cached at';
+  String get eventOccurred => _localizedStrings['event_occurred'] ?? 'Occurred';
+  String get eventRecovered => _localizedStrings['event_recovered'] ?? 'Recovered';
+  String get samplingTime => _localizedStrings['sampling_time'] ?? 'Sampling Time';
+  String get receiveTime => _localizedStrings['receive_time'] ?? 'Receive Time';
+  String get masterHost => _localizedStrings['master_host'] ?? 'Master';
+  String get modeLabel => _localizedStrings['mode_label'] ?? 'Mode';
+  String get syncLabel => _localizedStrings['sync_label'] ?? 'Sync';
+  String get deviceCount => _localizedStrings['device_count'] ?? 'Devices';
+  String get totalPower => _localizedStrings['total_power'] ?? 'Total Power';
+  String get reportTime => _localizedStrings['report_time'] ?? 'Report Time';
+  String get phaseVoltage => _localizedStrings['phase_voltage'] ?? 'Phase Voltage L1/L2/L3';
+  String get phaseCurrent => _localizedStrings['phase_current'] ?? 'Phase Current L1/L2/L3';
+  String get phaseActivePower => _localizedStrings['phase_active_power'] ?? 'Active Power L1/L2/L3';
+  String get totalActiveLabel => _localizedStrings['total_active_label'] ?? 'Total Active';
+  String get frequencyLabel => _localizedStrings['frequency_label'] ?? 'Frequency';
+  String get protocolTelemetryTitle => _localizedStrings['protocol_telemetry_title'] ?? 'Protocol Telemetry';
+  String get protocolTelemetryDesc => _localizedStrings['protocol_telemetry_desc'] ?? 'Alarm lifecycle, parallel state & three-phase 3min history';
+  String get chipFirmwareVersion => _localizedStrings['chip_firmware_version'] ?? 'Chip Firmware Version';
+  String get viewAvailableUpgrades => _localizedStrings['view_available_upgrades'] ?? 'View available upgrades';
+  String get currentFirmwareVersion => _localizedStrings['current_firmware_version'] ?? 'Current Firmware Version';
+  String get alarmLabel => _localizedStrings['alarm_label'] ?? 'Alarm';
+  String get sourceLabel => _localizedStrings['source_label'] ?? 'Source';
+
   /// 将英文/中文错误消息翻译为当前语言
   /// 支持 [code] message 格式、英文/中文精确匹配和前缀匹配
   String translateError(String message) {

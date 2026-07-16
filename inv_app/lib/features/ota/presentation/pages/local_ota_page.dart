@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -142,6 +143,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         return;
       }
       final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
+      if (!mounted) return;
       if (!serviceEnabled) {
         final l10n = AppLocalizations.of(context)!;
         setState(() { _scanningWifi = false; _errorMessage = l10n.enableLocationService; });
@@ -268,7 +270,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     try {
       currentSsid = await WiFiForIoTPlugin.getSSID();
       final isConnected = await WiFiForIoTPlugin.isConnected();
-      print('Current SSID: $currentSsid, isConnected: $isConnected');
+      debugPrint('Current SSID: $currentSsid, isConnected: $isConnected');
       
       if (currentSsid == null || !currentSsid.startsWith('CS_INV')) {
         setState(() {
@@ -278,21 +280,21 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         return;
       }
     } catch (e) {
-      print('getSSID error: $e');
+      debugPrint('getSSID error: $e');
     }
 
     // 强制使用WiFi
     try {
       await WiFiForIoTPlugin.forceWifiUsage(true);
-      print('forceWifiUsage(true) called');
+      debugPrint('forceWifiUsage(true) called');
       await Future.delayed(const Duration(seconds: 3));
     } catch (e) {
-      print('forceWifiUsage error: $e');
+      debugPrint('forceWifiUsage error: $e');
     }
 
     // 尝试连接
     final connected = await _firmwareService.testDeviceConnection(widget.deviceIP);
-    print('Connection test result: $connected');
+    debugPrint('Connection test result: $connected');
     
     if (connected) {
       _goToStep(LocalOTAStep.pushFirmware);
@@ -436,7 +438,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         },
       );
     } catch (e) {
-      print('Report local OTA result failed: $e');
+      debugPrint('Report local OTA result failed: $e');
       // 上报失败不影响用户体验，静默处理
     }
   }
@@ -558,7 +560,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         // 优先使用 main_version 作为展示版本
         final displayVersion = mainVer.isNotEmpty ? mainVer : chipVer;
 
-        print('OTA progress: status=$status, main_version=$mainVer, chip_version=$chipVer, raw=$progress');
+        debugPrint('OTA progress: status=$status, main_version=$mainVer, chip_version=$chipVer, raw=$progress');
 
         if (mounted) {
           setState(() {
@@ -580,7 +582,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             try {
               final info = await _firmwareService.getDeviceInfo(
                   deviceIP: widget.deviceIP,);
-              print('Device info response: $info');
+              debugPrint('Device info response: $info');
               // 同样优先 main_version
               final infoMainVer = info['main_version'] as String? ?? '';
               final infoChipVer = (info[firmwareKey] as String? ?? '').isNotEmpty
@@ -590,10 +592,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                       : (info['version'] as String? ?? '');
               newVersion = infoMainVer.isNotEmpty ? infoMainVer : (infoChipVer.isNotEmpty ? infoChipVer : null);
             } catch (e) {
-              print('Failed to get device info: $e');
+              debugPrint('Failed to get device info: $e');
             }
           }
-          print('Final newVersion: $newVersion, chipNewVersion: $chipNewVersion');
+          debugPrint('Final newVersion: $newVersion, chipNewVersion: $chipNewVersion');
           if (mounted) {
             setState(() {
               _isProcessing = false;

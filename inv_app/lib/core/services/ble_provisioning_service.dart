@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -364,16 +365,16 @@ class BleProvisioningService {
         
         // 先启用通知（必须在监听之前）
         await characteristic.setNotifyValue(true);
-        print('[BLE] 已订阅状态通知，特征UUID: ${characteristic.uuid}');
+        debugPrint('[BLE] Subscribed to status notifications, characteristic UUID: ${characteristic.uuid}');
         
         // 监听状态变化
         characteristic.lastValueStream.listen((value) {
           if (value.isNotEmpty) {
             final status = String.fromCharCodes(value);
-            print('[BLE] 收到状态通知: $status');
+            debugPrint('[BLE] Received status notification: $status');
             _handleStatusUpdate(status);
           } else {
-            print('[BLE] 收到空状态通知');
+            debugPrint('[BLE] Received empty status notification');
           }
         });
         
@@ -393,12 +394,12 @@ class BleProvisioningService {
     }
   }
 
-  /// 处理状态更新
+  /// Processing status update
   void _handleStatusUpdate(String status) {
-    print('[BLE] 处理状态更新: $status (长度: ${status.length})');
+    debugPrint('[BLE] Processing status update: $status (length: ${status.length})');
     // 去除空白字符和空字符
     final cleanStatus = status.replaceAll(RegExp(r'[\s\x00]+'), '');
-    print('[BLE] 清理后状态: $cleanStatus');
+    debugPrint('[BLE] Cleaned status: $cleanStatus');
     
     if (!_resultController.isClosed) {
       switch (cleanStatus) {
@@ -420,11 +421,11 @@ class BleProvisioningService {
           _emitStatus(BleProvisioningStatus.bleConnected);
           break;
         default:
-          print('[BLE] 未知状态: $cleanStatus');
+          debugPrint('[BLE] Unknown status: $cleanStatus');
           break;
       }
     } else {
-      print('[BLE] 结果流已关闭，忽略状态更新');
+      debugPrint('[BLE] Result stream closed, ignoring status update');
     }
   }
 
@@ -468,11 +469,11 @@ class BleProvisioningService {
 
       // 先写入SSID
       await ssidCharacteristic.write(ssid.codeUnits, withoutResponse: false);
-      print('[BLE] 已写入SSID: $ssid');
+      debugPrint('[BLE] Written SSID: $ssid');
       
       // 写入密码（触发配网）
       await passwordCharacteristic.write(password.codeUnits, withoutResponse: false);
-      print('[BLE] 已写入密码，等待设备响应...');
+      debugPrint('[BLE] Written password, waiting for device response...');
 
       _emitStatus(BleProvisioningStatus.waitingForResult);
 

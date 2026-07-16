@@ -160,7 +160,7 @@ class _AlarmPageState extends State<AlarmPage> {
         break;
       case 'normal':
         levelColor = AppColors.success;
-        levelText = '正常';
+        levelText = l10n.normal;
         break;
       default:
         levelColor = AppColors.textHint;

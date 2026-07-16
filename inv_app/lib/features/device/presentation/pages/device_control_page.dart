@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/utils/energy_schedule.dart';
+
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceControlPage extends StatefulWidget {

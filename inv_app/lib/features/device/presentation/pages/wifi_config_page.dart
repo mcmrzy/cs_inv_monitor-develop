@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -465,8 +466,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Future<void> _startBleScan() async {
-    print('[BLE] _startBleScan 被调用');
-    print('[BLE] 当前状态: _bleScanning=$_bleScanning, _provisionSuccess=$_provisionSuccess, _bleStatus=$_bleStatus');
+    debugPrint('[BLE] _startBleScan called');
+    debugPrint('[BLE] Current state: _bleScanning=$_bleScanning, _provisionSuccess=$_provisionSuccess, _bleStatus=$_bleStatus');
     setState(() {
       _bleDevices = [];
       _selectedBleDevice = null;
@@ -501,7 +502,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         _selectedBleDevice = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result.message ?? '连接失败'),
+        content: Text(result.message ?? AppLocalizations.of(context)!.connectionFailed),
         backgroundColor: AppColors.errorLight,
       ),);
     }
@@ -538,7 +539,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         _provisioning = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result.message ?? '发送失败'),
+        content: Text(result.message ?? AppLocalizations.of(context)!.sendFailed),
         backgroundColor: AppColors.errorLight,
       ),);
     }
@@ -575,8 +576,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         duration: const Duration(seconds: 3),
       ),);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('配网成功，等待设备上线中...'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(AppLocalizations.of(context)!.provisionSuccessWaiting),
         backgroundColor: Color(0xFFF59E0B),
         duration: Duration(seconds: 3),
       ),);
@@ -586,33 +587,34 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   String _getBleStatusText() {
+    final l10n = AppLocalizations.of(context)!;
     switch (_bleStatus) {
       case BleProvisioningStatus.idle:
-        return '就绪';
+        return l10n.bleProvisionReady;
       case BleProvisioningStatus.scanning:
-        return '正在扫描...';
+        return l10n.bleScanningShort;
       case BleProvisioningStatus.connecting:
-        return '正在连接设备...';
+        return l10n.bleConnecting;
       case BleProvisioningStatus.discoveringServices:
-        return '正在发现服务...';
+        return l10n.bleDiscoveringServices;
       case BleProvisioningStatus.readingDeviceInfo:
-        return '正在读取设备信息...';
+        return l10n.bleReadingInfo;
       case BleProvisioningStatus.subscribingNotifications:
-        return '正在订阅状态...';
+        return l10n.bleSubscribing;
       case BleProvisioningStatus.writingCredentials:
-        return '正在写入WiFi凭据...';
+        return l10n.bleWritingCredentials;
       case BleProvisioningStatus.waitingForResult:
-        return '等待配网结果...';
+        return l10n.bleWaitingResult;
       case BleProvisioningStatus.bleConnected:
-        return '已连接设备';
+        return l10n.bleConnectedDevice;
       case BleProvisioningStatus.wifiConnected:
-        return '配网成功！';
+        return l10n.bleSuccessExclaim;
       case BleProvisioningStatus.failed:
-        return '配网失败';
+        return l10n.bleFailed;
       case BleProvisioningStatus.timeout:
-        return '配网超时';
+        return l10n.bleTimeout;
       case BleProvisioningStatus.error:
-        return '配网错误';
+        return l10n.bleError;
     }
   }
 
@@ -649,6 +651,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Widget _buildModeSwitch() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       padding: EdgeInsets.all(4.w),
       decoration: BoxDecoration(
@@ -678,7 +681,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 Icon(Icons.bluetooth, size: 18.sp,
                   color: _provisionMode == _ProvisionMode.ble ? Colors.white : AppColors.textSecondary,),
                 SizedBox(width: 6.w),
-                Text('BLE配网',
+                Text(l10n.bleProvision,
                   style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600,
                     color: _provisionMode == _ProvisionMode.ble ? Colors.white : AppColors.textSecondary,),),
               ],),
@@ -921,7 +924,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   }
 
   Widget _buildBleSection() {
-    // 计算当前状态
+     final l10n = AppLocalizations.of(context)!;
+    // 计算Current state
     final bool deviceSelected = _selectedBleDevice != null;
     final bool isConfiguring = _bleStatus == BleProvisioningStatus.writingCredentials || 
                                _bleStatus == BleProvisioningStatus.waitingForResult;
@@ -974,12 +978,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             const Icon(Icons.check_circle, color: AppColors.successLight, size: 40),
             SizedBox(height: 12.h),
             Text(
-              '配网成功！',
+              l10n.bleSuccessExclaim,
               style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.successLight),
             ),
             SizedBox(height: 8.h),
             Text(
-              '设备正在连接WiFi，请稍候查看设备状态',
+              l10n.deviceConnectingWifi,
               style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -999,7 +1003,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                   _disconnectBleDevice();
                 },
                 icon: const Icon(Icons.check, size: 20),
-                label: const Text('完成', style: TextStyle(fontSize: 15)),
+                label: Text(l10n.done, style: const TextStyle(fontSize: 15)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -1023,13 +1027,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             const Icon(Icons.error_outline, color: AppColors.errorLight, size: 40),
             SizedBox(height: 12.h),
             Text(
-              _bleStatus == BleProvisioningStatus.timeout ? '配网超时' : 
-              _bleStatus == BleProvisioningStatus.failed ? '配网失败' : '配网错误',
+              _bleStatus == BleProvisioningStatus.timeout ? l10n.bleTimeout : 
+              _bleStatus == BleProvisioningStatus.failed ? l10n.bleFailed : l10n.bleError,
               style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.errorLight),
             ),
             SizedBox(height: 8.h),
             Text(
-              '请检查设备是否正常工作，然后重新扫描',
+              l10n.checkDeviceWorking,
               style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -1040,7 +1044,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               child: ElevatedButton.icon(
                 onPressed: _startBleScan,
                 icon: const Icon(Icons.refresh, size: 20),
-                label: const Text('重新扫描', style: TextStyle(fontSize: 15)),
+                label: Text(l10n.rescan, style: const TextStyle(fontSize: 15)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -1064,12 +1068,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             const Icon(Icons.bluetooth_disabled, color: AppColors.textHint, size: 40),
             SizedBox(height: 12.h),
             Text(
-              '未发现设备',
+              l10n.noDeviceFound,
               style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
             ),
             SizedBox(height: 8.h),
             Text(
-              '请确保设备已开启并处于配网模式',
+              l10n.ensureProvisionMode,
               style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
               textAlign: TextAlign.center,
             ),
@@ -1080,7 +1084,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               child: ElevatedButton.icon(
                 onPressed: _startBleScan,
                 icon: const Icon(Icons.refresh, size: 20),
-                label: const Text('重新扫描', style: TextStyle(fontSize: 15)),
+                label: Text(l10n.rescan, style: const TextStyle(fontSize: 15)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
@@ -1106,7 +1110,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             const Icon(Icons.info_outline, color: AppColors.primary, size: 20),
             SizedBox(width: 10.w),
             Expanded(child: Text(
-              'BLE配网：通过蓝牙扫描设备，无需切换网络，直接配置WiFi',
+              l10n.bleModeDescription,
               style: TextStyle(fontSize: 12.sp, color: AppColors.textPrimary),
             ),),
           ],),
@@ -1118,7 +1122,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         SizedBox(width: double.infinity, height: 46.h,
         child: ElevatedButton.icon(
           onPressed: () {
-            print('[BLE] 扫描按钮被点击, _bleScanning=$_bleScanning');
+            debugPrint('[BLE] Scan button clicked, _bleScanning=$_bleScanning');
             if (!_bleScanning) {
               _startBleScan();
             }
@@ -1201,7 +1205,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('已连接 ${_selectedBleDevice!.sn.isNotEmpty ? _selectedBleDevice!.sn : _selectedBleDevice!.deviceName}', style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46))),
+                Text(l10n.connectedTo(_selectedBleDevice!.sn.isNotEmpty ? _selectedBleDevice!.sn : _selectedBleDevice!.deviceName), style: TextStyle(fontSize: 13.sp, color: const Color(0xFF065F46))),
               ],
             ),),
             GestureDetector(onTap: _disconnectBleDevice, child: Text(AppLocalizations.of(context)!.disconnect, style: TextStyle(fontSize: 12.sp, color: AppColors.errorLight))),
@@ -1307,7 +1311,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             icon: _provisioning
                 ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
                 : const Icon(Icons.bluetooth, size: 22),
-            label: Text(_provisioning ? '配网中...' : '发送WiFi配置', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            label: Text(_provisioning ? l10n.provisioningNow : l10n.sendWifiConfig, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.successLight, foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),),
           ),

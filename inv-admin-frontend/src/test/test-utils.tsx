@@ -24,7 +24,7 @@ import { ConfigProvider, App as AntApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import type { ReactElement } from 'react'
 import useAuthStore from '@/stores/authStore'
-import useLocaleStore from '@/stores/localeStore'
+import useLocaleStore, { type Lang } from '@/stores/localeStore'
 import type { User } from '@/types'
 import { Role } from '@/types'
 
@@ -42,6 +42,8 @@ export interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper
   initialPermissions?: string[]
   /** 是否使用 MemoryRouter 包装组件；默认 true。渲染已包含 Router 的组件（如 App）时可设为 false */
   withRouter?: boolean
+  /** 渲染语言；默认 'zh'。影响 useTranslation 返回的翻译文案 */
+  lang?: Lang
 }
 
 /**
@@ -66,8 +68,8 @@ export function createTestQueryClient(): QueryClient {
 }
 
 function setupAuth(options: RenderWithProvidersOptions) {
-  // Default to Chinese locale for tests
-  useLocaleStore.setState({ lang: 'zh' })
+  // Default to Chinese locale for tests; override via options.lang
+  useLocaleStore.setState({ lang: options.lang ?? 'zh' })
 
   const { initialUser, initialToken, initialPermissions = [] } = options
   if (initialUser && initialToken) {

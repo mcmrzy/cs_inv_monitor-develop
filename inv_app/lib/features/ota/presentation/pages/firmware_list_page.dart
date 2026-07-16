@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -102,7 +103,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             : <dynamic>[];
 
     if (chips.isEmpty) {
-      print('[PreDownload] No chips found in package: $pkg');
+      debugPrint('[PreDownload] No chips found in package: $pkg');
       return;
     }
 
@@ -133,7 +134,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           final version = chip['firmware_version'] as String? ?? '';
           final fileName = '${chipName}_$version.bin';
 
-          print(
+          debugPrint(
               '[PreDownload] Chip: $chipName, firmwareId: $firmwareId, url: $downloadUrl');
 
           if (firmwareId > 0 && downloadUrl.isNotEmpty) {
@@ -158,7 +159,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               });
             }
           } else {
-            print(
+            debugPrint(
                 '[PreDownload] Skipping chip $chipName: invalid firmwareId or downloadUrl');
           }
         }
@@ -179,7 +180,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         );
       }
     } catch (e) {
-      print('[PreDownload] Error: $e');
+      debugPrint('[PreDownload] Error: $e');
       if (mounted) {
         setState(() {
           _downloadingIds.remove(packageId);
@@ -237,6 +238,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   }
 
   void _installPackage(BuildContext context, int packageId, String version) {
+    final l10n = AppLocalizations.of(context)!;
     if (_isRollback(version)) {
       showDialog<bool>(
         context: context,
@@ -245,22 +247,22 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             children: [
               const Icon(Icons.warning_rounded, color: AppColors.warning),
               SizedBox(width: 8.w),
-              const Text('警告', style: TextStyle(color: AppColors.warning)),
+              Text(l10n.warningLevel, style: const TextStyle(color: AppColors.warning)),
             ],
           ),
           content: Text(
-            '即将安装一个较旧的固件版本（$version），可能导致设备功能异常。确定要继续吗？',
+            l10n.oldVersionWarning(version),
             style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('取消'),
+              child: Text(l10n.cancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: FilledButton.styleFrom(backgroundColor: AppColors.warning),
-              child: const Text('确定安装'),
+              child: Text(l10n.confirmInstall),
             ),
           ],
         ),
@@ -288,8 +290,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: const Text(
-            '升级包列表',
+          title: Text(
+            l10n.firmwareList,
             style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
           ),
           centerTitle: true,
@@ -347,8 +349,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                   SizedBox(height: 16.h),
                   Text(
                     state is OTAFirmwareInstalling
-                        ? '正在安装固件...'
-                        : '正在加载升级包列表...',
+                        ? l10n.installingFirmware
+                        : l10n.loadingUpgradeList,
                     style: TextStyle(
                         fontSize: 14.sp, color: AppColors.textSecondary),
                   ),
@@ -395,7 +397,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         size: 56.sp, color: AppColors.textHint),
                     SizedBox(height: 12.h),
                     Text(
-                      '暂无可用的升级包',
+                      l10n.noUpgradesAvailable,
                       style: TextStyle(
                           fontSize: 14.sp, color: AppColors.textSecondary),
                     ),
@@ -414,6 +416,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   }
 
   Widget _buildPackageList(BuildContext context, List<dynamic> packages) {
+    final l10n = AppLocalizations.of(context)!;
     return ListView(
       padding: EdgeInsets.all(16.w),
       children: [
@@ -438,7 +441,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '当前版本',
+                        l10n.currentVersionLabel,
                         style: TextStyle(
                           fontSize: 12.sp,
                           color: AppColors.successLight,
@@ -470,6 +473,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   }
 
   Widget _buildPackageCard(BuildContext context, dynamic pkg) {
+    final l10n = AppLocalizations.of(context)!;
     final id = (pkg is Map) ? (pkg['id'] as int? ?? 0) : 0;
     // 优先使用 user_version，回退到 main_version
     final userVersion =
@@ -553,7 +557,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     borderRadius: BorderRadius.circular(20.r),
                   ),
                   child: Text(
-                    '强制升级',
+                    l10n.forceUpgrade,
                     style: TextStyle(
                       fontSize: 11.sp,
                       fontWeight: FontWeight.w600,
@@ -570,7 +574,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     borderRadius: BorderRadius.circular(20.r),
                   ),
                   child: Text(
-                    '当前版本',
+                    l10n.currentVersionLabel,
                     style: TextStyle(
                       fontSize: 11.sp,
                       fontWeight: FontWeight.w600,
@@ -674,7 +678,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         Text(
                           downloadProgress > 0
                               ? '${(downloadProgress * 100).toStringAsFixed(0)}%'
-                              : '下载中...',
+                              : l10n.downloading,
                           style: TextStyle(
                               fontSize: 10.sp, color: AppColors.primary),
                         ),
@@ -692,7 +696,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         borderRadius: BorderRadius.circular(8.r),
                       ),
                       child: Text(
-                        '本地安装',
+                        l10n.localUpgrade,
                         style: TextStyle(
                           fontSize: 12.sp,
                           fontWeight: FontWeight.w600,
@@ -713,7 +717,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         border: Border.all(color: AppColors.primary),
                       ),
                       child: Text(
-                        '预下载',
+                        l10n.preDownload,
                         style: TextStyle(
                           fontSize: 12.sp,
                           fontWeight: FontWeight.w600,
@@ -735,6 +739,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
   Widget _buildInstallButton(
       BuildContext context, int packageId, String version, bool isRollbackVer) {
+    final l10n = AppLocalizations.of(context)!;
     final bgColor = isRollbackVer ? AppColors.warning : AppColors.primary;
     return GestureDetector(
       onTap: () => _installPackage(context, packageId, version),
@@ -745,7 +750,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           borderRadius: BorderRadius.circular(8.r),
         ),
         child: Text(
-          '安装此版本',
+          l10n.installThisVersion,
           style: TextStyle(
             fontSize: 12.sp,
             fontWeight: FontWeight.w600,
@@ -813,11 +818,12 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
 
   /// 显示芯片选择对话框
   void _showChipSelectionDialog(List<dynamic> validChips) {
+    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text('选择要安装的固件',
+          title: Text(l10n.selectFirmware,
               style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -858,7 +864,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+                onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
           ],
         );
       },
