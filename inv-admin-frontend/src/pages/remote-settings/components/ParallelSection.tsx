@@ -13,7 +13,7 @@ const ParallelSection: React.FC = () => {
   const [noGridInput, setNoGridInput] = useState(false)
 
   const handleSet = (fieldName: string) => {
-    message.success(`${fieldName} 设置已发送`)
+    message.success(`${fieldName} 指令已下发`)
   }
 
   return (

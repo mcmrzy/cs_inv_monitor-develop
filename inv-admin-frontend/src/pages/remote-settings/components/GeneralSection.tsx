@@ -25,7 +25,7 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
   const [buzzer, setBuzzer] = useState(true)
 
   const handleSet = (fieldName: string) => {
-    message.success(`${fieldName} 设置已发送`)
+    message.success(`${fieldName} 指令已下发`)
   }
 
   const isLeadAcid = batteryType === 'lead_acid'
