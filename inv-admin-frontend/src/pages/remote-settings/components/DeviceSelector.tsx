@@ -69,7 +69,7 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
     <div>
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>先选择电站</Text>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>电站选择</Text>
           <Select
             showSearch
             allowClear
@@ -89,11 +89,11 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
           />
         </Col>
         <Col>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>再选择设备</Text>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>设备选择</Text>
           <Select
             showSearch
             allowClear
-            placeholder={selectedStationId ? '选择设备 (SN)' : '请先选择电站'}
+            placeholder={selectedStationId ? '选择设备 (SN)' : '请选择电站'}
             value={selectedSn}
             onChange={(v) => onDeviceChange(v ?? '')}
             loading={devicesLoading}

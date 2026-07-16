@@ -51,7 +51,7 @@ const ApplicationSection: React.FC = () => {
   const [acEnd3M, setAcEnd3M] = useState(0)
 
   const handleSet = (fieldName: string) => {
-    message.success(`${fieldName} 设置已发送`)
+    message.success(`${fieldName} 指令已下发`)
   }
 
   return (
@@ -97,7 +97,7 @@ const ApplicationSection: React.FC = () => {
       ) : (
         <Col span={24}>
           <div style={{ padding: '12px 0', color: '#bbb', fontSize: 13 }}>
-            开启"先使用交流电"后可配置优先时间段
+            启用"先使用交流电"后可配置优先时间段
           </div>
         </Col>
       )}

@@ -74,7 +74,7 @@ const ChargeSection: React.FC = () => {
   const [genBoost, setGenBoost] = useState(false)
 
   const handleSet = (fieldName: string) => {
-    message.success(`${fieldName} 设置已发送`)
+    message.success(`${fieldName} 指令已下发`)
   }
 
   const showVoltage = acChargeControl === 'voltage' || acChargeControl === 'voltage_soc'

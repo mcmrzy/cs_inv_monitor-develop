@@ -50,7 +50,7 @@ const RemoteSettingsPage: React.FC = () => {
 
   const handleRead = () => {
     setReading(true)
-    message.info('正在读取设备当前设置...')
+    message.info('正在读取设备配置参数')
     setTimeout(() => setReading(false), 1500)
   }
 
@@ -139,7 +139,7 @@ const RemoteSettingsPage: React.FC = () => {
         </div>
       ) : (
         <div style={{ borderRadius: 12, marginTop: 24, textAlign: 'center', padding: 48, background: '#fff' }}>
-          <Empty description="请先选择一个设备" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description="请选择设备" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         </div>
       )}
     </div>
