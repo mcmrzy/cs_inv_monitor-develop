@@ -3,6 +3,7 @@ import { Card, Alert, Descriptions, Tag, Spin, Empty, Typography } from 'antd'
 import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Text } = Typography
 
@@ -13,7 +14,7 @@ interface ParallelTabProps {
 const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
   const { t } = useTranslation()
 
-  const { data: controlState, isLoading } = useQuery({
+  const { data: controlState, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.devices.controlState(sn),
     queryFn: () => deviceApi.getControlState(sn).then((r) => r.data?.data ?? null),
   })
@@ -33,6 +34,7 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
 
   return (
     <Spin spinning={isLoading}>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Card
         title={t('deviceDetail.parallel.title')}
         bordered={false}

@@ -19,6 +19,7 @@ import useTranslation from '@/hooks/useTranslation'
 import { Role } from '@/types'
 import { queryKeys } from '@/utils/queryKeys'
 import StatisticCard from '@/components/StatisticCard'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Title, Text } = Typography
 
@@ -70,7 +71,7 @@ const HealthTab: React.FC = () => {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { timezone } = useTimezoneStore()
-  const { data: health, isLoading, refetch } = useQuery({
+  const { data: health, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.admin.health(),
     queryFn: () => adminApi.getSystemHealth().then((r) => r.data?.data ?? null as SystemHealth | null),
     refetchInterval: 30000,
@@ -78,6 +79,7 @@ const HealthTab: React.FC = () => {
 
   return (
     <div>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}><StatisticCard size="small" title={t('admin.uptime')} value={health ? formatUptime(health.uptime, t) : '-'} loading={isLoading} /></Col>
         <Col span={6}><StatisticCard size="small" title={t('admin.memoryUsage')} value={health?.memoryUsage ?? 0} suffix="%" precision={1} loading={isLoading} /></Col>
@@ -108,7 +110,7 @@ const SettingsTab: React.FC = () => {
   const { message } = App.useApp()
   const [form] = Form.useForm()
 
-  const { isLoading } = useQuery({
+  const { isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.admin.config(),
     queryFn: () => adminApi.getSystemConfig().then((r) => {
       form.setFieldsValue(r.data?.data ?? {})
@@ -124,6 +126,7 @@ const SettingsTab: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} />}
       <Card title={t('admin.basicSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
         <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
           <Form.Item name="site_name" label={t('admin.siteName')}><Input placeholder="CSERGY 光伏监控平台" /></Form.Item>
@@ -206,7 +209,7 @@ const TenantTab: React.FC = () => {
   const [createForm] = Form.useForm()
   const [editForm] = Form.useForm()
 
-  const { data: listRes, isLoading, refetch } = useQuery({
+  const { data: listRes, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.admin.tenants({ page, pageSize }),
     queryFn: () => adminApi.getTenants({ page, pageSize }).then((r) => ({
       items: r.data?.data?.items ?? [] as Tenant[],
@@ -258,6 +261,7 @@ const TenantTab: React.FC = () => {
 
   return (
     <div>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row justify="space-between" align="middle">
           <Col><Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>{t('admin.createTenant')}</Button></Col>
@@ -298,7 +302,7 @@ const QuotaTab: React.FC = () => {
   const { message } = App.useApp()
   const [form] = Form.useForm()
 
-  const { isLoading } = useQuery({
+  const { isLoading, error, refetch } = useQuery({
     queryKey: ['admin', 'quotas'],
     queryFn: () => adminApi.getSystemConfig().then((r) => {
       const d = r.data?.data ?? {}
@@ -319,7 +323,9 @@ const QuotaTab: React.FC = () => {
   })
 
   return (
-    <Card title={t('admin.systemQuota')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+    <>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
+      <Card title={t('admin.systemQuota')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
       <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
         <Form.Item name="maxDevicesPerTenant" label="每租户最大设备数"><InputNumber min={1} max={10000} style={{ width: '100%' }} /></Form.Item>
         <Form.Item name="maxUsersPerTenant" label="每租户最大用户数"><InputNumber min={1} max={1000} style={{ width: '100%' }} /></Form.Item>
@@ -327,7 +333,8 @@ const QuotaTab: React.FC = () => {
         <Form.Item name="maxOtaTasksPerMonth" label="每月最大OTA任务数"><InputNumber min={1} max={5000} style={{ width: '100%' }} /></Form.Item>
         <Form.Item><Button type="primary" onClick={async () => { try { saveMutation.mutate(await form.validateFields()) } catch {} }} loading={saveMutation.isPending}>{t('common.save')}</Button></Form.Item>
       </Form>
-    </Card>
+      </Card>
+    </>
   )
 }
 
@@ -393,7 +400,7 @@ const PermissionTab: React.FC = () => {
   const [originalPermissions, setOriginalPermissions] = useState<Record<string, Set<string>>>({})
   const [saving, setSaving] = useState(false)
 
-  const { isLoading } = useQuery({
+  const { isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.admin.permissions(Number(selectedRole)),
     queryFn: () => adminApi.getRolePermissions(Number(selectedRole)).then((r) => {
       const items = (r.data?.data ?? r.data ?? []) as { resource: string; action: string; is_allowed: boolean }[]
@@ -447,6 +454,7 @@ const PermissionTab: React.FC = () => {
 
   return (
     <div>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Card size="small" bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row justify="space-between" align="middle">
           <Col>
@@ -491,7 +499,7 @@ const APIOverviewTab: React.FC<{ onNavigateToPermissions?: () => void }> = ({ on
   const { t } = useTranslation()
   const [searchText, setSearchText] = useState('')
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['admin', 'route-groups'],
     queryFn: () => adminApi.getRouteGroups().then((r) => r.data?.data ?? r.data),
   })
@@ -520,6 +528,7 @@ const APIOverviewTab: React.FC<{ onNavigateToPermissions?: () => void }> = ({ on
 
   return (
     <div>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Card size="small" bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row justify="space-between" align="middle">
           <Col>

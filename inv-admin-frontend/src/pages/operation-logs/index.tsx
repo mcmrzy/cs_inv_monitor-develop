@@ -19,6 +19,7 @@ import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
@@ -209,7 +210,7 @@ const OperationLogsPage: React.FC = () => {
     ...(deviceSnFilter ? { keyword: deviceSnFilter } : {}),
   }
 
-  const { data: auditResult, isLoading: auditLoading } = useQuery({
+  const { data: auditResult, isLoading: auditLoading, error: auditError, refetch: refetchAudit } = useQuery({
     queryKey: queryKeys.admin.auditLogs(auditQueryParams),
     queryFn: () => adminApi.getAuditLogs(auditQueryParams).then((res) => {
       const d = res.data?.data ?? res.data ?? {}
@@ -318,7 +319,7 @@ const OperationLogsPage: React.FC = () => {
     ...(deviceSnFilter ? { keyword: deviceSnFilter } : {}),
   }
 
-  const { data: alarmResult, isLoading: alarmLoading } = useQuery({
+  const { data: alarmResult, isLoading: alarmLoading, error: alarmError, refetch: refetchAlarms } = useQuery({
     queryKey: queryKeys.operationLogs.alarmRecords(alarmQueryParams),
     queryFn: () => alertApi.list(alarmQueryParams).then((res) => {
       const d = res.data?.data ?? res.data ?? {}
@@ -338,7 +339,7 @@ const OperationLogsPage: React.FC = () => {
       alarmData.map((r) => ({
         [t('logs.time')]: r.occurred_at ? formatInTimezone(r.occurred_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '',
         [t('logs.deviceSN')]: r.device_sn,
-        [t('logs.alertLevel')]: typeof r.alarm_level === 'number' ? (ALARM_LEVEL_MAP[r.alarm_level]?.label || r.alarm_level) : r.alarm_level,
+        [t('logs.alertLevel')]: typeof r.alarm_level === 'number' ? (ALARM_LEVEL_MAP[r.alarm_level]?.i18nKey ? t(ALARM_LEVEL_MAP[r.alarm_level].i18nKey) : r.alarm_level) : r.alarm_level,
         [t('logs.faultCode')]: r.fault_code,
         [t('logs.faultInfo')]: r.fault_message,
         [t('logs.status')]: ALARM_STATUS_MAP[String(r.status)]?.label || r.status,
@@ -370,7 +371,7 @@ const OperationLogsPage: React.FC = () => {
       render: (level: number | string) => {
         const key = typeof level === 'number' ? String(level) : level
         const cfg = ALARM_LEVEL_MAP[key] || { label: String(level), color: '#d9d9d9' }
-        return <Tag color={cfg.color}>{cfg.label}</Tag>
+        return <Tag color={cfg.color}>{'i18nKey' in cfg && cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
       },
     },
     {
@@ -414,7 +415,7 @@ const OperationLogsPage: React.FC = () => {
     ...(deviceSnFilter ? { keyword: deviceSnFilter } : {}),
   }
 
-  const { data: cmdResult, isLoading: cmdLoading } = useQuery({
+  const { data: cmdResult, isLoading: cmdLoading, error: cmdError, refetch: refetchCommands } = useQuery({
     queryKey: queryKeys.operationLogs.commandRecords(cmdQueryParams),
     queryFn: async () => {
       const res = await adminApi.getAuditLogs({ ...cmdQueryParams, action: 'command' })
@@ -520,7 +521,7 @@ const OperationLogsPage: React.FC = () => {
     ...(userFilter ? { username: userFilter } : {}),
   }
 
-  const { data: sysResult, isLoading: sysLoading, refetch: refetchSystemLogs } = useQuery({
+  const { data: sysResult, isLoading: sysLoading, error: sysError, refetch: refetchSystemLogs } = useQuery({
     queryKey: queryKeys.operationLogs.systemEvents(sysQueryParams),
     queryFn: () => adminApi.getAuditLogs(sysQueryParams).then((res) => {
       const d = res.data?.data ?? res.data ?? {}
@@ -805,12 +806,27 @@ const OperationLogsPage: React.FC = () => {
     setSysPage(1)
   }
 
+  const activeQueryState = {
+    operation: { error: auditError, retry: refetchAudit },
+    alarm: { error: alarmError, retry: refetchAlarms },
+    command: { error: cmdError, retry: refetchCommands },
+    system: { error: sysError, retry: refetchSystemLogs },
+  }[activeTab]
+
   return (
     <div>
       <Title level={4} style={{ marginBottom: 24 }}>
         <HistoryOutlined style={{ marginRight: 8 }} />
         {t('logs.title')}
       </Title>
+
+      {activeQueryState?.error && (
+        <QueryErrorAlert
+          error={activeQueryState.error}
+          onRetry={() => { void activeQueryState.retry() }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* 全局过滤栏 */}
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>

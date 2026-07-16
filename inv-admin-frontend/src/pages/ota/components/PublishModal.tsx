@@ -7,6 +7,7 @@ import { deviceApi } from '@/services/deviceApi'
 import { modelApi } from '@/services/modelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import type { UpgradePackage, Device, PublishPackageRequest } from '@/types'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { TextArea } = Input
 const { Text } = Typography
@@ -33,19 +34,27 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
   const [deviceLoading, setDeviceLoading] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [modelList, setModelList] = useState<string[]>([])
+  const [modelError, setModelError] = useState<unknown>(null)
+  const [deviceError, setDeviceError] = useState<unknown>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   // 加载型号列表
   useEffect(() => {
     if (!open) return
+    setModelError(null)
     modelApi.listModels().then((res) => {
       const items = res.data?.data ?? res.data ?? []
       setModelList(Array.isArray(items) ? items.map((m: any) => m.model_code || m.model) : [])
-    }).catch(() => setModelList([]))
-  }, [open])
+    }).catch((error) => {
+      setModelList([])
+      setModelError(error)
+    })
+  }, [open, reloadKey])
 
   // 加载设备列表
   useEffect(() => {
     if (!open) return
+    setDeviceError(null)
     if (rolloutMode === 'device') {
       const sns = snInput.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean)
       if (sns.length === 0) { setDeviceList([]); return }
@@ -53,7 +62,10 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       deviceApi.getDevices({ sns: sns.join(','), pageSize: 100 }).then((res) => {
         const d = res.data?.data ?? res.data ?? {}
         setDeviceList(Array.isArray(d) ? d : (d?.items ?? []))
-      }).catch(() => setDeviceList([])).finally(() => setDeviceLoading(false))
+      }).catch((error) => {
+        setDeviceList([])
+        setDeviceError(error)
+      }).finally(() => setDeviceLoading(false))
       return
     }
     if (rolloutMode === 'model' && !selectedModel) { setDeviceList([]); return }
@@ -63,8 +75,11 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
     deviceApi.getDevices(params).then((res) => {
       const d = res.data?.data ?? res.data ?? {}
       setDeviceList(Array.isArray(d) ? d : (d?.items ?? []))
-    }).catch(() => setDeviceList([])).finally(() => setDeviceLoading(false))
-  }, [open, rolloutMode, selectedModel, snInput])
+    }).catch((error) => {
+      setDeviceList([])
+      setDeviceError(error)
+    }).finally(() => setDeviceLoading(false))
+  }, [open, rolloutMode, selectedModel, snInput, reloadKey])
 
   // 重置状态
   useEffect(() => {
@@ -162,10 +177,22 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       footer={
         <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button onClick={onClose}>取消</Button>
-          <Button type="primary" onClick={handlePublish} loading={publishing}>推送</Button>
+          <Button
+            type="primary"
+            onClick={handlePublish}
+            loading={publishing}
+            disabled={!!deviceError || (rolloutMode === 'model' && !!modelError)}
+          >推送</Button>
         </Space>
       }
     >
+      {(!!deviceError || (rolloutMode === 'model' && !!modelError)) && (
+        <QueryErrorAlert
+          error={deviceError || modelError}
+          onRetry={() => setReloadKey((value) => value + 1)}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       {/* 用户可见信息 */}
       <div style={{ marginBottom: 16 }}>
         <Text strong style={{ display: 'block', marginBottom: 8 }}>用户可见信息</Text>

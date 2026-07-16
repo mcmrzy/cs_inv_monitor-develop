@@ -20,6 +20,7 @@ import { alertApi } from '@/services/alertApi'
 import { DEVICE_STATUS_MAP, ALARM_LEVEL_MAP, CHART_COLORS, HERO_GRADIENTS, getAlarmLevelDisplay } from '@/utils/constants'
 import { safeNum, fmt } from '@/utils/format'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { useModelFields } from '@/components/dyna/useModelFields'
@@ -132,12 +133,16 @@ const MonitoringPage: React.FC = () => {
   ]
 
   /* ---------- 电站选择 ---------- */
-  const [selectedStationId, setSelectedStationId] = useState<string>('')
-  const [selectedDeviceSn, setSelectedDeviceSn] = useState<string>('')
+  const [selectedStationId, setSelectedStationId] = useState<string>(
+    () => { try { return localStorage.getItem('mon_selected_station') || '' } catch { return '' } },
+  )
+  const [selectedDeviceSn, setSelectedDeviceSn] = useState<string>(
+    () => { try { return localStorage.getItem('mon_selected_device') || '' } catch { return '' } },
+  )
 
-  const { data: stationsRaw } = useQuery({
+  const { data: stationsRaw, error: stationsError, refetch: refetchStations } = useQuery({
     queryKey: ['monitoring', 'stations'],
-    queryFn: () => api.get('/stations', { params: { page_size: 100, all: true } }).then((r) => r.data),
+    queryFn: () => api.get('/stations', { params: { page_size: 100, all: true }, expectedDataShape: 'page' }).then((r) => r.data),
     staleTime: 60_000,
     refetchOnMount: true,
   })
@@ -152,7 +157,7 @@ const MonitoringPage: React.FC = () => {
   const selectedStation = stationList.find((s) => String(s.id) === selectedStationId)
 
   /* ---------- 电站下设备列表 ---------- */
-  const { data: devicesRes } = useQuery({
+  const { data: devicesRes, error: devicesError, refetch: refetchDevices } = useQuery({
     queryKey: ['monitoring', 'devices', selectedStationId],
     queryFn: () => deviceApi.getDevices({ station_id: selectedStationId, page_size: 200 }).then((r) => {
       const d = r.data?.data ?? r.data
@@ -164,8 +169,16 @@ const MonitoringPage: React.FC = () => {
   const deviceList = devicesRes ?? []
 
   useEffect(() => {
-    if (deviceList.length > 0 && !selectedDeviceSn) {
-      setSelectedDeviceSn(deviceList[0].sn)
+    if (deviceList.length > 0) {
+      const exists = deviceList.some((d) => d.sn === selectedDeviceSn)
+      if (!exists) {
+        let saved = ''
+        try { saved = localStorage.getItem('mon_selected_device') || '' } catch { saved = '' }
+        const savedExists = deviceList.some((d) => d.sn === saved)
+        const newSn = savedExists ? saved : deviceList[0].sn
+        setSelectedDeviceSn(newSn)
+        try { localStorage.setItem('mon_selected_device', newSn) } catch { /* ignore */ }
+      }
     }
     if (deviceList.length === 0) {
       setSelectedDeviceSn('')
@@ -175,8 +188,16 @@ const MonitoringPage: React.FC = () => {
   const selectedDevice = deviceList.find((d) => d.sn === selectedDeviceSn)
 
   /* ---------- 型号字段配置 ---------- */
-  const modelFields = useModelFields(selectedDevice?.model)
+  const modelFields = useModelFields(selectedDevice?.model, (selectedDevice as any)?.model_id)
   const showFields = modelFields.cache?.showFields ?? []
+
+  // 字段标签：field_name 可能是 i18n key，优先翻译；否则回退到 field_name 或 field_key
+  const fieldLabel = (f: DeviceModelFieldItem): string => {
+    if (f.field_name && t(f.field_name) !== f.field_name) return t(f.field_name)
+    return f.field_name || f.field_key
+  }
+  const tLabel = (name?: string): string =>
+    name && t(name) !== name ? t(name) : (name ?? '')
   const fieldGroups = useMemo(() => {
     const groups: Record<string, DeviceModelFieldItem[]> = {}
     for (const f of showFields) {
@@ -189,13 +210,13 @@ const MonitoringPage: React.FC = () => {
   const fieldLabelMap = useMemo(() => {
     const map: Record<string, string> = {}
     for (const f of showFields) {
-      map[f.field_key] = f.unit ? `${f.field_name}(${f.unit})` : f.field_name
+      map[f.field_key] = f.unit ? `${fieldLabel(f)}(${f.unit})` : fieldLabel(f)
     }
     return map
   }, [showFields])
   const paramOptions = useMemo(() =>
     showFields.map((f) => ({
-      label: f.unit ? `${f.field_name} (${f.unit})` : f.field_name,
+      label: f.unit ? `${fieldLabel(f)} (${f.unit})` : fieldLabel(f),
       value: f.field_key,
       unit: f.unit || '',
       group: f.group_name || t('mon.other'),
@@ -206,7 +227,7 @@ const MonitoringPage: React.FC = () => {
    *  实时数据 (15秒自动刷新)
    * ============================================================ */
 
-  const { data: realtimeRes, isLoading: realtimeLoading } = useQuery({
+  const { data: realtimeRes, isLoading: realtimeLoading, error: realtimeError, refetch: refetchRealtime } = useQuery({
     queryKey: ['monitoring', 'realtime', selectedDeviceSn],
     queryFn: () => deviceApi.getRealtime(selectedDeviceSn).then((r) => {
       const raw = r.data?.data ?? r.data ?? {}
@@ -280,7 +301,7 @@ const MonitoringPage: React.FC = () => {
             <Col>
               <Space>
                 <Text strong style={{ fontSize: 15 }}>{selectedDeviceSn}</Text>
-                <Tag color={statusCfg.color}>{statusCfg.label}</Tag>
+                <Tag color={statusCfg.color}>{t(statusCfg.i18nKey)}</Tag>
                 {selectedDevice?.model && <Tag>{selectedDevice.model}</Tag>}
                 {selectedDevice?.rated_power != null && <Tag color="blue">{selectedDevice.rated_power}W</Tag>}
                 {modelFields.loading && <Tag color="processing">{t('mon.loadingFieldConfig')}</Tag>}
@@ -309,7 +330,7 @@ const MonitoringPage: React.FC = () => {
                       styles={{ body: { padding: isMobile ? '12px 10px' : '20px 16px' } }}
                     >
                       <div style={{ color: '#fff', fontSize: 13, opacity: 0.9, marginBottom: 8 }}>
-                        {field.field_name}
+                        {fieldLabel(field)}
                       </div>
                       <div style={{ color: '#fff', fontSize: isMobile ? 22 : 28, fontWeight: 700, lineHeight: 1 }}>
                         {field.field_type === 'float' ? numValue.toFixed(1) : Math.round(numValue)}
@@ -340,7 +361,7 @@ const MonitoringPage: React.FC = () => {
                           return (
                             <Col span={Math.floor(24 / Math.min(fields.length, 4))} key={field.id}>
                               <Statistic
-                                title={field.field_name}
+                                title={fieldLabel(field)}
                                 value={value}
                                 precision={precision}
                                 suffix={field.unit || undefined}
@@ -557,7 +578,7 @@ const MonitoringPage: React.FC = () => {
   const [selectedHistoryFields, setSelectedHistoryFields] = useState<string[]>([])
   const [fieldPanelOpen, setFieldPanelOpen] = useState(false)
 
-  const { data: historyRes, isLoading: historyLoading } = useQuery({
+  const { data: historyRes, isLoading: historyLoading, error: historyError, refetch: refetchHistory } = useQuery({
     queryKey: ['monitoring', 'history', selectedDeviceSn, historyPage, historyPageSize, historyRange],
     queryFn: () => {
       const params: any = {
@@ -755,18 +776,18 @@ const MonitoringPage: React.FC = () => {
   const historyFieldLabel = (key: string): string => {
     // 优先使用反向映射（数据 key → 型号字段标签）
     const mf = dataKeyToModelField[key]
-    if (mf) return mf.unit ? `${mf.field_name}(${mf.unit})` : mf.field_name
+    if (mf) return mf.unit ? `${tLabel(mf.field_name)}(${mf.unit})` : tLabel(mf.field_name)
     if (FIELD_LABEL_MAP[key]) return FIELD_LABEL_MAP[key]
     for (const fields of Object.values(fieldGroups)) {
       const found = fields.find((f) => f.field_key === key)
-      if (found) return found.unit ? `${found.field_name}(${found.unit})` : found.field_name
+      if (found) return found.unit ? `${fieldLabel(found)}(${found.unit})` : fieldLabel(found)
     }
     for (const fields of Object.values(fieldGroups)) {
       const found = fields.find((f) =>
         f.field_key.includes(key) || key.includes(f.field_key) ||
         f.field_key.replace(/[._]/g, '') === key.replace(/[._]/g, '')
       )
-      if (found) return found.unit ? `${found.field_name}(${found.unit})` : found.field_name
+      if (found) return found.unit ? `${fieldLabel(found)}(${found.unit})` : fieldLabel(found)
     }
     if (DEFAULT_FIELD_LABELS[key]) return DEFAULT_FIELD_LABELS[key]
     return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -781,7 +802,7 @@ const MonitoringPage: React.FC = () => {
       if (historyAvailableFields.includes(f.field_key)) {
         seen.add(f.field_key)
         opts.push({
-          label: f.unit ? `${f.field_name}(${f.unit})` : f.field_name,
+          label: f.unit ? `${fieldLabel(f)}(${f.unit})` : fieldLabel(f),
           value: f.field_key,
         })
       }
@@ -942,7 +963,7 @@ const MonitoringPage: React.FC = () => {
                 items.push({
                   modelKey: f.field_key,
                   dataKey: dataKey || f.field_key,
-                  label: f.unit ? `${f.field_name}(${f.unit})` : f.field_name,
+                  label: f.unit ? `${fieldLabel(f)}(${f.unit})` : fieldLabel(f),
                 })
               }
               if (items.length > 0) {
@@ -1065,7 +1086,7 @@ const MonitoringPage: React.FC = () => {
   const [alarmPage, setAlarmPage] = useState(1)
   const [alarmPageSize, setAlarmPageSize] = useState(20)
 
-  const { data: alarmsRes, isLoading: alarmsLoading } = useQuery({
+  const { data: alarmsRes, isLoading: alarmsLoading, error: alarmsError, refetch: refetchAlarms } = useQuery({
     queryKey: ['monitoring', 'alarms', selectedDeviceSn, alarmLevel, alarmPage, alarmPageSize],
     queryFn: () => {
       const params: any = { page: alarmPage, page_size: alarmPageSize }
@@ -1093,7 +1114,7 @@ const MonitoringPage: React.FC = () => {
       title: t('mon.alertLevelLabel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
       render: (level: number | string, record: any) => {
         const cfg = getAlarmLevelDisplay(record.fault_code, level)
-        return <Tag color={cfg.color}>{cfg.label}</Tag>
+        return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
       },
     },
     { title: t('mon.faultCode'), dataIndex: 'fault_code', key: 'fault_code', width: 100, render: (v: string) => v || '--' },
@@ -1161,7 +1182,7 @@ const MonitoringPage: React.FC = () => {
                       children: (
                         <div>
                           <div style={{ marginBottom: 4 }}>
-                            <Tag color={levelCfg.color}>{levelCfg.label}</Tag>
+                            <Tag color={levelCfg.color}>{levelCfg.i18nKey ? t(levelCfg.i18nKey) : levelCfg.label}</Tag>
                             {alarm.fault_code && <Tag>{alarm.fault_code}</Tag>}
                           </div>
                           <Text style={{ display: 'block', marginBottom: 2 }}>
@@ -1214,7 +1235,7 @@ const MonitoringPage: React.FC = () => {
 
   const [flowDate, setFlowDate] = useState(dayjs().tz(timezone).format('YYYY-MM-DD'))
 
-  const { data: flowRes, isLoading: flowLoading } = useQuery({
+  const { data: flowRes, isLoading: flowLoading, error: flowError, refetch: refetchFlow } = useQuery({
     queryKey: ['monitoring', 'energyFlow', selectedStationId, selectedDeviceSn, flowDate],
     queryFn: () => dashboardApi.getEnergyFlow({
       date: flowDate,
@@ -1286,7 +1307,7 @@ const MonitoringPage: React.FC = () => {
 
   const [energyOverviewPeriod, setEnergyOverviewPeriod] = useState('day')
 
-  const { data: energyStatsRes, isLoading: energyStatsLoading } = useQuery({
+  const { data: energyStatsRes, isLoading: energyStatsLoading, error: energyStatsError, refetch: refetchEnergyStats } = useQuery({
     queryKey: ['monitoring', 'energyOverview', selectedStationId, selectedDeviceSn, energyOverviewPeriod],
     queryFn: () => dashboardApi.getEnergyStats({
       type: energyOverviewPeriod,
@@ -1297,7 +1318,7 @@ const MonitoringPage: React.FC = () => {
   })
   const energyStatsRaw = (energyStatsRes?.data ?? energyStatsRes ?? {}) as any
 
-  const { data: energyTrendRes } = useQuery({
+  const { data: energyTrendRes, error: energyTrendError, refetch: refetchEnergyTrend } = useQuery({
     queryKey: ['monitoring', 'energyTrend', selectedStationId, energyOverviewPeriod],
     queryFn: () => dashboardApi.getTrend(energyOverviewPeriod).then((r) => r.data),
     enabled: !!selectedStationId,
@@ -1308,7 +1329,7 @@ const MonitoringPage: React.FC = () => {
     : (Array.isArray(energyTrendRes?.data?.data) ? energyTrendRes.data.data : []) as any[]
 
   // 30日发电趋势数据
-  const { data: trend30DaysRes } = useQuery({
+  const { data: trend30DaysRes, error: trend30DaysError, refetch: refetchTrend30Days } = useQuery({
     queryKey: ['monitoring', 'trend30Days', selectedStationId],
     queryFn: () => dashboardApi.getTrend('30days').then((r) => r.data),
     enabled: !!selectedStationId,
@@ -1455,6 +1476,16 @@ const MonitoringPage: React.FC = () => {
     { key: 'alarms', label: <span><AlertOutlined /> {t('mon.historyEvents')}</span>, children: renderAlarmTimeline() },
   ]
 
+  const queryError = stationsError || devicesError || realtimeError || historyError
+    || alarmsError || flowError || energyStatsError || energyTrendError || trend30DaysError
+
+  const retryMonitoring = () => {
+    void Promise.all([
+      refetchStations(), refetchDevices(), refetchRealtime(), refetchHistory(),
+      refetchAlarms(), refetchFlow(), refetchEnergyStats(), refetchEnergyTrend(), refetchTrend30Days(),
+    ])
+  }
+
   return (
     <div>
       <Row align="middle" justify="space-between" style={{ marginBottom: 16 }}>
@@ -1470,6 +1501,13 @@ const MonitoringPage: React.FC = () => {
           </Space>
         </Col>
       </Row>
+      {queryError && (
+        <QueryErrorAlert
+          error={queryError}
+          onRetry={retryMonitoring}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* 电站选择器 */}
       <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
@@ -1489,6 +1527,8 @@ const MonitoringPage: React.FC = () => {
               onChange={(v) => {
                 setSelectedStationId(v)
                 setSelectedDeviceSn('')
+                localStorage.setItem('mon_selected_station', v)
+                localStorage.removeItem('mon_selected_device')
               }}
               options={stationList.map((s) => ({
                 label: s.name,
@@ -1508,7 +1548,10 @@ const MonitoringPage: React.FC = () => {
                 placeholder={t('mon.selectInverterPlaceholder')}
                 style={{ width: '100%', maxWidth: 300, marginTop: 4 }}
                 value={selectedDeviceSn || undefined}
-                onChange={setSelectedDeviceSn}
+                onChange={(v) => {
+                  setSelectedDeviceSn(v)
+                  localStorage.setItem('mon_selected_device', v)
+                }}
                 options={deviceList.map((d) => ({
                   label: `${d.sn} (${d.model || '-'})`,
                   value: d.sn,

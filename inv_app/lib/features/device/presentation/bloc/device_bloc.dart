@@ -77,7 +77,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     result.fold(
       (failure) {
         // 如果已有数据，忽略错误
-        if (state is! DeviceListLoaded) {
+        if (failure is NetworkFailure && state is! DeviceListLoaded) {
           // 尝试从缓存加载
           if (dataCacheService != null) {
             final cacheKey = event.stationId != null
@@ -85,19 +85,21 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
                 : DataCacheService.deviceList;
             final cached = dataCacheService!.load(cacheKey);
             if (cached != null && cached is Map<String, dynamic>) {
-              final devices = (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
+              final devices =
+                  (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
               final total = (cached['total'] as int?) ?? 0;
               // 只有网络连接失败时才标记为缓存数据
-              final isNetworkError = failure is NetworkFailure;
-              emit(DeviceListLoaded(devices: devices, total: total, isFromCache: isNetworkError));
+              emit(DeviceListLoaded(
+                  devices: devices, total: total, isFromCache: true));
               return;
             }
           }
-          emit(DeviceError(message: failure.message));
         }
+        emit(DeviceError(message: failure.message));
       },
       (data) {
-        final devices = (data['items'] as List?) ?? (data['list'] as List?) ?? [];
+        final devices =
+            (data['items'] as List?) ?? (data['list'] as List?) ?? [];
         final total = (data['total'] as int?) ?? 0;
         // 保存到缓存
         if (dataCacheService != null) {
@@ -144,7 +146,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
     if (!mqttService.isConnected) {
       try {
-        await mqttService.waitForConnection(timeout: const Duration(seconds: 10));
+        await mqttService.waitForConnection(
+            timeout: const Duration(seconds: 10));
       } catch (e) {
         return;
       }
@@ -159,7 +162,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   ) {
     final currentState = state;
     if (currentState is DeviceDetailLoaded) {
-      emit(DeviceDetailLoaded(device: currentState.device, realtimeData: event.data));
+      emit(DeviceDetailLoaded(
+          device: currentState.device, realtimeData: event.data));
     }
   }
 
@@ -167,31 +171,37 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     DeviceControlRequested event,
     Emitter<DeviceState> emit,
   ) async {
-    final isLocal = connectionModeService != null && await connectionModeService!.isLocalMode();
+    final isLocal = connectionModeService != null &&
+        await connectionModeService!.isLocalMode();
 
     if (isLocal && localCommunicationService != null && _localPollIP != null) {
       try {
         await localCommunicationService!.connect(_localPollIP!);
-        await localCommunicationService!.sendCommand(event.cmdType, event.params);
+        await localCommunicationService!
+            .sendCommand(event.cmdType, event.params);
         if (offlineCacheService != null) {
-          await offlineCacheService!.saveAction(OfflineAction(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            type: 'control',
-            sn: event.sn,
-            data: {'cmd_type': event.cmdType, 'params': event.params},
-            timestamp: DateTime.now(),
-          ),);
+          await offlineCacheService!.saveAction(
+            OfflineAction(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              type: 'control',
+              sn: event.sn,
+              data: {'cmd_type': event.cmdType, 'params': event.params},
+              timestamp: DateTime.now(),
+            ),
+          );
         }
         emit(const DeviceControlSuccess(message: 'Command sent'));
       } catch (e) {
         if (offlineCacheService != null) {
-          await offlineCacheService!.saveAction(OfflineAction(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            type: 'control',
-            sn: event.sn,
-            data: {'cmd_type': event.cmdType, 'params': event.params},
-            timestamp: DateTime.now(),
-          ),);
+          await offlineCacheService!.saveAction(
+            OfflineAction(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              type: 'control',
+              sn: event.sn,
+              data: {'cmd_type': event.cmdType, 'params': event.params},
+              timestamp: DateTime.now(),
+            ),
+          );
         }
         emit(DeviceError(message: e.toString()));
       }
@@ -199,7 +209,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     }
 
     emit(DeviceLoading());
-    final result = await repository.control(event.sn, event.cmdType, event.params);
+    final result =
+        await repository.control(event.sn, event.cmdType, event.params);
     result.fold(
       (failure) => emit(DeviceError(message: failure.message)),
       (_) => emit(const DeviceControlSuccess(message: 'Command sent')),
@@ -220,24 +231,28 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       }
       await localCommunicationService!.updateParams(event.params);
       if (offlineCacheService != null) {
-        await offlineCacheService!.saveAction(OfflineAction(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          type: 'param_update',
-          sn: event.sn,
-          data: event.params,
-          timestamp: DateTime.now(),
-        ),);
+        await offlineCacheService!.saveAction(
+          OfflineAction(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            type: 'param_update',
+            sn: event.sn,
+            data: event.params,
+            timestamp: DateTime.now(),
+          ),
+        );
       }
       emit(DeviceParamsUpdateSuccess());
     } catch (e) {
       if (offlineCacheService != null) {
-        await offlineCacheService!.saveAction(OfflineAction(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          type: 'param_update',
-          sn: event.sn,
-          data: event.params,
-          timestamp: DateTime.now(),
-        ),);
+        await offlineCacheService!.saveAction(
+          OfflineAction(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            type: 'param_update',
+            sn: event.sn,
+            data: event.params,
+            timestamp: DateTime.now(),
+          ),
+        );
       }
       emit(DeviceError(message: e.toString()));
     }
@@ -298,11 +313,13 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
           }
           return <String, dynamic>{};
         }).toList();
-        emit(DeviceHistoryLoaded(
-          data: points,
-          period: event.period,
-          metric: event.metric,
-        ),);
+        emit(
+          DeviceHistoryLoaded(
+            data: points,
+            period: event.period,
+            metric: event.metric,
+          ),
+        );
       },
     );
   }
@@ -342,7 +359,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   ) {
     final currentState = state;
     if (currentState is DeviceDetailLoaded) {
-      emit(DeviceDetailLoaded(device: currentState.device, realtimeData: event.data));
+      emit(DeviceDetailLoaded(
+          device: currentState.device, realtimeData: event.data));
     }
   }
 
@@ -376,24 +394,28 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
       await localCommunicationService!.connect(event.deviceIP);
       await localCommunicationService!.updateParams(event.params);
       if (offlineCacheService != null && _activeSN != null) {
-        await offlineCacheService!.saveAction(OfflineAction(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          type: 'param_update',
-          sn: _activeSN ?? '',
-          data: event.params,
-          timestamp: DateTime.now(),
-        ),);
+        await offlineCacheService!.saveAction(
+          OfflineAction(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            type: 'param_update',
+            sn: _activeSN ?? '',
+            data: event.params,
+            timestamp: DateTime.now(),
+          ),
+        );
       }
       emit(DeviceParamsUpdateSuccess());
     } catch (e) {
       if (offlineCacheService != null && _activeSN != null) {
-        await offlineCacheService!.saveAction(OfflineAction(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          type: 'param_update',
-          sn: _activeSN ?? '',
-          data: event.params,
-          timestamp: DateTime.now(),
-        ),);
+        await offlineCacheService!.saveAction(
+          OfflineAction(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            type: 'param_update',
+            sn: _activeSN ?? '',
+            data: event.params,
+            timestamp: DateTime.now(),
+          ),
+        );
       }
       emit(DeviceError(message: e.toString()));
     }

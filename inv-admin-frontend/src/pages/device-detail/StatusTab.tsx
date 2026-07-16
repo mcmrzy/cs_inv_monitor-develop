@@ -7,6 +7,7 @@ import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Text } = Typography
 
@@ -18,19 +19,19 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
   const { t } = useTranslation()
   const { timezone } = useTimezoneStore()
 
-  const { data: controlState, isLoading: stateLoading } = useQuery({
+  const { data: controlState, isLoading: stateLoading, error: stateError, refetch: refetchState } = useQuery({
     queryKey: queryKeys.devices.controlState(sn),
     queryFn: () => deviceApi.getControlState(sn).then((r) => r.data?.data ?? null),
     refetchInterval: 15000,
   })
 
-  const { data: realtime, isLoading: rtLoading } = useQuery({
+  const { data: realtime, isLoading: rtLoading, error: realtimeError, refetch: refetchRealtime } = useQuery({
     queryKey: queryKeys.devices.realtime(sn),
     queryFn: () => deviceApi.getRealtime(sn).then((r) => r.data?.data ?? null),
     refetchInterval: 10000,
   })
 
-  const { data: deviceInfo } = useQuery({
+  const { data: deviceInfo, error: deviceError, refetch: refetchDevice } = useQuery({
     queryKey: queryKeys.devices.detail(sn),
     queryFn: () => deviceApi.getDeviceBySn(sn).then((r) => r.data?.data ?? null),
   })
@@ -69,6 +70,15 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
 
   return (
     <Spin spinning={stateLoading || rtLoading}>
+      {(stateError || realtimeError || deviceError) && (
+        <QueryErrorAlert
+          error={stateError || realtimeError || deviceError}
+          onRetry={() => {
+            void (stateError ? refetchState() : realtimeError ? refetchRealtime() : refetchDevice())
+          }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}>
           <Card size="small" bordered={false} style={{ borderRadius: 12 }}>

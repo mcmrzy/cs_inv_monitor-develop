@@ -53,6 +53,10 @@ const i18n: Record<Lang, Record<string, string>> = {
     errPwdMismatch: '两次输入的密码不一致',
     successLogin: '登录成功', successRegister: '注册成功，请登录', successReset: '密码重置成功，请登录', successCodeSent: '验证码已发送到邮箱',
     errEmailFormat: '邮箱格式不正确', errPhoneFormat: '手机号格式不正确', errPwdMin: '密码至少6位，需包含字母和数字',
+    captchaRequired: '请完成验证后重试',
+    errUserNotFound: '用户不存在或账号未注册', errAccountDisabled: '账户已禁用', errWrongPassword: '密码错误',
+    errPhoneRegistered: '该手机号已注册', errCodeInvalid: '验证码错误或已过期', errAlreadyRegistered: '该账号已注册',
+    errRequestFailed: '请求失败，请稍后重试',
   },
   en: {
     brand: 'CHENSHUO', brandSub: 'TECHNOLOGY', title: 'Solar Inverter\nSmart O&M Platform',
@@ -81,6 +85,10 @@ const i18n: Record<Lang, Record<string, string>> = {
     errPwdMismatch: 'Passwords do not match',
     successLogin: 'Login successful', successRegister: 'Registered! Please sign in.', successReset: 'Password reset! Please sign in.', successCodeSent: 'Code sent to your email',
     errEmailFormat: 'Invalid email format', errPhoneFormat: 'Invalid phone number', errPwdMin: 'At least 6 chars with letters and numbers',
+    captchaRequired: 'Complete the security verification and try again.',
+    errUserNotFound: 'User not found or account is not registered', errAccountDisabled: 'This account is disabled', errWrongPassword: 'Incorrect password',
+    errPhoneRegistered: 'This phone number is already registered', errCodeInvalid: 'The verification code is invalid or expired', errAlreadyRegistered: 'This account is already registered',
+    errRequestFailed: 'Request failed. Please try again later.',
   },
 }
 
@@ -102,6 +110,21 @@ const LoginPage: React.FC = () => {
   const [resetForm] = Form.useForm()
 
   const t = i18n[lang]
+  const localizeAuthError = (payload: any, fallback: string) => {
+    const byCode: Record<number, string> = {
+      4001: t.errUserNotFound,
+      4002: t.errAccountDisabled,
+      4003: t.errWrongPassword,
+      4004: t.errPhoneRegistered,
+      4005: t.errCodeInvalid,
+      4008: t.errEmailFormat,
+      4009: t.errAlreadyRegistered,
+      4010: t.errRequestFailed,
+      4032: t.captchaRequired,
+    }
+    const localized = byCode[Number(payload?.code)]
+    return localized || payload?.message || fallback
+  }
 
   useEffect(() => {
     if (countdown > 0) {
@@ -161,11 +184,11 @@ const LoginPage: React.FC = () => {
             await performLogin(values, token)
             return
           } catch {
-            showError('请完成验证后重试')
+            showError(t.captchaRequired)
             return
           }
         }
-        showError((d.message as string) || t.errLogin)
+        showError(localizeAuthError(d, t.errLogin))
         return
       }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
@@ -182,11 +205,11 @@ const LoginPage: React.FC = () => {
           await performLogin(values, token)
           return
         } catch {
-          showError('请完成验证后重试')
+          showError(t.captchaRequired)
           return
         }
       }
-      showError(errData?.message || t.errLogin)
+      showError(localizeAuthError(errData, t.errLogin))
     }
     finally { setLoading(false) }
   }
@@ -201,9 +224,9 @@ const LoginPage: React.FC = () => {
     try {
       const res = await api.post('/auth/email-register', values)
       const d = res.data as Record<string, unknown>
-      if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errRegister); return }
+      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errRegister)); return }
       message.success(t.successRegister); setActiveTab('login')
-    } catch (err: any) { showError(err?.response?.data?.message || t.errRegister) }
+    } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errRegister)) }
     finally { setLoading(false) }
   }
 
@@ -212,9 +235,9 @@ const LoginPage: React.FC = () => {
     try {
       const res = await api.post('/auth/email-reset-password', values)
       const d = res.data as Record<string, unknown>
-      if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errReset); return }
+      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errReset)); return }
       message.success(t.successReset); setActiveTab('login')
-    } catch (err: any) { showError(err?.response?.data?.message || t.errReset) }
+    } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errReset)) }
     finally { setLoading(false) }
   }
 
@@ -224,13 +247,13 @@ const LoginPage: React.FC = () => {
     try {
       const res = await api.post('/auth/phone-code-login', values)
       const d = res.data as Record<string, unknown>
-      if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errLogin); return }
+      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errLogin)); return }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
       login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', data.user, data.permissions ?? [])
       message.success(t.successLogin)
       navigate('/dashboard', { replace: true })
-    } catch (err: any) { showError(err?.response?.data?.message || t.errLogin) }
+    } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errLogin)) }
     finally { setLoading(false) }
   }
 
@@ -240,13 +263,13 @@ const LoginPage: React.FC = () => {
     try {
       const res = await api.post('/auth/email-code-login', values)
       const d = res.data as Record<string, unknown>
-      if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errLogin); return }
+      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errLogin)); return }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
       login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', data.user, data.permissions ?? [])
       message.success(t.successLogin)
       navigate('/dashboard', { replace: true })
-    } catch (err: any) { showError(err?.response?.data?.message || t.errLogin) }
+    } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errLogin)) }
     finally { setLoading(false) }
   }
 
@@ -260,11 +283,11 @@ const LoginPage: React.FC = () => {
       const headers = { 'X-Captcha-Token': captchaToken }
       const res = await api.post('/auth/send-email-code', { email, type: apiType }, { headers })
       const d = res.data as Record<string, unknown>
-      if (d?.code !== undefined && d.code !== 0) { showError((d.message as string) || t.errSendCode); return }
+      if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errSendCode)); return }
       message.success(t.successCodeSent); setCountdown(60)
     } catch (err: any) {
       if (err?.message === '用户取消验证') return
-      showError(err?.response?.data?.message || t.errSendCode)
+      showError(localizeAuthError(err?.response?.data, t.errSendCode))
     }
   }
 

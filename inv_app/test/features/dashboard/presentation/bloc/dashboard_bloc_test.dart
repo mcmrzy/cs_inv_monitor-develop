@@ -70,9 +70,11 @@ void main() {
             'recentAlarms': <dynamic>[],
           }),
         );
-        when(() => mockDashboardRepository.getTrendData(
-              type: any(named: 'type'),
-            ),).thenAnswer(
+        when(
+          () => mockDashboardRepository.getTrendData(
+            type: any(named: 'type'),
+          ),
+        ).thenAnswer(
           (_) async => right<Failure, List<TrendDataPoint>>([
             const TrendDataPoint(date: '01/01', energy: 10.0),
           ]),
@@ -101,7 +103,11 @@ void main() {
       act: (bloc) => bloc.add(const DashboardLoadRequested()),
       expect: () => [
         isA<DashboardLoading>(),
-        isA<DashboardLoaded>(),
+        isA<DashboardLoaded>().having(
+          (state) => state.failedSections,
+          'failedSections',
+          isEmpty,
+        ),
       ],
     );
 
@@ -112,19 +118,23 @@ void main() {
           (_) async =>
               left<Failure, Map<String, dynamic>>(createTestServerFailure()),
         );
-        when(() => mockDashboardRepository.getTrendData(
-              type: any(named: 'type'),
-            ),).thenAnswer(
+        when(
+          () => mockDashboardRepository.getTrendData(
+            type: any(named: 'type'),
+          ),
+        ).thenAnswer(
           (_) async =>
               left<Failure, List<TrendDataPoint>>(createTestServerFailure()),
         );
         when(() => mockDashboardRepository.getDeviceDistribution()).thenAnswer(
           (_) async => left<Failure, Map<String, dynamic>>(
-              createTestServerFailure(),),
+            createTestServerFailure(),
+          ),
         );
         when(() => mockDashboardRepository.getStationRanking()).thenAnswer(
           (_) async => left<Failure, List<StationRankItem>>(
-              createTestServerFailure(),),
+            createTestServerFailure(),
+          ),
         );
         when(() => mockDataCacheService.load(any())).thenReturn(null);
         return dashboardBloc;
@@ -143,19 +153,23 @@ void main() {
           (_) async =>
               left<Failure, Map<String, dynamic>>(createTestServerFailure()),
         );
-        when(() => mockDashboardRepository.getTrendData(
-              type: any(named: 'type'),
-            ),).thenAnswer(
+        when(
+          () => mockDashboardRepository.getTrendData(
+            type: any(named: 'type'),
+          ),
+        ).thenAnswer(
           (_) async =>
               left<Failure, List<TrendDataPoint>>(createTestServerFailure()),
         );
         when(() => mockDashboardRepository.getDeviceDistribution()).thenAnswer(
           (_) async => left<Failure, Map<String, dynamic>>(
-              createTestServerFailure(),),
+            createTestServerFailure(),
+          ),
         );
         when(() => mockDashboardRepository.getStationRanking()).thenAnswer(
           (_) async => left<Failure, List<StationRankItem>>(
-              createTestServerFailure(),),
+            createTestServerFailure(),
+          ),
         );
         when(() => mockDataCacheService.load(any())).thenReturn({
           'todayEnergy': 25.3,
@@ -182,7 +196,7 @@ void main() {
     );
 
     blocTest<DashboardBloc, DashboardState>(
-      'succeeds with partial API results',
+      'marks failed sections when only partial API results are available',
       build: () {
         // Only statistics succeeds, others fail
         when(() => mockDashboardRepository.getStatistics()).thenAnswer(
@@ -193,9 +207,11 @@ void main() {
             'recentAlarms': <dynamic>[],
           }),
         );
-        when(() => mockDashboardRepository.getTrendData(
-              type: any(named: 'type'),
-            ),).thenAnswer(
+        when(
+          () => mockDashboardRepository.getTrendData(
+            type: any(named: 'type'),
+          ),
+        ).thenAnswer(
           (_) async =>
               left<Failure, List<TrendDataPoint>>(createTestServerFailure()),
         );
@@ -205,7 +221,8 @@ void main() {
         );
         when(() => mockDashboardRepository.getStationRanking()).thenAnswer(
           (_) async => left<Failure, List<StationRankItem>>(
-              createTestServerFailure(),),
+            createTestServerFailure(),
+          ),
         );
         when(() => mockDataCacheService.save(any(), any()))
             .thenAnswer((_) async {});
@@ -214,7 +231,11 @@ void main() {
       act: (bloc) => bloc.add(const DashboardLoadRequested()),
       expect: () => [
         isA<DashboardLoading>(),
-        isA<DashboardLoaded>(),
+        isA<DashboardLoaded>().having(
+          (state) => state.failedSections,
+          'failedSections',
+          containsAll(['trend', 'distribution', 'ranking']),
+        ),
       ],
     );
   });
@@ -297,7 +318,8 @@ void main() {
         // bloc.close() (called by blocTest tearDown before verify) also
         // invokes sseDataSource.disconnect(), so the handler accounts for
         // at least 1 explicit call.
-        verify(() => mockSSEDataSource.disconnect()).called(greaterThanOrEqualTo(1));
+        verify(() => mockSSEDataSource.disconnect())
+            .called(greaterThanOrEqualTo(1));
       },
     );
   });
@@ -322,15 +344,19 @@ void main() {
           recentAlarms: [],
         ),
       ),
-      act: (bloc) => bloc.add(const DashboardSSEDataReceived(data: {
-        'type': 'dashboard_update',
-        'deviceStats': {
-          'online': 9,
-          'offline': 0,
-          'fault': 1,
-          'total': 10,
-        },
-      },),),
+      act: (bloc) => bloc.add(
+        const DashboardSSEDataReceived(
+          data: {
+            'type': 'dashboard_update',
+            'deviceStats': {
+              'online': 9,
+              'offline': 0,
+              'fault': 1,
+              'total': 10,
+            },
+          },
+        ),
+      ),
       expect: () => [
         isA<DashboardLoaded>().having(
           (s) => s.data.onlineCount,
@@ -343,10 +369,14 @@ void main() {
     blocTest<DashboardBloc, DashboardState>(
       'ignores data when not in DashboardLoaded state',
       build: () => dashboardBloc,
-      act: (bloc) => bloc.add(const DashboardSSEDataReceived(data: {
-        'type': 'dashboard_update',
-        'deviceStats': {'online': 9},
-      },),),
+      act: (bloc) => bloc.add(
+        const DashboardSSEDataReceived(
+          data: {
+            'type': 'dashboard_update',
+            'deviceStats': {'online': 9},
+          },
+        ),
+      ),
       expect: () => <DashboardState>[],
     );
   });
@@ -358,9 +388,11 @@ void main() {
     blocTest<DashboardBloc, DashboardState>(
       'updates selectedTimeRange and reloads trend data when in loaded state',
       build: () {
-        when(() => mockDashboardRepository.getTrendData(
-              type: any(named: 'type'),
-            ),).thenAnswer(
+        when(
+          () => mockDashboardRepository.getTrendData(
+            type: any(named: 'type'),
+          ),
+        ).thenAnswer(
           (_) async => right<Failure, List<TrendDataPoint>>([
             const TrendDataPoint(date: '01/07', energy: 20.0),
           ]),

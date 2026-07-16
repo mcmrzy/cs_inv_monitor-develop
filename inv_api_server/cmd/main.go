@@ -176,29 +176,29 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	go runOTAScheduler(db, otaService, heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
-		DB:                  db,
-		RDB:                 rdb,
-		JWTInstance:         jwtInstance,
-		JWTService:          jwtService,
-		AuthHandler:         authHandler,
-		CaptchaHandler:      captchaHandler,
-		StationHandler:      stationHandler,
-		DeviceHandler:       deviceHandler,
-		AlarmHandler:        alarmHandler,
-		NotificationHandler: notificationHandler,
-		WeatherHandler:      weatherHandler,
-		ModelHandler:        modelHandler,
-		BatteryHandler:      batteryHandler,
+		DB:                    db,
+		RDB:                   rdb,
+		JWTInstance:           jwtInstance,
+		JWTService:            jwtService,
+		AuthHandler:           authHandler,
+		CaptchaHandler:        captchaHandler,
+		StationHandler:        stationHandler,
+		DeviceHandler:         deviceHandler,
+		AlarmHandler:          alarmHandler,
+		NotificationHandler:   notificationHandler,
+		WeatherHandler:        weatherHandler,
+		ModelHandler:          modelHandler,
+		BatteryHandler:        batteryHandler,
 		EnergyScheduleHandler: energyScheduleHandler,
-		PermChecker:         permChecker,
-		AdminHandler:        adminHandler,
-		OTAHandler:          otaHandler,
-		OTAService:          otaService,
-		JPushService:        jpushService,
-		DashboardHandler:    dashboardHandler,
-		AlertRuleHandler:    alertRuleHandler,
-		WorkOrderHandler:    workOrderHandler,
-		ParallelHandler:     parallelHandler,
+		PermChecker:           permChecker,
+		AdminHandler:          adminHandler,
+		OTAHandler:            otaHandler,
+		OTAService:            otaService,
+		JPushService:          jpushService,
+		DashboardHandler:      dashboardHandler,
+		AlertRuleHandler:      alertRuleHandler,
+		WorkOrderHandler:      workOrderHandler,
+		ParallelHandler:       parallelHandler,
 	})
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
 	serve(cfg, router)
@@ -596,29 +596,29 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 }
 
 type RouterDeps struct {
-	DB                  *pgxpool.Pool
-	RDB                 *redis.Client
-	JWTInstance         *jwt.JWT
-	JWTService          *service.JWTService
-	AuthHandler         *handler.AuthHandler
-	CaptchaHandler      *handler.CaptchaHandler
-	StationHandler      *handler.StationHandler
-	DeviceHandler       *handler.DeviceHandler
-	AlarmHandler        *handler.AlarmHandler
-	NotificationHandler *handler.NotificationHandler
-	WeatherHandler      *handler.WeatherHandler
-	ModelHandler        *handler.ModelHandler
-	BatteryHandler      *handler.BatteryHandler
+	DB                    *pgxpool.Pool
+	RDB                   *redis.Client
+	JWTInstance           *jwt.JWT
+	JWTService            *service.JWTService
+	AuthHandler           *handler.AuthHandler
+	CaptchaHandler        *handler.CaptchaHandler
+	StationHandler        *handler.StationHandler
+	DeviceHandler         *handler.DeviceHandler
+	AlarmHandler          *handler.AlarmHandler
+	NotificationHandler   *handler.NotificationHandler
+	WeatherHandler        *handler.WeatherHandler
+	ModelHandler          *handler.ModelHandler
+	BatteryHandler        *handler.BatteryHandler
 	EnergyScheduleHandler *handler.EnergyScheduleHandler
-	PermChecker         *service.PermChecker
-	AdminHandler        *handler.AdminHandler
-	OTAHandler          *handler.OTAHandler
-	OTAService          *service.OTAService
-	JPushService        *service.JPushService
-	DashboardHandler    *handler.DashboardHandler
-	AlertRuleHandler    *handler.AlertRuleHandler
-	WorkOrderHandler    *handler.WorkOrderHandler
-	ParallelHandler     *handler.ParallelHandler
+	PermChecker           *service.PermChecker
+	AdminHandler          *handler.AdminHandler
+	OTAHandler            *handler.OTAHandler
+	OTAService            *service.OTAService
+	JPushService          *service.JPushService
+	DashboardHandler      *handler.DashboardHandler
+	AlertRuleHandler      *handler.AlertRuleHandler
+	WorkOrderHandler      *handler.WorkOrderHandler
+	ParallelHandler       *handler.ParallelHandler
 }
 
 func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
@@ -719,8 +719,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		})
 
 		// 验证码 API（无需认证）
-		api.GET("/captcha/generate", deps.CaptchaHandler.GenerateCaptcha)
-		api.POST("/captcha/verify", deps.CaptchaHandler.VerifyCaptcha)
+		captchaLimit := middleware.RateLimitWith(2, 5)
+		api.GET("/captcha/generate", captchaLimit, deps.CaptchaHandler.GenerateCaptcha)
+		api.POST("/captcha/verify", captchaLimit, deps.CaptchaHandler.VerifyCaptcha)
 
 		auth := api.Group("").Use(middleware.Auth(deps.JWTService))
 		{

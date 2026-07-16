@@ -1,5 +1,7 @@
 export default {
   zh: {
+    'dev.listLoadFailed': '设备列表加载失败，当前显示的不是有效空列表。',
+    'dev.retryLoad': '重新加载',
     'dev.title': '设备管理',
     'dev.deviceList': '设备列表',
     'dev.unbindApproval': '解绑审批',
@@ -196,6 +198,8 @@ export default {
     'dev.unbindError': '解绑失败',
   },
   en: {
+    'dev.listLoadFailed': 'Failed to load devices. The empty list shown is not a valid result.',
+    'dev.retryLoad': 'Try Again',
     'dev.title': 'Device Management',
     'dev.deviceList': 'Device List',
     'dev.unbindApproval': 'Unbind Approval',

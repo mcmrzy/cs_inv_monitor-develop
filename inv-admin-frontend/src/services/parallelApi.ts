@@ -1,8 +1,8 @@
 import api from './api'
 
 export const parallelApi = {
-  getGroups: (params?: any) => api.get('/parallel-groups', { params }),
-  getGroup: (id: number) => api.get(`/parallel-groups/${id}`),
+  getGroups: (params?: any) => api.get('/parallel-groups', { params, expectedDataShape: 'page' }),
+  getGroup: (id: number) => api.get(`/parallel-groups/${id}`, { expectedDataShape: 'object' }),
   createGroup: (data: any) => api.post('/parallel-groups', data),
   updateGroup: (id: number, data: any) => api.patch(`/parallel-groups/${id}`, data),
   deleteGroup: (id: number) => api.delete(`/parallel-groups/${id}`),

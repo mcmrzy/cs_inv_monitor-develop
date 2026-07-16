@@ -18,6 +18,7 @@ import { deviceApi } from '@/services/deviceApi'
 import useAuthStore from '@/stores/authStore'
 import { Role } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import { queryKeys } from '@/utils/queryKeys'
 import type { WorkOrder, User } from '@/types'
 import { formatInTimezone } from '@/utils/timezone'
@@ -63,7 +64,7 @@ const WorkOrdersPage: React.FC = () => {
   const [form] = Form.useForm()
 
   // 设备列表查询（用于工单关联设备SN下拉选择）
-  const { data: devicesRes } = useQuery({
+  const { data: devicesRes, error: devicesError, refetch: refetchDevices } = useQuery({
     queryKey: ['devices', 'for-work-order', user?.id, user?.role],
     queryFn: () => {
       const params: any = { page_size: 200 }
@@ -106,7 +107,7 @@ const WorkOrdersPage: React.FC = () => {
 
   const queryParams = { page, page_size: pageSize, status: statusFilter || undefined, priority: priorityFilter || undefined }
 
-  const { data: listRes, isLoading, refetch } = useQuery({
+  const { data: listRes, isLoading, error: listError, refetch } = useQuery({
     queryKey: queryKeys.workOrders.list(queryParams),
     queryFn: () => workOrderApi.list(queryParams).then((r) => {
       let items = r.data?.data?.items ?? []
@@ -117,12 +118,12 @@ const WorkOrdersPage: React.FC = () => {
     }),
   })
 
-  const { data: stats } = useQuery({
+  const { data: stats, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: queryKeys.workOrders.stats(),
     queryFn: () => workOrderApi.getStats().then((r) => r.data?.data ?? { open: 0, inProgress: 0, resolved: 0, closed: 0 }),
   })
 
-  const { data: templates } = useQuery({
+  const { data: templates, error: templatesError, refetch: refetchTemplates } = useQuery({
     queryKey: ['work-orders', 'templates'],
     queryFn: () => workOrderApi.getTemplates().then((r) => {
       const data = r.data?.data
@@ -134,7 +135,7 @@ const WorkOrdersPage: React.FC = () => {
     enabled: templateOpen,
   })
 
-  const { data: detail, isLoading: detailLoading } = useQuery({
+  const { data: detail, isLoading: detailLoading, error: detailError, refetch: refetchDetail } = useQuery({
     queryKey: queryKeys.workOrders.detail(detailId ?? ''),
     queryFn: () => workOrderApi.getDetail(detailId!).then((r) => r.data?.data ?? null as WorkOrderDetail | null),
     enabled: !!detailId,
@@ -246,8 +247,23 @@ const WorkOrdersPage: React.FC = () => {
   const data = listRes?.items ?? []
   const total = listRes?.total ?? 0
 
+  const queryFailure = [
+    { error: listError, retry: refetch },
+    { error: devicesError, retry: refetchDevices },
+    { error: statsError, retry: refetchStats },
+    { error: templatesError, retry: refetchTemplates },
+    { error: detailError, retry: refetchDetail },
+  ].find((item) => item.error)
+
   return (
     <div>
+      {queryFailure && (
+        <QueryErrorAlert
+          error={queryFailure.error}
+          onRetry={() => { void queryFailure.retry() }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Title level={4} style={{ marginBottom: 16 }}><FileTextOutlined style={{ marginRight: 8 }} />{t('wo.title')}</Title>
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}><StatisticCard size="small" title={t('wo.pending')} value={stats?.open ?? 0} valueStyle={{ color: '#1677ff' }} /></Col>

@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { Table, Button, Checkbox, Space, Popover, Input, Tooltip, Empty } from 'antd'
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table'
 import { SettingOutlined, SearchOutlined, SortAscendingOutlined, SortDescendingOutlined } from '@ant-design/icons'
+import useTranslation from '@/hooks/useTranslation'
 
 export interface FieldMeta {
   field_key: string
@@ -27,7 +28,6 @@ const FIELD_TYPE_RENDER: Record<string, (val: any) => string> = {
   int: (v) => (v != null ? String(Math.round(v)) : '-'),
   float: (v) => (v != null ? (typeof v === 'number' ? v.toFixed(2) : String(v)) : '-'),
   string: (v) => (v != null ? String(v) : '-'),
-  bool: (v) => (v === true ? '是' : v === false ? '否' : '-'),
 }
 
 function DynamicTable<T extends Record<string, any>>({
@@ -40,6 +40,7 @@ function DynamicTable<T extends Record<string, any>>({
   className,
   scrollX = 1200,
 }: DynamicTableProps<T>) {
+  const { t } = useTranslation()
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(() => {
     const initial = fields.filter((f) => f.is_show).map((f) => f.field_key)
     return new Set(initial)
@@ -105,7 +106,7 @@ function DynamicTable<T extends Record<string, any>>({
         title: (
           <Space size={4}>
             <span>{f.field_name}</span>
-            <Tooltip title="排序">
+            <Tooltip title={t('common.sort')}>
               <Button
                 type="text"
                 size="small"
@@ -123,14 +124,16 @@ function DynamicTable<T extends Record<string, any>>({
         ellipsis: true,
         sorter: undefined,
         render: (val: any) => {
-          const formatted = FIELD_TYPE_RENDER[f.field_type]?.(val) ?? (val != null ? String(val) : '-')
+          const formatted = f.field_type === 'bool'
+            ? (val === true ? t('common.yes') : val === false ? t('common.no') : '-')
+            : FIELD_TYPE_RENDER[f.field_type]?.(val) ?? (val != null ? String(val) : '-')
           if (f.unit) {
             return <span>{formatted} <span style={{ color: '#999', fontSize: 12 }}>{f.unit}</span></span>
           }
           return formatted
         },
       }))
-  }, [sortedFields, visibleKeys, sortField, sortOrder, handleSort])
+  }, [sortedFields, visibleKeys, sortField, sortOrder, handleSort, t])
 
   const columnSelector = (
     <div style={{ maxHeight: 300, overflow: 'auto', minWidth: 180 }}>
@@ -146,7 +149,7 @@ function DynamicTable<T extends Record<string, any>>({
         </div>
       ))}
       <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 8, paddingTop: 8 }}>
-        <Button size="small" onClick={() => setVisibleKeys(new Set(sortedFields.filter(f => f.is_show).map(f => f.field_key)))}>恢复默认</Button>
+        <Button size="small" onClick={() => setVisibleKeys(new Set(sortedFields.filter(f => f.is_show).map(f => f.field_key)))}>{t('common.restoreDefault')}</Button>
       </div>
     </div>
   )
@@ -158,22 +161,22 @@ function DynamicTable<T extends Record<string, any>>({
           <Input
             key={f.field_key}
             size="small"
-            placeholder={`筛选${f.field_name}`}
+            placeholder={t('common.filterField', { field: f.field_name })}
             allowClear
             style={{ width: 120 }}
             value={filters[f.field_key] || ''}
             onChange={(e) => setFilters((prev) => ({ ...prev, [f.field_key]: e.target.value }))}
           />
         ))}
-        <Popover content={columnSelector} title="选择显示列" trigger="click" placement="bottomRight">
-          <Button size="small" icon={<SettingOutlined />}>列设置</Button>
+        <Popover content={columnSelector} title={t('common.selectColumns')} trigger="click" placement="bottomRight">
+          <Button size="small" icon={<SettingOutlined />}>{t('common.columnSettings')}</Button>
         </Popover>
       </div>
     )
-  }, [sortedFields, filters, columnSelector])
+  }, [sortedFields, filters, columnSelector, t])
 
   if (fields.length === 0) {
-    return <Empty description="无字段元数据，请先在型号管理中配置字段" />
+    return <Empty description={t('common.noFieldMetadata')} />
   }
 
   return (

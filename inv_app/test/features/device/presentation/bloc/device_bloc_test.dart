@@ -28,10 +28,10 @@ void main() {
     when(() => mockMQTTService.isConnected).thenReturn(false);
     when(() => mockMQTTService.realtimeDataStream)
         .thenAnswer((_) => const Stream<InverterRealtime>.empty());
-    when(() => mockMQTTService.unsubscribeDeviceTopics(any()))
-        .thenReturn(null);
+    when(() => mockMQTTService.unsubscribeDeviceTopics(any())).thenReturn(null);
     when(() => mockMQTTService.subscribeDeviceTopics(any())).thenReturn(null);
-    when(() => mockMQTTService.waitForConnection(timeout: any(named: 'timeout')))
+    when(() =>
+            mockMQTTService.waitForConnection(timeout: any(named: 'timeout')))
         .thenAnswer((_) async {});
 
     deviceBloc = DeviceBloc(
@@ -56,14 +56,19 @@ void main() {
     blocTest<DeviceBloc, DeviceState>(
       'emits [DeviceLoading, DeviceListLoaded] on success',
       build: () {
-        when(() => mockDeviceRepository.getList(
-          stationId: any(named: 'stationId'),
-          status: any(named: 'status'),
-          page: any(named: 'page'),
-          pageSize: any(named: 'pageSize'),
-        ),).thenAnswer((_) async =>
-            right<Failure, Map<String, dynamic>>(createTestDeviceListResponse()),);
-        when(() => mockDataCacheService.save(any(), any())).thenAnswer((_) async {});
+        when(
+          () => mockDeviceRepository.getList(
+            stationId: any(named: 'stationId'),
+            status: any(named: 'status'),
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>(
+              createTestDeviceListResponse()),
+        );
+        when(() => mockDataCacheService.save(any(), any()))
+            .thenAnswer((_) async {});
         return deviceBloc;
       },
       act: (bloc) => bloc.add(const DeviceListRequested()),
@@ -76,13 +81,17 @@ void main() {
     blocTest<DeviceBloc, DeviceState>(
       'emits [DeviceLoading, DeviceError] on failure without cache',
       build: () {
-        when(() => mockDeviceRepository.getList(
-          stationId: any(named: 'stationId'),
-          status: any(named: 'status'),
-          page: any(named: 'page'),
-          pageSize: any(named: 'pageSize'),
-        ),).thenAnswer((_) async =>
-            left<Failure, Map<String, dynamic>>(createTestServerFailure()),);
+        when(
+          () => mockDeviceRepository.getList(
+            stationId: any(named: 'stationId'),
+            status: any(named: 'status'),
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
+          (_) async =>
+              left<Failure, Map<String, dynamic>>(createTestServerFailure()),
+        );
         when(() => mockDataCacheService.load(any())).thenReturn(null);
         return deviceBloc;
       },
@@ -94,15 +103,19 @@ void main() {
     );
 
     blocTest<DeviceBloc, DeviceState>(
-      'emits [DeviceLoading, DeviceListLoaded] from cache on failure',
+      'does not hide a server failure with cached data',
       build: () {
-        when(() => mockDeviceRepository.getList(
-          stationId: any(named: 'stationId'),
-          status: any(named: 'status'),
-          page: any(named: 'page'),
-          pageSize: any(named: 'pageSize'),
-        ),).thenAnswer((_) async =>
-            left<Failure, Map<String, dynamic>>(createTestServerFailure()),);
+        when(
+          () => mockDeviceRepository.getList(
+            stationId: any(named: 'stationId'),
+            status: any(named: 'status'),
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
+          (_) async =>
+              left<Failure, Map<String, dynamic>>(createTestServerFailure()),
+        );
         when(() => mockDataCacheService.load(any())).thenReturn(
           createTestDeviceListResponse(),
         );
@@ -111,7 +124,37 @@ void main() {
       act: (bloc) => bloc.add(const DeviceListRequested()),
       expect: () => [
         isA<DeviceLoading>(),
-        isA<DeviceListLoaded>(),
+        isA<DeviceError>(),
+      ],
+    );
+
+    blocTest<DeviceBloc, DeviceState>(
+      'uses explicitly marked cache on network failure',
+      build: () {
+        when(
+          () => mockDeviceRepository.getList(
+            stationId: any(named: 'stationId'),
+            status: any(named: 'status'),
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
+          (_) async =>
+              left<Failure, Map<String, dynamic>>(createTestNetworkFailure()),
+        );
+        when(() => mockDataCacheService.load(any())).thenReturn(
+          createTestDeviceListResponse(),
+        );
+        return deviceBloc;
+      },
+      act: (bloc) => bloc.add(const DeviceListRequested()),
+      expect: () => [
+        isA<DeviceLoading>(),
+        isA<DeviceListLoaded>().having(
+          (state) => state.isFromCache,
+          'isFromCache',
+          true,
+        ),
       ],
     );
 
@@ -119,22 +162,28 @@ void main() {
       'saves data to cache on success',
       build: () {
         final responseData = createTestDeviceListResponse();
-        when(() => mockDeviceRepository.getList(
-          stationId: any(named: 'stationId'),
-          status: any(named: 'status'),
-          page: any(named: 'page'),
-          pageSize: any(named: 'pageSize'),
-        ),).thenAnswer((_) async =>
-            right<Failure, Map<String, dynamic>>(responseData),);
-        when(() => mockDataCacheService.save(any(), any())).thenAnswer((_) async {});
+        when(
+          () => mockDeviceRepository.getList(
+            stationId: any(named: 'stationId'),
+            status: any(named: 'status'),
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
+          (_) async => right<Failure, Map<String, dynamic>>(responseData),
+        );
+        when(() => mockDataCacheService.save(any(), any()))
+            .thenAnswer((_) async {});
         return deviceBloc;
       },
       act: (bloc) => bloc.add(const DeviceListRequested()),
       verify: (_) {
-        verify(() => mockDataCacheService.save(
-          DataCacheService.deviceList,
-          any(),
-        ),).called(1);
+        verify(
+          () => mockDataCacheService.save(
+            DataCacheService.deviceList,
+            any(),
+          ),
+        ).called(1);
       },
     );
   });
@@ -185,18 +234,22 @@ void main() {
     blocTest<DeviceBloc, DeviceState>(
       'emits [DeviceLoading, DeviceControlSuccess] on cloud success',
       build: () {
-        when(() => mockDeviceRepository.control(
-          any(),
-          any(),
-          any(),
-        ),).thenAnswer((_) async => right<Failure, void>(null));
+        when(
+          () => mockDeviceRepository.control(
+            any(),
+            any(),
+            any(),
+          ),
+        ).thenAnswer((_) async => right<Failure, void>(null));
         return deviceBloc;
       },
-      act: (bloc) => bloc.add(const DeviceControlRequested(
-        sn: 'TEST_SN_1',
-        cmdType: 'start',
-        params: {},
-      ),),
+      act: (bloc) => bloc.add(
+        const DeviceControlRequested(
+          sn: 'TEST_SN_1',
+          cmdType: 'start',
+          params: {},
+        ),
+      ),
       expect: () => [
         isA<DeviceLoading>(),
         isA<DeviceControlSuccess>(),
@@ -206,20 +259,24 @@ void main() {
     blocTest<DeviceBloc, DeviceState>(
       'emits [DeviceLoading, DeviceError] on cloud failure',
       build: () {
-        when(() => mockDeviceRepository.control(
-          any(),
-          any(),
-          any(),
-        ),).thenAnswer(
+        when(
+          () => mockDeviceRepository.control(
+            any(),
+            any(),
+            any(),
+          ),
+        ).thenAnswer(
           (_) async => left<Failure, void>(createTestServerFailure()),
         );
         return deviceBloc;
       },
-      act: (bloc) => bloc.add(const DeviceControlRequested(
-        sn: 'TEST_SN_1',
-        cmdType: 'start',
-        params: {},
-      ),),
+      act: (bloc) => bloc.add(
+        const DeviceControlRequested(
+          sn: 'TEST_SN_1',
+          cmdType: 'start',
+          params: {},
+        ),
+      ),
       expect: () => [
         isA<DeviceLoading>(),
         isA<DeviceError>(),
@@ -234,10 +291,12 @@ void main() {
     blocTest<DeviceBloc, DeviceState>(
       'emits [DeviceLoading, DeviceBindSuccess] on success',
       build: () {
-        when(() => mockDeviceRepository.bind(
-          any(),
-          any(),
-        ),).thenAnswer((_) async => right<Failure, void>(null));
+        when(
+          () => mockDeviceRepository.bind(
+            any(),
+            any(),
+          ),
+        ).thenAnswer((_) async => right<Failure, void>(null));
         return deviceBloc;
       },
       act: (bloc) => bloc.add(const DeviceBindRequested(sn: 'TEST_SN_1')),
@@ -250,10 +309,12 @@ void main() {
     blocTest<DeviceBloc, DeviceState>(
       'emits [DeviceLoading, DeviceError] on failure',
       build: () {
-        when(() => mockDeviceRepository.bind(
-          any(),
-          any(),
-        ),).thenAnswer(
+        when(
+          () => mockDeviceRepository.bind(
+            any(),
+            any(),
+          ),
+        ).thenAnswer(
           (_) async => left<Failure, void>(createTestServerFailure()),
         );
         return deviceBloc;
@@ -308,23 +369,29 @@ void main() {
     blocTest<DeviceBloc, DeviceState>(
       'emits [DeviceHistoryLoaded] on success',
       build: () {
-        when(() => mockDeviceRepository.getHistory(
-          any(),
-          any(),
-          any(),
-          any(),
-        ),).thenAnswer((_) async => right<Failure, List<dynamic>>([
-              {'date': '2024-01-01', 'value': 10.5},
-            ]),);
+        when(
+          () => mockDeviceRepository.getHistory(
+            any(),
+            any(),
+            any(),
+            any(),
+          ),
+        ).thenAnswer(
+          (_) async => right<Failure, List<dynamic>>([
+            {'date': '2024-01-01', 'value': 10.5},
+          ]),
+        );
         return deviceBloc;
       },
-      act: (bloc) => bloc.add(const DeviceHistoryRequested(
-        sn: 'TEST_SN_1',
-        period: 'day',
-        startDate: '2024-01-01',
-        endDate: '2024-01-07',
-        metric: 'power',
-      ),),
+      act: (bloc) => bloc.add(
+        const DeviceHistoryRequested(
+          sn: 'TEST_SN_1',
+          period: 'day',
+          startDate: '2024-01-01',
+          endDate: '2024-01-07',
+          metric: 'power',
+        ),
+      ),
       expect: () => [
         isA<DeviceHistoryLoaded>(),
       ],
@@ -333,23 +400,27 @@ void main() {
     blocTest<DeviceBloc, DeviceState>(
       'emits [DeviceError] on failure',
       build: () {
-        when(() => mockDeviceRepository.getHistory(
-          any(),
-          any(),
-          any(),
-          any(),
-        ),).thenAnswer(
+        when(
+          () => mockDeviceRepository.getHistory(
+            any(),
+            any(),
+            any(),
+            any(),
+          ),
+        ).thenAnswer(
           (_) async => left<Failure, List<dynamic>>(createTestServerFailure()),
         );
         return deviceBloc;
       },
-      act: (bloc) => bloc.add(const DeviceHistoryRequested(
-        sn: 'TEST_SN_1',
-        period: 'day',
-        startDate: '2024-01-01',
-        endDate: '2024-01-07',
-        metric: 'power',
-      ),),
+      act: (bloc) => bloc.add(
+        const DeviceHistoryRequested(
+          sn: 'TEST_SN_1',
+          period: 'day',
+          startDate: '2024-01-01',
+          endDate: '2024-01-07',
+          metric: 'power',
+        ),
+      ),
       expect: () => [
         isA<DeviceError>(),
       ],
@@ -375,9 +446,11 @@ void main() {
         device: createTestDeviceMap(),
         realtimeData: null,
       ),
-      act: (bloc) => bloc.add(DeviceRealtimeWSUpdate(
-        InverterRealtime(deviceSN: 'TEST_SN_1', updatedAt: DateTime.now()),
-      ),),
+      act: (bloc) => bloc.add(
+        DeviceRealtimeWSUpdate(
+          InverterRealtime(deviceSN: 'TEST_SN_1', updatedAt: DateTime.now()),
+        ),
+      ),
       expect: () => [
         isA<DeviceDetailLoaded>().having(
           (s) => s.realtimeData,

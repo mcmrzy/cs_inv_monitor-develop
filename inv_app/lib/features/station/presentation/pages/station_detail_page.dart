@@ -2,12 +2,10 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:dio/dio.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -63,9 +61,11 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
     final mqtt = getIt<MQTTService>();
     _statusSub = mqtt.statusStream.listen((_) {
+      if (!mounted) return;
       context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
     });
     _alarmSub = mqtt.alarmStream.listen((_) {
+      if (!mounted) return;
       context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
     });
     _fetchWeather();
@@ -78,6 +78,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       if (res.statusCode == 200) {
         final data = (res.data is Map) ? (res.data['data'] ?? res.data) as Map<String, dynamic> : res.data as Map<String, dynamic>;
         if (data['temp_min'] != null || data['temp_max'] != null) {
+          if (!mounted) return;
           setState(() {
             _weatherIcon = data['icon'] as String? ?? '\uD83C\uDF1E';
             final tempMin = (data['temp_min'] as num?)?.toStringAsFixed(0) ?? '--';
@@ -126,6 +127,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       final tempMinList = (daily?['temperature_2m_min'] as List?)?.cast<num>();
       final tempMaxList = (daily?['temperature_2m_max'] as List?)?.cast<num>();
 
+      if (!mounted) return;
       setState(() {
         _weatherIcon = _weatherIconFromCode(code);
         final tMin = tempMinList != null && tempMinList.isNotEmpty ? tempMinList[0].toStringAsFixed(0) : '--';
@@ -291,7 +293,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     final displayLoadW = _mqttActive ? _mqttLoadW : loadW;
     final displayBattW = _mqttActive ? _mqttBattW : battW;
     final displaySoc = _mqttActive ? _mqttSoc : soc;
-    final displayGridW = 0.0;
+    const displayGridW = 0.0;
     final todayKwh = (station['today_energy'] ?? 0.0).toDouble();
     final totalKwh = (station['total_energy'] ?? 0.0).toDouble();
     final monthKwh = (station['month_energy'] ?? 0.0).toDouble();
@@ -445,7 +447,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [color.withOpacity(op1), color.withOpacity(op1 * 0.2), color.withOpacity(0)],
+                  colors: [color.withValues(alpha: op1), color.withValues(alpha: op1 * 0.2), color.withValues(alpha: 0)],
                   stops: const [0.5, 0.8, 1.0],
                 ),
               ),
@@ -456,7 +458,7 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [color.withOpacity(op2), color.withOpacity(0)],
+                  colors: [color.withValues(alpha: op2), color.withValues(alpha: 0)],
                   stops: const [0.4, 1.0],
                 ),
               ),
@@ -674,9 +676,9 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14.r), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))]),
         child: Row(
           children: [
-            _sItem('${month.toStringAsFixed(0)}', 'kWh', l10n.monthlyGeneration),
-            _sItem('${year.toStringAsFixed(0)}', 'kWh', l10n.yearlyGeneration),
-            _sItem('${total.toStringAsFixed(0)}', 'kWh', l10n.totalGenerationAll),
+            _sItem(month.toStringAsFixed(0), 'kWh', l10n.monthlyGeneration),
+            _sItem(year.toStringAsFixed(0), 'kWh', l10n.yearlyGeneration),
+            _sItem(total.toStringAsFixed(0), 'kWh', l10n.totalGenerationAll),
           ],
         ),
       ),
@@ -929,13 +931,7 @@ class _EnergyFlowPainter extends CustomPainter {
   final List<FlowEdge> flows;
   final double animValue;
 
-  static const arcR = 40.0;
-  static const nodeR = 40.0;
-
   _EnergyFlowPainter({required this.flows, required this.animValue});
-
-  bool _match(FlowEdge f, NodePosition a, NodePosition b) =>
-      (f.from == a && f.to == b) || (f.from == b && f.to == a);
 
   @override
 void paint(Canvas canvas, Size size) {
@@ -1089,7 +1085,7 @@ void paint(Canvas canvas, Size size) {
 }
 
   void _drawArrow(Canvas canvas, double x, double y, Color c, {bool pointingLeft = false, bool pointingUp = false}) {
-    final s = 6.0;
+    const s = 6.0;
     final path = Path();
     if (pointingUp) {
       path.moveTo(x, y - s);
@@ -1223,11 +1219,11 @@ void paint(Canvas canvas, Size size) {
 
   void _dot(Canvas canvas, double x, double y, double angle, double alpha, Color c) {
     canvas.drawCircle(Offset(x, y), 5.0, Paint()
-      ..color = c.withOpacity(alpha * 0.5)
+      ..color = c.withValues(alpha: alpha * 0.5)
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),);
     canvas.drawCircle(Offset(x, y), 3.0, Paint()
-      ..color = c.withOpacity(alpha)
+      ..color = c.withValues(alpha: alpha)
       ..style = PaintingStyle.fill,);
   }
 

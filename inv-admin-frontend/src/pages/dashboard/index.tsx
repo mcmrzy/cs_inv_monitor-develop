@@ -12,12 +12,13 @@ import {
 import { useNavigate } from 'react-router-dom'
 import ReactECharts from '@/lib/echarts'
 import { dashboardApi } from '@/services/dashboardApi'
-import { ALARM_LEVEL_MAP, HERO_GRADIENTS, getAlarmLevelDisplay } from '@/utils/constants'
+import { ALARM_LEVEL_MAP, HERO_GRADIENTS, getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
 import useTimezoneStore from '@/stores/timezoneStore'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import dayjsTimezone from 'dayjs/plugin/timezone'
@@ -53,19 +54,19 @@ const DashboardPage: React.FC = () => {
   const { t } = useTranslation()
 
   /* ---------- 全局数据 ---------- */
-  const { data: statsRes, isLoading: statsLoading } = useQuery({
+  const { data: statsRes, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: ['dashboard', 'statistics'],
     queryFn: () => dashboardApi.getStatistics().then((r) => r.data),
     refetchInterval: 15000,
   })
 
-  const { data: distRes, isLoading: distLoading } = useQuery({
+  const { data: distRes, isLoading: distLoading, error: distError, refetch: refetchDist } = useQuery({
     queryKey: ['dashboard', 'deviceDistribution'],
     queryFn: () => dashboardApi.getDeviceDistribution().then((r) => r.data),
     refetchInterval: 15000,
   })
 
-  const { data: trendRes, isLoading: trendLoading } = useQuery({
+  const { data: trendRes, isLoading: trendLoading, error: trendError, refetch: refetchTrend } = useQuery({
     queryKey: ['dashboard', 'trend', 'day'],
     queryFn: () => dashboardApi.getTrend('day').then((r) => r.data),
     refetchInterval: 15000,
@@ -83,7 +84,7 @@ const DashboardPage: React.FC = () => {
   const userTimezone = timezone
   const [flowDate, setFlowDate] = useState(dayjs().tz(timezone).format('YYYY-MM-DD'))
 
-  const { data: flowRes, isLoading: flowLoading } = useQuery({
+  const { data: flowRes, isLoading: flowLoading, error: flowError, refetch: refetchFlow } = useQuery({
     queryKey: ['dashboard', 'energyFlow', flowDate, userTimezone],
     queryFn: () => dashboardApi.getEnergyFlow({ date: flowDate }).then((r) => r.data?.data ?? r.data ?? []),
     staleTime: 0,
@@ -94,14 +95,14 @@ const DashboardPage: React.FC = () => {
   /* ---------- 电量概览 ---------- */
   const [energyOverviewPeriod, setEnergyOverviewPeriod] = useState('day')
 
-  const { data: energyStatsRes, isLoading: energyStatsLoading } = useQuery({
+  const { data: energyStatsRes, isLoading: energyStatsLoading, error: energyStatsError, refetch: refetchEnergyStats } = useQuery({
     queryKey: ['dashboard', 'energyOverview', energyOverviewPeriod],
     queryFn: () => dashboardApi.getEnergyStats({ type: energyOverviewPeriod }).then((r) => r.data),
     refetchInterval: 15000,
   })
   const energyStatsRaw = (energyStatsRes?.data ?? energyStatsRes ?? {}) as any
 
-  const { data: energyTrendRes } = useQuery({
+  const { data: energyTrendRes, error: energyTrendError, refetch: refetchEnergyTrend } = useQuery({
     queryKey: ['dashboard', 'energyTrend', energyOverviewPeriod],
     queryFn: () => dashboardApi.getTrend(energyOverviewPeriod).then((r) => r.data),
     refetchInterval: 15000,
@@ -111,7 +112,7 @@ const DashboardPage: React.FC = () => {
     : (Array.isArray(energyTrendRes?.data?.data) ? energyTrendRes.data.data : []) as any[]
 
   // 30日发电趋势数据
-  const { data: trend30DaysRes } = useQuery({
+  const { data: trend30DaysRes, error: trend30DaysError, refetch: refetchTrend30Days } = useQuery({
     queryKey: ['dashboard', 'trend30Days'],
     queryFn: () => dashboardApi.getTrend('30days').then((r) => r.data),
     refetchInterval: 15000,
@@ -279,7 +280,7 @@ const DashboardPage: React.FC = () => {
 
   /* 电站排行 */
   const [rankingPeriod, setRankingPeriod] = useState('today')
-  const { data: rankingRes } = useQuery({
+  const { data: rankingRes, error: rankingError, refetch: refetchRanking } = useQuery({
     queryKey: ['dashboard', 'stationRanking', rankingPeriod],
     queryFn: () => dashboardApi.getStationRanking({ period: rankingPeriod, limit: 8 }).then((r) => r.data),
   })
@@ -287,6 +288,16 @@ const DashboardPage: React.FC = () => {
     const raw = rankingRes?.data ?? rankingRes
     return Array.isArray(raw) ? raw : []
   })()
+
+  const queryError = statsError || distError || trendError || flowError
+    || energyStatsError || energyTrendError || trend30DaysError || rankingError
+
+  const retryDashboard = () => {
+    void Promise.all([
+      refetchStats(), refetchDist(), refetchTrend(), refetchFlow(),
+      refetchEnergyStats(), refetchEnergyTrend(), refetchTrend30Days(), refetchRanking(),
+    ])
+  }
 
   const rankingOption = useMemo(() => {
     if (!rankingData || rankingData.length === 0) return {}
@@ -317,10 +328,16 @@ const DashboardPage: React.FC = () => {
       title: t('dash.alertLevel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
       render: (level: number | string, record: any) => {
         const cfg = getAlarmLevelDisplay(record.fault_code, level)
-        return <Tag color={cfg.color}>{cfg.label}</Tag>
+        return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
       },
     },
-    { title: t('dash.faultMessage'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true },
+    {
+      title: t('dash.faultMessage'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true,
+      render: (message: string, record: AlertItem) => {
+        const key = getAlarmMessageI18nKey(record.fault_code)
+        return key ? t(key) : message
+      },
+    },
     {
       title: t('common.time'), dataIndex: 'occurred_at', key: 'occurred_at', width: 150,
       render: (v: string) => v ? formatInTimezone(v, timezone, 'MM-DD HH:mm:ss') : '-',
@@ -497,6 +514,13 @@ const DashboardPage: React.FC = () => {
       <Title level={4} style={{ marginBottom: 16 }}>
         {t('dash.title')}
       </Title>
+      {queryError && (
+        <QueryErrorAlert
+          error={queryError}
+          onRetry={retryDashboard}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       {renderOverview()}
     </div>
   )

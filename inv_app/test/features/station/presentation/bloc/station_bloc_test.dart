@@ -61,10 +61,12 @@ void main() {
         ),
       ],
       verify: (_) {
-        verify(() => mockDataCacheService.save(
-              'station_summary',
-              any(),
-            ),).called(1);
+        verify(
+          () => mockDataCacheService.save(
+            'station_summary',
+            any(),
+          ),
+        ).called(1);
       },
     );
 
@@ -89,7 +91,8 @@ void main() {
       build: () {
         when(() => mockStationRepository.getSummary()).thenAnswer(
           (_) async => left<Failure, Map<String, dynamic>>(
-              createTestNetworkFailure(),),
+            createTestNetworkFailure(),
+          ),
         );
         when(() => mockDataCacheService.load(any())).thenReturn({
           'stations': [createTestStationMap()],
@@ -106,6 +109,24 @@ void main() {
         ),
       ],
     );
+
+    blocTest<StationBloc, StationState>(
+      'does not hide a server failure with summary cache',
+      build: () {
+        when(() => mockStationRepository.getSummary()).thenAnswer(
+          (_) async => left<Failure, Map<String, dynamic>>(
+            createTestServerFailure(),
+          ),
+        );
+        when(() => mockDataCacheService.load(any())).thenReturn({
+          'stations': [createTestStationMap()],
+          'summary': {'total_power': 100.0},
+        });
+        return stationBloc;
+      },
+      act: (bloc) => bloc.add(StationSummaryRequested()),
+      expect: () => [isA<StationError>()],
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -115,10 +136,12 @@ void main() {
     blocTest<StationBloc, StationState>(
       'emits [StationLoading, StationListLoaded] on success from initial',
       build: () {
-        when(() => mockStationRepository.getList(
-              page: any(named: 'page'),
-              pageSize: any(named: 'pageSize'),
-            ),).thenAnswer(
+        when(
+          () => mockStationRepository.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>(
             createTestStationListResponse(),
           ),
@@ -135,10 +158,12 @@ void main() {
     blocTest<StationBloc, StationState>(
       'emits [StationError] on failure',
       build: () {
-        when(() => mockStationRepository.getList(
-              page: any(named: 'page'),
-              pageSize: any(named: 'pageSize'),
-            ),).thenAnswer(
+        when(
+          () => mockStationRepository.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
           (_) async => left<Failure, Map<String, dynamic>>(
             createTestServerFailure(),
           ),
@@ -200,7 +225,8 @@ void main() {
       build: () {
         when(() => mockStationRepository.getDetail(any())).thenAnswer(
           (_) async => left<Failure, Map<String, dynamic>>(
-              createTestNetworkFailure(),),
+            createTestNetworkFailure(),
+          ),
         );
         when(() => mockDataCacheService.load(any())).thenReturn({
           'station': createTestStationMap(),
@@ -216,6 +242,27 @@ void main() {
           'isFromCache',
           true,
         ),
+      ],
+    );
+
+    blocTest<StationBloc, StationState>(
+      'does not hide a server failure with detail cache',
+      build: () {
+        when(() => mockStationRepository.getDetail(any())).thenAnswer(
+          (_) async => left<Failure, Map<String, dynamic>>(
+            createTestServerFailure(),
+          ),
+        );
+        when(() => mockDataCacheService.load(any())).thenReturn({
+          'station': createTestStationMap(),
+          'devices': [createTestDeviceMap()],
+        });
+        return stationBloc;
+      },
+      act: (bloc) => bloc.add(const StationDetailRequested(stationId: 1)),
+      expect: () => [
+        isA<StationLoading>(),
+        isA<StationError>(),
       ],
     );
   });

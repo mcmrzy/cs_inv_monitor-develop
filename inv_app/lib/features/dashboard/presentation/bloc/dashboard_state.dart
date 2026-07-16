@@ -19,22 +19,26 @@ class DashboardLoaded extends DashboardState {
   final DashboardData data;
   final bool isSSEConnected;
   final String selectedTimeRange;
+  final List<String> failedSections;
 
   const DashboardLoaded({
     required this.data,
     this.isSSEConnected = false,
     this.selectedTimeRange = 'day',
+    this.failedSections = const [],
   });
 
   DashboardLoaded copyWith({
     DashboardData? data,
     bool? isSSEConnected,
     String? selectedTimeRange,
+    List<String>? failedSections,
   }) {
     return DashboardLoaded(
       data: data ?? this.data,
       isSSEConnected: isSSEConnected ?? this.isSSEConnected,
       selectedTimeRange: selectedTimeRange ?? this.selectedTimeRange,
+      failedSections: failedSections ?? this.failedSections,
     );
   }
 
@@ -52,6 +56,7 @@ class DashboardLoaded extends DashboardState {
         data.isFromCache,
         isSSEConnected,
         selectedTimeRange,
+        failedSections,
       ];
 }
 

@@ -16,6 +16,7 @@ import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
 import { formatInTimezone } from '@/utils/timezone'
 import type { CommandCapability, SchemaArg, ControlState, ParameterSchema } from '@/types'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Title, Text } = Typography
 
@@ -111,14 +112,15 @@ const CapabilityCard: React.FC<CapabilityCardProps> = ({
 
   /* Render a single form field based on schema arg type */
   const renderField = (arg: SchemaArg) => {
-    const label = arg.label ?? arg.description ?? arg.key
+    const translatedKey = t('commands.arg.' + arg.key)
+    const label = arg.label ?? arg.description ?? (translatedKey !== 'commands.arg.' + arg.key ? translatedKey : arg.key)
     const labelText = arg.unit ? `${label} (${arg.unit})` : label
 
     // Enum → Select
     if (arg.enum && arg.enum.length > 0) {
       return (
         <Form.Item key={arg.key} name={arg.key} label={labelText}>
-          <Select placeholder={`Select ${label}`}>
+          <Select placeholder={t('common.selectItem') + ' ' + label}>
             {arg.enum.map((v) => (
               <Select.Option key={String(v)} value={v}>{String(v)}</Select.Option>
             ))}
@@ -154,7 +156,7 @@ const CapabilityCard: React.FC<CapabilityCardProps> = ({
     // Default: string → Input
     return (
       <Form.Item key={arg.key} name={arg.key} label={labelText}>
-        <Input placeholder={`Enter ${label}`} />
+        <Input placeholder={t('common.enterItem') + ' ' + label} />
       </Form.Item>
     )
   }
@@ -171,13 +173,15 @@ const CapabilityCard: React.FC<CapabilityCardProps> = ({
       <div style={{ marginTop: 4 }}>
         <Divider style={{ margin: '8px 0' }} />
         {stateArgs.map((arg) => {
+          const translatedKey = t('commands.arg.' + arg.key)
+          const label = arg.label ?? arg.description ?? (translatedKey !== 'commands.arg.' + arg.key ? translatedKey : arg.key)
           const d = desired[arg.key]
           const r = reported[arg.key]
           const isDiff = JSON.stringify(d) !== JSON.stringify(r)
           return (
             <Row key={arg.key} gutter={8} style={{ marginBottom: 2 }}>
               <Col span={8}>
-                <Text type="secondary" style={{ fontSize: 12 }}>{arg.key}</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{label}</Text>
               </Col>
               <Col span={8}>
                 <Tag color={isDiff ? 'orange' : 'green'} style={{ fontSize: 11 }}>
@@ -206,7 +210,7 @@ const CapabilityCard: React.FC<CapabilityCardProps> = ({
       <Row align="middle" justify="space-between" style={{ marginBottom: hasArgs ? 12 : 0 }}>
         <Col>
           <Space>
-            <Text strong>{cap.display_name || cap.command_code}</Text>
+            <Text strong>{cap.display_name ? (t(cap.display_name) !== cap.display_name ? t(cap.display_name) : cap.display_name) : cap.command_code}</Text>
             <Tag color={riskColor}>R{cap.risk_level}</Tag>
             <Text type="secondary" style={{ fontSize: 12 }}>{cap.command_code}</Text>
           </Space>
@@ -282,7 +286,7 @@ const RemoteSettingsPage: React.FC = () => {
   }, [])
 
   /* ---------- Device list ---------- */
-  const { data: devicesData, isLoading: devicesLoading } = useQuery({
+  const { data: devicesData, isLoading: devicesLoading, error: devicesError, refetch: refetchDevices } = useQuery({
     queryKey: ['remote-settings', 'devices'],
     queryFn: () =>
       deviceApi.getDevices({ pageSize: 9999 }).then((r) => {
@@ -305,7 +309,7 @@ const RemoteSettingsPage: React.FC = () => {
   const selectedDevice = deviceList.find((d) => d.sn === selectedSn)
 
   /* ---------- Control capabilities ---------- */
-  const { data: capabilitiesData, isLoading: capsLoading } = useQuery({
+  const { data: capabilitiesData, isLoading: capsLoading, error: capabilitiesError, refetch: refetchCapabilities } = useQuery({
     queryKey: ['control-capabilities', selectedSn],
     queryFn: () =>
       deviceApi.getControlCapabilities(selectedSn).then((r) => {
@@ -322,7 +326,7 @@ const RemoteSettingsPage: React.FC = () => {
   )
 
   /* ---------- Control state ---------- */
-  const { data: controlState, refetch: refetchState } = useQuery({
+  const { data: controlState, error: controlStateError, refetch: refetchState } = useQuery({
     queryKey: ['control-state', selectedSn],
     queryFn: () =>
       deviceApi.getControlState(selectedSn).then((r) => {
@@ -392,7 +396,7 @@ const RemoteSettingsPage: React.FC = () => {
           icon: <ExclamationCircleOutlined />,
           content: t('remote.riskConfirmContent', {
             level: cap.risk_level,
-            name: cap.display_name || cap.command_code,
+            name: cap.display_name ? (t(cap.display_name) !== cap.display_name ? t(cap.display_name) : cap.display_name) : cap.command_code,
           }),
           okText: t('remote.confirmExecute'),
           cancelText: t('remote.cancel'),
@@ -471,8 +475,21 @@ const RemoteSettingsPage: React.FC = () => {
 
   /* ==================== Render ==================== */
 
+  const queryFailure = [
+    { error: devicesError, retry: refetchDevices },
+    { error: capabilitiesError, retry: refetchCapabilities },
+    { error: controlStateError, retry: refetchState },
+  ].find((item) => item.error)
+
   return (
     <div>
+      {queryFailure && (
+        <QueryErrorAlert
+          error={queryFailure.error}
+          onRetry={() => { void queryFailure.retry() }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Row align="middle" justify="space-between" style={{ marginBottom: 16 }}>
         <Col>
           <Title level={4} style={{ margin: 0 }}>
@@ -509,7 +526,7 @@ const RemoteSettingsPage: React.FC = () => {
                   label: (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span>{d.sn} {d.model ? `(${d.model})` : ''}</span>
-                      <span style={{ fontSize: 12, color: statusCfg.color }}>{statusCfg.label}</span>
+                      <span style={{ fontSize: 12, color: statusCfg.color }}>{t(statusCfg.i18nKey)}</span>
                     </div>
                   ),
                   value: d.sn,
@@ -520,14 +537,14 @@ const RemoteSettingsPage: React.FC = () => {
           {selectedDevice && (
             <Col>
               <Space split={<span style={{ color: '#d9d9d9' }}>|</span>}>
-                <Text strong>SN: {selectedDevice.sn}</Text>
+                <Text strong>{t('remote.sn')}: {selectedDevice.sn}</Text>
                 {selectedDevice.model && (
                   <Text type="secondary">
                     {t('remote.model')}: {selectedDevice.model}
                   </Text>
                 )}
                 <Tag color={DEVICE_STATUS_MAP[selectedDevice.status]?.color ?? '#d9d9d9'}>
-                  {DEVICE_STATUS_MAP[selectedDevice.status]?.label ?? t('remote.unknown')}
+                  {DEVICE_STATUS_MAP[selectedDevice.status]?.i18nKey ? t(DEVICE_STATUS_MAP[selectedDevice.status].i18nKey) : t('remote.unknown')}
                 </Tag>
                 {selectedDevice.last_online_at && (
                   <Tooltip title={t('remote.lastCommunication')}>
@@ -599,7 +616,7 @@ const RemoteSettingsPage: React.FC = () => {
           {Object.entries(groupedCaps).map(([group, caps]) => (
             <div key={group}>
               <Title level={5} style={{ marginTop: 16, marginBottom: 8, textTransform: 'capitalize' }}>
-                {group === 'default' ? t('remote.commandParams') : group}
+                {group === 'default' ? t('commands.domain.default') : (t('commands.domain.' + group) !== 'commands.domain.' + group ? t('commands.domain.' + group) : group)}
               </Title>
               {caps.map((cap) => (
                 <CapabilityCard

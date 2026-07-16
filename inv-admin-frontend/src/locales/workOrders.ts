@@ -1,5 +1,6 @@
 export default {
   zh: {
+    'wo.status': '状态',
     'wo.title': '工单管理',
     'wo.createOrder': '创建工单',
     'wo.selectTemplate': '选择工单模板',
@@ -51,6 +52,7 @@ export default {
     'wo.templatePrefill': '（模板预填）',
   },
   en: {
+    'wo.status': 'Status',
     'wo.title': 'Work Orders',
     'wo.createOrder': 'Create Order',
     'wo.selectTemplate': 'Select Template',

@@ -414,7 +414,11 @@ func (h *StationHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 	enrichedStations := make([]map[string]interface{}, 0, len(stations))
 	for _, st := range stations {
-		devices, _ := h.deviceService.GetByStationID(ctx, st.ID)
+		devices, err := h.deviceService.GetByStationID(ctx, st.ID)
+		if err != nil {
+			response.HandleError(c, apperr.Internal("system error", err))
+			return
+		}
 		deviceCount := len(devices)
 		onlineCount := 0
 		faultCount := 0
@@ -506,7 +510,11 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 	summaries := make([]StationSummary, 0, len(stations))
 	for _, station := range stations {
 		// 直接使用电站的状态而不是计算设备状态
-		devices, _ := h.deviceService.GetByStationID(c.Request.Context(), station.ID)
+		devices, err := h.deviceService.GetByStationID(c.Request.Context(), station.ID)
+		if err != nil {
+			response.HandleError(c, apperr.Internal("system error", err))
+			return
+		}
 		deviceCount := len(devices)
 		onlineCount := 0
 		faultCount := 0

@@ -11,7 +11,7 @@ import api from '@/services/api'
 import { alertApi, notificationApi } from '@/services/alertApi'
 import { deviceApi } from '@/services/deviceApi'
 import { getApiErrorMessage, protocolApi, type AlarmEvent } from '@/services/protocolApi'
-import { ALARM_LEVEL_MAP, getAlarmLevelDisplay } from '@/utils/constants'
+import { ALARM_LEVEL_MAP, getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
 import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
 import type { Alert } from '@/types'
@@ -80,7 +80,7 @@ const AlertsPage: React.FC = () => {
   // 获取电站列表（用于电站下拉）
   const { data: stationsData, error: stationsError } = useQuery({
     queryKey: queryKeys.stations.list(),
-    queryFn: () => api.get('/stations', { params: { page_size: 100, all: true } }).then((r) => {
+    queryFn: () => api.get('/stations', { params: { page_size: 100, all: true }, expectedDataShape: 'page' }).then((r) => {
       const d = r.data?.data ?? r.data ?? {}
       return (Array.isArray(d) ? d : (d?.items ?? d?.list ?? [])) as any[]
     }),
@@ -148,13 +148,13 @@ const AlertsPage: React.FC = () => {
   })
 
   // 告警统计
-  const { data: stats } = useQuery({
+  const { data: stats, error: statsError } = useQuery({
     queryKey: queryKeys.alerts.stats(),
     queryFn: () => alertApi.getStats().then((r) => r.data?.data ?? { total: 0, unhandled: 0, handled: 0, critical: 0 }),
   })
 
   // 通知统计
-  const { data: notifyStats } = useQuery({
+  const { data: notifyStats, error: notifyStatsError } = useQuery({
     queryKey: ['notifications', 'stats'],
     queryFn: () => notificationApi.getStats().then((r) => r.data?.data ?? { total: 0, unread: 0 }),
   })
@@ -303,10 +303,16 @@ const AlertsPage: React.FC = () => {
       title: t('alert.alertLevel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
       render: (level: number | string, record: any) => {
         const cfg = getAlarmLevelDisplay(record.fault_code, level)
-        return <Tag color={cfg.color}>{cfg.label}</Tag>
+        return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
       },
     },
-    { title: t('alert.faultInfo'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true },
+    {
+      title: t('alert.faultInfo'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true,
+      render: (message: string, record: any) => {
+        const key = getAlarmMessageI18nKey(record.fault_code)
+        return key ? t(key) : message
+      },
+    },
     {
       title: t('alert.status'), dataIndex: 'status', key: 'status', width: 80,
       render: (status: number | string) => {
@@ -410,7 +416,8 @@ const AlertsPage: React.FC = () => {
           return record.content || record.title
         }
         const cfg = getAlarmLevelDisplay(record.fault_code, record.alarm_level)
-        return <><Tag color={cfg.color} style={{ marginRight: 4 }}>{cfg.label}</Tag>{record.fault_message}</>
+        const messageKey = getAlarmMessageI18nKey(record.fault_code)
+        return <><Tag color={cfg.color} style={{ marginRight: 4 }}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>{messageKey ? t(messageKey) : record.fault_message}</>
       },
     },
     {
@@ -578,6 +585,14 @@ const AlertsPage: React.FC = () => {
             type="error"
             showIcon
             message={getApiErrorMessage(activeTab === 'notification' ? notifyError : listError || notifyError)}
+            style={{ marginBottom: 12 }}
+          />
+        )}
+        {(statsError || notifyStatsError) && (
+          <AntAlert
+            type="error"
+            showIcon
+            message={getApiErrorMessage(statsError || notifyStatsError)}
             style={{ marginBottom: 12 }}
           />
         )}

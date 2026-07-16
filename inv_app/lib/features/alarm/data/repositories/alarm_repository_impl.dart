@@ -28,7 +28,10 @@ class AlarmRepositoryImpl implements AlarmRepository {
     }
   }
 
-  Either<Failure, Map<String, dynamic>> _parseData(Response response) {
+  Either<Failure, Map<String, dynamic>> _parseData(
+    Response response, {
+    bool allowEmpty = false,
+  }) {
     final data = response.data;
     if (data is Map<String, dynamic>) {
       if (data['code'] == 0) {
@@ -36,7 +39,11 @@ class AlarmRepositoryImpl implements AlarmRepository {
         if (inner is Map<String, dynamic>) {
           return Right(inner);
         }
-        return const Right(<String, dynamic>{});
+        if (allowEmpty && inner == null) {
+          return const Right(<String, dynamic>{});
+        }
+        return const Left(
+            ServerFailure('Response format error: expected object data'));
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -44,9 +51,11 @@ class AlarmRepositoryImpl implements AlarmRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> getList({int? stationId, int? status, int page = 1, int pageSize = 20}) async {
+  Future<Either<Failure, Map<String, dynamic>>> getList(
+      {int? stationId, int? status, int page = 1, int pageSize = 20}) async {
     try {
-      final response = await remoteDataSource.getList(stationId: stationId, status: status, page: page, pageSize: pageSize);
+      final response = await remoteDataSource.getList(
+          stationId: stationId, status: status, page: page, pageSize: pageSize);
       return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));
@@ -71,7 +80,7 @@ class AlarmRepositoryImpl implements AlarmRepository {
   Future<Either<Failure, void>> markHandled(int alarmId) async {
     try {
       final response = await remoteDataSource.markHandled(alarmId);
-      final parsed = _parseData(response);
+      final parsed = _parseData(response, allowEmpty: true);
       return parsed.fold((failure) => Left(failure), (_) => const Right(null));
     } on DioException catch (e) {
       return Left(_mapError(e));
@@ -84,7 +93,7 @@ class AlarmRepositoryImpl implements AlarmRepository {
   Future<Either<Failure, void>> markRead(List<int> alarmIds) async {
     try {
       final response = await remoteDataSource.markRead(alarmIds);
-      final parsed = _parseData(response);
+      final parsed = _parseData(response, allowEmpty: true);
       return parsed.fold((failure) => Left(failure), (_) => const Right(null));
     } on DioException catch (e) {
       return Left(_mapError(e));

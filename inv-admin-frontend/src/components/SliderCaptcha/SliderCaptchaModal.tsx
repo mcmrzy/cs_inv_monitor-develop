@@ -1,6 +1,5 @@
 import React, { useRef } from 'react'
 import SliderCaptcha from 'rc-slider-captcha'
-import { createPuzzle } from 'create-puzzle'
 import { Modal, App } from 'antd'
 import {
   LoadingOutlined,
@@ -9,6 +8,7 @@ import {
   RedoOutlined,
   SafetyOutlined,
 } from '@ant-design/icons'
+import useTranslation from '@/hooks/useTranslation'
 
 interface SliderCaptchaModalProps {
   open: boolean
@@ -17,9 +17,6 @@ interface SliderCaptchaModalProps {
   apiUrl?: string
 }
 
-// 本地背景图片
-const BG_IMAGE = '/captcha-bg.jpg'
-
 const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   open,
   onCancel,
@@ -27,31 +24,25 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   apiUrl = '/api/v1',
 }) => {
   const { message } = App.useApp()
-  const xRef = useRef(0)
+  const { t } = useTranslation()
+  const challengeRef = useRef('')
 
   // 请求拼图数据
   const request = async () => {
     try {
-      // 使用 create-puzzle 生成拼图
-      const result = await createPuzzle(BG_IMAGE, {
-        width: 60,
-        height: 60,   // 拼图块高度应该是正方形
-        bgWidth: 320,
-        bgHeight: 160,
-      })
-
-      // 保存 x 位置用于验证
-      xRef.current = result.x
-
-      console.log('拼图生成结果:', { x: result.x, y: result.y })
+      const response = await fetch(`${apiUrl}/captcha/generate`)
+      const result = await response.json()
+      if (!response.ok || result.code !== 0 || !result.data?.challengeId) {
+        throw new Error(result.message || t('captcha.generateFailed'))
+      }
+      challengeRef.current = result.data.challengeId
 
       return {
-        bgUrl: result.bgUrl,
-        puzzleUrl: result.puzzleUrl,
+        bgUrl: result.data.bgUrl,
+        puzzleUrl: result.data.puzzleUrl,
       }
     } catch (error) {
-      console.error('生成拼图失败:', error)
-      message.error('生成验证码失败，请重试')
+      message.error(t('captcha.generateFailed'))
       throw error
     }
   }
@@ -59,48 +50,34 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
   // 验证滑块位置
   const onVerify = async (data: { x: number; y: number; duration: number; trail: [number, number][] }) => {
     try {
-      const tolerance = 8
-      const diff = Math.abs(data.x - xRef.current)
-
-      console.log('验证参数:', {
-        userX: data.x,
-        expectedX: xRef.current,
-        diff,
-        duration: data.duration,
+      if (!challengeRef.current) {
+        throw new Error(t('captcha.retry'))
+      }
+      const response = await fetch(`${apiUrl}/captcha/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          challengeId: challengeRef.current,
+          x: data.x,
+          duration: data.duration,
+        }),
       })
+      challengeRef.current = ''
 
-      // 前端验证位置
-      if (diff <= tolerance) {
-        // 前端验证通过，发送到后端存储 token
-        const response = await fetch(`${apiUrl}/captcha/verify`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            x: data.x,
-            duration: data.duration,
-            verified: true,
-          }),
-        })
+      const result = await response.json()
 
-        const result = await response.json()
-
-        if (result.code === 0 && result.data?.verified) {
-          onSuccess(result.data.verifyToken)
-          message.success('验证成功')
-          return Promise.resolve()
-        }
-
-        message.error(result.message || '验证失败，请重试')
-        return Promise.reject(new Error(result.message || '验证失败'))
+      if (response.ok && result.code === 0 && result.data?.verified) {
+        onSuccess(result.data.verifyToken)
+        message.success(t('captcha.success'))
+        return Promise.resolve()
       }
 
-      message.error('验证失败，请重试')
-      return Promise.reject(new Error('位置不正确'))
+      message.error(result.message || t('captcha.retry'))
+      return Promise.reject(new Error(result.message || t('captcha.failed')))
     } catch (error) {
-      console.error('验证失败:', error)
-      message.error('验证失败，请重试')
+      message.error(t('captcha.retry'))
       return Promise.reject(error)
     }
   }
@@ -110,7 +87,7 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <SafetyOutlined style={{ color: '#4f6ef7' }} />
-          <span>安全验证</span>
+          <span>{t('captcha.title')}</span>
         </div>
       }
       open={open}
@@ -125,7 +102,7 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
     >
       <div>
         <p style={{ color: '#666', marginBottom: 16, fontSize: 14 }}>
-          请拖动滑块完成验证
+          {t('captcha.drag')}
         </p>
         <SliderCaptcha
           mode="embed"
@@ -138,14 +115,14 @@ const SliderCaptchaModal: React.FC<SliderCaptchaModalProps> = ({
           errorHoldDuration={1000}
           limitErrorCount={3}
           tipText={{
-            default: '请拖动滑块完成验证',
-            loading: '加载中...',
-            moving: '请拖动滑块',
-            verifying: '验证中...',
-            success: '验证成功',
-            error: '验证失败',
-            errors: '操作过于频繁',
-            loadFailed: '加载失败',
+            default: t('captcha.drag'),
+            loading: t('captcha.loading'),
+            moving: t('captcha.moving'),
+            verifying: t('captcha.verifying'),
+            success: t('captcha.success'),
+            error: t('captcha.failed'),
+            errors: t('captcha.tooFrequent'),
+            loadFailed: t('captcha.loadFailed'),
           }}
           tipIcon={{
             default: <SafetyOutlined style={{ fontSize: 18 }} />,

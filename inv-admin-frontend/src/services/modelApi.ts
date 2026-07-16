@@ -112,44 +112,44 @@ export interface ModelCommandCapability {
 
 export const modelApi = {
   // 型号 CRUD
-  listModels: () => api.get('/models'),
-  listModelsPublic: () => api.get('/models'),  // 不需要管理员权限，所有登录用户可用
-  getModel: (id: number) => api.get(`/models/${id}`),
+  listModels: () => api.get('/models', { expectedDataShape: 'array' }),
+  listModelsPublic: () => api.get('/models', { expectedDataShape: 'array' }),  // 不需要管理员权限，所有登录用户可用
+  getModel: (id: number) => api.get(`/models/${id}`, { expectedDataShape: 'object' }),
   createModel: (data: Partial<DeviceModelItem>) => api.post('/models', data),
   updateModel: (id: number, data: Partial<DeviceModelItem>) => api.put(`/models/${id}`, data),
   deleteModel: (id: number) => api.delete(`/models/${id}`),
 
   // 字段 CRUD
-  getFields: (modelId: number) => api.get(`/models/${modelId}/fields`),
+  getFields: (modelId: number) => api.get(`/models/${modelId}/fields`, { expectedDataShape: 'array' }),
   createField: (modelId: number, data: Partial<DeviceModelFieldItem>) => api.post(`/models/${modelId}/fields`, data),
   updateField: (modelId: number, fieldId: number, data: Partial<DeviceModelFieldItem>) => api.put(`/models/${modelId}/fields/${fieldId}`, data),
   deleteField: (modelId: number, fieldId: number) => api.delete(`/models/${modelId}/fields/${fieldId}`),
   batchUpdateFields: (modelId: number, fields: Partial<DeviceModelFieldItem>[]) => api.put(`/models/${modelId}/fields/batch`, { fields }),
-  getFieldCatalog: () => api.get('/field-catalog'),
+  getFieldCatalog: () => api.get('/field-catalog', { expectedDataShape: 'array' }),
   saveFieldCatalog: (data: Partial<FieldCatalogItem>) => api.post('/field-catalog', data),
-  getFieldCapabilities: (modelId: number) => api.get(`/models/${modelId}/field-capabilities`),
+  getFieldCapabilities: (modelId: number) => api.get(`/models/${modelId}/field-capabilities`, { expectedDataShape: 'array' }),
   updateFieldCapability: (modelId: number, fieldKey: string, data: Partial<ModelFieldCapability>) =>
     api.put(`/models/${modelId}/field-capabilities/${fieldKey}`, data),
   batchUpdateFieldCapabilities: (modelId: number, fields: Partial<ModelFieldCapability>[]) =>
     api.put(`/models/${modelId}/field-capabilities`, { fields }),
-  getCommandCapabilities: (modelId: number) => api.get(`/models/${modelId}/commands-v2`),
+  getCommandCapabilities: (modelId: number) => api.get(`/models/${modelId}/commands-v2`, { expectedDataShape: 'array' }),
   updateCommandCapability: (modelId: number, commandCode: string, data: Partial<ModelCommandCapability>) =>
     api.put(`/models/${modelId}/commands-v2/${commandCode}`, data),
   saveCommandCapability: (modelId: number, data: Partial<ModelCommandCapability>) =>
     api.post(`/models/${modelId}/commands-v2`, data),
-  getProtocolSchema: (modelId: number) => api.get(`/models/${modelId}/protocol-schema`),
-  listProtocolVersions: () => api.get('/protocol-versions'),
+  getProtocolSchema: (modelId: number) => api.get(`/models/${modelId}/protocol-schema`, { expectedDataShape: 'object' }),
+  listProtocolVersions: () => api.get('/protocol-versions', { expectedDataShape: 'array' }),
   createProtocolVersion: (data: { protocol_code: string; version: number; schema_hash: string; fields: ProtocolFieldInput[] }) =>
     api.post('/protocol-versions', data),
   releaseProtocolVersion: (protocolId: number) => api.post(`/protocol-versions/${protocolId}/release`),
   bindProtocolVersion: (modelId: number, protocolId: number) => api.put(`/models/${modelId}/protocol-version`, { protocol_id: protocolId }),
-  getMigrationReport: (modelId: number) => api.get(`/models/${modelId}/migration-report`),
-  getDataPreview: (modelId: number) => api.get(`/models/${modelId}/data-preview`),
+  getMigrationReport: (modelId: number) => api.get(`/models/${modelId}/migration-report`, { expectedDataShape: 'object' }),
+  getDataPreview: (modelId: number) => api.get(`/models/${modelId}/data-preview`, { expectedDataShape: 'object' }),
   validateRegistry: (modelId: number) => api.post(`/models/${modelId}/validate`),
   activateRegistry: (modelId: number) => api.post(`/models/${modelId}/activate`),
 
   // 协议 CRUD
-  getProtocols: (modelId: number) => api.get(`/models/${modelId}/protocols`),
+  getProtocols: (modelId: number) => api.get(`/models/${modelId}/protocols`, { expectedDataShape: 'array' }),
   createProtocol: (modelId: number, data: Partial<DeviceModelProtocolItem>) => api.post(`/models/${modelId}/protocols`, data),
   updateProtocol: (modelId: number, protocolId: number, data: Partial<DeviceModelProtocolItem>) => api.put(`/models/${modelId}/protocols/${protocolId}`, data),
   deleteProtocol: (modelId: number, protocolId: number) => api.delete(`/models/${modelId}/protocols/${protocolId}`),

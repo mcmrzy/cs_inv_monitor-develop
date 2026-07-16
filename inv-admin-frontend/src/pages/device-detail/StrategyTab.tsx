@@ -10,6 +10,7 @@ import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import useTranslation from '@/hooks/useTranslation'
 
 const { Text } = Typography
@@ -38,7 +39,7 @@ const StrategyTab: React.FC<StrategyTabProps> = ({ sn }) => {
   const [overrideModalOpen, setOverrideModalOpen] = useState(false)
   const [overrideForm] = Form.useForm()
 
-  const { isLoading } = useQuery({
+  const { isLoading, error: strategyError, refetch: refetchStrategy } = useQuery({
     queryKey: queryKeys.devices.energySchedule(sn),
     queryFn: () => deviceApi.getEnergySchedule(sn).then((r) => {
       const d = r.data?.data ?? {}
@@ -53,7 +54,7 @@ const StrategyTab: React.FC<StrategyTabProps> = ({ sn }) => {
     }),
   })
 
-  const { data: overridesRes, isLoading: overridesLoading } = useQuery({
+  const { data: overridesRes, isLoading: overridesLoading, error: overridesError, refetch: refetchOverrides } = useQuery({
     queryKey: queryKeys.devices.controlOverrides(sn),
     queryFn: () => deviceApi.getControlOverrides(sn).then((r) => r.data?.data ?? []),
     refetchInterval: 30000,
@@ -115,6 +116,13 @@ const StrategyTab: React.FC<StrategyTabProps> = ({ sn }) => {
 
   return (
     <Spin spinning={isLoading}>
+      {(strategyError || overridesError) && (
+        <QueryErrorAlert
+          error={strategyError || overridesError}
+          onRetry={() => { void (strategyError ? refetchStrategy() : refetchOverrides()) }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Card
         title={t('deviceDetail.strategy.title')}
         bordered={false}

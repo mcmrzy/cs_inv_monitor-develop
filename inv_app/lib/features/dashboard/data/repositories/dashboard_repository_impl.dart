@@ -38,7 +38,8 @@ class DashboardRepositoryImpl implements DashboardRepository {
         if (inner is Map<String, dynamic>) {
           return inner;
         }
-        return <String, dynamic>{};
+        throw const ServerFailure(
+            'Response format error: expected object data');
       }
       throw ServerFailure(data['message'] ?? 'Request failed');
     }
@@ -56,7 +57,7 @@ class DashboardRepositoryImpl implements DashboardRepository {
         if (inner is Map<String, dynamic> && inner['list'] is List) {
           return inner['list'] as List;
         }
-        return [];
+        throw const ServerFailure('Response format error: expected list data');
       }
       throw ServerFailure(data['message'] ?? 'Request failed');
     }
@@ -81,7 +82,8 @@ class DashboardRepositoryImpl implements DashboardRepository {
   }
 
   @override
-  Future<Either<Failure, List<TrendDataPoint>>> getTrendData({String type = 'day'}) async {
+  Future<Either<Failure, List<TrendDataPoint>>> getTrendData(
+      {String type = 'day'}) async {
     try {
       final response = await remoteDataSource.getTrendData(type: type);
       final list = _parseList(response);
