@@ -3,6 +3,7 @@ import { Button, Empty, Typography, Space, App, Collapse, Badge } from 'antd'
 import {
   ReloadOutlined, SettingOutlined, ThunderboltOutlined,
   ToolOutlined, ArrowUpOutlined, ArrowDownOutlined,
+  ControlOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { deviceApi } from '@/services/deviceApi'
@@ -11,6 +12,8 @@ import DeviceSelector from './components/DeviceSelector'
 import GeneralSection from './components/GeneralSection'
 import ApplicationSection from './components/ApplicationSection'
 import ParallelSection from './components/ParallelSection'
+import GridConnectionSection from './components/GridConnectionSection'
+import PowerControlSection from './components/PowerControlSection'
 import ChargeSection from './components/ChargeSection'
 import DischargeSection from './components/DischargeSection'
 import OtherSection from './components/OtherSection'
@@ -35,7 +38,7 @@ const RemoteSettingsPage: React.FC = () => {
     return localStorage.getItem('remote-settings-device-sn')
   })
   const [reading, setReading] = useState(false)
-  const [activeKeys, setActiveKeys] = useState<string[]>(['general', 'application'])
+  const [activeKeys, setActiveKeys] = useState<string[]>(['general', 'application', 'parallel', 'gridConnection', 'powerControl', 'charge', 'discharge', 'other', 'reset'])
 
   const { data: devicesData } = useQuery({
     queryKey: queryKeys.devices.list({ page: 1, page_size: 200 }),
@@ -111,6 +114,22 @@ const RemoteSettingsPage: React.FC = () => {
               style={panelStyle(SECTION_COLORS.parallel)}
             >
               <ParallelSection />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="gridConnection"
+              header={<SectionHeader icon={<ThunderboltOutlined />} title="并网" count={6} color={SECTION_COLORS.gridConnection} />}
+              style={panelStyle(SECTION_COLORS.gridConnection)}
+            >
+              <GridConnectionSection deviceInfo={selectedDevice} />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="powerControl"
+              header={<SectionHeader icon={<ControlOutlined />} title="功率控制" count={21} color={SECTION_COLORS.powerControl} />}
+              style={panelStyle(SECTION_COLORS.powerControl)}
+            >
+              <PowerControlSection deviceInfo={selectedDevice} />
             </Collapse.Panel>
 
             <Collapse.Panel
