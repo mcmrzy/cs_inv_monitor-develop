@@ -107,12 +107,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
 
     _bleResultSub = _bleProvisioningService.resultStream.listen((result) {
       if (mounted) {
+        final message = _localizeBleMessage(result);
         setState(() {
-          _bleErrorMessage = result;
+          _bleErrorMessage = message;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result),
+            content: Text(message),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -573,8 +574,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              result.message ?? AppLocalizations.of(context)!.connectionFailed),
+          content: Text(_localizeBleMessage(result.message)),
           backgroundColor: AppColors.errorLight,
         ),
       );
@@ -614,8 +614,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(result.message ?? AppLocalizations.of(context)!.sendFailed),
+          content: Text(_localizeBleMessage(result.message)),
           backgroundColor: AppColors.errorLight,
         ),
       );
@@ -630,6 +629,36 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       _provisionSuccess = true; // 设置配网成功状态
       _bleErrorMessage = null; // 清除错误消息
     });
+  }
+
+  String _localizeBleMessage(String? code) {
+    final l10n = AppLocalizations.of(context)!;
+    switch (code) {
+      case 'ble_waiting_credentials':
+        return l10n.bleProvisionReady;
+      case 'ble_connecting_wifi':
+        return l10n.bleWaitingResult;
+      case 'ble_wifi_connected':
+        return l10n.bleSuccessExclaim;
+      case 'ble_wifi_not_found':
+        return l10n.bleWifiNotFound;
+      case 'ble_wifi_password_failed':
+        return l10n.bleWifiPasswordFailed;
+      case 'ble_timeout':
+        return l10n.bleTimeout;
+      case 'ble_device_not_connected':
+        return l10n.bleDeviceNotConnected;
+      case 'ble_credentials_sent':
+        return l10n.bleProvisionWaiting;
+      case 'ble_connect_failed':
+        return l10n.connectionFailed;
+      case 'ble_write_failed':
+        return l10n.sendFailed;
+      case null:
+        return l10n.bleError;
+      default:
+        return l10n.translateError(code);
+    }
   }
 
   String _getBleStatusText() {

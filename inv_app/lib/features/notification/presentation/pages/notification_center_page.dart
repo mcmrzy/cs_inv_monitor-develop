@@ -480,7 +480,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    notification.title,
+                    _notificationTitle(notification, l10n),
                     style: TextStyle(
                       fontSize: 14.sp,
                       fontWeight: FontWeight.w600,
@@ -494,7 +494,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                     children: [
                       Expanded(
                         child: Text(
-                          notification.subtitle,
+                          _notificationSubtitle(notification, l10n),
                           style: TextStyle(
                               fontSize: 12.sp, color: AppColors.textHint),
                         ),
@@ -520,6 +520,36 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       time.toUtc().toIso8601String(),
       l10n: l10n,
     );
+  }
+
+  String _notificationTitle(
+    SystemNotification notification,
+    AppLocalizations l10n,
+  ) {
+    if (notification.type == SystemNotificationType.otaAvailable) {
+      return l10n.firmwareUpgrade;
+    }
+    if (notification.type == SystemNotificationType.appUpdate) {
+      final version = notification.version ??
+          RegExp(r'v([^\s]+)').firstMatch(notification.title)?.group(1) ??
+          '';
+      return version.isEmpty ? l10n.newVersionFound : l10n.notifyAppUpdate(version);
+    }
+    return notification.title;
+  }
+
+  String _notificationSubtitle(
+    SystemNotification notification,
+    AppLocalizations l10n,
+  ) {
+    if (notification.type == SystemNotificationType.otaAvailable) {
+      return l10n.notifyOtaAvailable(notification.deviceSn ?? l10n.device);
+    }
+    if (notification.type == SystemNotificationType.appUpdate &&
+        notification.subtitle.isEmpty) {
+      return l10n.updateDetailsHint;
+    }
+    return notification.subtitle;
   }
 }
 

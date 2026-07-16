@@ -18,6 +18,34 @@ import '../../../../helpers/mock_providers.dart';
 class MockAppUpdateService extends Mock implements AppUpdateService {}
 
 void main() {
+  group('SystemNotification serialization', () {
+    test('preserves semantic app update version', () {
+      final notification = SystemNotification(
+        type: SystemNotificationType.appUpdate,
+        title: '',
+        subtitle: '',
+        timestamp: DateTime.utc(2026, 7, 16),
+        version: '2.3.0',
+      );
+
+      final restored = SystemNotification.fromJson(notification.toJson());
+
+      expect(restored.version, '2.3.0');
+      expect(restored.type, SystemNotificationType.appUpdate);
+    });
+
+    test('extracts version from legacy localized title', () {
+      final restored = SystemNotification.fromJson({
+        'type': SystemNotificationType.appUpdate.index,
+        'title': '发现新版本 v1.8.2',
+        'subtitle': '点击查看详情并更新',
+        'timestamp': DateTime.utc(2026, 7, 16).toIso8601String(),
+      });
+
+      expect(restored.version, '1.8.2');
+    });
+  });
+
   late NotificationBloc notificationBloc;
   late MockDeviceRepository mockDeviceRepository;
   late MockMQTTService mockMQTTService;

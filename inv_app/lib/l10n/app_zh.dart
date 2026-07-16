@@ -882,6 +882,7 @@ const Map<String, String> zh = {
   'notify_device_offline': '{device} 离线',
   'notify_ota_available': '{device} 有新固件可升级',
   'notify_app_update': '发现新版本 v{version}',
+  'update_details_hint': '点击查看详情并更新',
 
   // 其他
   'search_alarm_hint': '搜索告警设备/SN',
@@ -961,6 +962,9 @@ const Map<String, String> zh = {
   'ble_discovering_services': '正在发现服务...',
   'ble_connected_device': '已连接设备',
   'ble_success_exclaim': '配网成功！',
+  'ble_wifi_not_found': '未找到 WiFi 网络',
+  'ble_wifi_password_failed': '连接失败，请检查 WiFi 密码',
+  'ble_device_not_connected': '未连接 BLE 设备',
   'ble_ready': '就绪',
   'ble_scanning_short': '正在扫描...',
   'device_connecting_wifi': '设备正在连接WiFi，请稍候查看设备状态',

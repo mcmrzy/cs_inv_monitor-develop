@@ -30,6 +30,7 @@ class SystemNotification {
   final String subtitle;
   final DateTime timestamp;
   final String? deviceSn;
+  final String? version;
   final int? id; // 后端通知ID
   final bool fromBackend; // 是否来自后端
 
@@ -39,6 +40,7 @@ class SystemNotification {
     required this.subtitle,
     required this.timestamp,
     this.deviceSn,
+    this.version,
     this.id,
     this.fromBackend = false,
   });
@@ -49,15 +51,22 @@ class SystemNotification {
         'subtitle': subtitle,
         'timestamp': timestamp.toIso8601String(),
         'deviceSn': deviceSn,
+        'version': version,
       };
 
   factory SystemNotification.fromJson(Map<String, dynamic> json) {
+    final type = SystemNotificationType.values[json['type'] as int];
+    final title = json['title'] as String;
+    final legacyVersion = type == SystemNotificationType.appUpdate
+        ? RegExp(r'v([^\s]+)').firstMatch(title)?.group(1)
+        : null;
     return SystemNotification(
-      type: SystemNotificationType.values[json['type'] as int],
-      title: json['title'] as String,
+      type: type,
+      title: title,
       subtitle: json['subtitle'] as String,
       timestamp: DateTime.parse(json['timestamp'] as String).toLocal(),
       deviceSn: json['deviceSn'] as String?,
+      version: json['version'] as String? ?? legacyVersion,
     );
   }
 
@@ -151,8 +160,8 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     final storage = getIt<StorageService>();
     final notification = SystemNotification(
       type: SystemNotificationType.otaAvailable,
-      title: '设备固件更新',
-      subtitle: '${ota.deviceSN} 有新固件可用',
+      title: '',
+      subtitle: '',
       timestamp: DateTime.now(),
       deviceSn: ota.deviceSN,
     );
@@ -257,11 +266,14 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         if (info.hasUpdate) {
           final appUpdateNotif = SystemNotification(
             type: SystemNotificationType.appUpdate,
-            title: '发现新版本 v${info.latestVersionName}',
-            subtitle: info.changelog.isNotEmpty ? info.changelog : '点击查看详情并更新',
+            title: '',
+            subtitle: info.changelog,
             timestamp: DateTime.now(),
+            version: info.latestVersionName,
           );
-          final exists = localStored.any((n) => n.type == SystemNotificationType.appUpdate && n.title == appUpdateNotif.title);
+          final exists = localStored.any((n) =>
+              n.type == SystemNotificationType.appUpdate &&
+              n.version == appUpdateNotif.version);
           if (!exists) {
             localStored = [appUpdateNotif, ...localStored];
             final saveJson = json.encode(localStored.map((e) => e.toJson()).toList());

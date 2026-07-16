@@ -809,6 +809,7 @@ class AppLocalizations {
   String notifyDeviceOffline(String device) => str('notify_device_offline', {'device': device});
   String notifyOtaAvailable(String device) => str('notify_ota_available', {'device': device});
   String notifyAppUpdate(String version) => str('notify_app_update', {'version': version});
+  String get updateDetailsHint => _localizedStrings['update_details_hint'] ?? 'Tap to view details and update';
 
   String get confirmExecute => _localizedStrings['confirm_execute'] ?? 'Confirm Execute';
 
@@ -828,6 +829,9 @@ class AppLocalizations {
   String get bleDiscoveringServices => _localizedStrings['ble_discovering_services'] ?? 'Discovering services...';
   String get bleConnectedDevice => _localizedStrings['ble_connected_device'] ?? 'Device connected';
   String get bleSuccessExclaim => _localizedStrings['ble_success_exclaim'] ?? 'Provisioning success!';
+  String get bleWifiNotFound => _localizedStrings['ble_wifi_not_found'] ?? 'WiFi network not found';
+  String get bleWifiPasswordFailed => _localizedStrings['ble_wifi_password_failed'] ?? 'Connection failed. Check the WiFi password.';
+  String get bleDeviceNotConnected => _localizedStrings['ble_device_not_connected'] ?? 'No BLE device is connected';
   String get bleProvisionReady => _localizedStrings['ble_ready'] ?? 'Ready';
   String get bleScanningShort => _localizedStrings['ble_scanning_short'] ?? 'Scanning...';
   String get deviceConnectingWifi => _localizedStrings['device_connecting_wifi'] ?? 'Device is connecting to WiFi, please check device status';
