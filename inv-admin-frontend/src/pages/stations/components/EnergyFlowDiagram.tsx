@@ -127,10 +127,6 @@ function computeFlowEdges(
 }
 
 const svgAnimations = `
-  @keyframes pulse {
-    0%, 100% { r: 40; opacity: 0.3; }
-    50% { r: 48; opacity: 0.1; }
-  }
   @keyframes flow {
     from { stroke-dashoffset: 0; }
     to { stroke-dashoffset: -20; }
@@ -143,9 +139,6 @@ const svgAnimations = `
     stroke-dasharray: 4 8;
     opacity: 0.15;
   }
-  .node-pulse {
-    animation: pulse 2.5s ease-in-out infinite;
-  }
 `;
 
 const FlowNode: React.FC<{
@@ -153,48 +146,40 @@ const FlowNode: React.FC<{
   power: number;
   extra?: string;
 }> = React.memo(({ node, power, extra }) => {
-  const { x, y, color, label, type, image } = node;
+  const { x, y, label, type, image } = node;
   const displayPower = type === 'battery' && power < 0 ? Math.abs(power) : power;
+
+  const imgSize = 80;
 
   return (
     <g>
-      {/* Pulse ring */}
-      <circle
-        cx={x}
-        cy={y}
-        r={40}
-        fill={color}
-        opacity={0.3}
-        className="node-pulse"
-      />
-      {/* Main circle */}
-      <circle cx={x} cy={y} r={35} fill={color} />
       {/* Node image */}
       <image
         href={image}
-        x={x - 28}
-        y={y - 28}
-        width={56}
-        height={56}
+        x={x - imgSize / 2}
+        y={y - imgSize / 2}
+        width={imgSize}
+        height={imgSize}
         preserveAspectRatio="xMidYMid slice"
-        rx={6}
+        rx={8}
       />
       {/* Label */}
       <text
         x={x}
-        y={y + 10}
+        y={y + 4}
         textAnchor="middle"
         dominantBaseline="central"
         fill="#fff"
-        fontSize="9"
-        fontWeight="500"
+        fontSize="10"
+        fontWeight="600"
+        style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
       >
         {label}
       </text>
       {/* Power value below node */}
       <text
         x={x}
-        y={y + 52}
+        y={y + 56}
         textAnchor="middle"
         dominantBaseline="central"
         fill="#64748b"
@@ -207,7 +192,7 @@ const FlowNode: React.FC<{
       {extra && (
         <text
           x={x}
-          y={y + 66}
+          y={y + 70}
           textAnchor="middle"
           dominantBaseline="central"
           fill="#94a3b8"
