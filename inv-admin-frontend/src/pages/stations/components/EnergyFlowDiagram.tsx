@@ -22,8 +22,8 @@ interface NodeConfig {
   x: number;
   y: number;
   color: string;
-  icon: string;
   label: string;
+  image: string;
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -35,11 +35,11 @@ const NODE_COLORS: Record<string, string> = {
 };
 
 const NODES: NodeConfig[] = [
-  { type: 'pv', x: 300, y: 60, color: NODE_COLORS.pv, icon: '☀️', label: '光伏' },
-  { type: 'battery', x: 80, y: 250, color: NODE_COLORS.battery, icon: '🔋', label: '电池' },
-  { type: 'inverter', x: 300, y: 250, color: NODE_COLORS.inverter, icon: '⚡', label: '逆变器' },
-  { type: 'grid', x: 520, y: 250, color: NODE_COLORS.grid, icon: '🔌', label: '电网' },
-  { type: 'load', x: 300, y: 440, color: NODE_COLORS.load, icon: '💡', label: '负载' },
+  { type: 'pv', x: 300, y: 60, color: NODE_COLORS.pv, label: '光伏', image: '/images/energy-flow/pv.jpg' },
+  { type: 'battery', x: 80, y: 250, color: NODE_COLORS.battery, label: '电池', image: '/images/energy-flow/battery.jpg' },
+  { type: 'inverter', x: 300, y: 250, color: NODE_COLORS.inverter, label: '逆变器', image: '/images/energy-flow/inverter.png' },
+  { type: 'grid', x: 520, y: 250, color: NODE_COLORS.grid, label: '电网', image: '/images/energy-flow/grid.jpg' },
+  { type: 'load', x: 300, y: 440, color: NODE_COLORS.load, label: '负载', image: '/images/energy-flow/load.jpg' },
 ];
 
 function formatPower(w: number): string {
@@ -153,7 +153,7 @@ const FlowNode: React.FC<{
   power: number;
   extra?: string;
 }> = React.memo(({ node, power, extra }) => {
-  const { x, y, color, icon, label, type } = node;
+  const { x, y, color, label, type, image } = node;
   const displayPower = type === 'battery' && power < 0 ? Math.abs(power) : power;
 
   return (
@@ -169,29 +169,16 @@ const FlowNode: React.FC<{
       />
       {/* Main circle */}
       <circle cx={x} cy={y} r={35} fill={color} />
-      {/* Icon / Image */}
-      {type === 'battery' || type === 'inverter' ? (
-        <image
-          href={type === 'battery' ? '/images/energy-flow/battery.jpg' : '/images/energy-flow/inverter.png'}
-          x={x - 28}
-          y={y - 28}
-          width={56}
-          height={56}
-          clipPath={type === 'battery' ? 'url(#circle-clip-batt)' : 'url(#circle-clip-inv)'}
-          preserveAspectRatio="xMidYMid slice"
-        />
-      ) : (
-        <text
-          x={x}
-          y={y - 8}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="#fff"
-          fontSize="18"
-        >
-          {icon}
-        </text>
-      )}
+      {/* Node image */}
+      <image
+        href={image}
+        x={x - 28}
+        y={y - 28}
+        width={56}
+        height={56}
+        preserveAspectRatio="xMidYMid slice"
+        rx={6}
+      />
       {/* Label */}
       <text
         x={x}
@@ -303,12 +290,6 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
         <style>{svgAnimations}</style>
         <defs>
           {markerDefs}
-          <clipPath id="circle-clip-batt">
-            <circle cx={80} cy={250} r={28} />
-          </clipPath>
-          <clipPath id="circle-clip-inv">
-            <circle cx={300} cy={250} r={28} />
-          </clipPath>
         </defs>
 
         {/* Background grid (subtle) */}

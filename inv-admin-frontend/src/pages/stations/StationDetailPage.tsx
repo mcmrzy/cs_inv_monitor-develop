@@ -7,7 +7,7 @@ import {
 import {
   ArrowLeftOutlined, DesktopOutlined, CheckCircleOutlined,
   SunOutlined, WarningOutlined, ThunderboltOutlined,
-  ReloadOutlined, EditOutlined,
+  ReloadOutlined, EditOutlined, CloudOutlined, HomeOutlined, TableOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import api from '@/services/api'
@@ -22,6 +22,7 @@ import EnergyFlowDiagram from './components/EnergyFlowDiagram'
 import SocialContribution from './components/SocialContribution'
 import StationStatisticsTab from './components/StationStatisticsTab'
 import StationDevicesTab from './components/StationDevicesTab'
+import StationHistoryTab from './components/StationHistoryTab'
 
 const { Title, Text } = Typography
 
@@ -82,6 +83,29 @@ const extractList = (res: any): any[] => {
   return d?.items ?? d?.list ?? []
 }
 
+const ENERGY_CARD_ICONS: Record<string, React.ReactNode> = {
+  pv: (
+    <div style={{ width: 48, height: 48, borderRadius: 12, background: '#3B82F615', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <SunOutlined style={{ fontSize: 24, color: '#3B82F6' }} />
+    </div>
+  ),
+  battery: (
+    <div style={{ width: 48, height: 48, borderRadius: 12, background: '#EC489915', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <ThunderboltOutlined style={{ fontSize: 24, color: '#EC4899' }} />
+    </div>
+  ),
+  grid: (
+    <div style={{ width: 48, height: 48, borderRadius: 12, background: '#F59E0B15', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <CloudOutlined style={{ fontSize: 24, color: '#F59E0B' }} />
+    </div>
+  ),
+  load: (
+    <div style={{ width: 48, height: 48, borderRadius: 12, background: '#22C55E15', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <HomeOutlined style={{ fontSize: 24, color: '#22C55E' }} />
+    </div>
+  ),
+}
+
 const StationDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -99,7 +123,7 @@ const StationDetailPage: React.FC = () => {
   // 设备列表（用于实时数据汇总）
   const { data: devices = [] } = useQuery({
     queryKey: ['station-devices-overview', id],
-    queryFn: () => api.get('/devices', { params: { station_id: id, pageSize: 999 }, expectedDataShape: 'page' }).then(extractList),
+    queryFn: () => api.get('/devices', { params: { station_id: id, page_size: 999 }, expectedDataShape: 'page' }).then(extractList),
     enabled: !!id,
   })
 
@@ -125,7 +149,7 @@ const StationDetailPage: React.FC = () => {
   // 告警数据（概览Tab显示最近5条）
   const { data: alarms = [], isLoading: alarmsLoading } = useQuery({
     queryKey: ['station-alarms-overview', id],
-    queryFn: () => api.get('/alarms', { params: { station_id: id, pageSize: 20 }, expectedDataShape: 'page' }).then(extractList),
+    queryFn: () => api.get('/alarms', { params: { station_id: id, page_size: 20 }, expectedDataShape: 'page' }).then(extractList),
     enabled: !!id,
   })
 
@@ -216,7 +240,6 @@ const StationDetailPage: React.FC = () => {
     {
       key: 'pv',
       label: t('station.solarProduction'),
-      icon: '/images/energy-flow/pv.jpg',
       color: '#3B82F6',
       today: station.today_energy ?? station.today_generation ?? 0,
       total: station.total_energy ?? station.total_generation ?? 0,
@@ -227,7 +250,6 @@ const StationDetailPage: React.FC = () => {
     {
       key: 'battery',
       label: t('station.batteryDischarge'),
-      icon: '/images/energy-flow/battery.jpg',
       color: '#EC4899',
       today: station.today_discharge ?? 0,
       total: station.total_discharge ?? 0,
@@ -238,7 +260,6 @@ const StationDetailPage: React.FC = () => {
     {
       key: 'grid',
       label: t('station.gridExport'),
-      icon: '/images/energy-flow/grid.jpg',
       color: '#F59E0B',
       today: station.today_grid_export ?? 0,
       total: station.total_grid_export ?? 0,
@@ -249,7 +270,6 @@ const StationDetailPage: React.FC = () => {
     {
       key: 'load',
       label: t('station.loadConsumption'),
-      icon: '/images/energy-flow/load.jpg',
       color: '#22C55E',
       today: station.today_consumption ?? 0,
       total: station.total_consumption ?? 0,
@@ -303,7 +323,7 @@ const StationDetailPage: React.FC = () => {
             <Card bordered={false} style={{ borderRadius: 12, borderLeft: `4px solid ${card.color}`, height: '100%' }} bodyStyle={{ padding: '16px 20px' }}>
               <Row align="middle" gutter={12}>
                 <Col>
-                  <img src={card.icon} style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} alt="" />
+                  {ENERGY_CARD_ICONS[card.key]}
                 </Col>
                 <Col flex={1}>
                   <Text type="secondary" style={{ fontSize: 13 }}>{card.label}</Text>
@@ -496,7 +516,7 @@ const StationDetailPage: React.FC = () => {
         </Col>
       </Row>
 
-      {/* 三 Tab：概览 / 统计 / 关联设备 */}
+      {/* 四 Tab：概览 / 统计 / 关联设备 / 历史数据 */}
       <Card bordered={false} style={{ borderRadius: 12 }}>
         <Tabs
           activeKey={activeTab}
@@ -520,6 +540,11 @@ const StationDetailPage: React.FC = () => {
               children: (
                 <StationDevicesTab stationId={station.id} timezone={station.timezone || 'Asia/Shanghai'} />
               ),
+            },
+            {
+              key: 'history',
+              label: <span><TableOutlined /> {t('station.historyData')}</span>,
+              children: <StationHistoryTab stationId={station.id} timezone={station.timezone || 'Asia/Shanghai'} />,
             },
           ]}
         />
