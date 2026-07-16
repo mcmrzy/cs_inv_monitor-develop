@@ -264,6 +264,12 @@ export default {
     'remoteSettings.modelName': '设备型号',
     'remoteSettings.noDevices': '暂无关联设备',
     'remoteSettings.noFields': '暂无字段配置',
+    // Tab labels & hints
+    'remoteSettings.tabRuntime': '运行控制',
+    'remoteSettings.tabBattery': '电池充放电',
+    'remoteSettings.tabStatus': '配置状态',
+    'remoteSettings.tabParallel': '并机管理',
+    'remoteSettings.selectDeviceHint': '请先选择一台设备',
   },
   en: {
     'remote.title': 'Remote Parameter Settings',
@@ -530,5 +536,11 @@ export default {
     'remoteSettings.modelName': 'Model',
     'remoteSettings.noDevices': 'No associated devices',
     'remoteSettings.noFields': 'No fields configured yet',
+    // Tab labels & hints
+    'remoteSettings.tabRuntime': 'Runtime Control',
+    'remoteSettings.tabBattery': 'Battery',
+    'remoteSettings.tabStatus': 'Config Status',
+    'remoteSettings.tabParallel': 'Parallel',
+    'remoteSettings.selectDeviceHint': 'Please select a device first',
   },
 }
