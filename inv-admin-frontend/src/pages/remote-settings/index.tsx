@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Button, Empty, Typography, Space, App, Collapse, Badge } from 'antd'
+import { Button, Empty, Typography, Space, App, Collapse } from 'antd'
 import {
   ReloadOutlined, SettingOutlined, ThunderboltOutlined,
   ToolOutlined, ArrowUpOutlined, ArrowDownOutlined,
@@ -23,11 +23,10 @@ import type { DeviceItem } from './types'
 const { Title, Text } = Typography
 
 // 面板标题组件
-const SectionHeader: React.FC<{ icon: React.ReactNode; title: string; count: number; color: string }> = ({ icon, title, count, color }) => (
+const SectionHeader: React.FC<{ icon: React.ReactNode; title: string; color: string }> = ({ icon, title, color }) => (
   <Space size={8}>
     <span style={{ color, fontSize: 18 }}>{icon}</span>
     <span style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>{title}</span>
-    <Badge count={count} style={{ backgroundColor: color, fontSize: 11 }} />
   </Space>
 )
 
@@ -93,7 +92,7 @@ const RemoteSettingsPage: React.FC = () => {
           >
             <Collapse.Panel
               key="general"
-              header={<SectionHeader icon={<SettingOutlined />} title="通用设置" count={12} color={SECTION_COLORS.general} />}
+              header={<SectionHeader icon={<SettingOutlined />} title="通用设置" color={SECTION_COLORS.general} />}
               style={panelStyle(SECTION_COLORS.general)}
             >
               <GeneralSection deviceInfo={selectedDevice} />
@@ -101,7 +100,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="application"
-              header={<SectionHeader icon={<ThunderboltOutlined />} title="应用设置" count={11} color={SECTION_COLORS.application} />}
+              header={<SectionHeader icon={<ThunderboltOutlined />} title="应用设置" color={SECTION_COLORS.application} />}
               style={panelStyle(SECTION_COLORS.application)}
             >
               <ApplicationSection />
@@ -109,7 +108,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="parallel"
-              header={<SectionHeader icon={<ToolOutlined />} title="并联设置" count={4} color={SECTION_COLORS.parallel} />}
+              header={<SectionHeader icon={<ToolOutlined />} title="并联设置" color={SECTION_COLORS.parallel} />}
               style={panelStyle(SECTION_COLORS.parallel)}
             >
               <ParallelSection />
@@ -117,7 +116,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="powerControl"
-              header={<SectionHeader icon={<ControlOutlined />} title="功率控制" count={21} color={SECTION_COLORS.powerControl} />}
+              header={<SectionHeader icon={<ControlOutlined />} title="功率控制" color={SECTION_COLORS.powerControl} />}
               style={panelStyle(SECTION_COLORS.powerControl)}
             >
               <PowerControlSection deviceInfo={selectedDevice} />
@@ -125,7 +124,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="charge"
-              header={<SectionHeader icon={<ArrowUpOutlined />} title="充电设置" count={27} color={SECTION_COLORS.charge} />}
+              header={<SectionHeader icon={<ArrowUpOutlined />} title="充电设置" color={SECTION_COLORS.charge} />}
               style={panelStyle(SECTION_COLORS.charge)}
             >
               <ChargeSection />
@@ -133,7 +132,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="discharge"
-              header={<SectionHeader icon={<ArrowDownOutlined />} title="放电设置" count={8} color={SECTION_COLORS.discharge} />}
+              header={<SectionHeader icon={<ArrowDownOutlined />} title="放电设置" color={SECTION_COLORS.discharge} />}
               style={panelStyle(SECTION_COLORS.discharge)}
             >
               <DischargeSection />
@@ -141,7 +140,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="other"
-              header={<SectionHeader icon={<ToolOutlined />} title="其他设置" count={7} color={SECTION_COLORS.other} />}
+              header={<SectionHeader icon={<ToolOutlined />} title="其他设置" color={SECTION_COLORS.other} />}
               style={panelStyle(SECTION_COLORS.other)}
             >
               <OtherSection />
@@ -149,7 +148,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="reset"
-              header={<SectionHeader icon={<ReloadOutlined />} title="重置操作" count={1} color={SECTION_COLORS.reset} />}
+              header={<SectionHeader icon={<ReloadOutlined />} title="重置操作" color={SECTION_COLORS.reset} />}
               style={panelStyle(SECTION_COLORS.reset)}
             >
               <ResetSection />
