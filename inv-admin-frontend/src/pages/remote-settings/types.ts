@@ -69,6 +69,18 @@ export interface SendCommandRequest {
   params?: Record<string, unknown>
 }
 
+// ── 命令结果（设备上报） ──
+export interface CommandResult {
+  task_id: string
+  cmd: string
+  success: boolean
+  message?: string
+  data?: string
+  timestamp: number
+  ack?: boolean
+  reason?: string
+}
+
 // ── 同步状态颜色映射 ──
 export const SYNC_STATUS_MAP: Record<string, { color: string; label_zh: string }> = {
   synced: { color: '#22c55e', label_zh: '已同步' },

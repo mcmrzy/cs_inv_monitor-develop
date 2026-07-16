@@ -1,61 +1,57 @@
-/**
- * EnergySummaryCards - 发电量汇总卡片组
- *
- * 用于电站详情页概览 Tab，展示月/年/累计发电量。
- * 使用统一 StatisticCard 组件保持一致视觉风格。
- */
 import React from 'react'
-import { Row, Col } from 'antd'
-import { ThunderboltOutlined, ArrowUpOutlined, FireOutlined } from '@ant-design/icons'
-import StatisticCard from '@/components/StatisticCard'
+import { Row, Col, Card, Statistic } from 'antd'
+import { CalendarOutlined, RiseOutlined, TrophyOutlined } from '@ant-design/icons'
 import { safeNum } from '@/utils/format'
 import useTranslation from '@/hooks/useTranslation'
 
 interface EnergySummaryCardsProps {
-  monthEnergy: number  // 月发电 kWh
-  yearEnergy: number   // 年发电 kWh
-  totalEnergy: number  // 累计发电 kWh
+  monthEnergy: number
+  yearEnergy: number
+  totalEnergy: number
 }
 
-const EnergySummaryCards: React.FC<EnergySummaryCardsProps> = ({ monthEnergy, yearEnergy, totalEnergy }) => {
+const EnergySummaryCards: React.FC<EnergySummaryCardsProps> = ({
+  monthEnergy, yearEnergy, totalEnergy,
+}) => {
   const { t } = useTranslation()
 
-  const items = [
+  const cards = [
     {
-      title: t('station.monthEnergy', '月发电'),
+      title: t('station.monthGen'),
       value: safeNum(monthEnergy),
-      precision: 1,
-      icon: <ThunderboltOutlined style={{ color: '#1677ff', fontSize: 24 }} />,
-      color: '#1677ff',
+      icon: <CalendarOutlined style={{ marginRight: 6, color: '#8b5cf6' }} />,
+      color: '#8b5cf6',
+      bg: 'linear-gradient(135deg, #ede9fe 0%, #f5f3ff 100%)',
     },
     {
-      title: t('station.yearEnergy', '年发电'),
+      title: t('station.yearGen'),
       value: safeNum(yearEnergy),
-      precision: 1,
-      icon: <ArrowUpOutlined style={{ color: '#52c41a', fontSize: 24 }} />,
-      color: '#52c41a',
+      icon: <RiseOutlined style={{ marginRight: 6, color: '#22c55e' }} />,
+      color: '#22c55e',
+      bg: 'linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%)',
     },
     {
-      title: t('station.totalEnergy', '累计发电'),
+      title: t('station.totalGen'),
       value: safeNum(totalEnergy),
-      precision: 0,
-      icon: <FireOutlined style={{ color: '#722ed1', fontSize: 24 }} />,
+      icon: <TrophyOutlined style={{ marginRight: 6, color: '#722ed1' }} />,
       color: '#722ed1',
+      bg: 'linear-gradient(135deg, #fce7f3 0%, #fdf2f8 100%)',
     },
   ]
 
   return (
     <Row gutter={[16, 16]}>
-      {items.map((item) => (
-        <Col xs={8} key={item.title}>
-          <StatisticCard
-            title={item.title}
-            value={item.value}
-            precision={item.precision}
-            suffix="kWh"
-            prefix={item.icon}
-            valueStyle={{ color: item.color }}
-          />
+      {cards.map((card) => (
+        <Col xs={24} sm={8} key={card.title}>
+          <Card bordered={false} style={{ borderRadius: 12, background: card.bg }} styles={{ body: { padding: '16px' } }}>
+            <Statistic
+              title={<span style={{ fontSize: 13 }}>{card.icon}{card.title}</span>}
+              value={card.value}
+              suffix="kWh"
+              precision={1}
+              valueStyle={{ color: card.color, fontWeight: 700, fontSize: 22 }}
+            />
+          </Card>
         </Col>
       ))}
     </Row>

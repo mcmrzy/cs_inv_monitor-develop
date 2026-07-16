@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* 使用系统字体栈，避免外部字体加载被墙 */
 
 * {
   margin: 0;

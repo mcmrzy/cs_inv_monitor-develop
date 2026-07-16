@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from 'react'
-import {
-  Card, Select, Radio, InputNumber, Button, Row, Col, Space, Spin, Typography, App, Alert, Modal,
-} from 'antd'
+import React from 'react'
+import { Button, Row, Col, Space, Spin, Typography, Alert, Modal } from 'antd'
 import {
   NodeIndexOutlined, SettingOutlined, ThunderboltOutlined, ApiOutlined,
 } from '@ant-design/icons'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { deviceApi } from '@/services/deviceApi'
-import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
+import { useControlState } from '../hooks/useControlState'
+import SettingField from './SettingField'
+import SettingSection from './SettingSection'
 
 const { Text } = Typography
 
@@ -17,61 +15,9 @@ interface ParallelTabProps {
   sn: string
 }
 
-const PRIMARY = '#4f6ef7'
-const cardStyle = { borderRadius: 12 }
-
 const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
   const { t } = useTranslation()
-  const { message } = App.useApp()
-  const queryClient = useQueryClient()
-
-  // ── Local state ──
-  const [topology, setTopology] = useState<string>('standalone')
-  const [role, setRole] = useState<'master' | 'slave'>('master')
-  const [machineId, setMachineId] = useState<number>(1)
-  const [phase, setPhase] = useState<string>('A')
-
-  // ── Query: control state ──
-  const {
-    data: controlState,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: queryKeys.devices.controlState(sn),
-    queryFn: () => deviceApi.getControlState(sn).then((r) => (r as any).data?.data ?? null),
-    refetchInterval: 15000,
-  })
-
-  const reported = (controlState as any)?.reported ?? {}
-
-  useEffect(() => {
-    if (!reported || Object.keys(reported).length === 0) return
-    if (reported.parallel_topology !== undefined) setTopology(String(reported.parallel_topology))
-    if (reported.parallel_role !== undefined) setRole(reported.parallel_role === 'slave' ? 'slave' : 'master')
-    if (reported.parallel_machine_id !== undefined) setMachineId(Number(reported.parallel_machine_id))
-    if (reported.parallel_phase !== undefined) setPhase(String(reported.parallel_phase))
-  }, [reported])
-
-  const isOnline = (controlState as any)?.sync_status !== 'unknown'
-
-  // ── Command mutation ──
-  const commandMutation = useMutation({
-    mutationFn: (payload: { command_code: string; params?: Record<string, unknown> }) =>
-      deviceApi.sendCommand(sn, payload).then((r: any) => {
-        const d = r.data?.data ?? r.data
-        if (d && d.success === false) throw new Error(d.message ?? t('common.failed'))
-        return d
-      }),
-    onSuccess: () => {
-      message.success(t('common.success'))
-      void queryClient.invalidateQueries({ queryKey: queryKeys.devices.controlState(sn) })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.devices.commands(sn) })
-    },
-    onError: (err: Error) => {
-      message.error(err.message || t('common.failed'))
-    },
-  })
+  const { reported, isOnline, isLoading, error, refetch, sendCommand, isSending } = useControlState(sn)
 
   const confirmSend = (
     command_code: string,
@@ -84,11 +30,9 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
       okText: '确认执行',
       okType: 'danger',
       cancelText: '取消',
-      onOk: () => commandMutation.mutate({ command_code, params }),
+      onOk: () => sendCommand(command_code, params),
     })
   }
-
-  const sending = commandMutation.isPending
 
   return (
     <Spin spinning={isLoading}>
@@ -111,161 +55,94 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
       <Row gutter={[16, 16]}>
         {/* ── 并机拓扑 ── */}
         <Col xs={24} md={12}>
-          <Card
-            title={<Space><NodeIndexOutlined />并机拓扑</Space>}
-            bordered={false}
-            style={cardStyle}
-          >
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
-                  拓扑模式
-                  {reported.parallel_topology !== undefined && (
-                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                      当前: {String(reported.parallel_topology)}
-                    </Text>
-                  )}
-                </Text>
-                <Select
-                  value={topology}
-                  onChange={setTopology}
-                  disabled={!isOnline}
-                  style={{ width: '100%' }}
-                  options={[
-                    { value: 'standalone', label: '单机' },
-                    { value: 'parallel', label: '并联' },
-                    { value: 'three_phase', label: '三相' },
-                  ]}
-                />
-              </div>
-              <Button
-                type="primary"
-                loading={sending}
-                disabled={!isOnline}
-                onClick={() =>
-                  confirmSend('parallel_set_topology', { topology }, '设置并机拓扑')
-                }
-                style={{ background: PRIMARY, borderColor: PRIMARY }}
-              >
-                下发
-              </Button>
-            </Space>
-          </Card>
+          <SettingSection title="并机拓扑" icon={<NodeIndexOutlined />}>
+            <SettingField
+              label="拓扑模式"
+              fieldKey="parallel_topology"
+              type="select"
+              options={[
+                { value: 'standalone', label: '单机' },
+                { value: 'parallel', label: '并联' },
+                { value: 'three_phase', label: '三相' },
+              ]}
+              reportedValue={reported.parallel_topology}
+              disabled={!isOnline}
+              pending={isSending}
+              onSend={(v) => confirmSend('parallel_set_topology', { topology: v }, '设置并机拓扑')}
+            />
+          </SettingSection>
         </Col>
 
         {/* ── 角色与机号 ── */}
         <Col xs={24} md={12}>
-          <Card
-            title={<Space><SettingOutlined />角色与机号</Space>}
-            bordered={false}
-            style={cardStyle}
-          >
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
-                  角色
-                  {reported.parallel_role !== undefined && (
-                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                      当前: {String(reported.parallel_role)}
-                    </Text>
-                  )}
-                </Text>
-                <Radio.Group
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  disabled={!isOnline}
-                >
-                  <Radio value="master">主机</Radio>
-                  <Radio value="slave">从机</Radio>
-                </Radio.Group>
-              </div>
-              <div>
-                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
-                  机号
-                  {reported.parallel_machine_id !== undefined && (
-                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                      当前: {String(reported.parallel_machine_id)}
-                    </Text>
-                  )}
-                </Text>
-                <InputNumber
-                  min={1} max={16} step={1}
-                  value={machineId}
-                  onChange={(v) => setMachineId(v ?? 1)}
-                  disabled={!isOnline}
-                  style={{ width: '100%' }}
-                />
-              </div>
-              <Button
-                type="primary"
-                loading={sending}
-                disabled={!isOnline}
-                onClick={() =>
-                  confirmSend(
-                    'parallel_set_role',
-                    { role, machine_id: machineId },
-                    '设置角色与机号',
-                  )
-                }
-                style={{ background: PRIMARY, borderColor: PRIMARY }}
-              >
-                下发
-              </Button>
-            </Space>
-          </Card>
+          <SettingSection title="角色与机号" icon={<SettingOutlined />}>
+            <SettingField
+              label="角色"
+              fieldKey="parallel_role"
+              type="select"
+              options={[
+                { value: 'master', label: '主机' },
+                { value: 'slave', label: '从机' },
+              ]}
+              reportedValue={reported.parallel_role}
+              disabled={!isOnline}
+              pending={isSending}
+              onSend={(v) => confirmSend('parallel_set_role', { role: v }, '设置角色')}
+            />
+            <SettingField
+              label="机号"
+              fieldKey="parallel_machine_id"
+              type="number"
+              min={1}
+              max={16}
+              step={1}
+              reportedValue={reported.parallel_machine_id}
+              disabled={!isOnline}
+              pending={isSending}
+              onSend={(v) => confirmSend('parallel_set_role', { machine_id: v }, '设置机号')}
+            />
+          </SettingSection>
         </Col>
 
         {/* ── 相位设置 ── */}
         <Col xs={24} md={12}>
-          <Card
-            title={<Space><ThunderboltOutlined />相位设置</Space>}
-            bordered={false}
-            style={cardStyle}
-          >
-            <Space direction="vertical" style={{ width: '100%' }} size="middle">
-              <div>
-                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
-                  相位
-                  {reported.parallel_phase !== undefined && (
-                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                      当前: {String(reported.parallel_phase)}
-                    </Text>
-                  )}
-                </Text>
-                <Select
-                  value={phase}
-                  onChange={setPhase}
-                  disabled={!isOnline}
-                  style={{ width: '100%' }}
-                  options={[
-                    { value: 'A', label: 'A相' },
-                    { value: 'B', label: 'B相' },
-                    { value: 'C', label: 'C相' },
-                  ]}
-                />
-              </div>
-              <Button
-                type="primary"
-                loading={sending}
-                disabled={!isOnline}
-                onClick={() =>
-                  confirmSend('parallel_set_phase', { phase }, '设置相位')
-                }
-                style={{ background: PRIMARY, borderColor: PRIMARY }}
-              >
-                下发
-              </Button>
-            </Space>
-          </Card>
+          <SettingSection title="相位设置" icon={<ThunderboltOutlined />}>
+            <SettingField
+              label="相位"
+              fieldKey="parallel_phase"
+              type="select"
+              options={[
+                { value: 'A', label: 'A相' },
+                { value: 'B', label: 'B相' },
+                { value: 'C', label: 'C相' },
+              ]}
+              reportedValue={reported.parallel_phase}
+              disabled={!isOnline}
+              pending={isSending}
+              onSend={(v) => confirmSend('parallel_set_phase', { phase: v }, '设置相位')}
+            />
+          </SettingSection>
+        </Col>
+
+        {/* ── 共用电池 ── */}
+        <Col xs={24} md={12}>
+          <SettingSection title="共用电池" icon={<ThunderboltOutlined />}>
+            <SettingField
+              label="共用电池"
+              fieldKey="shared_battery"
+              type="switch"
+              reportedValue={reported.shared_battery}
+              disabled={!isOnline}
+              pending={isSending}
+              onSend={(v) => sendCommand('set_params', { shared_battery: v })}
+              tooltip={t('remote.pendingProtocol')}
+            />
+          </SettingSection>
         </Col>
 
         {/* ── 组级控制 ── */}
         <Col xs={24} md={12}>
-          <Card
-            title={<Space><ApiOutlined />组级控制</Space>}
-            bordered={false}
-            style={cardStyle}
-          >
+          <SettingSection title="组级控制" icon={<ApiOutlined />}>
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
               <Text type="secondary" style={{ fontSize: 12 }}>
                 以下操作将影响整个并机组，请谨慎操作
@@ -274,7 +151,7 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
                 <Col span={12}>
                   <Button
                     block
-                    loading={sending}
+                    loading={isSending}
                     disabled={!isOnline}
                     onClick={() =>
                       confirmSend('parallel_enable', undefined, '使能并联')
@@ -287,7 +164,7 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
                   <Button
                     block
                     danger
-                    loading={sending}
+                    loading={isSending}
                     disabled={!isOnline}
                     onClick={() =>
                       confirmSend('parallel_disable', undefined, '禁用并联')
@@ -299,7 +176,7 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
                 <Col span={12}>
                   <Button
                     block
-                    loading={sending}
+                    loading={isSending}
                     disabled={!isOnline}
                     onClick={() =>
                       confirmSend('parallel_sync_start', undefined, '开始同步')
@@ -311,7 +188,7 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
                 <Col span={12}>
                   <Button
                     block
-                    loading={sending}
+                    loading={isSending}
                     disabled={!isOnline}
                     onClick={() =>
                       confirmSend('parallel_sync_stop', undefined, '停止同步')
@@ -322,7 +199,7 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
                 </Col>
               </Row>
             </Space>
-          </Card>
+          </SettingSection>
         </Col>
       </Row>
     </Spin>
