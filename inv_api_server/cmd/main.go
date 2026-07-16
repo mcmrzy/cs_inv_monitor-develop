@@ -859,6 +859,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			adminGroup.POST("/permissions/:role/toggle", deps.AdminHandler.TogglePermission)
 
 			adminGroup.GET("/models", deps.AdminHandler.ListAllModels)
+			adminGroup.GET("/models/:id/config", deps.AdminHandler.GetModelConfig)
 
 			adminGroup.GET("/logs", deps.AdminHandler.GetAuditLogs)
 			adminGroup.GET("/logs/export", deps.AdminHandler.ExportAuditLogs)

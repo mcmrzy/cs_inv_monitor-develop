@@ -148,6 +148,9 @@ export const modelApi = {
   validateRegistry: (modelId: number) => api.post(`/models/${modelId}/validate`),
   activateRegistry: (modelId: number) => api.post(`/models/${modelId}/activate`),
 
+  // 型号完整配置（字段列表）
+  getModelConfig: (modelId: number) => api.get(`/models/${modelId}/config`, { expectedDataShape: 'object' }),
+
   // 协议 CRUD
   getProtocols: (modelId: number) => api.get(`/models/${modelId}/protocols`, { expectedDataShape: 'array' }),
   createProtocol: (modelId: number, data: Partial<DeviceModelProtocolItem>) => api.post(`/models/${modelId}/protocols`, data),
