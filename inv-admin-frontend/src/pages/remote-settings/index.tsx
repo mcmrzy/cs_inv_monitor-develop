@@ -31,7 +31,9 @@ const SectionHeader: React.FC<{ icon: React.ReactNode; title: string; count: num
 
 const RemoteSettingsPage: React.FC = () => {
   const { message } = App.useApp()
-  const [selectedSn, setSelectedSn] = useState<string | null>(null)
+  const [selectedSn, setSelectedSn] = useState<string | null>(() => {
+    return localStorage.getItem('remote-settings-device-sn')
+  })
   const [reading, setReading] = useState(false)
   const [activeKeys, setActiveKeys] = useState<string[]>(['general', 'application'])
 
@@ -70,7 +72,14 @@ const RemoteSettingsPage: React.FC = () => {
         远程配置逆变器运行参数，支持实时下发与生效
       </Text>
 
-      <DeviceSelector selectedSn={selectedSn} onDeviceChange={setSelectedSn} onRead={handleRead} reading={reading} />
+      <DeviceSelector selectedSn={selectedSn} onDeviceChange={(sn) => {
+        setSelectedSn(sn || null)
+        if (sn) {
+          localStorage.setItem('remote-settings-device-sn', sn)
+        } else {
+          localStorage.removeItem('remote-settings-device-sn')
+        }
+      }} onRead={handleRead} reading={reading} />
 
       {selectedSn ? (
         <div>
