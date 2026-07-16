@@ -202,42 +202,42 @@ const StationDetailPage: React.FC = () => {
 
   // 兼容后端返回 station_name 或 name
   const stationName = station.name || station.station_name || ''
-  // 兼容后端返回 today_energy/total_energy 或 today_generation/total_generation
-  const todayEnergy = statsSummary?.today ?? station.today_energy ?? station.today_generation ?? 0
-  const totalEnergy = statsSummary?.total ?? station.total_energy ?? station.total_generation ?? 0
+  // 兼容后端返回 today_energy/total_energy 或 today_generation/total_generation（0视为无数据）
+  const todayEnergy = statsSummary?.today || station.today_energy || station.today_generation || 0
+  const totalEnergy = statsSummary?.total || station.total_energy || station.total_generation || 0
 
   // 从设备列表计算 fault_count（后端 GetByID 未返回此字段）
   const faultCount = station.fault_count ?? devices.filter((d: any) => d.status === 2).length
 
-  // 汇总实时功率（优先使用 station 级别的实时功率字段）
-  const totalRealtimePower = station.pv_power
-    ? (station.pv_power ?? 0)
+  // 汇总实时功率（优先使用 station 级别的实时功率字段，0视为无数据回退到设备聚合）
+  const totalRealtimePower = (station.pv_power || 0) > 0
+    ? station.pv_power!
     : Object.values(realtimeData ?? {}).reduce((sum, rt) => {
         const p = safeNum(rt?.total_active_power ?? rt?.ac_power ?? rt?.power ?? 0)
         return sum + p
       }, 0)
 
-  // 汇总实时 PV 功率、负载功率、电池功率、电网功率
-  const aggregatedPv = station.pv_power ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.pv_total_power ?? rt?.pv?.data?.pv_total_power ?? 0), 0)
-  const aggregatedLoad = station.load_power ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.load_power ?? rt?.energy_consume ?? 0), 0)
-  const aggregatedBatt = station.batt_power ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.battery_power ?? (safeNum(rt?.battery_charge ?? 0) - safeNum(rt?.battery_discharge ?? 0))), 0)
-  const aggregatedGrid = station.grid_power ?? Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.grid_power ?? 0), 0)
+  // 汇总实时 PV 功率、负载功率、电池功率、电网功率（0视为无数据，回退到设备聚合）
+  const aggregatedPv = (station.pv_power || 0) > 0 ? station.pv_power! : Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.pv_total_power ?? rt?.pv_power_total ?? rt?.pv1_power ?? 0), 0)
+  const aggregatedLoad = (station.load_power || 0) > 0 ? station.load_power! : Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.load_power ?? rt?.ac_power ?? rt?.energy_consume ?? 0), 0)
+  const aggregatedBatt = (station.batt_power || 0) !== 0 ? station.batt_power! : Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.battery_power ?? (safeNum(rt?.battery_charge ?? rt?.charge_power ?? 0) - safeNum(rt?.battery_discharge ?? rt?.discharge_power ?? 0))), 0)
+  const aggregatedGrid = (station.grid_power || 0) !== 0 ? station.grid_power! : Object.values(realtimeData ?? {}).reduce((sum, rt) => sum + safeNum(rt?.grid_power ?? rt?.ac_power ?? 0), 0)
   const avgSoc = (() => {
-    const stationSoc = station.batt_soc ?? 0
+    const stationSoc = station.batt_soc || 0
     if (stationSoc > 0) return stationSoc
-    const socs = Object.values(realtimeData ?? {}).map(rt => safeNum(rt?.soc ?? rt?.batt?.data?.soc ?? 0)).filter(v => v > 0)
+    const socs = Object.values(realtimeData ?? {}).map(rt => safeNum(rt?.soc ?? rt?.battery_soc ?? 0)).filter(v => v > 0)
     return socs.length > 0 ? socs.reduce((a, b) => a + b, 0) / socs.length : 0
   })()
 
-  // 从设备实时数据中提取 PV1/PV2 分路、电池电压、电网电压/频率
+  // 从设备实时数据中提取 PV1/PV2 分路、电池电压、电网电压/频率（数据已被 normalizeRealtimeData 展平）
   const firstDeviceRt = Object.values(realtimeData ?? {})[0] as any
-  const pvPower1 = safeNum(firstDeviceRt?.pv1_power ?? firstDeviceRt?.pv?.data?.pv1_power ?? 0)
-  const pvVoltage1 = safeNum(firstDeviceRt?.pv1_voltage ?? firstDeviceRt?.pv?.data?.pv1_voltage ?? 0)
-  const pvPower2 = safeNum(firstDeviceRt?.pv2_power ?? firstDeviceRt?.pv?.data?.pv2_power ?? 0)
-  const pvVoltage2 = safeNum(firstDeviceRt?.pv2_voltage ?? firstDeviceRt?.pv?.data?.pv2_voltage ?? 0)
-  const battVoltage = safeNum(firstDeviceRt?.battery_voltage ?? firstDeviceRt?.batt?.data?.battery_voltage ?? 0)
-  const gridVoltage = safeNum(firstDeviceRt?.grid_voltage ?? firstDeviceRt?.grid?.data?.grid_voltage ?? firstDeviceRt?.ac_voltage ?? 0)
-  const gridFreq = safeNum(firstDeviceRt?.grid_frequency ?? firstDeviceRt?.grid?.data?.grid_frequency ?? firstDeviceRt?.ac_frequency ?? 0)
+  const pvPower1 = safeNum(firstDeviceRt?.pv1_power ?? 0)
+  const pvVoltage1 = safeNum(firstDeviceRt?.pv1_voltage ?? 0)
+  const pvPower2 = safeNum(firstDeviceRt?.pv2_power ?? 0)
+  const pvVoltage2 = safeNum(firstDeviceRt?.pv2_voltage ?? 0)
+  const battVoltage = safeNum(firstDeviceRt?.battery_voltage ?? firstDeviceRt?.voltage ?? 0)
+  const gridVoltage = safeNum(firstDeviceRt?.grid_voltage ?? firstDeviceRt?.ac_voltage ?? 0)
+  const gridFreq = safeNum(firstDeviceRt?.grid_frequency ?? firstDeviceRt?.ac_frequency ?? 0)
 
   // 最后更新时间
   const lastUpdateTime = realtimeData ? new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '--'
