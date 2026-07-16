@@ -170,14 +170,14 @@ const FlowNode: React.FC<{
       {/* Main circle */}
       <circle cx={x} cy={y} r={35} fill={color} />
       {/* Icon / Image */}
-      {type === 'battery' ? (
+      {type === 'battery' || type === 'inverter' ? (
         <image
-          href="/images/energy-flow/battery.jpg"
+          href={type === 'battery' ? '/images/energy-flow/battery.jpg' : '/images/energy-flow/inverter.png'}
           x={x - 28}
           y={y - 28}
           width={56}
           height={56}
-          clipPath="url(#circle-clip-batt)"
+          clipPath={type === 'battery' ? 'url(#circle-clip-batt)' : 'url(#circle-clip-inv)'}
           preserveAspectRatio="xMidYMid slice"
         />
       ) : (
@@ -305,6 +305,9 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
           {markerDefs}
           <clipPath id="circle-clip-batt">
             <circle cx={80} cy={250} r={28} />
+          </clipPath>
+          <clipPath id="circle-clip-inv">
+            <circle cx={300} cy={250} r={28} />
           </clipPath>
         </defs>
 
