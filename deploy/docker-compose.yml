@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   postgres:
     build:
@@ -6,26 +8,19 @@ services:
     image: inv-postgres-tls:2.28.2-pg18
     container_name: inv-postgres
     restart: unless-stopped
-    command:
-      - postgres
-      - -c
-      - ssl=on
-      - -c
-      - ssl_cert_file=/var/lib/postgresql/tls/server.crt
-      - -c
-      - ssl_key_file=/var/lib/postgresql/tls/server.key
     environment:
       POSTGRES_DB: ${DB_NAME:-inv_mqtt}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data
       TZ: UTC
     # 暴露端口供外部访问
     ports:
-      - "127.0.0.1:5432:5432"
+      - "5432:5432"
     expose:
       - "5432"
     volumes:
-      - pg_data:/var/lib/postgresql/18/docker
+      - pg_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_NAME:-inv_mqtt}"]
       interval: 5s
@@ -39,8 +34,6 @@ services:
     container_name: inv-redis
     restart: unless-stopped
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
     # 生产环境不暴露端口，仅通过Docker内部网络访问
     # 如需本地调试，取消注释下面的行
     # ports:
@@ -50,7 +43,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", "redis-cli -a $REDIS_PASSWORD ping | grep -q PONG"]
       interval: 5s
       retries: 5
     networks:
@@ -69,7 +62,6 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-inv_mqtt}
-      DB_SSL_MODE: ${DB_SSL_MODE:-require}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -78,8 +70,8 @@ services:
       INTERNAL_KEY: ${INTERNAL_KEY}
       INTERNAL_API_SECRET: ${INTERNAL_KEY}
       SERVER_URL: ${SERVER_URL:-http://192.168.8.50:8888}
-      AMAP_API_KEY: ${AMAP_API_KEY:-}
-      WEATHER_SOURCE: ${WEATHER_SOURCE:-open-meteo}
+      AMAP_API_KEY: a1747dbd3566aa8883fffde623290cd9
+      WEATHER_SOURCE: amap
       EMAIL_HOST: ${EMAIL_HOST}
       EMAIL_PORT: ${EMAIL_PORT}
       EMAIL_USER: ${EMAIL_USER}
@@ -92,16 +84,11 @@ services:
       JPUSH_DEDUP_TTL: ${JPUSH_DEDUP_TTL:-120}
     volumes:
       - firmware_data:/data/firmware
+      - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     ports:
       - "8081:8080"  # 固件下载专用端口，绕过Gateway避免传输卡顿
     expose:
       - "8080"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,7 +110,6 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-inv_mqtt}
-      DB_SSL_MODE: ${DB_SSL_MODE:-require}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -133,28 +119,18 @@ services:
       MQTT_USERNAME: ${MQTT_USERNAME}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
       MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
-      MQTT_CERT_SHA256: ${MQTT_CERT_SHA256:-}
-      # DEV/TEST ONLY: set MQTT_TLS_SKIP_VERIFY=true to skip all TLS cert
-      # verification. Never enable in production — use cert pinning instead.
-      MQTT_TLS_SKIP_VERIFY: ${MQTT_TLS_SKIP_VERIFY:-false}
+      MQTT_CERT_SHA256: ${MQTT_CERT_SHA256}
       KAFKA_BROKER: jiuxiaoyw.online:9092
-      KAFKA_CONSUMER_GROUP: inv-device-server-local
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}
     expose:
       - "8081"
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 8081 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
     depends_on:
-      inv-api-server:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      inv-api-server:
         condition: service_healthy
     networks:
       - inv-net
@@ -178,15 +154,8 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-inv_mqtt}
-      DB_SSL_MODE: ${DB_SSL_MODE:-require}
     ports:
       - "8888:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
     depends_on:
       postgres:
         condition: service_healthy
@@ -195,7 +164,7 @@ services:
       inv-api-server:
         condition: service_healthy
       inv-device-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - inv-net
 

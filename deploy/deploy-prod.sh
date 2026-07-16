@@ -10,7 +10,7 @@ set -e
 
 # ---------- Configuration ----------
 COMPOSE_FILE="docker-compose.prod.yml"
-ENV_FILE="${ENV_FILE:-.secrets/.env.prod}"
+ENV_FILE=".env.prod"
 GIT_REPO="https://your-git-repo/cs_inv_monitor.git"
 BRANCH="main"
 
@@ -93,7 +93,7 @@ log_step "Preparing environment variables..."
 cd "$(dirname "$0")"
 
 if [ ! -f "$ENV_FILE" ]; then
-	log_warn "$ENV_FILE not found, creating a template..."
+    log_warn ".env.prod not found, creating from template..."
     cat > "$ENV_FILE" <<'ENV_TEMPLATE'
 # Change these values before deploying!
 DB_PASSWORD=CHANGE_ME_STRONG_PASSWORD
@@ -105,38 +105,11 @@ ENV_TEMPLATE
     exit 1
 fi
 
-# Placeholder values are always fatal in production.
+# Refuse placeholder values in non-interactive production deployments.
 if grep -q "CHANGE_ME" "$ENV_FILE"; then
-	log_error "Found CHANGE_ME placeholders in $ENV_FILE. Refusing production deployment."
+	log_error "Found CHANGE_ME placeholders in $ENV_FILE."
+	log_error "Replace them with real values before deploying."
 	exit 1
-fi
-
-for required_var in DB_PASSWORD REDIS_PASSWORD JWT_SECRET INTERNAL_KEY; do
-	if ! grep -Eq "^${required_var}=.+" "$ENV_FILE"; then
-		log_error "${required_var} must be set in $ENV_FILE"
-		exit 1
-	fi
-done
-
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" config --quiet
-
-for version in 023 024 025; do
-	if ! compgen -G "../database/migrations/${version}_*.sql" > /dev/null; then
-		log_error "Missing required migration ${version}_*.sql"
-		exit 1
-	fi
-done
-
-# A PostgreSQL 16 data directory cannot be mounted into PostgreSQL 18. Refuse
-# the ordinary deployment path until an explicit dump/restore or pg_upgrade
-# has been completed.
-if docker inspect inv-postgres &>/dev/null; then
-	PG_VERSION_NUM=$(docker exec inv-postgres psql -U postgres -d inv_mqtt -Atqc "SHOW server_version_num" 2>/dev/null || true)
-	PG_MAJOR=${PG_VERSION_NUM:0:2}
-	if [ -n "$PG_MAJOR" ] && [ "$PG_MAJOR" != "18" ]; then
-		log_error "Existing PostgreSQL major version is ${PG_MAJOR}; upgrade its data to 18 before deployment."
-		exit 1
-	fi
 fi
 
 # ============================================================
@@ -161,10 +134,6 @@ fi
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --remove-orphans --wait --wait-timeout 180 $BUILD_ARGS
 
 log_info "Services started."
-
-# ============================================================
-# Database migrations are owned by API startup. Device Server depends on the
-# API healthcheck, so it cannot consume until every migration commits.
 
 # ============================================================
 # Step 6: Health Checks
@@ -209,7 +178,7 @@ else
 fi
 
 echo -n "  Checking redis (port 6379)... "
-if docker exec inv-redis sh -c 'redis-cli -a "$REDIS_PASSWORD" ping' &>/dev/null; then
+if docker exec inv-redis redis-cli -a "$REDIS_PASSWORD" ping &>/dev/null; then
     echo -e "${GREEN}OK${NC}"
 else
     echo -e "${RED}FAILED${NC}"

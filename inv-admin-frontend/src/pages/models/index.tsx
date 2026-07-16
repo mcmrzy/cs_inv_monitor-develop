@@ -14,7 +14,6 @@ import {
 import { modelApi, DeviceModelItem, DeviceModelFieldItem, DeviceModelProtocolItem, ModelFieldCapability, ModelCommandCapability } from '@/services/modelApi'
 import useTranslation from '@/hooks/useTranslation'
 import ModelRegistryWorkspace from './model_registry_workspace'
-import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Text, Title } = Typography
 
@@ -133,7 +132,7 @@ const ModelsPage: React.FC = () => {
   const [editingProtocol, setEditingProtocol] = useState<DeviceModelProtocolItem | null>(null)
   const [protocolForm] = Form.useForm()
 
-  const { data: modelList = [], isLoading, error: modelsError, refetch: refetchModels } = useQuery({
+  const { data: modelList = [], isLoading } = useQuery({
     queryKey: ['models'],
     queryFn: () => modelApi.listModels().then((res) => {
       const d = res.data
@@ -141,7 +140,7 @@ const ModelsPage: React.FC = () => {
     }),
   })
 
-  const { data: fieldList = [], error: fieldsError, refetch: refetchFields } = useQuery({
+  const { data: fieldList = [] } = useQuery({
     queryKey: ['modelFields', currentModelId],
     queryFn: () => modelApi.getFields(currentModelId!).then((res) => {
       const d = res.data
@@ -150,7 +149,7 @@ const ModelsPage: React.FC = () => {
     enabled: currentModelId != null,
   })
 
-  const { data: protocolList = [], error: protocolsError, refetch: refetchProtocols } = useQuery({
+  const { data: protocolList = [], refetch: refetchProtocols } = useQuery({
     queryKey: ['modelProtocols', currentModelId],
     queryFn: () => modelApi.getProtocols(currentModelId!).then((res) => {
       const d = res.data
@@ -159,19 +158,19 @@ const ModelsPage: React.FC = () => {
     enabled: currentModelId != null,
   })
 
-  const { data: fieldCapabilities = [], error: fieldCapabilitiesError, refetch: refetchFieldCapabilities } = useQuery<ModelFieldCapability[]>({
+  const { data: fieldCapabilities = [] } = useQuery<ModelFieldCapability[]>({
     queryKey: ['modelFieldCapabilities', currentModelId],
     queryFn: () => modelApi.getFieldCapabilities(currentModelId!).then((res) => res.data?.data ?? res.data ?? []),
     enabled: currentModelId != null && fieldsDrawerOpen,
   })
 
-  const { data: commandCapabilities = [], error: commandCapabilitiesError, refetch: refetchCommandCapabilities } = useQuery<ModelCommandCapability[]>({
+  const { data: commandCapabilities = [] } = useQuery<ModelCommandCapability[]>({
     queryKey: ['modelCommandCapabilities', currentModelId],
     queryFn: () => modelApi.getCommandCapabilities(currentModelId!).then((res) => res.data?.data ?? res.data ?? []),
     enabled: currentModelId != null && fieldsDrawerOpen,
   })
 
-  const { data: protocolSchema, error: protocolSchemaError, refetch: refetchProtocolSchema } = useQuery<any>({
+  const { data: protocolSchema } = useQuery<any>({
     queryKey: ['modelProtocolSchema', currentModelId],
     queryFn: () => modelApi.getProtocolSchema(currentModelId!).then((res) => res.data?.data ?? res.data),
     enabled: currentModelId != null && fieldsDrawerOpen,
@@ -181,14 +180,14 @@ const ModelsPage: React.FC = () => {
     mutationFn: ({ fieldKey, data }: { fieldKey: string; data: Partial<ModelFieldCapability> }) =>
       modelApi.updateFieldCapability(currentModelId!, fieldKey, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelFieldCapabilities', currentModelId] }),
-    onError: () => messageApi.error(t('models.fieldCapabilityUpdateFailed')),
+    onError: () => messageApi.error('更新字段能力失败'),
   })
 
   const updateCommandCapabilityMut = useMutation({
     mutationFn: ({ commandCode, data }: { commandCode: string; data: Partial<ModelCommandCapability> }) =>
       modelApi.updateCommandCapability(currentModelId!, commandCode, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelCommandCapabilities', currentModelId] }),
-    onError: () => messageApi.error(t('models.commandCapabilityUpdateFailed')),
+    onError: () => messageApi.error('更新控制能力失败'),
   })
 
   const groupedFields = useMemo(() => {
@@ -509,42 +508,25 @@ const ModelsPage: React.FC = () => {
     )
   }
 
-  const queryFailure = [
-    { error: modelsError, retry: refetchModels },
-    { error: fieldsError, retry: refetchFields },
-    { error: protocolsError, retry: refetchProtocols },
-    { error: fieldCapabilitiesError, retry: refetchFieldCapabilities },
-    { error: commandCapabilitiesError, retry: refetchCommandCapabilities },
-    { error: protocolSchemaError, retry: refetchProtocolSchema },
-  ].find((item) => item.error)
-
   return (
     <>
       {contextHolder}
-      {queryFailure && (
-        <QueryErrorAlert
-          error={queryFailure.error}
-          onRetry={() => { void queryFailure.retry() }}
-          style={{ marginBottom: 16 }}
-        />
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <Title level={4} style={{ margin: 0 }}>{t('models.title')}</Title>
-        <Space>
-          <Input.Search placeholder={t('models.searchModel')} allowClear style={{ width: 220 }}
-            onSearch={setKeyword} onChange={(e) => !e.target.value && setKeyword('')} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingModel(null); modelForm.resetFields(); modelForm.setFieldsValue({ category: 'inverter', rated_power_kw: 0 }); setModelModalOpen(true) }}>
-            {t('models.addModel')}
-          </Button>
-        </Space>
-      </div>
 
       <Card
         bordered={false}
         style={{ borderRadius: 12 }}
+        title={t('models.title')}
+        extra={
+          <Space>
+            <Input.Search placeholder={t('models.searchModel')} allowClear style={{ width: 220 }}
+              onSearch={setKeyword} onChange={(e) => !e.target.value && setKeyword('')} />
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingModel(null); modelForm.resetFields(); modelForm.setFieldsValue({ category: 'inverter', rated_power_kw: 0 }); setModelModalOpen(true) }}>
+              {t('models.addModel')}
+            </Button>
+          </Space>
+        }
       >
-        <Table rowKey="id" columns={modelColumns} dataSource={filteredModels} loading={isLoading} size="middle"
+        <Table rowKey="id" columns={modelColumns} dataSource={filteredModels} loading={isLoading} size="small"
           pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => t('common.total', { total }) }}
           scroll={{ x: 1000 }}
           locale={{ emptyText: <Empty description={t('common.noData')} /> }} />
@@ -566,58 +548,58 @@ const ModelsPage: React.FC = () => {
           items={[
             {
               key: 'fields',
-              label: <span><EyeOutlined /> {t('models.monitoringFields')}</span>,
+              label: <span><EyeOutlined /> 监测字段</span>,
               children: <Table<ModelFieldCapability>
                 rowKey="id"
                 size="small"
                 pagination={false}
                 dataSource={fieldCapabilities}
                 columns={[
-                  { title: t('models.registry.standardField'), dataIndex: 'field_key', width: 190 },
-                  { title: t('models.group'), dataIndex: 'group_code', width: 100 },
-                  { title: t('models.type'), dataIndex: 'field_type', width: 90 },
-                  { title: t('models.unit'), dataIndex: 'display_unit', width: 80, render: (v, r) => v || r.base_unit || '-' },
-                  { title: t('models.realtime'), dataIndex: 'show_realtime', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_realtime: checked } })} /> },
-                  { title: t('models.history'), dataIndex: 'show_history', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_history: checked } })} /> },
-                  { title: t('models.compare'), dataIndex: 'allow_compare', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_compare: checked } })} /> },
-                  { title: t('models.allowAlarm'), dataIndex: 'allow_alarm_rule', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_alarm_rule: checked } })} /> },
+                  { title: '标准字段', dataIndex: 'field_key', width: 190 },
+                  { title: '分组', dataIndex: 'group_code', width: 100 },
+                  { title: '类型', dataIndex: 'field_type', width: 90 },
+                  { title: '单位', dataIndex: 'display_unit', width: 80, render: (v, r) => v || r.base_unit || '-' },
+                  { title: '实时', dataIndex: 'show_realtime', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_realtime: checked } })} /> },
+                  { title: '历史', dataIndex: 'show_history', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_history: checked } })} /> },
+                  { title: '对比', dataIndex: 'allow_compare', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_compare: checked } })} /> },
+                  { title: '告警', dataIndex: 'allow_alarm_rule', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_alarm_rule: checked } })} /> },
                 ]}
-                locale={{ emptyText: <Empty description={t('models.emptyFieldCapability')} /> }}
+                locale={{ emptyText: <Empty description="暂无新版字段能力，请先执行数据库迁移" /> }}
               />,
             },
             {
               key: 'commands',
-              label: <span><ControlOutlined /> {t('models.controlCapability')}</span>,
+              label: <span><ControlOutlined /> 控制能力</span>,
               children: <Table<ModelCommandCapability>
                 rowKey="id" size="small" pagination={false} dataSource={commandCapabilities}
                 columns={[
-                  { title: t('models.commandCode'), dataIndex: 'command_code', width: 220 },
-                  { title: t('models.risk'), dataIndex: 'risk_level', width: 80, render: v => <Tag color={v === 3 ? 'red' : v === 2 ? 'orange' : 'blue'}>L{v}</Tag> },
-                  { title: t('models.timeout'), dataIndex: 'timeout_seconds', width: 90, render: v => `${v}s` },
-                  { title: t('models.requiresOnline'), dataIndex: 'requires_online', width: 90, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { requires_online: checked } })} /> },
-                  { title: t('models.enabled'), dataIndex: 'is_enabled', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { is_enabled: checked } })} /> },
-                  { title: t('models.parameterSchema'), dataIndex: 'parameter_schema', render: v => <Text code>{JSON.stringify(v)}</Text> },
+                  { title: '命令编码', dataIndex: 'command_code', width: 220 },
+                  { title: '风险', dataIndex: 'risk_level', width: 80, render: v => <Tag color={v === 3 ? 'red' : v === 2 ? 'orange' : 'blue'}>L{v}</Tag> },
+                  { title: '超时', dataIndex: 'timeout_seconds', width: 90, render: v => `${v}s` },
+                  { title: '要求在线', dataIndex: 'requires_online', width: 90, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { requires_online: checked } })} /> },
+                  { title: '启用', dataIndex: 'is_enabled', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { is_enabled: checked } })} /> },
+                  { title: '参数规则', dataIndex: 'parameter_schema', render: v => <Text code>{JSON.stringify(v)}</Text> },
                 ]}
               />,
             },
             {
               key: 'protocol',
-              label: <span><ApiOutlined /> {t('models.protocolVersionTab')}</span>,
+              label: <span><ApiOutlined /> 协议版本</span>,
               children: <>
                 <Descriptions size="small" bordered column={2} style={{ marginBottom: 12 }}>
-                  <Descriptions.Item label={t('models.protocolLabel')}>{protocolSchema?.protocol_code ?? '-'}</Descriptions.Item>
-                  <Descriptions.Item label={t('models.versionLabel')}>{protocolSchema?.version ?? '-'}</Descriptions.Item>
-                  <Descriptions.Item label={t('models.statusLabel')}><Tag color="green">{protocolSchema?.status ?? '-'}</Tag></Descriptions.Item>
-                  <Descriptions.Item label={t('models.schemaHash')}>{protocolSchema?.schema_hash ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label="协议">{protocolSchema?.protocol_code ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label="版本">{protocolSchema?.version ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label="状态"><Tag color="green">{protocolSchema?.status ?? '-'}</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Schema Hash">{protocolSchema?.schema_hash ?? '-'}</Descriptions.Item>
                 </Descriptions>
                 <Table rowKey={(r: any) => `${r.group_code}-${r.field_index}`} size="small" pagination={false}
                   dataSource={protocolSchema?.fields ?? []}
                   columns={[
-                    { title: t('models.arrayGroup'), dataIndex: 'group_code', width: 90 },
-                    { title: t('models.subscript'), dataIndex: 'field_index', width: 70 },
-                    { title: t('models.registry.standardField'), dataIndex: 'field_key', width: 220 },
-                    { title: t('models.wireType'), dataIndex: 'wire_type', width: 100 },
-                    { title: t('models.range'), render: (_: any, r: any) => `${r.minimum ?? '-'} ~ ${r.maximum ?? '-'}` },
+                    { title: '数组', dataIndex: 'group_code', width: 90 },
+                    { title: '下标', dataIndex: 'field_index', width: 70 },
+                    { title: '标准字段', dataIndex: 'field_key', width: 220 },
+                    { title: '线类型', dataIndex: 'wire_type', width: 100 },
+                    { title: '范围', render: (_: any, r: any) => `${r.minimum ?? '-'} ~ ${r.maximum ?? '-'}` },
                   ]}
                 />
               </>,

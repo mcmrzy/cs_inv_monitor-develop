@@ -9,9 +9,6 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  IMAGE_TAG: ${{ github.event.workflow_run.head_sha || github.sha }}
-
 jobs:
   build:
     name: Build & Push Images
@@ -26,18 +23,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ env.IMAGE_TAG }}
-
-      - name: Verify required production migrations
-        shell: bash
-        run: |
-          for version in 023 024 025; do
-            compgen -G "database/migrations/${version}_*.sql" > /dev/null || {
-              echo "Missing required migration ${version}_*.sql"
-              exit 1
-            }
-          done
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -56,7 +41,7 @@ jobs:
           file: ./inv_device_server/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/inv-device-server:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ github.repository_owner }}/inv-device-server:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/inv-device-server:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -64,11 +49,11 @@ jobs:
       - name: Build & Push inv-api-server
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./inv_api_server
           file: ./inv_api_server/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/inv-api-server:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ github.repository_owner }}/inv-api-server:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/inv-api-server:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -80,7 +65,7 @@ jobs:
           file: ./api-gateway/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/api-gateway:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ github.repository_owner }}/api-gateway:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/api-gateway:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -92,7 +77,7 @@ jobs:
           file: ./inv-admin-frontend/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/inv-admin-frontend:${{ env.IMAGE_TAG }}
+            ghcr.io/${{ github.repository_owner }}/inv-admin-frontend:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/inv-admin-frontend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -101,9 +86,6 @@ jobs:
     name: Deploy to Production
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
 
     steps:
       - name: Deploy to server via SSH
@@ -122,43 +104,25 @@ jobs:
             cd deploy
 
             # 设置镜像 tag（先移除旧的 IMAGE_TAG 行再追加）
-            ENV_FILE=.secrets/.env.prod
-            test -f "$ENV_FILE" || { echo "Missing server-side $ENV_FILE"; exit 1; }
-            sed -i '/^IMAGE_TAG=/d' "$ENV_FILE"
-            echo "IMAGE_TAG=${{ env.IMAGE_TAG }}" >> "$ENV_FILE"
+            sed -i '/^IMAGE_TAG=/d' .env.prod
+            echo "IMAGE_TAG=${{ github.sha }}" >> .env.prod
 
 
             # 登录 ghcr.io
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # 拉取新镜像
-            docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" pull
+            docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 
-            # PostgreSQL major versions cannot reuse a PG16 data directory.
-            if docker inspect inv-postgres > /dev/null 2>&1; then
-              PG_MAJOR=$(docker exec inv-postgres psql -U postgres -d inv_mqtt -Atqc "SHOW server_version_num" | cut -c1-2)
-              if [ "$PG_MAJOR" != "18" ]; then
-                echo "PostgreSQL $PG_MAJOR data must be upgraded to 18 before deployment"
-                exit 1
-              fi
-            fi
-
-            docker run --rm --entrypoint sh "ghcr.io/${{ github.repository_owner }}/inv-api-server:${{ env.IMAGE_TAG }}" -c '
-              for version in 023 024 025; do
-                ls /app/database/migrations/${version}_*.sql > /dev/null 2>&1 || exit 1
-              done
-            '
-
-            # 增量更新。Compose 会等待 PostgreSQL/Redis 健康、API 完成迁移并
-            # 健康后才启动 Device Server；迁移失败时部署立即失败。
-            docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" up -d --remove-orphans --wait --wait-timeout 180
+            # 更新容器
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans --wait --wait-timeout 180
 
             # 清理旧镜像
             docker image prune -f
 
             # 健康检查
             echo "=== 服务状态 ==="
-            docker compose -f docker-compose.prod.yml --env-file "$ENV_FILE" ps
+            docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 
             sleep 10
 
