@@ -15,7 +15,6 @@ import {
   Progress,
   Drawer,
   Space,
-  Popconfirm,
   Row,
   Col,
   Tooltip,
@@ -33,6 +32,7 @@ import {
   Checkbox,
   Alert,
 } from 'antd'
+import Popconfirm from '@/components/LocalizedPopconfirm'
 import {
   UploadOutlined,
   PlusOutlined,
@@ -96,47 +96,25 @@ interface FirmwareFormValues {
   changelog: string
 }
 
-// =================== 任务状态颜色映射 ===================
-const TASK_STATUS_COLOR: Record<string, string> = {
-  draft: 'default',
-  pending: 'processing',
-  scheduled: 'warning',
-  running: 'processing',
-  completed: 'success',
-  partial_success: 'warning',
-  failed: 'error',
-  cancelled: 'default',
+// =================== 任务状态映射 ===================
+const TASK_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  draft: { label: '草稿', color: 'default' },
+  pending: { label: '待执行', color: 'processing' },
+  scheduled: { label: '定时等待', color: 'warning' },
+  running: { label: '执行中', color: 'processing' },
+  completed: { label: '已完成', color: 'success' },
+  partial_success: { label: '部分成功', color: 'warning' },
+  failed: { label: '失败', color: 'error' },
+  cancelled: { label: '已取消', color: 'default' },
 }
 
-const UPGRADE_STATUS_COLOR: Record<string, string> = {
-  pending: '#1677ff',
-  downloading: '#13c2c2',
-  upgrading: '#fa8c16',
-  success: '#52c41a',
-  failed: '#ff4d4f',
-  cancelled: '#d9d9d9',
-}
-
-// 任务状态 i18n key 映射
-const TASK_STATUS_I18N_KEY: Record<string, string> = {
-  draft: 'ota.taskStatusDraft',
-  pending: 'ota.taskStatusPending',
-  scheduled: 'ota.taskStatusScheduled',
-  running: 'ota.taskStatusRunning',
-  completed: 'ota.taskStatusCompleted',
-  partial_success: 'ota.taskStatusPartialSuccess',
-  failed: 'ota.taskStatusFailed',
-  cancelled: 'ota.taskStatusCancelled',
-}
-
-// 升级状态 i18n key 映射
-const UPGRADE_STATUS_I18N_KEY: Record<string, string> = {
-  pending: 'ota.upgradeStatusPending',
-  downloading: 'ota.upgradeStatusDownloading',
-  upgrading: 'ota.upgradeStatusUpgrading',
-  success: 'ota.upgradeStatusSuccess',
-  failed: 'ota.upgradeStatusFailed',
-  cancelled: 'ota.upgradeStatusCancelled',
+const UPGRADE_STATUS_MAP: Record<string, { label: string; color: string }> = {
+  pending: { label: '待执行', color: '#1677ff' },
+  downloading: { label: '下载中', color: '#13c2c2' },
+  upgrading: { label: '升级中', color: '#fa8c16' },
+  success: { label: '成功', color: '#52c41a' },
+  failed: { label: '失败', color: '#ff4d4f' },
+  cancelled: { label: '已取消', color: '#d9d9d9' },
 }
 
 // =================== 主页面 ===================
@@ -287,8 +265,8 @@ const UpgradeTasksTab: React.FC = () => {
 
   const rollbackMutation = useMutation({
     mutationFn: (data: { sn: string; package_id: number }) => otaApi.rollbackUpgrade(data),
-    onSuccess: () => { message.success(t('ota.taskRollbackSuccess')); setRollbackOpen(false); setRollbackSn(''); setRollbackPackageId(null); invalidate() },
-    onError: (err: any) => message.error(t('ota.taskRollbackFailed') + ': ' + (err?.response?.data?.message || err?.message || '')),
+    onSuccess: () => { message.success('回退指令已下发'); setRollbackOpen(false); setRollbackSn(''); setRollbackPackageId(null); invalidate() },
+    onError: (err: any) => message.error('回退失败: ' + (err?.response?.data?.message || err?.message || '')),
   })
 
   const openRollbackModal = async (taskId: number | string, sn: string) => {
@@ -307,7 +285,7 @@ const UpgradeTasksTab: React.FC = () => {
 
   const handleRollback = () => {
     if (!rollbackSn || !rollbackPackageId) {
-      message.warning(t('ota.pleaseSelectRollbackPackage'))
+      message.warning('请选择目标升级包')
       return
     }
     rollbackMutation.mutate({ sn: rollbackSn, package_id: rollbackPackageId })
@@ -419,9 +397,10 @@ const UpgradeTasksTab: React.FC = () => {
     {
       title: t('common.status'), key: 'status', width: 100,
       render: (_: any, r: UpgradeTask) => {
-        const color = TASK_STATUS_COLOR[r.status] || 'default'
-        const i18nKey = TASK_STATUS_I18N_KEY[r.status]
-        return <Tag color={color}>{i18nKey ? t(i18nKey) : r.status}</Tag>
+        const cfg = TASK_STATUS_MAP[r.status] || { label: r.status, color: 'default' }
+        const i18nKey = `ota.taskStatus${r.status.charAt(0).toUpperCase() + r.status.slice(1).replace(/_(\w)/g, (_: string, c: string) => c.toUpperCase())}`
+        const translated = t(i18nKey)
+        return <Tag color={cfg.color}>{translated !== i18nKey ? translated : cfg.label}</Tag>
       },
     },
     {
@@ -432,12 +411,12 @@ const UpgradeTasksTab: React.FC = () => {
       },
     },
     {
-      title: t('ota.source'), key: 'source', width: 100,
+      title: '来源', key: 'source', width: 100,
       render: (_: any, r: UpgradeTask) => {
         const sourceMap: Record<string, { label: string; color: string }> = {
-          admin: { label: t('ota.sourceAdmin'), color: 'blue' },
-          app: { label: t('ota.sourceApp'), color: 'green' },
-          local: { label: t('ota.sourceLocal'), color: 'orange' },
+          admin: { label: '管理员推送', color: 'blue' },
+          app: { label: 'APP触发', color: 'green' },
+          local: { label: '本地OTA', color: 'orange' },
         }
         const cfg = sourceMap[r.source || ''] || { label: r.source || '-', color: 'default' }
         return <Tag color={cfg.color}>{cfg.label}</Tag>
@@ -462,12 +441,12 @@ const UpgradeTasksTab: React.FC = () => {
                   if (devices.length > 0) {
                     openRollbackModal(r.id, devices[0].device_sn)
                   } else {
-                    message.warning(t('ota.noTaskDevices'))
+                    message.warning('该任务没有设备记录')
                   }
                 })
               }}
             >
-              {t('ota.rollback')}
+              回退
             </Button>
           )}
           {(r.status === 'pending' || r.status === 'draft') && (
@@ -511,7 +490,7 @@ const UpgradeTasksTab: React.FC = () => {
     { title: t('ota.targetVersion'), dataIndex: 'firmware_version', key: 'firmware_version', width: 100 },
     {
       title: t('common.status'), dataIndex: 'status', key: 'status', width: 100,
-      render: (s: string) => { const color = UPGRADE_STATUS_COLOR[s] || '#d9d9d9'; const i18nKey = UPGRADE_STATUS_I18N_KEY[s]; return <Tag color={color}>{i18nKey ? t(i18nKey) : s}</Tag> },
+      render: (s: string) => { const c = UPGRADE_STATUS_MAP[s] || { label: s, color: '#d9d9d9' }; return <Tag color={c.color}>{c.label}</Tag> },
     },
     {
       title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 150,
@@ -575,8 +554,8 @@ const UpgradeTasksTab: React.FC = () => {
               value={statusFilter}
               onChange={(val) => { setStatusFilter(val); setPage(1) }}
               options={[
-                { label: t('ota.all'), value: '' },
-                { label: t('ota.taskStatusActive'), value: 'active' },
+                { label: '全部', value: '' },
+                { label: t('ota.taskStatusActive') || '进行中', value: 'active' },
                 { label: t('ota.taskStatusPending'), value: 'pending' },
                 { label: t('ota.taskStatusRunning'), value: 'running' },
                 { label: t('ota.taskStatusCompleted'), value: 'completed' },
@@ -790,7 +769,7 @@ const UpgradeTasksTab: React.FC = () => {
 
       {/* 回退 Modal */}
       <Modal
-        title={t('ota.rollbackToVersion')}
+        title="回退到指定版本"
         open={rollbackOpen}
         onCancel={() => { setRollbackOpen(false); setRollbackSn(''); setRollbackPackageId(null) }}
         onOk={handleRollback}
@@ -799,19 +778,19 @@ const UpgradeTasksTab: React.FC = () => {
         destroyOnClose
       >
         <Alert
-          message={t('ota.rollbackInstructions')}
-          description={t('ota.rollbackWarning')}
+          message="回退说明"
+          description="回退操作将把设备固件恢复到指定升级包版本，请确认目标升级包版本正确。"
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
         />
         <Form layout="vertical">
-          <Form.Item label={t('ota.deviceSn')}>
+          <Form.Item label="设备 SN">
             <Input value={rollbackSn} disabled />
           </Form.Item>
-          <Form.Item label={t('ota.targetPackage')} required>
+          <Form.Item label="目标升级包" required>
             <Select
-              placeholder={t('ota.selectRollbackPackage')}
+              placeholder="选择要回退到的升级包"
               value={rollbackPackageId}
               onChange={setRollbackPackageId}
               options={rollbackPackageList.map((pkg: any) => ({
@@ -871,7 +850,7 @@ const FirmwareTab: React.FC = () => {
       const list = d?.devices ?? []
       setFwDevices(Array.isArray(list) ? list : [])
     } catch (err: any) {
-      message.error(t('ota.deviceListQueryFailed') + ': ' + (err?.response?.data?.message || err?.message || ''))
+      message.error('查询设备列表失败: ' + (err?.response?.data?.message || err?.message || ''))
       setFwDevices([])
     } finally {
       setFwDevicesLoading(false)
@@ -997,9 +976,9 @@ const FirmwareTab: React.FC = () => {
       title: t('common.operation'), key: 'action', width: 140,
       render: (_: any, record: Firmware) => (
         <Space size={4}>
-          <Tooltip title={t('ota.viewFirmwareDevices')}>
+          <Tooltip title="查看使用该固件的设备">
             <Button type="link" size="small" icon={<DesktopOutlined />} onClick={() => openFwDevicesModal(record)}>
-              {t('ota.viewDevices')}
+              查看设备
             </Button>
           </Tooltip>
           <Popconfirm title={t('ota.confirmDeleteFirmware')} onConfirm={() => deleteMutation.mutate(record.id)}>
@@ -1072,25 +1051,25 @@ const FirmwareTab: React.FC = () => {
 
       {/* 查看使用该固件的设备 Modal */}
       <Modal
-        title={t('ota.firmwareDevicesTitle')}
+        title="使用该固件的设备"
         open={fwDevicesOpen}
         onCancel={() => { setFwDevicesOpen(false); setFwDevicesTarget(null); setFwDevices([]) }}
         width={780}
         destroyOnClose
         footer={[
           <Button key="close" onClick={() => { setFwDevicesOpen(false); setFwDevicesTarget(null); setFwDevices([]) }}>
-            {t('common.close')}
+            关闭
           </Button>,
         ]}
       >
         {fwDevicesTarget && (
           <div>
             <Descriptions column={3} size="small" bordered style={{ marginBottom: 16 }}>
-              <Descriptions.Item label={t('ota.model')}>{fwDevicesTarget.model}</Descriptions.Item>
-              <Descriptions.Item label={t('ota.chip')}>
+              <Descriptions.Item label="型号">{fwDevicesTarget.model}</Descriptions.Item>
+              <Descriptions.Item label="芯片">
                 <Tag color="blue">{(fwDevicesTarget.target_chip || '').toUpperCase()}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label={t('ota.version')}>{fwDevicesTarget.version}</Descriptions.Item>
+              <Descriptions.Item label="版本">{fwDevicesTarget.version}</Descriptions.Item>
             </Descriptions>
             <Table
               rowKey="sn"
@@ -1098,11 +1077,11 @@ const FirmwareTab: React.FC = () => {
               loading={fwDevicesLoading}
               dataSource={fwDevices}
               pagination={{ pageSize: 10 }}
-              locale={{ emptyText: <Empty description={t('ota.noFirmwareDevices')} /> }}
+              locale={{ emptyText: <Empty description="暂无设备使用该固件版本" /> }}
               columns={[
-                { title: t('ota.deviceSn'), dataIndex: 'sn', key: 'sn', width: 140 },
-                { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
-                { title: t('ota.mainVersion'), dataIndex: 'main_version', key: 'main_version', width: 120, render: (v: string) => v || '-' },
+                { title: '设备 SN', dataIndex: 'sn', key: 'sn', width: 140 },
+                { title: '型号', dataIndex: 'model', key: 'model', width: 100 },
+                { title: '主版本', dataIndex: 'main_version', key: 'main_version', width: 120, render: (v: string) => v || '-' },
                 { title: 'ARM', dataIndex: 'firmware_arm', key: 'firmware_arm', width: 110, render: (v: string) => v || '-' },
                 { title: 'ESP', dataIndex: 'firmware_esp', key: 'firmware_esp', width: 110, render: (v: string) => v || '-' },
                 { title: 'DSP', dataIndex: 'firmware_dsp', key: 'firmware_dsp', width: 110, render: (v: string) => v || '-' },
@@ -1151,7 +1130,7 @@ const PackagesTab: React.FC = () => {
       const list = d?.devices ?? []
       setPkgDevices(Array.isArray(list) ? list : [])
     } catch (err: any) {
-      message.error(t('ota.deviceListQueryFailed') + ': ' + (err?.response?.data?.message || err?.message || ''))
+      message.error('查询设备列表失败: ' + (err?.response?.data?.message || err?.message || ''))
       setPkgDevices([])
     } finally {
       setPkgDevicesLoading(false)
@@ -1191,9 +1170,9 @@ const PackagesTab: React.FC = () => {
     onError: (err: any) => {
           const msg = err?.response?.data?.message || err?.message || ''
           if (msg.includes('duplicate key') || msg.includes('uq_package_model_version')) {
-            message.error(t('ota.duplicatePackageVersion'))
+            message.error('该型号下已存在相同版本号的升级包，请使用不同的版本号')
           } else {
-            message.error(t('ota.createFailedPrefix') + ': ' + msg)
+            message.error('创建失败: ' + msg)
           }
         },
   })
@@ -1206,8 +1185,8 @@ const PackagesTab: React.FC = () => {
 
   const editMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => otaApi.updatePackage(id, data),
-    onSuccess: () => { message.success(t('ota.updateSuccess')); setEditOpen(false); setEditPkg(null); editForm.resetFields(); invalidate() },
-    onError: (err: any) => message.error(t('ota.updateFailedPrefix') + ': ' + (err?.response?.data?.message || err?.message || '')),
+    onSuccess: () => { message.success('更新成功'); setEditOpen(false); setEditPkg(null); editForm.resetFields(); invalidate() },
+    onError: (err: any) => message.error('更新失败: ' + (err?.response?.data?.message || err?.message || '')),
   })
 
   const openEditModal = (record: UpgradePackage) => {
@@ -1241,7 +1220,7 @@ const PackagesTab: React.FC = () => {
       if (values.firmware_esp) firmwareIds.push(Number(values.firmware_esp))
       if (values.firmware_dsp) firmwareIds.push(Number(values.firmware_dsp))
       if (values.firmware_bms) firmwareIds.push(Number(values.firmware_bms))
-      if (firmwareIds.length === 0) { message.warning(t('ota.selectAtLeastOneChipFirmware')); return }
+      if (firmwareIds.length === 0) { message.warning('请至少选择一个芯片固件'); return }
       
       createMutation.mutate({
         model: values.model,
@@ -1256,8 +1235,8 @@ const PackagesTab: React.FC = () => {
   const columns: ColumnsType<UpgradePackage> = [
     { title: t('ota.packageVersion'), dataIndex: 'main_version', key: 'main_version', width: 140, render: (v: string) => <Tag color="blue">{v}</Tag> },
     { 
-      title: t('ota.userVersionNumber'), dataIndex: 'user_version', key: 'user_version', width: 110,
-      render: (v: string) => v ? <Tag color="cyan">{v}</Tag> : <span style={{ color: '#bbb' }}>{t('ota.autoGenerated')}</span>,
+      title: '用户版本号', dataIndex: 'user_version', key: 'user_version', width: 110,
+      render: (v: string) => v ? <Tag color="cyan">{v}</Tag> : <span style={{ color: '#bbb' }}>自动生成</span>,
     },
     { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
     {
@@ -1265,17 +1244,17 @@ const PackagesTab: React.FC = () => {
       render: (_: any, record: UpgradePackage) => <Space wrap>{record.items?.map((item) => <Tag key={item.target_chip}>{item.target_chip.toUpperCase()}: {item.firmware_version}</Tag>)}</Space>,
     },
     { 
-      title: t('ota.publishStatus'), key: 'is_published', width: 90,
+      title: '发布状态', key: 'is_published', width: 90,
       render: (_: any, record: UpgradePackage) => {
         return record.is_published 
-          ? <Tag color="green">{t('ota.published')}</Tag> 
-          : <Tag color="default">{t('ota.draft')}</Tag>
+          ? <Tag color="green">已发布</Tag> 
+          : <Tag color="default">草稿</Tag>
       },
     },
     { 
-      title: t('ota.rolloutType'), key: 'rollout_type', width: 90,
+      title: '推送方式', key: 'rollout_type', width: 90,
       render: (_: any, record: UpgradePackage) => {
-        const typeMap: Record<string, string> = { all: t('ota.rolloutAll'), model: t('ota.rolloutByModel'), user: t('ota.rolloutSpecifiedUsers'), device: t('ota.rolloutSpecifiedDevices') }
+        const typeMap: Record<string, string> = { all: '全量', model: '按型号', user: '指定用户', device: '指定设备' }
         return typeMap[record.rollout_type || ''] || (record.rollout_type || '-')
       },
     },
@@ -1290,14 +1269,14 @@ const PackagesTab: React.FC = () => {
             icon={<DesktopOutlined />}
             onClick={() => openPkgDevicesModal(record)}
           >
-            {t('ota.viewDevices')}
+            查看设备
           </Button>
           <Button
             type="link"
             size="small"
             onClick={() => openEditModal(record)}
           >
-            {t('common.edit')}
+            编辑
           </Button>
           {!record.is_published && (
             <Button
@@ -1306,7 +1285,7 @@ const PackagesTab: React.FC = () => {
               icon={<RocketOutlined />}
               onClick={() => { setPublishPkg(record); setPublishOpen(true) }}
             >
-              {t('ota.publish')}
+              发布
             </Button>
           )}
           {record.is_published && (
@@ -1315,7 +1294,7 @@ const PackagesTab: React.FC = () => {
               size="small"
               onClick={() => { setPublishPkg(record); setPublishOpen(true) }}
             >
-              {t('ota.pushManagement')}
+              推送管理
             </Button>
           )}
           <Popconfirm title={t('ota.confirmDeletePackage')} onConfirm={() => deleteMutation.mutate(Number(record.id))}>
@@ -1352,49 +1331,49 @@ const PackagesTab: React.FC = () => {
             <Select placeholder={t('ota.selectModel')} options={modelList.map((m: any) => ({ label: m.model_name || m.model_code, value: m.model_code }))} />
           </Form.Item>
           
-          <Divider orientation="left" style={{ margin: '16px 0 12px' }}>{t('ota.selectChipFirmwareHint')}</Divider>
+          <Divider orientation="left" style={{ margin: '16px 0 12px' }}>选择固件（至少选择一个芯片）</Divider>
           
-          <Form.Item name="firmware_arm" label={t('ota.selectChipFirmware', { chip: 'ARM' })}>
-            <Select allowClear placeholder={t('ota.selectChipFirmware', { chip: 'ARM' })}
+          <Form.Item name="firmware_arm" label="ARM 固件">
+            <Select allowClear placeholder="选择 ARM 固件"
               options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'arm').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))} />
           </Form.Item>
-          <Form.Item name="firmware_esp" label={t('ota.selectChipFirmware', { chip: 'ESP' })}>
-            <Select allowClear placeholder={t('ota.selectChipFirmware', { chip: 'ESP' })}
+          <Form.Item name="firmware_esp" label="ESP 固件">
+            <Select allowClear placeholder="选择 ESP 固件"
               options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'esp').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))} />
           </Form.Item>
-          <Form.Item name="firmware_dsp" label={t('ota.selectChipFirmware', { chip: 'DSP' })}>
-            <Select allowClear placeholder={t('ota.selectOptionalChipFirmware', { chip: 'DSP' })}
+          <Form.Item name="firmware_dsp" label="DSP 固件">
+            <Select allowClear placeholder="选择 DSP 固件（可选）"
               options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'dsp').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))} />
           </Form.Item>
-          <Form.Item name="firmware_bms" label={t('ota.selectChipFirmware', { chip: 'BMS' })}>
-            <Select allowClear placeholder={t('ota.selectOptionalChipFirmware', { chip: 'BMS' })}
+          <Form.Item name="firmware_bms" label="BMS 固件">
+            <Select allowClear placeholder="选择 BMS 固件（可选）"
               options={filteredFirmware.filter((f: Firmware) => f.target_chip === 'bms').map((f: Firmware) => ({ label: f.version, value: Number(f.id) }))} />
           </Form.Item>
           
-          <div style={{ color: '#999', fontSize: 12 }}>{t('ota.packageCreateHint')}</div>
+          <div style={{ color: '#999', fontSize: 12 }}>创建后可在发布时设置用户可见信息和推送方式</div>
         </Form>
       </Modal>
 
       {/* 查看已安装该升级包的设备 Modal */}
       <Modal
-        title={t('ota.installedDevicesTitle')}
+        title="已安装该升级包的设备"
         open={pkgDevicesOpen}
         onCancel={() => { setPkgDevicesOpen(false); setPkgDevicesTarget(null); setPkgDevices([]) }}
         width={780}
         destroyOnClose
         footer={[
           <Button key="close" onClick={() => { setPkgDevicesOpen(false); setPkgDevicesTarget(null); setPkgDevices([]) }}>
-            {t('common.close')}
+            关闭
           </Button>,
         ]}
       >
         {pkgDevicesTarget && (
           <div>
             <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
-              <Descriptions.Item label={t('ota.packageVersionLabel')}>
+              <Descriptions.Item label="升级包版本">
                 <Tag color="blue">{pkgDevicesTarget.main_version}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label={t('ota.model')}>{pkgDevicesTarget.model}</Descriptions.Item>
+              <Descriptions.Item label="型号">{pkgDevicesTarget.model}</Descriptions.Item>
             </Descriptions>
             <Table<DeviceUpgrade>
               rowKey={(r) => `${r.device_sn}-${r.id}`}
@@ -1402,30 +1381,30 @@ const PackagesTab: React.FC = () => {
               loading={pkgDevicesLoading}
               dataSource={pkgDevices}
               pagination={{ pageSize: 10 }}
-              locale={{ emptyText: <Empty description={t('ota.noInstalledDevices')} /> }}
+              locale={{ emptyText: <Empty description="暂无设备安装该升级包" /> }}
               columns={[
-                { title: t('ota.deviceSn'), dataIndex: 'device_sn', key: 'device_sn', width: 140 },
-                { title: t('ota.model'), dataIndex: 'device_model', key: 'device_model', width: 100, render: (v: string) => v || '-' },
+                { title: '设备 SN', dataIndex: 'device_sn', key: 'device_sn', width: 140 },
+                { title: '型号', dataIndex: 'device_model', key: 'device_model', width: 100, render: (v: string) => v || '-' },
                 {
-                  title: t('ota.installStatus'),
+                  title: '安装状态',
                   dataIndex: 'status',
                   key: 'status',
                   width: 100,
                   render: (s: string) => {
                     const statusMap: Record<string, { label: string; color: string }> = {
-                      success: { label: t('ota.upgradeStatusSuccess'), color: 'success' },
-                      pending: { label: t('ota.upgradeStatusPending'), color: 'processing' },
-                      upgrading: { label: t('ota.upgradeStatusUpgrading'), color: 'warning' },
-                      downloading: { label: t('ota.upgradeStatusDownloading'), color: 'cyan' },
-                      failed: { label: t('ota.upgradeStatusFailed'), color: 'error' },
-                      cancelled: { label: t('ota.upgradeStatusCancelled'), color: 'default' },
+                      success: { label: '成功', color: 'success' },
+                      pending: { label: '待执行', color: 'processing' },
+                      upgrading: { label: '升级中', color: 'warning' },
+                      downloading: { label: '下载中', color: 'cyan' },
+                      failed: { label: '失败', color: 'error' },
+                      cancelled: { label: '已取消', color: 'default' },
                     }
                     const cfg = statusMap[s] || { label: s, color: 'default' }
                     return <Tag color={cfg.color}>{cfg.label}</Tag>
                   },
                 },
                 {
-                  title: t('ota.installTime'),
+                  title: '安装时间',
                   dataIndex: 'created_at',
                   key: 'created_at',
                   width: 170,
@@ -1439,7 +1418,7 @@ const PackagesTab: React.FC = () => {
 
       {/* 编辑升级包 Modal */}
       <Modal
-        title={t('ota.editPackage')}
+        title="编辑升级包"
         open={editOpen}
         onCancel={() => { setEditOpen(false); setEditPkg(null); editForm.resetFields() }}
         onOk={handleEdit}
@@ -1450,21 +1429,21 @@ const PackagesTab: React.FC = () => {
         {editPkg && (
           <Form form={editForm} layout="vertical">
             <Descriptions column={2} size="small" bordered style={{ marginBottom: 16 }}>
-              <Descriptions.Item label={t('ota.model')}>{editPkg.model}</Descriptions.Item>
-              <Descriptions.Item label={t('ota.internalVersion')}>{editPkg.main_version}</Descriptions.Item>
+              <Descriptions.Item label="型号">{editPkg.model}</Descriptions.Item>
+              <Descriptions.Item label="内部版本">{editPkg.main_version}</Descriptions.Item>
             </Descriptions>
             <Form.Item
               name="user_version"
-              label={t('ota.userVisibleVersion')}
-              help={t('ota.userVersionOptionalHelp')}
+              label="用户可见版本号"
+              help="留空则自动生成（如 V1.0.0）"
             >
-              <Input placeholder={t('ota.versionExample')} />
+              <Input placeholder="例如：V1.0.2" />
             </Form.Item>
             <Form.Item
               name="user_changelog"
-              label={t('ota.userVisibleChangelog')}
+              label="用户可见更新说明"
             >
-              <TextArea rows={4} placeholder={t('ota.changelogExample')} />
+              <TextArea rows={4} placeholder="例如：修复了XX问题，优化了XX功能" />
             </Form.Item>
           </Form>
         )}

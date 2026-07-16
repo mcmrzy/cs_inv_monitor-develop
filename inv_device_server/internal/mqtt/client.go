@@ -2,10 +2,15 @@ package mqtt
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -70,6 +75,11 @@ type MQTTStats struct {
 
 const onlineTimeoutSeconds = 600
 
+// onlineSetKey is the Redis Set that serves as a secondary index of online device SNs.
+// The heartbeat keys (device:heartbeat:{sn}) remain the source of truth with TTL-based
+// expiry; this Set is maintained for O(1) retrieval of all online device SNs.
+const onlineSetKey = "device:online_set"
+
 // heartbeatKey returns the Redis key for device heartbeat with TTL.
 // Each device gets an independent key that auto-expires after timeout,
 // enabling Redis Keyspace Notifications for event-driven offline detection.
@@ -90,8 +100,13 @@ func (h *Hub) MarkDeviceOnline(sn string) {
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		// Set independent key with TTL for event-driven expiry detection
-		h.rdb.Set(ctx, heartbeatKey(sn), now.Unix(), onlineTimeoutSeconds*time.Second)
+		// Pipeline: set heartbeat key with TTL + add SN to online set (secondary index)
+		pipe := h.rdb.Pipeline()
+		pipe.Set(ctx, heartbeatKey(sn), now.Unix(), onlineTimeoutSeconds*time.Second)
+		pipe.SAdd(ctx, onlineSetKey, sn)
+		if _, err := pipe.Exec(ctx); err != nil {
+			logger.Warn("Failed to mark device online", zap.String("sn", sn), zap.Error(err))
+		}
 	}
 }
 
@@ -106,27 +121,125 @@ func (h *Hub) IsDeviceOnline(sn string) bool {
 }
 
 func (h *Hub) GetOnlineDeviceSNs() []string {
-	if h.rdb != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		var sns []string
-		var cursor uint64
-		for {
-			keys, nextCursor, err := h.rdb.Scan(ctx, cursor, "device:heartbeat:*", 1000).Result()
-			if err != nil {
-				break
-			}
-			for _, key := range keys {
-				sns = append(sns, strings.TrimPrefix(key, "device:heartbeat:"))
-			}
-			cursor = nextCursor
-			if cursor == 0 {
-				break
-			}
-		}
+	if h.rdb == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Primary: O(1) retrieval from Redis Set (secondary index)
+	sns, err := h.rdb.SMembers(ctx, onlineSetKey).Result()
+	if err == nil && len(sns) > 0 {
 		return sns
 	}
+
+	// Fallback: scan heartbeat keys when set is empty (e.g. before initial rebuild)
+	return h.scanHeartbeatKeys(ctx)
+}
+
+// scanHeartbeatKeys scans all device:heartbeat:* keys as a fallback.
+func (h *Hub) scanHeartbeatKeys(ctx context.Context) []string {
+	var sns []string
+	var cursor uint64
+	for {
+		keys, nextCursor, err := h.rdb.Scan(ctx, cursor, "device:heartbeat:*", 1000).Result()
+		if err != nil {
+			break
+		}
+		for _, key := range keys {
+			sns = append(sns, strings.TrimPrefix(key, "device:heartbeat:"))
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	return sns
+}
+
+// MarkDeviceOffline removes a device SN from the online set.
+// The heartbeat key will expire naturally via TTL; this only cleans the secondary index.
+func (h *Hub) MarkDeviceOffline(sn string) {
+	if h.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.rdb.SRem(ctx, onlineSetKey, sn).Err(); err != nil {
+		logger.Warn("Failed to mark device offline", zap.String("sn", sn), zap.Error(err))
+	}
+}
+
+// RebuildOnlineSet scans all existing heartbeat keys and rebuilds the online set.
+// Should be called on service startup to ensure the set is in sync with heartbeat keys.
+func (h *Hub) RebuildOnlineSet(ctx context.Context) error {
+	if h.rdb == nil {
+		return nil
+	}
+
+	sns := h.scanHeartbeatKeys(ctx)
+
+	// Replace the set atomically: delete old set, then add all current SNs
+	pipe := h.rdb.Pipeline()
+	pipe.Del(ctx, onlineSetKey)
+	if len(sns) > 0 {
+		members := make([]interface{}, len(sns))
+		for i, sn := range sns {
+			members[i] = sn
+		}
+		pipe.SAdd(ctx, onlineSetKey, members...)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		logger.Error("Failed to rebuild online set", zap.Int("count", len(sns)), zap.Error(err))
+		return err
+	}
+	logger.Info("Online set rebuilt", zap.Int("device_count", len(sns)))
 	return nil
+}
+
+// StartOnlineSetReconciler periodically reconciles the online set with heartbeat keys.
+// Runs every 5 minutes to clean up stale entries (devices whose heartbeat keys have expired
+// but whose SNs were not removed from the set).
+func (h *Hub) StartOnlineSetReconciler(ctx context.Context) {
+	if h.rdb == nil {
+		return
+	}
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.reconcileOnlineSet(ctx)
+		}
+	}
+}
+
+// reconcileOnlineSet removes stale SNs from the online set whose heartbeat keys no longer exist.
+func (h *Hub) reconcileOnlineSet(ctx context.Context) {
+	setSNs, err := h.rdb.SMembers(ctx, onlineSetKey).Result()
+	if err != nil {
+		logger.Warn("Failed to get online set for reconciliation", zap.Error(err))
+		return
+	}
+	if len(setSNs) == 0 {
+		return
+	}
+
+	// Check which SNs in the set no longer have a heartbeat key
+	var stale []interface{}
+	for _, sn := range setSNs {
+		if h.rdb.Exists(ctx, heartbeatKey(sn)).Val() == 0 {
+			stale = append(stale, sn)
+		}
+	}
+	if len(stale) > 0 {
+		h.rdb.SRem(ctx, onlineSetKey, stale...)
+		logger.Info("Reconciled online set",
+			zap.Int("stale_removed", len(stale)),
+			zap.Int("remaining", len(setSNs)-len(stale)))
+	}
 }
 
 func (h *Hub) GetCmdChan() chan *DeviceCommand {
@@ -146,8 +259,11 @@ func NewClient(cfg *config.MQTTConfig, hub *Hub) *Client {
 }
 
 func (c *Client) Connect(ctx context.Context) error {
+	// Determine whether TLS is needed: port 8883 implies TLS, or either
+	// TLS mode flag is explicitly enabled.
+	useTLS := c.config.TLSInsecure || c.config.TLSSkipVerify || c.config.Port == 8883
 	scheme := "mqtt"
-	if c.config.TLSInsecure || c.config.Port == 8883 {
+	if useTLS {
 		scheme = "tls"
 	}
 
@@ -156,13 +272,50 @@ func (c *Client) Connect(ctx context.Context) error {
 		return fmt.Errorf("parse MQTT broker URL: %w", err)
 	}
 
-	// 配置 TLS（跳过证书验证）
+	// TLS configuration — three modes (see MQTTConfig docs in config.go):
+	//   1. tls_skip_verify=true  → skip all verification (DEV/TEST ONLY)
+	//   2. tls_insecure=true     → certificate pinning via cert_sha256 (PRODUCTION)
+	//   3. both false + port 8883 → standard CA-based verification (PRODUCTION)
 	var tlsConfig *tls.Config
-	if c.config.TLSInsecure {
+	if c.config.TLSSkipVerify {
+		// ⚠ DEVELOPMENT / TESTING ONLY — completely skips certificate
+		// verification. Never use in production.
+		logger.Warn("MQTT TLS verification is disabled (tls_skip_verify=true) — this is insecure and must NOT be used in production")
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: true,
 		}
+	} else if c.config.TLSInsecure {
+		expectedPin, err := hex.DecodeString(strings.TrimSpace(c.config.CertSHA256))
+		if err != nil || len(expectedPin) != sha256.Size {
+			return fmt.Errorf("MQTT certificate SHA-256 pin is required in pinned TLS mode")
+		}
+		tlsConfig = &tls.Config{
+			// The legacy broker uses a private chain and a certificate without a
+			// DNS SAN. Pin the exact leaf certificate instead of accepting any
+			// certificate while the broker certificate is being replaced.
+			InsecureSkipVerify: true,
+			VerifyConnection: func(state tls.ConnectionState) error {
+				if len(state.PeerCertificates) == 0 {
+					return fmt.Errorf("MQTT broker did not present a certificate")
+				}
+				leaf, err := x509.ParseCertificate(state.PeerCertificates[0].Raw)
+				if err != nil {
+					return fmt.Errorf("parse MQTT broker certificate: %w", err)
+				}
+				now := time.Now()
+				if now.Before(leaf.NotBefore) || now.After(leaf.NotAfter) {
+					return fmt.Errorf("MQTT broker certificate is outside its validity period")
+				}
+				actual := sha256.Sum256(leaf.Raw)
+				if subtle.ConstantTimeCompare(actual[:], expectedPin) != 1 {
+					return fmt.Errorf("MQTT broker certificate pin mismatch")
+				}
+				return nil
+			},
+		}
 	}
+	// When neither flag is set but port is 8883, tlsConfig stays nil and Go
+	// uses the default TLS verification with the system CA store.
 
 	cliCfg := autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{serverURL},
@@ -171,22 +324,24 @@ func (c *Client) Connect(ctx context.Context) error {
 		CleanStartOnInitialConnection: true,
 		SessionExpiryInterval:         0,
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, connAck *paho.Connack) {
+			c.setBrokerHealth("ok")
 			logger.Info("MQTT connected (command channel only)")
 			if _, err := cm.Subscribe(ctx, &paho.Subscribe{
 				Subscriptions: []paho.SubscribeOptions{
-					{Topic: "cs_inv/#", QoS: 1},
+					{Topic: "$share/inv-group/cs_inv/#", QoS: 1},
 				},
 			}); err != nil {
 				logger.Error("Failed to subscribe to topic", zap.Error(err))
 			} else {
-				logger.Info("Subscribed to cs_inv/#")
+				logger.Info("Subscribed to $share/inv-group/cs_inv/#")
 			}
 		},
 		OnConnectError: func(err error) {
+			c.setBrokerHealth("error")
 			logger.Error("MQTT connection error", zap.Error(err))
 		},
 		ClientConfig: paho.ClientConfig{
-			ClientID: c.config.ClientID,
+			ClientID: uniqueClientID(c.config.ClientID),
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
 				func(pr paho.PublishReceived) (bool, error) {
 					topic := pr.Packet.Topic
@@ -232,9 +387,11 @@ func (c *Client) Connect(ctx context.Context) error {
 				},
 			},
 			OnClientError: func(err error) {
+				c.setBrokerHealth("error")
 				logger.Error("MQTT client error", zap.Error(err))
 			},
 			OnServerDisconnect: func(d *paho.Disconnect) {
+				c.setBrokerHealth("disconnected")
 				if d.Properties != nil && d.Properties.ReasonString != "" {
 					logger.Error("MQTT server disconnect", zap.String("reason", d.Properties.ReasonString))
 				} else {
@@ -255,13 +412,42 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	c.cm = cm
-
-	if err = cm.AwaitConnection(ctx); err != nil {
-		return fmt.Errorf("await MQTT connection: %w", err)
-	}
-
+	// autopaho owns the reconnect loop. Do not block process startup waiting for
+	// the broker: the HTTP liveness/readiness endpoint must remain available and
+	// report MQTT as not ready while reconnection continues.
 	go c.handleCommands(ctx)
+	logger.Info("MQTT connection manager started; initial connection is asynchronous")
 	return nil
+}
+
+func uniqueClientID(base string) string {
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" {
+		return base
+	}
+	hostname = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			return r
+		}
+		return -1
+	}, hostname)
+	if len(hostname) > 12 {
+		hostname = hostname[len(hostname)-12:]
+	}
+	if hostname == "" {
+		return base
+	}
+	return base + "-" + hostname
+}
+
+func (c *Client) setBrokerHealth(status string) {
+	if c.hub == nil || c.hub.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = c.hub.rdb.Set(ctx, "mqtt:broker:health", status, 0).Err()
+	_ = c.hub.rdb.Set(ctx, "mqtt:broker:health:updated_at", time.Now().UTC().Unix(), 0).Err()
 }
 
 func (c *Client) handleCommands(ctx context.Context) {
@@ -363,12 +549,12 @@ func (c *Client) buildMqttPayload(cmd *DeviceCommand) map[string]interface{} {
 			if args, ok := rawReq["args"].([]interface{}); ok {
 				payload["args"] = args
 			} else {
-			// 使用 RawPayload 中的 params（可能比 cmd.Params 更完整）
-			if params, ok := rawReq["params"]; ok && params != nil {
-				payload["params"] = params
-			} else if cmd.Params != nil && len(cmd.Params) > 0 {
-				payload["params"] = cmd.Params
-			}
+				// 使用 RawPayload 中的 params（可能比 cmd.Params 更完整）
+				if params, ok := rawReq["params"]; ok && params != nil {
+					payload["params"] = params
+				} else if cmd.Params != nil && len(cmd.Params) > 0 {
+					payload["params"] = cmd.Params
+				}
 			}
 		} else {
 			if cmd.Params != nil && len(cmd.Params) > 0 {
@@ -448,14 +634,49 @@ func isDeviceStatusTopic(topic string) bool {
 	return false
 }
 
-// isCmdResultTopic 匹配 cs_inv/{sn}/cmd_result
+// isCmdResultTopic supports the final V1 cmd/response topic and the legacy
+// cmd_result topic during the device migration window.
 func isCmdResultTopic(topic string) bool {
 	parts := strings.Split(topic, "/")
 	if len(parts) == 3 && parts[0] == "cs_inv" && parts[2] == "cmd_result" {
 		return true
 	}
+	if len(parts) == 4 && parts[0] == "cs_inv" && parts[2] == "cmd" && parts[3] == "response" {
+		return true
+	}
 	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/cmd_result
 	if len(parts) == 5 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "cmd_result" {
+		return true
+	}
+	if len(parts) == 6 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "cmd" && parts[5] == "response" {
+		return true
+	}
+	return false
+}
+
+// isParallelTopic 匹配 cs_inv/{sn}/parallel（并机状态上报）
+func isParallelTopic(topic string) bool {
+	parts := strings.Split(topic, "/")
+	// 匹配 cs_inv/{sn}/parallel
+	if len(parts) == 3 && parts[0] == "cs_inv" && parts[2] == "parallel" {
+		return true
+	}
+	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/parallel
+	if len(parts) == 5 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "parallel" {
+		return true
+	}
+	return false
+}
+
+// isThreePhaseTopic 匹配 cs_inv/{sn}/three_phase（三相数据上报）
+func isThreePhaseTopic(topic string) bool {
+	parts := strings.Split(topic, "/")
+	// 匹配 cs_inv/{sn}/three_phase
+	if len(parts) == 3 && parts[0] == "cs_inv" && parts[2] == "three_phase" {
+		return true
+	}
+	// 匹配共享订阅 $share/{group}/cs_inv/{sn}/three_phase
+	if len(parts) == 5 && parts[0] == "$share" && parts[2] == "cs_inv" && parts[4] == "three_phase" {
 		return true
 	}
 	return false

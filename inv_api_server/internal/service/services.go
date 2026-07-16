@@ -18,6 +18,7 @@ import (
 	"inv-api-server/pkg/logger"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -29,6 +30,19 @@ func generateTaskID() string {
 		return uuid.NewString()
 	}
 	return id.String()
+}
+
+// jitterSeconds returns a random offset in [0, max) seconds for cache TTL jitter.
+// This prevents cache stampede from synchronized expiry across multiple keys.
+func jitterSeconds(max int) int {
+	if max <= 0 {
+		return 0
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return max / 2 // fallback to midpoint
+	}
+	return int(n.Int64())
 }
 
 type UserService struct {
@@ -311,21 +325,27 @@ func (s *StationService) GetStatistics(ctx context.Context, stationID int64, sta
 }
 
 type DeviceService struct {
-	repo         *repository.DeviceRepository
-	cache        *redis.Client
-	modelRepo    *repository.ModelRepository
-	deviceSrvURL string
-	internalKey  string
-	httpClient   *http.Client
+	repo                *repository.DeviceRepository
+	cache               *redis.Client
+	modelRepo           *repository.ModelRepository
+	permChecker         *PermChecker
+	deviceSrvURL        string
+	internalKey         string
+	httpClient          *http.Client
+	db                  *pgxpool.Pool
+	limitChecker        *DynamicLimitChecker
+	preconditionChecker *PreconditionChecker
 }
 
-func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, modelRepo *repository.ModelRepository, deviceSrvURL string, internalKey string) *DeviceService {
-	return &DeviceService{
+func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, modelRepo *repository.ModelRepository, permChecker *PermChecker, deviceSrvURL string, internalKey string, db *pgxpool.Pool) *DeviceService {
+	s := &DeviceService{
 		repo:         repo,
 		cache:        cache,
 		modelRepo:    modelRepo,
+		permChecker:  permChecker,
 		deviceSrvURL: deviceSrvURL,
 		internalKey:  internalKey,
+		db:           db,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
@@ -335,6 +355,9 @@ func NewDeviceService(repo *repository.DeviceRepository, cache *redis.Client, mo
 			},
 		},
 	}
+	s.limitChecker = NewDynamicLimitChecker(cache, db)
+	s.preconditionChecker = NewPreconditionChecker(cache)
+	return s
 }
 
 func (s *DeviceService) GetBySN(ctx context.Context, sn string) (*model.Device, error) {
@@ -377,8 +400,19 @@ func (s *DeviceService) GetRealtimeData(ctx context.Context, sn string) (map[str
 	return s.repo.GetRealtimeData(ctx, sn)
 }
 
+// BatchGetRealtimeData fetches realtime data for multiple devices in a single
+// Redis Pipeline round-trip, eliminating N+1 queries in device list endpoints.
+func (s *DeviceService) BatchGetRealtimeData(ctx context.Context, sns []string) (map[string]map[string]interface{}, error) {
+	return s.repo.BatchGetRealtimeData(ctx, sns)
+}
+
 func (s *DeviceService) EnsureDevice(ctx context.Context, sn string) error {
 	return s.repo.EnsureDevice(ctx, sn)
+}
+
+// Create creates a new device with the specified fields.
+func (s *DeviceService) Create(ctx context.Context, sn, model string, ratedPower *float64, firmwareArm, firmwareEsp string) error {
+	return s.repo.Create(ctx, sn, model, ratedPower, firmwareArm, firmwareEsp)
 }
 
 func (s *DeviceService) Bind(ctx context.Context, sn string, userID, stationID int64) error {
@@ -402,64 +436,61 @@ func (s *DeviceService) HasPermission(ctx context.Context, userID int64, sn stri
 }
 
 func (s *DeviceService) HasControlPermission(ctx context.Context, userID int64, sn string) bool {
+	// 先检查 RBAC devices:control 权限
+	if s.permChecker != nil && !s.permChecker.CheckPermission(userID, "devices", "control") {
+		return false
+	}
+	// 再检查数据归属
 	return s.repo.HasDataPermission(ctx, userID, sn)
 }
 
-// 系统级命令白名单，不受型号控制字段校验限制
-var systemCommands = map[string]bool{
-	"get_params":   true,
-	"set_params":   true,
-	"set_control":  true,
-	"set_alarm":    true,
-	"batch_config": true,
-	"reset":        true,
-	"restart":      true,
-	"ota":          true,
+func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, command string) error {
+	found, enabled, err := s.modelRepo.CommandCapability(ctx, sn, command)
+	if err != nil {
+		return fmt.Errorf("query command capability: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("命令 %s 不在设备型号允许的控制命令中", command)
+	}
+	if !enabled {
+		return fmt.Errorf("命令 %s 已被禁用", command)
+	}
+	return nil
 }
 
-func (s *DeviceService) ValidateControlCommand(ctx context.Context, sn string, command string) error {
-	if found, enabled, err := s.modelRepo.CommandCapability(ctx, sn, command); err != nil {
-		return fmt.Errorf("query command capability: %w", err)
-	} else if found {
-		if !enabled {
-			return fmt.Errorf("command %s is disabled for this model", command)
-		}
-		return nil
-	}
-	// 系统级命令始终允许
-	if systemCommands[command] {
-		return nil
-	}
-
-	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
+// CheckCommandPermission performs fine-grained permission_code validation for a specific command.
+// If the command has no permission_code configured, the check is skipped (backward compatible).
+// The permission_code format is "resource_action" (e.g. "device_control_basic"),
+// split on the last underscore to get (resource, action).
+func (s *DeviceService) CheckCommandPermission(ctx context.Context, userID int64, sn, commandCode string) error {
+	permCode, err := s.modelRepo.GetCommandPermissionCode(ctx, sn, commandCode)
 	if err != nil {
-		return fmt.Errorf("查询设备型号失败: %w", err)
+		return fmt.Errorf("query command permission code: %w", err)
 	}
-	if modelID == 0 {
-		// 设备未配置型号，允许所有命令（向后兼容）
+	if permCode == "" {
+		// 命令未配置权限码，跳过细粒度检查（向后兼容）
 		return nil
 	}
-
-	controlFields, err := s.modelRepo.GetControlFieldsByModelID(ctx, modelID)
-	if err != nil {
-		return fmt.Errorf("查询控制字段失败: %w", err)
+	// 将权限码拆分为 (resource, action) 二元组
+	// 例如 "device_control_basic" → resource="device_control", action="basic"
+	idx := strings.LastIndex(permCode, "_")
+	if idx <= 0 || idx == len(permCode)-1 {
+		return fmt.Errorf("invalid permission_code format: %s", permCode)
 	}
-
-	if len(controlFields) == 0 {
-		// 型号未配置控制字段，允许所有命令（向后兼容）
-		return nil
+	resource, action := permCode[:idx], permCode[idx+1:]
+	if s.permChecker != nil && !s.permChecker.CheckPermission(userID, resource, action) {
+		return fmt.Errorf("缺少权限: %s", permCode)
 	}
-
-	allowed := make(map[string]bool)
-	for _, f := range controlFields {
-		allowed[f.FieldKey] = true
-	}
-
-	if !allowed[command] {
-		return fmt.Errorf("命令 %s 不在设备型号允许的控制字段中", command)
-	}
-
 	return nil
+}
+
+// GetControlCapabilitiesBySN returns all command capabilities for the device model identified by SN.
+func (s *DeviceService) GetControlCapabilitiesBySN(ctx context.Context, sn string) ([]repository.CommandCapability, error) {
+	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
+	if err != nil || modelID == 0 {
+		return []repository.CommandCapability{}, nil
+	}
+	return s.modelRepo.GetCommandCapabilitiesByModelID(ctx, modelID)
 }
 
 func (s *DeviceService) GetControlFieldsBySN(ctx context.Context, sn string) ([]model.DeviceModelField, error) {
@@ -502,16 +533,16 @@ func (s *DeviceService) FilterByDataPermission(ctx context.Context, userID int64
 	return filtered, nil
 }
 
-func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, params map[string]interface{}) error {
+func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, params map[string]interface{}) (string, error) {
 	if s.deviceSrvURL == "" {
-		return fmt.Errorf("device server URL not configured")
+		return "", fmt.Errorf("device server URL not configured")
 	}
 
 	// 生成唯一任务ID
 	taskID := generateTaskID()
 	args, hasV2Spec, err := s.modelRepo.BuildCommandArgs(ctx, sn, cmdType, params)
 	if err != nil {
-		return fmt.Errorf("invalid command %s: %w", cmdType, err)
+		return "", fmt.Errorf("invalid command %s: %w", cmdType, err)
 	}
 
 	// 1. 写入命令日志（status=pending）
@@ -519,7 +550,7 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 	if err := s.repo.InsertCommandLog(ctx, sn, taskID, cmdType, string(paramsJSON)); err != nil {
 		logger.Error("Failed to insert command log",
 			zap.String("sn", sn), zap.String("task_id", taskID), zap.Error(err))
-		// 继续执行，不因为日志插入失败而阻断命令下发
+		return "", fmt.Errorf("persist command audit log: %w", err)
 	}
 
 	// 2. 构造命令体
@@ -533,17 +564,20 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 		cmdBody["t"] = time.Now().Unix()
 		cmdBody["cmd"] = cmdType
 		cmdBody["args"] = args
+		cmdBody["expires_at"] = time.Now().Add(5 * time.Minute).Unix()
 	}
 	body, err := json.Marshal(cmdBody)
 	if err != nil {
-		return fmt.Errorf("marshal command: %w", err)
+		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "failed", "marshal command failed")
+		return "", fmt.Errorf("marshal command: %w", err)
 	}
 
 	// 3. 发送到 Device Server
 	url := fmt.Sprintf("%s/api/v1/device/%s/command", s.deviceSrvURL, sn)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "failed", "create request failed")
+		return "", fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if s.internalKey != "" {
@@ -555,7 +589,7 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 		logger.Error("SendCommand HTTP call failed",
 			zap.String("sn", sn), zap.String("cmd", cmdType), zap.Error(err))
 		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "failed", "发送失败: "+err.Error())
-		return fmt.Errorf("send command to device server: %w", err)
+		return "", fmt.Errorf("send command to device server: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -563,19 +597,13 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 	if resp.StatusCode == http.StatusServiceUnavailable {
 		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "queued", fmt.Sprintf("设备 %s 离线，命令已排队等待发送", sn))
 		if s.cache != nil {
-			queueData, _ := json.Marshal(map[string]interface{}{
-				"command": cmdType,
-				"params":  params,
-				"task_id": taskID,
-			})
 			queueKey := "device:cmd:queue:" + sn
-			_ = s.cache.RPush(ctx, queueKey, queueData).Err()
-			// 设置队列过期时间（7天）
-			_ = s.cache.Expire(ctx, queueKey, 7*24*time.Hour).Err()
+			_ = s.cache.RPush(ctx, queueKey, body).Err()
+			_ = s.cache.Expire(ctx, queueKey, 5*time.Minute).Err()
 			logger.Info("Command queued for offline device",
 				zap.String("sn", sn), zap.String("task_id", taskID))
 		}
-		return nil // 不返回错误，命令已排队
+		return taskID, nil // 命令已排队，可通过 task_id 跟踪
 	}
 
 	if resp.StatusCode >= http.StatusBadRequest {
@@ -584,7 +612,7 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 			zap.String("sn", sn), zap.String("cmd", cmdType),
 			zap.Int("status", resp.StatusCode), zap.String("body", string(respBody)))
 		_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "failed", fmt.Sprintf("Device Server 返回 %d", resp.StatusCode))
-		return fmt.Errorf("device server returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("device server returned status %d", resp.StatusCode)
 	}
 
 	_ = s.repo.UpdateCommandLogStatus(ctx, taskID, "sent", "命令已发送")
@@ -597,7 +625,7 @@ func (s *DeviceService) SendCommand(ctx context.Context, sn, cmdType string, par
 
 	logger.Info("Command sent to device server",
 		zap.String("sn", sn), zap.String("cmd", cmdType), zap.String("task_id", taskID))
-	return nil
+	return taskID, nil
 }
 
 // insertCmdNotification 插入命令发送通知
@@ -670,6 +698,10 @@ func (s *DeviceService) Delete(ctx context.Context, sn string) error {
 
 func (s *DeviceService) Update(ctx context.Context, sn string, model string, ratedPower *float64, firmwareArm string, firmwareEsp string) error {
 	return s.repo.Update(ctx, sn, model, ratedPower, firmwareArm, firmwareEsp)
+}
+
+func (s *DeviceService) RequestUnbind(ctx context.Context, deviceSN string, requestedBy int64, reason string) (int64, error) {
+	return s.repo.RequestUnbind(ctx, deviceSN, requestedBy, reason)
 }
 
 func (s *DeviceService) GetUnbindRequests(ctx context.Context, page, pageSize int) ([]map[string]interface{}, int64, error) {

@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"inv-api-server/pkg/timezone"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -29,20 +31,21 @@ type internalDeviceStatusRequest struct {
 }
 
 type internalDeviceInfoRequest struct {
-	SN             string  `json:"sn"`
-	Model          string  `json:"model"`
-	Manufacturer   string  `json:"manufacturer"`
-	FirmwareARM    string  `json:"firmware_arm"`
-	FirmwareESP    string  `json:"firmware_esp"`
-	FirmwareDSP    string  `json:"firmware_dsp"`
-	FirmwareBMS    string  `json:"firmware_bms"`
-	Type           string  `json:"type"`
-	RatedPower     int     `json:"rated_power"`
-	RatedVoltage   int     `json:"rated_voltage"`
-	RatedFreq      float64 `json:"rated_freq"`
-	BatteryVoltage float64 `json:"battery_voltage"`
-	BatteryType    string  `json:"battery_type"`
-	CellCount      int     `json:"cell_count"`
+	SN              string  `json:"sn"`
+	Model           string  `json:"model"`
+	Manufacturer    string  `json:"manufacturer"`
+	FirmwareARM     string  `json:"firmware_arm"`
+	FirmwareESP     string  `json:"firmware_esp"`
+	FirmwareDSP     string  `json:"firmware_dsp"`
+	FirmwareBMS     string  `json:"firmware_bms"`
+	Type            string  `json:"device_type"`
+	RatedPower      int     `json:"rated_power"`
+	RatedVoltage    int     `json:"rated_voltage"`
+	RatedFreq       float64 `json:"rated_frequency"`
+	BatteryVoltage  float64 `json:"battery_nominal_voltage"`
+	BatteryType     string  `json:"battery_type"`
+	CellCount       int     `json:"cell_count"`
+	TempSensorCount int     `json:"temp_sensor_count"`
 }
 
 type internalDeviceDataRequest struct {
@@ -68,16 +71,6 @@ type internalDeviceCmdStatusRequest struct {
 	Cmd       string `json:"cmd"`
 	Message   string `json:"message"`
 	Timestamp int64  `json:"timestamp"`
-}
-
-type internalDeviceAlarmRequest struct {
-	SN        string          `json:"sn"`
-	Code      int             `json:"code"`
-	Level     string          `json:"level"`
-	Message   string          `json:"message"`
-	Count     int             `json:"count"`
-	Timestamp int64           `json:"timestamp"`
-	Trigger   json.RawMessage `json:"trigger"`
 }
 
 // NotificationService 通知服务接口，由 service 层实现。
@@ -161,7 +154,8 @@ type sseNotification struct {
 }
 
 type InternalHandler struct {
-	db           *pgxpool.Pool
+	db           internalHandlerDB
+	protocolV1   protocolV1Store
 	rdb          *redis.Client
 	otaService   *service.OTAService
 	jpushService *service.JPushService
@@ -177,8 +171,12 @@ func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service
 	if notifyCfg == nil {
 		notifyCfg = defaultNotificationConfig()
 	}
+	var handlerDB internalHandlerDB
+	if db != nil {
+		handlerDB = db
+	}
 	h := &InternalHandler{
-		db:               db,
+		db:               handlerDB,
 		rdb:              rdb,
 		otaService:       otaService,
 		jpushService:     jpushService,
@@ -186,6 +184,9 @@ func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service
 		sseHub:           make(chan sseHubEvent, 256),
 		notifySvc:        notifySvc,
 		notifyCfg:        notifyCfg,
+	}
+	if db != nil {
+		h.protocolV1 = &postgresProtocolV1Store{db: db}
 	}
 	go h.runSSEHub()
 	return h
@@ -262,7 +263,7 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	logger.Info("DeviceStatus called",
 		zap.String("sn", req.SN),
 		zap.Int("status", req.Status),
-		zap.String("source", c.GetHeader("X-Internal-Key")),
+		zap.Bool("internal_authenticated", c.GetHeader("X-Internal-Key") != ""),
 		zap.String("ua", c.GetHeader("User-Agent")))
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
@@ -272,9 +273,12 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	var oldStatus int
 	var userID int64
 	var stationID sql.NullInt64
-	_ = h.db.QueryRow(ctx,
+	if err := h.db.QueryRow(ctx,
 		`SELECT COALESCE(status, 0), user_id, station_id FROM devices WHERE sn = $1`, req.SN,
-	).Scan(&oldStatus, &userID, &stationID)
+	).Scan(&oldStatus, &userID, &stationID); err != nil {
+		logger.Warn("DeviceStatus: failed to query device state, using defaults",
+			zap.String("sn", req.SN), zap.Error(err))
+	}
 
 	// 状态转换决策已由 inv_device_server 的 DeviceStateManager 处理
 	// 此处直接使用请求中的状态值
@@ -293,7 +297,7 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 		return
 	}
 
-	_, _ = h.db.Exec(ctx, `
+	if _, err := h.db.Exec(ctx, `
 		UPDATE stations SET
 			status = CASE
 				WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status IN (1, 2) AND devices.deleted_at IS NULL) THEN 1
@@ -302,7 +306,9 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			updated_at = NOW()
 		WHERE deleted_at IS NULL
 		AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
-	`, req.SN)
+	`, req.SN); err != nil {
+		logger.Warn("DeviceStatus: failed to update station status", zap.String("sn", req.SN), zap.Error(err))
+	}
 
 	// 设备状态变化时，插入通知记录（带 120 秒冷却期，防止状态抖动产生大量重复通知）
 	if oldStatus != newStatus && userID > 0 {
@@ -323,10 +329,13 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 		if notifyType != "" {
 			// 冷却期检查：120 秒内同一设备同类型通知不重复写入
 			var exists bool
-			_ = h.db.QueryRow(ctx,
+			if err := h.db.QueryRow(ctx,
 				`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type=$2 AND created_at > NOW() - INTERVAL '120 seconds')`,
 				req.SN, notifyType,
-			).Scan(&exists)
+			).Scan(&exists); err != nil {
+				logger.Warn("DeviceStatus: failed to check notification dedup",
+					zap.String("sn", req.SN), zap.Error(err))
+			}
 			if exists {
 				response.Success(c, gin.H{"status": "ok", "notify_dedup": true})
 				return
@@ -336,10 +345,13 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			if stationID.Valid {
 				sid = stationID.Int64
 			}
-			_, _ = h.db.Exec(ctx, `
+			if _, err := h.db.Exec(ctx, `
 				INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
 				VALUES ($1, $2, $3, $4, $5, $6, NOW())
-			`, req.SN, sid, userID, notifyType, title, content)
+			`, req.SN, sid, userID, notifyType, title, content); err != nil {
+				logger.Warn("DeviceStatus: failed to insert notification",
+					zap.String("sn", req.SN), zap.String("notify_type", notifyType), zap.Error(err))
+			}
 
 			// 通过 SSE 实时推送通知给前端
 			h.broadcastNotification(userID, notifyType, title, content, req.SN)
@@ -376,21 +388,34 @@ func (h *InternalHandler) pushRealtimeData(ctx context.Context, sn string, data 
 	}
 
 	cacheKey := "realtime:latest:" + sn
+	hashKey := "realtime:fields:" + sn
 	pipe := h.rdb.Pipeline()
 	pipe.Set(ctx, cacheKey, payload, 10*time.Minute)
+
+	// Field-level cache: use HSET for O(1) retrieval via HGETALL (replaces per-field SET keys)
+	fieldValues := make([]interface{}, 0, len(data)*2)
+	now := time.Now().UTC().Unix()
 	for k, v := range data {
 		if k == "_sn" || k == "_updated_at" {
 			continue
 		}
-		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": time.Now().UTC().Unix()})
-		pipe.Set(ctx, "realtime:latest:"+sn+":"+k, fieldBytes, 10*time.Minute)
+		fieldBytes, _ := json.Marshal(map[string]interface{}{"v": v, "ts": now})
+		fieldValues = append(fieldValues, k, string(fieldBytes))
 	}
+	if len(fieldValues) > 0 {
+		pipe.HSet(ctx, hashKey, fieldValues...)
+		pipe.Expire(ctx, hashKey, 10*time.Minute)
+	}
+
 	if _, err := pipe.Exec(ctx); err != nil {
 		log.Printf("ERROR: Redis pipeline failed: %v", err)
 	}
 
 	pubChannel := "realtime:channel:" + sn
 	_ = h.rdb.Publish(ctx, pubChannel, string(payload)).Err()
+
+	// 通知 Dashboard SSE 订阅者：设备数据更新，触发仪表盘刷新
+	_ = h.rdb.Publish(ctx, "dashboard:events", sn).Err()
 }
 
 func (h *InternalHandler) DeviceInfo(c *gin.Context) {
@@ -410,10 +435,10 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 	_, err := h.db.Exec(ctx, `
 		INSERT INTO devices (
 			sn, model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms, device_type,
-			rated_power, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count,
+			rated_power, rated_voltage, rated_freq, battery_voltage, battery_type, cell_count, temp_sensor_count,
 			user_id, status, last_online_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 0, 1, NOW(), NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, 1, NOW(), NOW(), NOW())
 		ON CONFLICT (sn) DO UPDATE SET
 			model = COALESCE(NULLIF(EXCLUDED.model, ''), devices.model),
 			manufacturer = COALESCE(NULLIF(EXCLUDED.manufacturer, ''), devices.manufacturer),
@@ -428,24 +453,27 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 			battery_voltage = CASE WHEN EXCLUDED.battery_voltage > 0 THEN EXCLUDED.battery_voltage ELSE devices.battery_voltage END,
 			battery_type = COALESCE(NULLIF(EXCLUDED.battery_type, ''), devices.battery_type),
 			cell_count = CASE WHEN EXCLUDED.cell_count > 0 THEN EXCLUDED.cell_count ELSE devices.cell_count END,
+			temp_sensor_count = CASE WHEN EXCLUDED.temp_sensor_count > 0 THEN EXCLUDED.temp_sensor_count ELSE devices.temp_sensor_count END,
 			status = CASE WHEN devices.status = 2 AND EXISTS (
 				SELECT 1 FROM alarms WHERE alarms.device_sn = $1 AND alarms.alarm_level = 3 AND alarms.status = 0
 			) THEN 2 ELSE 1 END,
 			last_online_at = NOW(),
 			updated_at = NOW()
 	`, req.SN, req.Model, req.Manufacturer, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS, req.Type,
-		req.RatedPower, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount)
+		req.RatedPower, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount, req.TempSensorCount)
 	if err != nil {
 		logger.Error("InternalDeviceInfo failed", zap.String("sn", req.SN), zap.Error(err))
 		response.HandleError(c, apperr.Internal("upsert device info failed", err))
 		return
 	}
 
-	_, _ = h.db.Exec(ctx, `
+	if _, err := h.db.Exec(ctx, `
 		UPDATE devices SET model_id = dm.id
 		FROM device_models dm
 		WHERE devices.sn = $1 AND dm.model_code = $2 AND devices.model_id IS NULL
-	`, req.SN, req.Model)
+	`, req.SN, req.Model); err != nil {
+		logger.Warn("DeviceInfo: failed to update model_id", zap.String("sn", req.SN), zap.Error(err))
+	}
 
 	// OTA 升级状态校验：设备上报新固件版本后，检查是否有进行中的升级
 	h.reconcileOTAStatus(ctx, req.SN, req.FirmwareARM, req.FirmwareESP, req.FirmwareDSP, req.FirmwareBMS)
@@ -637,9 +665,12 @@ func (h *InternalHandler) updateDeviceFirmwareVersion(ctx context.Context, sn, c
 	default:
 		return
 	}
-	_, _ = h.db.Exec(ctx, fmt.Sprintf(
+	if _, err := h.db.Exec(ctx, fmt.Sprintf(
 		"UPDATE devices SET %s = $2, updated_at = NOW() WHERE sn = $1", col,
-	), sn, version)
+	), sn, version); err != nil {
+		logger.Warn("updateDeviceFirmwareVersion: failed to update firmware version",
+			zap.String("sn", sn), zap.String("chip", chip), zap.Error(err))
+	}
 }
 
 func (h *InternalHandler) DeviceData(c *gin.Context) {
@@ -650,12 +681,6 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 	}
 	if req.SN == "" || req.Topic == "" || req.Data == nil {
 		response.HandleError(c, apperr.BadRequest("sn, topic and data are required"))
-		return
-	}
-
-	rawJSON, err := json.Marshal(req.Data)
-	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid data payload"))
 		return
 	}
 
@@ -671,53 +696,22 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 
 	// 设备服务器发送的数据是嵌套结构: {"data": {...实际字段...}, "timestamp": ...}
 	// 先解包内层 data 用于字段提取
-	dataMap := req.Data
-	if nested, ok := req.Data["data"].(map[string]interface{}); ok {
-		dataMap = nested
-	}
-
-	// 从 JSONB data 中提取常用索引字段
-	var totalActivePower, dailyEnergy, internalTemp float64
-	var gridFreq, battSOC, battPower, pvPower float64
-	var workState, faultCode string
-
-	switch req.Topic {
-	case "data/ac":
-		totalActivePower = extractFloat(dataMap, "power", "total_active_power")
-		gridFreq = extractFloat(dataMap, "grid_freq", "grid_frequency", "freq")
-		pvPower = extractFloat(dataMap, "pv_power")
-	case "data/status":
-		workState = extractString(dataMap, "state", "work_state")
-		faultCode = extractString(dataMap, "fault_code")
-		internalTemp = extractFloat(dataMap, "temp_inv", "internal_temperature")
-		gridFreq = extractFloat(dataMap, "grid_freq", "grid_frequency", "freq")
-		battSOC = extractFloat(dataMap, "battery_soc", "batt_soc")
-		battPower = extractFloat(dataMap, "battery_power")
-		pvPower = extractFloat(dataMap, "pv_power")
-	case "data/energy":
-		dailyEnergy = extractFloat(dataMap, "daily_pv", "daily_energy")
-	}
-
-	_, err = h.db.Exec(ctx, `
-		INSERT INTO device_telemetry (device_sn, topic, data, total_active_power, daily_energy, work_state, fault_code, internal_temperature, grid_frequency, battery_soc, battery_power, pv_power, time, created_at)
-		VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-	`, req.SN, req.Topic, string(rawJSON), totalActivePower, dailyEnergy, workState, faultCode, internalTemp, gridFreq, battSOC, battPower, pvPower, telemetryTime)
-	if err != nil {
-		logger.Error("InternalDeviceData failed", zap.String("sn", req.SN), zap.Error(err))
-		response.HandleError(c, apperr.Internal("insert telemetry failed", err))
-		return
-	}
+	// The modular pre-V1 payload cannot be reconstructed into a complete
+	// {t,v,data} envelope, so it is intentionally not persisted. The canonical
+	// heartbeat path is stored by inv-device-server in device_telemetry_3min.
 
 	// 遥测数据入库即视为设备在线，刷新 last_online_at（30 秒节流避免高频更新）
-	_, _ = h.db.Exec(ctx, `
+	if _, err := h.db.Exec(ctx, `
 		UPDATE devices SET last_online_at = NOW(), updated_at = NOW()
 		WHERE sn = $1 AND (last_online_at IS NULL OR last_online_at < NOW() - INTERVAL '30 seconds')
-	`, req.SN)
+	`, req.SN); err != nil {
+		logger.Warn("DeviceData: failed to update last_online_at", zap.String("sn", req.SN), zap.Error(err))
+	}
 
 	if req.Topic == "data/energy" {
 		// 根据设备时区和上报时间戳推算实际数据日期，支持离线补报历史数据
 		var deviceTZ string
-		err = h.db.QueryRow(ctx, `SELECT COALESCE(timezone, '') FROM devices WHERE sn = $1`, req.SN).Scan(&deviceTZ)
+		err := h.db.QueryRow(ctx, `SELECT COALESCE(timezone, '') FROM devices WHERE sn = $1`, req.SN).Scan(&deviceTZ)
 		if err != nil || deviceTZ == "" {
 			deviceTZ = timezone.AsiaShanghai // 默认 Asia/Shanghai
 		}
@@ -725,49 +719,130 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 
 		runMinutes := int(req.RuntimeHours * 60)
 
-		dayDataJSON, _ := json.Marshal(map[string]interface{}{
-			"energy_produce":  req.DailyPV,
-			"daily_charge":    req.DailyCharge,
-			"daily_discharge": req.DailyDischarge,
-			"daily_load":      req.DailyLoad,
-			"run_minutes":     runMinutes,
-		})
-
 		_, err = h.db.Exec(ctx, `
-			INSERT INTO device_day_data (device_sn, data_date, data, created_at)
-			VALUES ($1, $2::date, $3::jsonb, NOW())
-			ON CONFLICT (device_sn, data_date) DO UPDATE SET
-				data = EXCLUDED.data
-		`, req.SN, dataDate, string(dayDataJSON))
+			INSERT INTO device_energy_day(device_sn,stat_date,timezone,pv_energy,charge_energy,discharge_energy,load_energy,
+				total_pv_energy,total_charge_energy,total_discharge_energy,total_load_energy,run_minutes,sample_count,updated_at)
+			VALUES($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,NOW())
+			ON CONFLICT(device_sn,stat_date) DO UPDATE SET
+				timezone=EXCLUDED.timezone,pv_energy=GREATEST(device_energy_day.pv_energy,EXCLUDED.pv_energy),
+				charge_energy=GREATEST(device_energy_day.charge_energy,EXCLUDED.charge_energy),
+				discharge_energy=GREATEST(device_energy_day.discharge_energy,EXCLUDED.discharge_energy),
+				load_energy=GREATEST(device_energy_day.load_energy,EXCLUDED.load_energy),
+				total_pv_energy=GREATEST(device_energy_day.total_pv_energy,EXCLUDED.total_pv_energy),
+				total_charge_energy=GREATEST(device_energy_day.total_charge_energy,EXCLUDED.total_charge_energy),
+				total_discharge_energy=GREATEST(device_energy_day.total_discharge_energy,EXCLUDED.total_discharge_energy),
+				total_load_energy=GREATEST(device_energy_day.total_load_energy,EXCLUDED.total_load_energy),
+				run_minutes=GREATEST(device_energy_day.run_minutes,EXCLUDED.run_minutes),updated_at=NOW()
+		`, req.SN, dataDate, deviceTZ, req.DailyPV, req.DailyCharge, req.DailyDischarge, req.DailyLoad,
+			req.TotalPV, req.TotalCharge, req.TotalDischarge, req.TotalLoad, runMinutes)
 		if err != nil {
 			logger.Error("InternalDeviceData upsert day data failed", zap.String("sn", req.SN), zap.Error(err))
 			response.HandleError(c, apperr.Internal("upsert device day data failed", err))
 			return
 		}
 
-		if req.StationID > 0 && req.DailyPV > 0 {
-			_, err = h.db.Exec(ctx, `
-				INSERT INTO station_day_data (station_id, data_date, energy_produce, income, device_count, online_count, fault_count, created_at)
-				VALUES ($1, $2::date, $3, 0, 0, 0, 0, NOW())
-				ON CONFLICT (station_id, data_date) DO UPDATE SET
-					energy_produce = (
-						SELECT COALESCE(SUM((data->>'energy_produce')::numeric), 0)
-						FROM device_day_data
-						WHERE device_sn IN (
-							SELECT sn FROM devices WHERE station_id = $1 AND deleted_at IS NULL
-						) AND data_date = $2::date
-					),
-					income = station_day_data.income + EXCLUDED.income
-			`, req.StationID, dataDate, req.DailyPV)
-			if err != nil {
-				logger.Error("InternalDeviceData upsert station data failed", zap.Int64("station_id", req.StationID), zap.Error(err))
-				response.HandleError(c, apperr.Internal("upsert station day data failed", err))
-				return
-			}
-		}
 	}
 
 	response.Success(c, gin.H{"status": "ok"})
+}
+
+// DeviceDataBatch 批量写入遥测数据接口，使用 multi-row INSERT 提高写入效率
+func (h *InternalHandler) DeviceDataBatch(c *gin.Context) {
+	var requests []internalDeviceDataRequest
+	if err := c.ShouldBindJSON(&requests); err != nil {
+		response.BadRequest(c, "invalid request")
+		return
+	}
+	if len(requests) == 0 {
+		response.Success(c, gin.H{"count": 0, "success": 0, "failed": 0})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	successCount := 0
+	failedCount := 0
+	snSet := make(map[string]bool)
+	var energyReqs []internalDeviceDataRequest
+
+	// 构建 multi-row INSERT
+	for _, req := range requests {
+		if req.SN == "" || req.Topic == "" || req.Data == nil {
+			failedCount++
+			continue
+		}
+		snSet[req.SN] = true
+		if req.Topic == "data/energy" {
+			energyReqs = append(energyReqs, req)
+		}
+		successCount++
+	}
+
+	// 批量更新 last_online_at（30 秒节流）
+	if len(snSet) > 0 {
+		sns := make([]string, 0, len(snSet))
+		for sn := range snSet {
+			sns = append(sns, sn)
+		}
+		if _, err := h.db.Exec(ctx, `
+			UPDATE devices SET last_online_at = NOW(), updated_at = NOW()
+			WHERE sn = ANY($1) AND (last_online_at IS NULL OR last_online_at < NOW() - INTERVAL '30 seconds')
+		`, sns); err != nil {
+			logger.Warn("DeviceDataBatch: failed to batch update last_online_at", zap.Error(err))
+		}
+	}
+
+	// Compatibility energy records update the canonical per-device day table.
+	for _, req := range energyReqs {
+		h.handleBatchEnergyData(ctx, req)
+	}
+
+	response.Success(c, gin.H{
+		"count":   len(requests),
+		"success": successCount,
+		"failed":  failedCount,
+	})
+}
+
+// handleBatchEnergyData preserves modular energy reports in device_energy_day.
+func (h *InternalHandler) handleBatchEnergyData(ctx context.Context, req internalDeviceDataRequest) {
+	var telemetryTime time.Time
+	if req.Timestamp > 0 {
+		telemetryTime = time.Unix(req.Timestamp, 0).UTC()
+	} else {
+		telemetryTime = time.Now().UTC()
+	}
+
+	var deviceTZ string
+	err := h.db.QueryRow(ctx, `SELECT COALESCE(timezone, '') FROM devices WHERE sn = $1`, req.SN).Scan(&deviceTZ)
+	if err != nil || deviceTZ == "" {
+		deviceTZ = timezone.AsiaShanghai
+	}
+	dataDate := timezone.InTimezone(telemetryTime, deviceTZ).Format("2006-01-02")
+
+	runMinutes := int(req.RuntimeHours * 60)
+	_, err = h.db.Exec(ctx, `
+		INSERT INTO device_energy_day(device_sn,stat_date,timezone,pv_energy,charge_energy,discharge_energy,load_energy,
+			total_pv_energy,total_charge_energy,total_discharge_energy,total_load_energy,run_minutes,sample_count,updated_at)
+		VALUES($1,$2::date,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1,NOW())
+		ON CONFLICT(device_sn,stat_date) DO UPDATE SET
+			timezone=EXCLUDED.timezone,pv_energy=GREATEST(device_energy_day.pv_energy,EXCLUDED.pv_energy),
+			charge_energy=GREATEST(device_energy_day.charge_energy,EXCLUDED.charge_energy),
+			discharge_energy=GREATEST(device_energy_day.discharge_energy,EXCLUDED.discharge_energy),
+			load_energy=GREATEST(device_energy_day.load_energy,EXCLUDED.load_energy),
+			total_pv_energy=GREATEST(device_energy_day.total_pv_energy,EXCLUDED.total_pv_energy),
+			total_charge_energy=GREATEST(device_energy_day.total_charge_energy,EXCLUDED.total_charge_energy),
+			total_discharge_energy=GREATEST(device_energy_day.total_discharge_energy,EXCLUDED.total_discharge_energy),
+			total_load_energy=GREATEST(device_energy_day.total_load_energy,EXCLUDED.total_load_energy),
+			run_minutes=GREATEST(device_energy_day.run_minutes,EXCLUDED.run_minutes),updated_at=NOW()
+	`, req.SN, dataDate, deviceTZ, req.DailyPV, req.DailyCharge, req.DailyDischarge, req.DailyLoad,
+		req.TotalPV, req.TotalCharge, req.TotalDischarge, req.TotalLoad, runMinutes)
+	if err != nil {
+		logger.Error("DeviceDataBatch upsert day data failed", zap.String("sn", req.SN), zap.Error(err))
+		return
+	}
+
 }
 
 func (h *InternalHandler) DeviceCmdStatus(c *gin.Context) {
@@ -862,12 +937,15 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 		}
 	} else {
 		// 兼容旧格式：没有 task_id，插入新记录
-		_, _ = h.db.Exec(ctx, `
+		if _, err := h.db.Exec(ctx, `
 			INSERT INTO device_cmd_logs (device_sn, cmd, result, message, status, sent_at)
 			VALUES ($1, $2, $3, $4, $5,
 				CASE WHEN $6 > 0 THEN TO_TIMESTAMP($6) ELSE NOW() END
 			)
-		`, req.SN, req.Cmd, req.Result, req.Message, status, req.Timestamp)
+		`, req.SN, req.Cmd, req.Result, req.Message, status, req.Timestamp); err != nil {
+			logger.Warn("DeviceCmdResult: failed to insert cmd log",
+				zap.String("sn", req.SN), zap.String("cmd", req.Cmd), zap.Error(err))
+		}
 	}
 
 	// 插入命令结果通知
@@ -888,20 +966,26 @@ func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 // getDeviceOwner 查询设备所属用户和电站
 func (h *InternalHandler) getDeviceOwner(ctx context.Context, sn string) (int64, int64) {
 	var userID, stationID int64
-	_ = h.db.QueryRow(ctx,
+	if err := h.db.QueryRow(ctx,
 		`SELECT COALESCE(user_id, 0), COALESCE(station_id, 0) FROM devices WHERE sn = $1 AND deleted_at IS NULL`,
 		sn,
-	).Scan(&userID, &stationID)
+	).Scan(&userID, &stationID); err != nil {
+		logger.Warn("getDeviceOwner: failed to query device owner",
+			zap.String("sn", sn), zap.Error(err))
+	}
 	return userID, stationID
 }
 
 // insertNotification 插入通知（带冷却期）
 func (h *InternalHandler) insertNotification(ctx context.Context, sn string, stationID, userID int64, notifyType, title, content string) error {
 	var exists bool
-	_ = h.db.QueryRow(ctx,
+	if err := h.db.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type=$2 AND created_at > NOW() - INTERVAL '60 seconds')`,
 		sn, notifyType,
-	).Scan(&exists)
+	).Scan(&exists); err != nil {
+		logger.Warn("insertNotification: failed to check dedup",
+			zap.String("sn", sn), zap.String("notify_type", notifyType), zap.Error(err))
+	}
 	if exists {
 		return nil
 	}
@@ -914,6 +998,7 @@ func (h *InternalHandler) insertNotification(ctx context.Context, sn string, sta
 
 type internalOTAStatusRequest struct {
 	DeviceSN   string `json:"device_sn"`
+	TaskID     string `json:"task_id"`     // device_upgrades.id echoed by the device
 	FirmwareID *int64 `json:"firmware_id"` // 可选，设备上报时可能携带
 	Status     string `json:"status"`
 	Progress   int    `json:"progress"`
@@ -951,15 +1036,23 @@ func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 		zap.String("task_id", req.TaskID),
 		zap.String("message", req.Message))
 
-	// 更新 device_upgrades 表：标记为升级中（设备已确认收到命令）
+	// 更新唯一一条 device_upgrades 记录。旧设备没有 task_id 时只更新最近
+	// 一条 pending 记录，绝不能把同一设备的多个芯片任务全部推进。
 	if req.Ack {
+		upgradeID, _ := strconv.ParseInt(req.TaskID, 10, 64)
 		tag, err := h.db.Exec(ctx, `
 			UPDATE device_upgrades SET
 				status = 'upgrading',
 				started_at = CASE WHEN started_at IS NULL THEN NOW() ELSE started_at END,
 				updated_at = NOW()
-			WHERE device_sn = $1 AND status = 'pending'
-		`, req.DeviceSN)
+			WHERE id = COALESCE(
+				(SELECT id FROM device_upgrades
+				 WHERE id = NULLIF($2, 0) AND device_sn = $1 AND status = 'pending'),
+				(SELECT id FROM device_upgrades
+				 WHERE device_sn = $1 AND status = 'pending'
+				 ORDER BY updated_at DESC, id DESC LIMIT 1)
+			)
+		`, req.DeviceSN, upgradeID)
 		if err != nil {
 			logger.Error("OTACmdAck update failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 			response.HandleError(c, apperr.Internal("update OTA cmd ack failed", err))
@@ -979,6 +1072,10 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	}
 	if req.DeviceSN == "" {
 		response.HandleError(c, apperr.BadRequest("device_sn is required"))
+		return
+	}
+	if req.Progress < 0 || req.Progress > 100 {
+		response.HandleError(c, apperr.BadRequest("progress must be between 0 and 100"))
 		return
 	}
 
@@ -1002,7 +1099,9 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 		return
 	}
 
-	// 直接更新 device_upgrades 表
+	// 精确更新设备回传的升级记录。兼容旧固件：task_id 缺失时先按
+	// firmware_id 定位，再退化到最近一条活跃记录，但始终只更新一条。
+	upgradeID, _ := strconv.ParseInt(req.TaskID, 10, 64)
 	tag, err := h.db.Exec(ctx, `
 		UPDATE device_upgrades SET
 			status = $2::varchar,
@@ -1011,8 +1110,19 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 			started_at = CASE WHEN started_at IS NULL AND $2::varchar IN ('downloading','upgrading') THEN NOW() ELSE started_at END,
 			completed_at = CASE WHEN $2::varchar IN ('success', 'failed') THEN NOW() ELSE completed_at END,
 			updated_at = NOW()
-		WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
-	`, req.DeviceSN, dbStatus, req.Progress, req.Message)
+		WHERE id = COALESCE(
+			(SELECT id FROM device_upgrades
+			 WHERE id = NULLIF($5, 0) AND device_sn = $1
+			   AND status NOT IN ('success', 'failed', 'cancelled')),
+			(SELECT id FROM device_upgrades
+			 WHERE firmware_id = $6 AND device_sn = $1
+			   AND status NOT IN ('success', 'failed', 'cancelled')
+			 ORDER BY updated_at DESC, id DESC LIMIT 1),
+			(SELECT id FROM device_upgrades
+			 WHERE device_sn = $1 AND status NOT IN ('success', 'failed', 'cancelled')
+			 ORDER BY updated_at DESC, id DESC LIMIT 1)
+		)
+	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID)
 	if err != nil {
 		logger.Error("InternalOTAStatus failed", zap.String("sn", req.DeviceSN), zap.Error(err))
 		response.HandleError(c, apperr.Internal("update OTA status failed", err))
@@ -1045,9 +1155,12 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 						continue
 					}
 					if time.Since(startedAt) > 15*time.Minute {
-						h.db.Exec(bgCtx, `
+						if _, err := h.db.Exec(bgCtx, `
 							UPDATE device_upgrades SET status = 'failed', error_message = '升级超时，设备可能已断连', updated_at = NOW()
-							WHERE id = $1`, id)
+							WHERE id = $1`, id); err != nil {
+							logger.Warn("OTA: failed to mark timed-out upgrade as failed",
+								zap.Int64("upgrade_id", id), zap.Error(err))
+						}
 						logger.Info("OTA upgrade timed out",
 							zap.String("sn", req.DeviceSN),
 							zap.Int64("upgrade_id", id),
@@ -1066,12 +1179,15 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 						continue
 					}
 					seen[tid] = true
-					h.db.Exec(bgCtx, `
+					if _, err := h.db.Exec(bgCtx, `
 						UPDATE upgrade_tasks SET
 							success_count = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'success'),
 							failed_count  = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'failed'),
 							updated_at = NOW()
-						WHERE id = $1`, tid)
+						WHERE id = $1`, tid); err != nil {
+						logger.Warn("OTA: failed to update task stats after timeout",
+							zap.Int64("task_id", tid), zap.Error(err))
+					}
 
 					var totalDevices, successCount, failedCount int
 					if err := h.db.QueryRow(bgCtx, `
@@ -1086,9 +1202,12 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 							} else {
 								newStatus = "partial_success"
 							}
-							h.db.Exec(bgCtx, `
+							if _, err := h.db.Exec(bgCtx, `
 								UPDATE upgrade_tasks SET status = $2, completed_at = NOW(), updated_at = NOW()
-								WHERE id = $1`, tid, newStatus)
+								WHERE id = $1`, tid, newStatus); err != nil {
+								logger.Warn("OTA: failed to auto-complete task after timeout",
+									zap.Int64("task_id", tid), zap.Error(err))
+							}
 							logger.Info("Upgrade task auto-completed after timeout",
 								zap.Int64("task_id", tid), zap.String("status", newStatus))
 						}
@@ -1115,20 +1234,26 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 				return
 			}
 			if taskStatus == "pending" || taskStatus == "scheduled" || taskStatus == "draft" {
-				h.db.Exec(bgCtx, `
+				if _, err := h.db.Exec(bgCtx, `
 					UPDATE upgrade_tasks SET status = 'running', executed_at = NOW(), updated_at = NOW()
-					WHERE id = $1`, taskID)
+					WHERE id = $1`, taskID); err != nil {
+					logger.Warn("OTA: failed to set task status to running",
+						zap.Int64("task_id", taskID), zap.Error(err))
+				}
 				taskStatus = "running"
 			}
 
 			// 设备升级完成时，更新任务统计计数
 			if dbStatus == "success" || dbStatus == "failed" {
-				h.db.Exec(bgCtx, `
+				if _, err := h.db.Exec(bgCtx, `
 					UPDATE upgrade_tasks SET
 						success_count = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'success'),
 						failed_count  = (SELECT COUNT(*) FROM device_upgrades WHERE task_id = $1 AND status = 'failed'),
 						updated_at = NOW()
-					WHERE id = $1`, taskID)
+					WHERE id = $1`, taskID); err != nil {
+					logger.Warn("OTA: failed to update task stats",
+						zap.Int64("task_id", taskID), zap.Error(err))
+				}
 
 				// 检查是否所有设备都已完成
 				var totalDevices, successCount, failedCount int
@@ -1144,9 +1269,12 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 						} else {
 							newStatus = "partial_success"
 						}
-						h.db.Exec(bgCtx, `
+						if _, err := h.db.Exec(bgCtx, `
 							UPDATE upgrade_tasks SET status = $2, completed_at = NOW(), updated_at = NOW()
-							WHERE id = $1`, taskID, newStatus)
+							WHERE id = $1`, taskID, newStatus); err != nil {
+							logger.Warn("OTA: failed to auto-complete task",
+								zap.Int64("task_id", taskID), zap.Error(err))
+						}
 						logger.Info("Upgrade task status auto-updated",
 							zap.Int64("task_id", taskID), zap.String("status", newStatus))
 					}
@@ -1159,12 +1287,15 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	if dbStatus == "success" && tag.RowsAffected() > 0 {
 		// 查询升级记录的目标芯片和固件版本
 		var targetChip, firmwareVersion string
-		h.db.QueryRow(ctx, `
+		if err := h.db.QueryRow(ctx, `
 			SELECT COALESCE(target_chip,''), COALESCE(firmware_version,'')
 			FROM device_upgrades
 			WHERE device_sn = $1 AND status = 'success'
 			ORDER BY updated_at DESC LIMIT 1
-		`, req.DeviceSN).Scan(&targetChip, &firmwareVersion)
+		`, req.DeviceSN).Scan(&targetChip, &firmwareVersion); err != nil {
+			logger.Warn("OTA: failed to query upgrade target chip and firmware version",
+				zap.String("sn", req.DeviceSN), zap.Error(err))
+		}
 
 		if targetChip != "" && firmwareVersion != "" {
 			// 更新设备对应芯片的固件版本
@@ -1180,10 +1311,13 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 				updateCol = "firmware_bms"
 			}
 			if updateCol != "" {
-				h.db.Exec(ctx, fmt.Sprintf(
+				if _, err := h.db.Exec(ctx, fmt.Sprintf(
 					"UPDATE devices SET %s = $2, updated_at = NOW() WHERE sn = $1",
 					updateCol,
-				), req.DeviceSN, firmwareVersion)
+				), req.DeviceSN, firmwareVersion); err != nil {
+					logger.Warn("OTA: failed to update device firmware version",
+						zap.String("sn", req.DeviceSN), zap.String("chip", targetChip), zap.Error(err))
+				}
 				logger.Info("Device firmware version updated",
 					zap.String("sn", req.DeviceSN),
 					zap.String("chip", targetChip),
@@ -1211,6 +1345,15 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 
 	response.Success(c, gin.H{"status": "ok"})
 }
+
+/*
+Removed legacy alarm ingress (2026-07-15).
+
+This source is intentionally kept inside a non-compiling comment for one
+release as an audit aid. Production /api/v1/internal/device-alarm is handled
+exclusively by IngestAlarmV1, whose transaction writes the immutable event and
+snapshot before updating the mutable alarms projection. Delete this commented
+reference after the next release audit; it must never be routed again.
 
 func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	var req internalDeviceAlarmRequest
@@ -1268,25 +1411,56 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		12: 1, // 恢复并网运行 → 提示
 	}
 
-	// code=0 或 level="normal" → 告警清除，恢复设备状态
-	if req.Code == 0 || req.Level == "normal" {
+	// V1 state=0 recovers only the matching (source, code) alarm. Legacy
+	// code=0/normal remains a device-wide clear during the migration window.
+	isV1Recovery := req.State != nil && *req.State == 0
+	if isV1Recovery || req.Code == 0 || req.Level == "normal" {
 		logger.Info("Device alarm cleared", zap.String("sn", req.SN))
 
 		// 将该设备的未处理严重告警标记为已恢复（status=2）
-		h.db.Exec(ctx, `
-			UPDATE alarms SET status = 2, recovered_at = NOW()
-			WHERE device_sn = $1 AND alarm_level = 3 AND status = 0
-		`, req.SN)
+		if isV1Recovery {
+			if _, err := h.db.Exec(ctx, `UPDATE alarms SET status=2,recovered_at=NOW(),event_state='recovered'
+				WHERE device_sn=$1 AND alarm_source=$2 AND fault_code=$3 AND status=0`,
+				req.SN, req.Source, fmt.Sprintf("%d", req.Code)); err != nil {
+				logger.Warn("DeviceAlarm: failed to recover alarms (V1)", zap.String("sn", req.SN), zap.Error(err))
+			}
+		} else {
+			if _, err := h.db.Exec(ctx, `UPDATE alarms SET status=2,recovered_at=NOW(),event_state='recovered'
+				WHERE device_sn=$1 AND alarm_level=3 AND status=0`, req.SN); err != nil {
+				logger.Warn("DeviceAlarm: failed to recover alarms (legacy)", zap.String("sn", req.SN), zap.Error(err))
+			}
+		}
+
+		// 写入告警恢复事件日志 (best-effort)
+		var recoverStationID sql.NullInt64
+		if err := h.db.QueryRow(ctx, `SELECT station_id FROM devices WHERE sn = $1`, req.SN).Scan(&recoverStationID); err != nil {
+			logger.Warn("Failed to query station_id for alarm recovery event",
+				zap.String("sn", req.SN), zap.Error(err))
+		}
+		now := time.Now().UTC()
+		recoverEventID := h.writeAlarmEvent(ctx, req.SN, recoverStationID, req.Source, fmt.Sprintf("%d", req.Code),
+			0, "recovered", nil, &now, nil)
+		// 捕获告警恢复后的设备状态快照 (best-effort)
+		if recoverEventID > 0 {
+			h.captureAlarmSnapshot(ctx, req.SN, recoverEventID, "after")
+		}
 
 		// 延迟检查：等待3秒确认没有新的告警到达，防止告警和恢复通知同时出现
-		time.Sleep(3 * time.Second)
+		if !isV1Recovery {
+			time.Sleep(3 * time.Second)
+		}
 
 		// 检查是否还有未恢复的严重告警（包括延迟期间新到达的告警）
 		var activeAlarmCount int
-		_ = h.db.QueryRow(ctx,
+		if err := h.db.QueryRow(ctx,
 			`SELECT COUNT(*) FROM alarms WHERE device_sn = $1 AND alarm_level = 3 AND status = 0`,
 			req.SN,
-		).Scan(&activeAlarmCount)
+		).Scan(&activeAlarmCount); err != nil {
+			logger.Warn("DeviceAlarm: failed to check active alarms, skipping recovery",
+				zap.String("sn", req.SN), zap.Error(err))
+			response.Success(c, gin.H{"status": "ok", "skipped": true, "reason": "active_alarm_check_failed"})
+			return
+		}
 		if activeAlarmCount > 0 {
 			logger.Info("Skipping alarm_cleared - device still has active alarms",
 				zap.String("sn", req.SN), zap.Int("active_alarms", activeAlarmCount))
@@ -1295,10 +1469,13 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		}
 
 		// 确认没有未处理的严重告警后，才更新设备状态为在线
-		h.db.Exec(ctx, `
+		if _, err := h.db.Exec(ctx, `
 			UPDATE devices SET status = 1, last_online_at = NOW(), updated_at = NOW() WHERE sn = $1 AND status = 2
-		`, req.SN)
-		h.db.Exec(ctx, `
+		`, req.SN); err != nil {
+			logger.Warn("DeviceAlarm: failed to update device status to online",
+				zap.String("sn", req.SN), zap.Error(err))
+		}
+		if _, err := h.db.Exec(ctx, `
 			UPDATE stations SET
 				status = CASE
 					WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status = 1 AND devices.deleted_at IS NULL) THEN 1
@@ -1307,7 +1484,10 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 				updated_at = NOW()
 			WHERE deleted_at IS NULL
 			AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
-		`, req.SN)
+		`, req.SN); err != nil {
+			logger.Warn("DeviceAlarm: failed to update station status after recovery",
+				zap.String("sn", req.SN), zap.Error(err))
+		}
 
 		// 插入故障恢复通知（带 60 秒冷却期）
 		var clearUserID int64
@@ -1317,28 +1497,37 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		).Scan(&clearUserID, &clearStationID); err == nil && clearUserID > 0 {
 			// 冷却期检查：60 秒内同一设备同类型通知不重复写入
 			var notifyExists bool
-			_ = h.db.QueryRow(ctx,
+			if err := h.db.QueryRow(ctx,
 				`SELECT EXISTS(SELECT 1 FROM notifications WHERE device_sn=$1 AND notify_type='alarm_cleared' AND created_at > NOW() - INTERVAL '60 seconds')`,
 				req.SN,
-			).Scan(&notifyExists)
+			).Scan(&notifyExists); err != nil {
+				logger.Warn("DeviceAlarm: failed to check alarm_cleared notification dedup",
+					zap.String("sn", req.SN), zap.Error(err))
+			}
 			if !notifyExists {
 				var csid int64
 				if clearStationID.Valid {
 					csid = clearStationID.Int64
 				}
 				var lastFaultMsg string
-				_ = h.db.QueryRow(ctx,
+				if err := h.db.QueryRow(ctx,
 					`SELECT fault_message FROM alarms WHERE device_sn=$1 AND status=2 ORDER BY recovered_at DESC LIMIT 1`,
 					req.SN,
-				).Scan(&lastFaultMsg)
+				).Scan(&lastFaultMsg); err != nil {
+					logger.Warn("DeviceAlarm: failed to query last fault message",
+						zap.String("sn", req.SN), zap.Error(err))
+				}
 				if lastFaultMsg == "" {
 					lastFaultMsg = "故障"
 				}
 				clearContent := fmt.Sprintf("设备 %s %s 已恢复", req.SN, lastFaultMsg)
-				_, _ = h.db.Exec(ctx, `
+				if _, err := h.db.Exec(ctx, `
 					INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
 					VALUES ($1, $2, $3, $4, $5, $6, NOW())
-				`, req.SN, csid, clearUserID, "alarm_cleared", "故障已恢复", clearContent)
+				`, req.SN, csid, clearUserID, "alarm_cleared", "故障已恢复", clearContent); err != nil {
+					logger.Warn("DeviceAlarm: failed to insert alarm_cleared notification",
+						zap.String("sn", req.SN), zap.Error(err))
+				}
 				h.broadcastNotification(clearUserID, "alarm_cleared", "故障已恢复", clearContent, req.SN)
 
 				// JPush 推送故障恢复通知给 APP 端
@@ -1399,10 +1588,13 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 
 	// 去重：同一设备+告警级别在 10 秒内不重复写入
 	var exists bool
-	h.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM alarms WHERE device_sn=$1 AND alarm_level=$2 AND occurred_at > NOW() - INTERVAL '10 seconds')`,
-		req.SN, alarmLevel,
-	).Scan(&exists)
+	if err := h.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM alarms WHERE device_sn=$1 AND alarm_source=$2 AND fault_code=$3 AND status=0)`,
+		req.SN, req.Source, fmt.Sprintf("%d", req.Code),
+	).Scan(&exists); err != nil {
+		logger.Warn("DeviceAlarm: failed to check alarm dedup",
+			zap.String("sn", req.SN), zap.Error(err))
+	}
 	if exists {
 		logger.Info("Alarm dedup: same device+level within 10s",
 			zap.String("sn", req.SN),
@@ -1414,6 +1606,8 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	// 构建 fault_detail JSON
 	detailJSON, _ := json.Marshal(map[string]interface{}{
 		"code":      req.Code,
+		"source":    req.Source,
+		"state":     req.State,
 		"level":     req.Level,
 		"message":   req.Message,
 		"count":     req.Count,
@@ -1427,21 +1621,33 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	}
 
 	_, err := h.db.Exec(ctx, `
-		INSERT INTO alarms (device_sn, type, level, alarm_level, station_id, user_id, fault_code, fault_message, fault_detail, message, status, occurred_at, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, NOW(), NOW())
-	`, req.SN, alarmType, alarmLevel, alarmLevel, stationID, userID, faultCode, faultMessage, string(detailJSON), faultMessage)
+		INSERT INTO alarms (device_sn, type, level, alarm_level, alarm_source, event_state, station_id, user_id, fault_code, fault_message, fault_detail, message, status, occurred_at, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, $8, $9, $10, $11, 0, NOW(), NOW())
+	`, req.SN, alarmType, alarmLevel, alarmLevel, req.Source, stationID, userID, faultCode, faultMessage, string(detailJSON), faultMessage)
 	if err != nil {
 		logger.Error("InternalDeviceAlarm insert failed", zap.String("sn", req.SN), zap.Error(err))
 		response.HandleError(c, apperr.Internal("insert alarm failed", err))
 		return
 	}
 
+	// 写入告警事件日志 (best-effort，失败不影响主流程)
+	activeAt := time.Now().UTC()
+	activeEventID := h.writeAlarmEvent(ctx, req.SN, stationID, req.Source, faultCode,
+		alarmLevel, "active", &activeAt, nil, detailJSON)
+	// 捕获告警发生时的设备状态快照 (best-effort)
+	if activeEventID > 0 {
+		h.captureAlarmSnapshot(ctx, req.SN, activeEventID, "before")
+	}
+
 	// 告警级别为严重(fault, alarmLevel=3)时，更新设备状态为故障
 	if alarmLevel == 3 {
-		h.db.Exec(ctx, `
+		if _, err := h.db.Exec(ctx, `
 			UPDATE devices SET status = 2, updated_at = NOW() WHERE sn = $1 AND status != 2
-		`, req.SN)
-		h.db.Exec(ctx, `
+		`, req.SN); err != nil {
+			logger.Warn("DeviceAlarm: failed to update device status to fault",
+				zap.String("sn", req.SN), zap.Error(err))
+		}
+		if _, err := h.db.Exec(ctx, `
 			UPDATE stations SET
 				status = CASE
 					WHEN EXISTS (SELECT 1 FROM devices WHERE devices.station_id = stations.id AND devices.status IN (1, 2) AND devices.deleted_at IS NULL) THEN 1
@@ -1450,7 +1656,10 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 				updated_at = NOW()
 			WHERE deleted_at IS NULL
 			AND id IN (SELECT station_id FROM devices WHERE sn = $1 AND station_id IS NOT NULL)
-		`, req.SN)
+		`, req.SN); err != nil {
+			logger.Warn("DeviceAlarm: failed to update station status after fault",
+				zap.String("sn", req.SN), zap.Error(err))
+		}
 	}
 
 	// 写入 notifications 表，确保所有级别告警在管理后台通知列表中可见
@@ -1470,10 +1679,13 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		if stationID.Valid {
 			notifyStationID = stationID.Int64
 		}
-		_, _ = h.db.Exec(ctx, `
+		if _, err := h.db.Exec(ctx, `
 			INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
 			VALUES ($1, $2, $3, $4, $5, $6, NOW())
-		`, req.SN, notifyStationID, userID, "device_alarm", notifyTitle, notifyContent)
+		`, req.SN, notifyStationID, userID, "device_alarm", notifyTitle, notifyContent); err != nil {
+			logger.Warn("DeviceAlarm: failed to insert device_alarm notification",
+				zap.String("sn", req.SN), zap.Error(err))
+		}
 	}
 
 	// 通过 SSE 实时推送告警信息给前端
@@ -1498,6 +1710,7 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 
 	response.Success(c, gin.H{"status": "ok"})
 }
+*/
 
 // NotificationStream SSE endpoint for real-time notifications
 // 支持同一用户多客户端（多浏览器标签）并行推送
@@ -1650,3 +1863,630 @@ func (h *InternalHandler) getNotificationUsers(ctx context.Context, deviceSN str
 	}
 	return userIDs, nil
 }
+
+// =====================================================
+// 并机状态 / 三相数据 / 告警事件端点
+// =====================================================
+
+// internalParallelStateRequest 并机状态上报请求
+type internalParallelStateRequest struct {
+	MasterSN         string          `json:"master_sn"`
+	StationID        int64           `json:"station_id"`
+	Enabled          *bool           `json:"enabled"`
+	Mode             string          `json:"mode"`
+	Count            int             `json:"count"`
+	TotalRatedPower  int             `json:"total_rated_power"`
+	TotalActivePower float64         `json:"total_active_power"`
+	SyncState        string          `json:"sync_state"`
+	Machines         json.RawMessage `json:"machines"`
+	ReportedAt       time.Time       `json:"reported_at"`
+}
+
+// ParallelState 接收并机状态上报 (POST /api/v1/internal/parallel-state)
+// UPSERT 到 device_parallel_state 表，检测拓扑变化并写入 device_parallel_events
+func (h *InternalHandler) ParallelState(c *gin.Context) {
+	var req internalParallelStateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+	if req.StationID == 0 {
+		response.HandleError(c, apperr.BadRequest("station_id is required"))
+		return
+	}
+	if req.MasterSN == "" {
+		response.HandleError(c, apperr.BadRequest("master_sn is required"))
+		return
+	}
+	if len(req.Machines) == 0 {
+		req.Machines = json.RawMessage("[]")
+	}
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+	if req.ReportedAt.IsZero() {
+		req.ReportedAt = time.Now().UTC()
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	// 查询当前状态（用于拓扑变化检测）
+	var oldMasterSN, oldMode, oldSyncState string
+	var oldCount, oldTotalRatedPower int
+	var oldTotalActivePower float64
+	var oldMachines []byte
+	err := h.db.QueryRow(ctx, `
+		SELECT COALESCE(master_sn,''), COALESCE(mode,''), COALESCE(count,0),
+		       COALESCE(total_rated_power,0), COALESCE(total_active_power,0),
+		       COALESCE(sync_state,''), COALESCE(machines,'[]')
+		FROM device_parallel_state WHERE station_id = $1
+	`, req.StationID).Scan(&oldMasterSN, &oldMode, &oldCount, &oldTotalRatedPower,
+		&oldTotalActivePower, &oldSyncState, &oldMachines)
+
+	// UPSERT 新状态 (migration 039 表结构: event_time/t/data_hash 由触发器填充)
+	_, err = h.db.Exec(ctx, `
+		INSERT INTO device_parallel_state (station_id, master_sn, enabled, mode, count, total_rated_power, total_active_power, sync_state, machines, event_time, reported_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, NOW())
+		ON CONFLICT (station_id) DO UPDATE SET
+			master_sn = EXCLUDED.master_sn,
+			enabled = EXCLUDED.enabled,
+			mode = EXCLUDED.mode,
+			count = EXCLUDED.count,
+			total_rated_power = EXCLUDED.total_rated_power,
+			total_active_power = EXCLUDED.total_active_power,
+			sync_state = EXCLUDED.sync_state,
+			machines = EXCLUDED.machines,
+			event_time = EXCLUDED.event_time,
+			reported_at = EXCLUDED.reported_at,
+			updated_at = NOW()
+	`, req.StationID, req.MasterSN, enabled, req.Mode, req.Count, req.TotalRatedPower,
+		req.TotalActivePower, req.SyncState, []byte(req.Machines), req.ReportedAt)
+	if err != nil {
+		logger.Error("ParallelState upsert failed", zap.Int64("station_id", req.StationID), zap.Error(err))
+		response.HandleError(c, apperr.Internal("upsert parallel state failed", err))
+		return
+	}
+
+	// 检测拓扑变化并写入事件日志 (best-effort)
+	topologyChanged := oldMasterSN != req.MasterSN ||
+		oldMode != req.Mode ||
+		oldCount != req.Count ||
+		oldTotalRatedPower != req.TotalRatedPower ||
+		string(oldMachines) != string(req.Machines)
+
+	if topologyChanged {
+		eventType := "topology_changed"
+		if oldMasterSN == "" {
+			eventType = "parallel_created"
+		} else if oldMasterSN != req.MasterSN {
+			eventType = "master_switched"
+		}
+
+		oldStateJSON := json.RawMessage("null")
+		if oldMasterSN != "" {
+			oldStateJSON = oldMachines
+		}
+
+		if _, err := h.db.Exec(ctx, `
+			INSERT INTO device_parallel_events (station_id, master_sn, event_type, old_state, new_state, event_time, occurred_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $6)
+		`, req.StationID, req.MasterSN, eventType, []byte(oldStateJSON), []byte(req.Machines), req.ReportedAt); err != nil {
+			logger.Warn("ParallelState: failed to insert parallel event",
+				zap.Int64("station_id", req.StationID), zap.String("master_sn", req.MasterSN), zap.Error(err))
+		}
+
+		logger.Info("Parallel topology changed",
+			zap.Int64("station_id", req.StationID),
+			zap.String("old_master", oldMasterSN),
+			zap.String("new_master", req.MasterSN),
+			zap.String("event_type", eventType))
+	}
+
+	response.Success(c, gin.H{"status": "ok"})
+}
+
+// internalThreePhaseDataRequest 三相数据上报请求
+type internalThreePhaseDataRequest struct {
+	SN               string    `json:"sn"`
+	EventTime        time.Time `json:"event_time"`
+	VoltageL1        float64   `json:"voltage_l1"`
+	VoltageL2        float64   `json:"voltage_l2"`
+	VoltageL3        float64   `json:"voltage_l3"`
+	CurrentL1        float64   `json:"current_l1"`
+	CurrentL2        float64   `json:"current_l2"`
+	CurrentL3        float64   `json:"current_l3"`
+	ActivePowerL1    float64   `json:"active_power_l1"`
+	ActivePowerL2    float64   `json:"active_power_l2"`
+	ActivePowerL3    float64   `json:"active_power_l3"`
+	TotalActivePower float64   `json:"total_active_power"`
+	LineVoltageL1L2  float64   `json:"line_voltage_l1l2"`
+	LineVoltageL2L3  float64   `json:"line_voltage_l2l3"`
+	LineVoltageL3L1  float64   `json:"line_voltage_l3l1"`
+	Frequency        float64   `json:"frequency"`
+	VoltageUnbalance float64   `json:"voltage_unbalance"`
+	CurrentUnbalance float64   `json:"current_unbalance"`
+	RawEnvelope      string    `json:"raw_envelope"`
+}
+
+// ThreePhaseData 接收三相数据上报 (POST /api/v1/internal/three-phase)
+// 写入 device_three_phase_3min 超表，使用 ON CONFLICT DO NOTHING 防止重复
+func (h *InternalHandler) ThreePhaseData(c *gin.Context) {
+	var req internalThreePhaseDataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.HandleError(c, apperr.BadRequest("invalid request"))
+		return
+	}
+	if req.SN == "" {
+		response.HandleError(c, apperr.BadRequest("sn is required"))
+		return
+	}
+	if req.EventTime.IsZero() {
+		req.EventTime = time.Now().UTC()
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	var rawEnvelope interface{}
+	if req.RawEnvelope != "" {
+		rawEnvelope = req.RawEnvelope
+	} else {
+		rawEnvelope = "{}"
+	}
+
+	_, err := h.db.Exec(ctx, `
+		INSERT INTO device_three_phase_3min (
+			device_sn, event_time, voltage_l1, voltage_l2, voltage_l3,
+			current_l1, current_l2, current_l3, active_power_l1, active_power_l2, active_power_l3,
+			total_active_power, line_voltage_l1l2, line_voltage_l2l3, line_voltage_l3l1,
+			frequency, voltage_unbalance, current_unbalance, raw_envelope
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::jsonb)
+		ON CONFLICT (device_sn, event_time, data_hash) DO NOTHING
+	`, req.SN, req.EventTime,
+		req.VoltageL1, req.VoltageL2, req.VoltageL3,
+		req.CurrentL1, req.CurrentL2, req.CurrentL3,
+		req.ActivePowerL1, req.ActivePowerL2, req.ActivePowerL3,
+		req.TotalActivePower, req.LineVoltageL1L2, req.LineVoltageL2L3, req.LineVoltageL3L1,
+		req.Frequency, req.VoltageUnbalance, req.CurrentUnbalance, rawEnvelope)
+	if err != nil {
+		logger.Error("ThreePhaseData insert failed", zap.String("sn", req.SN), zap.Error(err))
+		response.HandleError(c, apperr.Internal("insert three phase data failed", err))
+		return
+	}
+
+	response.Success(c, gin.H{"status": "ok"})
+}
+
+// GetParallelState 查询设备并机状态 (GET /api/v1/devices/:sn/parallel-state)
+func (h *InternalHandler) GetParallelState(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.BadRequest(c, "sn is required")
+		return
+	}
+	if !h.ensureDeviceAccess(c, sn) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	// 先查询设备的 station_id，再查并机状态
+	var stationID int64
+	err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(station_id, 0) FROM devices WHERE sn = $1 AND deleted_at IS NULL`, sn,
+	).Scan(&stationID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.NotFound(c, "device not found")
+		} else {
+			logger.Error("GetParallelState device query failed", zap.String("sn", sn), zap.Error(err))
+			response.InternalError(c, "query device failed")
+		}
+		return
+	}
+	if stationID == 0 {
+		response.Success(c, gin.H{"has_parallel": false, "enabled": false})
+		return
+	}
+
+	var result = make(map[string]interface{})
+	var masterSN, mode, syncState string
+	var enabled bool
+	var count int
+	var totalRatedPower int64
+	var totalActivePower float64
+	var machines []byte
+	var reportedAt time.Time
+
+	err = h.db.QueryRow(ctx, `
+		SELECT master_sn, enabled, COALESCE(mode,''), count, total_rated_power, total_active_power,
+		       sync_state, machines, reported_at
+		FROM device_parallel_state WHERE station_id = $1
+	`, stationID).Scan(&masterSN, &enabled, &mode, &count, &totalRatedPower, &totalActivePower,
+		&syncState, &machines, &reportedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.Success(c, gin.H{"has_parallel": false, "enabled": false})
+		} else {
+			logger.Error("GetParallelState state query failed", zap.Int64("station_id", stationID), zap.Error(err))
+			response.InternalError(c, "query parallel state failed")
+		}
+		return
+	}
+
+	var machinesData interface{}
+	if err := json.Unmarshal(machines, &machinesData); err != nil {
+		logger.Error("GetParallelState machines decode failed", zap.Int64("station_id", stationID), zap.Error(err))
+		response.InternalError(c, "decode parallel state failed")
+		return
+	}
+
+	result["has_parallel"] = enabled
+	result["enabled"] = enabled
+	result["station_id"] = stationID
+	result["master_sn"] = masterSN
+	result["mode"] = mode
+	result["count"] = count
+	result["total_rated_power"] = totalRatedPower
+	result["total_active_power"] = totalActivePower
+	result["sync_state"] = syncState
+	result["machines"] = machinesData
+	result["reported_at"] = reportedAt
+
+	response.Success(c, result)
+}
+
+// GetThreePhaseHistory 查询设备三相历史数据 (GET /api/v1/devices/:sn/three-phase)
+func (h *InternalHandler) GetThreePhaseHistory(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.BadRequest(c, "sn is required")
+		return
+	}
+	if !h.ensureDeviceAccess(c, sn) {
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 500 {
+		pageSize = 50
+	}
+	startTime, endTime, rangeErr := parseProtocolQueryRange(c)
+	if rangeErr != nil {
+		response.BadRequest(c, rangeErr.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	var total int64
+	countQuery := `SELECT COUNT(*) FROM device_three_phase_3min WHERE device_sn = $1`
+	countArgs := []interface{}{sn}
+	argIdx := 2
+	if startTime != nil {
+		countQuery += fmt.Sprintf(` AND event_time >= $%d`, argIdx)
+		countArgs = append(countArgs, *startTime)
+		argIdx++
+	}
+	if endTime != nil {
+		countQuery += fmt.Sprintf(` AND event_time <= $%d`, argIdx)
+		countArgs = append(countArgs, *endTime)
+		argIdx++
+	}
+	if err := h.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		logger.Error("GetThreePhaseHistory: failed to count records", zap.String("sn", sn), zap.Error(err))
+		response.InternalError(c, "count three phase history failed")
+		return
+	}
+
+	offset := (page - 1) * pageSize
+	dataQuery := `
+		SELECT event_time, t, received_at, data_hash, raw_envelope, voltage_l1, voltage_l2, voltage_l3,
+		       current_l1, current_l2, current_l3,
+		       active_power_l1, active_power_l2, active_power_l3,
+		       total_active_power, line_voltage_l1l2, line_voltage_l2l3, line_voltage_l3l1,
+		       frequency, voltage_unbalance, current_unbalance
+		FROM device_three_phase_3min WHERE device_sn = $1`
+	dataArgs := []interface{}{sn}
+	argIdx = 2
+	if startTime != nil {
+		dataQuery += fmt.Sprintf(` AND event_time >= $%d`, argIdx)
+		dataArgs = append(dataArgs, *startTime)
+		argIdx++
+	}
+	if endTime != nil {
+		dataQuery += fmt.Sprintf(` AND event_time <= $%d`, argIdx)
+		dataArgs = append(dataArgs, *endTime)
+		argIdx++
+	}
+	dataQuery += fmt.Sprintf(` ORDER BY event_time DESC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	dataArgs = append(dataArgs, pageSize, offset)
+
+	rows, err := h.db.Query(ctx, dataQuery, dataArgs...)
+	if err != nil {
+		logger.Error("GetThreePhaseHistory query failed", zap.String("sn", sn), zap.Error(err))
+		response.HandleError(c, apperr.Internal("query three phase history failed", err))
+		return
+	}
+	defer rows.Close()
+
+	items := []map[string]interface{}{}
+	for rows.Next() {
+		var eventTime, receivedAt time.Time
+		var timestamp int64
+		var dataHash string
+		var rawEnvelope []byte
+		var vL1, vL2, vL3, cL1, cL2, cL3, pL1, pL2, pL3, totalP, lv12, lv23, lv31, freq, vUnb, cUnb float64
+		if err := rows.Scan(&eventTime, &timestamp, &receivedAt, &dataHash, &rawEnvelope, &vL1, &vL2, &vL3, &cL1, &cL2, &cL3, &pL1, &pL2, &pL3,
+			&totalP, &lv12, &lv23, &lv31, &freq, &vUnb, &cUnb); err != nil {
+			logger.Error("GetThreePhaseHistory row scan failed", zap.String("sn", sn), zap.Error(err))
+			response.InternalError(c, "scan three phase history failed")
+			return
+		}
+		var rawEnvelopeValue any
+		if len(rawEnvelope) > 0 && json.Unmarshal(rawEnvelope, &rawEnvelopeValue) != nil {
+			rawEnvelopeValue = nil
+		}
+		items = append(items, map[string]interface{}{
+			"event_time":         eventTime,
+			"t":                  timestamp,
+			"received_at":        receivedAt,
+			"data_hash":          dataHash,
+			"raw_envelope":       rawEnvelopeValue,
+			"voltage_l1":         vL1,
+			"voltage_l2":         vL2,
+			"voltage_l3":         vL3,
+			"current_l1":         cL1,
+			"current_l2":         cL2,
+			"current_l3":         cL3,
+			"active_power_l1":    pL1,
+			"active_power_l2":    pL2,
+			"active_power_l3":    pL3,
+			"total_active_power": totalP,
+			"line_voltage_l1l2":  lv12,
+			"line_voltage_l2l3":  lv23,
+			"line_voltage_l3l1":  lv31,
+			"frequency":          freq,
+			"voltage_unbalance":  vUnb,
+			"current_unbalance":  cUnb,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		logger.Error("GetThreePhaseHistory rows failed", zap.String("sn", sn), zap.Error(err))
+		response.InternalError(c, "read three phase history failed")
+		return
+	}
+
+	response.Page(c, items, total, page, pageSize)
+}
+
+// GetAlarmEvents 查询设备告警事件历史 (GET /api/v1/devices/:sn/alarm-events)
+func (h *InternalHandler) GetAlarmEvents(c *gin.Context) {
+	sn := c.Param("sn")
+	if sn == "" {
+		response.BadRequest(c, "sn is required")
+		return
+	}
+	if !h.ensureDeviceAccess(c, sn) {
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 500 {
+		pageSize = 50
+	}
+	startTime, endTime, rangeErr := parseProtocolQueryRange(c)
+	if rangeErr != nil {
+		response.BadRequest(c, rangeErr.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	var total int64
+	countQuery := `SELECT COUNT(*) FROM device_alarm_events WHERE device_sn = $1`
+	countArgs := []interface{}{sn}
+	argIdx := 2
+	if startTime != nil {
+		countQuery += fmt.Sprintf(` AND event_time >= $%d`, argIdx)
+		countArgs = append(countArgs, *startTime)
+		argIdx++
+	}
+	if endTime != nil {
+		countQuery += fmt.Sprintf(` AND event_time <= $%d`, argIdx)
+		countArgs = append(countArgs, *endTime)
+		argIdx++
+	}
+	if err := h.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		logger.Error("GetAlarmEvents: failed to count records", zap.String("sn", sn), zap.Error(err))
+		response.InternalError(c, "count alarm events failed")
+		return
+	}
+
+	offset := (page - 1) * pageSize
+	dataQuery := `
+		SELECT id, device_sn, station_id, source, code, level, state, active_at, recovered_at,
+		       raw_data, event_time, t, received_at, raw_envelope, data_hash, created_at
+		FROM device_alarm_events WHERE device_sn = $1`
+	dataArgs := []interface{}{sn}
+	argIdx = 2
+	if startTime != nil {
+		dataQuery += fmt.Sprintf(` AND event_time >= $%d`, argIdx)
+		dataArgs = append(dataArgs, *startTime)
+		argIdx++
+	}
+	if endTime != nil {
+		dataQuery += fmt.Sprintf(` AND event_time <= $%d`, argIdx)
+		dataArgs = append(dataArgs, *endTime)
+		argIdx++
+	}
+	dataQuery += fmt.Sprintf(` ORDER BY event_time DESC, id DESC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	dataArgs = append(dataArgs, pageSize, offset)
+
+	rows, err := h.db.Query(ctx, dataQuery, dataArgs...)
+	if err != nil {
+		logger.Error("GetAlarmEvents query failed", zap.String("sn", sn), zap.Error(err))
+		response.HandleError(c, apperr.Internal("query alarm events failed", err))
+		return
+	}
+	defer rows.Close()
+
+	items := []map[string]interface{}{}
+	for rows.Next() {
+		var id int64
+		var stationID sql.NullInt64
+		var source int
+		var deviceSN, code, state string
+		var level int16
+		var activeAt, recoveredAt sql.NullTime
+		var rawData, rawEnvelope []byte
+		var eventTime, receivedAt, createdAt time.Time
+		var timestamp int64
+		var dataHash string
+		if err := rows.Scan(&id, &deviceSN, &stationID, &source, &code, &level, &state,
+			&activeAt, &recoveredAt, &rawData, &eventTime, &timestamp, &receivedAt, &rawEnvelope, &dataHash, &createdAt); err != nil {
+			logger.Error("GetAlarmEvents row scan failed", zap.String("sn", sn), zap.Error(err))
+			response.InternalError(c, "scan alarm events failed")
+			return
+		}
+		var rawDataVal interface{}
+		if len(rawData) > 0 {
+			_ = json.Unmarshal(rawData, &rawDataVal)
+		}
+		var rawEnvelopeVal interface{}
+		if len(rawEnvelope) > 0 {
+			_ = json.Unmarshal(rawEnvelope, &rawEnvelopeVal)
+		}
+		item := map[string]interface{}{
+			"id":           id,
+			"device_sn":    deviceSN,
+			"source":       source,
+			"code":         code,
+			"level":        level,
+			"state":        state,
+			"event_time":   eventTime,
+			"t":            timestamp,
+			"received_at":  receivedAt,
+			"raw_envelope": rawEnvelopeVal,
+			"data_hash":    dataHash,
+			"created_at":   createdAt,
+			"raw_data":     rawDataVal,
+		}
+		if stationID.Valid {
+			item["station_id"] = stationID.Int64
+		}
+		if activeAt.Valid {
+			item["active_at"] = activeAt.Time
+		}
+		if recoveredAt.Valid {
+			item["recovered_at"] = recoveredAt.Time
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		logger.Error("GetAlarmEvents rows failed", zap.String("sn", sn), zap.Error(err))
+		response.InternalError(c, "read alarm events failed")
+		return
+	}
+
+	response.Page(c, items, total, page, pageSize)
+}
+
+/*
+Removed legacy best-effort event/snapshot writers (2026-07-15).
+IngestAlarmV1 owns the only supported transactional write path.
+
+// writeAlarmEvent 写入告警事件日志 (best-effort，失败不影响主流程)
+func (h *InternalHandler) writeAlarmEvent(ctx context.Context, sn string, stationID sql.NullInt64,
+	source int, code string, level int, state string, activeAt, recoveredAt *time.Time, rawData []byte) int64 {
+	var activeAtVal, recoveredAtVal interface{}
+	if activeAt != nil {
+		activeAtVal = *activeAt
+	}
+	if recoveredAt != nil {
+		recoveredAtVal = *recoveredAt
+	}
+	var sid interface{}
+	if stationID.Valid {
+		sid = stationID.Int64
+	}
+	var rawDataVal interface{}
+	if len(rawData) > 0 {
+		rawDataVal = rawData
+	}
+	var eventID int64
+	err := h.db.QueryRow(ctx, `
+		INSERT INTO device_alarm_events (device_sn, station_id, source, code, level, state, active_at, recovered_at, raw_data)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+		RETURNING id
+	`, sn, sid, source, code, level, state, activeAtVal, recoveredAtVal, rawDataVal).Scan(&eventID)
+	if err != nil {
+		logger.Warn("writeAlarmEvent failed (best-effort)",
+			zap.String("sn", sn), zap.String("code", code), zap.Error(err))
+		return 0
+	}
+	return eventID
+}
+
+// captureAlarmSnapshot 从 device_latest_state 表捕获设备状态快照写入 device_alarm_snapshots 表。
+// best-effort 操作，失败不影响主流程。
+func (h *InternalHandler) captureAlarmSnapshot(ctx context.Context, deviceSN string, alarmEventID int64, snapshotType string) {
+	var acActivePower, acVoltage, acCurrent, acFrequency sql.NullFloat64
+	var batterySoc, batteryVoltage, batteryCurrent, batteryTemperature sql.NullFloat64
+	var inverterTemperature, dcBusVoltage sql.NullFloat64
+	var workState sql.NullInt16
+	var faultCode sql.NullInt64
+	var rawSnapshot []byte
+
+	err := h.db.QueryRow(ctx, `
+		SELECT ac_active_power, ac_voltage, ac_current, ac_frequency,
+		       battery_soc, battery_voltage, battery_current, battery_temperature,
+		       inverter_temperature, dc_bus_voltage, work_state, fault_code,
+		       raw_envelope
+		FROM device_latest_state WHERE device_sn = $1
+	`, deviceSN).Scan(
+		&acActivePower, &acVoltage, &acCurrent, &acFrequency,
+		&batterySoc, &batteryVoltage, &batteryCurrent, &batteryTemperature,
+		&inverterTemperature, &dcBusVoltage, &workState, &faultCode,
+		&rawSnapshot,
+	)
+	if err != nil {
+		logger.Warn("Failed to capture alarm snapshot",
+			zap.String("sn", deviceSN), zap.String("snapshot_type", snapshotType), zap.Error(err))
+		return
+	}
+
+	if rawSnapshot == nil {
+		rawSnapshot = []byte("{}")
+	}
+
+	_, err = h.db.Exec(ctx, `
+		INSERT INTO device_alarm_snapshots (device_sn, alarm_event_id, snapshot_type,
+		    ac_voltage, ac_current, ac_active_power, ac_frequency,
+		    battery_soc, battery_voltage, battery_current, battery_temperature,
+		    internal_temperature, dc_bus_voltage, work_state, fault_code, raw_snapshot)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb)
+	`, deviceSN, alarmEventID, snapshotType,
+		acVoltage, acCurrent, acActivePower, acFrequency,
+		batterySoc, batteryVoltage, batteryCurrent, batteryTemperature,
+		inverterTemperature, dcBusVoltage, workState, faultCode, rawSnapshot)
+	if err != nil {
+		logger.Warn("Failed to save alarm snapshot",
+			zap.String("sn", deviceSN), zap.String("snapshot_type", snapshotType), zap.Error(err))
+	}
+}
+*/
