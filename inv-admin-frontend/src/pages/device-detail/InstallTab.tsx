@@ -5,6 +5,7 @@ import {
 import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 interface InstallTabProps {
   sn: string
@@ -26,14 +27,14 @@ const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
   const [form] = Form.useForm()
   const [acForm] = Form.useForm()
 
-  const { data: profilesRes, isLoading: profilesLoading } = useQuery({
+  const { data: profilesRes, isLoading: profilesLoading, error: profilesError, refetch: refetchProfiles } = useQuery({
     queryKey: queryKeys.devices.batteryProfiles(),
     queryFn: () => deviceApi.getBatteryProfiles().then((r) => r.data?.data ?? []),
   })
 
   const profiles: BatteryProfile[] = (profilesRes as BatteryProfile[]) ?? []
 
-  const { isLoading: configLoading } = useQuery({
+  const { isLoading: configLoading, error: configError, refetch: refetchConfig } = useQuery({
     queryKey: queryKeys.devices.batteryConfig(sn),
     queryFn: () => deviceApi.getBatteryConfig(sn).then((r) => {
       const d = r.data?.data ?? {}
@@ -63,6 +64,13 @@ const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
 
   return (
     <Spin spinning={profilesLoading || configLoading}>
+      {(profilesError || configError) && (
+        <QueryErrorAlert
+          error={profilesError || configError}
+          onRetry={() => { void (profilesError ? refetchProfiles() : refetchConfig()) }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Card
         title={t('deviceDetail.install.batteryConfig')}
         bordered={false}

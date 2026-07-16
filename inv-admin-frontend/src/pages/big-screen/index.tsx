@@ -6,6 +6,7 @@ import { dashboardApi } from '@/services/dashboardApi'
 import api from '@/services/api'
 import useLocaleStore from '@/stores/localeStore'
 import { KPIPanel, MapPanel, TrendPanel } from './components'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 // ──────────────────────────────────────────────────────────
 // Types
@@ -98,20 +99,20 @@ const BigScreenPage: React.FC = () => {
   }, [])
 
   // 4. 数据查询（API 返回 { code, data } 包装，需取 r.data.data）
-  const { data: mainData } = useQuery<BigScreenData>({
+  const { data: mainData, error: mainError, refetch: refetchMain } = useQuery<BigScreenData>({
     queryKey: ['big-screen'],
     queryFn: () => dashboardApi.getBigScreen().then(r => r.data.data),
     refetchInterval: 10000,
   })
 
-  const { data: stationsRes } = useQuery<StationSummary>({
+  const { data: stationsRes, error: stationsError, refetch: refetchStations } = useQuery<StationSummary>({
     queryKey: ['big-screen-stations'],
-    queryFn: () => api.get('/stations/summary').then(r => r.data.data),
+    queryFn: () => api.get('/stations/summary', { expectedDataShape: 'object' }).then(r => r.data.data),
     refetchInterval: 30000,
   })
 
   // 发电趋势数据（独立接口）
-  const { data: trendRes } = useQuery<{ date: string; energy: number; load: number }[]>({
+  const { data: trendRes, error: trendError, refetch: refetchTrend } = useQuery<{ date: string; energy: number; load: number }[]>({
     queryKey: ['big-screen-trend'],
     queryFn: () => dashboardApi.getTrend('day').then(r => r.data.data),
     refetchInterval: 60000,
@@ -157,23 +158,35 @@ const BigScreenPage: React.FC = () => {
     onlineDevices: 0,
   }
 
+  const queryError = mainError || stationsError || trendError
+  const retry = () => {
+    void Promise.all([refetchMain(), refetchStations(), refetchTrend()])
+  }
+
   // ──────────────────────────────────────────────────────────
   // Render
   // ──────────────────────────────────────────────────────────
   return (
     <div className="bs-container" ref={containerRef}>
+      {queryError && (
+        <QueryErrorAlert
+          error={queryError}
+          onRetry={retry}
+          style={{ position: 'absolute', top: 76, left: 24, right: 24, zIndex: 20 }}
+        />
+      )}
       {/* Header */}
       <header className="bs-header">
         <div className="bs-header-left">
           <RocketOutlined className="bs-header-icon" />
-          <span className="bs-header-title">光伏监控大屏</span>
+          <span className="bs-header-title">{lang === 'zh' ? '光伏监控大屏' : 'PV Monitoring Center'}</span>
         </div>
         <div className="bs-header-center">
           <span ref={clockRef} className="bs-clock" />
         </div>
         <div className="bs-header-right">
           <span className="bs-online-badge">
-            在线率 <strong>{onlineRate.toFixed(1)}%</strong>
+            {lang === 'zh' ? '在线率' : 'Online rate'} <strong>{onlineRate.toFixed(1)}%</strong>
           </span>
           <button className="bs-fullscreen-btn" onClick={toggleFullscreen}>
             {isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}

@@ -170,10 +170,23 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 }
 
 func RateLimit() gin.HandlerFunc {
+	return RateLimitWith(10, 20)
+}
+
+// RateLimitWith creates an IP-based token bucket with a custom refill rate and burst.
+// It is useful for public endpoints whose work is significantly more expensive than
+// an ordinary API request, such as image challenge generation.
+func RateLimitWith(rate float64, burst int) gin.HandlerFunc {
+	if rate <= 0 {
+		rate = 1
+	}
+	if burst <= 0 {
+		burst = 1
+	}
 	limiter := &ipRateLimiter{
 		limiters: make(map[string]*tokenBucket),
-		rate:     10,
-		burst:    20,
+		rate:     rate,
+		burst:    burst,
 	}
 	return limiter.Handle()
 }
@@ -259,7 +272,7 @@ func (l *ipRateLimiter) Handle() gin.HandlerFunc {
 		ip := c.ClientIP()
 		limiter := l.getLimiter(ip)
 		if !limiter.allow() {
-			response.Error(c, 429, "请求过于频繁，请稍后再试")
+			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return
 		}

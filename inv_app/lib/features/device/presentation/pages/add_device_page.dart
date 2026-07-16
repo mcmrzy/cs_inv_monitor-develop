@@ -12,6 +12,7 @@ import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';
+import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class AddDevicePage extends StatefulWidget {
@@ -58,8 +59,15 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
       final dio = getIt<Dio>();
       final res = await dio.get('/stations/$_selectedStationId');
       if (res.statusCode == 200 && mounted) {
-        final data = res.data as Map<String, dynamic>;
-        final station = data['station'] ?? data['data'] ?? data;
+        final data = unwrapApiResponse<Map<String, dynamic>>(
+          res.data,
+          validate: (value) => value is Map<String, dynamic>,
+          expected: 'an object',
+        );
+        final station = data['station'];
+        if (station is! Map) {
+          throw const FormatException('station detail must contain station');
+        }
         final name = (station['station_name'] ?? station['name'] ?? '').toString();
         if (name.isNotEmpty) {
           setState(() => _selectedStationName = name);
@@ -148,6 +156,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
     if (_selectedStationId == null) {
       final result = await _showStationSelector();
       if (result == null) return;
+      if (!mounted) return;
       _selectedStationId = result.$1;
       _selectedStationName = result.$2;
       setState(() {});
@@ -547,6 +556,7 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
       final jsonStr = prefs.getString(_scanHistoryKey);
       if (jsonStr != null) {
         final list = jsonDecode(jsonStr) as List;
+        if (!mounted) return;
         setState(() {
           _scanHistory = list.map((e) => _ScanHistoryEntry.fromJson(e as Map<String, dynamic>)).toList();
         });

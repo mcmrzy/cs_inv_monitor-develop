@@ -17,7 +17,7 @@ import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
-import { ROLE_MAP, ROLE_COLORS } from '@/utils/constants'
+import { ROLE_MAP, ROLE_COLORS, ROLE_I18N_KEY } from '@/utils/constants'
 import { Role } from '@/types'
 import api from '@/services/api'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
@@ -232,7 +232,7 @@ const MainLayout: React.FC = () => {
       >
         <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <Typography.Text strong style={{ color: '#fff', fontSize: collapsed ? 16 : 18, whiteSpace: 'nowrap' }}>
-            {collapsed ? 'INV' : '逆变器物联平台'}
+            {collapsed ? 'INV' : t('app.title')}
           </Typography.Text>
         </div>
         <Menu theme="dark" mode="inline" selectedKeys={[selectedKey]} items={displayMenuItems} onClick={handleMenuClick} />
@@ -260,7 +260,7 @@ const MainLayout: React.FC = () => {
               suffixIcon={<ClockCircleOutlined />}
             />
             {user && (
-              <Badge color={ROLE_COLORS[user.role]} text={<Typography.Text style={{ fontSize: 13 }}>{ROLE_MAP[user.role] || user.role}</Typography.Text>} />
+              <Badge color={ROLE_COLORS[user.role]} text={<Typography.Text style={{ fontSize: 13 }}>{ROLE_I18N_KEY[user.role] ? t(ROLE_I18N_KEY[user.role]) : ROLE_MAP[user.role] || user.role}</Typography.Text>} />
             )}
             <Dropdown menu={{ items: userMenuItemsDropdown }} placement="bottomRight">
               <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>

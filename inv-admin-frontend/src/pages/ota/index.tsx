@@ -65,6 +65,7 @@ import { modelApi } from '@/services/modelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import type { Firmware, DeviceUpgrade, Device, UpgradePackage, UpgradeTask } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import PublishModal from './components/PublishModal'
@@ -172,7 +173,7 @@ const UpgradeTasksTab: React.FC = () => {
   const queryParams: any = { page, pageSize }
   if (statusFilter) queryParams.status = statusFilter
 
-  const { data: tasksRes, isLoading, refetch } = useQuery({
+  const { data: tasksRes, isLoading, error: tasksError, refetch } = useQuery({
     queryKey: queryKeys.ota.tasks(queryParams),
     queryFn: () => otaApi.listTasks(queryParams).then((r) => {
       const d = r.data?.data ?? r.data ?? {}
@@ -181,13 +182,13 @@ const UpgradeTasksTab: React.FC = () => {
     }),
   })
 
-  const { data: statsRes } = useQuery({
+  const { data: statsRes, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: queryKeys.ota.taskStats(),
     queryFn: () => otaApi.getTaskStats().then((r) => r.data?.data ?? r.data ?? {}),
   })
   const stats = statsRes as any
 
-  const { data: firmwareList = [] } = useQuery({
+  const { data: firmwareList = [], error: firmwareListError, refetch: refetchFirmwareList } = useQuery({
     queryKey: queryKeys.ota.firmwares({ all: true }),
     queryFn: () => otaApi.getAllFirmware().then((r) => {
       const d = r.data; const list = d?.data?.items ?? d?.data ?? d?.items ?? []
@@ -196,7 +197,7 @@ const UpgradeTasksTab: React.FC = () => {
     enabled: createOpen,
   })
 
-  const { data: packageList = [] } = useQuery({
+  const { data: packageList = [], error: packageListError, refetch: refetchPackageList } = useQuery({
     queryKey: queryKeys.ota.packages(),
     queryFn: () => otaApi.listPackages().then((r) => {
       const d = r.data?.data ?? r.data ?? []
@@ -205,7 +206,7 @@ const UpgradeTasksTab: React.FC = () => {
     enabled: createOpen,
   })
 
-  const { data: deviceList = [] } = useQuery({
+  const { data: deviceList = [], error: deviceListError, refetch: refetchDeviceList } = useQuery({
     queryKey: ['devices', 'all'],
     queryFn: () => deviceApi.getAll().then((r) => {
       const d = r.data; const list = d?.data?.items ?? d?.data ?? d?.items ?? []
@@ -215,7 +216,7 @@ const UpgradeTasksTab: React.FC = () => {
   })
 
   // 任务详情 - 设备列表
-  const { data: taskDevices = [], isLoading: devicesLoading } = useQuery({
+  const { data: taskDevices = [], isLoading: devicesLoading, error: taskDevicesError, refetch: refetchTaskDevices } = useQuery({
     queryKey: queryKeys.ota.taskDevices(detailTaskId ?? 0),
     queryFn: () => otaApi.getTaskDevices(detailTaskId!).then((r) => {
       const payload = r.data?.data ?? r.data ?? {}
@@ -501,8 +502,18 @@ const UpgradeTasksTab: React.FC = () => {
     },
   ]
 
+  const queryFailure = [
+    { error: tasksError, retry: refetch },
+    { error: statsError, retry: refetchStats },
+    { error: firmwareListError, retry: refetchFirmwareList },
+    { error: packageListError, retry: refetchPackageList },
+    { error: deviceListError, retry: refetchDeviceList },
+    { error: taskDevicesError, retry: refetchTaskDevices },
+  ].find((item) => item.error)
+
   return (
     <div>
+      {queryFailure && <QueryErrorAlert error={queryFailure.error} onRetry={() => { void queryFailure.retry() }} style={{ marginBottom: 16 }} />}
       {/* 统计卡片 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}>
@@ -848,7 +859,7 @@ const FirmwareTab: React.FC = () => {
 
   const queryParams = { page, pageSize, model: modelFilter || undefined }
 
-  const { data: firmwareRes, isLoading, refetch } = useQuery({
+  const { data: firmwareRes, isLoading, error: firmwareError, refetch } = useQuery({
     queryKey: queryKeys.ota.firmwares(queryParams),
     queryFn: () => otaApi.listFirmware(queryParams).then((r) => {
       const d = r.data
@@ -859,7 +870,7 @@ const FirmwareTab: React.FC = () => {
     }),
   })
 
-  const { data: allFirmwareList = [] } = useQuery({
+  const { data: allFirmwareList = [], error: allFirmwareError, refetch: refetchAllFirmware } = useQuery({
     queryKey: queryKeys.ota.firmwares({ all: true }),
     queryFn: () => otaApi.listFirmware({ page: 1, pageSize: 1000 }).then((r) => {
       const d = r.data; let list = d?.items ?? d?.data?.items ?? d?.data ?? []
@@ -867,7 +878,7 @@ const FirmwareTab: React.FC = () => {
     }),
   })
 
-  const { data: deviceModels = [] } = useQuery({
+  const { data: deviceModels = [], error: deviceModelsError, refetch: refetchDeviceModels } = useQuery({
     queryKey: ['models', 'all'],
     queryFn: () => modelApi.listModels().then((r) => {
       const d = r.data?.data ?? r.data ?? []
@@ -937,6 +948,13 @@ const FirmwareTab: React.FC = () => {
   }
 
   const firmwareData = firmwareRes?.items ?? []
+  const queryFailure = firmwareError
+    ? { error: firmwareError, retry: refetch }
+    : allFirmwareError
+      ? { error: allFirmwareError, retry: refetchAllFirmware }
+      : deviceModelsError
+        ? { error: deviceModelsError, retry: refetchDeviceModels }
+        : null
   const firmwareTotal = firmwareRes?.total ?? 0
 
   const columns: ColumnsType<Firmware> = [
@@ -973,6 +991,7 @@ const FirmwareTab: React.FC = () => {
 
   return (
     <div>
+      {queryFailure && <QueryErrorAlert error={queryFailure.error} onRetry={() => { void queryFailure.retry() }} style={{ marginBottom: 16 }} />}
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
           <Col><Button type="primary" icon={<UploadOutlined />} onClick={() => setUploadOpen(true)}>{t('ota.uploadFirmware')}</Button></Col>
@@ -1120,23 +1139,30 @@ const PackagesTab: React.FC = () => {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.ota.all })
 
-  const { data: packagesRes, isLoading } = useQuery({
+  const { data: packagesRes, isLoading, error: packagesError, refetch: refetchPackages } = useQuery({
     queryKey: queryKeys.ota.packages(modelFilter ? { model: modelFilter } : undefined),
     queryFn: () => otaApi.listPackages(modelFilter ? { model: modelFilter } : {}).then((r) => r.data?.data ?? r.data ?? []),
   })
   const packages = (Array.isArray(packagesRes) ? packagesRes : []) as UpgradePackage[]
 
-  const { data: firmwareRes } = useQuery({
+  const { data: firmwareRes, error: firmwareError, refetch: refetchFirmware } = useQuery({
     queryKey: queryKeys.ota.firmwares(),
     queryFn: () => otaApi.getAllFirmware().then((r) => r.data?.data ?? r.data ?? []),
   })
   const firmwareList = (Array.isArray(firmwareRes) ? firmwareRes : []) as Firmware[]
 
-  const { data: modelsRes } = useQuery({
+  const { data: modelsRes, error: modelsError, refetch: refetchModels } = useQuery({
     queryKey: queryKeys.models.list(),
     queryFn: () => modelApi.listModels().then((r) => r.data?.data ?? r.data ?? []),
   })
   const modelList = (Array.isArray(modelsRes) ? modelsRes : (modelsRes as any)?.items ?? []) as any[]
+  const queryFailure = packagesError
+    ? { error: packagesError, retry: refetchPackages }
+    : firmwareError
+      ? { error: firmwareError, retry: refetchFirmware }
+      : modelsError
+        ? { error: modelsError, retry: refetchModels }
+        : null
 
   const createMutation = useMutation({
     mutationFn: (data: any) => otaApi.createPackage(data),
@@ -1281,6 +1307,7 @@ const PackagesTab: React.FC = () => {
 
   return (
     <div>
+      {queryFailure && <QueryErrorAlert error={queryFailure.error} onRetry={() => { void queryFailure.retry() }} style={{ marginBottom: 16 }} />}
       <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
         <Row justify="space-between" align="middle">
           <Col><Space>
@@ -1446,7 +1473,7 @@ const AppVersionTab: React.FC = () => {
   const [rolloutPercent, setRolloutPercent] = useState<number>(100)
   const [form] = Form.useForm()
 
-  const { data: versionData = [], isLoading, refetch } = useQuery({
+  const { data: versionData = [], isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.ota.appVersions(platformFilter ? { platform: platformFilter } : undefined),
     queryFn: () => otaApi.getAppVersions(platformFilter).then((r) => {
       const d = r.data; const list = d?.data ?? d?.items ?? d ?? []
@@ -1554,6 +1581,7 @@ const AppVersionTab: React.FC = () => {
 
   return (
     <div>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
           <Col><Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>{t('ota.publishVersion')}</Button></Col>

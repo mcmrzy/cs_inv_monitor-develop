@@ -3,21 +3,21 @@ import type { PublishPackageRequest } from '@/types'
 
 export const otaApi = {
   // 固件管理
-  listFirmware: (params?: any) => api.get('/firmwares', { params }),
-  getFirmwares: (params?: any) => api.get('/firmwares', { params }),
+  listFirmware: (params?: any) => api.get('/firmwares', { params, expectedDataShape: 'array' }),
+  getFirmwares: (params?: any) => api.get('/firmwares', { params, expectedDataShape: 'array' }),
   uploadFirmware: (formData: FormData) =>
     api.post('/firmwares', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   createFirmware: (data: any) => api.post('/firmwares', data),
   deleteFirmware: (id: string | number) => api.delete(`/firmwares/${id}`),
-  getAllFirmware: () => api.get('/firmwares', { params: { page_size: 9999 } }),
+  getAllFirmware: () => api.get('/firmwares', { params: { page_size: 9999 }, expectedDataShape: 'array' }),
 
   // 升级管理（替代旧 /tasks）
-  getUpgradeDashboard: (params?: any) => api.get('/ota/upgrades/dashboard', { params }),
+  getUpgradeDashboard: (params?: any) => api.get('/ota/upgrades/dashboard', { params, expectedDataShape: 'object' }),
   pushUpgrade: (data: { firmware_id: number; device_sns: string[]; immediate?: boolean }) =>
     api.post('/ota/upgrades/push', data),
-  getFirmwareUpgradeDetails: (firmwareId: number) => api.get(`/ota/upgrades/firmware/${firmwareId}`),
+  getFirmwareUpgradeDetails: (firmwareId: number) => api.get(`/ota/upgrades/firmware/${firmwareId}`, { expectedDataShape: 'object' }),
   retryUpgrade: (data: { firmware_id: number; device_sns: string[] }) =>
     api.post('/ota/upgrades/retry', data),
   cancelUpgrade: (data: { device_sn: string; firmware_id: number }) =>
@@ -25,7 +25,7 @@ export const otaApi = {
   deleteUpgradeByFirmware: (firmwareId: number) => api.delete(`/ota/upgrades/firmware/${firmwareId}`),
 
   // App版本管理
-  getAppVersions: (platform?: string) => api.get('/ota/app/versions', { params: platform ? { platform } : {} }),
+  getAppVersions: (platform?: string) => api.get('/ota/app/versions', { params: platform ? { platform } : {}, expectedDataShape: 'array' }),
   createAppVersion: (data: any) => api.post('/ota/app/versions', data),
   deleteAppVersion: (id: number) => api.delete(`/ota/app/versions/${id}`),
   updateAppVersionRollout: (id: number, percentage: number) => api.put(`/ota/app/versions/${id}/rollout`, { percentage }),
@@ -33,8 +33,8 @@ export const otaApi = {
   restoreAppVersion: (id: number, percentage?: number) => api.post(`/ota/app/versions/${id}/restore`, { percentage: percentage || 100 }),
 
   // 升级包管理
-  listPackages: (params?: any) => api.get('/ota/packages', { params }),
-  getPackage: (id: number) => api.get(`/ota/packages/${id}`),
+  listPackages: (params?: any) => api.get('/ota/packages', { params, expectedDataShape: 'array' }),
+  getPackage: (id: number) => api.get(`/ota/packages/${id}`, { expectedDataShape: 'object' }),
   createPackage: (data: {
     model: string
     firmware_ids: number[]
@@ -57,16 +57,16 @@ export const otaApi = {
   deletePackage: (id: number) => api.delete(`/ota/packages/${id}`),
   pushPackageUpgrade: (data: { package_id: number; device_sns: string[]; immediate?: boolean; rollout_percent?: number }) =>
     api.post('/ota/packages/push', data),
-  getPackageUpgradeDetails: (packageId: number) => api.get(`/ota/packages/${packageId}/details`),
+  getPackageUpgradeDetails: (packageId: number) => api.get(`/ota/packages/${packageId}/details`, { expectedDataShape: 'object' }),
   rollbackPackage: (id: number, data: { immediate?: boolean }) => api.post(`/ota/packages/${id}/rollback`, data),
 
   // 回退升级（新接口）
   rollbackUpgrade: (data: { sn: string; package_id: number }) => api.post('/ota/rollback', data),
   // 获取设备可用升级包
-  getAvailablePackages: (sn: string) => api.get(`/ota/packages/available/${sn}`),
+  getAvailablePackages: (sn: string) => api.get(`/ota/packages/available/${sn}`, { expectedDataShape: 'object' }),
 
   // 升级任务管理（新统一接口）
-  listTasks: (params?: any) => api.get('/ota/tasks', { params }),
+  listTasks: (params?: any) => api.get('/ota/tasks', { params, expectedDataShape: 'page' }),
   createTask: (data: {
     name?: string
     task_type: 'single' | 'package'
@@ -77,19 +77,19 @@ export const otaApi = {
     scheduled_at?: string
     rollout_percent?: number
   }) => api.post('/ota/tasks', data),
-  getTask: (id: number | string) => api.get(`/ota/tasks/${id}`),
-  getTaskDevices: (id: number | string, params?: any) => api.get(`/ota/tasks/${id}/devices`, { params }),
+  getTask: (id: number | string) => api.get(`/ota/tasks/${id}`, { expectedDataShape: 'object' }),
+  getTaskDevices: (id: number | string, params?: any) => api.get(`/ota/tasks/${id}/devices`, { params, expectedDataShape: 'object' }),
   executeTask: (id: number | string) => api.post(`/ota/tasks/${id}/execute`),
   cancelTask: (id: number | string) => api.post(`/ota/tasks/${id}/cancel`),
   retryTask: (id: number | string) => api.post(`/ota/tasks/${id}/retry`),
   deleteTask: (id: number | string) => api.delete(`/ota/tasks/${id}`),
-  getTaskStats: () => api.get('/ota/tasks/stats'),
+  getTaskStats: () => api.get('/ota/tasks/stats', { expectedDataShape: 'object' }),
 
   // 固件-设备关联查询
   getDevicesByFirmware: (model: string, targetChip: string, version: string) =>
-    api.get('/ota/firmware/devices', { params: { model, target_chip: targetChip, version } }),
+    api.get('/ota/firmware/devices', { params: { model, target_chip: targetChip, version }, expectedDataShape: 'object' }),
   getUpgradePackageDevices: (packageId: number, status?: string) =>
-    api.get('/ota/firmware/package-devices', { params: { package_id: packageId, status } }),
+    api.get('/ota/firmware/package-devices', { params: { package_id: packageId, status }, expectedDataShape: 'object' }),
 
   // 发布升级包
   publishPackage: (id: number, data: PublishPackageRequest) =>

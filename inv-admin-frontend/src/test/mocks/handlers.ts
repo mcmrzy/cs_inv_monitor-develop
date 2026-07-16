@@ -222,7 +222,7 @@ export const handlers = [
     return HttpResponse.json({
       code: 0,
       message: 'success',
-      data: paginatedResponse(mockFirmwares, mockFirmwares.length),
+      data: mockFirmwares,
     })
   }),
 
@@ -271,7 +271,7 @@ export const handlers = [
 
   /** OTA 升级包列表 */
   http.get(`${API_BASE}/ota/packages`, () => {
-    return HttpResponse.json({ code: 0, message: 'success', data: { items: [], total: 0 } })
+    return HttpResponse.json({ code: 0, message: 'success', data: [] })
   }),
 
   /** 创建 OTA 升级包 */

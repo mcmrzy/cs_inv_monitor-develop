@@ -10,31 +10,47 @@ export interface ModelFieldsCache {
   controlFields: DeviceModelFieldItem[]
 }
 
-export function useModelFields(deviceModel: string | undefined) {
+export function useModelFields(deviceModel: string | undefined, modelId?: number) {
   const [cache, setCache] = useState<ModelFieldsCache | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchFields = useCallback(async (modelCode: string) => {
+  const fetchFields = useCallback(async (modelCode: string, mId?: number) => {
     setLoading(true)
     setError(null)
     try {
-      // 使用 listModelsPublic 而非 listModels，避免终端用户因缺少 admin:manage 权限而无法获取型号列表
-      const modelsRes = await modelApi.listModelsPublic()
-      const models: DeviceModelItem[] =
-        modelsRes.data?.data ?? modelsRes.data ?? []
+      let matchedId: number | null = null
+      let matched: DeviceModelItem | null = null
 
-      const matched = models.find(
-        (m) => m.model_code === modelCode || m.model_name === modelCode,
-      )
+      // 优先使用 model_id 直接查询
+      if (mId && mId > 0) {
+        matchedId = mId
+      } else if (modelCode) {
+        // Fallback: 字符串匹配（增加 toLowerCase 容错）
+        // 使用 listModelsPublic 而非 listModels，避免终端用户因缺少 admin:manage 权限而无法获取型号列表
+        const modelsRes = await modelApi.listModelsPublic()
+        const models: DeviceModelItem[] =
+          modelsRes.data?.data ?? modelsRes.data ?? []
 
-      if (!matched) {
+        matched = models.find(
+          (m) => m.model_code?.toLowerCase() === modelCode.toLowerCase() ||
+                 m.model_name?.toLowerCase() === modelCode.toLowerCase(),
+        ) ?? null
+
+        if (!matched) {
+          setCache(null)
+          setError(`未找到型号 ${modelCode} 的配置`)
+          return
+        }
+        matchedId = matched.id
+      }
+
+      if (!matchedId) {
         setCache(null)
-        setError(`未找到型号 ${modelCode} 的配置`)
         return
       }
 
-      const fieldsRes = await modelApi.getFields(matched.id)
+      const fieldsRes = await modelApi.getFields(matchedId)
       const allFields: DeviceModelFieldItem[] =
         fieldsRes.data?.data ?? fieldsRes.data ?? []
 
@@ -43,7 +59,7 @@ export function useModelFields(deviceModel: string | undefined) {
       const controlFields = sortedFields.filter((f) => f.is_control)
 
       setCache({
-        modelId: matched.id,
+        modelId: matchedId,
         model: matched,
         fields: sortedFields,
         showFields,
@@ -58,14 +74,14 @@ export function useModelFields(deviceModel: string | undefined) {
   }, [])
 
   useEffect(() => {
-    if (deviceModel && deviceModel !== '-') {
-      fetchFields(deviceModel)
+    if ((deviceModel && deviceModel !== '-') || (modelId && modelId > 0)) {
+      fetchFields(deviceModel ?? '', modelId)
     } else {
       setCache(null)
     }
-  }, [deviceModel, fetchFields])
+  }, [deviceModel, modelId, fetchFields])
 
-  return { cache, loading, error, refetch: () => deviceModel && fetchFields(deviceModel) }
+  return { cache, loading, error, refetch: () => fetchFields(deviceModel ?? '', modelId) }
 }
 
 export { type DeviceModelFieldItem as ModelField }

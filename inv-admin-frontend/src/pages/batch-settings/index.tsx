@@ -18,6 +18,7 @@ import StatusBadge from '@/components/StatusBadge'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Title, Text } = Typography
 
@@ -128,9 +129,9 @@ const BatchSettingsPage: React.FC = () => {
 
   /* ---------- 数据获取 ---------- */
 
-  const { data: stationsRes } = useQuery({
+  const { data: stationsRes, error: stationsError, refetch: refetchStations } = useQuery({
     queryKey: ['stations', 'all'],
-    queryFn: () => api.get('/stations', { params: { page_size: 999, all: true } }).then((r) => r.data),
+    queryFn: () => api.get('/stations', { params: { page_size: 999, all: true }, expectedDataShape: 'page' }).then((r) => r.data),
     staleTime: 300000,
   })
 
@@ -139,7 +140,7 @@ const BatchSettingsPage: React.FC = () => {
     return Array.isArray(items) ? items : []
   }, [stationsRes])
 
-  const { data: devicesRes, isLoading: devicesLoading } = useQuery({
+  const { data: devicesRes, isLoading: devicesLoading, error: devicesError, refetch: refetchDevices } = useQuery({
     queryKey: ['batch', 'devices', selectedStationIds],
     queryFn: () => {
       const params: any = { page_size: 9999 }
@@ -655,8 +656,21 @@ const BatchSettingsPage: React.FC = () => {
     { title: t('batch.step3'), description: t('batch.step3Desc') },
   ]
 
+  const queryFailure = stationsError
+    ? { error: stationsError, retry: refetchStations }
+    : devicesError
+      ? { error: devicesError, retry: refetchDevices }
+      : null
+
   return (
     <div>
+      {queryFailure && (
+        <QueryErrorAlert
+          error={queryFailure.error}
+          onRetry={() => { void queryFailure.retry() }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       {contextHolder}
       <Title level={4} style={{ marginBottom: 24 }}>
         <SettingOutlined style={{ marginRight: 8 }} />

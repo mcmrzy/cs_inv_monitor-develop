@@ -536,6 +536,16 @@ type StationRepository struct {
 	db *pgxpool.Pool
 }
 
+// stationListSelectColumns keeps list reads safe for legacy rows created before
+// optional station fields received application defaults. The Station model uses
+// non-nullable Go scalars, so every nullable database column must be normalized
+// before pgx scans it.
+const stationListSelectColumns = `id, user_id, name,
+	COALESCE(province, ''), COALESCE(city, ''), COALESCE(district, ''),
+	COALESCE(address, ''), COALESCE(capacity, 0), COALESCE(panel_count, 0),
+	COALESCE(latitude, 0), COALESCE(longitude, 0),
+	COALESCE(timezone, 'Asia/Shanghai'), status, created_at, updated_at`
+
 func NewStationRepository(db *pgxpool.Pool) *StationRepository {
 	return &StationRepository{db: db}
 }
@@ -649,13 +659,11 @@ func (r *StationRepository) GetByUserID(ctx context.Context, userID int64, page,
 		return nil, 0, err
 	}
 
-	query := `
-		SELECT id, user_id, name, province, city, district, address, capacity,
-			   panel_count, latitude, longitude, timezone, status, created_at, updated_at
-		FROM stations WHERE user_id = $1 AND deleted_at IS NULL
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`
+	query := `SELECT ` + stationListSelectColumns + `
+			FROM stations WHERE user_id = $1 AND deleted_at IS NULL
+			ORDER BY created_at DESC
+			LIMIT $2 OFFSET $3
+		`
 
 	rows, err := r.db.Query(ctx, query, userID, pageSize, offset)
 	if err != nil {
@@ -689,13 +697,11 @@ func (r *StationRepository) GetAll(ctx context.Context, page, pageSize int) ([]*
 		return nil, 0, err
 	}
 
-	query := `
-		SELECT id, user_id, name, province, city, district, address, capacity,
-			   panel_count, latitude, longitude, timezone, status, created_at, updated_at
-		FROM stations WHERE deleted_at IS NULL
-		ORDER BY created_at DESC
-		LIMIT $1 OFFSET $2
-	`
+	query := `SELECT ` + stationListSelectColumns + `
+			FROM stations WHERE deleted_at IS NULL
+			ORDER BY created_at DESC
+			LIMIT $1 OFFSET $2
+		`
 
 	rows, err := r.db.Query(ctx, query, pageSize, offset)
 	if err != nil {
@@ -759,6 +765,17 @@ type DeviceRepository struct {
 	cache *redis.Client
 }
 
+// deviceListSelectColumns mirrors the Device scan order used by both list
+// methods. Nullable database columns are normalized because Device deliberately
+// exposes scalar JSON fields rather than sql.Null* implementation details.
+const deviceListSelectColumns = `d.id, d.sn, COALESCE(d.model, ''), COALESCE(d.model_id, 0), COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+	COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
+	COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
+	COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
+	d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
+	COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
+	d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name`
+
 func NewDeviceRepository(db *pgxpool.Pool, cache *redis.Client) *DeviceRepository {
 	return &DeviceRepository{db: db, cache: cache}
 }
@@ -810,7 +827,7 @@ func (r *DeviceRepository) GetAllowedDeviceSNs(ctx context.Context, userID int64
 
 func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Device, error) {
 	query := `
-		SELECT d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+		SELECT d.id, d.sn, d.model, COALESCE(d.model_id, 0), COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
 			   COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
@@ -827,7 +844,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 	var lastOnlineAt sql.NullTime
 
 	err := r.db.QueryRow(ctx, query, sn).Scan(
-		&device.ID, &device.SN, &device.Model, &device.Manufacturer,
+		&device.ID, &device.SN, &device.Model, &device.ModelID, &device.Manufacturer,
 		&device.FirmwareArm, &device.FirmwareEsp,
 		&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 		&device.DeviceType,
@@ -858,14 +875,6 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 
 func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error) {
 	offset := (page - 1) * pageSize
-
-	selectCols := `d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
-		COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
-		COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
-		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
-		d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
-		COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
-		d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name`
 
 	allowedSNsSubquery := `(SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)`
 
@@ -903,7 +912,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		return nil, 0, err
 	}
 
-	query := `SELECT ` + selectCols + baseQuery + ` ORDER BY d.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+	query := `SELECT ` + deviceListSelectColumns + baseQuery + ` ORDER BY d.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
 	args = append(args, pageSize, offset)
 
@@ -919,7 +928,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
-			&device.ID, &device.SN, &device.Model, &device.Manufacturer,
+			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.Manufacturer,
 			&device.FirmwareArm, &device.FirmwareEsp,
 			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 			&device.DeviceType,
@@ -947,14 +956,6 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 
 func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error) {
 	offset := (page - 1) * pageSize
-
-	selectCols := `d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
-		COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
-		COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
-		COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
-		d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
-		COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
-		d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name`
 
 	baseQuery := ` FROM devices d LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
 	args := []interface{}{}
@@ -990,7 +991,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 		return nil, 0, err
 	}
 
-	query := `SELECT ` + selectCols + baseQuery + ` ORDER BY d.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+	query := `SELECT ` + deviceListSelectColumns + baseQuery + ` ORDER BY d.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
 	args = append(args, pageSize, offset)
 
@@ -1006,7 +1007,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
-			&device.ID, &device.SN, &device.Model, &device.Manufacturer,
+			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.Manufacturer,
 			&device.FirmwareArm, &device.FirmwareEsp,
 			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 			&device.DeviceType,
@@ -1033,14 +1034,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 }
 
 func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) ([]*model.Device, error) {
-	query := `
-		SELECT d.id, d.sn, d.model, COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
-			   COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
-			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
-			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
-			   d.station_id, d.user_id, d.status, COALESCE(d.timezone,'Asia/Shanghai'),
-			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
-			   d.last_online_at, d.created_at, d.updated_at, COALESCE(s.name, '') as station_name
+	query := `SELECT ` + deviceListSelectColumns + `
 		FROM devices d
 		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
 		LEFT JOIN stations s ON s.id = d.station_id
@@ -1059,7 +1053,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
-			&device.ID, &device.SN, &device.Model, &device.Manufacturer,
+			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.Manufacturer,
 			&device.FirmwareArm, &device.FirmwareEsp,
 			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 			&device.DeviceType,

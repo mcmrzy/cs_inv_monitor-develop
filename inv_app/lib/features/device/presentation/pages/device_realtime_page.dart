@@ -9,6 +9,7 @@ import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/core/utils/telemetry_quality.dart';
+import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceRealtimePage extends StatefulWidget {
@@ -31,6 +32,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   StreamSubscription? _statusSub;
   StreamSubscription? _realtimeSub;
   bool _hasMqttData = false;
+  bool _apiUnavailable = false;
 
   // 分组定义（颜色和图标）
   static const _groupStyles = {
@@ -171,7 +173,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           .get('/devices/${widget.sn}')
           .timeout(const Duration(seconds: 5));
       if (res.statusCode == 200 && mounted) {
-        final data = res.data['data'] as Map<String, dynamic>? ?? {};
+        final data = unwrapApiResponse<Map<String, dynamic>>(
+          res.data,
+          validate: (value) => value is Map<String, dynamic>,
+          expected: 'an object',
+        );
 
         // 解析 realtime_data
         final realtimeRaw =
@@ -223,19 +229,21 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           _modelName = data['device']?['model'] as String?;
           _loading = false;
           _error = null;
+          _apiUnavailable = false;
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        // API 调用失败（网络不可用等）：使用 MQTT 数据 + 默认字段配置降级显示
         setState(() {
-          // 仅在 MQTT 也没有数据时才构建默认字段
-          if (_modelFields.isEmpty) {
+          _apiUnavailable = true;
+          // 只有已经实际收到 MQTT 数据时才允许降级展示。
+          if (_hasMqttData && _modelFields.isEmpty) {
             _modelFields = _buildDefaultModelFields();
           }
           _loading = false;
-          // 不设置 _error，让页面以 MQTT 实时数据模式展示
-          _error = null;
+          _error = _hasMqttData
+              ? null
+              : AppLocalizations.of(context)!.str('realtime_load_failed');
         });
       }
     }
@@ -256,6 +264,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             final newMqttData = _inverterToFlatMap(rt);
             _realtimeData.addAll(newMqttData);
             _hasMqttData = true;
+            if (_apiUnavailable) {
+              _error = null;
+            }
             if (rt.onlineStatus != null) {
               _online = rt.onlineStatus!.online;
             }
@@ -616,6 +627,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       child: ListView(
         padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 40.h),
         children: [
+          if (_apiUnavailable && _hasMqttData) _buildMqttFallbackBanner(),
           // 顶部状态卡片
           _buildStatusCard(),
           SizedBox(height: 12.h),
@@ -629,6 +641,35 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           // 动态分组
           ...groups.entries
               .map((entry) => _buildGroupCard(entry.key, entry.value)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMqttFallbackBanner() {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off_outlined, size: 18.w, color: AppColors.warning),
+          SizedBox(width: 8.w),
+          Expanded(
+            child: Text(
+              l10n.str('realtime_mqtt_fallback'),
+              style: TextStyle(fontSize: 12.sp, color: AppColors.warning),
+            ),
+          ),
+          TextButton(
+            onPressed: _fetchDeviceDetail,
+            child: Text(l10n.retry),
+          ),
         ],
       ),
     );

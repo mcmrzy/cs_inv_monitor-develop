@@ -1,5 +1,7 @@
 export default {
   zh: {
+    'station.listLoadFailed': '电站列表加载失败，当前显示的不是有效空列表。',
+    'station.retryLoad': '重新加载',
     'station.title': '电站管理',
     'station.manageAll': '管理所有电站',
     'station.stationName': '电站名称',
@@ -84,6 +86,8 @@ export default {
     'station.noStationDevice': '暂无绑定设备',
   },
   en: {
+    'station.listLoadFailed': 'Failed to load stations. The empty list shown is not a valid result.',
+    'station.retryLoad': 'Try Again',
     'station.title': 'Station Management',
     'station.manageAll': 'Manage all stations',
     'station.stationName': 'Station Name',

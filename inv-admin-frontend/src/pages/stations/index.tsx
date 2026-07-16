@@ -4,7 +4,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Typography, Tag, Select, message, Space, Popconfirm,
   Drawer, Descriptions, Tabs, Statistic, Input, Button, Form, Modal, Empty, Spin, Grid,
-  Tooltip, Radio,
+  Tooltip, Radio, Alert,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
@@ -18,11 +18,12 @@ import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
 import useAuthStore from '@/stores/authStore'
 import { Role } from '@/types'
-import { ALARM_LEVEL_MAP, DEVICE_STATUS_MAP, getAlarmLevelDisplay } from '@/utils/constants'
+import { ALARM_LEVEL_MAP, DEVICE_STATUS_MAP, getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone, TIMEZONE_LIST, getTimezoneLabel } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import useLocaleStore from '@/stores/localeStore'
 import StatisticCard from '@/components/StatisticCard'
 
@@ -153,32 +154,32 @@ const StationsPage: React.FC = () => {
 
   /* ---------- 数据获取 ---------- */
 
-  const { data: stations = [], isLoading, refetch } = useQuery({
+  const { data: stations = [], isLoading, isError: stationsError, refetch } = useQuery({
     queryKey: ['stations'],
-    queryFn: () => api.get('/stations', { params: { all: true } }).then(extractList),
+    queryFn: () => api.get('/stations', { params: { all: true }, expectedDataShape: 'page' }).then(extractList),
   })
 
-  const { data: summary } = useQuery({
+  const { data: summary, error: summaryError, refetch: refetchSummary } = useQuery({
     queryKey: ['stations', 'summary'],
-    queryFn: () => api.get('/stations/summary', { params: { all: true } }).then(extractData),
+    queryFn: () => api.get('/stations/summary', { params: { all: true }, expectedDataShape: 'object' }).then(extractData),
   })
 
-  const { data: users = [] } = useQuery({
+  const { data: users = [], error: usersError, refetch: refetchUsers } = useQuery({
     queryKey: ['users', 'all'],
-    queryFn: () => api.get('/users', { params: { pageSize: 9999 } }).then(extractList),
+    queryFn: () => api.get('/users', { params: { pageSize: 9999 }, expectedDataShape: 'page' }).then(extractList),
     enabled: !!isAdmin && hasPermission('users:view'),
   })
 
   /* ---------- 详情数据 ---------- */
 
-  const { data: stationDevices = [], isLoading: devicesLoading } = useQuery({
+  const { data: stationDevices = [], isLoading: devicesLoading, error: stationDevicesError, refetch: refetchStationDevices } = useQuery({
     queryKey: ['station-devices', currentStation?.id],
-    queryFn: () => api.get('/devices', { params: { station_id: currentStation!.id, pageSize: 999 } }).then(extractList),
+    queryFn: () => api.get('/devices', { params: { station_id: currentStation!.id, pageSize: 999 }, expectedDataShape: 'page' }).then(extractList),
     enabled: !!currentStation?.id && drawerOpen && activeTab === 'devices',
   })
 
   /* 实时数据批量获取 - 15秒刷新 */
-  const { data: realtimeData } = useQuery({
+  const { data: realtimeData, error: realtimeError, refetch: refetchRealtime } = useQuery({
     queryKey: ['station-devices-realtime', currentStation?.id],
     queryFn: async () => {
       const devices = stationDevices ?? []
@@ -221,10 +222,11 @@ const StationsPage: React.FC = () => {
     )
   }
 
-  const { data: stationStats, isLoading: statsLoading } = useQuery({
+  const { data: stationStats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: ['station-statistics', currentStation?.id, trendRange],
     queryFn: async () => {
       const res = await api.get(`/stations/${currentStation!.id}/statistics`, {
+        expectedDataShape: 'array',
         params: {
           start_date: dayjs().tz(timezone).subtract(trendRange, 'day').format('YYYY-MM-DD'),
           end_date: dayjs().tz(timezone).format('YYYY-MM-DD'),
@@ -261,9 +263,9 @@ const StationsPage: React.FC = () => {
     enabled: !!currentStation?.id && drawerOpen && activeTab === 'statistics',
   })
 
-  const { data: stationAlarms = [], isLoading: alarmsLoading } = useQuery({
+  const { data: stationAlarms = [], isLoading: alarmsLoading, error: alarmsError, refetch: refetchAlarms } = useQuery({
     queryKey: ['station-alarms', currentStation?.id],
-    queryFn: () => api.get('/alarms', { params: { station_id: currentStation!.id, pageSize: 999 } }).then(extractList),
+    queryFn: () => api.get('/alarms', { params: { station_id: currentStation!.id, pageSize: 999 }, expectedDataShape: 'page' }).then(extractList),
     enabled: !!currentStation?.id && drawerOpen && activeTab === 'alarms',
   })
 
@@ -574,7 +576,7 @@ const StationsPage: React.FC = () => {
       width: 80,
       render: (v: number | string) => {
         const s = DEVICE_STATUS_MAP[String(v)]
-        return s ? <Tag color={s.color}>{s.label}</Tag> : <Tag>{v}</Tag>
+        return s ? <Tag color={s.color}>{t(s.i18nKey)}</Tag> : <Tag>{v}</Tag>
       },
     },
     {
@@ -668,7 +670,7 @@ const StationsPage: React.FC = () => {
       width: 80,
       render: (v: number | string, record: any) => {
         const cfg = getAlarmLevelDisplay(record.fault_code, v)
-        return <Tag color={cfg.color}>{cfg.label}</Tag>
+        return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
       },
     },
     { title: t('station.faultCode'), dataIndex: 'fault_code', width: 100 },
@@ -676,6 +678,10 @@ const StationsPage: React.FC = () => {
       title: t('station.faultMessage'),
       dataIndex: 'fault_message',
       ellipsis: true,
+      render: (message: string, record: AlarmItem) => {
+        const key = getAlarmMessageI18nKey(record.fault_code)
+        return key ? t(key) : message
+      },
     },
     {
       title: t('common.status'),
@@ -901,9 +907,34 @@ const StationsPage: React.FC = () => {
 
   /* ==================== 渲染 ==================== */
 
+  const secondaryQueryFailure = [
+    { error: summaryError, retry: refetchSummary },
+    { error: usersError, retry: refetchUsers },
+    { error: stationDevicesError, retry: refetchStationDevices },
+    { error: realtimeError, retry: refetchRealtime },
+    { error: statsError, retry: refetchStats },
+    { error: alarmsError, retry: refetchAlarms },
+  ].find((item) => item.error)
+
   return (
     <div style={{ padding: '0 0 24px' }}>
       {contextHolder}
+      {stationsError && (
+        <Alert
+          type="error"
+          showIcon
+          message={t('station.listLoadFailed')}
+          action={<Button size="small" danger onClick={() => refetch()}>{t('station.retryLoad')}</Button>}
+          style={{ marginBottom: 16 }}
+        />
+      )}
+      {secondaryQueryFailure && (
+        <QueryErrorAlert
+          error={secondaryQueryFailure.error}
+          onRetry={() => { void secondaryQueryFailure.retry() }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
         <Title level={4} style={{ margin: 0 }}>⚡ {t('station.title')}</Title>
         <Space>

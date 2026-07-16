@@ -14,10 +14,11 @@ import { userApi } from '@/services/userApi'
 import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
 import { Role } from '@/types'
-import { ROLE_MAP, ROLE_COLORS } from '@/utils/constants'
+import { ROLE_MAP, ROLE_COLORS, ROLE_I18N_KEY } from '@/utils/constants'
 import { queryKeys } from '@/utils/queryKeys'
 import type { User } from '@/types'
 import { formatInTimezone } from '@/utils/timezone'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import useTimezoneStore from '@/stores/timezoneStore'
 
 const { Title } = Typography
@@ -97,7 +98,7 @@ const UsersPage: React.FC = () => {
 
   const queryParams = { page, page_size: pageSize, keyword: keyword || undefined, role: roleFilter, status: statusFilter }
 
-  const { data: listRes, isLoading, refetch } = useQuery({
+  const { data: listRes, isLoading, error: listError, refetch } = useQuery({
     queryKey: queryKeys.users.list(queryParams),
     queryFn: () => userApi.list(queryParams).then((r) => {
       const d = (r.data?.data ?? r.data) as { items?: User[]; total?: number }
@@ -105,7 +106,7 @@ const UsersPage: React.FC = () => {
     }),
   })
 
-  const { data: childrenRes } = useQuery({
+  const { data: childrenRes, error: childrenError, refetch: refetchChildren } = useQuery({
     queryKey: ['users', 'children', selectedUserId],
     queryFn: () => userApi.getChildren(selectedUserId).then((r) => {
       const d = (r.data?.data ?? r.data) as { items?: User[]; total?: number }
@@ -149,7 +150,7 @@ const UsersPage: React.FC = () => {
   const assignableRoles = getAssignableRoles(currentUser?.role)
 
   // 获取可选的上级用户列表（角色等级高于当前创建的用户）
-  const { data: parentUsers } = useQuery({
+  const { data: parentUsers, error: parentUsersError, refetch: refetchParentUsers } = useQuery({
     queryKey: ['users', 'parents', currentUser?.id],
     queryFn: () => userApi.list({ page_size: 100, status: 1 }).then((r) => {
       const d = (r.data?.data ?? r.data) as { items?: User[]; total?: number }
@@ -195,7 +196,7 @@ const UsersPage: React.FC = () => {
       title: t('user.role'), dataIndex: 'role', key: 'role', width: 110,
       render: (role: any) => {
         const key = typeof role === 'number' ? String(role) : role
-        return <Tag color={ROLE_COLORS[key] || '#d9d9d9'}>{ROLE_MAP[key] || key}</Tag>
+        return <Tag color={ROLE_COLORS[key] || '#d9d9d9'}>{ROLE_I18N_KEY[key] ? t(ROLE_I18N_KEY[key]) : ROLE_MAP[key] || key}</Tag>
       },
     },
     {
@@ -256,8 +257,21 @@ const UsersPage: React.FC = () => {
     setPage(1)
   }
 
+  const queryFailure = [
+    { error: listError, retry: refetch },
+    { error: childrenError, retry: refetchChildren },
+    { error: parentUsersError, retry: refetchParentUsers },
+  ].find((item) => item.error)
+
   return (
     <div>
+      {queryFailure && (
+        <QueryErrorAlert
+          error={queryFailure.error}
+          onRetry={() => { void queryFailure.retry() }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Title level={4} style={{ marginBottom: 16 }}>
         <TeamOutlined style={{ marginRight: 8 }} />{t('user.title')}
       </Title>
@@ -304,7 +318,7 @@ const UsersPage: React.FC = () => {
           <Form.Item name="email" label={t('user.email')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.email') }, { type: 'email', message: t('user.emailFormatError') }]}><Input placeholder={t('common.pleaseInput') + t('user.email')} /></Form.Item>
           <Form.Item name="nickname" label={t('user.nickname')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.nickname') }]}><Input placeholder={t('common.pleaseInput') + t('user.nickname')} /></Form.Item>
           <Form.Item name="role" label={t('user.role')} rules={[{ required: true, message: t('common.pleaseSelect') + t('user.role') }]}>
-            <Select placeholder={t('common.pleaseSelect') + t('user.role')} options={assignableRoles.map((r) => ({ label: ROLE_MAP[ROLE_TO_NUMERIC[r]], value: ROLE_TO_NUMERIC[r] }))} />
+            <Select placeholder={t('common.pleaseSelect') + t('user.role')} options={assignableRoles.map((r) => ({ label: t(ROLE_I18N_KEY[ROLE_TO_NUMERIC[r]]), value: ROLE_TO_NUMERIC[r] }))} />
           </Form.Item>
           {!editingUser && parentUsers && parentUsers.length > 0 && (
             <Form.Item name="parentId" label={t('user.parentUser')}>
@@ -312,7 +326,7 @@ const UsersPage: React.FC = () => {
                 allowClear
                 placeholder={t('user.selectParent')}
                 options={parentUsers.map((u) => ({
-                  label: `${u.nickname || u.phone} (${ROLE_MAP[String(u.role)] || u.role})`,
+                  label: `${u.nickname || u.phone} (${ROLE_I18N_KEY[String(u.role)] ? t(ROLE_I18N_KEY[String(u.role)]) : ROLE_MAP[String(u.role)] || u.role})`,
                   value: u.id,
                 }))}
               />
@@ -363,7 +377,7 @@ const UsersPage: React.FC = () => {
                 title: t('user.role'), dataIndex: 'role', key: 'role', width: 110,
                 render: (role: any) => {
                   const key = typeof role === 'number' ? String(role) : role
-                  return <Tag color={ROLE_COLORS[key] || '#d9d9d9'}>{ROLE_MAP[key] || key}</Tag>
+                  return <Tag color={ROLE_COLORS[key] || '#d9d9d9'}>{ROLE_I18N_KEY[key] ? t(ROLE_I18N_KEY[key]) : ROLE_MAP[key] || key}</Tag>
                 },
               },
               {

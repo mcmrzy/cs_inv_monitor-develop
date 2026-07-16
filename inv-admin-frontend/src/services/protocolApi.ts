@@ -111,16 +111,22 @@ function unwrap<T>(response: { data: ApiResponse<T> }): T {
 export function getApiErrorMessage(error: unknown): string {
   const axiosError = error as AxiosError<ApiResponse<unknown>>
   const status = axiosError.response?.status
+  const businessCode = axiosError.response?.data?.code
   const message = axiosError.response?.data?.message || (error instanceof Error ? error.message : '')
   if (status === 403) return `无权访问该设备${message ? `：${message}` : ''}`
   if (status === 404) return `设备或接口不存在${message ? `：${message}` : ''}`
   if (status && status >= 500) return `服务端处理失败（HTTP ${status}）${message ? `：${message}` : ''}`
+  if (businessCode !== undefined && businessCode !== 0) return `API ${businessCode}${message ? ` · ${message}` : ''}`
+  if (status) return `HTTP ${status}${message ? ` · ${message}` : ''}`
   return message || '请求失败，请检查网络和服务状态'
 }
 
 export const protocolApi = {
   getParallelState: async (sn: string): Promise<ParallelState> =>
-    unwrap(await api.get<ApiResponse<ParallelState>>(`/devices/${encodeURIComponent(sn)}/parallel-state`)),
+    unwrap(await api.get<ApiResponse<ParallelState>>(
+      `/devices/${encodeURIComponent(sn)}/parallel-state`,
+      { expectedDataShape: 'object' },
+    )),
 
   getThreePhase: async (
     sn: string,
@@ -128,7 +134,7 @@ export const protocolApi = {
   ): Promise<PaginatedResponse<ThreePhaseSample>> =>
     unwrap(await api.get<ApiResponse<PaginatedResponse<ThreePhaseSample>>>(
       `/devices/${encodeURIComponent(sn)}/three-phase`,
-      { params },
+      { params, expectedDataShape: 'page' },
     )),
 
   getAlarmEvents: async (
@@ -137,9 +143,9 @@ export const protocolApi = {
   ): Promise<PaginatedResponse<AlarmEvent>> =>
     unwrap(await api.get<ApiResponse<PaginatedResponse<AlarmEvent>>>(
       `/devices/${encodeURIComponent(sn)}/alarm-events`,
-      { params },
+      { params, expectedDataShape: 'page' },
     )),
 
   getAlarmEventDetail: async (id: number): Promise<AlarmEventDetail> =>
-    unwrap(await api.get<ApiResponse<AlarmEventDetail>>(`/alarm-events/${id}`)),
+    unwrap(await api.get<ApiResponse<AlarmEventDetail>>(`/alarm-events/${id}`, { expectedDataShape: 'object' })),
 }

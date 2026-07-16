@@ -23,9 +23,9 @@ import { commandApi } from '@/services/commandApi'
 import { modelApi } from '@/services/modelApi'
 import { userApi } from '@/services/userApi'
 import useAuthStore from '@/stores/authStore'
-import { Role } from '@/types'
-import { DEVICE_STATUS_MAP } from '@/utils/constants'
+import { Role, type CommandCapability, type ParameterSchema, type SchemaArg } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import StatusBadge from '@/components/StatusBadge'
 import { useModelFields, DynamicFieldRenderer, DynamicStatCards } from '@/components/dyna'
 import { formatInTimezone } from '@/utils/timezone'
@@ -123,6 +123,49 @@ interface CommandTemplate {
   params: CommandParam[]
   requiresConfirm: boolean
   confirmationMessage?: string
+}
+
+function parseCapabilitySchema(raw: unknown): ParameterSchema | null {
+  if (!raw) return null
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw) as ParameterSchema } catch { return null }
+  }
+  return typeof raw === 'object' && raw !== null && 'args' in raw
+    ? raw as ParameterSchema
+    : null
+}
+
+function mapCapabilityParam(arg: SchemaArg): CommandParam {
+  const hasEnum = Array.isArray(arg.enum) && arg.enum.length > 0
+  return {
+    name: arg.key,
+    label: arg.label || arg.description || arg.key,
+    type: hasEnum ? 'select' : arg.type === 'integer' || arg.type === 'number' ? 'number' : arg.type,
+    required: arg.required ?? false,
+    options: hasEnum ? arg.enum!.map((value) => ({ label: String(value), value })) : undefined,
+    min: arg.min,
+    max: arg.max,
+    defaultValue: arg.default,
+    unit: arg.unit,
+  }
+}
+
+function mapCapabilityToTemplate(capability: CommandCapability): CommandTemplate {
+  const supportedCategories = new Set(['power', 'battery', 'grid', 'system', 'ota'])
+  const category = supportedCategories.has(capability.config_domain || '')
+    ? capability.config_domain as CommandTemplate['category']
+    : 'system'
+  const schema = parseCapabilitySchema(capability.parameter_schema)
+  const label = capability.ui_schema?.display_name || capability.display_name || capability.command_code
+  return {
+    name: capability.command_code,
+    label,
+    description: capability.display_name && capability.display_name !== label ? capability.display_name : '',
+    category,
+    params: (schema?.args ?? []).map(mapCapabilityParam),
+    requiresConfirm: capability.risk_level >= 3 || capability.confirmation_mode === 'required',
+    confirmationMessage: capability.risk_level >= 3 ? label : undefined,
+  }
 }
 
 interface CommandHistoryRecord {
@@ -248,7 +291,7 @@ const DevicesPage: React.FC = () => {
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null)
 
   const [modelOptions, setModelOptions] = useState<{ label: string; value: string }[]>([])
-  const modelFields = useModelFields(detailDevice?.model)
+  const modelFields = useModelFields(detailDevice?.model, (detailDevice as any)?.model_id)
 
   const buildQueryParams = useCallback(() => {
     const params: any = {
@@ -267,7 +310,7 @@ const DevicesPage: React.FC = () => {
     return params
   }, [page, pageSize, filters, isInstaller, isEndUser, user?.id])
 
-  const { data: devicesRes, isLoading: devicesLoading } = useQuery({
+  const { data: devicesRes, isLoading: devicesLoading, isError: devicesError, refetch: refetchDevices } = useQuery({
     queryKey: ['devices', buildQueryParams()],
     queryFn: () =>
       deviceApi.getDevices(buildQueryParams()).then((res) => {
@@ -280,7 +323,7 @@ const DevicesPage: React.FC = () => {
       }),
   })
 
-  const { data: deviceDetailRaw } = useQuery({
+  const { data: deviceDetailRaw, error: deviceDetailError, refetch: refetchDeviceDetail } = useQuery({
     queryKey: ['deviceDetail', detailSn],
     queryFn: () =>
       deviceApi.getDeviceBySn(detailSn).then((res) => {
@@ -291,7 +334,7 @@ const DevicesPage: React.FC = () => {
     enabled: !!detailSn && detailDrawerOpen,
   })
 
-  const { data: realtimeData, isLoading: realtimeLoading } = useQuery({
+  const { data: realtimeData, isLoading: realtimeLoading, error: realtimeError, refetch: refetchRealtime } = useQuery({
     queryKey: ['deviceRealtime', detailSn],
     queryFn: () =>
       deviceApi.getRealtime(detailSn).then((res) => {
@@ -416,7 +459,7 @@ const DevicesPage: React.FC = () => {
     }).catch(() => {})
   }, [])
 
-  const { data: lifecycleRes } = useQuery({
+  const { data: lifecycleRes, error: lifecycleError, refetch: refetchLifecycle } = useQuery({
     queryKey: ['deviceLifecycle', detailSn],
     queryFn: () =>
       deviceApi.getLifecycleHistory(detailSn).then((res) => {
@@ -430,7 +473,7 @@ const DevicesPage: React.FC = () => {
     enabled: !!detailSn && detailDrawerOpen,
   })
 
-  const { data: unbindRequestsRes } = useQuery({
+  const { data: unbindRequestsRes, error: unbindRequestsError, refetch: refetchUnbindRequests } = useQuery({
     queryKey: ['unbindRequests', unbindReqPage, unbindReqPageSize],
     queryFn: () =>
       deviceApi.getUnbindRequests({ page: unbindReqPage, pageSize: unbindReqPageSize }).then((res) => {
@@ -444,20 +487,20 @@ const DevicesPage: React.FC = () => {
     enabled: canDirectUnbind && unbindApprovalTab === 'approvals',
   })
 
-  const { data: commandTemplatesRes } = useQuery({
+  const { data: commandTemplatesRes, error: commandTemplatesError, refetch: refetchCommandTemplates } = useQuery({
     queryKey: ['commandTemplates', detailSn],
     queryFn: () =>
       commandApi.getTemplates(detailSn).then((res) => {
         const d = res.data
         const inner = d?.data ?? d
-        if (Array.isArray(inner)) return inner as CommandTemplate[]
-        if (inner?.items && Array.isArray(inner.items)) return inner.items as CommandTemplate[]
-        return [] as CommandTemplate[]
+        return (inner as CommandCapability[])
+          .filter((capability) => capability.is_enabled)
+          .map(mapCapabilityToTemplate)
       }),
     enabled: !!detailSn && detailDrawerOpen,
   })
 
-  const { data: commandHistoryRes } = useQuery({
+  const { data: commandHistoryRes, error: commandHistoryError, refetch: refetchCommandHistory } = useQuery({
     queryKey: ['commandHistory', detailSn],
     queryFn: () =>
       commandApi.getHistory(detailSn, { page_size: 50 }).then((res) => {
@@ -554,7 +597,7 @@ const DevicesPage: React.FC = () => {
   })
 
   // 获取安装商列表
-  const { data: installersRes } = useQuery({
+  const { data: installersRes, error: installersError, refetch: refetchInstallers } = useQuery({
     queryKey: ['users', 'installers'],
     queryFn: () =>
       userApi.list({ role: Role.INSTALLER, pageSize: 100 }).then((res) => {
@@ -579,9 +622,9 @@ const DevicesPage: React.FC = () => {
   })
 
   // 获取电站列表（用于绑定电站下拉）
-  const { data: stationsList = [] } = useQuery({
+  const { data: stationsList = [], error: stationsListError, refetch: refetchStationsList } = useQuery({
     queryKey: ['stations-for-bind'],
-    queryFn: () => api.get('/stations', { params: { page_size: 200 } }).then((res: any) => {
+    queryFn: () => api.get('/stations', { params: { page_size: 200 }, expectedDataShape: 'page' }).then((res: any) => {
       const d = res.data
       const list = Array.isArray(d) ? d : d?.data?.items || d?.data?.list || d?.list || (Array.isArray(d?.data) ? d?.data : [])
       return Array.isArray(list) ? list : []
@@ -1855,9 +1898,37 @@ const DevicesPage: React.FC = () => {
     },
   ]
 
+  const secondaryQueryFailure = [
+    { error: deviceDetailError, retry: refetchDeviceDetail },
+    { error: realtimeError, retry: refetchRealtime },
+    { error: lifecycleError, retry: refetchLifecycle },
+    { error: unbindRequestsError, retry: refetchUnbindRequests },
+    { error: commandTemplatesError, retry: refetchCommandTemplates },
+    { error: commandHistoryError, retry: refetchCommandHistory },
+    { error: installersError, retry: refetchInstallers },
+    { error: stationsListError, retry: refetchStationsList },
+  ].find((item) => item.error)
+
   return (
     <div>
       {contextHolder}
+
+      {devicesError && (
+        <Alert
+          type="error"
+          showIcon
+          message={t('dev.listLoadFailed')}
+          action={<Button size="small" danger onClick={() => refetchDevices()}>{t('dev.retryLoad')}</Button>}
+          style={{ marginBottom: 16 }}
+        />
+      )}
+      {secondaryQueryFailure && (
+        <QueryErrorAlert
+          error={secondaryQueryFailure.error}
+          onRetry={() => { void secondaryQueryFailure.retry() }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <Title level={4} style={{ marginBottom: 24 }}>
         {t('dev.title')}

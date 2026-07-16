@@ -1,5 +1,7 @@
 import React from 'react';
 import { Button, Result } from 'antd';
+import locales from '@/locales';
+import useLocaleStore from '@/stores/localeStore';
 
 interface Props {
   children: React.ReactNode;
@@ -31,6 +33,8 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      const dictionary = locales[useLocaleStore.getState().lang];
+      const t = (key: string) => dictionary[key] ?? key;
       return (
         <div style={{
           minHeight: '100vh',
@@ -41,17 +45,17 @@ class ErrorBoundary extends React.Component<Props, State> {
         }}>
           <Result
             status="error"
-            title="页面出错了"
-            subTitle={this.state.error?.message || '未知错误'}
+            title={t('error.pageTitle')}
+            subTitle={this.state.error?.message || t('error.unknown')}
             extra={[
               <Button type="primary" key="retry" onClick={this.handleReset}>
-                返回登录页
+                {t('error.backToLogin')}
               </Button>,
               <Button key="detail" onClick={() => alert(JSON.stringify({
                 message: this.state.error?.message,
                 stack: this.state.error?.stack,
               }))}>
-                查看详情
+                {t('error.viewDetails')}
               </Button>,
             ]}
           />

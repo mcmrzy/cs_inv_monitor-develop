@@ -10,6 +10,7 @@ import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 const { Text, Title: AntTitle } = Typography
 
 interface DiagnosticsTabProps {
@@ -33,12 +34,12 @@ const DiagnosticsTab: React.FC<DiagnosticsTabProps> = ({ sn }) => {
   const { timezone } = useTimezoneStore()
   const queryClient = useQueryClient()
 
-  const { data: controlState, isLoading: stateLoading } = useQuery({
+  const { data: controlState, isLoading: stateLoading, error: stateError, refetch: refetchState } = useQuery({
     queryKey: queryKeys.devices.controlState(sn),
     queryFn: () => deviceApi.getControlState(sn).then((r) => r.data?.data ?? null),
   })
 
-  const { data: commandsRes, isLoading: cmdLoading } = useQuery({
+  const { data: commandsRes, isLoading: cmdLoading, error: commandsError, refetch: refetchCommands } = useQuery({
     queryKey: queryKeys.devices.commands(sn, { page: 1, page_size: 20 }),
     queryFn: () => deviceApi.getCommands(sn, { page: 1, page_size: 20 }).then((r) => r.data?.data ?? r.data),
   })
@@ -92,6 +93,13 @@ const DiagnosticsTab: React.FC<DiagnosticsTabProps> = ({ sn }) => {
 
   return (
     <Spin spinning={stateLoading || cmdLoading}>
+      {(stateError || commandsError) && (
+        <QueryErrorAlert
+          error={stateError || commandsError}
+          onRetry={() => { void (stateError ? refetchState() : refetchCommands()) }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       {/* Action Cards */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={12}>

@@ -348,6 +348,38 @@ func TestRateLimit_超频请求被拒(t *testing.T) {
 	assert.True(t, bucket.allow(), "等待后应有新 token")
 }
 
+func TestRateLimitWith_使用自定义突发上限(t *testing.T) {
+	r := gin.New()
+	r.Use(RateLimitWith(0.01, 2))
+	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
+
+	for i, wantStatus := range []int{200, 200, 429} {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/test", nil)
+		req.RemoteAddr = "5.6.7.8:1234"
+		r.ServeHTTP(w, req)
+		assert.Equal(t, wantStatus, w.Code, "第 %d 个请求状态不符", i+1)
+	}
+}
+
+func TestRateLimitWith_无效配置使用安全默认值(t *testing.T) {
+	r := gin.New()
+	r.Use(RateLimitWith(0, 0))
+	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
+
+	first := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "9.8.7.6:1234"
+	r.ServeHTTP(first, req)
+	assert.Equal(t, 200, first.Code)
+
+	second := httptest.NewRecorder()
+	req, _ = http.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "9.8.7.6:1234"
+	r.ServeHTTP(second, req)
+	assert.Equal(t, 429, second.Code)
+}
+
 // ==================== 上下文 Helper ====================
 
 func TestGetUserID_不存在返回0(t *testing.T) {

@@ -329,7 +329,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 
 	if err := h.smsService.SendCode(c.Request.Context(), req.Phone, req.Type); err != nil {
 		logger.Warn("send code failed", zap.String("phone", req.Phone), zap.Error(err))
-		response.Error(c, 4006, err.Error())
+		response.Error(c, 4006, "verification code delivery failed")
 		return
 	}
 
@@ -682,7 +682,7 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 
 	if err := h.emailService.SendCode(c.Request.Context(), req.Email, req.Type); err != nil {
 		logger.Warn("send email code failed", zap.String("email", req.Email), zap.Error(err))
-		response.Error(c, 4010, err.Error())
+		response.Error(c, 4010, "verification code delivery failed")
 		return
 	}
 

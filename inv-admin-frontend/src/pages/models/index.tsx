@@ -14,6 +14,7 @@ import {
 import { modelApi, DeviceModelItem, DeviceModelFieldItem, DeviceModelProtocolItem, ModelFieldCapability, ModelCommandCapability } from '@/services/modelApi'
 import useTranslation from '@/hooks/useTranslation'
 import ModelRegistryWorkspace from './model_registry_workspace'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Text, Title } = Typography
 
@@ -132,7 +133,7 @@ const ModelsPage: React.FC = () => {
   const [editingProtocol, setEditingProtocol] = useState<DeviceModelProtocolItem | null>(null)
   const [protocolForm] = Form.useForm()
 
-  const { data: modelList = [], isLoading } = useQuery({
+  const { data: modelList = [], isLoading, error: modelsError, refetch: refetchModels } = useQuery({
     queryKey: ['models'],
     queryFn: () => modelApi.listModels().then((res) => {
       const d = res.data
@@ -140,7 +141,7 @@ const ModelsPage: React.FC = () => {
     }),
   })
 
-  const { data: fieldList = [] } = useQuery({
+  const { data: fieldList = [], error: fieldsError, refetch: refetchFields } = useQuery({
     queryKey: ['modelFields', currentModelId],
     queryFn: () => modelApi.getFields(currentModelId!).then((res) => {
       const d = res.data
@@ -149,7 +150,7 @@ const ModelsPage: React.FC = () => {
     enabled: currentModelId != null,
   })
 
-  const { data: protocolList = [], refetch: refetchProtocols } = useQuery({
+  const { data: protocolList = [], error: protocolsError, refetch: refetchProtocols } = useQuery({
     queryKey: ['modelProtocols', currentModelId],
     queryFn: () => modelApi.getProtocols(currentModelId!).then((res) => {
       const d = res.data
@@ -158,19 +159,19 @@ const ModelsPage: React.FC = () => {
     enabled: currentModelId != null,
   })
 
-  const { data: fieldCapabilities = [] } = useQuery<ModelFieldCapability[]>({
+  const { data: fieldCapabilities = [], error: fieldCapabilitiesError, refetch: refetchFieldCapabilities } = useQuery<ModelFieldCapability[]>({
     queryKey: ['modelFieldCapabilities', currentModelId],
     queryFn: () => modelApi.getFieldCapabilities(currentModelId!).then((res) => res.data?.data ?? res.data ?? []),
     enabled: currentModelId != null && fieldsDrawerOpen,
   })
 
-  const { data: commandCapabilities = [] } = useQuery<ModelCommandCapability[]>({
+  const { data: commandCapabilities = [], error: commandCapabilitiesError, refetch: refetchCommandCapabilities } = useQuery<ModelCommandCapability[]>({
     queryKey: ['modelCommandCapabilities', currentModelId],
     queryFn: () => modelApi.getCommandCapabilities(currentModelId!).then((res) => res.data?.data ?? res.data ?? []),
     enabled: currentModelId != null && fieldsDrawerOpen,
   })
 
-  const { data: protocolSchema } = useQuery<any>({
+  const { data: protocolSchema, error: protocolSchemaError, refetch: refetchProtocolSchema } = useQuery<any>({
     queryKey: ['modelProtocolSchema', currentModelId],
     queryFn: () => modelApi.getProtocolSchema(currentModelId!).then((res) => res.data?.data ?? res.data),
     enabled: currentModelId != null && fieldsDrawerOpen,
@@ -508,9 +509,25 @@ const ModelsPage: React.FC = () => {
     )
   }
 
+  const queryFailure = [
+    { error: modelsError, retry: refetchModels },
+    { error: fieldsError, retry: refetchFields },
+    { error: protocolsError, retry: refetchProtocols },
+    { error: fieldCapabilitiesError, retry: refetchFieldCapabilities },
+    { error: commandCapabilitiesError, retry: refetchCommandCapabilities },
+    { error: protocolSchemaError, retry: refetchProtocolSchema },
+  ].find((item) => item.error)
+
   return (
     <>
       {contextHolder}
+      {queryFailure && (
+        <QueryErrorAlert
+          error={queryFailure.error}
+          onRetry={() => { void queryFailure.retry() }}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <Title level={4} style={{ margin: 0 }}>{t('models.title')}</Title>

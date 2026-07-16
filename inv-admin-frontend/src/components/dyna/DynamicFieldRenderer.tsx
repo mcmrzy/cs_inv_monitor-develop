@@ -1,6 +1,7 @@
 import React from 'react'
 import { Descriptions, Tag, Space, Typography, Empty, Spin } from 'antd'
 import type { DeviceModelFieldItem } from '@/services/modelApi'
+import useTranslation from '@/hooks/useTranslation'
 
 const { Text } = Typography
 
@@ -21,8 +22,9 @@ const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
   bordered = true,
   emptyText = '-',
 }) => {
+  const { t } = useTranslation()
   if (!fields || fields.length === 0) {
-    return <Empty description="无字段配置" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+    return <Empty description={t('common.noFieldConfig')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
   }
 
   const formatValue = (field: DeviceModelFieldItem, value: any): React.ReactNode => {
@@ -34,7 +36,7 @@ const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
 
     switch (field.field_type) {
       case 'bool':
-        return value ? <Tag color="green">是</Tag> : <Tag color="default">否</Tag>
+        return value ? <Tag color="green">{t('common.yes')}</Tag> : <Tag color="default">{t('common.no')}</Tag>
       case 'float': {
         const num = Number(value)
         return isNaN(num) ? <Text type="secondary">{emptyText}</Text> : <Text>{num.toFixed(2)}{unit}</Text>
@@ -51,7 +53,7 @@ const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
   return (
     <Descriptions column={column} size={size} bordered={bordered}>
       {fields.map((field) => (
-        <Descriptions.Item key={field.id} label={field.field_name}>
+        <Descriptions.Item key={field.id} label={field.field_name && t(field.field_name) !== field.field_name ? t(field.field_name) : (field.field_name || field.field_key)}>
           {formatValue(field, data[field.field_key])}
         </Descriptions.Item>
       ))}

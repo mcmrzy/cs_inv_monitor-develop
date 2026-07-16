@@ -50,7 +50,9 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
         listener: (context, state) {
           // 数据加载成功后自动连接 SSE
           if (state is DashboardLoaded && !state.isSSEConnected) {
-            context.read<DashboardBloc>().add(const DashboardSSEConnectRequested());
+            context
+                .read<DashboardBloc>()
+                .add(const DashboardSSEConnectRequested());
           }
         },
         builder: (context, state) {
@@ -87,6 +89,8 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
         children: [
           // 离线数据提示
           if (data.isFromCache) _buildCacheBanner(),
+          if (state.failedSections.isNotEmpty)
+            _buildPartialFailureBanner(context),
 
           // Hero 能量卡片
           Padding(
@@ -140,6 +144,32 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
 
           // 底部留白
           SizedBox(height: 100.h),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPartialFailureBanner(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      margin: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
+      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+          SizedBox(width: 10.w),
+          Expanded(child: Text(l10n.failedToLoad)),
+          TextButton(
+            onPressed: () => context
+                .read<DashboardBloc>()
+                .add(const DashboardLoadRequested()),
+            child: Text(l10n.retry),
+          ),
         ],
       ),
     );
@@ -204,7 +234,9 @@ class _DashboardOverviewPageState extends State<DashboardOverviewPage> {
             SizedBox(height: 16.h),
             OutlinedButton(
               onPressed: () {
-                context.read<DashboardBloc>().add(const DashboardLoadRequested());
+                context
+                    .read<DashboardBloc>()
+                    .add(const DashboardLoadRequested());
               },
               child: Text(l10n.retry),
             ),

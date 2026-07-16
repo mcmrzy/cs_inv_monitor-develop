@@ -692,10 +692,15 @@ CREATE TABLE firmware_versions (
     file_url VARCHAR(500) NOT NULL,
     file_size BIGINT,
     file_md5 VARCHAR(32),
+    file_sha256 VARCHAR(64) DEFAULT '',
     changelog TEXT,
     is_force BOOLEAN DEFAULT FALSE,
+    uploaded_by BIGINT DEFAULT 0,
     status SMALLINT DEFAULT 1, -- 1:正常 0:禁用
+    target_chip VARCHAR(50) DEFAULT '',
+    main_version VARCHAR(50) DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(model, version)
 );
 

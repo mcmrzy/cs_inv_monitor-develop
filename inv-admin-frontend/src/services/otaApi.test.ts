@@ -9,26 +9,24 @@ describe('otaApi', () => {
     it('listFirmware should return firmware list', async () => {
       const res = await otaApi.listFirmware({ page: 1 })
       const data = res.data?.data ?? res.data
-      expect(data.items).toHaveLength(mockFirmwares.length)
+      expect(data).toHaveLength(mockFirmwares.length)
     })
 
     it('getAllFirmware should request with large page_size', async () => {
+      let requestedPageSize: string | null = null
       server.use(
         http.get('/api/v1/firmwares', ({ request }) => {
           const url = new URL(request.url)
+          requestedPageSize = url.searchParams.get('page_size')
           return HttpResponse.json({
             code: 0,
-            data: {
-              items: mockFirmwares,
-              total: mockFirmwares.length,
-              page_size: url.searchParams.get('page_size'),
-            },
+            data: mockFirmwares,
           })
         }),
       )
 
-      const res = await otaApi.getAllFirmware()
-      expect(res.data.data.page_size).toBe('9999')
+      await otaApi.getAllFirmware()
+      expect(requestedPageSize).toBe('9999')
     })
 
     it('deleteFirmware should delete by id', async () => {
@@ -127,7 +125,7 @@ describe('otaApi', () => {
         http.get('/api/v1/ota/packages', () => {
           return HttpResponse.json({
             code: 0,
-            data: { items: [], total: 0 },
+            data: [],
           })
         }),
       )

@@ -69,9 +69,11 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
       if (dataCacheService != null) {
         final cached = dataCacheService!.load(DataCacheService.alarmList);
         if (cached != null && cached is Map<String, dynamic>) {
-          final alarms = (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
+          final alarms =
+              (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
           final total = (cached['total'] as int?) ?? 0;
-          emit(AlarmListLoaded(alarms: alarms, total: total, isFromCache: true));
+          emit(
+              AlarmListLoaded(alarms: alarms, total: total, isFromCache: true));
           return;
         }
       }
@@ -85,23 +87,26 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
     );
     result.fold(
       (failure) {
-        if (state is AlarmListLoaded) return;
         // 失败时尝试从缓存加载
-        if (dataCacheService != null) {
+        if (failure is NetworkFailure &&
+            state is! AlarmListLoaded &&
+            dataCacheService != null) {
           final cached = dataCacheService!.load(DataCacheService.alarmList);
           if (cached != null && cached is Map<String, dynamic>) {
-            final alarms = (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
+            final alarms =
+                (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
             final total = (cached['total'] as int?) ?? 0;
             // 只有网络连接失败时才标记为缓存数据
-            final isNetworkError = failure is NetworkFailure;
-            emit(AlarmListLoaded(alarms: alarms, total: total, isFromCache: isNetworkError));
+            emit(AlarmListLoaded(
+                alarms: alarms, total: total, isFromCache: true));
             return;
           }
         }
         emit(AlarmError(message: failure.message));
       },
       (data) {
-        final alarms = (data['items'] as List?) ?? (data['list'] as List?) ?? [];
+        final alarms =
+            (data['items'] as List?) ?? (data['list'] as List?) ?? [];
         final total = (data['total'] as int?) ?? 0;
         dataCacheService?.save(DataCacheService.alarmList, data);
         emit(AlarmListLoaded(alarms: alarms, total: total));

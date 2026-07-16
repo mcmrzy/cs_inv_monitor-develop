@@ -81,7 +81,7 @@ describe('MSW Mock Server', () => {
   it('拦截固件列表请求', async () => {
     const res = await api.get('/firmwares')
     expect(res.data.code).toBe(0)
-    expect(res.data.data.items).toEqual(mockFirmwares)
+    expect(res.data.data).toEqual(mockFirmwares)
   })
 
   it('支持 server.use() 覆盖默认 handler', async () => {
@@ -105,6 +105,65 @@ describe('MSW Mock Server', () => {
     // 上一个 test 的 server.use() 应已被 afterEach 中的 resetHandlers 清除
     const res = await api.get('/devices')
     expect(res.data.data.items).toEqual(mockDevices)
+  })
+
+  it('HTTP 200 但业务 code 非 0 时拒绝请求', async () => {
+    server.use(
+      http.get('/api/v1/devices', () =>
+        HttpResponse.json({ code: 5001, message: 'database query failed' }),
+      ),
+    )
+
+    await expect(api.get('/devices')).rejects.toMatchObject({
+      code: 'ERR_BUSINESS_RESPONSE',
+      response: { data: { code: 5001, message: 'database query failed' } },
+    })
+  })
+
+  it('GET 成功包缺少 data 时按响应格式错误处理', async () => {
+    server.use(
+      http.get('/api/v1/devices', () =>
+        HttpResponse.json({ code: 0, message: 'success' }),
+      ),
+    )
+
+    await expect(api.get('/devices')).rejects.toMatchObject({
+      code: 'ERR_RESPONSE_FORMAT',
+    })
+  })
+
+  it('写操作允许成功包不返回 data', async () => {
+    server.use(
+      http.post('/api/v1/test-ack', () =>
+        HttpResponse.json({ code: 0, message: 'success' }),
+      ),
+    )
+
+    const response = await api.post('/test-ack')
+    expect(response.data.code).toBe(0)
+  })
+
+  it('按调用方声明校验分页响应结构', async () => {
+    server.use(
+      http.get('/api/v1/contract-page', () =>
+        HttpResponse.json({ code: 0, message: 'success', data: [] }),
+      ),
+    )
+
+    await expect(api.get('/contract-page', { expectedDataShape: 'page' })).rejects.toMatchObject({
+      code: 'ERR_RESPONSE_FORMAT',
+    })
+  })
+
+  it('接受 items/total 完整的分页响应', async () => {
+    server.use(
+      http.get('/api/v1/contract-page', () =>
+        HttpResponse.json({ code: 0, message: 'success', data: { items: [], total: 0 } }),
+      ),
+    )
+
+    const response = await api.get('/contract-page', { expectedDataShape: 'page' })
+    expect(response.data.data).toEqual({ items: [], total: 0 })
   })
 })
 

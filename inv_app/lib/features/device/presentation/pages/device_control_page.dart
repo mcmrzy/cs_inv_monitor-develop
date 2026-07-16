@@ -5,6 +5,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
+import 'package:inv_app/core/utils/api_response.dart';
+import 'package:inv_app/core/utils/energy_schedule.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class DeviceControlPage extends StatefulWidget {
@@ -22,6 +24,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
   // Shared state
   bool _loading = true;
+  int _failedSectionCount = 0;
   bool _isOnline = false;
   Timer? _pollTimer;
   int _pollGeneration = 0;
@@ -39,13 +42,19 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   Map<String, dynamic> _bmsLimits = {};
 
   // Tab3 — 能源计划
-  List<dynamic> _energySchedule = [];
+  List<Map<String, dynamic>> _energySchedule = [];
+  int _energyScheduleRevision = 0;
+  String _energyScheduleTimezone = 'Asia/Shanghai';
+  bool _energyScheduleEnabled = true;
   List<dynamic> _controlOverrides = [];
 
   // Tab4 — 设备信息
   Map<String, dynamic> _deviceInfo = {};
   Map<String, dynamic> _controlState = {};
   List<dynamic> _commandHistory = [];
+
+  bool _isListOrPage(dynamic value) =>
+      value is List || (value is Map && value['items'] is List);
 
   @override
   void initState() {
@@ -66,7 +75,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   // ─────────────────────────────────────────────────────────────────────
 
   Future<void> _fetchAllData() async {
-    await Future.wait([
+    if (mounted) {
+      setState(() => _loading = true);
+    }
+    final results = await Future.wait([
       _fetchControlFields(),
       _fetchRealtimeData(),
       _fetchEnergySchedule(),
@@ -74,29 +86,43 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       _fetchCommandHistory(),
     ]);
     if (mounted) {
-      setState(() => _loading = false);
+      setState(() {
+        _failedSectionCount = results.where((success) => !success).length;
+        _loading = false;
+      });
     }
   }
 
-  Future<void> _fetchControlFields() async {
+  Future<bool> _fetchControlFields() async {
     final dio = getIt<Dio>();
     bool isOnline = false;
     Map<String, int> riskLevels = {};
+    var success = true;
 
     try {
       final fieldsRes =
           await dio.get('/devices/${widget.deviceSN}/control-fields');
-      final fieldsData = fieldsRes.data['data'] as List<dynamic>? ?? [];
+      final fieldsData = unwrapApiResponse<List<dynamic>>(
+        fieldsRes.data,
+        validate: (data) => data is List,
+        expected: 'a list',
+      );
       // Control fields are fetched for risk metadata; UI tabs use dedicated endpoints
       fieldsData
           .map((e) => DeviceModelField.fromJson(e as Map<String, dynamic>))
           .toList();
-    } catch (_) {}
+    } catch (_) {
+      success = false;
+    }
 
     try {
       final capsRes =
           await dio.get('/devices/${widget.deviceSN}/control-capabilities');
-      final capsData = capsRes.data['data'] as List<dynamic>? ?? [];
+      final capsData = unwrapApiResponse<List<dynamic>>(
+        capsRes.data,
+        validate: (data) => data is List,
+        expected: 'a list',
+      );
       for (final cap in capsData) {
         if (cap is Map<String, dynamic>) {
           final code = cap['command_code'] as String?;
@@ -106,16 +132,23 @@ class _DeviceControlPageState extends State<DeviceControlPage>
           }
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      success = false;
+    }
 
     try {
       final deviceRes = await dio.get('/devices/${widget.deviceSN}');
-      final deviceData =
-          deviceRes.data['data'] as Map<String, dynamic>? ?? {};
+      final deviceData = unwrapApiResponse<Map<String, dynamic>>(
+        deviceRes.data,
+        validate: (data) => data is Map<String, dynamic>,
+        expected: 'an object',
+      );
       isOnline = deviceData['online_status']?['online'] == true ||
           deviceData['device']?['status'] == 1;
       _deviceInfo = deviceData;
-    } catch (_) {}
+    } catch (_) {
+      success = false;
+    }
 
     if (mounted) {
       setState(() {
@@ -123,13 +156,18 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         _riskLevels = riskLevels;
       });
     }
+    return success;
   }
 
-  Future<void> _fetchRealtimeData() async {
+  Future<bool> _fetchRealtimeData() async {
     final dio = getIt<Dio>();
     try {
       final res = await dio.get('/devices/${widget.deviceSN}/realtime');
-      final data = res.data['data'] as Map<String, dynamic>? ?? {};
+      final data = unwrapApiResponse<Map<String, dynamic>>(
+        res.data,
+        validate: (value) => value is Map<String, dynamic>,
+        expected: 'an object',
+      );
       if (mounted) {
         setState(() {
           _realtimeData = data;
@@ -140,40 +178,66 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                   (data['output_power'] as num) > 0);
         });
       }
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<void> _fetchEnergySchedule() async {
+  Future<bool> _fetchEnergySchedule() async {
     final dio = getIt<Dio>();
+    var success = true;
     try {
-      final res =
-          await dio.get('/devices/${widget.deviceSN}/energy-schedule');
-      final data = res.data['data'];
+      final res = await dio.get('/devices/${widget.deviceSN}/energy-schedule');
+      final data = unwrapApiResponse<Map<String, dynamic>>(
+        res.data,
+        validate: isEnergySchedulePayload,
+        expected: 'a schedule object containing periods',
+      );
       if (mounted) {
         setState(() {
-          _energySchedule = data is List ? data : (data is Map ? (data['items'] as List? ?? []) : []);
+          _energySchedule = normalizeSchedulePeriods(data['periods']);
+          _energyScheduleRevision =
+              (data['revision'] as num?)?.toInt() ?? 0;
+          _energyScheduleTimezone =
+              data['timezone'] as String? ?? 'Asia/Shanghai';
+          _energyScheduleEnabled = data['enabled'] as bool? ?? true;
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      success = false;
+    }
 
     try {
       final res =
           await dio.get('/devices/${widget.deviceSN}/control-overrides');
-      final data = res.data['data'];
+      final data = unwrapApiResponse<dynamic>(
+        res.data,
+        validate: _isListOrPage,
+        expected: 'a list or page object',
+      );
       if (mounted) {
         setState(() {
-          _controlOverrides = data is List ? data : (data is Map ? (data['items'] as List? ?? []) : []);
+          _controlOverrides = data is List
+              ? data
+              : (data is Map ? (data['items'] as List? ?? []) : []);
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      success = false;
+    }
+    return success;
   }
 
-  Future<void> _fetchControlState() async {
+  Future<bool> _fetchControlState() async {
     final dio = getIt<Dio>();
     try {
-      final res =
-          await dio.get('/devices/${widget.deviceSN}/control-state');
-      final data = res.data['data'] as Map<String, dynamic>? ?? {};
+      final res = await dio.get('/devices/${widget.deviceSN}/control-state');
+      final data = unwrapApiResponse<Map<String, dynamic>>(
+        res.data,
+        validate: (value) => value is Map<String, dynamic>,
+        expected: 'an object',
+      );
       if (mounted) {
         setState(() {
           _controlState = data;
@@ -194,17 +258,24 @@ class _DeviceControlPageState extends State<DeviceControlPage>
           }
         });
       }
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<void> _fetchCommandHistory() async {
+  Future<bool> _fetchCommandHistory() async {
     final dio = getIt<Dio>();
     try {
       final res = await dio.get(
         '/devices/${widget.deviceSN}/commands',
         queryParameters: {'page_size': 20},
       );
-      final data = res.data['data'];
+      final data = unwrapApiResponse<dynamic>(
+        res.data,
+        validate: _isListOrPage,
+        expected: 'a list or page object',
+      );
       List? items;
       if (data is Map) {
         items = data['items'] as List?;
@@ -214,15 +285,20 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       if (mounted) {
         setState(() => _commandHistory = items ?? []);
       }
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────
   //  Command sending (preserved from original)
   // ─────────────────────────────────────────────────────────────────────
 
-  Future<void> _sendCommand(String commandCode,
-      {Map<String, dynamic>? params,}) async {
+  Future<void> _sendCommand(
+    String commandCode, {
+    Map<String, dynamic>? params,
+  }) async {
     final l10n = AppLocalizations.of(context)!;
     try {
       final dio = getIt<Dio>();
@@ -268,10 +344,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('等待设备执行...'),
+        SnackBar(
+          content: Text(l10n.str('control_waiting_execution')),
           backgroundColor: AppColors.info,
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 3),
         ),
       );
 
@@ -290,6 +366,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
   /// Poll command status every 3 seconds, timeout after 60 seconds.
   void _pollCommandStatus(String taskID) {
+    final l10n = AppLocalizations.of(context)!;
     _pollTimer?.cancel();
     final generation = ++_pollGeneration;
     const pollInterval = Duration(seconds: 3);
@@ -303,10 +380,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       if (DateTime.now().difference(startTime) >= timeout) {
         if (mounted && generation == _pollGeneration) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⏱ 命令执行超时'),
+            SnackBar(
+              content: Text(l10n.str('control_execution_timeout')),
               backgroundColor: AppColors.warning,
-              duration: Duration(seconds: 3),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -360,6 +437,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
   void _showCommandStatusSnack(String status) {
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     String message;
     Color color;
@@ -367,22 +445,22 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     switch (status) {
       case 'acknowledged':
       case 'executing':
-        message = '执行中...';
+        message = l10n.str('control_executing');
         color = AppColors.info;
         break;
       case 'success':
       case 'completed':
-        message = '✅ 已生效';
+        message = l10n.str('control_applied');
         color = AppColors.success;
         break;
       case 'timeout':
       case 'failed':
       case 'cancelled':
-        message = '❌ 执行失败';
+        message = l10n.str('control_execution_failed');
         color = AppColors.error;
         break;
       default:
-        message = '等待设备执行...';
+        message = l10n.str('control_waiting_execution');
         color = AppColors.info;
         break;
     }
@@ -392,8 +470,9 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       SnackBar(
         content: Text(message),
         backgroundColor: color,
-        duration:
-            isTerminal ? const Duration(seconds: 3) : const Duration(seconds: 2),
+        duration: isTerminal
+            ? const Duration(seconds: 3)
+            : const Duration(seconds: 2),
       ),
     );
   }
@@ -418,9 +497,13 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(100.h),
         child: AppBar(
-          title: Text(l10n.deviceControl,
-              style: TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 17.sp,),),
+          title: Text(
+            l10n.deviceControl,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 17.sp,
+            ),
+          ),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -431,28 +514,70 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
-            labelStyle:
-                TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
+            labelStyle: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600),
             unselectedLabelStyle: TextStyle(fontSize: 13.sp),
             tabAlignment: TabAlignment.fill,
-            tabs: const [
-              Tab(text: '运行'),
-              Tab(text: '电池保护'),
-              Tab(text: '能源计划'),
-              Tab(text: '设备信息'),
+            tabs: [
+              Tab(text: l10n.str('control_tab_running')),
+              Tab(text: l10n.str('control_tab_battery')),
+              Tab(text: l10n.str('control_tab_energy_plan')),
+              Tab(text: l10n.deviceInfo),
             ],
           ),
         ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
+          : Column(
               children: [
-                _buildRunningTab(),
-                _buildBatteryProtectionTab(),
-                _buildEnergyScheduleTab(),
-                _buildDeviceInfoTab(),
+                if (_failedSectionCount > 0)
+                  Material(
+                    color: _failedSectionCount == 5
+                        ? AppColors.error.withValues(alpha: 0.1)
+                        : AppColors.warning.withValues(alpha: 0.12),
+                    child: Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _failedSectionCount == 5
+                                ? Icons.error_outline
+                                : Icons.warning_amber_rounded,
+                            color: _failedSectionCount == 5
+                                ? AppColors.error
+                                : AppColors.warning,
+                          ),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text(
+                              _failedSectionCount == 5
+                                  ? l10n.str('control_load_failed')
+                                  : l10n.str('control_partial_failed', {
+                                      'count': '$_failedSectionCount',
+                                    }),
+                              style: TextStyle(fontSize: 13.sp),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _fetchAllData,
+                            child: Text(l10n.retry),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildRunningTab(),
+                      _buildBatteryProtectionTab(),
+                      _buildEnergyScheduleTab(),
+                      _buildDeviceInfoTab(),
+                    ],
+                  ),
+                ),
               ],
             ),
     );
@@ -471,8 +596,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       decoration: BoxDecoration(
         color: AppColors.warning.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10.r),
-        border:
-            Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -540,9 +664,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                   borderRadius: BorderRadius.circular(10.r),
                 ),
                 child: Icon(
-                  _acOutputOn
-                      ? Icons.power_settings_new
-                      : Icons.power_off,
+                  _acOutputOn ? Icons.power_settings_new : Icons.power_off,
                   size: 20.sp,
                   color: _acOutputOn ? AppColors.success : AppColors.error,
                 ),
@@ -552,15 +674,22 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('AC 输出',
-                        style: TextStyle(
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.w600,),),
+                    Text(
+                      l10n.str('control_ac_output'),
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     SizedBox(height: 2.h),
                     Text(
-                      _acOutputOn ? '已开启' : '已关闭',
+                      _acOutputOn
+                          ? l10n.str('control_enabled')
+                          : l10n.str('control_disabled'),
                       style: TextStyle(
-                          fontSize: 12.sp, color: AppColors.textSecondary,),
+                        fontSize: 12.sp,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -568,7 +697,9 @@ class _DeviceControlPageState extends State<DeviceControlPage>
               if (riskLevel >= 2)
                 Container(
                   padding: EdgeInsets.symmetric(
-                      horizontal: 6.w, vertical: 2.h,),
+                    horizontal: 6.w,
+                    vertical: 2.h,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4.r),
@@ -576,9 +707,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                   child: Text(
                     'R$riskLevel',
                     style: TextStyle(
-                        fontSize: 10.sp,
-                        color: AppColors.warning,
-                        fontWeight: FontWeight.w600,),
+                      fontSize: 10.sp,
+                      color: AppColors.warning,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
             ],
@@ -588,11 +720,9 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _isOnline
-                      ? () => _toggleAcOutput(true)
-                      : null,
+                  onPressed: _isOnline ? () => _toggleAcOutput(true) : null,
                   icon: Icon(Icons.power_settings_new, size: 18.sp),
-                  label: const Text('开启'),
+                  label: Text(l10n.str('open')),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white,
@@ -604,11 +734,9 @@ class _DeviceControlPageState extends State<DeviceControlPage>
               SizedBox(width: 8.w),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _isOnline
-                      ? () => _toggleAcOutput(false)
-                      : null,
+                  onPressed: _isOnline ? () => _toggleAcOutput(false) : null,
                   icon: Icon(Icons.power_off, size: 18.sp),
-                  label: Text(l10n.str('close') == 'close' ? '关闭' : l10n.str('close')),
+                  label: Text(l10n.str('close')),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.error,
                     foregroundColor: Colors.white,
@@ -625,14 +753,17 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   void _toggleAcOutput(bool turnOn) {
+    final l10n = AppLocalizations.of(context)!;
     final command = turnOn ? 'ac_on' : 'ac_off';
     final riskLevel = _riskLevels[command] ?? 0;
     if (riskLevel >= 2) {
       _showConfirmDialog(
-        turnOn ? '开启 AC 输出' : '关闭 AC 输出',
         turnOn
-            ? '确认开启 AC 输出？设备将开始供电。'
-            : '确认关闭 AC 输出？负载将断电。',
+            ? l10n.str('control_enable_ac_title')
+            : l10n.str('control_disable_ac_title'),
+        turnOn
+            ? l10n.str('control_enable_ac_confirm')
+            : l10n.str('control_disable_ac_confirm'),
         () {
           _sendCommand(command);
           setState(() => _acOutputOn = turnOn);
@@ -645,6 +776,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   Widget _buildRunModeCard() {
+    final l10n = AppLocalizations.of(context)!;
     final runMode = _realtimeData['run_mode'] ??
         _realtimeData['running_mode'] ??
         _realtimeData['mode'];
@@ -657,28 +789,40 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         children: [
           Row(
             children: [
-              Icon(Icons.settings_suggest_outlined,
-                  size: 20.sp, color: AppColors.primary,),
+              Icon(
+                Icons.settings_suggest_outlined,
+                size: 20.sp,
+                color: AppColors.primary,
+              ),
               SizedBox(width: 8.w),
-              Text('当前运行模式',
-                  style: TextStyle(
-                      fontSize: 14.sp, fontWeight: FontWeight.w600,),),
+              Text(
+                l10n.str('control_current_mode'),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 8.h),
           Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(
-                horizontal: 12.w, vertical: 10.h,),
+              horizontal: 12.w,
+              vertical: 10.h,
+            ),
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(8.r),
             ),
-            child: Text(modeStr,
-                style: TextStyle(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primary,),),
+            child: Text(
+              modeStr,
+              style: TextStyle(
+                fontSize: 16.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+              ),
+            ),
           ),
         ],
       ),
@@ -690,7 +834,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     final pvPower = _realtimeData['pv_power'] ?? _realtimeData['pv_power_w'];
     final battPower =
         _realtimeData['battery_power'] ?? _realtimeData['batt_power'];
-    final loadPower = _realtimeData['load_power'] ?? _realtimeData['output_power'];
+    final loadPower =
+        _realtimeData['load_power'] ?? _realtimeData['output_power'];
 
     return Container(
       decoration: AppColor.card(context),
@@ -700,49 +845,61 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         children: [
           Row(
             children: [
-              Icon(Icons.bolt_rounded,
-                  size: 20.sp, color: AppColors.orange,),
+              Icon(
+                Icons.bolt_rounded,
+                size: 20.sp,
+                color: AppColors.orange,
+              ),
               SizedBox(width: 8.w),
-              Text('能源流',
-                  style: TextStyle(
-                      fontSize: 14.sp, fontWeight: FontWeight.w600,),),
+              Text(
+                l10n.str('control_energy_flow'),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 12.h),
           Row(
             children: [
               Expanded(
-                  child: _buildEnergyFlowItem(
-                icon: Icons.wb_sunny_outlined,
-                label: l10n.pv,
-                value: pvPower,
-                unit: 'W',
-                color: AppColors.orange,
-              ),),
+                child: _buildEnergyFlowItem(
+                  icon: Icons.wb_sunny_outlined,
+                  label: l10n.pv,
+                  value: pvPower,
+                  unit: 'W',
+                  color: AppColors.orange,
+                ),
+              ),
               Container(
-                  width: 1,
-                  height: 40.h,
-                  color: AppColors.divider,),
+                width: 1,
+                height: 40.h,
+                color: AppColors.divider,
+              ),
               Expanded(
-                  child: _buildEnergyFlowItem(
-                icon: Icons.battery_charging_full,
-                label: l10n.battery,
-                value: battPower,
-                unit: 'W',
-                color: AppColors.teal,
-              ),),
+                child: _buildEnergyFlowItem(
+                  icon: Icons.battery_charging_full,
+                  label: l10n.battery,
+                  value: battPower,
+                  unit: 'W',
+                  color: AppColors.teal,
+                ),
+              ),
               Container(
-                  width: 1,
-                  height: 40.h,
-                  color: AppColors.divider,),
+                width: 1,
+                height: 40.h,
+                color: AppColors.divider,
+              ),
               Expanded(
-                  child: _buildEnergyFlowItem(
-                icon: Icons.home_outlined,
-                label: l10n.str('load') == 'load' ? '负载' : l10n.str('load'),
-                value: loadPower,
-                unit: 'W',
-                color: AppColors.blue,
-              ),),
+                child: _buildEnergyFlowItem(
+                  icon: Icons.home_outlined,
+                  label: l10n.str('load'),
+                  value: loadPower,
+                  unit: 'W',
+                  color: AppColors.blue,
+                ),
+              ),
             ],
           ),
         ],
@@ -764,20 +921,25 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       children: [
         Icon(icon, size: 22.sp, color: color),
         SizedBox(height: 4.h),
-        Text(label,
-            style:
-                TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+        ),
         SizedBox(height: 2.h),
-        Text('$valStr $unit',
-            style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,),),
+        Text(
+          '$valStr $unit',
+          style: TextStyle(
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
       ],
     );
   }
 
   Widget _buildMuteCard() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: AppColor.card(context),
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
@@ -802,14 +964,22 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('临时静音',
-                    style: TextStyle(
-                        fontSize: 14.sp, fontWeight: FontWeight.w500,),),
+                Text(
+                  l10n.str('control_temporary_mute'),
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 SizedBox(height: 2.h),
                 Text(
-                  _muteEnabled ? '告警声音已静音' : '点击临时静音告警声音',
+                  _muteEnabled
+                      ? l10n.str('control_alarm_muted')
+                      : l10n.str('control_mute_hint'),
                   style: TextStyle(
-                      fontSize: 11.sp, color: AppColors.textHint,),
+                    fontSize: 11.sp,
+                    color: AppColors.textHint,
+                  ),
                 ),
               ],
             ),
@@ -833,6 +1003,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   // ─────────────────────────────────────────────────────────────────────
 
   Widget _buildBatteryProtectionTab() {
+    final l10n = AppLocalizations.of(context)!;
     return ListView(
       padding: EdgeInsets.all(16.w),
       children: [
@@ -840,8 +1011,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
         // 备电保留 SOC
         _buildSliderCard(
-          title: '备电保留 SOC',
-          subtitle: '电池不会放电低于此值',
+          title: l10n.str('control_reserve_soc'),
+          subtitle: l10n.str('control_reserve_soc_hint'),
           value: _reserveSoc,
           min: 0,
           max: 80,
@@ -856,8 +1027,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
         // 充电目标 SOC
         _buildSliderCard(
-          title: '充电目标 SOC',
-          subtitle: '电池充电到此值后停止',
+          title: l10n.str('control_target_soc'),
+          subtitle: l10n.str('control_target_soc_hint'),
           value: _chargeTargetSoc,
           min: 20,
           max: 100,
@@ -915,24 +1086,31 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: TextStyle(
-                            fontSize: 14.sp,
-                            fontWeight: FontWeight.w600,),),
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     SizedBox(height: 2.h),
-                    Text(subtitle,
-                        style: TextStyle(
-                            fontSize: 11.sp,
-                            color: AppColors.textHint,),),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
                   ],
                 ),
               ),
               Text(
                 '${value.toStringAsFixed(0)}$unit',
                 style: TextStyle(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w700,
-                    color: color,),
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
               ),
             ],
           ),
@@ -954,17 +1132,36 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   void _sendSocWindow() {
     final lowX10 = (_reserveSoc * 10).round();
     final highX10 = (_chargeTargetSoc * 10).round();
-    _sendCommand('set_soc_window', params: {
-      'low_x10': lowX10,
-      'high_x10': highX10,
-    },);
+    _sendCommand(
+      'set_soc_window',
+      params: {
+        'low_x10': lowX10,
+        'high_x10': highX10,
+      },
+    );
   }
 
   Widget _buildChargeSpeedCard() {
+    final l10n = AppLocalizations.of(context)!;
     final presets = [
-      {'label': '温和', 'icon': Icons.eco_outlined, 'color': AppColors.teal, 'limit': 30},
-      {'label': '标准', 'icon': Icons.speed_outlined, 'color': AppColors.primary, 'limit': 60},
-      {'label': '快速', 'icon': Icons.flash_on, 'color': AppColors.orange, 'limit': 100},
+      {
+        'label': l10n.str('control_charge_gentle'),
+        'icon': Icons.eco_outlined,
+        'color': AppColors.teal,
+        'limit': 30,
+      },
+      {
+        'label': l10n.str('control_charge_standard'),
+        'icon': Icons.speed_outlined,
+        'color': AppColors.primary,
+        'limit': 60,
+      },
+      {
+        'label': l10n.str('control_charge_fast'),
+        'icon': Icons.flash_on,
+        'color': AppColors.orange,
+        'limit': 100,
+      },
     ];
 
     return Container(
@@ -975,12 +1172,19 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         children: [
           Row(
             children: [
-              Icon(Icons.speed_rounded,
-                  size: 20.sp, color: AppColors.primary,),
+              Icon(
+                Icons.speed_rounded,
+                size: 20.sp,
+                color: AppColors.primary,
+              ),
               SizedBox(width: 8.w),
-              Text('充电速度预设',
-                  style: TextStyle(
-                      fontSize: 14.sp, fontWeight: FontWeight.w600,),),
+              Text(
+                l10n.str('control_charge_speed'),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 12.h),
@@ -993,49 +1197,53 @@ class _DeviceControlPageState extends State<DeviceControlPage>
               return Expanded(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                      horizontal: idx == 1 ? 8.w : 0,),
+                    horizontal: idx == 1 ? 8.w : 0,
+                  ),
                   child: GestureDetector(
                     onTap: _isOnline
                         ? () {
                             setState(() => _chargeSpeedPreset = idx);
-                            _sendCommand('set_charge_limit', params: {
-                              'max_current_pct': p['limit'],
-                            },);
+                            _sendCommand(
+                              'set_charge_limit',
+                              params: {
+                                'max_current_pct': p['limit'],
+                              },
+                            );
                           }
                         : null,
                     child: Container(
                       padding: EdgeInsets.symmetric(
-                          vertical: 12.h,),
+                        vertical: 12.h,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? color.withValues(alpha: 0.1)
-                            : AppColors.surfaceHover
-                                .withValues(alpha: 0.5),
+                            : AppColors.surfaceHover.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(10.r),
                         border: Border.all(
-                          color: isSelected
-                              ? color
-                              : Colors.transparent,
+                          color: isSelected ? color : Colors.transparent,
                           width: 1.5,
                         ),
                       ),
                       child: Column(
                         children: [
-                          Icon(p['icon'] as IconData,
-                              size: 22.sp,
-                              color: isSelected
-                                  ? color
-                                  : AppColors.textHint,),
+                          Icon(
+                            p['icon'] as IconData,
+                            size: 22.sp,
+                            color: isSelected ? color : AppColors.textHint,
+                          ),
                           SizedBox(height: 4.h),
-                          Text(p['label'] as String,
-                              style: TextStyle(
-                                  fontSize: 12.sp,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                  color: isSelected
-                                      ? color
-                                      : AppColors.textSecondary,),),
+                          Text(
+                            p['label'] as String,
+                            style: TextStyle(
+                              fontSize: 12.sp,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color:
+                                  isSelected ? color : AppColors.textSecondary,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1060,38 +1268,55 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         children: [
           Row(
             children: [
-              Icon(Icons.security_outlined,
-                  size: 20.sp, color: AppColors.info,),
+              Icon(
+                Icons.security_outlined,
+                size: 20.sp,
+                color: AppColors.info,
+              ),
               SizedBox(width: 8.w),
-              Text('BMS 实时限制',
-                  style: TextStyle(
-                      fontSize: 14.sp, fontWeight: FontWeight.w600,),),
+              Text(
+                l10n.str('control_bms_limits'),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 8.h),
           if (entries.isEmpty)
-            Text(l10n.noData,
-                style: TextStyle(
-                    fontSize: 12.sp, color: AppColors.textHint,),)
+            Text(
+              l10n.noData,
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: AppColors.textHint,
+              ),
+            )
           else
-            ...entries.map((e) => Padding(
-                  padding:
-                      EdgeInsets.symmetric(vertical: 4.h),
-                  child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(e.key,
-                          style: TextStyle(
-                              fontSize: 13.sp,
-                              color: AppColors.textSecondary,),),
-                      Text('${e.value}',
-                          style: TextStyle(
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.w500,),),
-                    ],
-                  ),
-                ),),
+            ...entries.map(
+              (e) => Padding(
+                padding: EdgeInsets.symmetric(vertical: 4.h),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      e.key,
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    Text(
+                      '${e.value}',
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1114,19 +1339,29 @@ class _DeviceControlPageState extends State<DeviceControlPage>
           padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
           child: Row(
             children: [
-              Icon(Icons.schedule_rounded,
-                  size: 20.sp, color: AppColors.primary,),
+              Icon(
+                Icons.schedule_rounded,
+                size: 20.sp,
+                color: AppColors.primary,
+              ),
               SizedBox(width: 8.w),
               Expanded(
-                child: Text('时间段列表',
-                    style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,),),
+                child: Text(
+                  l10n.str('control_schedule_list'),
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               IconButton(
-                onPressed: _isOnline ? () => _showEnergyScheduleEditor(null) : null,
-                icon: Icon(Icons.add_circle_outline,
-                    size: 22.sp, color: AppColors.primary,),
+                onPressed:
+                    _isOnline ? () => _showEnergyScheduleEditor(null) : null,
+                icon: Icon(
+                  Icons.add_circle_outline,
+                  size: 22.sp,
+                  color: AppColors.primary,
+                ),
               ),
             ],
           ),
@@ -1139,18 +1374,24 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             padding: EdgeInsets.all(24.w),
             child: Column(
               children: [
-                Icon(Icons.event_available,
-                    size: 36.sp, color: AppColors.textHint,),
+                Icon(
+                  Icons.event_available,
+                  size: 36.sp,
+                  color: AppColors.textHint,
+                ),
                 SizedBox(height: 8.h),
-                Text(l10n.noData,
-                    style: TextStyle(
-                        fontSize: 13.sp, color: AppColors.textHint,),),
+                Text(
+                  l10n.noData,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: AppColors.textHint,
+                  ),
+                ),
               ],
             ),
           )
         else
-          ..._energySchedule.map((slot) =>
-              _buildEnergyScheduleItem(slot as Map<String, dynamic>),),
+          ..._energySchedule.map(_buildEnergyScheduleItem),
 
         SizedBox(height: 12.h),
 
@@ -1163,37 +1404,52 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             children: [
               Row(
                 children: [
-                  Icon(Icons.edit_calendar,
-                      size: 20.sp, color: AppColors.warning,),
+                  Icon(
+                    Icons.edit_calendar,
+                    size: 20.sp,
+                    color: AppColors.warning,
+                  ),
                   SizedBox(width: 8.w),
-                  Text('临时覆盖',
-                      style: TextStyle(
-                          fontSize: 14.sp,
-                          fontWeight: FontWeight.w600,),),
+                  Text(
+                    l10n.str('control_temporary_override'),
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
               SizedBox(height: 8.h),
               if (_controlOverrides.isEmpty)
-                Text('当前无临时覆盖',
-                    style: TextStyle(
-                        fontSize: 12.sp, color: AppColors.textHint,),)
+                Text(
+                  l10n.str('control_no_override'),
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: AppColors.textHint,
+                  ),
+                )
               else
                 ..._controlOverrides.map((o) {
                   final m = o as Map<String, dynamic>;
                   return Padding(
                     padding: EdgeInsets.symmetric(vertical: 4.h),
                     child: Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('${m['command'] ?? '—'}',
-                            style: TextStyle(
-                                fontSize: 13.sp,
-                                color: AppColors.textSecondary,),),
-                        Text('${m['params'] ?? ''}',
-                            style: TextStyle(
-                                fontSize: 12.sp,
-                                color: AppColors.textHint,),),
+                        Text(
+                          '${m['command'] ?? '—'}',
+                          style: TextStyle(
+                            fontSize: 13.sp,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        Text(
+                          '${m['params'] ?? ''}',
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            color: AppColors.textHint,
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -1206,6 +1462,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   Widget _buildEnergyScheduleItem(Map<String, dynamic> slot) {
+    final l10n = AppLocalizations.of(context)!;
     final start = slot['start_time'] ?? slot['start'] ?? '—';
     final end = slot['end_time'] ?? slot['end'] ?? '—';
     final mode = slot['mode'] ?? slot['action'] ?? '—';
@@ -1215,8 +1472,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       margin: EdgeInsets.only(bottom: 8.h),
       decoration: AppColor.card(context),
       child: ListTile(
-        contentPadding:
-            EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
         leading: Container(
           width: 40.w,
           height: 40.w,
@@ -1225,32 +1481,45 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                 .withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10.r),
           ),
-          child: Icon(Icons.timer_outlined,
-              size: 20.sp,
-              color: enabled ? AppColors.primary : AppColors.textHint,),
+          child: Icon(
+            Icons.timer_outlined,
+            size: 20.sp,
+            color: enabled ? AppColors.primary : AppColors.textHint,
+          ),
         ),
-        title: Text('$start — $end',
-            style: TextStyle(
-                fontSize: 14.sp, fontWeight: FontWeight.w500,),),
-        subtitle: Text('模式: $mode',
-            style: TextStyle(
-                fontSize: 11.sp, color: AppColors.textHint,),),
+        title: Text(
+          '$start — $end',
+          style: TextStyle(
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        subtitle: Text(
+          l10n.str('control_mode_value', {'mode': '$mode'}),
+          style: TextStyle(
+            fontSize: 11.sp,
+            color: AppColors.textHint,
+          ),
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(Icons.edit_outlined,
-                  size: 18.sp, color: AppColors.primary,),
-              onPressed: _isOnline
-                  ? () => _showEnergyScheduleEditor(slot)
-                  : null,
+              icon: Icon(
+                Icons.edit_outlined,
+                size: 18.sp,
+                color: AppColors.primary,
+              ),
+              onPressed:
+                  _isOnline ? () => _showEnergyScheduleEditor(slot) : null,
             ),
             IconButton(
-              icon: Icon(Icons.delete_outline,
-                  size: 18.sp, color: AppColors.error,),
-              onPressed: _isOnline
-                  ? () => _deleteEnergySchedule(slot)
-                  : null,
+              icon: Icon(
+                Icons.delete_outline,
+                size: 18.sp,
+                color: AppColors.error,
+              ),
+              onPressed: _isOnline ? () => _deleteEnergySchedule(slot) : null,
             ),
           ],
         ),
@@ -1259,20 +1528,25 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   void _showEnergyScheduleEditor(Map<String, dynamic>? existing) {
+    final l10n = AppLocalizations.of(context)!;
     final isEdit = existing != null;
     final startCtrl =
         TextEditingController(text: existing?['start_time'] ?? '');
-    final endCtrl =
-        TextEditingController(text: existing?['end_time'] ?? '');
-    final modeCtrl =
-        TextEditingController(text: existing?['mode'] ?? '');
+    final endCtrl = TextEditingController(text: existing?['end_time'] ?? '');
+    final modeCtrl = TextEditingController(text: existing?['mode'] ?? '');
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(isEdit ? '编辑时间段' : '添加时间段',
-            style: TextStyle(
-                fontSize: 16.sp, fontWeight: FontWeight.w600,),),
+        title: Text(
+          isEdit
+              ? l10n.str('control_edit_schedule')
+              : l10n.str('control_add_schedule'),
+          style: TextStyle(
+            fontSize: 16.sp,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
         content: SingleChildScrollView(
@@ -1281,25 +1555,25 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             children: [
               TextField(
                 controller: startCtrl,
-                decoration: const InputDecoration(
-                  labelText: '开始时间 (HH:MM)',
-                  hintText: '例如 08:00',
+                decoration: InputDecoration(
+                  labelText: l10n.str('control_start_time'),
+                  hintText: l10n.str('control_start_time_hint'),
                 ),
               ),
               SizedBox(height: 12.h),
               TextField(
                 controller: endCtrl,
-                decoration: const InputDecoration(
-                  labelText: '结束时间 (HH:MM)',
-                  hintText: '例如 18:00',
+                decoration: InputDecoration(
+                  labelText: l10n.str('control_end_time'),
+                  hintText: l10n.str('control_end_time_hint'),
                 ),
               ),
               SizedBox(height: 12.h),
               TextField(
                 controller: modeCtrl,
-                decoration: const InputDecoration(
-                  labelText: '模式',
-                  hintText: '例如 charge / discharge / idle',
+                decoration: InputDecoration(
+                  labelText: l10n.str('control_mode'),
+                  hintText: l10n.str('control_mode_hint'),
                 ),
               ),
             ],
@@ -1314,7 +1588,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             onPressed: () {
               Navigator.pop(ctx);
               _saveEnergySchedule(
-                existing?['id'],
+                existing,
                 startCtrl.text,
                 endCtrl.text,
                 modeCtrl.text,
@@ -1329,35 +1603,69 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   void _saveEnergySchedule(
-      dynamic id, String start, String end, String mode, bool isEdit,) async {
+    Map<String, dynamic>? existing,
+    String start,
+    String end,
+    String mode,
+    bool isEdit,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
     final dio = getIt<Dio>();
     try {
-      final body = {
+      var periods = _energySchedule.map(Map<String, dynamic>.from).toList();
+      final updatedPeriod = <String, dynamic>{
+        if (existing != null) ...existing,
         'start_time': start,
         'end_time': end,
         'mode': mode,
+        'enabled': existing?['enabled'] ?? true,
       };
-      if (isEdit && id != null) {
-        body['id'] = id;
+      if (isEdit && existing != null) {
+        periods = replaceSchedulePeriod(periods, existing, updatedPeriod);
+      } else {
+        periods.add(updatedPeriod);
       }
-      await dio.put(
+      final response = await dio.put(
         '/devices/${widget.deviceSN}/energy-schedule',
-        data: body,
+        data: {
+          'timezone': _energyScheduleTimezone,
+          'enabled': _energyScheduleEnabled,
+          'periods': periods,
+        },
+        options: Options(
+          headers: {'If-Match': '$_energyScheduleRevision'},
+        ),
+      );
+      final schedule = unwrapApiResponse<Map<String, dynamic>>(
+        response.data,
+        validate: isEnergySchedulePayload,
+        expected: 'an updated schedule object',
       );
       if (mounted) {
+        setState(() {
+          _energySchedule = normalizeSchedulePeriods(schedule['periods']);
+          _energyScheduleRevision =
+              (schedule['revision'] as num?)?.toInt() ??
+                  _energyScheduleRevision;
+          _energyScheduleTimezone =
+              schedule['timezone'] as String? ?? _energyScheduleTimezone;
+          _energyScheduleEnabled =
+              schedule['enabled'] as bool? ?? _energyScheduleEnabled;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isEdit ? '✅ 已更新' : '✅ 已添加'),
+            content: Text(isEdit
+                ? l10n.str('control_schedule_updated')
+                : l10n.str('control_schedule_added')),
             backgroundColor: AppColors.success,
           ),
         );
       }
-      _fetchEnergySchedule();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ 保存失败: $e'),
+            content: Text(l10n.str('control_schedule_save_failed')),
             backgroundColor: AppColors.error,
           ),
         );
@@ -1366,27 +1674,45 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   void _deleteEnergySchedule(Map<String, dynamic> slot) async {
-    final id = slot['id'];
+    final l10n = AppLocalizations.of(context)!;
     final dio = getIt<Dio>();
     try {
-      await dio.delete(
+      final periods = removeSchedulePeriod(_energySchedule, slot);
+      final response = await dio.put(
         '/devices/${widget.deviceSN}/energy-schedule',
-        queryParameters: {'id': id},
+        data: {
+          'timezone': _energyScheduleTimezone,
+          'enabled': _energyScheduleEnabled,
+          'periods': periods,
+        },
+        options: Options(
+          headers: {'If-Match': '$_energyScheduleRevision'},
+        ),
+      );
+      final schedule = unwrapApiResponse<Map<String, dynamic>>(
+        response.data,
+        validate: isEnergySchedulePayload,
+        expected: 'an updated schedule object',
       );
       if (mounted) {
+        setState(() {
+          _energySchedule = normalizeSchedulePeriods(schedule['periods']);
+          _energyScheduleRevision =
+              (schedule['revision'] as num?)?.toInt() ??
+                  _energyScheduleRevision;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ 已删除'),
+          SnackBar(
+            content: Text(l10n.str('control_schedule_deleted')),
             backgroundColor: AppColors.success,
           ),
         );
       }
-      _fetchEnergySchedule();
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ 删除失败: $e'),
+            content: Text(l10n.str('control_schedule_delete_failed')),
             backgroundColor: AppColors.error,
           ),
         );
@@ -1399,12 +1725,13 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   // ─────────────────────────────────────────────────────────────────────
 
   Widget _buildDeviceInfoTab() {
+    final l10n = AppLocalizations.of(context)!;
     return ListView(
       padding: EdgeInsets.all(16.w),
       children: [
         // 安装配置只读展示
         _buildInfoSection(
-          '安装配置',
+          l10n.str('control_installation'),
           Icons.build_outlined,
           _extractDeviceInfoFields(),
         ),
@@ -1428,20 +1755,29 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   Map<String, dynamic> _extractDeviceInfoFields() {
-    final device = _deviceInfo['device'] as Map<String, dynamic>? ??
-        _deviceInfo;
+    final l10n = AppLocalizations.of(context)!;
+    final device =
+        _deviceInfo['device'] as Map<String, dynamic>? ?? _deviceInfo;
     return {
-      '设备SN': widget.deviceSN,
-      '设备型号': device['model'] ?? device['model_name'] ?? '—',
-      '设备名称': device['name'] ?? device['device_name'] ?? '—',
-      '安装位置': device['location'] ?? device['install_location'] ?? '—',
-      '安装日期': device['install_date'] ?? device['created_at'] ?? '—',
-      '电站': device['station_name'] ?? device['station'] ?? '—',
+      l10n.str('control_device_sn'): widget.deviceSN,
+      l10n.str('control_device_model'):
+          device['model'] ?? device['model_name'] ?? '—',
+      l10n.str('control_device_name'):
+          device['name'] ?? device['device_name'] ?? '—',
+      l10n.str('control_install_location'):
+          device['location'] ?? device['install_location'] ?? '—',
+      l10n.str('control_install_date'):
+          device['install_date'] ?? device['created_at'] ?? '—',
+      l10n.str('control_station'):
+          device['station_name'] ?? device['station'] ?? '—',
     };
   }
 
   Widget _buildInfoSection(
-      String title, IconData icon, Map<String, dynamic> fields,) {
+    String title,
+    IconData icon,
+    Map<String, dynamic> fields,
+  ) {
     return Container(
       decoration: AppColor.card(context),
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
@@ -1452,40 +1788,52 @@ class _DeviceControlPageState extends State<DeviceControlPage>
             children: [
               Icon(icon, size: 20.sp, color: AppColors.primary),
               SizedBox(width: 8.w),
-              Text(title,
-                  style: TextStyle(
-                      fontSize: 14.sp, fontWeight: FontWeight.w600,),),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 8.h),
-          ...fields.entries.map((e) => Padding(
-                padding: EdgeInsets.symmetric(vertical: 3.h),
-                child: Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(e.key,
-                        style: TextStyle(
-                            fontSize: 13.sp,
-                            color: AppColors.textSecondary,),),
-                    Flexible(
-                      child: Text('${e.value}',
-                          style: TextStyle(
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.w500,),
-                          textAlign: TextAlign.right,),
+          ...fields.entries.map(
+            (e) => Padding(
+              padding: EdgeInsets.symmetric(vertical: 3.h),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    e.key,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColors.textSecondary,
                     ),
-                  ],
-                ),
-              ),),
+                  ),
+                  Flexible(
+                    child: Text(
+                      '${e.value}',
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildFirmwareCard() {
-    final device = _deviceInfo['device'] as Map<String, dynamic>? ??
-        _deviceInfo;
+    final l10n = AppLocalizations.of(context)!;
+    final device =
+        _deviceInfo['device'] as Map<String, dynamic>? ?? _deviceInfo;
     final fwVersion = device['firmware_version'] ??
         device['fw_version'] ??
         _controlState['reported']?['firmware_version'] ??
@@ -1494,8 +1842,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         device['hw_version'] ??
         _controlState['reported']?['hardware_version'] ??
         '—';
-    final mcuVersion = device['mcu_version'] ??
-        _controlState['reported']?['mcu_version'];
+    final mcuVersion =
+        device['mcu_version'] ?? _controlState['reported']?['mcu_version'];
 
     return Container(
       decoration: AppColor.card(context),
@@ -1505,19 +1853,26 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         children: [
           Row(
             children: [
-              Icon(Icons.memory,
-                  size: 20.sp, color: AppColors.indigo,),
+              Icon(
+                Icons.memory,
+                size: 20.sp,
+                color: AppColors.indigo,
+              ),
               SizedBox(width: 8.w),
-              Text('固件版本',
-                  style: TextStyle(
-                      fontSize: 14.sp, fontWeight: FontWeight.w600,),),
+              Text(
+                l10n.str('control_firmware_versions'),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 8.h),
-          _buildInfoRow('固件版本', '$fwVersion'),
-          _buildInfoRow('硬件版本', '$hwVersion'),
+          _buildInfoRow(l10n.str('control_firmware_version'), '$fwVersion'),
+          _buildInfoRow(l10n.str('control_hardware_version'), '$hwVersion'),
           if (mcuVersion != null)
-            _buildInfoRow('MCU版本', '$mcuVersion'),
+            _buildInfoRow(l10n.str('control_mcu_version'), '$mcuVersion'),
         ],
       ),
     );
@@ -1529,21 +1884,29 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 13.sp, color: AppColors.textSecondary,),),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 13.sp, fontWeight: FontWeight.w500,),),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13.sp,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildConfigDiffCard() {
+    final l10n = AppLocalizations.of(context)!;
     final desired = _controlState['desired'] as Map<String, dynamic>? ?? {};
-    final reported =
-        _controlState['reported'] as Map<String, dynamic>? ?? {};
+    final reported = _controlState['reported'] as Map<String, dynamic>? ?? {};
     final allKeys = {...desired.keys, ...reported.keys}.toList()..sort();
 
     final diffKeys = allKeys.where((k) {
@@ -1560,19 +1923,30 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         children: [
           Row(
             children: [
-              Icon(Icons.compare_arrows,
-                  size: 20.sp, color: AppColors.purple,),
+              Icon(
+                Icons.compare_arrows,
+                size: 20.sp,
+                color: AppColors.purple,
+              ),
               SizedBox(width: 8.w),
-              Text('配置差异 (desired / reported)',
-                  style: TextStyle(
-                      fontSize: 14.sp, fontWeight: FontWeight.w600,),),
+              Text(
+                l10n.str('control_config_diff'),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 8.h),
           if (diffKeys.isEmpty)
-            Text('配置一致，无差异',
-                style: TextStyle(
-                    fontSize: 12.sp, color: AppColors.success,),)
+            Text(
+              l10n.str('control_config_in_sync'),
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: AppColors.success,
+              ),
+            )
           else
             ...diffKeys.map((k) {
               final d = desired[k] ?? '—';
@@ -1585,23 +1959,31 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                   borderRadius: BorderRadius.circular(8.r),
                 ),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(k,
-                        style: TextStyle(
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,),),
+                    Text(
+                      k,
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
                     SizedBox(height: 2.h),
-                    Text('期望: $d',
-                        style: TextStyle(
-                            fontSize: 11.sp,
-                            color: AppColors.primary,),),
-                    Text('实际: $r',
-                        style: TextStyle(
-                            fontSize: 11.sp,
-                            color: AppColors.textSecondary,),),
+                    Text(
+                      l10n.str('control_desired_value', {'value': '$d'}),
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    Text(
+                      l10n.str('control_reported_value', {'value': '$r'}),
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -1612,6 +1994,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   Widget _buildCommandHistoryCard() {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       decoration: AppColor.card(context),
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
@@ -1620,25 +2003,39 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         children: [
           Row(
             children: [
-              Icon(Icons.history,
-                  size: 20.sp, color: AppColors.teal,),
+              Icon(
+                Icons.history,
+                size: 20.sp,
+                color: AppColors.teal,
+              ),
               SizedBox(width: 8.w),
-              Text('命令记录',
-                  style: TextStyle(
-                      fontSize: 14.sp, fontWeight: FontWeight.w600,),),
+              Text(
+                l10n.str('control_command_history'),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const Spacer(),
               IconButton(
                 onPressed: _fetchCommandHistory,
-                icon: Icon(Icons.refresh,
-                    size: 18.sp, color: AppColors.textHint,),
+                icon: Icon(
+                  Icons.refresh,
+                  size: 18.sp,
+                  color: AppColors.textHint,
+                ),
               ),
             ],
           ),
           SizedBox(height: 8.h),
           if (_commandHistory.isEmpty)
-            Text('暂无命令记录',
-                style: TextStyle(
-                    fontSize: 12.sp, color: AppColors.textHint,),)
+            Text(
+              l10n.str('control_no_command_history'),
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: AppColors.textHint,
+              ),
+            )
           else
             ..._commandHistory.take(10).map((cmd) {
               final m = cmd as Map<String, dynamic>;
@@ -1653,7 +2050,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   }
 
   Widget _buildCommandHistoryItem(
-      String command, String status, String time,) {
+    String command,
+    String status,
+    String time,
+  ) {
     Color statusColor;
     switch (status) {
       case 'success':
@@ -1676,7 +2076,9 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     return Container(
       margin: EdgeInsets.only(bottom: 6.h),
       padding: EdgeInsets.symmetric(
-          horizontal: 10.w, vertical: 8.h,),
+        horizontal: 10.w,
+        vertical: 8.h,
+      ),
       decoration: BoxDecoration(
         color: AppColors.surfaceHover.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8.r),
@@ -1694,26 +2096,34 @@ class _DeviceControlPageState extends State<DeviceControlPage>
           SizedBox(width: 8.w),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(command,
-                    style: TextStyle(
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.w500,),),
+                Text(
+                  command,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 if (time.isNotEmpty)
-                  Text(time,
-                      style: TextStyle(
-                          fontSize: 10.sp,
-                          color: AppColors.textHint,),),
+                  Text(
+                    time,
+                    style: TextStyle(
+                      fontSize: 10.sp,
+                      color: AppColors.textHint,
+                    ),
+                  ),
               ],
             ),
           ),
-          Text(status,
-              style: TextStyle(
-                  fontSize: 11.sp,
-                  color: statusColor,
-                  fontWeight: FontWeight.w600,),),
+          Text(
+            status,
+            style: TextStyle(
+              fontSize: 11.sp,
+              color: statusColor,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -1724,7 +2134,10 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   // ─────────────────────────────────────────────────────────────────────
 
   void _showConfirmDialog(
-      String title, String message, VoidCallback onConfirm,) {
+    String title,
+    String message,
+    VoidCallback onConfirm,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,

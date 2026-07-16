@@ -28,7 +28,10 @@ class StationRepositoryImpl implements StationRepository {
     }
   }
 
-  Either<Failure, Map<String, dynamic>> _parseData(Response response) {
+  Either<Failure, Map<String, dynamic>> _parseData(
+    Response response, {
+    bool allowEmpty = false,
+  }) {
     final data = response.data;
     if (data is Map<String, dynamic>) {
       if (data['code'] == 0) {
@@ -36,7 +39,11 @@ class StationRepositoryImpl implements StationRepository {
         if (inner is Map<String, dynamic>) {
           return Right(inner);
         }
-        return const Right(<String, dynamic>{});
+        if (allowEmpty && inner == null) {
+          return const Right(<String, dynamic>{});
+        }
+        return const Left(
+            ServerFailure('Response format error: expected object data'));
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -51,7 +58,8 @@ class StationRepositoryImpl implements StationRepository {
         if (inner is List) {
           return Right(inner);
         }
-        return const Right(<dynamic>[]);
+        return const Left(
+            ServerFailure('Response format error: expected list data'));
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -71,9 +79,11 @@ class StationRepositoryImpl implements StationRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> getList({int page = 1, int pageSize = 20}) async {
+  Future<Either<Failure, Map<String, dynamic>>> getList(
+      {int page = 1, int pageSize = 20}) async {
     try {
-      final response = await remoteDataSource.getList(page: page, pageSize: pageSize);
+      final response =
+          await remoteDataSource.getList(page: page, pageSize: pageSize);
       return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));
@@ -98,7 +108,7 @@ class StationRepositoryImpl implements StationRepository {
   Future<Either<Failure, void>> create(Map<String, dynamic> data) async {
     try {
       final response = await remoteDataSource.create(data);
-      final parsed = _parseData(response);
+      final parsed = _parseData(response, allowEmpty: true);
       return parsed.fold(
         (failure) => Left(failure),
         (_) => const Right(null),
@@ -111,10 +121,11 @@ class StationRepositoryImpl implements StationRepository {
   }
 
   @override
-  Future<Either<Failure, void>> update(int stationId, Map<String, dynamic> data) async {
+  Future<Either<Failure, void>> update(
+      int stationId, Map<String, dynamic> data) async {
     try {
       final response = await remoteDataSource.update(stationId, data);
-      final parsed = _parseData(response);
+      final parsed = _parseData(response, allowEmpty: true);
       return parsed.fold(
         (failure) => Left(failure),
         (_) => const Right(null),
@@ -130,7 +141,7 @@ class StationRepositoryImpl implements StationRepository {
   Future<Either<Failure, void>> delete(int stationId) async {
     try {
       final response = await remoteDataSource.delete(stationId);
-      final parsed = _parseData(response);
+      final parsed = _parseData(response, allowEmpty: true);
       return parsed.fold(
         (failure) => Left(failure),
         (_) => const Right(null),
@@ -143,9 +154,11 @@ class StationRepositoryImpl implements StationRepository {
   }
 
   @override
-  Future<Either<Failure, List<dynamic>>> getStatistics(int stationId, String startDate, String endDate, String period) async {
+  Future<Either<Failure, List<dynamic>>> getStatistics(
+      int stationId, String startDate, String endDate, String period) async {
     try {
-      final response = await remoteDataSource.getStatistics(stationId, startDate, endDate, period);
+      final response = await remoteDataSource.getStatistics(
+          stationId, startDate, endDate, period);
       return _parseList(response);
     } on DioException catch (e) {
       return Left(_mapError(e));

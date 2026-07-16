@@ -69,7 +69,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       } else if (state is DashboardLoaded) {
         // 保留旧数据
       } else {
-        emit(const DashboardError(message: 'Failed to load, please check network'));
+        emit(const DashboardError(
+            message: 'Failed to load, please check network'));
       }
       return;
     }
@@ -80,18 +81,23 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     Map<String, dynamic> dist = {};
     List<StationRankItem> ranking = [];
     int successCount = 0;
+    final failedSections = <String>[];
 
     // 1. 统计数据（Hero 卡片 + 告警）
     try {
       final result = await repository.getStatistics();
       result.fold(
-        (failure) => dev.log('Dashboard: getStatistics failed: ${failure.message}'),
+        (failure) {
+          failedSections.add('statistics');
+          dev.log('Dashboard: getStatistics failed: ${failure.message}');
+        },
         (data) {
           stats = data;
           successCount++;
         },
       );
     } catch (e) {
+      failedSections.add('statistics');
       dev.log('Dashboard: getStatistics exception: $e');
     }
 
@@ -99,13 +105,17 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     try {
       final result = await repository.getTrendData();
       result.fold(
-        (failure) => dev.log('Dashboard: getTrendData failed: ${failure.message}'),
+        (failure) {
+          failedSections.add('trend');
+          dev.log('Dashboard: getTrendData failed: ${failure.message}');
+        },
         (data) {
           trendData = data;
           successCount++;
         },
       );
     } catch (e) {
+      failedSections.add('trend');
       dev.log('Dashboard: getTrendData exception: $e');
     }
 
@@ -113,13 +123,18 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     try {
       final result = await repository.getDeviceDistribution();
       result.fold(
-        (failure) => dev.log('Dashboard: getDeviceDistribution failed: ${failure.message}'),
+        (failure) {
+          failedSections.add('distribution');
+          dev.log(
+              'Dashboard: getDeviceDistribution failed: ${failure.message}');
+        },
         (data) {
           dist = data;
           successCount++;
         },
       );
     } catch (e) {
+      failedSections.add('distribution');
       dev.log('Dashboard: getDeviceDistribution exception: $e');
     }
 
@@ -127,13 +142,17 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     try {
       final result = await repository.getStationRanking();
       result.fold(
-        (failure) => dev.log('Dashboard: getStationRanking failed: ${failure.message}'),
+        (failure) {
+          failedSections.add('ranking');
+          dev.log('Dashboard: getStationRanking failed: ${failure.message}');
+        },
         (data) {
           ranking = data;
           successCount++;
         },
       );
     } catch (e) {
+      failedSections.add('ranking');
       dev.log('Dashboard: getStationRanking exception: $e');
     }
 
@@ -145,14 +164,16 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       } else if (state is DashboardLoaded) {
         // 保留旧数据
       } else {
-        emit(const DashboardError(message: 'Failed to load, please check network'));
+        emit(const DashboardError(
+            message: 'Failed to load, please check network'));
       }
       return;
     }
 
     final deviceStats = stats['deviceStats'] as Map<String, dynamic>? ?? {};
-    final recentAlarms =
-        (stats['recentAlarms'] as List<dynamic>?)?.cast<Map<String, dynamic>>() ?? [];
+    final recentAlarms = (stats['recentAlarms'] as List<dynamic>?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
 
     final dashboardData = DashboardData(
       todayEnergy: (stats['todayEnergy'] as num?)?.toDouble() ?? 0,
@@ -177,9 +198,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
     final currentState = state;
     if (currentState is DashboardLoaded) {
-      emit(currentState.copyWith(data: dashboardData));
+      emit(currentState.copyWith(
+          data: dashboardData, failedSections: failedSections));
     } else {
-      emit(DashboardLoaded(data: dashboardData));
+      emit(
+          DashboardLoaded(data: dashboardData, failedSections: failedSections));
     }
   }
 
@@ -237,17 +260,22 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
         // 解析设备统计（后端格式：deviceStats 对象）
         final deviceStats = data['deviceStats'] as Map<String, dynamic>?;
-        final onlineCount = (deviceStats?['online'] as num?)?.toInt() ?? currentData.onlineCount;
-        final offlineCount = (deviceStats?['offline'] as num?)?.toInt() ?? currentData.offlineCount;
-        final faultCount = (deviceStats?['fault'] as num?)?.toInt() ?? currentData.faultCount;
-        final deviceTotal = (deviceStats?['total'] as num?)?.toInt() ?? currentData.deviceTotal;
+        final onlineCount = (deviceStats?['online'] as num?)?.toInt() ??
+            currentData.onlineCount;
+        final offlineCount = (deviceStats?['offline'] as num?)?.toInt() ??
+            currentData.offlineCount;
+        final faultCount =
+            (deviceStats?['fault'] as num?)?.toInt() ?? currentData.faultCount;
+        final deviceTotal =
+            (deviceStats?['total'] as num?)?.toInt() ?? currentData.deviceTotal;
 
         // 解析最近告警（后端格式：recentAlarms 数组）
         final recentAlarmsRaw = data['recentAlarms'] as List<dynamic>?;
         final recentAlarms = recentAlarmsRaw?.map((e) {
-          if (e is Map<String, dynamic>) return e;
-          return <String, dynamic>{};
-        }).toList() ?? currentData.recentAlarms;
+              if (e is Map<String, dynamic>) return e;
+              return <String, dynamic>{};
+            }).toList() ??
+            currentData.recentAlarms;
 
         final updatedData = DashboardData(
           todayEnergy: currentData.todayEnergy,
@@ -274,7 +302,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     Emitter<DashboardState> emit,
   ) async {
     if (state is DashboardLoaded) {
-      emit((state as DashboardLoaded).copyWith(isSSEConnected: event.isConnected));
+      emit((state as DashboardLoaded)
+          .copyWith(isSSEConnected: event.isConnected));
     }
   }
 
@@ -290,7 +319,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     try {
       final result = await repository.getTrendData(type: event.range);
       result.fold(
-        (failure) => dev.log('Dashboard: getTrendData failed: ${failure.message}'),
+        (failure) =>
+            dev.log('Dashboard: getTrendData failed: ${failure.message}'),
         (data) {
           if (state is DashboardLoaded) {
             final currentState = state as DashboardLoaded;
@@ -325,15 +355,22 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         'offlineCount': data.offlineCount,
         'faultCount': data.faultCount,
         'trendData': data.trendData
-            .map((e) => {'date': e.date, 'energy': e.energy, 'load': e.load, 'cumulative': e.cumulative})
+            .map((e) => {
+                  'date': e.date,
+                  'energy': e.energy,
+                  'load': e.load,
+                  'cumulative': e.cumulative
+                })
             .toList(),
         'stationRanking': data.stationRanking
-            .map((e) => {
-                  'stationId': e.stationId,
-                  'stationName': e.stationName,
-                  'energy': e.energy,
-                  'deviceCount': e.deviceCount,
-                },)
+            .map(
+              (e) => {
+                'stationId': e.stationId,
+                'stationName': e.stationName,
+                'energy': e.energy,
+                'deviceCount': e.deviceCount,
+              },
+            )
             .toList(),
         'recentAlarms': data.recentAlarms,
       });
@@ -362,8 +399,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             .whereType<Map<String, dynamic>>()
             .map((e) => StationRankItem.fromJson(e))
             .toList(),
-        recentAlarms:
-            ((cached['recentAlarms'] as List<dynamic>?) ?? []).cast<Map<String, dynamic>>(),
+        recentAlarms: ((cached['recentAlarms'] as List<dynamic>?) ?? [])
+            .cast<Map<String, dynamic>>(),
         isFromCache: true,
       );
     } catch (_) {

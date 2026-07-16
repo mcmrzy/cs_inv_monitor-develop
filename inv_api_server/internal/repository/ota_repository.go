@@ -33,7 +33,7 @@ func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([
 	query := `
 		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
 		       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-		       COALESCE(target_chip,''), COALESCE(main_version,'')
+		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,'')
 		FROM firmware_versions WHERE status = 1
 	`
 	args := []interface{}{}
@@ -54,7 +54,7 @@ func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([
 		var f model.Firmware
 		if err := rows.Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
 			&f.FileMD5, &f.FileSHA256, &f.Changelog, &f.IsForce, &f.UploadedBy,
-			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion); err != nil {
+			&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion); err != nil {
 			continue
 		}
 		result = append(result, f)
@@ -67,11 +67,11 @@ func (r *OTARepository) GetFirmware(ctx context.Context, id int64) (*model.Firmw
 	err := r.db.QueryRow(ctx, `
 		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
 		       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
-		       COALESCE(target_chip,''), COALESCE(main_version,'')
+		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,'')
 		FROM firmware_versions WHERE id = $1
 	`, id).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
 		&f.FileMD5, &f.FileSHA256, &f.Changelog, &f.IsForce, &f.UploadedBy,
-		&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion)
+		&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion)
 	return &f, err
 }
 

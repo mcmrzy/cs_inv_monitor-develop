@@ -8,24 +8,29 @@ export const ROLE_MAP: Record<string, string> = {
   5: '终端用户',
 }
 
-export const DEVICE_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  0: { label: '离线', color: '#d9d9d9' },
-  1: { label: '在线', color: '#52c41a' },
-  2: { label: '故障', color: '#ff4d4f' },
-  offline: { label: '离线', color: '#d9d9d9' },
-  online: { label: '在线', color: '#52c41a' },
-  fault: { label: '故障', color: '#ff4d4f' },
+export const ROLE_I18N_KEY: Record<string, string> = {
+  0: 'user.superAdmin', 1: 'user.admin', 2: 'user.operator',
+  3: 'user.dealer', 4: 'user.installer', 5: 'user.endUser',
 }
 
-export const ALARM_LEVEL_MAP: Record<string, { label: string; color: string }> = {
-  1: { label: '提示', color: '#1677ff' },
-  2: { label: '警告', color: '#fa8c16' },
-  3: { label: '严重', color: '#ff4d4f' },
+export const DEVICE_STATUS_MAP: Record<string, { label: string; color: string; i18nKey: string }> = {
+  0: { label: '离线', color: '#d9d9d9', i18nKey: 'common.offline' },
+  1: { label: '在线', color: '#52c41a', i18nKey: 'common.online' },
+  2: { label: '故障', color: '#ff4d4f', i18nKey: 'common.fault' },
+  offline: { label: '离线', color: '#d9d9d9', i18nKey: 'common.offline' },
+  online: { label: '在线', color: '#52c41a', i18nKey: 'common.online' },
+  fault: { label: '故障', color: '#ff4d4f', i18nKey: 'common.fault' },
+}
+
+export const ALARM_LEVEL_MAP: Record<string, { label: string; color: string; i18nKey: string }> = {
+  1: { label: '提示', color: '#1677ff', i18nKey: 'common.alarmInfo' },
+  2: { label: '警告', color: '#fa8c16', i18nKey: 'common.alarmWarning' },
+  3: { label: '严重', color: '#ff4d4f', i18nKey: 'common.alarmCritical' },
   // 字符串级别映射（设备上报的 level 字段）
-  fault: { label: '严重', color: '#ff4d4f' },
-  warning: { label: '警告', color: '#fa8c16' },
-  info: { label: '提示', color: '#1677ff' },
-  normal: { label: '正常', color: '#52c41a' },
+  fault: { label: '严重', color: '#ff4d4f', i18nKey: 'common.alarmCritical' },
+  warning: { label: '警告', color: '#fa8c16', i18nKey: 'common.alarmWarning' },
+  info: { label: '提示', color: '#1677ff', i18nKey: 'common.alarmInfo' },
+  normal: { label: '正常', color: '#52c41a', i18nKey: 'common.normal' },
 }
 
 export const ALARM_LEVEL_OPTIONS = [
@@ -69,6 +74,13 @@ export const ALARM_CODE_MESSAGE: Record<number, string> = {
   12: '恢复并网运行',
 }
 
+export function getAlarmMessageI18nKey(
+  faultCode: string | number | null | undefined,
+): string | undefined {
+  const code = parseFaultCode(faultCode)
+  return ALARM_CODE_MESSAGE[code] !== undefined ? `alarm.code.${code}` : undefined
+}
+
 // 解析故障码为十进制数值（支持十进制字符串和0x十六进制格式）
 export function parseFaultCode(faultCode: string | number | null | undefined): number {
   if (faultCode == null) return -1
@@ -87,7 +99,7 @@ export function parseFaultCode(faultCode: string | number | null | undefined): n
 export function getAlarmLevelDisplay(
   faultCode: string | number | null | undefined,
   alarmLevel: number | string,
-): { label: string; color: string } {
+): { label: string; color: string; i18nKey?: string } {
   const code = parseFaultCode(faultCode)
   // 优先使用告警码映射
   if (code >= 0 && ALARM_CODE_LEVEL[code] !== undefined) {
