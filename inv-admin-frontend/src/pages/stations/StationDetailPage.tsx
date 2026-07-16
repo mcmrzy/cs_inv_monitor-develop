@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Card, Tag, Button, Space, Spin, Tabs, Table, Row, Col, Empty, Alert, List, Typography,
+  Card, Tag, Button, Space, Spin, Tabs, Table, Row, Col, Empty, Progress, Typography,
 } from 'antd'
 import {
   ArrowLeftOutlined, DesktopOutlined, CheckCircleOutlined,
   SunOutlined, WarningOutlined, ThunderboltOutlined,
+  ReloadOutlined, EditOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import api from '@/services/api'
@@ -18,8 +19,6 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import useLocaleStore from '@/stores/localeStore'
 import EnergyFlowDiagram from './components/EnergyFlowDiagram'
-import PowerMetricCards from './components/PowerMetricCards'
-import EnergySummaryCards from './components/EnergySummaryCards'
 import SocialContribution from './components/SocialContribution'
 import StationStatisticsTab from './components/StationStatisticsTab'
 import StationDevicesTab from './components/StationDevicesTab'
@@ -29,7 +28,7 @@ const { Title, Text } = Typography
 interface StationDetail {
   id: number
   name?: string
-  station_name?: string   // 后端详情 API 可能返回 station_name 而非 name
+  station_name?: string
   province?: string
   city?: string
   district?: string
@@ -48,8 +47,8 @@ interface StationDetail {
   fault_count?: number
   today_generation?: number
   total_generation?: number
-  today_energy?: number   // 后端详情 API 返回 today_energy
-  total_energy?: number   // 后端详情 API 返回 total_energy
+  today_energy?: number
+  total_energy?: number
   month_energy?: number
   year_energy?: number
   pv_power?: number
@@ -57,6 +56,12 @@ interface StationDetail {
   grid_power?: number
   batt_power?: number
   batt_soc?: number
+  today_discharge?: number
+  total_discharge?: number
+  today_grid_export?: number
+  total_grid_export?: number
+  today_consumption?: number
+  total_consumption?: number
   created_at?: string
 }
 
@@ -85,7 +90,7 @@ const StationDetailPage: React.FC = () => {
   const { timezone } = useTimezoneStore()
   const [activeTab, setActiveTab] = useState('overview')
 
-  const { data: station, isLoading: stationLoading } = useQuery({
+  const { data: station, isLoading: stationLoading, refetch: refetchStation } = useQuery({
     queryKey: ['station', id],
     queryFn: () => api.get(`/stations/${id}`).then(res => res?.data?.data ?? res?.data),
     enabled: !!id,
@@ -193,6 +198,67 @@ const StationDetailPage: React.FC = () => {
     return socs.length > 0 ? socs.reduce((a, b) => a + b, 0) / socs.length : 0
   })()
 
+  // 从设备实时数据中提取 PV1/PV2 分路、电池电压、电网电压/频率
+  const firstDeviceRt = Object.values(realtimeData ?? {})[0] as any
+  const pvPower1 = safeNum(firstDeviceRt?.pv1_power ?? firstDeviceRt?.pv?.data?.pv1_power ?? 0)
+  const pvVoltage1 = safeNum(firstDeviceRt?.pv1_voltage ?? firstDeviceRt?.pv?.data?.pv1_voltage ?? 0)
+  const pvPower2 = safeNum(firstDeviceRt?.pv2_power ?? firstDeviceRt?.pv?.data?.pv2_power ?? 0)
+  const pvVoltage2 = safeNum(firstDeviceRt?.pv2_voltage ?? firstDeviceRt?.pv?.data?.pv2_voltage ?? 0)
+  const battVoltage = safeNum(firstDeviceRt?.battery_voltage ?? firstDeviceRt?.batt?.data?.battery_voltage ?? 0)
+  const gridVoltage = safeNum(firstDeviceRt?.grid_voltage ?? firstDeviceRt?.grid?.data?.grid_voltage ?? firstDeviceRt?.ac_voltage ?? 0)
+  const gridFreq = safeNum(firstDeviceRt?.grid_frequency ?? firstDeviceRt?.grid?.data?.grid_frequency ?? firstDeviceRt?.ac_frequency ?? 0)
+
+  // 最后更新时间
+  const lastUpdateTime = realtimeData ? new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '--'
+
+  // 4宫格能量卡片数据
+  const energyCards = [
+    {
+      key: 'pv',
+      label: t('station.solarProduction'),
+      icon: '/images/energy-flow/pv.jpg',
+      color: '#3B82F6',
+      today: station.today_energy ?? station.today_generation ?? 0,
+      total: station.total_energy ?? station.total_generation ?? 0,
+      todayLabel: t('station.todayGeneration'),
+      totalLabel: t('station.cumulative'),
+      unit: 'kWh',
+    },
+    {
+      key: 'battery',
+      label: t('station.batteryDischarge'),
+      icon: '/images/energy-flow/battery.jpg',
+      color: '#EC4899',
+      today: station.today_discharge ?? 0,
+      total: station.total_discharge ?? 0,
+      todayLabel: t('station.todayDischarge'),
+      totalLabel: t('station.cumulative'),
+      unit: 'kWh',
+    },
+    {
+      key: 'grid',
+      label: t('station.gridExport'),
+      icon: '/images/energy-flow/grid.jpg',
+      color: '#F59E0B',
+      today: station.today_grid_export ?? 0,
+      total: station.total_grid_export ?? 0,
+      todayLabel: t('station.todayExport'),
+      totalLabel: t('station.cumulative'),
+      unit: 'kWh',
+    },
+    {
+      key: 'load',
+      label: t('station.loadConsumption'),
+      icon: '/images/energy-flow/load.jpg',
+      color: '#22C55E',
+      today: station.today_consumption ?? 0,
+      total: station.total_consumption ?? 0,
+      todayLabel: t('station.todayConsumption'),
+      totalLabel: t('station.cumulative'),
+      unit: 'kWh',
+    },
+  ]
+
   // 告警列表列定义
   const alarmColumns: ColumnsType<AlarmItem> = [
     {
@@ -229,86 +295,206 @@ const StationDetailPage: React.FC = () => {
 
   /* ==================== 概览 Tab ==================== */
   const renderOverviewTab = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* a) 天气/容量信息条 */}
-      <Card bordered={false} style={{ borderRadius: 12, background: 'linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%)' }}>
-        <Row gutter={[16, 12]} align="middle">
-          <Col xs={12} sm={6}>
-            <Space><SunOutlined style={{ color: '#f59e0b', fontSize: 18 }} /><Text>{t('station.capacity_kW')}: <strong>{station.capacity ?? '-'} kW</strong></Text></Space>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* 4 宫格能量卡片 */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 0 }}>
+        {energyCards.map((card) => (
+          <Col xs={24} sm={12} md={6} key={card.key}>
+            <Card bordered={false} style={{ borderRadius: 12, borderLeft: `4px solid ${card.color}`, height: '100%' }} bodyStyle={{ padding: '16px 20px' }}>
+              <Row align="middle" gutter={12}>
+                <Col>
+                  <img src={card.icon} style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} alt="" />
+                </Col>
+                <Col flex={1}>
+                  <Text type="secondary" style={{ fontSize: 13 }}>{card.label}</Text>
+                  <div>
+                    <Text strong style={{ fontSize: 20 }}>{(card.today ?? 0).toFixed(1)}</Text>
+                    <Text type="secondary"> {card.unit}</Text>
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {card.totalLabel}: {(card.total ?? 0).toFixed(0)} {card.unit}
+                  </Text>
+                </Col>
+              </Row>
+            </Card>
           </Col>
-          <Col xs={12} sm={6}>
-            <Space><DesktopOutlined style={{ color: '#1677ff', fontSize: 18 }} /><Text>{t('station.deviceCount')}: <strong>{station.device_count ?? 0}</strong></Text></Space>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Space><CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} /><Text>{t('station.onlineCount')}: <strong style={{ color: '#52c41a' }}>{station.online_count ?? 0}</strong></Text></Space>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Space>
-              <WarningOutlined style={{ color: (station.fault_count ?? 0) > 0 ? '#ff4d4f' : '#8c8c8c', fontSize: 18 }} />
-              <Text>{t('station.faultCount')}: <strong style={{ color: (station.fault_count ?? 0) > 0 ? '#ff4d4f' : undefined }}>{station.fault_count ?? 0}</strong></Text>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+        ))}
+      </Row>
 
-      {/* b) 能量流图 */}
-      <Card bordered={false} style={{ borderRadius: 12 }} title={
-        <Space><ThunderboltOutlined /> {t('station.energyFlow')}</Space>
-      } size="small">
-        <EnergyFlowDiagram
-          pvPower={aggregatedPv}
-          loadPower={aggregatedLoad}
-          battPower={aggregatedBatt}
-          gridPower={aggregatedGrid}
-          battSoc={avgSoc}
-        />
-      </Card>
+      {/* 两列布局：左列能量流图 + 右列系统信息 */}
+      <Row gutter={[16, 16]}>
+        {/* 左列：能量流图 */}
+        <Col xs={24} lg={14}>
+          <Card bordered={false} style={{ borderRadius: 12, height: '100%' }} title={
+            <Space><ThunderboltOutlined /> {t('station.energyFlow')}</Space>
+          } size="small">
+            <EnergyFlowDiagram
+              pvPower={aggregatedPv}
+              loadPower={aggregatedLoad}
+              battPower={aggregatedBatt}
+              gridPower={aggregatedGrid}
+              battSoc={avgSoc}
+            />
+          </Card>
+        </Col>
 
-      {/* c) 功率指标 */}
-      <PowerMetricCards totalPower={totalRealtimePower} todayEnergy={todayEnergy} />
+        {/* 右列：系统详细信息 */}
+        <Col xs={24} lg={10}>
+          <Card
+            bordered={false}
+            style={{ borderRadius: 12, marginBottom: 16 }}
+            title={<><ThunderboltOutlined /> {t('station.systemInfo')}</>}
+            extra={<Text type="secondary" style={{ fontSize: 12 }}>{lastUpdateTime}</Text>}
+          >
+            {/* PV 输入 */}
+            <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #f0f0f0' }}>
+              <Text strong style={{ color: '#3B82F6' }}>{t('station.pvInput')}</Text>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col span={12}>
+                  <Text type="secondary">PV1:</Text>
+                  <Text strong style={{ marginLeft: 8 }}>{pvPower1 > 0 ? `${pvPower1} W` : '--'}</Text>
+                  <Text type="secondary" style={{ marginLeft: 8 }}>{pvVoltage1 > 0 ? `${pvVoltage1} V` : ''}</Text>
+                </Col>
+                <Col span={12}>
+                  <Text type="secondary">PV2:</Text>
+                  <Text strong style={{ marginLeft: 8 }}>{pvPower2 > 0 ? `${pvPower2} W` : '--'}</Text>
+                  <Text type="secondary" style={{ marginLeft: 8 }}>{pvVoltage2 > 0 ? `${pvVoltage2} V` : ''}</Text>
+                </Col>
+              </Row>
+              <Row style={{ marginTop: 4 }}>
+                <Col span={24}>
+                  <Text type="secondary">{t('station.systemStatus')}: </Text>
+                  <Tag color={station.status === 1 ? 'green' : 'red'} style={{ marginLeft: 4 }}>
+                    {station.status === 1 ? t('station.normal') : t('station.stopped')}
+                  </Tag>
+                </Col>
+              </Row>
+            </div>
 
-      {/* d) 发电量汇总 */}
-      <EnergySummaryCards
-        monthEnergy={statsSummary?.month ?? station.month_energy ?? 0}
-        yearEnergy={statsSummary?.year ?? station.year_energy ?? 0}
-        totalEnergy={totalEnergy}
-      />
+            {/* 电池 */}
+            <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #f0f0f0' }}>
+              <Row align="middle">
+                <Col flex={1}>
+                  <Text strong style={{ color: '#EC4899' }}>{t('station.battery')}</Text>
+                </Col>
+                <Col>
+                  <Progress
+                    type="circle"
+                    percent={Math.round(avgSoc)}
+                    size={40}
+                    strokeColor={avgSoc > 20 ? '#22c55e' : '#ef4444'}
+                  />
+                </Col>
+              </Row>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col span={8}>
+                  <Text type="secondary">{t('station.power')}:</Text>{' '}
+                  <Text strong>{aggregatedBatt ?? 0} W</Text>
+                </Col>
+                <Col span={8}>
+                  <Text type="secondary">{t('station.voltage')}:</Text>{' '}
+                  <Text strong>{battVoltage > 0 ? `${battVoltage} V` : '--'}</Text>
+                </Col>
+                <Col span={8}>
+                  <Text type="secondary">SOC:</Text>{' '}
+                  <Text strong>{Math.round(avgSoc)}%</Text>
+                </Col>
+              </Row>
+            </div>
 
-      {/* e) 最近告警（5条） */}
-      <Card bordered={false} style={{ borderRadius: 12 }} size="small" title={
-        <Space><WarningOutlined style={{ color: '#ff4d4f' }} /> {t('station.recentAlarms')}</Space>
-      } extra={alarms.length > 5 && <a onClick={() => setActiveTab('overview')}>{t('station.viewAll')}</a>}>
-        {recentAlarms.length > 0 ? (
-          <Table<AlarmItem>
-            columns={alarmColumns}
-            dataSource={recentAlarms}
-            rowKey="id"
-            size="small"
-            pagination={false}
-            scroll={{ x: 600 }}
-          />
-        ) : (
-          <Empty description={t('station.noAlarms')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-        )}
-      </Card>
+            {/* 电网 */}
+            <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #f0f0f0' }}>
+              <Text strong style={{ color: '#F59E0B' }}>{t('station.grid')}</Text>
+              <Row gutter={16} style={{ marginTop: 8 }}>
+                <Col span={8}>
+                  <Text type="secondary">{t('station.power')}:</Text>{' '}
+                  <Text strong>{aggregatedGrid ?? 0} W</Text>
+                </Col>
+                <Col span={8}>
+                  <Text type="secondary">{t('station.voltage')}:</Text>{' '}
+                  <Text strong>{gridVoltage > 0 ? `${gridVoltage} V` : '--'}</Text>
+                </Col>
+                <Col span={8}>
+                  <Text type="secondary">{t('station.frequency')}:</Text>{' '}
+                  <Text strong>{gridFreq > 0 ? `${gridFreq} Hz` : '--'}</Text>
+                </Col>
+              </Row>
+            </div>
 
-      {/* f) 社会贡献 */}
-      <SocialContribution totalEnergy={statsSummary?.total ?? station.total_generation ?? station.total_energy ?? 0} />
+            {/* 负载 */}
+            <div>
+              <Text strong style={{ color: '#22C55E' }}>{t('station.load')}</Text>
+              <Row style={{ marginTop: 8 }}>
+                <Col span={12}>
+                  <Text type="secondary">{t('station.consumptionPower')}:</Text>{' '}
+                  <Text strong>{aggregatedLoad ?? 0} W</Text>
+                </Col>
+              </Row>
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 底部：社会贡献 + 最近告警 */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={14}>
+          <SocialContribution totalEnergy={statsSummary?.total ?? station.total_generation ?? station.total_energy ?? 0} />
+        </Col>
+        <Col xs={24} lg={10}>
+          <Card bordered={false} style={{ borderRadius: 12 }} size="small" title={
+            <Space><WarningOutlined style={{ color: '#ff4d4f' }} /> {t('station.recentAlarms')}</Space>
+          } extra={alarms.length > 5 && <a onClick={() => setActiveTab('overview')}>{t('station.viewAll')}</a>}>
+            {recentAlarms.length > 0 ? (
+              <Table<AlarmItem>
+                columns={alarmColumns}
+                dataSource={recentAlarms}
+                rowKey="id"
+                size="small"
+                pagination={false}
+                scroll={{ x: 600 }}
+              />
+            ) : (
+              <Empty description={t('station.noAlarms')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            )}
+          </Card>
+        </Col>
+      </Row>
     </div>
   )
 
   return (
     <div style={{ padding: '0 0 24px' }}>
       {/* 顶部导航栏 */}
-      <Space style={{ marginBottom: 16 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/stations')}>
-          {t('common.back')}
-        </Button>
-        <Title level={4} style={{ margin: 0 }}>{stationName}</Title>
-        <Tag color={station.status === 1 ? 'green' : 'red'}>
-          {station.status === 1 ? t('station.normal') : t('station.stopped')}
-        </Tag>
-      </Space>
+      <Row align="middle" gutter={16} style={{ marginBottom: 16 }}>
+        <Col flex="auto">
+          <Space>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/stations')}>
+              {t('common.back')}
+            </Button>
+            <Title level={4} style={{ margin: 0 }}>{stationName}</Title>
+            <Tag color={station.status === 1 ? 'green' : 'red'}>
+              {station.status === 1 ? t('station.normal') : t('station.stopped')}
+            </Tag>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              <DesktopOutlined style={{ marginRight: 4 }} />
+              {t('station.deviceCount')}: {station.device_count ?? 0} / {t('station.onlineCount')}: {station.online_count ?? 0}
+            </Text>
+            {(station.fault_count ?? 0) > 0 && (
+              <Tag color="red" icon={<WarningOutlined />}>{station.fault_count} {t('station.fault')}</Tag>
+            )}
+          </Space>
+        </Col>
+        <Col>
+          <Space>
+            <Button icon={<EditOutlined />} size="small" onClick={() => navigate(`/stations/${id}/edit`)}>
+              {t('common.edit')}
+            </Button>
+            <Button icon={<ReloadOutlined />} size="small" onClick={() => refetchStation()}>
+              {t('common.refresh')}
+            </Button>
+          </Space>
+        </Col>
+      </Row>
 
       {/* 三 Tab：概览 / 统计 / 关联设备 */}
       <Card bordered={false} style={{ borderRadius: 12 }}>
