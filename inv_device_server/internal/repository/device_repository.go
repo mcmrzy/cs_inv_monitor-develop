@@ -40,7 +40,7 @@ func (r *DeviceRepository) GetAllActiveModels(ctx context.Context) ([]model.Devi
 	}
 	defer rows.Close()
 
-	var models []model.DeviceModel
+	models := make([]model.DeviceModel, 0)
 	for rows.Next() {
 		var m model.DeviceModel
 		err := rows.Scan(&m.ID, &m.ModelCode, &m.ModelName, &m.Manufacturer, &m.Category,
@@ -75,7 +75,7 @@ func (r *DeviceRepository) GetModelFields(ctx context.Context, modelID int32) ([
 	}
 	defer rows.Close()
 
-	var fields []model.DeviceModelField
+	fields := make([]model.DeviceModelField, 0)
 	for rows.Next() {
 		var f model.DeviceModelField
 		var controlParamsJSON []byte
@@ -161,7 +161,7 @@ func (r *DeviceRepository) GetAllDevices(ctx context.Context) ([]DeviceSummary, 
 	}
 	defer rows.Close()
 
-	var devices []DeviceSummary
+	devices := make([]DeviceSummary, 0)
 	for rows.Next() {
 		var d DeviceSummary
 		if err := rows.Scan(&d.SN, &d.ModelID); err != nil {
@@ -193,7 +193,7 @@ func (r *DeviceRepository) GetModelProtocols(ctx context.Context, modelID int32)
 	}
 	defer rows.Close()
 
-	var protocols []model.DeviceModelProtocol
+	protocols := make([]model.DeviceModelProtocol, 0)
 	for rows.Next() {
 		var p model.DeviceModelProtocol
 		err := rows.Scan(&p.ID, &p.ModelID, &p.TopicPattern, &p.ParseType,

@@ -292,7 +292,7 @@ var stateTransitionMatrix = [3][6]DeviceState{
 	// EventOnlineReport, EventOfflineReport, EventFaultDetected, EventFaultRecovered, EventHeartbeatTimeout, EventLWTOffline
 	{StateOnline, -1, StateFault, -1, -1, -1},                                       // 当前: Offline
 	{-1, StateOffline, StateFault, -1, StateOffline, StateOffline},                  // 当前: Online
-	{StateFault, StateOffline, StateFault, StateOnline, StateOffline, StateOffline}, // 当前: Fault
+	{StateOnline, StateOffline, StateFault, StateOnline, StateOffline, StateOffline}, // 当前: Fault (允许 Fault→Online)
 }
 
 // CanTransition 检查状态转换是否合法
@@ -342,6 +342,30 @@ func EventToString(event StateTransition) string {
 	}
 }
 
+// infoLevelFaultCodes 信息级（alarm_level=1）故障码集合
+// 这些故障码对应的事件为提示性质（如"恢复并网运行"），不应触发设备故障状态转换
+var infoLevelFaultCodes = map[int64]bool{
+	10: true, // 系统启动完成
+	11: true, // 进入待机模式
+	12: true, // 恢复并网运行
+}
+
+// isInfoLevelFaultCode 判断 fault_code 是否为信息级（不应触发故障转换）
+func isInfoLevelFaultCode(fc interface{}) bool {
+	var code int64
+	switch v := fc.(type) {
+	case float64:
+		code = int64(v)
+	case int:
+		code = int64(v)
+	case int64:
+		code = v
+	default:
+		return false
+	}
+	return infoLevelFaultCodes[code]
+}
+
 // DetectAndHandleFault 检测故障状态并处理状态变更
 // 用于 data/status 主题的故障检测
 // 注意：此函数只检测故障，不检测恢复。故障恢复由 alarm 主题的 code=0 触发
@@ -387,6 +411,14 @@ func (m *DeviceStateManager) DetectAndHandleFault(ctx context.Context, sn string
 	if !isFault {
 		logger.Info("No fault detected in data/status, skipping (recovery handled by alarm topic)",
 			zap.String("sn", sn))
+		return nil
+	}
+
+	// 信息级故障码过滤：alarm_level=1 的故障码（如"恢复并网运行"）不触发故障状态转换
+	if faultCode != nil && isInfoLevelFaultCode(faultCode) {
+		logger.Info("Info-level fault_code detected, skipping fault state transition",
+			zap.String("sn", sn),
+			zap.Any("fault_code", faultCode))
 		return nil
 	}
 

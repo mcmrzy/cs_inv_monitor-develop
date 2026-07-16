@@ -159,7 +159,7 @@ func (r *UserRepository) ListByParentID(ctx context.Context, parentID int64, pag
 	}
 	defer rows.Close()
 
-	var users []*model.User
+	users := make([]*model.User, 0)
 	for rows.Next() {
 		var user model.User
 		var regionID, pid sql.NullInt64
@@ -380,7 +380,7 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 	}
 	defer rows.Close()
 
-	var users []model.User
+	users := make([]model.User, 0)
 	for rows.Next() {
 		var user model.User
 		var regionID sql.NullInt64
@@ -462,7 +462,7 @@ func (r *UserRepository) queryUsers(ctx context.Context, query string) ([]model.
 	}
 	defer rows.Close()
 
-	var users []model.User
+	users := make([]model.User, 0)
 	for rows.Next() {
 		var user model.User
 		var regionID sql.NullInt64
@@ -814,7 +814,7 @@ func (r *DeviceRepository) GetAllowedDeviceSNs(ctx context.Context, userID int64
 	}
 	defer rows.Close()
 
-	var sns []string
+	sns := make([]string, 0)
 	for rows.Next() {
 		var sn string
 		if err := rows.Scan(&sn); err != nil {
@@ -1586,7 +1586,7 @@ func (r *DeviceRepository) MarkStaleDevicesOffline(ctx context.Context, timeoutS
 	}
 	defer rows.Close()
 
-	var sns []string
+	sns := make([]string, 0)
 	for rows.Next() {
 		var sn string
 		if err := rows.Scan(&sn); err != nil {
@@ -1597,7 +1597,7 @@ func (r *DeviceRepository) MarkStaleDevicesOffline(ctx context.Context, timeoutS
 
 	// 双重校验：检查 Redis device:heartbeat:{sn} key 是否存在，如果存在则不标记离线
 	if len(sns) > 0 && r.cache != nil {
-		var stale []string
+		stale := make([]string, 0)
 		for _, sn := range sns {
 			if r.cache.Exists(ctx, "device:heartbeat:"+sn).Val() > 0 {
 				continue // Redis 心跳 key 仍存在，跳过
