@@ -80,7 +80,7 @@ class DashboardSSEDataSource {
 
   void _processSSEData(String chunk) {
     final lines = chunk.split('\n');
-    
+
     for (final line in lines) {
       if (line.startsWith('data: ')) {
         final data = line.substring(6).trim();
@@ -94,11 +94,9 @@ class DashboardSSEDataSource {
         }
       } else if (line.startsWith('event: ')) {
         // 处理事件类型
-        final eventType = line.substring(7).trim();
         // 可以根据事件类型做特殊处理
       } else if (line.startsWith('id: ')) {
         // 处理事件ID
-        final eventId = line.substring(4).trim();
         // 可以用于断线重连
       } else if (line.startsWith('retry: ')) {
         // 处理重连时间
@@ -130,11 +128,11 @@ class DashboardSSEDataSource {
   void _handleConnectionError(dynamic error) {
     _isConnected = false;
     _heartbeatTimer?.cancel();
-    
+
     if (_reconnectAttempts < maxReconnectAttempts) {
       _reconnectAttempts++;
       final delay = reconnectDelay * _reconnectAttempts;
-      
+
       _reconnectTimer?.cancel();
       _reconnectTimer = Timer(delay, () {
         _connect();
@@ -147,11 +145,11 @@ class DashboardSSEDataSource {
   void _handleDisconnection() {
     _isConnected = false;
     _heartbeatTimer?.cancel();
-    
+
     if (_reconnectAttempts < maxReconnectAttempts) {
       _reconnectAttempts++;
       final delay = reconnectDelay * _reconnectAttempts;
-      
+
       _reconnectTimer?.cancel();
       _reconnectTimer = Timer(delay, () {
         _connect();
@@ -192,7 +190,7 @@ class SSEEvent {
       type: json['type'] as String? ?? '',
       data: json['data'] as Map<String, dynamic>? ?? {},
       id: json['id'] as String?,
-      timestamp: json['timestamp'] != null 
+      timestamp: json['timestamp'] != null
           ? DateTime.parse(json['timestamp'] as String)
           : DateTime.now(),
     );

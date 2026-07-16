@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
@@ -31,6 +30,7 @@ class _HomePageState extends State<HomePage> {
     final l10n = AppLocalizations.of(context)!;
     return [l10n.all, l10n.normal, l10n.fault, l10n.offline];
   }
+
   static const _filterColors = [
     AppColors.primary,
     AppColors.successLight,
@@ -64,25 +64,31 @@ class _HomePageState extends State<HomePage> {
     var list = stations;
     if (q.isNotEmpty) {
       list = list
-          .where((s) =>
-              (s['station_name'] ?? s['name'] ?? '')
-                  .toString()
-                  .toLowerCase()
-                  .contains(q),)
+          .where(
+            (s) => (s['station_name'] ?? s['name'] ?? '')
+                .toString()
+                .toLowerCase()
+                .contains(q),
+          )
           .toList();
     }
     switch (_filterIndex) {
       case 1:
         list = list
-            .where((s) =>
-                (s['status'] ?? 1) == 1 &&
-                (s['fault_count'] ?? 0) == 0 &&
-                (s['online_count'] ?? 0) > 0,)
+            .where(
+              (s) =>
+                  (s['status'] ?? 1) == 1 &&
+                  (s['fault_count'] ?? 0) == 0 &&
+                  (s['online_count'] ?? 0) > 0,
+            )
             .toList();
       case 2:
         list = list.where((s) => (s['fault_count'] ?? 0) > 0).toList();
       case 3:
-        list = list.where((s) => (s['status'] ?? 1) != 1 || (s['online_count'] ?? 0) == 0).toList();
+        list = list
+            .where(
+                (s) => (s['status'] ?? 1) != 1 || (s['online_count'] ?? 0) == 0)
+            .toList();
     }
     return list;
   }
@@ -113,18 +119,23 @@ class _HomePageState extends State<HomePage> {
             children: [
               Expanded(
                 child: StyledRefreshIndicator(
-                  onRefresh: () async => context.read<StationBloc>().add(StationSummaryRequested()),
+                  onRefresh: () async => context
+                      .read<StationBloc>()
+                      .add(StationSummaryRequested()),
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
-                      if (isFromCache) SliverToBoxAdapter(
-                        child: SafeArea(
-                          bottom: false,
-                          child: OfflineDataBanner(
-                            onRetry: () => context.read<StationBloc>().add(StationSummaryRequested()),
+                      if (isFromCache)
+                        SliverToBoxAdapter(
+                          child: SafeArea(
+                            bottom: false,
+                            child: OfflineDataBanner(
+                              onRetry: () => context
+                                  .read<StationBloc>()
+                                  .add(StationSummaryRequested()),
+                            ),
                           ),
                         ),
-                      ),
                       _buildHeader(),
                       if (_showSearch) _buildSearchBar(),
                       _buildFilterCards(ds),
@@ -133,13 +144,22 @@ class _HomePageState extends State<HomePage> {
                           padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 8.h),
                           child: Row(
                             children: [
-                              Text(l10n.str('station_count', {'count': '${filtered.length}'}),
-                                  style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary),),
+                              Text(
+                                l10n.str('station_count',
+                                    {'count': '${filtered.length}'}),
+                                style: TextStyle(
+                                    fontSize: 13.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary),
+                              ),
                               const Spacer(),
                               if (_filterIndex > 0)
                                 GestureDetector(
                                   onTap: () => setState(() => _filterIndex = 0),
-                                  child: Text(l10n.clearFilter, style: TextStyle(fontSize: 12.sp, color: AppColors.primary)),
+                                  child: Text(l10n.clearFilter,
+                                      style: TextStyle(
+                                          fontSize: 12.sp,
+                                          color: AppColors.primary)),
                                 ),
                             ],
                           ),
@@ -151,9 +171,11 @@ class _HomePageState extends State<HomePage> {
                         SliverPadding(
                           padding: EdgeInsets.symmetric(horizontal: 16.w),
                           sliver: SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                  (_, i) => _buildCard(filtered[i]),
-                                  childCount: filtered.length,),),
+                            delegate: SliverChildBuilderDelegate(
+                              (_, i) => _buildCard(filtered[i]),
+                              childCount: filtered.length,
+                            ),
+                          ),
                         ),
                       const SliverToBoxAdapter(child: SizedBox(height: 100)),
                     ],
@@ -172,10 +194,11 @@ class _HomePageState extends State<HomePage> {
     return SliverToBoxAdapter(
       child: Container(
         padding: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 12.h,
-            left: 20.w,
-            right: 20.w,
-            bottom: 8.h,),
+          top: MediaQuery.of(context).padding.top + 12.h,
+          left: 20.w,
+          right: 20.w,
+          bottom: 8.h,
+        ),
         color: Colors.white,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -183,15 +206,20 @@ class _HomePageState extends State<HomePage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.brandName,
-                    style: TextStyle(
-                        fontSize: 22.sp,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.3,),),
+                Text(
+                  l10n.brandName,
+                  style: TextStyle(
+                    fontSize: 22.sp,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.3,
+                  ),
+                ),
                 SizedBox(height: 2.h),
-                Text(l10n.pvInverterMonitor,
-                    style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),),
+                Text(
+                  l10n.pvInverterMonitor,
+                  style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+                ),
               ],
             ),
             Row(
@@ -259,27 +287,34 @@ class _HomePageState extends State<HomePage> {
           decoration: InputDecoration(
             hintText: l10n.searchStation,
             hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
-            prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppColors.textHint),
+            prefixIcon: const Icon(Icons.search_rounded,
+                size: 20, color: AppColors.textHint),
             suffixIcon: _searchCtl.text.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.textHint),
+                    icon: const Icon(Icons.close_rounded,
+                        size: 18, color: AppColors.textHint),
                     onPressed: () {
                       _searchCtl.clear();
                       setState(() {});
-                    },)
+                    },
+                  )
                 : null,
             filled: true,
             fillColor: AppColors.surfaceHover,
-            contentPadding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+            contentPadding:
+                EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12.r),
-                borderSide: BorderSide.none,),
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide: BorderSide.none,
+            ),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12.r),
-                borderSide: BorderSide.none,),
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide: BorderSide.none,
+            ),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12.r),
-                borderSide: const BorderSide(color: AppColors.primary, width: 1),),
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1),
+            ),
           ),
         ),
       ),
@@ -289,9 +324,17 @@ class _HomePageState extends State<HomePage> {
   SliverToBoxAdapter _buildFilterCards(dynamic state) {
     final stations = state.stations as List<dynamic>;
     final totalCount = stations.length;
-    final normalCount = stations.where((s) => (s['status'] ?? 1) == 1 && (s['fault_count'] ?? 0) == 0 && (s['online_count'] ?? 0) > 0).length;
-    final faultCount = stations.where((s) => (s['fault_count'] ?? 0) > 0).length;
-    final offlineCount = stations.where((s) => (s['status'] ?? 1) != 1 || (s['online_count'] ?? 0) == 0).length;
+    final normalCount = stations
+        .where((s) =>
+            (s['status'] ?? 1) == 1 &&
+            (s['fault_count'] ?? 0) == 0 &&
+            (s['online_count'] ?? 0) > 0)
+        .length;
+    final faultCount =
+        stations.where((s) => (s['fault_count'] ?? 0) > 0).length;
+    final offlineCount = stations
+        .where((s) => (s['status'] ?? 1) != 1 || (s['online_count'] ?? 0) == 0)
+        .length;
 
     final values = [totalCount, normalCount, faultCount, offlineCount];
 
@@ -325,18 +368,25 @@ class _HomePageState extends State<HomePage> {
                     ),
                     child: Column(
                       children: [
-                        Text('${values[i]}',
-                            style: TextStyle(
-                                fontSize: 16.sp,
-                                fontWeight: FontWeight.w800,
-                                color: _filterColors[i],
-                                height: 1.1,),),
+                        Text(
+                          '${values[i]}',
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w800,
+                            color: _filterColors[i],
+                            height: 1.1,
+                          ),
+                        ),
                         SizedBox(height: 3.h),
-                        Text(_filters[i],
-                            style: TextStyle(
-                                fontSize: 11.sp,
-                                fontWeight: FontWeight.w600,
-                                color: active ? _filterColors[i] : AppColors.textHint,),),
+                        Text(
+                          _filters[i],
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w600,
+                            color:
+                                active ? _filterColors[i] : AppColors.textHint,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -357,7 +407,6 @@ class _HomePageState extends State<HomePage> {
     final todayEnergy = station['today_energy'] ?? 0;
     final totalEnergy = station['total_energy'] ?? 0;
     final status = station['status'] ?? 1;
-    final deviceCount = station['device_count'] ?? 0;
     final onlineCount = station['online_count'] ?? 0;
 
     final ok = status == 1 && faultCount == 0 && onlineCount > 0;
@@ -371,8 +420,12 @@ class _HomePageState extends State<HomePage> {
     if (district is String && district.isNotEmpty) addressParts.add(district);
     final addressText = '${l10n.china} ${addressParts.join(' ')}';
 
-    final badgeColor = ok ? AppColors.badgeNormalText : (hasFault ? AppColors.badgeAlarmText : AppColors.badgeOfflineText);
-    final badgeBg = ok ? AppColors.badgeNormalBg : (hasFault ? AppColors.badgeAlarmBg : AppColors.badgeOfflineBg);
+    final badgeColor = ok
+        ? AppColors.badgeNormalText
+        : (hasFault ? AppColors.badgeAlarmText : AppColors.badgeOfflineText);
+    final badgeBg = ok
+        ? AppColors.badgeNormalBg
+        : (hasFault ? AppColors.badgeAlarmBg : AppColors.badgeOfflineBg);
     final badgeText = ok ? l10n.normal : (hasFault ? l10n.fault : l10n.offline);
 
     return Padding(
@@ -417,36 +470,50 @@ class _HomePageState extends State<HomePage> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(name,
-                                style: TextStyle(
-                                    fontSize: 16.sp,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary,),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,),
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                fontSize: 16.sp,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                           Container(
-                            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 8.w, vertical: 3.h),
                             decoration: BoxDecoration(
                               color: badgeBg,
                               borderRadius: BorderRadius.circular(6.r),
                             ),
-                            child: Text(badgeText,
-                                style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: badgeColor),),
+                            child: Text(
+                              badgeText,
+                              style: TextStyle(
+                                  fontSize: 11.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: badgeColor),
+                            ),
                           ),
                         ],
                       ),
                       SizedBox(height: 4.h),
-                      Text(addressText,
-                          style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,),
+                      Text(
+                        addressText,
+                        style: TextStyle(
+                            fontSize: 11.sp, color: AppColors.textHint),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       SizedBox(height: 10.h),
                       Row(
                         children: [
-                          _energyItem(todayEnergy.toStringAsFixed(1), 'kWh', l10n.todayGeneration),
+                          _energyItem(todayEnergy.toStringAsFixed(1), 'kWh',
+                              l10n.todayGeneration),
                           SizedBox(width: 24.w),
-                          _energyItem(totalEnergy.toStringAsFixed(0), 'kWh', l10n.totalGeneration),
+                          _energyItem(totalEnergy.toStringAsFixed(0), 'kWh',
+                              l10n.totalGeneration),
                         ],
                       ),
                     ],
@@ -470,23 +537,26 @@ class _HomePageState extends State<HomePage> {
               TextSpan(
                 text: value,
                 style: TextStyle(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    height: 1.1,),
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  height: 1.1,
+                ),
               ),
               TextSpan(
                 text: ' $unit',
                 style: TextStyle(
-                    fontSize: 11.sp,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textHint,),
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textHint,
+                ),
               ),
             ],
           ),
         ),
         SizedBox(height: 2.h),
-        Text(label, style: TextStyle(fontSize: 10.sp, color: AppColors.textHint)),
+        Text(label,
+            style: TextStyle(fontSize: 10.sp, color: AppColors.textHint)),
       ],
     );
   }
@@ -501,16 +571,25 @@ class _HomePageState extends State<HomePage> {
             width: 80.w,
             height: 80.w,
             decoration: BoxDecoration(
-                color: AppColors.surfaceHover,
-                borderRadius: BorderRadius.circular(20.r),),
-            child: Icon(Icons.add_home_work_outlined, size: 36.sp, color: AppColors.textHint),
+              color: AppColors.surfaceHover,
+              borderRadius: BorderRadius.circular(20.r),
+            ),
+            child: Icon(Icons.add_home_work_outlined,
+                size: 36.sp, color: AppColors.textHint),
           ),
           SizedBox(height: 18.h),
-          Text(l10n.noStations,
-              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary),),
+          Text(
+            l10n.noStations,
+            style: TextStyle(
+                fontSize: 16.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary),
+          ),
           SizedBox(height: 6.h),
-          Text(l10n.tapPlusToCreate,
-              style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),),
+          Text(
+            l10n.tapPlusToCreate,
+            style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+          ),
         ],
       ),
     );
@@ -524,16 +603,22 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_rounded, size: 44.sp, color: AppColors.textHint),
+            Icon(Icons.cloud_off_rounded,
+                size: 44.sp, color: AppColors.textHint),
             SizedBox(height: 14.h),
-            Text(l10n.translateError(msg),
-                style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
-                textAlign: TextAlign.center,),
+            Text(
+              l10n.translateError(msg),
+              style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+              textAlign: TextAlign.center,
+            ),
             SizedBox(height: 16.h),
             OutlinedButton(
-                onPressed: () => context.read<StationBloc>().add(StationSummaryRequested()),
-                style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
-                child: Text(l10n.retry),),
+              onPressed: () =>
+                  context.read<StationBloc>().add(StationSummaryRequested()),
+              style:
+                  OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+              child: Text(l10n.retry),
+            ),
           ],
         ),
       ),
@@ -731,18 +816,29 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.title,
-                        style: TextStyle(
-                            fontSize: 16.sp, fontWeight: FontWeight.w600,),),
+                    Text(
+                      item.title,
+                      style: TextStyle(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     SizedBox(height: 2.h),
-                    Text(item.subtitle,
-                        style: TextStyle(
-                            fontSize: 12.sp, color: AppColors.textHint,),),
+                    Text(
+                      item.subtitle,
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios,
-                  size: 16, color: AppColors.textHint,),
+              const Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: AppColors.textHint,
+              ),
             ],
           ),
         ),

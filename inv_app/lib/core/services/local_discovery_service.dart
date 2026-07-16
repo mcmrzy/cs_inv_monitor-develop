@@ -1,4 +1,5 @@
 import 'package:wifi_iot/wifi_iot.dart';
+import 'package:inv_app/core/services/wifi_scan_service.dart';
 
 class DiscoveredDevice {
   final String ssid;
@@ -31,23 +32,28 @@ class DiscoveredDevice {
 class LocalDiscoveryService {
   Future<List<DiscoveredDevice>> scanCSInvAPs() async {
     try {
-      final results = await WiFiForIoTPlugin.loadWifiList();
+      final results = await scanWifiNetworks();
       if (results.isEmpty) return [];
 
-      final devices = results.map((ap) {
-        final ssid = (ap.ssid ?? '').trim();
-        final rssi = int.tryParse(ap.level?.toString() ?? '') ?? -100;
-        final capabilities = ap.capabilities ?? '';
-        final isEncrypted = capabilities.contains('WPA') || capabilities.contains('WEP') || capabilities.contains('PSK');
+      final devices = results
+          .map((ap) {
+            final ssid = (ap.ssid ?? '').trim();
+            final rssi = int.tryParse(ap.level?.toString() ?? '') ?? -100;
+            final capabilities = ap.capabilities ?? '';
+            final isEncrypted = capabilities.contains('WPA') ||
+                capabilities.contains('WEP') ||
+                capabilities.contains('PSK');
 
-        return DiscoveredDevice(
-          ssid: ssid,
-          rssi: rssi,
-          isEncrypted: isEncrypted,
-          bssid: ap.bssid,
-          frequency: int.tryParse(ap.frequency?.toString() ?? ''),
-        );
-      }).where((d) => d.ssid.isNotEmpty).toList();
+            return DiscoveredDevice(
+              ssid: ssid,
+              rssi: rssi,
+              isEncrypted: isEncrypted,
+              bssid: ap.bssid,
+              frequency: int.tryParse(ap.frequency?.toString() ?? ''),
+            );
+          })
+          .where((d) => d.ssid.isNotEmpty)
+          .toList();
 
       devices.sort((a, b) => b.rssi.compareTo(a.rssi));
 
@@ -72,9 +78,11 @@ class LocalDiscoveryService {
     try {
       final isRegistered = await WiFiForIoTPlugin.isRegisteredWifiNetwork(ssid);
       if (isRegistered == true) {
-        return await WiFiForIoTPlugin.findAndConnect(ssid, password: password ?? '');
+        return await WiFiForIoTPlugin.findAndConnect(ssid,
+            password: password ?? '');
       }
-      return await WiFiForIoTPlugin.connect(ssid, password: password ?? '', withInternet: false);
+      return await WiFiForIoTPlugin.connect(ssid,
+          password: password ?? '', withInternet: false);
     } catch (_) {
       return false;
     }

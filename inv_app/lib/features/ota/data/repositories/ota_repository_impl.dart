@@ -43,28 +43,6 @@ class OtaRepositoryImpl implements OtaRepository {
     return const Left(ServerFailure('Response format error'));
   }
 
-  Either<Failure, List<dynamic>> _parseListData(Response response) {
-    final data = response.data;
-    if (data is Map<String, dynamic>) {
-      if (data['code'] == 0) {
-        final inner = data['data'];
-        if (inner is List) {
-          return Right(inner);
-        }
-        if (inner is Map<String, dynamic>) {
-          final list = inner['items'] ?? inner['list'];
-          if (list is List) {
-            return Right(list);
-          }
-        }
-        return const Left(
-            ServerFailure('Response format error: expected list data'));
-      }
-      return Left(ServerFailure(data['message'] ?? 'Request failed'));
-    }
-    return const Left(ServerFailure('Response format error'));
-  }
-
   Either<Failure, List<dynamic>> _parsePackageListResponse(Response response) {
     final data = response.data;
     if (data is Map<String, dynamic>) {

@@ -24,8 +24,8 @@
 | CQ-004 | P0 | App | 已修复 | `code == 0` 但 `data` 结构错误时被当成成功空数据 | Repository parser 返回 `Right({})`/`Right([])` | Device/Station/Alarm/Dashboard/OTA 读取接口严格校验结构；写操作仍允许合法空响应。契约测试通过 |
 | CQ-005 | P0 | App 仪表盘 | 已修复 | 多个仪表盘接口部分失败时，失败模块显示 0 或空图表 | BLoC 只统计是否至少一个接口成功，没有向 UI 传递部分失败信息 | BLoC 记录失败模块，页面显示部分加载失败和重试入口；10 项仪表盘测试通过 |
 | CQ-006 | P1 | Web OTA | 已修复 | 发布弹窗请求失败后主动 `setModelList([])`/`setDeviceList([])` | catch 将异常转换为空数组 | 型号/设备加载失败会显示错误和重试；相关数据失败时禁止发布 |
-| CQ-007 | P1 | 多语言 | 已修复 | 多处中英文混用、硬编码中文及乱码注释/文案 | 文案未统一进入 locale，历史文件编码异常 | 核心 UI 已全部完成双语化。Web 覆盖公共组件、主要业务页、型号/协议治理工作区，以及 OTA 状态映射（14 键）、管理页租户表单（12 键）、告警事件类型标签、大屏页和型号管理字段表（25 键，29 处替换）。Flutter 覆盖告警网格（语义参数替代硬编码）、OTA 页面（15+ 处）、BLE 配网（13 状态 + 15+ 文案）、实时数据页（保留 chineseMap 兼容层）、仪表盘（7 处）和协议页面（20+ 处）；l10n 三文件新增约 55 个键值对。剩余少量数据层文件（china_regions.dart 地理数据、alarm_code_mapping.dart 告警码映射、device_realtime_page fieldNameMap）待后续补全 |
-| CQ-008 | P1 | App 工程质量 | 已修复 | `flutter analyze` 历史上有 416 项 warning/info，容易掩盖新缺陷 | 历史未使用代码、异步 context、废弃 API、格式规则和调试输出长期累积 | analyze 从 416 项降至 369 项（28 warning + 341 info，0 error）。已消除全部 `print()` 违规（5 文件 41 处替换为 `debugPrint()`）和 `use_build_context_synchronously` 风险（4 文件添加 mounted guard），并修复 Flutter '正常' 硬编码（5 文件 6 处替换为 `l10n.normal`）。剩余 369 项以格式类 info 为主，不再掩盖实际缺陷 |
+| CQ-007 | P1 | 多语言 | 持续修复 | 多处中英文混用、硬编码中文及乱码注释/文案 | 文案未统一进入 locale，历史文件编码异常 | 核心 UI 已完成首轮双语化；复扫仍发现 App 通知/BLE 服务消息和 Web OTA 深层弹窗存在硬编码中文，已登记 CQ-024，不能再把该项视为完全结束 |
+| CQ-008 | P1 | App 工程质量 | 持续修复 | `flutter analyze` 历史 warning/info 容易掩盖新缺陷 | 历史未使用代码、异步 context、废弃 API、格式规则和调试输出长期累积 | 本轮将 error/warning 清零；当前仍有 760 项 info，主要为 `require_trailing_commas` 等格式规则，后续按目录机械清理并在 CI 中单独阻断 warning/error |
 | CQ-009 | P1 | Web API 契约 | 已修复 | HTTP 成功但业务失败或 `data` 结构错误时，queryFn 仍可能变成空数据 | Web 请求层没有处理业务 `code != 0`，也缺少结构契约 | Axios 拦截器统一拒绝业务错误和 GET 缺失 data；核心 API 可声明 object/array/page 契约并严格校验，设备、仪表盘、工单、用户、管理、告警、型号、协议和 OTA 已接入 |
 | CQ-010 | P0 | Web 设备控制 | 已修复 | 设备详情“控制模板”读取命令历史接口，模板字段与后端返回完全不匹配，选择/执行控制可能失效或崩溃 | `/devices/:sn/commands` 是历史分页接口，不是控制能力接口 | 模板改读 `/control-capabilities` 并把参数 Schema、风险等级和分类转换为控制表单；历史改读 `/commands/history`，新增 API 契约测试 |
 | CQ-011 | P0 | 验证码安全 | 已修复 | 滑块验证码可伪造：请求 JSON 解析失败时后端直接发放 token，正常请求也只检查耗时；前后端日志泄露坐标或 token | 拼图和坐标校验完全在客户端，后端信任 `verified` | 后端生成背景与拼图图片并只在 Redis 保存期望坐标；挑战一次性使用，错误坐标、过期和重放均失败；前端只提交 challengeId/x/duration，不再持有正确坐标或 verified；删除敏感日志及 create-puzzle 依赖 |
@@ -34,6 +34,14 @@
 | CQ-014 | P0 | App 参数设置 | 已修复 | 参数页通过异步 `get_params` 控制命令读取配置，却把后端返回的 `task_id` 当参数；请求失败后仍渲染默认值，写请求业务失败也会提示成功 | 读取接口选错且直接 Dio 调用未校验 envelope | 改读 `/devices/:sn/control-state`，以 reported 覆盖 desired 形成当前参数；设备状态与控制状态严格校验，失败时警告默认值不可信并可重试；写命令必须返回合法 task_id 才视为已受理 |
 | CQ-015 | P0 | App 实时详情 | 已修复 | 云端设备详情失败时，即使 MQTT 从未收到数据，页面也清除错误并用默认字段渲染，看起来像真实空值 | 失败降级没有验证备用数据源是否实际可用 | 设备详情接入严格 envelope 校验；云端和 MQTT 均无数据时显示加载失败；只有实际收到 MQTT 数据才降级，并明确提示云端不可用和备用字段来源 |
 | CQ-016 | P1 | App 添加设备 | 已修复 | 从指定电站进入添加设备时，电站名称可能始终为空；选择电站弹窗关闭页面后仍可能访问 context | 页面把后端 `data.station` 错读成 `data` 根字段，且异步选择后缺少 mounted 判断 | 严格解包电站详情并读取嵌套 station；扫描历史及选择电站流程补 mounted 保护；该文件定向 analyze 清零 |
+| CQ-017 | P0 | App 能源计划 | 已修复 | 能源计划把后端对象响应当数组读取，保存时只发送 periods，导致读取失败或覆盖其他字段 | App 与后端 schedule envelope/PUT 契约不一致 | 新增 schedule 规范化和替换/删除 helper；读取完整 schedule 对象，保存携带 timezone、enabled、periods 并使用 If-Match revision；7 项 helper/API 测试通过 |
+| CQ-018 | P0 | API 能源计划 | 已修复 | 普通用户可通过已知 SN 读取或修改其他用户设备的计划/临时覆盖 | 5 个设备级 handler 未校验设备归属 | Handler 注入 `DeviceRepository.HasDataPermission`；管理员放行，普通用户必须拥有/获共享权限；授权测试覆盖管理员、所有者、非所有者和缺失 checker |
+| CQ-019 | P0 | API 电池配置 | 已修复 | 普通用户可读取或绑定其他用户设备的电池配置 | 设备级电池接口缺少归属校验 | GET/PUT battery-config 接入同一设备授权检查，并新增管理员、所有者、非所有者测试 |
+| CQ-020 | P0 | 生产部署 | 待外部配置 | 新镜像已构建但不能安全替换当前容器 | `deploy/.env.prod` 缺失，现有 `.env` 仍含占位密码/证书 | 增加 `deploy/docker-up.ps1` 和 Makefile 生产配置校验；缺文件、占位值或 `DB_SSL_MODE != require` 时拒绝部署。待提供真实生产配置后执行重建和 healthy 验证 |
+| CQ-021 | P1 | App Wi-Fi | 已修复 | Wi-Fi 扫描依赖 `wifi_iot` 的废弃扫描 API，平台升级后可能失效 | 扫描与连接能力耦合在旧插件 | 新增 `wifi_scan` 适配服务，迁移本地发现、配网页和本地 OTA 的扫描流程；`wifi_iot` 仅保留连接能力 |
+| CQ-022 | P1 | App 仪表盘 | 已修复 | 型号动态字段成功加载后仍使用 `widget.fields`，自动加载结果 `_autoFields` 被忽略 | 动态区块分支和渲染函数没有使用 effective fields | 统一使用 `widget.fields ?? _autoFields`，恢复按型号字段元数据动态渲染 |
+| CQ-023 | P0 | 合并回归 | 已修复 | cherry-pick 曾覆盖能源计划/电池授权实现，但保留了测试，导致编译失败 | 并发提交的冲突解决只保留部分文件 | 恢复两个 Handler 的授权实现和 main 注入；`go test -p 2 ./...` 全量通过，保留测试防止再次静默回退 |
+| CQ-024 | P1 | 多语言 | 待修复 | App 通知标题/BLE 服务错误和 Web OTA 多个弹窗仍硬编码中文，英文模式下会混入中文 | 深层业务组件和无 BuildContext 的服务/BLoC 未使用 locale key | 已完成字符串复扫并锁定文件；下一轮优先把通知模型改为语义 key+参数、BLE 错误映射为本地化 key，并补齐 OTA locale 键与英文模式测试 |
 
 ## 第一轮检查范围
 
@@ -127,11 +135,23 @@
 **额外修复**：
 - Go Gateway RBAC 中间件 `hasPermission` 增加 JWT role 回退逻辑，解决权限校验遗漏。
 
+### 2026-07-16 第三轮
+
+- 收口并验证并发 cherry-pick 冲突，源码中无冲突标记，恢复被覆盖的能源计划/电池设备归属授权。
+- Web 全量 Vitest：21 个测试文件、193 项测试全部通过；生产构建通过，最大 chunk 为 `vendor-antd-choices` 408.67 kB，无 chunk-size 警告。
+- Flutter 全量测试：173 项通过、4 项既有跳过、0 失败。
+- Flutter analyze：0 error、0 warning；760 项 info 以 trailing comma 等格式规则为主。
+- Go API：`go test -p 2 ./...` 全部通过。高并发并行回归曾触发 Windows Go GC/Vitest worker 异常，改为低并发串行后稳定通过，判定为本机资源竞争而非测试断言失败。
+- Wi-Fi 扫描迁移至 `wifi_scan 0.4.1+2`，依赖锁文件已更新。
+- 修复 Dashboard 自动型号字段加载后未参与渲染的问题；清理 App 26 个未使用代码/无效判断 warning。
+- 多语言复扫确认源码文件本身为 UTF-8；PowerShell 默认读取显示的“乱码”不是文件损坏。另发现 App 通知/BLE 和 Web OTA 深层硬编码，登记 CQ-024。
+- Docker 新镜像此前已构建；现运行的 API、Device、Gateway、Postgres、Redis healthy，039–055 迁移已应用，数据库连接全部使用 SSL。前端仍是旧容器且无 health，因缺少真实 `deploy/.env.prod` 未冒险重建。
+
 ## 下一步规划
 
 1. **端到端测试补全（P0）**：针对 Phase 8 缺口分析，优先为设备控制（32 handler）和 OTA 发布（34 handler）补充单元/集成测试。
 2. **端到端测试补全（P1）**：告警处理 API 侧（9 handler）和工单流转（9 handler）补充测试覆盖。
-3. **CQ-007 数据层收尾**：补全剩余数据层文件国际化——china_regions.dart 地理数据、alarm_code_mapping.dart 告警码映射、device_realtime_page fieldNameMap。
-4. **CQ-008 持续降噪**：继续清理 Flutter 格式类 info，逐步恢复 warning 作为 CI 阻断条件。
-5. **Docker 部署验证**：在可用的 Docker 环境复核 healthcheck 配置和服务健康状态。
+3. **CQ-024 多语言收尾**：优先修复 App 通知/BLE 服务消息和 Web OTA 深层弹窗硬编码，并为英文模式补回归测试；随后处理 china_regions.dart、alarm_code_mapping.dart 和 fieldNameMap 数据层兼容。
+4. **CQ-008 持续降噪**：按目录机械清理 760 项格式类 info；CI 立即把 error/warning 设为阻断，info 单独统计。
+5. **Docker 部署验证**：取得真实 `deploy/.env.prod` 后通过安全脚本重建，重点确认前端 healthcheck 和全部服务 healthy；禁止使用占位配置覆盖当前健康容器。
 6. **英文模式回归**：持续扩展英文模式组件测试，覆盖 OTA 状态映射、告警事件类型和型号管理字段表等新增国际化键值。

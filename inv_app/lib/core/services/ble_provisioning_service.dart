@@ -54,12 +54,18 @@ class BleProvisioningResult {
 class BleProvisioningService {
   // 协议定义的UUID
   static const String serviceUuid = '43534956-5052-1000-8000-00805f9b34fb';
-  static const String snCharacteristicUuid = '43534956-534e-1000-8000-00805f9b34fb';
-  static const String firmwareCharacteristicUuid = '43534956-4657-1000-8000-00805f9b34fb';
-  static const String macCharacteristicUuid = '43534956-4d41-1000-8000-00805f9b34fb';
-  static const String ssidCharacteristicUuid = '43534956-5353-1000-8000-00805f9b34fb';
-  static const String passwordCharacteristicUuid = '43534956-5057-1000-8000-00805f9b34fb';
-  static const String statusCharacteristicUuid = '43534956-5354-1000-8000-00805f9b34fb';
+  static const String snCharacteristicUuid =
+      '43534956-534e-1000-8000-00805f9b34fb';
+  static const String firmwareCharacteristicUuid =
+      '43534956-4657-1000-8000-00805f9b34fb';
+  static const String macCharacteristicUuid =
+      '43534956-4d41-1000-8000-00805f9b34fb';
+  static const String ssidCharacteristicUuid =
+      '43534956-5353-1000-8000-00805f9b34fb';
+  static const String passwordCharacteristicUuid =
+      '43534956-5057-1000-8000-00805f9b34fb';
+  static const String statusCharacteristicUuid =
+      '43534956-5354-1000-8000-00805f9b34fb';
 
   // 扫描超时时间
   static const Duration scanTimeout = Duration(seconds: 10);
@@ -69,17 +75,17 @@ class BleProvisioningService {
   static const Duration provisioningTimeout = Duration(seconds: 60);
 
   // 状态流控制器
-  final StreamController<BleProvisioningStatus> _statusController = 
+  final StreamController<BleProvisioningStatus> _statusController =
       StreamController<BleProvisioningStatus>.broadcast();
   Stream<BleProvisioningStatus> get statusStream => _statusController.stream;
 
   // 设备信息流控制器
-  final StreamController<List<BleDeviceInfo>> _devicesController = 
+  final StreamController<List<BleDeviceInfo>> _devicesController =
       StreamController<List<BleDeviceInfo>>.broadcast();
   Stream<List<BleDeviceInfo>> get devicesStream => _devicesController.stream;
 
   // 配网结果流控制器
-  final StreamController<String> _resultController = 
+  final StreamController<String> _resultController =
       StreamController<String>.broadcast();
   Stream<String> get resultStream => _resultController.stream;
 
@@ -96,8 +102,6 @@ class BleProvisioningService {
   BluetoothDevice? get connectedDevice => _connectedDevice;
 
   // 订阅状态通知的特征
-  BluetoothCharacteristic? _statusCharacteristic;
-
   // 超时定时器
   Timer? _scanTimer;
   Timer? _connectionTimer;
@@ -160,7 +164,6 @@ class BleProvisioningService {
     _running = true;
     _discoveredDevices = [];
     _connectedDevice = null;
-    _statusCharacteristic = null;
     _scanTimer?.cancel();
     _connectionTimer?.cancel();
     _provisioningTimer?.cancel();
@@ -196,7 +199,7 @@ class BleProvisioningService {
           final advName = result.advertisementData.advName;
           String deviceName;
           String sn = '';
-          
+
           if (advName.isNotEmpty) {
             // 使用获取到的设备名
             deviceName = advName;
@@ -207,9 +210,10 @@ class BleProvisioningService {
           } else {
             // 如果没有设备名，用MAC地址后6位生成
             final mac = result.device.remoteId.toString();
-            deviceName = 'CS_INV_${mac.substring(mac.length - 6).replaceAll(':', '')}';
+            deviceName =
+                'CS_INV_${mac.substring(mac.length - 6).replaceAll(':', '')}';
           }
-          
+
           return BleDeviceInfo(
             sn: sn,
             firmwareVersion: '',
@@ -234,7 +238,6 @@ class BleProvisioningService {
           _emitStatus(BleProvisioningStatus.timeout);
         }
       });
-
     } catch (e) {
       _emitStatus(BleProvisioningStatus.error);
       _running = false;
@@ -252,10 +255,11 @@ class BleProvisioningService {
   }
 
   /// 连接到BLE设备
-  Future<BleProvisioningResult> connectToDevice(BleDeviceInfo deviceInfo) async {
+  Future<BleProvisioningResult> connectToDevice(
+      BleDeviceInfo deviceInfo) async {
     // 先停止扫描
     stopScan();
-    
+
     if (_connectedDevice != null) {
       await disconnectFromDevice();
     }
@@ -277,7 +281,7 @@ class BleProvisioningService {
 
       // 发现服务
       final services = await device.discoverServices();
-      
+
       // 查找目标服务
       final targetService = services.firstWhere(
         (service) => service.uuid == Guid(serviceUuid),
@@ -304,7 +308,6 @@ class BleProvisioningService {
         success: true,
         deviceInfo: deviceInfoResult,
       );
-
     } catch (e) {
       _emitStatus(BleProvisioningStatus.error);
       return BleProvisioningResult(
@@ -336,7 +339,12 @@ class BleProvisioningService {
     // 从已发现设备列表中获取设备名
     final existingDevice = _discoveredDevices.firstWhere(
       (d) => d.macAddress == (_connectedDevice?.remoteId.toString() ?? ''),
-      orElse: () => BleDeviceInfo(sn: '', firmwareVersion: '', macAddress: '', deviceName: '未知设备', rssi: 0),
+      orElse: () => BleDeviceInfo(
+          sn: '',
+          firmwareVersion: '',
+          macAddress: '',
+          deviceName: '未知设备',
+          rssi: 0),
     );
 
     // 使用读取到的SN更新设备名
@@ -351,7 +359,9 @@ class BleProvisioningService {
     return BleDeviceInfo(
       sn: sn,
       firmwareVersion: firmwareVersion,
-      macAddress: macAddress.isNotEmpty ? macAddress : (_connectedDevice?.remoteId.toString() ?? ''),
+      macAddress: macAddress.isNotEmpty
+          ? macAddress
+          : (_connectedDevice?.remoteId.toString() ?? ''),
       deviceName: deviceName,
       rssi: 0,
     );
@@ -361,12 +371,11 @@ class BleProvisioningService {
   Future<void> _subscribeToStatusNotifications(BluetoothService service) async {
     for (final characteristic in service.characteristics) {
       if (characteristic.uuid == Guid(statusCharacteristicUuid)) {
-        _statusCharacteristic = characteristic;
-        
         // 先启用通知（必须在监听之前）
         await characteristic.setNotifyValue(true);
-        debugPrint('[BLE] Subscribed to status notifications, characteristic UUID: ${characteristic.uuid}');
-        
+        debugPrint(
+            '[BLE] Subscribed to status notifications, characteristic UUID: ${characteristic.uuid}');
+
         // 监听状态变化
         characteristic.lastValueStream.listen((value) {
           if (value.isNotEmpty) {
@@ -377,7 +386,7 @@ class BleProvisioningService {
             debugPrint('[BLE] Received empty status notification');
           }
         });
-        
+
         break;
       }
     }
@@ -396,11 +405,12 @@ class BleProvisioningService {
 
   /// Processing status update
   void _handleStatusUpdate(String status) {
-    debugPrint('[BLE] Processing status update: $status (length: ${status.length})');
+    debugPrint(
+        '[BLE] Processing status update: $status (length: ${status.length})');
     // 去除空白字符和空字符
     final cleanStatus = status.replaceAll(RegExp(r'[\s\x00]+'), '');
     debugPrint('[BLE] Cleaned status: $cleanStatus');
-    
+
     if (!_resultController.isClosed) {
       switch (cleanStatus) {
         case 'waiting':
@@ -417,7 +427,8 @@ class BleProvisioningService {
         case 'failed':
         case 'not_found':
           // 配网失败后，回到bleConnected状态，允许重新输入凭据
-          _resultController.add(cleanStatus == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
+          _resultController
+              .add(cleanStatus == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
           _emitStatus(BleProvisioningStatus.bleConnected);
           break;
         default:
@@ -470,9 +481,10 @@ class BleProvisioningService {
       // 先写入SSID
       await ssidCharacteristic.write(ssid.codeUnits, withoutResponse: false);
       debugPrint('[BLE] Written SSID: $ssid');
-      
+
       // 写入密码（触发配网）
-      await passwordCharacteristic.write(password.codeUnits, withoutResponse: false);
+      await passwordCharacteristic.write(password.codeUnits,
+          withoutResponse: false);
       debugPrint('[BLE] Written password, waiting for device response...');
 
       _emitStatus(BleProvisioningStatus.waitingForResult);
@@ -489,7 +501,6 @@ class BleProvisioningService {
         success: true,
         message: 'WiFi凭据已发送，等待设备连接...',
       );
-
     } catch (e) {
       _emitStatus(BleProvisioningStatus.error);
       return BleProvisioningResult(
@@ -503,7 +514,7 @@ class BleProvisioningService {
   Future<void> disconnectFromDevice() async {
     _provisioningTimer?.cancel();
     _connectionTimer?.cancel();
-    
+
     if (_connectedDevice != null) {
       try {
         await _connectedDevice!.disconnect();
@@ -511,9 +522,8 @@ class BleProvisioningService {
         // 忽略断开连接时的错误
       }
       _connectedDevice = null;
-      _statusCharacteristic = null;
     }
-    
+
     _emitStatus(BleProvisioningStatus.idle);
   }
 

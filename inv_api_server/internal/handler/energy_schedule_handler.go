@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -15,10 +16,25 @@ import (
 
 type EnergyScheduleHandler struct {
 	scheduleService *service.EnergyScheduleService
+	hasPermission   func(context.Context, int64, string) bool
 }
 
-func NewEnergyScheduleHandler(scheduleService *service.EnergyScheduleService) *EnergyScheduleHandler {
-	return &EnergyScheduleHandler{scheduleService: scheduleService}
+func NewEnergyScheduleHandler(scheduleService *service.EnergyScheduleService, deviceRepo *repository.DeviceRepository) *EnergyScheduleHandler {
+	return &EnergyScheduleHandler{
+		scheduleService: scheduleService,
+		hasPermission:   deviceRepo.HasDataPermission,
+	}
+}
+
+func (h *EnergyScheduleHandler) authorizeDevice(c *gin.Context, sn string) bool {
+	if middleware.GetRole(c) == 0 {
+		return true
+	}
+	if h.hasPermission == nil || !h.hasPermission(c.Request.Context(), middleware.GetUserID(c), sn) {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return false
+	}
+	return true
 }
 
 // GetSchedule GET /devices/:sn/energy-schedule
@@ -26,6 +42,9 @@ func (h *EnergyScheduleHandler) GetSchedule(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
 		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		return
+	}
+	if !h.authorizeDevice(c, sn) {
 		return
 	}
 
@@ -53,6 +72,9 @@ func (h *EnergyScheduleHandler) UpdateSchedule(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
 		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		return
+	}
+	if !h.authorizeDevice(c, sn) {
 		return
 	}
 
@@ -97,6 +119,9 @@ func (h *EnergyScheduleHandler) CreateOverride(c *gin.Context) {
 		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
 		return
 	}
+	if !h.authorizeDevice(c, sn) {
+		return
+	}
 
 	var req repository.CreateOverrideReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -139,6 +164,9 @@ func (h *EnergyScheduleHandler) ListOverrides(c *gin.Context) {
 		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
 		return
 	}
+	if !h.authorizeDevice(c, sn) {
+		return
+	}
 
 	overrides, err := h.scheduleService.ListActiveOverrides(c.Request.Context(), sn)
 	if err != nil {
@@ -154,6 +182,9 @@ func (h *EnergyScheduleHandler) CancelOverride(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
 		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		return
+	}
+	if !h.authorizeDevice(c, sn) {
 		return
 	}
 

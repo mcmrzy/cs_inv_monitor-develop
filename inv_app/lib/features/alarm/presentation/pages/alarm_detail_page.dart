@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/data/alarm_code_mapping.dart';
@@ -24,7 +24,9 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
   @override
   void initState() {
     super.initState();
-    context.read<AlarmBloc>().add(AlarmDetailRequested(alarmId: widget.alarmId));
+    context
+        .read<AlarmBloc>()
+        .add(AlarmDetailRequested(alarmId: widget.alarmId));
   }
 
   int _parseFaultCode(dynamic faultCode) {
@@ -35,21 +37,6 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
       return int.tryParse(str.substring(2), radix: 16) ?? -1;
     }
     return int.tryParse(str) ?? -1;
-  }
-
-  String _severityLabel(String severity, AppLocalizations l10n) {
-    switch (severity) {
-      case 'fault':
-        return l10n.severe;
-      case 'warning':
-        return l10n.warningLevel;
-      case 'info':
-        return l10n.infoLevel;
-      case 'normal':
-        return l10n.normal;
-      default:
-        return l10n.unknown;
-    }
   }
 
   Color _severityColor(String severity) {
@@ -94,7 +81,9 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l10n.translateError(state.message)), duration: const Duration(seconds: 2)),
+                  SnackBar(
+                      content: Text(l10n.translateError(state.message)),
+                      duration: const Duration(seconds: 2)),
                 );
               }
             });
@@ -108,11 +97,13 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
 
             final faultCode = _parseFaultCode(alarm['fault_code']);
             final alarmEntry = AlarmCodeMapping.getEntry(faultCode);
-            final severity = alarmEntry?.severity ?? _levelToSeverity(alarm['alarm_level']);
+            final severity =
+                alarmEntry?.severity ?? _levelToSeverity(alarm['alarm_level']);
             final severityColor = _severityColor(severity);
             final isHandled = alarm['status'] == 1;
 
-            return _buildDetailContent(alarm, faultCode, alarmEntry, severity, severityColor, isHandled, l10n);
+            return _buildDetailContent(alarm, faultCode, alarmEntry, severity,
+                severityColor, isHandled, l10n);
           }
 
           if (state is AlarmError) {
@@ -139,7 +130,14 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     );
   }
 
-  Widget _buildDetailContent(dynamic alarm, int faultCode, dynamic alarmEntry, String severity, Color severityColor, bool isHandled, AppLocalizations l10n) {
+  Widget _buildDetailContent(
+      dynamic alarm,
+      int faultCode,
+      dynamic alarmEntry,
+      String severity,
+      Color severityColor,
+      bool isHandled,
+      AppLocalizations l10n) {
     return Column(
       children: [
         Expanded(
@@ -151,11 +149,11 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                 // 顶部状态卡片
                 _buildStatusHeader(severity, severityColor, isHandled, l10n),
                 SizedBox(height: 16.h),
-                
+
                 // 告警信息卡片
                 _buildAlarmInfoCard(alarm, faultCode, alarmEntry, l10n),
                 SizedBox(height: 12.h),
-                
+
                 // 详细信息区域
                 if (alarmEntry != null) ...[
                   _buildDescriptionSection(alarmEntry, l10n),
@@ -165,14 +163,14 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                   _buildSuggestionsSection(alarmEntry, l10n),
                   SizedBox(height: 12.h),
                 ],
-                
+
                 // 设备信息
                 _buildDeviceInfoSection(alarm, l10n),
                 SizedBox(height: 12.h),
-                
+
                 // 时间信息
                 _buildTimeInfoSection(alarm, isHandled, l10n),
-                
+
                 // 处理按钮（仅未处理时显示）
                 if (!isHandled) ...[
                   SizedBox(height: 24.h),
@@ -189,10 +187,11 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
   }
 
   // ==================== 顶部状态卡片 ====================
-  Widget _buildStatusHeader(String severity, Color color, bool isHandled, AppLocalizations l10n) {
+  Widget _buildStatusHeader(
+      String severity, Color color, bool isHandled, AppLocalizations l10n) {
     IconData iconData;
     String statusText;
-    
+
     switch (severity) {
       case 'fault':
         iconData = Icons.error_outline;
@@ -214,7 +213,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
         iconData = Icons.notifications_none;
         statusText = l10n.general;
     }
-    
+
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
@@ -281,9 +280,13 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
   }
 
   // ==================== 告警信息卡片 ====================
-  Widget _buildAlarmInfoCard(dynamic alarm, int faultCode, AlarmCodeEntry? entry, AppLocalizations l10n) {
-    final alarmName = entry?.getLocalizedName(Localizations.localeOf(context).languageCode) ?? alarm['fault_message'] ?? l10n.unknownAlarm;
-    
+  Widget _buildAlarmInfoCard(dynamic alarm, int faultCode,
+      AlarmCodeEntry? entry, AppLocalizations l10n) {
+    final alarmName =
+        entry?.getLocalizedName(Localizations.localeOf(context).languageCode) ??
+            alarm['fault_message'] ??
+            l10n.unknownAlarm;
+
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
@@ -302,7 +305,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.warning_amber_rounded, size: 20.sp, color: AppColors.primary),
+              Icon(Icons.warning_amber_rounded,
+                  size: 20.sp, color: AppColors.primary),
               SizedBox(width: 8.w),
               Text(
                 l10n.alarmInfo,
@@ -330,7 +334,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8.r),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -378,7 +383,10 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
 
   // ==================== 可能原因区域 ====================
   Widget _buildCausesSection(AlarmCodeEntry entry, AppLocalizations l10n) {
-    final causes = entry.possibleCause.split('\n').where((s) => s.trim().isNotEmpty).toList();
+    final causes = entry.possibleCause
+        .split('\n')
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
     if (causes.isEmpty) return const SizedBox.shrink();
 
     return _buildSectionCard(
@@ -387,41 +395,46 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
       title: l10n.possibleCauses,
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: causes.map((cause) => Padding(
-          padding: EdgeInsets.only(bottom: 10.h),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                margin: EdgeInsets.only(top: 4.h),
-                width: 6.w,
-                height: 6.w,
-                decoration: const BoxDecoration(
-                  color: AppColors.warning,
-                  shape: BoxShape.circle,
+        children: causes
+            .map(
+              (cause) => Padding(
+                padding: EdgeInsets.only(bottom: 10.h),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      margin: EdgeInsets.only(top: 4.h),
+                      width: 6.w,
+                      height: 6.w,
+                      decoration: const BoxDecoration(
+                        color: AppColors.warning,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    SizedBox(width: 10.w),
+                    Expanded(
+                      child: Text(
+                        cause.trim(),
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          color: AppColors.textSecondary,
+                          height: 1.6,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(width: 10.w),
-              Expanded(
-                child: Text(
-                  cause.trim(),
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    color: AppColors.textSecondary,
-                    height: 1.6,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),).toList(),
+            )
+            .toList(),
       ),
     );
   }
 
   // ==================== 建议措施区域 ====================
   Widget _buildSuggestionsSection(AlarmCodeEntry entry, AppLocalizations l10n) {
-    final suggestions = entry.suggestion.split('\n').where((s) => s.trim().isNotEmpty).toList();
+    final suggestions =
+        entry.suggestion.split('\n').where((s) => s.trim().isNotEmpty).toList();
 
     return _buildSectionCard(
       icon: Icons.build_outlined,
@@ -429,44 +442,48 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
       title: l10n.suggestedActions,
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: List.generate(suggestions.length, (index) => Padding(
-          padding: EdgeInsets.only(bottom: 12.h),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 24.w,
-                height: 24.w,
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6.r),
-                  border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-                ),
-                child: Center(
-                  child: Text(
-                    '${index + 1}',
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.success,
+        children: List.generate(
+          suggestions.length,
+          (index) => Padding(
+            padding: EdgeInsets.only(bottom: 12.h),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 24.w,
+                  height: 24.w,
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6.r),
+                    border: Border.all(
+                        color: AppColors.success.withValues(alpha: 0.3)),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.success,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: Text(
-                  suggestions[index].trim(),
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    color: AppColors.textSecondary,
-                    height: 1.6,
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Text(
+                    suggestions[index].trim(),
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColors.textSecondary,
+                      height: 1.6,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),),
+        ),
       ),
     );
   }
@@ -557,7 +574,8 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
   }
 
   // ==================== 时间信息区域 ====================
-  Widget _buildTimeInfoSection(dynamic alarm, bool isHandled, AppLocalizations l10n) {
+  Widget _buildTimeInfoSection(
+      dynamic alarm, bool isHandled, AppLocalizations l10n) {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
@@ -590,10 +608,14 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                 decoration: BoxDecoration(
-                  color: isHandled ? AppColors.success.withValues(alpha: 0.1) : AppColors.error.withValues(alpha: 0.1),
+                  color: isHandled
+                      ? AppColors.success.withValues(alpha: 0.1)
+                      : AppColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6.r),
                   border: Border.all(
-                    color: isHandled ? AppColors.success.withValues(alpha: 0.3) : AppColors.error.withValues(alpha: 0.3),
+                    color: isHandled
+                        ? AppColors.success.withValues(alpha: 0.3)
+                        : AppColors.error.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Text(
@@ -608,9 +630,12 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
             ],
           ),
           SizedBox(height: 14.h),
-          _buildInfoRow(l10n.occurrenceTime, alarm['occurred_at']?.toString() ?? '-'),
-          _buildInfoRow(l10n.recoveryTime, alarm['recovered_at']?.toString() ?? '-'),
-          _buildInfoRow(l10n.processTime, alarm['handled_at']?.toString() ?? '-'),
+          _buildInfoRow(
+              l10n.occurrenceTime, alarm['occurred_at']?.toString() ?? '-'),
+          _buildInfoRow(
+              l10n.recoveryTime, alarm['recovered_at']?.toString() ?? '-'),
+          _buildInfoRow(
+              l10n.processTime, alarm['handled_at']?.toString() ?? '-'),
         ],
       ),
     );
@@ -621,65 +646,68 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     return BlocBuilder<AlarmBloc, AlarmState>(
       builder: (context, state) {
         final isLoading = state is AlarmLoading;
-        
+
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: isLoading ? null : () async {
-              try {
-                context.read<AlarmBloc>().add(
-                  AlarmMarkReadRequested(alarmIds: [widget.alarmId]),
-                );
-                
-                await Future.delayed(const Duration(milliseconds: 300));
-                
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Row(
-                        children: [
-                          Icon(Icons.check_circle, color: Colors.white, size: 20.sp),
-                          SizedBox(width: 10.w),
-                          Text(
-                            l10n.markProcessedSuccess,
-                            style: TextStyle(
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.w500,
+            onPressed: isLoading
+                ? null
+                : () async {
+                    try {
+                      context.read<AlarmBloc>().add(
+                            AlarmMarkReadRequested(alarmIds: [widget.alarmId]),
+                          );
+
+                      await Future.delayed(const Duration(milliseconds: 300));
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Row(
+                              children: [
+                                Icon(Icons.check_circle,
+                                    color: Colors.white, size: 20.sp),
+                                SizedBox(width: 10.w),
+                                Text(
+                                  l10n.markProcessedSuccess,
+                                  style: TextStyle(
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            backgroundColor: AppColors.success,
+                            duration: const Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10.r),
                             ),
                           ),
-                        ],
-                      ),
-                      backgroundColor: AppColors.success,
-                      duration: const Duration(seconds: 2),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10.r),
-                      ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(l10n.translateError(e.toString())),
+                            backgroundColor: AppColors.error,
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    }
+                  },
+            icon: isLoading
+                ? SizedBox(
+                    width: 18.sp,
+                    height: 18.sp,
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(l10n.translateError(e.toString())),
-                      backgroundColor: AppColors.error,
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                }
-              }
-            },
-            icon: isLoading 
-              ? SizedBox(
-                  width: 18.sp,
-                  height: 18.sp,
-                  child: const CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : Icon(Icons.check_circle_outline, size: 20.sp),
+                  )
+                : Icon(Icons.check_circle_outline, size: 20.sp),
             label: Text(
               isLoading ? l10n.processing : l10n.markProcessed,
               style: TextStyle(
@@ -758,7 +786,9 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                   }
                 },
                 icon: Icon(Icons.phone, size: 18.sp),
-                label: Text(l10n.contactInstaller, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                label: Text(l10n.contactInstaller,
+                    style: TextStyle(
+                        fontSize: 14.sp, fontWeight: FontWeight.w600)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary),
@@ -776,7 +806,9 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
                   _contactService.makePhoneCall('400-888-8888');
                 },
                 icon: Icon(Icons.headset_mic, size: 18.sp),
-                label: Text(l10n.contactService, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
+                label: Text(l10n.contactService,
+                    style: TextStyle(
+                        fontSize: 14.sp, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.success,
                   foregroundColor: Colors.white,
