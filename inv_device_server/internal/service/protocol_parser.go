@@ -269,6 +269,23 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 		}
 	}
 
+	// 故障恢复检测：fault_code=0 且设备当前处于 Fault 状态时，触发自动恢复
+	faultCodeIsZero := false
+	if sample.System.FaultCode != nil && *sample.System.FaultCode == 0 {
+		faultCodeIsZero = true
+	} else if sample.System.FaultCode == nil {
+		// fault_code 字段不存在时也视为无故障
+		faultCodeIsZero = true
+	}
+	if faultCodeIsZero && p.stateManager.GetDeviceState(ctx, raw.SN) == StateFault {
+		logger.Info("Heartbeat fault_code=0 while in Fault state, triggering auto-recovery",
+			zap.String("sn", raw.SN))
+		if err := p.stateManager.HandleFaultRecovery(ctx, raw.SN); err != nil {
+			logger.Warn("Failed to trigger fault recovery from heartbeat",
+				zap.String("sn", raw.SN), zap.Error(err))
+		}
+	}
+
 	status := map[string]interface{}{}
 	if sample.System.FaultCode != nil {
 		status["fault_code"] = int64(*sample.System.FaultCode)

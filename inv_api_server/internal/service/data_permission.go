@@ -47,7 +47,7 @@ func (d *DataPermission) GetAllowedDeviceSNs(ctx context.Context, userID int64) 
 	}
 	defer rows.Close()
 
-	var sns []string
+	sns := make([]string, 0)
 	for rows.Next() {
 		var sn string
 		if err := rows.Scan(&sn); err != nil {

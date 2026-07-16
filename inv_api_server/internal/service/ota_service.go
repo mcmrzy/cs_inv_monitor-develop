@@ -520,7 +520,7 @@ func (s *OTAService) GetDevicePackageUpgradeInfo(ctx context.Context, sn string,
 	}
 
 	// 6. 遍历升级包中的芯片项，组装详情
-	var chips []ChipUpgradeDetail
+	chips := make([]ChipUpgradeDetail, 0)
 	totalProgress := 0
 	chipCount := 0
 	allSuccess := true
@@ -685,7 +685,7 @@ func (s *OTAService) CreateUpgradePackage(ctx context.Context, req *CreatePackag
 
 	// 查询所有固件并校验
 	chipSeen := map[string]bool{}
-	var items []model.UpgradePackageItem
+	items := make([]model.UpgradePackageItem, 0)
 	for _, fwID := range req.FirmwareIDs {
 		fw, err := s.repo.GetFirmware(ctx, fwID)
 		if err != nil || fw == nil {

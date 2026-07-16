@@ -49,7 +49,7 @@ func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([
 	}
 	defer rows.Close()
 
-	var result []model.Firmware
+	result := make([]model.Firmware, 0)
 	for rows.Next() {
 		var f model.Firmware
 		if err := rows.Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
@@ -213,7 +213,7 @@ func (r *OTARepository) ListUpgradesByFirmware(ctx context.Context, page, pageSi
 	}
 	defer rows.Close()
 
-	var result []model.DeviceUpgrade
+	result := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		var lastUpdated time.Time
@@ -246,7 +246,7 @@ func (r *OTARepository) ListUpgradesByFirmwareID(ctx context.Context, firmwareID
 	}
 	defer rows.Close()
 
-	var result []model.DeviceUpgrade
+	result := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
@@ -285,7 +285,7 @@ func (r *OTARepository) GetDeviceUpgradeHistory(ctx context.Context, deviceSN st
 	}
 	defer rows.Close()
 
-	var result []model.DeviceUpgrade
+	result := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
@@ -574,7 +574,7 @@ func (r *OTARepository) ListAppVersions(ctx context.Context, platform string) ([
 	}
 	defer rows.Close()
 
-	var result []model.AppVersion
+	result := make([]model.AppVersion, 0)
 	for rows.Next() {
 		var v model.AppVersion
 		if err := rows.Scan(&v.ID, &v.Platform, &v.VersionCode, &v.VersionName,
@@ -713,7 +713,7 @@ func (r *OTARepository) ListUpgradePackages(ctx context.Context, modelFilter str
 	}
 	defer rows.Close()
 
-	var result []model.UpgradePackage
+	result := make([]model.UpgradePackage, 0)
 	for rows.Next() {
 		var pkg model.UpgradePackage
 		if err := rows.Scan(&pkg.ID, &pkg.Model, &pkg.MainVersion, &pkg.Changelog, &pkg.IsForce,
@@ -776,7 +776,7 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 	}
 	defer rows.Close()
 
-	var candidates []model.UpgradePackage
+	candidates := make([]model.UpgradePackage, 0)
 	for rows.Next() {
 		var pkg model.UpgradePackage
 		if err := rows.Scan(&pkg.ID, &pkg.Model, &pkg.MainVersion, &pkg.Changelog, &pkg.IsForce,
@@ -791,7 +791,7 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 		return nil, nil
 	}
 
-	var result []model.UpgradePackage
+	result := make([]model.UpgradePackage, 0)
 	for i := range candidates {
 		pkgRows, err := r.db.Query(ctx, `
 			SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
@@ -1010,7 +1010,7 @@ func (r *OTARepository) GetPendingPackageUpgradeForDevice(ctx context.Context, s
 	}
 	defer rows.Close()
 
-	var upgrades []model.DeviceUpgrade
+	upgrades := make([]model.DeviceUpgrade, 0)
 	var pkg model.UpgradePackage
 	for rows.Next() {
 		var du model.DeviceUpgrade
@@ -1059,7 +1059,7 @@ func (r *OTARepository) GetSuccessfulUpgradesByPackage(ctx context.Context, pack
 	}
 	defer rows.Close()
 
-	var upgrades []model.DeviceUpgrade
+	upgrades := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		var pkgID int64
@@ -1110,7 +1110,7 @@ func (r *OTARepository) GetPackageUpgradesByPackageID(ctx context.Context, packa
 	}
 	defer rows.Close()
 
-	var result []model.DeviceUpgrade
+	result := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		var pkgID int64
@@ -1142,7 +1142,7 @@ func (r *OTARepository) GetUpgradeBySNAndPackage(ctx context.Context, sn string,
 	}
 	defer rows.Close()
 
-	var result []model.DeviceUpgrade
+	result := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		var pkgID int64
@@ -1193,7 +1193,7 @@ func (r *OTARepository) GetPendingUpgradesBySN(ctx context.Context, sn string) (
 	}
 	defer rows.Close()
 
-	var upgrades []model.DeviceUpgrade
+	upgrades := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		var pkgID int64
@@ -1253,7 +1253,7 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 	var fwID *int64
 	var pkgID *int64
 	var targetVersion string
-	var items []model.UpgradePackageItem
+	items := make([]model.UpgradePackageItem, 0)
 
 	if packageID != nil && *packageID > 0 {
 		// 事务内查询升级包（避免 TOCTOU 竞态）
@@ -1562,7 +1562,7 @@ func (r *OTARepository) ListUpgradeTasks(ctx context.Context, page, pageSize int
 	}
 	defer rows.Close()
 
-	var result []model.UpgradeTask
+	result := make([]model.UpgradeTask, 0)
 	for rows.Next() {
 		var t model.UpgradeTask
 		if err := rows.Scan(&t.ID, &t.Name, &t.TaskType, &t.FirmwareID, &t.PackageID, &t.Model,
@@ -1640,7 +1640,7 @@ func (r *OTARepository) ListUpgradeDevicesByTaskID(ctx context.Context, taskID i
 	}
 	defer rows.Close()
 
-	var result []model.DeviceUpgrade
+	result := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		if err := rows.Scan(&du.ID, &du.DeviceSN, &du.FirmwareID, &du.FirmwareVersion, &du.TargetChip,
@@ -1795,7 +1795,7 @@ func (r *OTARepository) GetDevicesByFirmwareVersion(ctx context.Context, deviceM
 	}
 	defer rows.Close()
 
-	var result []DeviceInfo
+	result := make([]DeviceInfo, 0)
 	for rows.Next() {
 		var d DeviceInfo
 		if err := rows.Scan(&d.SN, &d.Model, &d.FirmwareArm, &d.FirmwareEsp,
@@ -1830,7 +1830,7 @@ func (r *OTARepository) GetDevicesByUpgradePackage(ctx context.Context, packageI
 	}
 	defer rows.Close()
 
-	var result []model.DeviceUpgrade
+	result := make([]model.DeviceUpgrade, 0)
 	for rows.Next() {
 		var du model.DeviceUpgrade
 		var pkgID int64
@@ -1866,7 +1866,7 @@ func (r *OTARepository) GetDeviceSNsByModel(ctx context.Context, deviceModel str
 	}
 	defer rows.Close()
 
-	var sns []string
+	sns := make([]string, 0)
 	for rows.Next() {
 		var sn string
 		if err := rows.Scan(&sn); err != nil {

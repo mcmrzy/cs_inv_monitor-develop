@@ -524,7 +524,7 @@ func (s *DeviceService) FilterByDataPermission(ctx context.Context, userID int64
 		allowedSet[sn] = true
 	}
 
-	var filtered []string
+	filtered := make([]string, 0)
 	for _, sn := range sns {
 		if allowedSet[sn] {
 			filtered = append(filtered, sn)

@@ -96,7 +96,7 @@ func (r *MetadataRepository) ParseMetricsByModel(modelID int32, rawData map[stri
 		return nil
 	}
 
-	var result []model.ParsedField
+	result := make([]model.ParsedField, 0)
 	for _, field := range meta.FieldOrder {
 		if !field.IsShow {
 			continue
