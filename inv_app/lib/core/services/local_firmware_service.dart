@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 
@@ -25,7 +24,8 @@ class LocalFirmwareService {
 
     try {
       await _localComm.connect(deviceIP);
-      await _localComm.uploadFirmware(filePath, target: target, onProgress: onProgress);
+      await _localComm.uploadFirmware(filePath,
+          target: target, onProgress: onProgress);
     } catch (e) {
       throw LocalFirmwareException('Upload firmware failed: $e');
     }
@@ -42,7 +42,8 @@ class LocalFirmwareService {
     return _calculateMD5(filePath);
   }
 
-  Future<Map<String, dynamic>> getLocalOTAProgress({required String deviceIP}) async {
+  Future<Map<String, dynamic>> getLocalOTAProgress(
+      {required String deviceIP}) async {
     try {
       await _localComm.connect(deviceIP);
       return await _localComm.getOTAProgress();
@@ -225,7 +226,8 @@ class _MD5Digest {
 
   static int _mask(int x) => x & 0xffffffff;
 
-  static int _rotl(int x, int n) => _mask((_mask(x) << n) | (_mask(x) >> (32 - n)));
+  static int _rotl(int x, int n) =>
+      _mask((_mask(x) << n) | (_mask(x) >> (32 - n)));
 
   static int _ff(int a, int b, int c, int d, int x, int s, int ac) {
     return _rotl(_mask(a + ((b & c) | (~b & d)) + x + ac), s) + b;

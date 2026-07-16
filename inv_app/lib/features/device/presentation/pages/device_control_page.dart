@@ -198,8 +198,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       if (mounted) {
         setState(() {
           _energySchedule = normalizeSchedulePeriods(data['periods']);
-          _energyScheduleRevision =
-              (data['revision'] as num?)?.toInt() ?? 0;
+          _energyScheduleRevision = (data['revision'] as num?)?.toInt() ?? 0;
           _energyScheduleTimezone =
               data['timezone'] as String? ?? 'Asia/Shanghai';
           _energyScheduleEnabled = data['enabled'] as bool? ?? true;
@@ -1645,9 +1644,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       if (mounted) {
         setState(() {
           _energySchedule = normalizeSchedulePeriods(schedule['periods']);
-          _energyScheduleRevision =
-              (schedule['revision'] as num?)?.toInt() ??
-                  _energyScheduleRevision;
+          _energyScheduleRevision = (schedule['revision'] as num?)?.toInt() ??
+              _energyScheduleRevision;
           _energyScheduleTimezone =
               schedule['timezone'] as String? ?? _energyScheduleTimezone;
           _energyScheduleEnabled =
@@ -1698,9 +1696,8 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       if (mounted) {
         setState(() {
           _energySchedule = normalizeSchedulePeriods(schedule['periods']);
-          _energyScheduleRevision =
-              (schedule['revision'] as num?)?.toInt() ??
-                  _energyScheduleRevision;
+          _energyScheduleRevision = (schedule['revision'] as num?)?.toInt() ??
+              _energyScheduleRevision;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

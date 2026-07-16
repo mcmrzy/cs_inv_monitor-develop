@@ -3,9 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
-import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class SplashPage extends StatefulWidget {

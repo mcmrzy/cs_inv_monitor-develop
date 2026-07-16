@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:inv_app/core/errors/exceptions.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:dartz/dartz.dart';
 
@@ -30,7 +29,8 @@ class ApiService {
     required T Function(Map<String, dynamic>) fromJson,
   }) async {
     try {
-      final response = await _dio.post(path, data: data, queryParameters: queryParameters);
+      final response =
+          await _dio.post(path, data: data, queryParameters: queryParameters);
       return _handleResponse(response, fromJson);
     } on DioException catch (e) {
       return Left(_handleDioError(e));
@@ -46,7 +46,8 @@ class ApiService {
     required T Function(Map<String, dynamic>) fromJson,
   }) async {
     try {
-      final response = await _dio.put(path, data: data, queryParameters: queryParameters);
+      final response =
+          await _dio.put(path, data: data, queryParameters: queryParameters);
       return _handleResponse(response, fromJson);
     } on DioException catch (e) {
       return Left(_handleDioError(e));
@@ -62,7 +63,8 @@ class ApiService {
     required T Function(Map<String, dynamic>) fromJson,
   }) async {
     try {
-      final response = await _dio.delete(path, data: data, queryParameters: queryParameters);
+      final response =
+          await _dio.delete(path, data: data, queryParameters: queryParameters);
       return _handleResponse(response, fromJson);
     } on DioException catch (e) {
       return Left(_handleDioError(e));

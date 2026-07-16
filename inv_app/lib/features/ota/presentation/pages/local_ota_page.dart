@@ -10,6 +10,7 @@ import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/errors/ota_error_types.dart';
 import 'package:inv_app/core/services/local_firmware_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -67,7 +68,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   // WiFi 热点扫描
   bool _scanningWifi = false;
-  WifiNetwork? _selectedAp;
+  ScannedWifiNetwork? _selectedAp;
   bool _autoConnecting = false;
 
   late final FirmwareDownloadService _downloadService;
@@ -78,10 +79,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   @override
   void initState() {
     super.initState();
-    _downloadService = FirmwareDownloadService(getIt<Dio>(), getIt<SharedPreferences>());
+    _downloadService =
+        FirmwareDownloadService(getIt<Dio>(), getIt<SharedPreferences>());
     _firmwareService = LocalFirmwareService(LocalCommunicationService());
 
-    _downloadProgressSub = _downloadService.downloadProgressStream.listen((progress) {
+    _downloadProgressSub =
+        _downloadService.downloadProgressStream.listen((progress) {
       if (mounted) {
         setState(() {
           _downloadProgress = progress;
@@ -94,9 +97,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
   Future<void> _initFirmware() async {
     if (widget.firmwareId != null) {
-      final isDownloaded = await _downloadService.isFirmwareDownloaded(widget.firmwareId!);
+      final isDownloaded =
+          await _downloadService.isFirmwareDownloaded(widget.firmwareId!);
       if (isDownloaded) {
-        final path = await _downloadService.getDownloadedFirmwarePath(widget.firmwareId!);
+        final path = await _downloadService
+            .getDownloadedFirmwarePath(widget.firmwareId!);
         if (path != null && mounted) {
           setState(() {
             _selectedFilePath = path;
@@ -131,26 +136,38 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   /// 自动扫描热点并连接，整个流程只触发两次 setState（开始/结束）
   Future<void> _autoScanAndConnect() async {
     // 已在处理中或已连接成功，不重复触发
-    if (_scanningWifi || _autoConnecting || _isProcessing || _selectedAp != null) return;
+    if (_scanningWifi ||
+        _autoConnecting ||
+        _isProcessing ||
+        _selectedAp != null) return;
 
-    setState(() { _scanningWifi = true; _errorMessage = null; });
+    setState(() {
+      _scanningWifi = true;
+      _errorMessage = null;
+    });
     try {
       final status = await Permission.location.request();
       if (!mounted) return;
       if (!status.isGranted && !status.isLimited) {
         final l10n = AppLocalizations.of(context)!;
-        setState(() { _scanningWifi = false; _errorMessage = l10n.locationPermissionRequired; });
+        setState(() {
+          _scanningWifi = false;
+          _errorMessage = l10n.locationPermissionRequired;
+        });
         return;
       }
       final serviceEnabled = await Permission.location.serviceStatus.isEnabled;
       if (!mounted) return;
       if (!serviceEnabled) {
         final l10n = AppLocalizations.of(context)!;
-        setState(() { _scanningWifi = false; _errorMessage = l10n.enableLocationService; });
+        setState(() {
+          _scanningWifi = false;
+          _errorMessage = l10n.enableLocationService;
+        });
         return;
       }
       await WiFiForIoTPlugin.forceWifiUsage(true);
-      final networks = await WiFiForIoTPlugin.loadWifiList();
+      final networks = await scanWifiNetworks();
       if (!mounted) return;
 
       final sn = widget.deviceSN.toUpperCase();
@@ -163,7 +180,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         final l10n = AppLocalizations.of(context)!;
         setState(() {
           _scanningWifi = false;
-          _errorMessage = l10n.str('device_hotspot_not_found', {'sn': widget.deviceSN});
+          _errorMessage =
+              l10n.str('device_hotspot_not_found', {'sn': widget.deviceSN});
         });
         return;
       }
@@ -173,9 +191,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _selectedAp = network;
       final ssid = network.ssid ?? '';
       final cap = network.capabilities?.toUpperCase() ?? '';
-      final isOpen = !cap.contains('WPA') && !cap.contains('WEP') && !cap.contains('EAP');
+      final isOpen =
+          !cap.contains('WPA') && !cap.contains('WEP') && !cap.contains('EAP');
 
-      final connected = await WiFiForIoTPlugin.connect(ssid,
+      final connected = await WiFiForIoTPlugin.connect(
+        ssid,
         password: null,
         security: isOpen ? NetworkSecurity.NONE : NetworkSecurity.WPA,
         joinOnce: true,
@@ -197,7 +217,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
       final currentSsid = await WiFiForIoTPlugin.getSSID();
       if (!mounted) return;
-      if (currentSsid == null || !(currentSsid.toUpperCase().contains('CS_INV') || currentSsid.toUpperCase().contains('CS-INV'))) {
+      if (currentSsid == null ||
+          !(currentSsid.toUpperCase().contains('CS_INV') ||
+              currentSsid.toUpperCase().contains('CS-INV'))) {
         final l10n = AppLocalizations.of(context)!;
         setState(() {
           _scanningWifi = false;
@@ -227,7 +249,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   }
 
   Future<void> _startDownload() async {
-    if (widget.firmwareUrl == null || widget.firmwareFileName == null || widget.firmwareId == null) return;
+    if (widget.firmwareUrl == null ||
+        widget.firmwareFileName == null ||
+        widget.firmwareId == null) return;
 
     setState(() {
       _isDownloading = true;
@@ -271,11 +295,12 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       currentSsid = await WiFiForIoTPlugin.getSSID();
       final isConnected = await WiFiForIoTPlugin.isConnected();
       debugPrint('Current SSID: $currentSsid, isConnected: $isConnected');
-      
+
       if (currentSsid == null || !currentSsid.startsWith('CS_INV')) {
         setState(() {
           _isProcessing = false;
-          _errorMessage = l10n.str('connect_wifi_first', {'wifi': currentSsid ?? ''});
+          _errorMessage =
+              l10n.str('connect_wifi_first', {'wifi': currentSsid ?? ''});
         });
         return;
       }
@@ -293,9 +318,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     }
 
     // 尝试连接
-    final connected = await _firmwareService.testDeviceConnection(widget.deviceIP);
+    final connected =
+        await _firmwareService.testDeviceConnection(widget.deviceIP);
     debugPrint('Connection test result: $connected');
-    
+
     if (connected) {
       _goToStep(LocalOTAStep.pushFirmware);
       _startPushFirmware();
@@ -304,7 +330,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       setState(() {
         _isProcessing = false;
       });
-      
+
       if (mounted) {
         showDialog(
           context: context,
@@ -316,14 +342,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               children: [
                 Text(l10n.connectedHotspotCannotAccess),
                 const SizedBox(height: 12),
-                Text(l10n.tryFollowing, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(l10n.tryFollowing,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Text(l10n.disableMobileData),
                 Text(l10n.ensureWifiConnected),
                 Text(l10n.waitAndRetry),
                 const SizedBox(height: 12),
-                Text('${l10n.currentHotspot}: $currentSsid', style: const TextStyle(color: Colors.grey)),
-                Text('${l10n.deviceIpLabel}: ${widget.deviceIP}', style: const TextStyle(color: Colors.grey)),
+                Text('${l10n.currentHotspot}: $currentSsid',
+                    style: const TextStyle(color: Colors.grey)),
+                Text('${l10n.deviceIpLabel}: ${widget.deviceIP}',
+                    style: const TextStyle(color: Colors.grey)),
               ],
             ),
             actions: [
@@ -424,7 +453,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   /// POST /ota/devices/:sn/local-ota-result
   /// 请求: {target_chip, new_version, main_version}
   /// 响应: {code: 0, data: {task_id: int64}}
-  Future<void> _reportLocalOTAResult(String sn, String targetChip, String newVersion, [String? mainVersion]) async {
+  Future<void> _reportLocalOTAResult(
+      String sn, String targetChip, String newVersion,
+      [String? mainVersion]) async {
     try {
       // 等待网络恢复（断开热点后需要几秒切回移动网络/普通WiFi）
       await Future.delayed(const Duration(seconds: 3));
@@ -447,7 +478,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   Future<bool> _isDeviceHotspotConnected() async {
     try {
       final ssid = await WiFiForIoTPlugin.getSSID();
-      if (ssid == null || ssid.isEmpty || ssid == '<unknown ssid>') return false;
+      if (ssid == null || ssid.isEmpty || ssid == '<unknown ssid>')
+        return false;
       final upper = ssid.toUpperCase();
       return upper.contains('CS_INV') || upper.contains('CS-INV');
     } catch (_) {
@@ -459,7 +491,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   Future<bool> _reconnectDeviceHotspot() async {
     try {
       await WiFiForIoTPlugin.forceWifiUsage(true);
-      final networks = await WiFiForIoTPlugin.loadWifiList();
+      final networks = await scanWifiNetworks();
       final sn = widget.deviceSN.toUpperCase();
       final target = networks.where((n) {
         final ssid = (n.ssid ?? '').toUpperCase();
@@ -471,7 +503,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       final network = target.first;
       final ssid = network.ssid ?? '';
       final cap = network.capabilities?.toUpperCase() ?? '';
-      final isOpen = !cap.contains('WPA') && !cap.contains('WEP') && !cap.contains('EAP');
+      final isOpen =
+          !cap.contains('WPA') && !cap.contains('WEP') && !cap.contains('EAP');
 
       final connected = await WiFiForIoTPlugin.connect(
         ssid,
@@ -520,8 +553,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         // 设备热点断开 = 正在重启
         if (mounted) {
           setState(() {
-            _upgradeStatus = l10n.str('waiting_hotspot_recovery',
-                {'seconds': '$totalWaitSeconds'},);
+            _upgradeStatus = l10n.str(
+              'waiting_hotspot_recovery',
+              {'seconds': '$totalWaitSeconds'},
+            );
           });
         }
 
@@ -546,8 +581,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
       // 2. 热点已连接，尝试获取升级进度
       try {
-        final progress =
-            await _firmwareService.getLocalOTAProgress(deviceIP: widget.deviceIP);
+        final progress = await _firmwareService.getLocalOTAProgress(
+            deviceIP: widget.deviceIP);
         final status = progress['status'] as String? ?? '';
         final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
         final message = progress['message'] as String? ?? '';
@@ -560,7 +595,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         // 优先使用 main_version 作为展示版本
         final displayVersion = mainVer.isNotEmpty ? mainVer : chipVer;
 
-        debugPrint('OTA progress: status=$status, main_version=$mainVer, chip_version=$chipVer, raw=$progress');
+        debugPrint(
+            'OTA progress: status=$status, main_version=$mainVer, chip_version=$chipVer, raw=$progress');
 
         if (mounted) {
           setState(() {
@@ -571,31 +607,38 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
         if (status == 'done') {
           // 优先使用 main_version，回退到芯片版本号
-          String? newVersion = displayVersion.isNotEmpty ? displayVersion : null;
+          String? newVersion =
+              displayVersion.isNotEmpty ? displayVersion : null;
           // 保存芯片版本用于后端上报（优先固件专属字段，回退到旧字段名）
-          final chipNewVersion = (progress[firmwareKey] as String? ?? '').isNotEmpty
-              ? (progress[firmwareKey] as String)
-              : chipVer.isNotEmpty
-                  ? chipVer
-                  : (progress[versionKey] as String? ?? '');
+          final chipNewVersion =
+              (progress[firmwareKey] as String? ?? '').isNotEmpty
+                  ? (progress[firmwareKey] as String)
+                  : chipVer.isNotEmpty
+                      ? chipVer
+                      : (progress[versionKey] as String? ?? '');
           if (newVersion == null) {
             try {
               final info = await _firmwareService.getDeviceInfo(
-                  deviceIP: widget.deviceIP,);
+                deviceIP: widget.deviceIP,
+              );
               debugPrint('Device info response: $info');
               // 同样优先 main_version
               final infoMainVer = info['main_version'] as String? ?? '';
-              final infoChipVer = (info[firmwareKey] as String? ?? '').isNotEmpty
-                  ? (info[firmwareKey] as String)
-                  : (info[versionKey] as String? ?? '').isNotEmpty
-                      ? (info[versionKey] as String)
-                      : (info['version'] as String? ?? '');
-              newVersion = infoMainVer.isNotEmpty ? infoMainVer : (infoChipVer.isNotEmpty ? infoChipVer : null);
+              final infoChipVer =
+                  (info[firmwareKey] as String? ?? '').isNotEmpty
+                      ? (info[firmwareKey] as String)
+                      : (info[versionKey] as String? ?? '').isNotEmpty
+                          ? (info[versionKey] as String)
+                          : (info['version'] as String? ?? '');
+              newVersion = infoMainVer.isNotEmpty
+                  ? infoMainVer
+                  : (infoChipVer.isNotEmpty ? infoChipVer : null);
             } catch (e) {
               debugPrint('Failed to get device info: $e');
             }
           }
-          debugPrint('Final newVersion: $newVersion, chipNewVersion: $chipNewVersion');
+          debugPrint(
+              'Final newVersion: $newVersion, chipNewVersion: $chipNewVersion');
           if (mounted) {
             setState(() {
               _isProcessing = false;
@@ -635,8 +678,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         offlineCount++;
         if (mounted) {
           setState(() {
-            _upgradeStatus = l10n.str('waiting_device_response',
-                {'seconds': '$totalWaitSeconds'},);
+            _upgradeStatus = l10n.str(
+              'waiting_device_response',
+              {'seconds': '$totalWaitSeconds'},
+            );
           });
         }
         continue;
@@ -686,7 +731,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: Text(l10n.localFirmwareUpgrade, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(l10n.localFirmwareUpgrade,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -750,7 +797,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                             : Center(
                                 child: Text(
                                   '${index + 1}',
-                                  style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: stepColor),
+                                  style: TextStyle(
+                                      fontSize: 12.sp,
+                                      fontWeight: FontWeight.w600,
+                                      color: stepColor),
                                 ),
                               ),
                       ),
@@ -759,8 +809,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                         _stepLabel(step),
                         style: TextStyle(
                           fontSize: 10.sp,
-                          color: isCurrent || isCompleted ? AppColors.textPrimary : AppColors.textHint,
-                          fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
+                          color: isCurrent || isCompleted
+                              ? AppColors.textPrimary
+                              : AppColors.textHint,
+                          fontWeight:
+                              isCurrent ? FontWeight.w600 : FontWeight.w400,
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
@@ -773,7 +826,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   Container(
                     width: 16.w,
                     height: 2,
-                    color: isCompleted ? AppColors.successLight : const Color(0xFFE5E7EB),
+                    color: isCompleted
+                        ? AppColors.successLight
+                        : const Color(0xFFE5E7EB),
                   ),
               ],
             ),
@@ -827,29 +882,41 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2)),
             ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.selectFirmware, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              Text(l10n.selectFirmware,
+                  style: TextStyle(
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
               SizedBox(height: 12.h),
               if (_selectedFilePath != null)
                 _buildSelectedFirmwareInfo()
               else if (_isDownloading)
                 _buildDownloadingProgress()
               else
-                Text(l10n.firmwareDownloadHint, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+                Text(l10n.firmwareDownloadHint,
+                    style:
+                        TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
               if (_errorMessage != null) ...[
                 SizedBox(height: 8.h),
-                Text(_errorMessage!, style: TextStyle(fontSize: 12.sp, color: AppColors.error)),
+                Text(_errorMessage!,
+                    style: TextStyle(fontSize: 12.sp, color: AppColors.error)),
               ],
             ],
           ),
         ),
         SizedBox(height: 24.h),
-        if (_selectedFilePath == null && !_isDownloading && widget.firmwareUrl != null)
+        if (_selectedFilePath == null &&
+            !_isDownloading &&
+            widget.firmwareUrl != null)
           SizedBox(
             width: double.infinity,
             height: 48.h,
@@ -858,10 +925,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r)),
                 elevation: 0,
               ),
-              child: Text(l10n.downloadFirmware, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              child: Text(l10n.downloadFirmware,
+                  style:
+                      TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
             ),
           ),
         if (_selectedFilePath != null)
@@ -873,10 +943,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r)),
                 elevation: 0,
               ),
-              child: Text(l10n.next, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              child: Text(l10n.next,
+                  style:
+                      TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
             ),
           ),
       ],
@@ -899,7 +972,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         ),
         SizedBox(height: 8.h),
         Text(
-          _downloadProgress > 0 ? '${(_downloadProgress * 100).toStringAsFixed(1)}%' : '${l10n.downloading}...',
+          _downloadProgress > 0
+              ? '${(_downloadProgress * 100).toStringAsFixed(1)}%'
+              : '${l10n.downloading}...',
           style: TextStyle(fontSize: 12.sp, color: AppColors.primary),
         ),
       ],
@@ -913,21 +988,28 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       decoration: BoxDecoration(
         color: const Color(0xFFECFDF5),
         borderRadius: BorderRadius.circular(10.r),
-        border: Border.all(color: AppColors.successLight.withValues(alpha: 0.3)),
+        border:
+            Border.all(color: AppColors.successLight.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle_rounded, size: 20.sp, color: AppColors.successLight),
+          Icon(Icons.check_circle_rounded,
+              size: 20.sp, color: AppColors.successLight),
           SizedBox(width: 8.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.firmwareReady, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.successLight)),
+                Text(l10n.firmwareReady,
+                    style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.successLight)),
                 SizedBox(height: 2.h),
                 Text(
                   widget.firmwareFileName ?? _selectedFilePath!.split('/').last,
-                  style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+                  style: TextStyle(
+                      fontSize: 11.sp, color: AppColors.textSecondary),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -957,41 +1039,64 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             decoration: BoxDecoration(
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(14.r),
-              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+              border:
+                  Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
             ),
             child: Column(
               children: [
                 if (isInProgress) ...[
-                  const SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.primary)),
+                  const SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 3, color: AppColors.primary)),
                   SizedBox(height: 12.h),
                   Text(
                     _isProcessing
                         ? l10n.checkConnection
                         : _selectedAp != null
-                            ? l10n.str('connecting_to', {'ssid': _selectedAp?.ssid ?? ''})
+                            ? l10n.str('connecting_to',
+                                {'ssid': _selectedAp?.ssid ?? ''})
                             : l10n.scanningDeviceHotspot,
-                    style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+                    style: TextStyle(
+                        fontSize: 14.sp, color: AppColors.textSecondary),
                   ),
                 ] else if (_selectedAp != null && _errorMessage == null) ...[
-                  Icon(Icons.wifi_rounded, size: 48.sp, color: AppColors.successLight),
+                  Icon(Icons.wifi_rounded,
+                      size: 48.sp, color: AppColors.successLight),
                   SizedBox(height: 12.h),
-                  Text(l10n.connected, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.successLight)),
+                  Text(l10n.connected,
+                      style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.successLight)),
                   SizedBox(height: 4.h),
-                  Text(_selectedAp!.ssid ?? '', style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
+                  Text(_selectedAp!.ssid ?? '',
+                      style: TextStyle(
+                          fontSize: 13.sp, color: AppColors.textSecondary)),
                 ] else ...[
-                  Icon(Icons.wifi_find_rounded, size: 48.sp, color: AppColors.primary),
+                  Icon(Icons.wifi_find_rounded,
+                      size: 48.sp, color: AppColors.primary),
                   SizedBox(height: 12.h),
-                  Text(l10n.connectDeviceAp, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                  Text(l10n.connectDeviceAp,
+                      style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary)),
                   SizedBox(height: 8.h),
                   Text(
                     l10n.autoScanHint,
-                    style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+                    style: TextStyle(
+                        fontSize: 13.sp, color: AppColors.textSecondary),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: 4.h),
                   Text(
                     '${l10n.deviceIpLabel}: ${widget.deviceIP}',
-                    style: TextStyle(fontSize: 12.sp, color: AppColors.primary, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600),
                   ),
                   SizedBox(height: 12.h),
                   SizedBox(
@@ -1000,11 +1105,14 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     child: OutlinedButton.icon(
                       onPressed: _autoScanAndConnect,
                       icon: Icon(Icons.refresh_rounded, size: 18.sp),
-                      label: Text(l10n.rescanHotspot, style: TextStyle(fontSize: 13.sp)),
+                      label: Text(l10n.rescanHotspot,
+                          style: TextStyle(fontSize: 13.sp)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
-                        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10.r)),
+                        side: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.4)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10.r)),
                       ),
                     ),
                   ),
@@ -1023,9 +1131,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             ),
             child: Row(
               children: [
-                Icon(Icons.error_outline_rounded, size: 18.sp, color: AppColors.error),
+                Icon(Icons.error_outline_rounded,
+                    size: 18.sp, color: AppColors.error),
                 SizedBox(width: 8.w),
-                Expanded(child: Text(_errorMessage!, style: TextStyle(fontSize: 12.sp, color: AppColors.error))),
+                Expanded(
+                    child: Text(_errorMessage!,
+                        style: TextStyle(
+                            fontSize: 12.sp, color: AppColors.error))),
               ],
             ),
           ),
@@ -1037,14 +1149,22 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           child: ElevatedButton(
             onPressed: isInProgress ? null : _checkConnectionAndProceed,
             style: ElevatedButton.styleFrom(
-              backgroundColor: isInProgress ? AppColors.textHint : AppColors.primary,
+              backgroundColor:
+                  isInProgress ? AppColors.textHint : AppColors.primary,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.r)),
               elevation: 0,
             ),
             child: _isProcessing
-                ? SizedBox(width: 20.w, height: 20.w, child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : Text(l10n.checkConnection, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                ? SizedBox(
+                    width: 20.w,
+                    height: 20.w,
+                    child: const CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : Text(l10n.checkConnection,
+                    style: TextStyle(
+                        fontSize: 15.sp, fontWeight: FontWeight.w600)),
           ),
         ),
       ],
@@ -1064,14 +1184,22 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2)),
             ],
           ),
           child: Column(
             children: [
-              Icon(Icons.cloud_upload_rounded, size: 48.sp, color: AppColors.primary),
+              Icon(Icons.cloud_upload_rounded,
+                  size: 48.sp, color: AppColors.primary),
               SizedBox(height: 12.h),
-              Text(l10n.pushingFirmware, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              Text(l10n.pushingFirmware,
+                  style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
               SizedBox(height: 20.h),
               ClipRRect(
                 borderRadius: BorderRadius.circular(8.r),
@@ -1079,13 +1207,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   value: _uploadProgress,
                   minHeight: 10.h,
                   backgroundColor: const Color(0xFFE5E7EB),
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.primary),
                 ),
               ),
               SizedBox(height: 10.h),
               Text(
                 '${(_uploadProgress * 100).toStringAsFixed(1)}%',
-                style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                style: TextStyle(
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary),
               ),
             ],
           ),
@@ -1107,16 +1239,23 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2)),
             ],
           ),
           child: Column(
             children: [
-              Icon(Icons.system_update_rounded, size: 48.sp, color: AppColors.primary),
+              Icon(Icons.system_update_rounded,
+                  size: 48.sp, color: AppColors.primary),
               SizedBox(height: 12.h),
               Text(
                 _upgradeStatus.isNotEmpty ? _upgradeStatus : l10n.upgrading,
-                style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                style: TextStyle(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary),
               ),
               SizedBox(height: 20.h),
               ClipRRect(
@@ -1125,13 +1264,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   value: _upgradeProgress,
                   minHeight: 10.h,
                   backgroundColor: const Color(0xFFE5E7EB),
-                  valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.primary),
                 ),
               ),
               SizedBox(height: 10.h),
               Text(
                 '${(_upgradeProgress * 100).toStringAsFixed(1)}%',
-                style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                style: TextStyle(
+                    fontSize: 24.sp,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary),
               ),
               SizedBox(height: 8.h),
               Text(
@@ -1157,18 +1300,28 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2)),
             ],
           ),
           child: Column(
             children: [
               if (_result == LocalOTAResult.success) ...[
-                Icon(Icons.check_circle_rounded, size: 64.sp, color: AppColors.successLight),
+                Icon(Icons.check_circle_rounded,
+                    size: 64.sp, color: AppColors.successLight),
                 SizedBox(height: 16.h),
-                Text(l10n.upgradeSuccess, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(l10n.upgradeSuccess,
+                    style: TextStyle(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
                 if (_newVersion != null) ...[
                   SizedBox(height: 8.h),
-                  Text(l10n.str('new_version_label', {'version': _newVersion!}), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+                  Text(l10n.str('new_version_label', {'version': _newVersion!}),
+                      style: TextStyle(
+                          fontSize: 14.sp, color: AppColors.textSecondary)),
                 ],
                 SizedBox(height: 24.h),
                 SizedBox(
@@ -1179,19 +1332,29 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.successLight,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.r)),
                       elevation: 0,
                     ),
-                    child: Text(l10n.done, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                    child: Text(l10n.done,
+                        style: TextStyle(
+                            fontSize: 15.sp, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
               if (_result == LocalOTAResult.failed) ...[
                 Icon(Icons.cancel_rounded, size: 64.sp, color: AppColors.error),
                 SizedBox(height: 16.h),
-                Text(l10n.upgradeFailed, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(l10n.upgradeFailed,
+                    style: TextStyle(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
                 SizedBox(height: 8.h),
-                Text(_resultMessage ?? l10n.unknown, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
+                Text(_resultMessage ?? l10n.unknown,
+                    style: TextStyle(
+                        fontSize: 14.sp, color: AppColors.textSecondary),
+                    textAlign: TextAlign.center),
                 SizedBox(height: 24.h),
                 SizedBox(
                   width: double.infinity,
@@ -1209,19 +1372,30 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.r)),
                       elevation: 0,
                     ),
-                    child: Text(l10n.retry, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                    child: Text(l10n.retry,
+                        style: TextStyle(
+                            fontSize: 15.sp, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
               if (_result == LocalOTAResult.verifyFailed) ...[
-                Icon(Icons.warning_rounded, size: 64.sp, color: AppColors.warning),
+                Icon(Icons.warning_rounded,
+                    size: 64.sp, color: AppColors.warning),
                 SizedBox(height: 16.h),
-                Text(l10n.firmwareVerifyFailed, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text(l10n.firmwareVerifyFailed,
+                    style: TextStyle(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary)),
                 SizedBox(height: 8.h),
-                Text(l10n.firmwareCorruptedHint, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
+                Text(l10n.firmwareCorruptedHint,
+                    style: TextStyle(
+                        fontSize: 14.sp, color: AppColors.textSecondary),
+                    textAlign: TextAlign.center),
                 SizedBox(height: 24.h),
                 SizedBox(
                   width: double.infinity,
@@ -1229,7 +1403,8 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   child: ElevatedButton(
                     onPressed: () async {
                       if (widget.firmwareId != null) {
-                        await _downloadService.deleteDownloadedFirmware(widget.firmwareId!);
+                        await _downloadService
+                            .deleteDownloadedFirmware(widget.firmwareId!);
                       }
                       setState(() {
                         _selectedFilePath = null;
@@ -1241,10 +1416,13 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.warning,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.r)),
                       elevation: 0,
                     ),
-                    child: Text(l10n.redownload, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+                    child: Text(l10n.redownload,
+                        style: TextStyle(
+                            fontSize: 15.sp, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -1263,7 +1441,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Row(
@@ -1275,16 +1456,23 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(10.r),
             ),
-            child: Icon(Icons.devices_rounded, size: 18.sp, color: AppColors.primary),
+            child: Icon(Icons.devices_rounded,
+                size: 18.sp, color: AppColors.primary),
           ),
           SizedBox(width: 10.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.currentDevice, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(l10n.currentDevice,
+                    style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary)),
                 SizedBox(height: 2.h),
-                Text(widget.deviceSN, style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+                Text(widget.deviceSN,
+                    style:
+                        TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
               ],
             ),
           ),
@@ -1294,7 +1482,11 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(6.r),
             ),
-            child: Text(widget.deviceIP, style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: AppColors.primary)),
+            child: Text(widget.deviceIP,
+                style: TextStyle(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary)),
           ),
         ],
       ),

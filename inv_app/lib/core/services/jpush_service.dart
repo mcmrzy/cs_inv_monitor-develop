@@ -113,15 +113,18 @@ class JPushService {
       try {
         // 等待 SDK 注册完成（获取到 registrationID 表示就绪）
         final regId = await _jpush.getRegistrationID();
-        if (regId != null && regId.isNotEmpty) {
-          debugPrint('[JPushService] SDK ready, regId=$regId, setting alias=$alias');
+        if (regId.isNotEmpty) {
+          debugPrint(
+              '[JPushService] SDK ready, regId=$regId, setting alias=$alias');
           await _jpush.setAlias(alias);
           debugPrint('[JPushService] Alias set successfully: $alias');
           return;
         }
-        debugPrint('[JPushService] SDK not ready yet, retry ${attempt + 1}/3...');
+        debugPrint(
+            '[JPushService] SDK not ready yet, retry ${attempt + 1}/3...');
       } catch (e) {
-        debugPrint('[JPushService] setAlias failed (attempt ${attempt + 1}/3): $e');
+        debugPrint(
+            '[JPushService] setAlias failed (attempt ${attempt + 1}/3): $e');
       }
       await Future.delayed(const Duration(seconds: 2));
     }
@@ -196,7 +199,8 @@ class JPushService {
         if (deviceSn != null && deviceSn.isNotEmpty) {
           AppRouter.router.go('/device/$deviceSn');
         } else {
-          debugPrint('[JPushService] Missing device_sn for notify_type=$notifyType');
+          debugPrint(
+              '[JPushService] Missing device_sn for notify_type=$notifyType');
         }
         break;
       case 'system_announcement':
@@ -209,7 +213,8 @@ class JPushService {
         AppRouter.router.go('/settings');
         break;
       default:
-        debugPrint('[JPushService] Unknown notify_type: $notifyType, skip navigation');
+        debugPrint(
+            '[JPushService] Unknown notify_type: $notifyType, skip navigation');
     }
   }
 
@@ -229,7 +234,8 @@ class JPushService {
       }
     }
     if (status.isPermanentlyDenied) {
-      debugPrint('[JPushService] Notification permission permanently denied, please enable in settings');
+      debugPrint(
+          '[JPushService] Notification permission permanently denied, please enable in settings');
     }
   }
 }

@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:inv_app/core/config/app_config.dart';
 
 /// 当下载URL返回的是网页而非直接安装包时抛出此异常
 class WebPageUrlException implements Exception {
@@ -91,7 +90,8 @@ class AppUpdateService {
   Future<bool> _isWebPageUrl(String url) async {
     try {
       final checkDio = Dio();
-      final response = await checkDio.head(url,
+      final response = await checkDio.head(
+        url,
         options: Options(
           followRedirects: true,
           validateStatus: (status) => status != null && status < 400,
