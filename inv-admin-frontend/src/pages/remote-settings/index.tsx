@@ -1,103 +1,86 @@
 import React, { useState } from 'react'
-import { Tabs, Empty, Card, Typography } from 'antd'
-import useTranslation from '@/hooks/useTranslation'
+import { Button, Card, Empty, Typography, Space, App } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
+import { useQuery } from '@tanstack/react-query'
+import { deviceApi } from '@/services/deviceApi'
+import { queryKeys } from '@/utils/queryKeys'
 import DeviceSelector from './components/DeviceSelector'
-import GeneralSettingsTab from './components/GeneralSettingsTab'
-import ApplicationSettingsTab from './components/ApplicationSettingsTab'
-import ConfigStatusTab from './components/ConfigStatusTab'
-import ParallelTab from './components/ParallelTab'
-import GridSettingsTab from './components/GridSettingsTab'
-import PowerControlTab from './components/PowerControlTab'
-import ChargeSettingsTab from './components/ChargeSettingsTab'
-import DischargeSettingsTab from './components/DischargeSettingsTab'
-import OtherSettingsTab from './components/OtherSettingsTab'
-import ResetTab from './components/ResetTab'
-import type { RemoteSettingsTab } from './types'
+import GeneralSection from './components/GeneralSection'
+import ApplicationSection from './components/ApplicationSection'
+import ParallelSection from './components/ParallelSection'
+import ChargeSection from './components/ChargeSection'
+import DischargeSection from './components/DischargeSection'
+import OtherSection from './components/OtherSection'
+import ResetSection from './components/ResetSection'
+import type { DeviceItem } from './types'
 
 const { Title, Text } = Typography
 
 const RemoteSettingsPage: React.FC = () => {
-  const { t } = useTranslation()
+  const { message } = App.useApp()
   const [selectedSn, setSelectedSn] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<RemoteSettingsTab>('general')
+  const [reading, setReading] = useState(false)
+
+  const { data: devicesData } = useQuery({
+    queryKey: queryKeys.devices.list({ page: 1, page_size: 200 }),
+    queryFn: () =>
+      deviceApi.getDevices({ page: 1, page_size: 200 }).then((r) => {
+        const d = (r as any).data?.data ?? (r as any).data
+        return (d?.items ?? (Array.isArray(d) ? d : [])) as DeviceItem[]
+      }),
+    staleTime: 60_000,
+  })
+
+  const devices = devicesData ?? []
+  const selectedDevice = devices.find((d) => d.sn === selectedSn) ?? null
+
+  const handleRead = () => {
+    setReading(true)
+    message.info('正在读取设备当前设置...')
+    setTimeout(() => setReading(false), 1500)
+  }
 
   return (
     <div>
       <Title level={4} style={{ marginBottom: 4 }}>
-        {t('remoteSettings.pageTitle')}
+        远程参数设置
       </Title>
       <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
-        {t('remoteSettings.pageDescription')}
+        远程配置逆变器运行参数，支持实时下发与生效
       </Text>
 
       <DeviceSelector selectedSn={selectedSn} onDeviceChange={setSelectedSn} />
 
+      {selectedDevice && (
+        <div style={{ marginTop: 16, marginBottom: 24 }}>
+          <Button
+            type="primary"
+            icon={<ReloadOutlined />}
+            onClick={handleRead}
+            loading={reading}
+          >
+            读取当前设置
+          </Button>
+        </div>
+      )}
+
       {selectedSn ? (
-        <Tabs
-          activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as RemoteSettingsTab)}
-          destroyInactiveTabPane
-          style={{ marginTop: 16 }}
-          items={[
-            {
-              key: 'general',
-              label: t('remoteSettings.tabGeneral'),
-              children: <GeneralSettingsTab sn={selectedSn} />,
-            },
-            {
-              key: 'application',
-              label: t('remoteSettings.tabApplication'),
-              children: <ApplicationSettingsTab sn={selectedSn} />,
-            },
-            {
-              key: 'parallel',
-              label: t('remoteSettings.tabParallel'),
-              children: <ParallelTab sn={selectedSn} />,
-            },
-            {
-              key: 'grid',
-              label: t('remoteSettings.tabGrid'),
-              children: <GridSettingsTab sn={selectedSn} />,
-            },
-            {
-              key: 'power',
-              label: t('remoteSettings.tabPower'),
-              children: <PowerControlTab sn={selectedSn} />,
-            },
-            {
-              key: 'charge',
-              label: t('remoteSettings.tabCharge'),
-              children: <ChargeSettingsTab sn={selectedSn} />,
-            },
-            {
-              key: 'discharge',
-              label: t('remoteSettings.tabDischarge'),
-              children: <DischargeSettingsTab sn={selectedSn} />,
-            },
-            {
-              key: 'other',
-              label: t('remoteSettings.tabOther'),
-              children: <OtherSettingsTab sn={selectedSn} />,
-            },
-            {
-              key: 'reset',
-              label: t('remoteSettings.tabReset'),
-              children: <ResetTab sn={selectedSn} />,
-            },
-            {
-              key: 'status',
-              label: t('remoteSettings.tabStatus'),
-              children: <ConfigStatusTab sn={selectedSn} />,
-            },
-          ]}
-        />
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <GeneralSection deviceInfo={selectedDevice} />
+          <ApplicationSection />
+          <ParallelSection />
+          <ChargeSection />
+          <DischargeSection />
+          <OtherSection />
+          <ResetSection />
+        </div>
       ) : (
         <Card
           bordered={false}
           style={{ borderRadius: 12, marginTop: 24, textAlign: 'center', padding: 48 }}
         >
           <Empty
-            description={t('remoteSettings.selectDeviceHint')}
+            description="请先选择一个设备"
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         </Card>
