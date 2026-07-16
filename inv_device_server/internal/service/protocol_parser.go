@@ -104,7 +104,7 @@ func (p *ProtocolParser) SetStateManager(sm *DeviceStateManager) {
 }
 
 func (p *ProtocolParser) Start(ctx context.Context) {
-	go runOrderedKafkaConsumer(ctx, "protocol-parser", p.consumer, p.processKafkaMessage, 250*time.Millisecond)
+	go runOrderedKafkaConsumerWithRetry(ctx, "protocol-parser", p.consumer, p.processKafkaMessage, DefaultMaxRetries, DefaultBaseBackoff, nil, nil)
 	go p.refreshModelCache(ctx)
 }
 
@@ -526,14 +526,14 @@ func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) e
 			var err error
 			payloadMap, err = unwrapPayload(raw.Payload)
 			if err != nil {
-				return err
+				return permanentMessage("INVALID_TELEMETRY_PAYLOAD", err)
 			}
 		}
 	} else {
 		var err error
 		payloadMap, err = unwrapPayload(raw.Payload)
 		if err != nil {
-			return err
+			return permanentMessage("INVALID_TELEMETRY_PAYLOAD", err)
 		}
 	}
 

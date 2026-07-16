@@ -145,16 +145,16 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
   }, [rolloutMode, deviceList.length, rolloutPercent])
 
   const previewColumns: ColumnsType<Device> = [
-    { title: 'SN', dataIndex: 'sn', width: 180 },
+    { title: t('ota.sn'), dataIndex: 'sn', width: 180 },
     {
-      title: '当前固件版本', dataIndex: 'firmwareVersion', width: 160,
-      render: (v: string) => v ? <Tag color="blue">{v}</Tag> : <Tag>未知</Tag>,
+      title: t('ota.currentVersion'), dataIndex: 'firmwareVersion', width: 160,
+      render: (v: string) => v ? <Tag color="blue">{v}</Tag> : <Tag>{t('ota.unknown')}</Tag>,
     },
     {
-      title: '在线状态', dataIndex: 'status', width: 100,
+      title: t('common.status'), dataIndex: 'status', width: 100,
       render: (status: string) => {
         const colorMap: Record<string, string> = { online: 'green', offline: 'default', fault: 'red' }
-        const labelMap: Record<string, string> = { online: '在线', offline: '离线', fault: '故障' }
+        const labelMap: Record<string, string> = { online: t('common.online'), offline: t('common.offline'), fault: t('common.fault') }
         return <Tag color={colorMap[status] ?? 'default'}>{labelMap[status] ?? status}</Tag>
       },
     },
@@ -171,20 +171,20 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
 
   return (
     <Modal
-      title={`推送升级包 - ${packageData?.main_version ?? ''}`}
+      title={`${t('ota.pushPackage')} - ${packageData?.main_version ?? ''}`}
       open={open}
       onCancel={onClose}
       width={800}
       destroyOnClose
       footer={
         <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button onClick={onClose}>取消</Button>
+          <Button onClick={onClose}>{t('common.cancel')}</Button>
           <Button
             type="primary"
             onClick={handlePublish}
             loading={publishing}
             disabled={!!deviceError || (rolloutMode === 'model' && !!modelError)}
-          >推送</Button>
+          >{t('ota.pushPackage')}</Button>
         </Space>
       }
     >
@@ -197,23 +197,23 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       )}
       {/* 用户可见信息 */}
       <div style={{ marginBottom: 16 }}>
-        <Text strong style={{ display: 'block', marginBottom: 8 }}>用户可见信息</Text>
+        <Text strong style={{ display: 'block', marginBottom: 8 }}>{t('ota.userVisibleInfo')}</Text>
         <Form form={form} layout="vertical">
           <Form.Item 
             name="user_version" 
-            label="版本号"
-            help="用户看到的版本号，留空自动生成（如 V1.0.0）"
+            label={t('ota.userVersion')}
+            help={t('ota.userVersionHelp')}
           >
-            <Input placeholder="例如：V1.0.2" />
+            <Input placeholder={t('ota.versionExample')} />
           </Form.Item>
           <Form.Item 
             name="user_changelog" 
-            label="更新说明"
-            help="用户看到的更新说明，留空自动汇总各固件说明"
+            label={t('ota.updateNotes')}
+            help={t('ota.updateNotesHelp')}
           >
-            <TextArea rows={3} placeholder="例如：修复了XX问题，优化了XX功能" />
+            <TextArea rows={3} placeholder={t('ota.changelogExample')} />
           </Form.Item>
-          <Form.Item name="is_force" label="强制更新" valuePropName="checked" help="开启后用户必须更新才能使用App">
+          <Form.Item name="is_force" label={t('ota.forceUpdate')} valuePropName="checked" help={t('ota.forceUpdateHelp')}>
             <Switch />
           </Form.Item>
         </Form>
@@ -223,22 +223,22 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
 
       {/* 推送策略 */}
       <div style={{ marginBottom: 16 }}>
-        <Text strong style={{ display: 'block', marginBottom: 8 }}>推送策略</Text>
+        <Text strong style={{ display: 'block', marginBottom: 8 }}>{t('ota.pushStrategy')}</Text>
         <Radio.Group value={rolloutMode} onChange={e => setRolloutMode(e.target.value)}>
-          <Radio.Button value="all">全量推送</Radio.Button>
-          <Radio.Button value="gray">灰度推送</Radio.Button>
-          <Radio.Button value="model">按型号</Radio.Button>
-          <Radio.Button value="device">按设备SN</Radio.Button>
+          <Radio.Button value="all">{t('ota.rolloutAll')}</Radio.Button>
+          <Radio.Button value="gray">{t('ota.rolloutGray')}</Radio.Button>
+          <Radio.Button value="model">{t('ota.rolloutByModel')}</Radio.Button>
+          <Radio.Button value="device">{t('ota.rolloutByDevice')}</Radio.Button>
         </Radio.Group>
       </div>
 
       {/* 灰度百分比 */}
       {rolloutMode === 'gray' && (
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>灰度比例: {rolloutPercent}%</Text>
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>{t('ota.rolloutPercentLabel')}: {rolloutPercent}%</Text>
           <Slider min={1} max={99} value={rolloutPercent} onChange={v => setRolloutPercent(v)} />
           <Text type="secondary">
-            预计推送 {estimatedCount} 台（共 {deviceList.length} 台）
+            {t('ota.rolloutEstimate', { estimated: estimatedCount, total: deviceList.length })}
           </Text>
         </div>
       )}
@@ -246,10 +246,10 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       {/* 型号选择 */}
       {rolloutMode === 'model' && (
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>选择型号</Text>
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>{t('ota.selectModelLabel')}</Text>
           <Select
             style={{ width: 300 }}
-            placeholder="请选择型号"
+            placeholder={t('ota.selectModel')}
             value={selectedModel}
             onChange={v => setSelectedModel(v)}
             allowClear
@@ -261,12 +261,12 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       {/* SN 输入 */}
       {rolloutMode === 'device' && (
         <div style={{ marginBottom: 16 }}>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>输入设备 SN（逗号分隔）</Text>
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>{t('ota.deviceSnInput')}</Text>
           <TextArea
             rows={3}
             value={snInput}
             onChange={e => setSnInput(e.target.value)}
-            placeholder="例如: SN001,SN002,SN003"
+            placeholder={t('ota.deviceSnExample')}
           />
         </div>
       )}
@@ -274,7 +274,7 @@ const PublishModal: React.FC<PublishModalProps> = ({ open, packageData, onClose,
       {/* 设备预览 */}
       {showPreview && (
         <>
-          <Divider orientation="left">设备预览</Divider>
+          <Divider orientation="left">{t('ota.devicePreview')}</Divider>
           <Table
             size="small"
             rowKey="sn"

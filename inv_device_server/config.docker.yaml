@@ -47,6 +47,7 @@ kafka:
   telemetry_topic: inv-telemetry
   alarm_topic: inv-alerts
   command_topic: inv-commands
+  consumer_group: ""
 
 backends:
   api_server: http://inv-api-server:8080

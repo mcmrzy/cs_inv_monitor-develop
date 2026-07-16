@@ -72,11 +72,12 @@ type MQTTConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers        []string `mapstructure:"brokers"`
-	Enabled        bool     `mapstructure:"enabled"`
-	TelemetryTopic string   `mapstructure:"telemetry_topic"`
-	AlarmTopic     string   `mapstructure:"alarm_topic"`
-	CommandTopic   string   `mapstructure:"command_topic"`
+	Brokers         []string `mapstructure:"brokers"`
+	Enabled         bool     `mapstructure:"enabled"`
+	TelemetryTopic  string   `mapstructure:"telemetry_topic"`
+	AlarmTopic      string   `mapstructure:"alarm_topic"`
+	CommandTopic    string   `mapstructure:"command_topic"`
+	ConsumerGroupID string   `mapstructure:"consumer_group"`
 }
 
 type BackendsConfig struct {
@@ -132,6 +133,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("kafka.telemetry_topic", "inv-telemetry")
 	viper.SetDefault("kafka.alarm_topic", "inv-alerts")
 	viper.SetDefault("kafka.command_topic", "inv-commands")
+	viper.SetDefault("kafka.consumer_group", "")
 
 	viper.BindEnv("database.host", "DB_HOST")
 	viper.BindEnv("database.port", "DB_PORT")
@@ -158,6 +160,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("kafka.telemetry_topic", "KAFKA_TELEMETRY_TOPIC")
 	viper.BindEnv("kafka.alarm_topic", "KAFKA_ALARM_TOPIC")
 	viper.BindEnv("kafka.command_topic", "KAFKA_COMMAND_TOPIC")
+	viper.BindEnv("kafka.consumer_group", "KAFKA_CONSUMER_GROUP")
 
 	// 将单个 broker 字符串转换为数组
 	if broker := viper.GetString("kafka.brokers"); broker != "" {

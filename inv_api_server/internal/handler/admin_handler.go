@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -306,6 +307,38 @@ func (h *AdminHandler) ToggleUserStatus(c *gin.Context) {
 		return
 	}
 	response.SuccessWithMessage(c, "用户状态已更新", nil)
+}
+
+func (h *AdminHandler) GetModelConfig(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		response.HandleError(c, apperr.BadRequest("无效的型号ID"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	m, err := h.modelRepo.GetModelByID(ctx, id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			response.HandleError(c, apperr.NotFound("型号不存在"))
+			return
+		}
+		response.HandleError(c, apperr.Internal("查询型号失败", err))
+		return
+	}
+
+	fields, err := h.modelRepo.GetFieldsByModelID(ctx, id)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("查询型号字段失败", err))
+		return
+	}
+
+	response.Success(c, gin.H{
+		"model":  m,
+		"fields": fields,
+	})
 }
 
 func (h *AdminHandler) ListAllModels(c *gin.Context) {

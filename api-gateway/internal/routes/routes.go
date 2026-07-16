@@ -146,6 +146,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	adminGroup.Any("/api/v1/internal/*action", p.Handler())
 	// Admin 子路由代理 — 逐条注册以避免与 route-groups 通配符冲突
 	adminGroup.Any("/api/v1/admin/models", p.Handler())
+	adminGroup.Any("/api/v1/admin/models/*action", p.Handler())
 	adminGroup.Any("/api/v1/admin/users", p.Handler())
 	adminGroup.Any("/api/v1/admin/users/*action", p.Handler())
 	adminGroup.Any("/api/v1/admin/permissions", p.Handler())

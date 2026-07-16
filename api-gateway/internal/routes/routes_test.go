@@ -135,6 +135,7 @@ func TestRouteRegistration_AdminRoutes(t *testing.T) {
 		"/api/v1/admin/route-groups",
 		"/api/v1/users",
 		"/api/v1/admin/models",
+		"/api/v1/admin/models/*action",
 		"/api/v1/admin/users",
 		"/api/v1/admin/permissions",
 		"/api/v1/admin/logs",

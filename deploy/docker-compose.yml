@@ -138,6 +138,7 @@ services:
       # verification. Never enable in production — use cert pinning instead.
       MQTT_TLS_SKIP_VERIFY: ${MQTT_TLS_SKIP_VERIFY:-false}
       KAFKA_BROKER: jiuxiaoyw.online:9092
+      KAFKA_CONSUMER_GROUP: inv-device-server-local
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}
     expose:
