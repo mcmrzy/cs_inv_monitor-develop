@@ -882,6 +882,7 @@ const Map<String, String> en = {
   'notify_device_offline': '{device} is offline',
   'notify_ota_available': '{device} has new firmware available',
   'notify_app_update': 'New version v{version} available',
+  'update_details_hint': 'Tap to view details and update',
 
   // Other
   'search_alarm_hint': 'Search alarm device/SN',
@@ -961,6 +962,9 @@ const Map<String, String> en = {
   'ble_discovering_services': 'Discovering services...',
   'ble_connected_device': 'Device connected',
   'ble_success_exclaim': 'Provisioning success!',
+  'ble_wifi_not_found': 'WiFi network not found',
+  'ble_wifi_password_failed': 'Connection failed. Check the WiFi password.',
+  'ble_device_not_connected': 'No BLE device is connected',
   'ble_ready': 'Ready',
   'ble_scanning_short': 'Scanning...',
   'device_connecting_wifi': 'Device is connecting to WiFi, please check device status',

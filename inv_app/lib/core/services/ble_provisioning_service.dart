@@ -312,7 +312,7 @@ class BleProvisioningService {
       _emitStatus(BleProvisioningStatus.error);
       return BleProvisioningResult(
         success: false,
-        message: '连接失败: $e',
+        message: 'ble_connect_failed',
       );
     }
   }
@@ -343,7 +343,7 @@ class BleProvisioningService {
           sn: '',
           firmwareVersion: '',
           macAddress: '',
-          deviceName: '未知设备',
+          deviceName: 'CS_INV Device',
           rssi: 0),
     );
 
@@ -353,7 +353,7 @@ class BleProvisioningService {
       // 如果读取到SN，使用完整SN作为设备名
       deviceName = 'CS_INV_$sn';
     } else if (deviceName.isEmpty) {
-      deviceName = _connectedDevice?.platformName ?? '未知设备';
+      deviceName = _connectedDevice?.platformName ?? 'CS_INV Device';
     }
 
     return BleDeviceInfo(
@@ -414,21 +414,22 @@ class BleProvisioningService {
     if (!_resultController.isClosed) {
       switch (cleanStatus) {
         case 'waiting':
-          _resultController.add('等待凭据');
+          _resultController.add('ble_waiting_credentials');
           break;
         case 'connecting':
-          _resultController.add('正在连接WiFi...');
+          _resultController.add('ble_connecting_wifi');
           _emitStatus(BleProvisioningStatus.waitingForResult);
           break;
         case 'connected':
-          _resultController.add('WiFi连接成功！');
+          _resultController.add('ble_wifi_connected');
           _emitStatus(BleProvisioningStatus.wifiConnected);
           break;
         case 'failed':
         case 'not_found':
           // 配网失败后，回到bleConnected状态，允许重新输入凭据
-          _resultController
-              .add(cleanStatus == 'not_found' ? '未找到WiFi网络' : '连接失败，请检查密码');
+          _resultController.add(cleanStatus == 'not_found'
+              ? 'ble_wifi_not_found'
+              : 'ble_wifi_password_failed');
           _emitStatus(BleProvisioningStatus.bleConnected);
           break;
         default:
@@ -448,7 +449,7 @@ class BleProvisioningService {
     if (_connectedDevice == null) {
       return BleProvisioningResult(
         success: false,
-        message: '未连接设备',
+        message: 'ble_device_not_connected',
       );
     }
 
@@ -493,19 +494,19 @@ class BleProvisioningService {
       _provisioningTimer = Timer(provisioningTimeout, () {
         if (_currentStatus == BleProvisioningStatus.waitingForResult) {
           _emitStatus(BleProvisioningStatus.timeout);
-          _resultController.add('配网超时');
+          _resultController.add('ble_timeout');
         }
       });
 
       return BleProvisioningResult(
         success: true,
-        message: 'WiFi凭据已发送，等待设备连接...',
+        message: 'ble_credentials_sent',
       );
     } catch (e) {
       _emitStatus(BleProvisioningStatus.error);
       return BleProvisioningResult(
         success: false,
-        message: '写入失败: $e',
+        message: 'ble_write_failed',
       );
     }
   }

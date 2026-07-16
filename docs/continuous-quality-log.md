@@ -41,7 +41,7 @@
 | CQ-021 | P1 | App Wi-Fi | 已修复 | Wi-Fi 扫描依赖 `wifi_iot` 的废弃扫描 API，平台升级后可能失效 | 扫描与连接能力耦合在旧插件 | 新增 `wifi_scan` 适配服务，迁移本地发现、配网页和本地 OTA 的扫描流程；`wifi_iot` 仅保留连接能力 |
 | CQ-022 | P1 | App 仪表盘 | 已修复 | 型号动态字段成功加载后仍使用 `widget.fields`，自动加载结果 `_autoFields` 被忽略 | 动态区块分支和渲染函数没有使用 effective fields | 统一使用 `widget.fields ?? _autoFields`，恢复按型号字段元数据动态渲染 |
 | CQ-023 | P0 | 合并回归 | 已修复 | cherry-pick 曾覆盖能源计划/电池授权实现，但保留了测试，导致编译失败 | 并发提交的冲突解决只保留部分文件 | 恢复两个 Handler 的授权实现和 main 注入；`go test -p 2 ./...` 全量通过，保留测试防止再次静默回退 |
-| CQ-024 | P1 | 多语言 | 待修复 | App 通知标题/BLE 服务错误和 Web OTA 多个弹窗仍硬编码中文，英文模式下会混入中文 | 深层业务组件和无 BuildContext 的服务/BLoC 未使用 locale key | 已完成字符串复扫并锁定文件；下一轮优先把通知模型改为语义 key+参数、BLE 错误映射为本地化 key，并补齐 OTA locale 键与英文模式测试 |
+| CQ-024 | P1 | 多语言 | 部分修复 | App 通知标题/BLE 服务错误和 Web OTA 多个弹窗仍硬编码中文，英文模式下会混入中文 | 深层业务组件和无 BuildContext 的服务/BLoC 未使用 locale key | App 已改为持久化通知语义/版本、渲染时按当前 locale 翻译，并兼容从旧中文标题提取版本；BLE 服务改发稳定状态码，由页面本地化。剩余 Web OTA 深层弹窗和状态映射待继续收口 |
 
 ## 第一轮检查范围
 
@@ -145,6 +145,7 @@
 - Wi-Fi 扫描迁移至 `wifi_scan 0.4.1+2`，依赖锁文件已更新。
 - 修复 Dashboard 自动型号字段加载后未参与渲染的问题；清理 App 26 个未使用代码/无效判断 warning。
 - 多语言复扫确认源码文件本身为 UTF-8；PowerShell 默认读取显示的“乱码”不是文件损坏。另发现 App 通知/BLE 和 Web OTA 深层硬编码，登记 CQ-024。
+- CQ-024 App 部分回归：通知序列化新增 2 项测试，通知 BLoC 定向 6 项通过；Flutter 全量测试增至 175 项通过、4 项跳过，analyze 仍为 0 error / 0 warning。
 - Docker 新镜像此前已构建；现运行的 API、Device、Gateway、Postgres、Redis healthy，039–055 迁移已应用，数据库连接全部使用 SSL。前端仍是旧容器且无 health，因缺少真实 `deploy/.env.prod` 未冒险重建。
 
 ## 下一步规划
