@@ -35,11 +35,11 @@ const NODE_COLORS: Record<string, string> = {
 };
 
 const NODES: NodeConfig[] = [
-  { type: 'pv', x: 300, y: 60, color: NODE_COLORS.pv, label: '光伏', image: '/images/energy-flow/pv.jpg' },
-  { type: 'battery', x: 80, y: 250, color: NODE_COLORS.battery, label: '电池', image: '/images/energy-flow/battery.jpg' },
-  { type: 'inverter', x: 300, y: 250, color: NODE_COLORS.inverter, label: '逆变器', image: '/images/energy-flow/inverter.png' },
-  { type: 'grid', x: 520, y: 250, color: NODE_COLORS.grid, label: '电网', image: '/images/energy-flow/grid.jpg' },
-  { type: 'load', x: 300, y: 440, color: NODE_COLORS.load, label: '负载', image: '/images/energy-flow/load.jpg' },
+  { type: 'pv', x: 300, y: 85, color: NODE_COLORS.pv, label: '光伏', image: '/images/energy-flow/pv.jpg' },
+  { type: 'battery', x: 80, y: 275, color: NODE_COLORS.battery, label: '电池', image: '/images/energy-flow/battery.jpg' },
+  { type: 'inverter', x: 300, y: 275, color: NODE_COLORS.inverter, label: '逆变器', image: '/images/energy-flow/inverter.png' },
+  { type: 'grid', x: 520, y: 275, color: NODE_COLORS.grid, label: '电网', image: '/images/energy-flow/grid.jpg' },
+  { type: 'load', x: 300, y: 465, color: NODE_COLORS.load, label: '负载', image: '/images/energy-flow/load.jpg' },
 ];
 
 function formatPower(w: number): string {
@@ -66,7 +66,7 @@ function computeFlowEdges(
   // 1. PV → Inverter (straight down)
   edges.push({
     id: 'pv-inv',
-    path: 'M 300 100 L 300 210',
+    path: 'M 300 135 L 300 225',
     color: NODE_COLORS.pv,
     active: pvPower > 0,
     power: pvPower,
@@ -76,7 +76,7 @@ function computeFlowEdges(
   // 2. Inverter → Load (straight down)
   edges.push({
     id: 'inv-load',
-    path: 'M 300 290 L 300 400',
+    path: 'M 300 325 L 300 415',
     color: NODE_COLORS.inverter,
     active: loadPower > 0,
     power: loadPower,
@@ -86,7 +86,7 @@ function computeFlowEdges(
   // 3. PV → Battery (curve, upper-left) — charging
   edges.push({
     id: 'pv-batt',
-    path: 'M 270 80 Q 160 120 110 210',
+    path: 'M 265 105 Q 155 150 110 225',
     color: NODE_COLORS.battery,
     active: pvPower > 0 && battPower > 0,
     power: battPower > 0 ? battPower : 0,
@@ -96,7 +96,7 @@ function computeFlowEdges(
   // 4. Battery → Inverter (curve, left-center) — discharging
   edges.push({
     id: 'batt-inv',
-    path: 'M 120 250 Q 180 280 260 260',
+    path: 'M 130 275 Q 190 295 250 280',
     color: NODE_COLORS.battery,
     active: battPower < 0,
     power: battPower < 0 ? Math.abs(battPower) : 0,
@@ -106,7 +106,7 @@ function computeFlowEdges(
   // 5. Grid → Inverter (straight, right to center) — consuming
   edges.push({
     id: 'grid-inv',
-    path: 'M 480 250 L 340 250',
+    path: 'M 470 265 L 350 265',
     color: NODE_COLORS.grid,
     active: gridPower > 0,
     power: gridPower,
@@ -116,7 +116,7 @@ function computeFlowEdges(
   // 6. Inverter → Grid (straight, center to right) — feeding
   edges.push({
     id: 'inv-grid',
-    path: 'M 340 260 L 480 260',
+    path: 'M 350 285 L 470 285',
     color: NODE_COLORS.inverter,
     active: gridPower < 0,
     power: gridPower < 0 ? Math.abs(gridPower) : 0,
@@ -149,10 +149,36 @@ const FlowNode: React.FC<{
   const { x, y, label, type, image } = node;
   const displayPower = type === 'battery' && power < 0 ? Math.abs(power) : power;
 
-  const imgSize = 80;
+  const imgSize = 100;
 
   return (
     <g>
+      {/* Label above image */}
+      <text
+        x={x}
+        y={y - 64}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="#333"
+        fontSize="13"
+        fontWeight="700"
+        style={{ textShadow: '0 0 4px rgba(255,255,255,0.9), 0 0 8px rgba(255,255,255,0.7)' }}
+      >
+        {label}
+      </text>
+      {/* Power value above image, below label */}
+      <text
+        x={x}
+        y={y - 50}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="#555"
+        fontSize="12"
+        fontWeight="600"
+        style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
+      >
+        {formatPower(displayPower)}
+      </text>
       {/* Node image */}
       <image
         href={image}
@@ -160,43 +186,20 @@ const FlowNode: React.FC<{
         y={y - imgSize / 2}
         width={imgSize}
         height={imgSize}
-        preserveAspectRatio="xMidYMid slice"
-        rx={8}
+        preserveAspectRatio="xMidYMid meet"
+        rx={10}
       />
-      {/* Label */}
-      <text
-        x={x}
-        y={y + 4}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="#fff"
-        fontSize="10"
-        fontWeight="600"
-        style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
-      >
-        {label}
-      </text>
-      {/* Power value below node */}
-      <text
-        x={x}
-        y={y + 56}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="#64748b"
-        fontSize="12"
-        fontWeight="600"
-      >
-        {formatPower(displayPower)}
-      </text>
-      {/* Extra info (SOC) */}
+      {/* Extra info (SOC) below image */}
       {extra && (
         <text
           x={x}
-          y={y + 70}
+          y={y + 60}
           textAnchor="middle"
           dominantBaseline="central"
-          fill="#94a3b8"
-          fontSize="11"
+          fill="#555"
+          fontSize="12"
+          fontWeight="500"
+          style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
         >
           {extra}
         </text>
@@ -268,7 +271,7 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
   return (
     <div style={{ width: '100%', maxWidth: 600, margin: '0 auto' }}>
       <svg
-        viewBox="0 0 600 500"
+        viewBox="0 0 600 540"
         style={{ width: '100%', height: 'auto', display: 'block' }}
         xmlns="http://www.w3.org/2000/svg"
       >
@@ -278,7 +281,7 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
         </defs>
 
         {/* Background grid (subtle) */}
-        <rect width="600" height="500" fill="transparent" rx="12" />
+        <rect width="600" height="540" fill="transparent" rx="12" />
 
         {/* Flow paths (rendered behind nodes) */}
         {edges.map((edge) => (
