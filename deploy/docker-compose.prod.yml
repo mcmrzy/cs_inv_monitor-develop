@@ -8,18 +8,9 @@ name: inv-monitor-prod
 services:
   # ---------- PostgreSQL (TimescaleDB) ----------
   postgres:
-    build:
-      context: ..
-      dockerfile: deploy/postgres/Dockerfile
-    image: inv-postgres-tls:2.28.2-pg18
+    image: timescale/timescaledb:latest-pg18
     container_name: inv-postgres
-    command: >-
-      postgres
-      -c max_connections=300
-      -c shared_buffers=256MB
-      -c ssl=on
-      -c ssl_cert_file=/var/lib/postgresql/tls/server.crt
-      -c ssl_key_file=/var/lib/postgresql/tls/server.key
+    command: postgres -c max_connections=300 -c shared_buffers=256MB
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -28,7 +19,9 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - pg-data:/var/lib/postgresql/18/docker
+      - pg-data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/02-timescaledb.sql:ro
     networks:
       - inv-prod-network
     restart: unless-stopped
@@ -56,11 +49,13 @@ services:
   redis:
     image: redis:7-alpine
     container_name: inv-redis
-    volumes:
-      - redis-data:/data
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --notify-keyspace-events Ex"]
     networks:
       - inv-prod-network
     restart: unless-stopped
@@ -82,14 +77,13 @@ services:
         max-file: "3"
 
   # ---------- inv-device-server ----------
-  # Starts only after API migrations have completed and API is healthy.
   inv-device-server:
     image: ghcr.io/mcmrzy/inv-device-server:${IMAGE_TAG:-latest}
     container_name: inv-device-server
     expose:
       - "8081"
     env_file:
-      - .secrets/.env.prod
+      - .env.prod
     environment:
       DB_HOST: postgres
       REDIS_HOST: redis
@@ -104,18 +98,12 @@ services:
     networks:
       - inv-prod-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "nc -z localhost 8081 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
     depends_on:
-      inv-api-server:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      inv-api-server:
         condition: service_healthy
     deploy:
       resources:
@@ -135,13 +123,12 @@ services:
     expose:
       - "8080"
     env_file:
-      - .secrets/.env.prod
+      - .env.prod
     environment:
       DB_HOST: postgres
       REDIS_HOST: redis
       DEVICE_SERVER_URL: http://inv-device-server:8081
       INTERNAL_KEY: ${INTERNAL_KEY}
-      INTERNAL_API_SECRET: ${INTERNAL_KEY}
       JPUSH_ENABLED: ${JPUSH_ENABLED:-false}
       JPUSH_APP_KEY: ${JPUSH_APP_KEY}
       JPUSH_MASTER_SECRET: ${JPUSH_MASTER_SECRET}
@@ -149,15 +136,10 @@ services:
       JPUSH_DEDUP_TTL: ${JPUSH_DEDUP_TTL:-120}
     volumes:
       - ./configs/api-server.yaml:/app/config.yaml:ro
+      - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     networks:
       - inv-prod-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -181,7 +163,7 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - .secrets/.env.prod
+      - .env.prod
     environment:
       JWT_SECRET: ${JWT_SECRET}
       API_SERVER_URL: http://inv-api-server:8080
@@ -194,19 +176,10 @@ services:
     networks:
       - inv-prod-network
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
     depends_on:
-      inv-api-server:
-        condition: service_healthy
-      inv-device-server:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - inv-api-server
+      - inv-device-server
+      - redis
     deploy:
       resources:
         limits:

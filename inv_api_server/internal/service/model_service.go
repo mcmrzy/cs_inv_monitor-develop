@@ -2,38 +2,19 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
-
-	"github.com/redis/go-redis/v9"
-	"golang.org/x/sync/singleflight"
 )
 
 type ModelService struct {
 	modelRepo *repository.ModelRepository
-	rdb       *redis.Client
-	sf        singleflight.Group
 }
 
 func NewModelService(modelRepo *repository.ModelRepository) *ModelService {
 	return &ModelService{modelRepo: modelRepo}
 }
-
-// NewModelServiceWithCache creates a ModelService with Redis caching for high-frequency reads.
-// Device models are high-frequency, low-change data ideal for caching.
-func NewModelServiceWithCache(modelRepo *repository.ModelRepository, rdb *redis.Client) *ModelService {
-	return &ModelService{modelRepo: modelRepo, rdb: rdb}
-}
-
-const (
-	modelListCacheKey  = "cache:model:list"
-	modelCacheKeyFmt  = "cache:model:%d"
-	modelCacheTTL     = 10 * time.Minute
-)
 
 type CreateModelRequest struct {
 	ModelCode    string  `json:"model_code" binding:"required"`
@@ -94,78 +75,11 @@ type UpdateProtocolRequest struct {
 }
 
 func (s *ModelService) ListModels(ctx context.Context) ([]model.DeviceModel, error) {
-	// Try cache first
-	if s.rdb != nil {
-		if cached, err := s.rdb.Get(ctx, modelListCacheKey).Result(); err == nil {
-			var models []model.DeviceModel
-			if json.Unmarshal([]byte(cached), &models) == nil {
-				return models, nil
-			}
-		}
-	}
-
-	// singleflight: prevent cache stampede when multiple requests miss simultaneously
-	val, err, _ := s.sf.Do(modelListCacheKey, func() (interface{}, error) {
-		models, err := s.modelRepo.ListModels(ctx)
-		if err != nil {
-			return nil, err
-		}
-		// Write to cache with jittered TTL to prevent synchronized expiry
-		if s.rdb != nil {
-			data, _ := json.Marshal(models)
-			ttl := modelCacheTTL + time.Duration(jitterSeconds(60))*time.Second
-			s.rdb.Set(ctx, modelListCacheKey, data, ttl)
-		}
-		return models, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return val.([]model.DeviceModel), nil
+	return s.modelRepo.ListModels(ctx)
 }
 
 func (s *ModelService) GetModel(ctx context.Context, id int64) (*model.DeviceModel, error) {
-	cacheKey := fmt.Sprintf(modelCacheKeyFmt, id)
-
-	// Try cache first
-	if s.rdb != nil {
-		if cached, err := s.rdb.Get(ctx, cacheKey).Result(); err == nil {
-			var m model.DeviceModel
-			if json.Unmarshal([]byte(cached), &m) == nil {
-				return &m, nil
-			}
-		}
-	}
-
-	// singleflight: prevent cache stampede for the same model ID
-	val, err, _ := s.sf.Do(cacheKey, func() (interface{}, error) {
-		m, err := s.modelRepo.GetModelByID(ctx, id)
-		if err != nil || m == nil {
-			return m, err
-		}
-		if s.rdb != nil {
-			data, _ := json.Marshal(m)
-			ttl := modelCacheTTL + time.Duration(jitterSeconds(60))*time.Second
-			s.rdb.Set(ctx, cacheKey, data, ttl)
-		}
-		return m, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if val == nil {
-		return nil, nil
-	}
-	return val.(*model.DeviceModel), nil
-}
-
-// InvalidateModelCache clears cached model data. Call after Create/Update/Delete operations.
-func (s *ModelService) InvalidateModelCache(ctx context.Context, modelID int64) {
-	if s.rdb == nil {
-		return
-	}
-	keys := []string{modelListCacheKey, fmt.Sprintf(modelCacheKeyFmt, modelID)}
-	s.rdb.Del(ctx, keys...)
+	return s.modelRepo.GetModelByID(ctx, id)
 }
 
 func (s *ModelService) CreateModel(ctx context.Context, req *CreateModelRequest) (*model.DeviceModel, error) {
@@ -187,24 +101,15 @@ func (s *ModelService) CreateModel(ctx context.Context, req *CreateModelRequest)
 		return nil, err
 	}
 
-	s.InvalidateModelCache(ctx, m.ID)
 	return m, nil
 }
 
 func (s *ModelService) UpdateModel(ctx context.Context, id int64, req *UpdateModelRequest) error {
-	err := s.modelRepo.UpdateModel(ctx, id, req.ModelName, req.Manufacturer, req.Category, req.RatedPowerKw, req.Description)
-	if err == nil {
-		s.InvalidateModelCache(ctx, id)
-	}
-	return err
+	return s.modelRepo.UpdateModel(ctx, id, req.ModelName, req.Manufacturer, req.Category, req.RatedPowerKw, req.Description)
 }
 
 func (s *ModelService) DeleteModel(ctx context.Context, id int64) error {
-	err := s.modelRepo.RetireModel(ctx, id)
-	if err == nil {
-		s.InvalidateModelCache(ctx, id)
-	}
-	return err
+	return s.modelRepo.RetireModel(ctx, id)
 }
 
 func (s *ModelService) ListFieldCatalog(ctx context.Context) ([]map[string]any, error) {

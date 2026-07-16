@@ -77,28 +77,34 @@ func main() {
 
 	db, err := initDatabase(cfg)
 	if err != nil {
-		logger.Fatal("Failed to init database", zap.Error(err))
-	}
-	defer db.Close()
+		logger.Warn("Failed to init database, running without DB", zap.Error(err))
+	} else {
+		defer db.Close()
 
-	// Migrations are a startup barrier: consumers must never see a partially
-	// migrated schema, and a failed migration must never be reported healthy.
-	if cfg.Migration.AutoRun {
-		logger.Info("Running database migrations...",
-			zap.String("dir", cfg.Migration.Dir),
-			zap.String("schema_file", cfg.Migration.SchemaFile))
-		if err := migration.Run(context.Background(), db, cfg.Migration.Dir, cfg.Migration.SchemaFile, cfg.Migration.BaselineVersion); err != nil {
-			logger.Fatal("Database migration failed", zap.Error(err))
+		// 在服务器启动前执行数据库自动迁移
+		if cfg.Migration.AutoRun {
+			logger.Info("Running database migrations...",
+				zap.String("dir", cfg.Migration.Dir),
+				zap.String("schema_file", cfg.Migration.SchemaFile))
+			if err := migration.Run(context.Background(), db, cfg.Migration.Dir, cfg.Migration.SchemaFile); err != nil {
+				logger.Fatal("Database migration failed", zap.Error(err))
+			}
 		}
 	}
 
 	rdb, err := initRedis(cfg)
 	if err != nil {
-		logger.Fatal("Failed to init redis", zap.Error(err))
+		logger.Warn("Failed to init redis, running without Redis", zap.Error(err))
+	} else {
+		defer rdb.Close()
 	}
-	defer rdb.Close()
 
-	startFullServer(cfg, db, rdb)
+	if db != nil && rdb != nil {
+		startFullServer(cfg, db, rdb)
+	} else {
+		logger.Warn("Starting server in limited mode (no database)")
+		startMinimalServer(cfg)
+	}
 }
 
 func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
@@ -116,9 +122,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	stationRepo := repository.NewStationRepository(db)
 	deviceRepo := repository.NewDeviceRepository(db, rdb)
 	alarmRepo := repository.NewAlarmRepository(db)
-	modelRepo := repository.NewModelRepository(db, rdb)
-	batteryRepo := repository.NewBatteryRepository(db)
-	energyScheduleRepo := repository.NewEnergyScheduleRepository(db)
+	modelRepo := repository.NewModelRepository(db)
 
 	userService := service.NewUserService(userRepo, rdb)
 	jwtService := service.NewJWTService(jwtInstance, rdb)
@@ -132,13 +136,11 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	emailService := service.NewEmailService(rdb, cfg.Email, configService)
 	jpushService := service.NewJPushService(&cfg.JPush, rdb)
 	stationService := service.NewStationService(stationRepo)
-	permChecker := service.NewPermChecker(rdb, userRepo)
-	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, permChecker, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, db)
+	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
 	alarmService := service.NewAlarmService(alarmRepo)
 	modelService := service.NewModelService(modelRepo)
-	batteryService := service.NewBatteryService(batteryRepo)
-	energyScheduleService := service.NewEnergyScheduleService(energyScheduleRepo)
 	rbacCache := service.NewRBACCacheService(rdb, userRepo)
+	permChecker := service.NewPermChecker(rdb, userRepo)
 
 	otaRepo := repository.NewOTARepository(db)
 	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL, db, jpushService)
@@ -152,16 +154,11 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	notificationHandler := handler.NewNotificationHandler(db, jpushService)
 	wsHandler := handler.NewWSHandler(rdb, jwtService)
 	modelHandler := handler.NewModelHandler(modelService)
-	batteryHandler := handler.NewBatteryHandler(batteryService, deviceRepo)
-	energyScheduleHandler := handler.NewEnergyScheduleHandler(energyScheduleService, deviceRepo)
 	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
 	otaHandler := handler.NewOTAHandler(otaService, db, jpushService)
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
-	alertRuleHandler := handler.NewAlertRuleHandler(db)
-	workOrderHandler := handler.NewWorkOrderHandler(db)
-	parallelRepo := repository.NewParallelRepository(db)
-	parallelService := service.NewParallelService(parallelRepo)
-	parallelHandler := handler.NewParallelHandler(parallelService)
+	alertRuleHandler := handler.NewAlertRuleHandler()
+	workOrderHandler := handler.NewWorkOrderHandler()
 
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
@@ -172,33 +169,28 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	// OTA 升级超时清理：每 5 分钟扫描卡住的升级记录并更新关联任务统计
 	go runOTATimeoutCleanup(db, heartbeatDone)
-	// OTA 定时任务：领取并执行到期任务，重启后也会恢复已到期但未执行的任务。
-	go runOTAScheduler(db, otaService, heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
-		DB:                    db,
-		RDB:                   rdb,
-		JWTInstance:           jwtInstance,
-		JWTService:            jwtService,
-		AuthHandler:           authHandler,
-		CaptchaHandler:        captchaHandler,
-		StationHandler:        stationHandler,
-		DeviceHandler:         deviceHandler,
-		AlarmHandler:          alarmHandler,
-		NotificationHandler:   notificationHandler,
-		WeatherHandler:        weatherHandler,
-		ModelHandler:          modelHandler,
-		BatteryHandler:        batteryHandler,
-		EnergyScheduleHandler: energyScheduleHandler,
-		PermChecker:           permChecker,
-		AdminHandler:          adminHandler,
-		OTAHandler:            otaHandler,
-		OTAService:            otaService,
-		JPushService:          jpushService,
-		DashboardHandler:      dashboardHandler,
-		AlertRuleHandler:      alertRuleHandler,
-		WorkOrderHandler:      workOrderHandler,
-		ParallelHandler:       parallelHandler,
+		DB:                  db,
+		RDB:                 rdb,
+		JWTInstance:         jwtInstance,
+		JWTService:          jwtService,
+		AuthHandler:         authHandler,
+		CaptchaHandler:      captchaHandler,
+		StationHandler:      stationHandler,
+		DeviceHandler:       deviceHandler,
+		AlarmHandler:        alarmHandler,
+		NotificationHandler: notificationHandler,
+		WeatherHandler:      weatherHandler,
+		ModelHandler:        modelHandler,
+		PermChecker:         permChecker,
+		AdminHandler:        adminHandler,
+		OTAHandler:          otaHandler,
+		OTAService:          otaService,
+		JPushService:        jpushService,
+		DashboardHandler:    dashboardHandler,
+		AlertRuleHandler:    alertRuleHandler,
+		WorkOrderHandler:    workOrderHandler,
 	})
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
 	serve(cfg, router)
@@ -392,70 +384,6 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 	}
 }
 
-// runOTAScheduler atomically claims due scheduled tasks. A task left pending
-// by a process crash is reclaimable after five minutes.
-func runOTAScheduler(db *pgxpool.Pool, otaService *service.OTAService, done chan struct{}) {
-	run := func() {
-		rows, err := db.Query(context.Background(), `
-			WITH due AS (
-				SELECT id FROM upgrade_tasks
-				WHERE execute_mode = 'scheduled'
-				  AND scheduled_at IS NOT NULL
-				  AND scheduled_at <= NOW()
-				  AND (status = 'scheduled' OR (status = 'pending' AND updated_at < NOW() - INTERVAL '5 minutes'))
-				ORDER BY scheduled_at, id
-				FOR UPDATE SKIP LOCKED
-				LIMIT 20
-			)
-			UPDATE upgrade_tasks t
-			SET status = 'pending', updated_at = NOW()
-			FROM due
-			WHERE t.id = due.id
-			RETURNING t.id
-		`)
-		if err != nil {
-			logger.Warn("OTA scheduler claim failed", zap.Error(err))
-			return
-		}
-		var taskIDs []int64
-		for rows.Next() {
-			var id int64
-			if err := rows.Scan(&id); err == nil {
-				taskIDs = append(taskIDs, id)
-			}
-		}
-		rows.Close()
-		for _, taskID := range taskIDs {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			err := otaService.ExecuteTask(ctx, taskID)
-			cancel()
-			if err != nil {
-				logger.Error("Scheduled OTA task execution failed", zap.Int64("task_id", taskID), zap.Error(err))
-				_, _ = db.Exec(context.Background(), `
-					UPDATE upgrade_tasks SET status = 'failed', notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $2),
-					completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND status IN ('pending','running')
-				`, taskID, "定时执行失败: "+err.Error())
-			}
-		}
-		if len(taskIDs) > 0 {
-			logger.Info("OTA scheduled tasks dispatched", zap.Int("count", len(taskIDs)))
-		}
-	}
-
-	run()
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-done:
-			logger.Info("OTA scheduler stopped")
-			return
-		case <-ticker.C:
-			run()
-		}
-	}
-}
-
 func startMinimalServer(cfg *config.Config) {
 	router := setupRouterMinimal(cfg)
 	serve(cfg, router)
@@ -596,29 +524,26 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 }
 
 type RouterDeps struct {
-	DB                    *pgxpool.Pool
-	RDB                   *redis.Client
-	JWTInstance           *jwt.JWT
-	JWTService            *service.JWTService
-	AuthHandler           *handler.AuthHandler
-	CaptchaHandler        *handler.CaptchaHandler
-	StationHandler        *handler.StationHandler
-	DeviceHandler         *handler.DeviceHandler
-	AlarmHandler          *handler.AlarmHandler
-	NotificationHandler   *handler.NotificationHandler
-	WeatherHandler        *handler.WeatherHandler
-	ModelHandler          *handler.ModelHandler
-	BatteryHandler        *handler.BatteryHandler
-	EnergyScheduleHandler *handler.EnergyScheduleHandler
-	PermChecker           *service.PermChecker
-	AdminHandler          *handler.AdminHandler
-	OTAHandler            *handler.OTAHandler
-	OTAService            *service.OTAService
-	JPushService          *service.JPushService
-	DashboardHandler      *handler.DashboardHandler
-	AlertRuleHandler      *handler.AlertRuleHandler
-	WorkOrderHandler      *handler.WorkOrderHandler
-	ParallelHandler       *handler.ParallelHandler
+	DB                  *pgxpool.Pool
+	RDB                 *redis.Client
+	JWTInstance         *jwt.JWT
+	JWTService          *service.JWTService
+	AuthHandler         *handler.AuthHandler
+	CaptchaHandler      *handler.CaptchaHandler
+	StationHandler      *handler.StationHandler
+	DeviceHandler       *handler.DeviceHandler
+	AlarmHandler        *handler.AlarmHandler
+	NotificationHandler *handler.NotificationHandler
+	WeatherHandler      *handler.WeatherHandler
+	ModelHandler        *handler.ModelHandler
+	PermChecker         *service.PermChecker
+	AdminHandler        *handler.AdminHandler
+	OTAHandler          *handler.OTAHandler
+	OTAService          *service.OTAService
+	JPushService        *service.JPushService
+	DashboardHandler    *handler.DashboardHandler
+	AlertRuleHandler    *handler.AlertRuleHandler
+	WorkOrderHandler    *handler.WorkOrderHandler
 }
 
 func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
@@ -663,12 +588,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/device-status", internalHandler.DeviceStatus)
 		internal.POST("/device-info", internalHandler.DeviceInfo)
 		internal.POST("/device-data", internalHandler.DeviceData)
-		internal.POST("/device-data-batch", internalHandler.DeviceDataBatch)
 		internal.POST("/device-cmd-status", internalHandler.DeviceCmdStatus)
 		internal.POST("/device-cmd-result", internalHandler.DeviceCmdResult)
-		internal.POST("/device-alarm", internalHandler.IngestAlarmV1)
-		internal.POST("/parallel-state", internalHandler.IngestParallelV1)
-		internal.POST("/three-phase", internalHandler.IngestThreePhaseV1)
+		internal.POST("/device-alarm", internalHandler.DeviceAlarm)
 		internal.POST("/ota-status", internalHandler.OTAStatus)
 		internal.POST("/ota-cmd-ack", internalHandler.OTACmdAck)
 	}
@@ -719,9 +641,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		})
 
 		// 验证码 API（无需认证）
-		captchaLimit := middleware.RateLimitWith(2, 5)
-		api.GET("/captcha/generate", captchaLimit, deps.CaptchaHandler.GenerateCaptcha)
-		api.POST("/captcha/verify", captchaLimit, deps.CaptchaHandler.VerifyCaptcha)
+		api.GET("/captcha/generate", deps.CaptchaHandler.GenerateCaptcha)
+		api.POST("/captcha/verify", deps.CaptchaHandler.VerifyCaptcha)
 
 		auth := api.Group("").Use(middleware.Auth(deps.JWTService))
 		{
@@ -741,32 +662,23 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.GET("/stations/:id/statistics", deps.StationHandler.GetStatistics)
 
 			auth.GET("/devices", deps.DeviceHandler.List)
-			auth.POST("/devices", deps.DeviceHandler.Create)
 			auth.GET("/devices/:sn", deps.DeviceHandler.GetDetail)
 			auth.GET("/devices/:sn/realtime", deps.DeviceHandler.GetRealtimeData)
 			auth.POST("/devices/bind", deps.DeviceHandler.Bind)
 			auth.POST("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
 			auth.DELETE("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
-			auth.POST("/devices/:sn/request-unbind", deps.DeviceHandler.RequestUnbind)
 			auth.DELETE("/devices/:sn", deps.DeviceHandler.DeleteDevice)
 			auth.PUT("/devices/:sn", deps.DeviceHandler.Update)
-			auth.POST("/devices/:sn/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.Control)
-			auth.POST("/devices/batch/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.BatchControl)
-			auth.GET("/devices/:sn/control-fields", deps.DeviceHandler.GetControlFields)
-			auth.GET("/devices/:sn/control-capabilities", deps.DeviceHandler.GetControlCapabilities)
+			auth.POST("/devices/:sn/control", deps.DeviceHandler.Control)
 			auth.GET("/devices/:sn/control-state", deps.DeviceHandler.GetControlState)
+			auth.POST("/devices/batch/control", deps.DeviceHandler.BatchControl)
+			auth.GET("/devices/:sn/control-fields", deps.DeviceHandler.GetControlFields)
 			auth.GET("/devices/:sn/commands", deps.DeviceHandler.GetCommands)
 			auth.GET("/devices/:sn/commands/history", deps.DeviceHandler.GetCommands)
 			auth.GET("/devices/:sn/telemetry", deps.DeviceHandler.GetTelemetry)
-			auth.GET("/devices/:sn/telemetry/export", deps.DeviceHandler.ExportTelemetry)
-			auth.GET("/devices/:sn/telemetry/export-excel", deps.DeviceHandler.ExportTelemetryExcel)
 			auth.GET("/devices/:sn/lifecycle", deps.DeviceHandler.GetLifecycleHistory)
 			auth.GET("/devices/:sn/history", deps.DeviceHandler.GetHistory)
 			auth.GET("/devices/:sn/alarms", deps.DeviceHandler.GetAlarms)
-			auth.GET("/devices/:sn/alarm-events", internalHandler.GetAlarmEvents)
-			auth.GET("/devices/:sn/parallel-state", internalHandler.GetParallelState)
-			auth.GET("/devices/:sn/three-phase", internalHandler.GetThreePhaseHistory)
-			auth.GET("/alarm-events/:id", internalHandler.GetAlarmEventDetail)
 			auth.GET("/devices/:sn/statistics", deps.DeviceHandler.GetStatistics)
 			auth.POST("/devices/add-to-station", deps.DeviceHandler.AddToStation)
 			auth.POST("/devices/:sn/remove-from-station", deps.DeviceHandler.RemoveFromStation)
@@ -779,21 +691,6 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/devices/:sn/assign-installer", deps.DeviceHandler.AssignInstaller)
 			auth.DELETE("/devices/:sn/installer", deps.DeviceHandler.RemoveInstaller)
 			auth.POST("/devices/batch-assign-installer", deps.DeviceHandler.BatchAssignInstaller)
-			auth.POST("/devices/import-excel", deps.DeviceHandler.ImportExcel)
-
-			// 电池配置模板
-			auth.GET("/devices/:sn/battery-config", deps.BatteryHandler.GetDeviceConfig)
-			auth.PUT("/devices/:sn/battery-config", deps.BatteryHandler.BindDeviceConfig)
-			auth.GET("/battery-profiles", deps.BatteryHandler.ListProfiles)
-			auth.GET("/battery-profiles/:id", deps.BatteryHandler.GetProfile)
-			auth.POST("/battery-profiles", deps.BatteryHandler.CreateProfile)
-
-			// 能源计划与临时覆盖
-			auth.GET("/devices/:sn/energy-schedule", deps.EnergyScheduleHandler.GetSchedule)
-			auth.PUT("/devices/:sn/energy-schedule", deps.EnergyScheduleHandler.UpdateSchedule)
-			auth.POST("/devices/:sn/control-overrides", deps.EnergyScheduleHandler.CreateOverride)
-			auth.GET("/devices/:sn/control-overrides", deps.EnergyScheduleHandler.ListOverrides)
-			auth.DELETE("/devices/:sn/control-overrides/:id", deps.EnergyScheduleHandler.CancelOverride)
 
 			auth.GET("/alarms", deps.AlarmHandler.List)
 			auth.DELETE("/alarms/clear", deps.AlarmHandler.ClearAll)
@@ -813,7 +710,41 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/notifications/clear", deps.NotificationHandler.ClearAll)
 			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
 
-			registerModelRoutes(auth, deps.ModelHandler, deps.PermChecker)
+			auth.GET("/models", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.ListModels)
+			auth.GET("/field-catalog", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.ListFieldCatalog)
+			auth.POST("/field-catalog", middleware.RequirePermission(deps.PermChecker, "models", "dictionary"), deps.ModelHandler.UpsertFieldCatalog)
+			auth.PUT("/field-catalog/:fieldKey", middleware.RequirePermission(deps.PermChecker, "models", "dictionary"), deps.ModelHandler.UpsertFieldCatalog)
+			auth.GET("/protocol-versions", middleware.RequirePermission(deps.PermChecker, "models", "protocol_view"), deps.ModelHandler.ListProtocolVersions)
+			auth.POST("/protocol-versions", middleware.RequirePermission(deps.PermChecker, "models", "protocol_publish"), deps.ModelHandler.CreateProtocolVersion)
+			auth.POST("/protocol-versions/:protocolId/release", middleware.RequirePermission(deps.PermChecker, "models", "protocol_publish"), deps.ModelHandler.ReleaseProtocolVersion)
+			auth.POST("/models", middleware.RequirePermission(deps.PermChecker, "models", "create"), deps.ModelHandler.CreateModel)
+			auth.GET("/models/:id", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.GetModel)
+			auth.PUT("/models/:id", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.UpdateModel)
+			auth.DELETE("/models/:id", middleware.RequirePermission(deps.PermChecker, "models", "delete"), deps.ModelHandler.DeleteModel)
+			auth.GET("/models/:id/fields", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.GetModelFields)
+			auth.GET("/models/:id/field-capabilities", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.GetFieldCapabilities)
+			auth.PUT("/models/:id/field-capabilities/:fieldKey", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.UpdateFieldCapability)
+			auth.PUT("/models/:id/field-capabilities", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.BatchUpdateFieldCapabilities)
+			auth.GET("/models/:id/commands-v2", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.GetModelCommandsV2)
+			auth.POST("/models/:id/commands-v2", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.UpsertModelCommand)
+			auth.PUT("/models/:id/commands-v2/:commandCode", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.UpdateCommandCapability)
+			auth.GET("/models/:id/protocol-schema", middleware.RequirePermission(deps.PermChecker, "models", "protocol_view"), deps.ModelHandler.GetProtocolSchema)
+			auth.PUT("/models/:id/protocol-version", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.BindProtocolVersion)
+			auth.GET("/models/:id/migration-report", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.GetMigrationReport)
+			auth.GET("/models/:id/data-preview", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.GetDataPreview)
+			auth.POST("/models/:id/validate", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.ValidateRegistry)
+			auth.POST("/models/:id/activate", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.ActivateRegistry)
+			auth.GET("/models/by-code/:code/fields", middleware.RequirePermission(deps.PermChecker, "models", "view"), deps.ModelHandler.GetFieldsByModelCode)
+			auth.POST("/models/:id/fields", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.CreateField)
+			auth.PUT("/models/:id/fields/:fieldId", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.UpdateField)
+			auth.DELETE("/models/:id/fields/:fieldId", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.DeleteField)
+			auth.PUT("/models/:id/fields/batch", middleware.RequirePermission(deps.PermChecker, "models", "edit"), deps.ModelHandler.BatchUpdateFields)
+
+			// Protocol CRUD
+			auth.GET("/models/:id/protocols", middleware.RequirePermission(deps.PermChecker, "models", "protocol_view"), deps.ModelHandler.GetProtocols)
+			auth.POST("/models/:id/protocols", middleware.RequirePermission(deps.PermChecker, "models", "protocol_publish"), deps.ModelHandler.CreateProtocol)
+			auth.PUT("/models/:id/protocols/:protocolId", middleware.RequirePermission(deps.PermChecker, "models", "protocol_publish"), deps.ModelHandler.UpdateProtocol)
+			auth.DELETE("/models/:id/protocols/:protocolId", middleware.RequirePermission(deps.PermChecker, "models", "protocol_publish"), deps.ModelHandler.DeleteProtocol)
 
 			auth.GET("/dashboard/statistics", deps.DashboardHandler.GetStatistics)
 			auth.GET("/dashboard/device-distribution", deps.DashboardHandler.GetDeviceDistribution)
@@ -837,10 +768,6 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/work-orders", deps.WorkOrderHandler.Create)
 			auth.GET("/work-orders/:id", deps.WorkOrderHandler.GetByID)
 			auth.PUT("/work-orders/:id", deps.WorkOrderHandler.Update)
-			auth.PATCH("/work-orders/:id", deps.WorkOrderHandler.Update)
-			auth.PATCH("/work-orders/:id/status", deps.WorkOrderHandler.Update)
-			auth.POST("/work-orders/:id/escalate", deps.WorkOrderHandler.Escalate)
-			auth.POST("/work-orders/:id/attachments", deps.WorkOrderHandler.UploadAttachments)
 			auth.DELETE("/work-orders/:id", deps.WorkOrderHandler.Delete)
 		}
 
@@ -859,7 +786,6 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			adminGroup.POST("/permissions/:role/toggle", deps.AdminHandler.TogglePermission)
 
 			adminGroup.GET("/models", deps.AdminHandler.ListAllModels)
-			adminGroup.GET("/models/:id/config", deps.AdminHandler.GetModelConfig)
 
 			adminGroup.GET("/logs", deps.AdminHandler.GetAuditLogs)
 			adminGroup.GET("/logs/export", deps.AdminHandler.ExportAuditLogs)
@@ -883,17 +809,6 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
 			usersGroup.PUT("/:id/parent", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserParent)
-			usersGroup.PUT("/:id/password", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ResetUserPassword)
-		}
-
-		parallelGroup := api.Group("/parallel-groups").Use(middleware.Auth(deps.JWTService))
-		{
-			parallelGroup.GET("", deps.ParallelHandler.List)
-			parallelGroup.GET("/:id", deps.ParallelHandler.Get)
-			parallelGroup.POST("", deps.ParallelHandler.Create)
-			parallelGroup.PUT("/:id", deps.ParallelHandler.Update)
-			parallelGroup.PATCH("/:id", deps.ParallelHandler.Update)
-			parallelGroup.DELETE("/:id", deps.ParallelHandler.Delete)
 		}
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService))
@@ -1006,12 +921,7 @@ func setupRouterMinimal(cfg *config.Config) *gin.Engine {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
-	// 使用配置的 CORS origins，或默认仅允许 localhost
-	corsOrigins := cfg.CORS.AllowedOrigins
-	if len(corsOrigins) == 0 {
-		corsOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
-	}
-	router.Use(middleware.CORS(corsOrigins))
+	router.Use(middleware.CORS([]string{}))
 
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "db": false})

@@ -1,8 +1,9 @@
 -- 021_expand_continuous_aggregate_offset: 扩大连续聚合刷新窗口
 -- 目的: 覆盖设备离线重连后补发的历史数据
 
+BEGIN;
+
 -- 旧连续聚合是可选组件；全新 schema 或尚未执行 migration_timescaledb.sql 时安全跳过。
--- 事务与 schema_migrations 记录由 Go 迁移器统一管理。
 DO $$
 BEGIN
     IF to_regclass('device_telemetry_1min') IS NOT NULL THEN
@@ -24,3 +25,7 @@ BEGIN
             schedule_interval => INTERVAL '1 day', if_not_exists => TRUE);
     END IF;
 END $$;
+
+INSERT INTO schema_migrations (version, name) VALUES (21, 'expand_continuous_aggregate_offset') ON CONFLICT DO NOTHING;
+
+COMMIT;
