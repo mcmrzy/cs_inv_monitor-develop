@@ -1,6 +1,7 @@
 import { BrowserRouter, Router, Routes, Route, Navigate } from 'react-router-dom'
 import type { History } from '@remix-run/router'
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import lazyWithRetry from '@/utils/lazyWithRetry'
 import { ConfigProvider, App as AntApp, Spin } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import enUS from 'antd/locale/en_US'
@@ -12,25 +13,25 @@ import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { Role } from '@/types'
 
-const LoginPage = lazy(() => import('@/pages/login'))
-const UnauthorizedPage = lazy(() => import('@/pages/unauthorized'))
-const DashboardPage = lazy(() => import('@/pages/dashboard'))
-const DevicesPage = lazy(() => import('@/pages/devices'))
-const OtaPage = lazy(() => import('@/pages/ota'))
-const AlertsPage = lazy(() => import('@/pages/alerts'))
-const UsersPage = lazy(() => import('@/pages/users'))
-const AdminPage = lazy(() => import('@/pages/admin'))
-const WorkOrdersPage = lazy(() => import('@/pages/work-orders'))
-const BigScreenPage = lazy(() => import('@/pages/big-screen'))
-const ParallelPage = lazy(() => import('@/pages/parallel'))
-const StationsPage = lazy(() => import('@/pages/stations'))
-const StationDetailPage = lazy(() => import('@/pages/stations/StationDetailPage'))
-const ModelsPage = lazy(() => import('@/pages/models'))
-const MonitoringPage = lazy(() => import('@/pages/monitoring'))
-const RemoteSettingsPage = lazy(() => import('@/pages/remote-settings'))
-const BatchSettingsPage = lazy(() => import('@/pages/batch-settings'))
-const OperationLogsPage = lazy(() => import('@/pages/operation-logs'))
-const DeviceDetailPage = lazy(() => import('@/pages/device-detail'))
+const LoginPage = lazyWithRetry(() => import('@/pages/login'))
+const UnauthorizedPage = lazyWithRetry(() => import('@/pages/unauthorized'))
+const DashboardPage = lazyWithRetry(() => import('@/pages/dashboard'))
+const DevicesPage = lazyWithRetry(() => import('@/pages/devices'))
+const OtaPage = lazyWithRetry(() => import('@/pages/ota'))
+const AlertsPage = lazyWithRetry(() => import('@/pages/alerts'))
+const UsersPage = lazyWithRetry(() => import('@/pages/users'))
+const AdminPage = lazyWithRetry(() => import('@/pages/admin'))
+const WorkOrdersPage = lazyWithRetry(() => import('@/pages/work-orders'))
+const BigScreenPage = lazyWithRetry(() => import('@/pages/big-screen'))
+const ParallelPage = lazyWithRetry(() => import('@/pages/parallel'))
+const StationsPage = lazyWithRetry(() => import('@/pages/stations'))
+const StationDetailPage = lazyWithRetry(() => import('@/pages/stations/StationDetailPage'))
+const ModelsPage = lazyWithRetry(() => import('@/pages/models'))
+const MonitoringPage = lazyWithRetry(() => import('@/pages/monitoring'))
+const RemoteSettingsPage = lazyWithRetry(() => import('@/pages/remote-settings'))
+const BatchSettingsPage = lazyWithRetry(() => import('@/pages/batch-settings'))
+const OperationLogsPage = lazyWithRetry(() => import('@/pages/operation-logs'))
+const DeviceDetailPage = lazyWithRetry(() => import('@/pages/device-detail'))
 
 const RoleRedirect: React.FC = () => {
   const user = useAuthStore((s) => s.user)
