@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -203,8 +203,33 @@ const StationDetailPage: React.FC = () => {
   // 兼容后端返回 station_name 或 name
   const stationName = station.name || station.station_name || ''
   // 兼容后端返回 today_energy/total_energy 或 today_generation/total_generation（0视为无数据）
-  const todayEnergy = statsSummary?.today || station.today_energy || station.today_generation || 0
-  const totalEnergy = statsSummary?.total || station.total_energy || station.total_generation || 0
+  const stationTodayEnergy = statsSummary?.today || station.today_energy || station.today_generation || 0
+  const stationTotalEnergy = statsSummary?.total || station.total_energy || station.total_generation || 0
+
+  // 从设备实时数据聚合能量值（normalizeRealtimeData 展平 energy 对象后字段: daily_pv, total_pv, daily_discharge, total_discharge, daily_load, total_load）
+  const deviceEnergy = useMemo(() => {
+    const rtList = Object.values(realtimeData ?? {})
+    if (rtList.length === 0) return null
+    let dailyPv = 0, totalPv = 0
+    let dailyDischarge = 0, totalDischarge = 0
+    let dailyCharge = 0, totalCharge = 0
+    let dailyLoad = 0, totalLoad = 0
+    rtList.forEach((rt: any) => {
+      dailyPv += safeNum(rt?.daily_pv ?? 0)
+      totalPv += safeNum(rt?.total_pv ?? 0)
+      dailyDischarge += safeNum(rt?.daily_discharge ?? 0)
+      totalDischarge += safeNum(rt?.total_discharge ?? 0)
+      dailyCharge += safeNum(rt?.daily_charge ?? 0)
+      totalCharge += safeNum(rt?.total_charge ?? 0)
+      dailyLoad += safeNum(rt?.daily_load ?? 0)
+      totalLoad += safeNum(rt?.total_load ?? 0)
+    })
+    return { dailyPv, totalPv, dailyDischarge, totalDischarge, dailyCharge, totalCharge, dailyLoad, totalLoad }
+  }, [realtimeData])
+
+  // 优先使用设备实时数据聚合的能量值，回退到 station 级别字段
+  const todayEnergy = (deviceEnergy && deviceEnergy.dailyPv > 0) ? deviceEnergy.dailyPv : stationTodayEnergy
+  const totalEnergy = (deviceEnergy && deviceEnergy.totalPv > 0) ? deviceEnergy.totalPv : stationTotalEnergy
 
   // 从设备列表计算 fault_count（后端 GetByID 未返回此字段）
   const faultCount = station.fault_count ?? devices.filter((d: any) => d.status === 2).length
@@ -263,14 +288,14 @@ const StationDetailPage: React.FC = () => {
       key: 'battery',
       label: t('station.batteryDischarge'),
       color: '#EC4899',
-      today: station.today_discharge,
-      total: station.total_discharge,
-      todayLabel: t('station.power'),
-      totalLabel: 'SOC',
+      today: (deviceEnergy?.dailyDischarge ?? 0) > 0 ? deviceEnergy!.dailyDischarge : station.today_discharge,
+      total: (deviceEnergy?.totalDischarge ?? 0) > 0 ? deviceEnergy!.totalDischarge : station.total_discharge,
+      todayLabel: (deviceEnergy?.dailyDischarge ?? 0) > 0 || station.today_discharge != null ? t('station.todayDischarge') : t('station.power'),
+      totalLabel: (deviceEnergy?.totalDischarge ?? 0) > 0 || station.total_discharge != null ? t('station.cumulative') : 'SOC',
       unit: 'kWh',
-      // 后端不返回 today_discharge/total_discharge，改为展示实时功率和SOC
-      todayDisplay: station.today_discharge != null ? `${(station.today_discharge ?? 0).toFixed(1)} kWh` : `${Math.abs(aggregatedBatt).toFixed(0)} W`,
-      totalDisplay: station.total_discharge != null ? `${(station.total_discharge ?? 0).toFixed(0)} kWh` : `${Math.round(avgSoc)}%`,
+      // 有能量数据时显示 kWh，否则回退到实时功率和 SOC
+      todayDisplay: undefined, // 由 today 字段自动处理
+      totalDisplay: (deviceEnergy?.totalDischarge ?? 0) > 0 || station.total_discharge != null ? undefined : `${Math.round(avgSoc)}%`,
     },
     {
       key: 'grid',
@@ -278,23 +303,24 @@ const StationDetailPage: React.FC = () => {
       color: '#F59E0B',
       today: station.today_grid_export,
       total: station.total_grid_export,
-      todayLabel: t('station.power'),
+      todayLabel: station.today_grid_export != null ? t('station.todayExport') : t('station.power'),
       totalLabel: t('station.cumulative'),
       unit: 'kWh',
-      todayDisplay: station.today_grid_export != null ? `${(station.today_grid_export ?? 0).toFixed(1)} kWh` : `${aggregatedGrid.toFixed(0)} W`,
-      totalDisplay: station.total_grid_export != null ? `${(station.total_grid_export ?? 0).toFixed(0)} kWh` : '--',
+      // 后端不返回电网能量，回退显示实时功率
+      todayDisplay: station.today_grid_export != null ? undefined : `${Math.abs(aggregatedGrid).toFixed(0)} W`,
+      totalDisplay: station.total_grid_export != null ? undefined : '--',
     },
     {
       key: 'load',
       label: t('station.loadConsumption'),
       color: '#22C55E',
-      today: station.today_consumption,
-      total: station.total_consumption,
-      todayLabel: t('station.power'),
+      today: (deviceEnergy?.dailyLoad ?? 0) > 0 ? deviceEnergy!.dailyLoad : station.today_consumption,
+      total: (deviceEnergy?.totalLoad ?? 0) > 0 ? deviceEnergy!.totalLoad : station.total_consumption,
+      todayLabel: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? t('station.todayConsumption') : t('station.power'),
       totalLabel: t('station.cumulative'),
       unit: 'kWh',
-      todayDisplay: station.today_consumption != null ? `${(station.today_consumption ?? 0).toFixed(1)} kWh` : `${aggregatedLoad.toFixed(0)} W`,
-      totalDisplay: station.total_consumption != null ? `${(station.total_consumption ?? 0).toFixed(0)} kWh` : '--',
+      todayDisplay: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? undefined : `${aggregatedLoad.toFixed(0)} W`,
+      totalDisplay: (deviceEnergy?.totalLoad ?? 0) > 0 || station.total_consumption != null ? undefined : '--',
     },
   ]
 
