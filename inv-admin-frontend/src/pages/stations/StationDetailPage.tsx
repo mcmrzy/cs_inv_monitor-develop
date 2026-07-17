@@ -188,25 +188,8 @@ const StationDetailPage: React.FC = () => {
     enabled: !!id,
   })
 
-  if (stationLoading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 100 }}>
-        <Spin size="large" />
-      </div>
-    )
-  }
-
-  if (!station) {
-    return <Empty description={t('station.notFound')} />
-  }
-
-  // 兼容后端返回 station_name 或 name
-  const stationName = station.name || station.station_name || ''
-  // 兼容后端返回 today_energy/total_energy 或 today_generation/total_generation（0视为无数据）
-  const stationTodayEnergy = statsSummary?.today || station.today_energy || station.today_generation || 0
-  const stationTotalEnergy = statsSummary?.total || station.total_energy || station.total_generation || 0
-
   // 从设备实时数据聚合能量值（normalizeRealtimeData 展平 energy 对象后字段: daily_pv, total_pv, daily_discharge, total_discharge, daily_load, total_load）
+  // NOTE: useMemo 必须在条件早返回之前调用，否则违反 React Hooks 规则导致 #310 无限渲染
   const deviceEnergy = useMemo(() => {
     const rtList = Object.values(realtimeData ?? {})
     if (rtList.length === 0) return null
@@ -226,6 +209,24 @@ const StationDetailPage: React.FC = () => {
     })
     return { dailyPv, totalPv, dailyDischarge, totalDischarge, dailyCharge, totalCharge, dailyLoad, totalLoad }
   }, [realtimeData])
+
+  if (stationLoading) {
+    return (
+      <div style={{ textAlign: 'center', padding: 100 }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (!station) {
+    return <Empty description={t('station.notFound')} />
+  }
+
+  // 兼容后端返回 station_name 或 name
+  const stationName = station.name || station.station_name || ''
+  // 兼容后端返回 today_energy/total_energy 或 today_generation/total_generation（0视为无数据）
+  const stationTodayEnergy = statsSummary?.today || station.today_energy || station.today_generation || 0
+  const stationTotalEnergy = statsSummary?.total || station.total_energy || station.total_generation || 0
 
   // 优先使用设备实时数据聚合的能量值，回退到 station 级别字段
   const todayEnergy = (deviceEnergy && deviceEnergy.dailyPv > 0) ? deviceEnergy.dailyPv : stationTodayEnergy
