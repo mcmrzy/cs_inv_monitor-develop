@@ -23,14 +23,16 @@ type StationHandler struct {
 	deviceService  *service.DeviceService
 	userService    *service.UserService
 	db             *pgxpool.Pool
+	amapAPIKey     string
 }
 
-func NewStationHandler(stationService *service.StationService, deviceService *service.DeviceService, userService *service.UserService, db *pgxpool.Pool) *StationHandler {
+func NewStationHandler(stationService *service.StationService, deviceService *service.DeviceService, userService *service.UserService, db *pgxpool.Pool, amapAPIKey string) *StationHandler {
 	return &StationHandler{
 		stationService: stationService,
 		deviceService:  deviceService,
 		userService:    userService,
 		db:             db,
+		amapAPIKey:     amapAPIKey,
 	}
 }
 
@@ -82,6 +84,16 @@ func (h *StationHandler) Create(c *gin.Context) {
 	if err := timezone.ValidateTimezone(station.Timezone); err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid timezone: "+station.Timezone))
 		return
+	}
+
+	// 当经纬度为 0 但省市区非空时，自动调用高德地理编码获取坐标
+	if station.Latitude == 0 && station.Longitude == 0 && station.Province != "" {
+		lat, lng, err := geocodeAddress(station.Province, station.City, station.District, h.amapAPIKey)
+		if err == nil {
+			station.Latitude = lat
+			station.Longitude = lng
+		}
+		// 地理编码失败不阻断创建，仅忽略
 	}
 
 	if err := h.stationService.Create(c.Request.Context(), station); err != nil {
@@ -194,6 +206,16 @@ func (h *StationHandler) Update(c *gin.Context) {
 			return
 		}
 		station.Timezone = req.Timezone
+	}
+
+	// 当经纬度为 0 但省市区非空时，自动调用高德地理编码获取坐标
+	if station.Latitude == 0 && station.Longitude == 0 && station.Province != "" {
+		lat, lng, err := geocodeAddress(station.Province, station.City, station.District, h.amapAPIKey)
+		if err == nil {
+			station.Latitude = lat
+			station.Longitude = lng
+		}
+		// 地理编码失败不阻断更新，仅忽略
 	}
 
 	if err := h.stationService.Update(c.Request.Context(), station); err != nil {

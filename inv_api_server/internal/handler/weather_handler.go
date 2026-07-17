@@ -86,6 +86,10 @@ func (h *WeatherHandler) GetStationWeather(c *gin.Context) {
 }
 
 func (h *WeatherHandler) fetchWeatherFromOpenMeteo(lat, lng float64, tz string) (WeatherResponse, error) {
+	if lat == 0 && lng == 0 {
+		return WeatherResponse{}, fmt.Errorf("电站坐标未设置，请先设置电站位置")
+	}
+
 	encodedTz := timezone.EncodeTimezoneForURL(tz)
 	url := fmt.Sprintf("%s?latitude=%.6f&longitude=%.6f&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=%s",
 		h.weatherAPI, lat, lng, encodedTz)

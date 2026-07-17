@@ -38,6 +38,33 @@ func TestIsAppAllowedPath(t *testing.T) {
 	}
 }
 
+func TestIsAppAllowedPathWithMethod(t *testing.T) {
+	tests := []struct {
+		path   string
+		method string
+		expect bool
+	}{
+		// POST /api/v1/stations 允许普通用户创建电站
+		{"/api/v1/stations", "POST", true},
+		// GET/PUT/DELETE 仍走 RBAC，不通过白名单
+		{"/api/v1/stations", "GET", false},
+		{"/api/v1/stations/123", "PUT", false},
+		{"/api/v1/stations/123", "DELETE", false},
+		// OTA 路径不受方法限制（沿用 appAllowedPaths）
+		{"/api/v1/ota/check/DEV001", "GET", true},
+		{"/api/v1/ota/trigger", "POST", true},
+		// 其他路径不受影响
+		{"/api/v1/devices", "GET", false},
+	}
+
+	for _, tt := range tests {
+		name := tt.method + " " + tt.path
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.expect, isAppAllowedPathWithMethod(tt.path, tt.method))
+		})
+	}
+}
+
 func TestGetActionFromMethod(t *testing.T) {
 	r := &RBACMiddleware{}
 	tests := []struct {
