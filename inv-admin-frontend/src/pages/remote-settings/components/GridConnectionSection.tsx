@@ -93,7 +93,7 @@ const GridConnectionSection: React.FC<Props> = ({ deviceInfo }) => {
   }
 
   return (
-    <Row gutter={[0, 8]}>
+    <Row gutter={[16, 8]}>
       {/* 并网 */}
       <SubGroupHelp title="并网" color="#3b82f6" hint="设置并网等待时间、重新并网等待时间、并网市电电压/频率上下限" />
       {GRID_FIELDS.map((f) => (
