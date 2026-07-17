@@ -32,6 +32,7 @@ type Client struct {
 	onOtaCmdAck    func(sn string, payload []byte)
 	onStatusChange func(sn string, online bool)
 	onCmdResult    func(sn string, payload []byte)
+	onAlarm        func(sn string, payload []byte)
 }
 
 func (c *Client) SetOtaStatusHandler(handler func(sn string, payload []byte)) {
@@ -48,6 +49,10 @@ func (c *Client) SetStatusChangeHandler(handler func(sn string, online bool)) {
 
 func (c *Client) SetCmdResultHandler(handler func(sn string, payload []byte)) {
 	c.onCmdResult = handler
+}
+
+func (c *Client) SetAlarmHandler(handler func(sn string, payload []byte)) {
+	c.onAlarm = handler
 }
 
 type Hub struct {
@@ -383,6 +388,11 @@ func (c *Client) Connect(ctx context.Context) error {
 					if isCmdResultTopic(topic) && c.onCmdResult != nil {
 						c.onCmdResult(sn, pr.Packet.Payload)
 					}
+
+					// 处理告警消息
+					if isAlarmTopic(topic) && c.onAlarm != nil {
+						c.onAlarm(sn, pr.Packet.Payload)
+					}
 					return true, nil
 				},
 			},
@@ -652,6 +662,15 @@ func isCmdResultTopic(topic string) bool {
 		return true
 	}
 	return false
+}
+
+// isAlarmTopic 匹配 cs_inv/{sn}/alarm 或 cs_inv/{sn}/data/alarm（含共享订阅前缀）
+func isAlarmTopic(topic string) bool {
+	parts := strings.Split(topic, "/")
+	if len(parts) < 3 {
+		return false
+	}
+	return parts[len(parts)-1] == "alarm"
 }
 
 // isParallelTopic 匹配 cs_inv/{sn}/parallel（并机状态上报）

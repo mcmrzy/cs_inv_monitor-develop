@@ -515,3 +515,94 @@ func getKeys(m map[string]interface{}) []string {
 	}
 	return keys
 }
+
+// HandleMQTTAlarm 处理从 MQTT 直连收到的告警消息（不经过 Kafka）
+func (a *AlertConsumer) HandleMQTTAlarm(sn string, payload []byte) {
+	ctx := context.Background()
+
+	// 告警去重（MQTT QoS1 可能重复投递）
+	hash := md5.Sum(payload)
+	msgKey := fmt.Sprintf("mqtt:alarm:dedup:%x", hash)
+	if a.rdb != nil {
+		exists, err := a.rdb.Exists(ctx, msgKey).Result()
+		if err != nil {
+			logger.Warn("MQTT alarm dedup lookup failed; proceeding with delivery", zap.Error(err))
+		} else if exists > 0 {
+			logger.Debug("MQTT alarm already delivered, skipping duplicate", zap.String("sn", sn))
+			return
+		}
+	}
+
+	// 解析 payload
+	var payloadMap map[string]interface{}
+	if err := json.Unmarshal(payload, &payloadMap); err != nil {
+		logger.Warn("Failed to parse MQTT alarm payload", zap.String("sn", sn), zap.Error(err))
+		return
+	}
+
+	receivedAt := timezone.NowUTC()
+
+	// 尝试 V1 格式: {v:1, t:..., data:{source,code,level,state}}
+	if alarmData, matched, err := parseAlarmV1(sn, payloadMap); matched {
+		if err != nil {
+			logger.Warn("Invalid V1 alarm from MQTT", zap.String("sn", sn), zap.Error(err))
+			return
+		}
+		// 直接使用原始信封 POST 到 api-server
+		if postErr := a.postInternalAlarmRequest(internalAlarmEnvelopeRequest{
+			SN:         sn,
+			Topic:      "alarm",
+			ReceivedAt: receivedAt,
+			Envelope:   json.RawMessage(payload),
+		}); postErr != nil {
+			logger.Error("Failed to post V1 MQTT alarm", zap.String("sn", sn), zap.Error(postErr))
+			return
+		}
+		a.markAlertProcessed(ctx, msgKey)
+		logger.Info("MQTT V1 alarm delivered", zap.String("sn", sn), zap.Int("code", alarmData.Code))
+		return
+	}
+
+	// 旧格式：复用 postInternalAlarm
+	alarm := &model.AlarmData{
+		SN:         sn,
+		ReceivedAt: receivedAt,
+	}
+
+	var alarmPayload RawAlarmPayload
+	dataMap := payloadMap
+	if data, ok := payloadMap["data"].(map[string]interface{}); ok {
+		dataMap = data
+		if ts, ok := payloadMap["timestamp"]; ok {
+			dataMap["timestamp"] = ts
+		}
+	}
+	dataJSON, err := json.Marshal(dataMap)
+	if err != nil {
+		logger.Warn("Failed to marshal MQTT alarm data", zap.String("sn", sn), zap.Error(err))
+		return
+	}
+	if err := json.Unmarshal(dataJSON, &alarmPayload); err != nil {
+		logger.Warn("Failed to parse MQTT alarm fields", zap.String("sn", sn), zap.Error(err))
+		return
+	}
+	if alarmPayload.Timestamp <= 0 {
+		alarmPayload.Timestamp = receivedAt.Unix()
+	}
+
+	alarm.Code = alarmPayload.Code
+	alarm.Level = alarmPayload.Level
+	alarm.Message = alarmPayload.Message
+	alarm.Count = alarmPayload.Count
+	alarm.Timestamp = alarmPayload.Timestamp
+
+	if postErr := a.postInternalAlarm(alarm); postErr != nil {
+		logger.Error("Failed to post MQTT alarm", zap.String("sn", sn), zap.Error(postErr))
+		return
+	}
+	a.markAlertProcessed(ctx, msgKey)
+	logger.Info("MQTT alarm delivered",
+		zap.String("sn", sn),
+		zap.Int("code", alarmPayload.Code),
+		zap.String("level", alarmPayload.Level))
+}
