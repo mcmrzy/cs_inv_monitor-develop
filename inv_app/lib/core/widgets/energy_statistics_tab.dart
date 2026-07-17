@@ -800,32 +800,13 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     }
   }
 
-  /// 将小时级功率数据聚合为2小时桶（取平均值），用于减少图表数据点密度
-  List<double> _aggregatePowerList(List<double> data, int bucketSize) {
-    final List<double> result = [];
-    for (int i = 0; i < data.length; i += bucketSize) {
-      final end = (i + bucketSize).clamp(0, data.length);
-      final bucket = data.sublist(i, end);
-      result.add(bucket.reduce((a, b) => a + b) / bucket.length);
-    }
-    return result;
-  }
-
   /// 折线图 - 实时功率（0在中间，上下有正负）
   Widget _buildLineChart() {
     // 功率折线图使用 *Power 字段（单位 W），正值为充电/发电，负值为放电/输出
-    final rawPv = _dataPoints.map((e) => e.pvPower).toList();
-    final rawBc = _dataPoints.map((e) => e.batteryChargePower).toList();
-    final rawBd = _dataPoints.map((e) => -e.batteryDischargePower).toList();
-    final rawInv = _dataPoints.map((e) => -e.inverterPower).toList();
-
-    // 日模式下每2小时聚合一次，24个点→12个点，降低密度
-    final int bucket = (_period == 'day' && rawPv.length > 12) ? 2 : 1;
-    final pvData = _aggregatePowerList(rawPv, bucket);
-    final battChargeData = _aggregatePowerList(rawBc, bucket);
-    final battDischargeData = _aggregatePowerList(rawBd, bucket);
-    final inverterData = _aggregatePowerList(rawInv, bucket);
-    final chartLen = pvData.length;
+    final pvData = _dataPoints.map((e) => e.pvPower).toList();
+    final battChargeData = _dataPoints.map((e) => e.batteryChargePower).toList();
+    final battDischargeData = _dataPoints.map((e) => -e.batteryDischargePower).toList(); // 负值
+    final inverterData = _dataPoints.map((e) => -e.inverterPower).toList(); // 负值
 
     // 计算Y轴范围
     double maxAbs = 0;
@@ -837,15 +818,20 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     }
     final double yRange = maxAbs > 0 ? maxAbs * 1.2 : 100.0;
 
-    // 当前小时对应的桶索引
-    final currentBucket = DateTime.now().hour ~/ bucket;
+    // X轴范围：固定0-23小时，横向滚动解决数据点密度问题
+    const double chartMaxX = 23.0;
+    final currentHour = DateTime.now().hour;
+    final screenWidth = MediaQuery.of(context).size.width;
 
-    return SizedBox(
-      height: 220.h,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: screenWidth * 1.8,
+        height: 220.h,
       child: LineChart(
         LineChartData(
           minX: _period == 'day' ? 0.0 : null,
-          maxX: _period == 'day' ? (chartLen - 1).toDouble() : null,
+          maxX: _period == 'day' ? chartMaxX : null,
           minY: -yRange,
           maxY: yRange,
           gridData: FlGridData(
@@ -878,24 +864,27 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 20.h,
-                interval: _period == 'day' ? 2.0 : null,
+                interval: _period == 'day' ? 3.0 : null,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
-                  if (index < 0 || index >= chartLen) return const SizedBox.shrink();
                   if (_period == 'day') {
-                    // 每2个桶（4小时）显示标签，始终显示当前小时所在桶
-                    if (index % 2 != 0 && index != currentBucket) return const SizedBox.shrink();
+                    if (index < 0 || index >= _dataPoints.length) return const SizedBox.shrink();
+                    // 每3小时显示标签，始终显示当前小时
+                    if (index % 3 != 0 && index != currentHour) return const SizedBox.shrink();
+                    return Text(
+                      '${index}h',
+                      style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
+                    );
                   } else {
+                    if (index < 0 || index >= _dataPoints.length) return const SizedBox.shrink();
                     final maxLabels = 4;
-                    final step = (chartLen / maxLabels).ceil().clamp(1, chartLen);
-                    if (index != (chartLen - 1) && index % step != 0) return const SizedBox.shrink();
+                    final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
+                    if (index != (_dataPoints.length - 1) && index % step != 0) return const SizedBox.shrink();
+                    return Text(
+                      _formatTimeLabel(_dataPoints[index].time),
+                      style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
+                    );
                   }
-                  // 标签文本：桶索引 × bucket = 实际小时
-                  final hour = index * bucket;
-                  return Text(
-                    '${hour}h',
-                    style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
-                  );
                 },
               ),
             ),
