@@ -40,6 +40,15 @@ const TimeRangeField: React.FC<TimeRangeFieldProps> = ({ label, h, m, onHChange,
 const ApplicationSection: React.FC = () => {
   const { message } = App.useApp()
 
+  // 顶层新增字段
+  const [highGridFreq, setHighGridFreq] = useState('50')
+  const [highGridMode, setHighGridMode] = useState(false)
+  const [microGrid, setMicroGrid] = useState(false)
+  const [gridTied, setGridTied] = useState(false)
+  const [fastAntiBackflow, setFastAntiBackflow] = useState(false)
+  const [reverseCtDirection, setReverseCtDirection] = useState(false)
+  const [onStandby, setOnStandby] = useState(false)
+
   const [outputVoltage, setOutputVoltage] = useState('220')
   const [outputFreq, setOutputFreq] = useState('50')
   const [acInputRange, setAcInputRange] = useState<number>(0)
@@ -64,6 +73,15 @@ const ApplicationSection: React.FC = () => {
   const [pvAcLoad, setPvAcLoad] = useState(false)
   const [feedToGrid, setFeedToGrid] = useState(false)
   const [outputPowerPercent, setOutputPowerPercent] = useState<number>(0)
+  const [gridTiedPowerPercent, setGridTiedPowerPercent] = useState<number>(0)
+  const [ctPowerCompensation, setCtPowerCompensation] = useState<number>(0)
+  const [gridMaxInputPower, setGridMaxInputPower] = useState<number>(0)
+  const [gridCtConnection, setGridCtConnection] = useState(false)
+  // 新增混合设置字段
+  const [pvMaxPowerPercent, setPvMaxPowerPercent] = useState<number>(100)
+  const [acChargeMaxPower, setAcChargeMaxPower] = useState<number>(0)
+  const [batteryChargeMaxPower, setBatteryChargeMaxPower] = useState<number>(0)
+  const [systemMaxPower, setSystemMaxPower] = useState<number>(0)
 
   // 并联设置
   const [systemType, setSystemType] = useState<number>(0)
@@ -79,6 +97,22 @@ const ApplicationSection: React.FC = () => {
 
   return (
     <Row gutter={[16, 8]}>
+      {/* 顶层新增字段 */}
+      <FieldRow label="高网输出频率设置(Hz)" tooltip="选择高网输出频率。">
+        <Select value={highGridFreq} onChange={setHighGridFreq} style={{ width: 140 }} showSearch>
+          <Option value="50">50</Option>
+          <Option value="60">60</Option>
+        </Select>
+        <SettingButton onClick={() => handleSet('高网输出频率设置')} />
+      </FieldRow>
+
+      <SwitchField label="高网模式使能" checked={highGridMode} onChange={(v) => { setHighGridMode(v); handleSet('高网模式使能') }} enableText="启用" disableText="禁用" tooltip="启用高网模式以适配高电网环境" />
+      <SwitchField label="微网使能" checked={microGrid} onChange={(v) => { setMicroGrid(v); handleSet('微网使能') }} enableText="启用" disableText="禁用" tooltip="启用微网运行模式" />
+      <SwitchField label="并网" checked={gridTied} onChange={(v) => { setGridTied(v); handleSet('并网') }} enableText="启用" disableText="禁用" tooltip="启用并网功能" />
+      <SwitchField label="快速防逆流" checked={fastAntiBackflow} onChange={(v) => { setFastAntiBackflow(v); handleSet('快速防逆流') }} enableText="启用" disableText="禁用" tooltip="启用快速防逆流保护" />
+      <SwitchField label="反转CT方向" checked={reverseCtDirection} onChange={(v) => { setReverseCtDirection(v); handleSet('反转CT方向') }} enableText="启用" disableText="禁用" tooltip="用于反转CT的方向，以防安装错误" />
+      <SwitchField label="开机/待机" checked={onStandby} onChange={(v) => { setOnStandby(v); handleSet('开机/待机') }} enableText="开机" disableText="待机" tooltip="控制逆变器开机或待机状态" />
+
       <FieldRow label="离网输出电压设置(V)" tooltip="设置电压以适应额定电网电压。">
         <Select value={outputVoltage} onChange={setOutputVoltage} style={{ width: 140 }} showSearch>
           <Option value="220">220</Option>
@@ -137,6 +171,43 @@ const ApplicationSection: React.FC = () => {
       <FieldRow label="输出功率百分比(%)" tooltip="逆变器可以设置馈入功率百分比从 0% 到 100%。">
         <InputNumber min={0} max={100} value={outputPowerPercent} onChange={(v) => setOutputPowerPercent(v ?? 0)} style={{ width: 120 }} />
         <SettingButton onClick={() => handleSet('输出功率百分比')} />
+      </FieldRow>
+
+      <FieldRow label="并网功率百分比(%)" tooltip="设置并网功率百分比。">
+        <InputNumber min={0} max={100} value={gridTiedPowerPercent} onChange={(v) => setGridTiedPowerPercent(v ?? 0)} style={{ width: 120 }} />
+        <SettingButton onClick={() => handleSet('并网功率百分比')} />
+      </FieldRow>
+
+      <FieldRow label="CT功率补偿(W)" tooltip="CT功率补偿值">
+        <InputNumber min={-199} max={199} value={ctPowerCompensation} onChange={(v) => setCtPowerCompensation(v ?? 0)} style={{ width: 120 }} />
+        <SettingButton onClick={() => handleSet('CT功率补偿')} />
+      </FieldRow>
+
+      <FieldRow label="电网最大输入功率(W)" tooltip="设置电网最大输入功率限制">
+        <InputNumber min={0} max={65535} value={gridMaxInputPower} onChange={(v) => setGridMaxInputPower(v ?? 0)} style={{ width: 120 }} />
+        <SettingButton onClick={() => handleSet('电网最大输入功率')} />
+      </FieldRow>
+
+      <SwitchField label="电网CT连接" checked={gridCtConnection} onChange={(v) => { setGridCtConnection(v); handleSet('电网CT连接') }} enableText="启用" disableText="禁用" tooltip="启用电网CT连接" />
+
+      <FieldRow label="光伏功率最大百分比(%)" tooltip="设置光伏最大功率百分比。">
+        <InputNumber min={0} max={100} value={pvMaxPowerPercent} onChange={(v) => setPvMaxPowerPercent(v ?? 100)} style={{ width: 120 }} />
+        <SettingButton onClick={() => handleSet('光伏功率最大百分比')} />
+      </FieldRow>
+
+      <FieldRow label="交流充电最大功率(W)" tooltip="设置交流充电最大功率限制。">
+        <InputNumber min={0} max={65535} value={acChargeMaxPower} onChange={(v) => setAcChargeMaxPower(v ?? 0)} style={{ width: 120 }} />
+        <SettingButton onClick={() => handleSet('交流充电最大功率')} />
+      </FieldRow>
+
+      <FieldRow label="电池充电最大功率(W)" tooltip="设置电池充电最大功率限制。">
+        <InputNumber min={0} max={65535} value={batteryChargeMaxPower} onChange={(v) => setBatteryChargeMaxPower(v ?? 0)} style={{ width: 120 }} />
+        <SettingButton onClick={() => handleSet('电池充电最大功率')} />
+      </FieldRow>
+
+      <FieldRow label="系统最大功率(W)" tooltip="设置系统最大功率限制。">
+        <InputNumber min={0} max={65535} value={systemMaxPower} onChange={(v) => setSystemMaxPower(v ?? 0)} style={{ width: 120 }} />
+        <SettingButton onClick={() => handleSet('系统最大功率')} />
       </FieldRow>
 
       {/* 并联设置 */}
