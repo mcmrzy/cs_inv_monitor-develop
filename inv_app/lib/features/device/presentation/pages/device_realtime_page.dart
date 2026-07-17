@@ -327,12 +327,6 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   /// key 与 _fieldNameMap 中的键保持一致
   Map<String, dynamic> _inverterToFlatMap(InverterRealtime rt) {
     final map = <String, dynamic>{};
-    if (rt.protocolVersion != null) {
-      map['protocol_version'] = rt.protocolVersion;
-    }
-    if (rt.qualityFlags != null) {
-      map['quality_flags'] = rt.qualityFlags;
-    }
     // AC
     if (rt.ac != null) {
       map['ac_voltage'] = rt.ac!.voltage;
