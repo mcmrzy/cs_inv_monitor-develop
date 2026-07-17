@@ -1,0 +1,227 @@
+$(document).ready(function() {
+    initHeight()
+    var resizeTimer;
+    $(window).resize(function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            initHeight()
+        }, 200)
+    });
+
+    $('#favoriteBtn').click(function(){
+        storagePowerStation(selectPlantId,  selectPlantName.replace(/\'/g, '\\\''))
+    })
+    $('#unstoredPowerStationSubmit').click(function() {
+        $('#unstoredPowerStationSubmit').button('loading');
+        let plantId = $('#collectorPowerStationModal').data('plantId')
+
+        $.post(baseUrl + '/api/userFav/removeUserFavPlantRecord', { plantId: plantId }, function(response) {
+            $('#unstoredPowerStationSubmit').button('reset');
+            if(response.success) {
+                alert(successText);
+                $('#unstoredPowerStationDialog').modal('hide');
+            } else {
+                alert(failedText);
+                $('#unstoredPowerStationDialog').modal('hide');
+            }
+        }, 'json');
+    })
+
+    $('#unstoredPowerStationDialog').on('hidden.bs.modal', function () {
+        $('#unstoredPowerStationModal').text('').removeData();
+        $('#unstoredPowerStationSubmit').show()
+    });
+    $('#collectorPowerStationSubmit').unbind('click').bind('click', function() {
+        $('#collectorPowerStationSubmit').button('loading');
+        let plantId = $('#collectorPowerStationModal').data('plantId')
+        let remarks = $('#remarksTextareaEditCollectorPower').val()
+        $.post(baseUrl + '/api/userFav/saveUserFavPlantRecord', { plantId: plantId, remarks: remarks }, function(response) {
+            $('#collectorPowerStationSubmit').button('reset');
+            if(response.success) {
+                alert(setSuccessText);
+            } else {
+                alert(failedText);
+            }
+            $('#collectorPowerStationDialog').modal('hide');
+        }, 'json');
+    })
+})
+
+function initHeight() {
+    var $box1 = $('#firstMenu')
+    var $box2 = $('.ebase-frame-header-userTopBar')
+    if(isOverlapping($box1, $box2)) {
+        $('body>header') && $('body>header').css('height', '160px')
+        $('.ebase-frame-header-userTopBar') && $('.ebase-frame-header-userTopBar').css('padding-top', '80px')
+        $('.page-container') && $('.page-container').css('padding-top', '160px')
+        $('#nav > div') && $('#nav > div').css('padding-top', '80px')
+        $('#firstMenu .op-ebase-topMenu .menu-list .item .nameWrapper') && $('#firstMenu .op-ebase-topMenu .menu-list .item .nameWrapper').css('padding', '0px 30px 8px 30px')
+        if(validNewline()) {
+            $('#firstMenu .op-ebase-topMenu .menu-list .item .nameWrapper') && $('#firstMenu .op-ebase-topMenu .menu-list .item .nameWrapper').css('padding', '0px 10px 8px 10px')
+        }
+    } else {
+        $('body>header') && $('body>header').css('height', '80px')
+        $('.ebase-frame-header-userTopBar') && $('.ebase-frame-header-userTopBar').css('padding-top', '0px')
+        $('.page-container') && $('.page-container').css('padding-top', '80px')
+        $('#nav > div') && $('#nav > div').css('padding-top', '0px')
+        $('#firstMenu .op-ebase-topMenu .menu-list .item .nameWrapper') && $('#firstMenu .op-ebase-topMenu .menu-list .item .nameWrapper').css('padding', '0px 30px 8px 30px')
+    }
+}
+
+function isOverlapping($box1, $box2) {
+    var box1 = $box1.offset();
+    var box2 = $box2.offset();
+    var width1 = $box1.outerWidth();
+    var width2 = $box2.outerWidth();
+    var height1 = $box1.outerHeight();
+    var height2 = $box2.outerHeight();
+
+    var left1 = box1.left;
+    var top1 = box1.top;
+    var right1 = left1 + width1;
+    var bottom1 = top1 + height1;
+
+    var left2 = box2.left;
+    var top2 = box2.top;
+    var right2 = left2 + width2;
+    var bottom2 = top2 + height2;
+
+    return !(right1 < left2 || left1 > right2 || bottom1 < top2 || top1 > bottom2);
+}
+
+function validNewline() {
+    var $elements = $('#firstMenu .item')
+    var previousTop = 0
+    let isNewLine = false
+    $elements.each(function(index, item) {
+        var currentTop = $(this).offset().top;
+        if (currentTop !== previousTop && index !== 0) {
+            isNewLine = true
+        }
+        previousTop = currentTop;
+    })
+    return isNewLine
+}
+
+function changeLocale(language) {
+    $.post(baseUrl + '/locale', { language: language }, function(response) {
+        window.location.reload();
+    });
+}
+
+/*	$('.op-ebase-topMenu .menu-list .item').hover(
+		function() {
+			if(!$(this).hasClass('selected')) {
+				var $img = $(this).find('img');
+				$img.attr('src', $img.attr('src').replace('gray', 'green'));
+			}
+		},
+		function() {
+			if(!$(this).hasClass('selected')) {
+				var $img = $(this).find('img');
+				$img.attr('src', $img.attr('src').replace('green', 'gray'));
+			}
+		}
+	);	*/
+
+function goToCluster(clusterId, clusterPrefixUrl) {
+    $.post(baseUrl + '/web/system/cluster/buildClusterKey', { serverClusterId: clusterId }, function(response) {
+        if(response.success) {
+            var sslClusterPrefixUrl = clusterPrefixUrl.replace('http://', 'https://');
+            var href = window.location.href;
+            var index = href.indexOf('/WManage');
+            if(index > 0) {
+                window.location.href = sslClusterPrefixUrl + '/WManage/web/login/clusterLoginForward?clusterLoginKey=' + response.clusterLoginKey + '&targetUrl=' + href.substring(index) + '&customCompany=' + customCompany;
+            }
+        }
+    }, 'json');
+}
+
+var unstoredPowerStationA = function (plantId) {
+    $.post(baseUrl + '/api/userFav/removeUserFavPlantRecord', { plantId: plantId }, function(response) {
+        if(response.success) {
+            $('#collectorPowerStationTable').datagrid('reload');
+        } else {
+            alert(failedText);
+        }
+    }, 'json');
+}
+
+function storagePowerStation(plantId, plantName, remarks) {
+    $('#tabelDialog').modal('hide')
+    $('#remarksTextareaEditCollectorPower').val(remarks)
+    $('#collectorPowerStationModal').text(plantName).data('plantId', plantId);
+    $('#collectorPowerStationDialog').modal();
+}
+
+function favStationJumpFormatter(value, row) {
+    return '<a href="javascript:execFavStationJump(' + row.plantId + ')">' + value + '</a>';
+}
+
+function execFavStationJump(plantId) {
+    $.post(baseUrl + '/api/userVisit/update', { plantId: plantId }, function(response) {
+        if(response.success) {
+            window.location.href = baseUrl + '/web/monitor/inverter';
+        }
+    }, 'json');
+}
+
+function formatTimestampToSpecificDate(value){
+    if (value) {
+        let date = new Date(value);
+        // 获取年、月、日
+        let year = date.getFullYear();
+        let month = ('0' + (date.getMonth() + 1)).slice(-2); 	// 月份从0开始，因此要加1
+        let day = ('0' + date.getDate()).slice(-2); 			// 获取日，并确保为两位数
+
+        // 拼接成指定格式的字符串
+        let formattedDate = year + '-' + month + '-' + day;
+
+        return formattedDate;
+    }
+}
+
+function showTabelDialog() {
+    // 显示弹窗
+    $('#tabelDialog').modal().on('shown.bs.modal', function () {
+        let columns = []
+        columns = [{ field:'name', title:'Station name', width: '18%', formatter: favStationJumpFormatter }]
+        if(isAdmin || isMaintain || isOwnerLevel) {
+            columns = columns.concat([{field:'installerAccount',title:'Installer', width: '10%'},
+                {field:'endUserAccount',title:'EndUser', width: '10%'}])
+        }
+        columns = columns.concat([{field:'country',title:'Country', width: '10%'},
+            {field:'timezone',title:'Timezone', width: '8%'},
+            {field:'createDate',title:'Create date', width: '10%'},
+            {field:'updateTime',title:'update Time', hidden: true, formatter: function(value){
+                    if (value){
+                        let date = new Date(value);
+                        // 获取年、月、日
+                        let year = date.getFullYear();
+                        let month = ('0' + (date.getMonth() + 1)).slice(-2); // 月份从0开始，因此要加1
+                        let day = ('0' + date.getDate()).slice(-2); // 获取日，并确保为两位数
+                        let formattedDate = year + '-' + month + '-' + day;
+
+                        return formattedDate;
+                    }
+                }
+            },
+            {field:'remarks',title:'Remarks', width: '22%'},
+            {field:'plantId',title:'Plant id', hidden: true},
+            {field:'action',title:'Action', width: '13%', formatter: function(value, row, index ){
+                    let plantId = row.plantId
+                    let name = row.name
+                    let remarks = row.remarks
+                    // return "<a class='' onclick='unstoredPowerStationA(" + plantId + ")'>cancel collection</a>"}},
+                    return '<div class="actionHolder"><button button class="btn btn-default btn-xs" style="margin-right: 5px;" onclick="storagePowerStation(' + plantId + ', \'' + name.replace(/\'/g, '\\\'') + '\', \'' + remarks.replace(/\'/g, '\\\'') + '\');">Edit</button>' +
+                        "<button button class='btn btn-default btn-xs' style='margin-right: 5px;' onclick='unstoredPowerStationA(" + plantId + ")'>Cancel</button></div>"}},
+        ])
+        // 弹窗显示完成后，加载数据到数据表格
+        $('#collectorPowerStationTable').datagrid({
+            url: baseUrl + '/api/userFav/getUserFavPlantRecordList?clientType=WEB',
+            columns: [columns],
+            pagination: false,
+            fitColumns: true
+        });
+    });
+}

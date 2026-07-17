@@ -1,0 +1,1011 @@
+var isWorkingModePage = (currentSetPageType && currentSetPageType.indexOf('workingMode2_') == 0);
+
+function autoSelectSettingPage() {
+	if(!isWorkingModePage) {
+		if(currentDeviceType == 6 && currentSetPageType == 'remoteSetWeekly') {
+			return true;
+		}
+
+		if(isSnaSeriesOrGeta() && currentSetPageType != 'remoteSetOffGrid') {
+			window.location.href = baseUrl + '/web/maintain/remoteSetOffGrid';
+		} else if(currentDeviceType == 5 && currentSetPageType != 'remoteSetLsp') {
+			window.location.href = baseUrl + '/web/maintain/remoteSetLsp';
+		} else if((currentDeviceType == 6 || (currentDeviceType == 7 && isAdmin) || isBess200K() || isTrip12K() || isMega24K() || currentDeviceType == 8 || currentDeviceType == 10) && !isHuayuAccount && currentSetPageType != 'remoteSet12K') {
+			window.location.href = baseUrl + '/web/maintain/remoteSet12K';
+		} else if(currentDeviceType == 7 && !isAdmin && currentSetPageType != 'remoteSetALLOne') {
+			window.location.href = baseUrl + '/web/maintain/remoteSetAllInOne';
+		} else if(currentDeviceType == 9 && currentSetPageType != 'remoteSetMidbox') {
+			window.location.href = baseUrl + '/web/maintain/remoteSetMidbox';
+		} else if(!isSnaSeriesOrGeta() && currentSetPageType == 'remoteSetOffGrid') {
+			window.location.href = baseUrl + '/web/maintain/remoteSet';
+		} else if(currentDeviceType != 5 && currentSetPageType == 'remoteSetLsp') {
+			window.location.href = baseUrl + '/web/maintain/remoteSet';
+		} else if(((currentDeviceType != 6 && !isTrip12K() && !isBess200K() && !(currentDeviceType == 7 && isAdmin) && !isMega24K() && currentDeviceType != 8 && currentDeviceType != 10) || isHuayuAccount) && currentSetPageType == 'remoteSet12K') {
+			window.location.href = baseUrl + '/web/maintain/remoteSet';
+		} else if(currentDeviceType != 7 && currentSetPageType == 'remoteSetALLOne') {
+			window.location.href = baseUrl + '/web/maintain/remoteSet';
+		} else if(currentDeviceType != 9 && currentSetPageType == 'remoteSetMidbox') {
+			window.location.href = baseUrl + '/web/maintain/remoteSet';
+		}
+	} else {
+		var settingPageMatch = false;
+		if(isSnaSeriesOrGeta()) {
+			if(currentSetPageType != 'workingMode2_OffGrid') {
+				window.location.href = baseUrl + '/web/maintain/workingMode/sna';
+			} else {
+				settingPageMatch = true;
+			}
+		} else if(currentDeviceType == 6 || (currentDeviceType == 7 && isAdmin) || isBess200K() || isTrip12K() || isMega24K() || currentDeviceType == 8 || currentDeviceType == 10) {
+			if(currentSetPageType != 'workingMode2_12K') {
+				window.location.href = baseUrl + '/web/maintain/workingMode/12k';
+			} else {
+				settingPageMatch = true;
+			}
+		} else if(isMidboxNotEqb()) {
+			if(currentSetPageType != 'workingMode2_Midbox') {
+				window.location.href = baseUrl + '/web/maintain/workingMode/midbox';
+			} else {
+				settingPageMatch = true;
+			}
+		} else if(isHybird() || currentDeviceType == 2 || !currentModuleInverterSn) {
+			if(currentSetPageType != 'workingMode2_Hybrid') {
+				window.location.href = baseUrl + '/web/maintain/workingMode/hybrid';
+			} else {
+				settingPageMatch = true;
+			}
+		} else if(isEQB()) {
+            if(currentSetPageType != 'workingMode2_Eqb') {
+                window.location.href = baseUrl + '/web/maintain/workingMode/eqb';
+            } else {
+                settingPageMatch = true;
+            }
+        }
+
+		if(!settingPageMatch) {
+			window.location.href = baseUrl + '/web/maintain/remoteSet';
+		}
+	}
+}
+
+/**
+ * #lithiumTypeModelInput
+ */
+function fillLithiumTypeModels_Hybrid() {
+	var $lithiumTypeModelInput = $('#lithiumTypeModelInput');
+	$lithiumTypeModelInput.find('option.custom').remove();
+	
+    if(gigabiz1User) {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard Battery / HANCHU</option>');
+    } else if(isPowerZone) {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard Battery / Powerzone</option>');
+    } else {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard Battery</option>');
+    }
+	$lithiumTypeModelInput.append('<option class="custom" value="1">1: HINA Battery</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="2">2: Pylon/Freedom Won/Solar MD/Hubble/Blue Nova</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="3">3: Enopte</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="4">4: MSUN</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="5">5: GSL1 Battery</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="6">6: Luxpower</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="7">7: Aobo Battery</option>');
+	if(currentDeviceType == 4) {
+		$lithiumTypeModelInput.append('<option class="custom" value="8">8: Dyness</option>');
+	} else {
+		$lithiumTypeModelInput.append('<option class="custom" value="8">8: Rsvd</option>');
+	}
+	$lithiumTypeModelInput.append('<option class="custom" value="9">9: Stealth</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="10">10: TeLongMei</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="11">11: Merit</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="14">14: WECO</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="15">15: Murata</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="16">16: BITEK</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="17">17: OKSolar</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="18">18: GW Battery</option>');
+	
+	if(currentDeviceType == 10) {
+		$lithiumTypeModelInput.append('<option class="custom" value="19">19: CROWN</option>');
+	}
+	
+	$lithiumTypeModelInput.append('<option class="custom" value="20">20: Revov</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="21">21: Beebeejump</option>');
+	if(currentDeviceType == 2) {
+		$lithiumTypeModelInput.append('<option class="custom" value="28">28: Gotion</option>');
+	} else {
+		$lithiumTypeModelInput.append('<option class="custom" value="28">28</option>');
+	}
+    if(currentDeviceType == 10 && currentStandard == 'ACAB' && currentSlaveVersion >= 0x0D) {
+        $lithiumTypeModelInput.append('<option class="custom" value="30">30: Lithium no comms: 15 cells in series</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="31">31: Lithium no comms: 16 cells in series</option>');
+    }
+	
+	$lithiumTypeModelInput.parents('.lithiumBrandBox').show();
+}
+
+function fillLithiumTypeModels_Gen3() {
+    var $lithiumTypeModelInput = $('#lithiumTypeModelInput');
+    $lithiumTypeModelInput.find('option.custom').remove();
+    $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="1">1: HinaESS</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="2">2: Pylon</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="3">3: Enopte</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="4">4: MSUN</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="5">5: GSL1</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="6">6: Luxpower</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="7">7: Aobo</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="8">8: Dyness</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="9">9: Stealth</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="10">10: TeLongMei</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="11">11: Merit</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="12">12: BYD</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="13">13: SHINWA</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="14">14: WeCo</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="15">15: Murata</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="16">16: BITek</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="17">17: OKSolar</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="18">18: GW</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="19">19: CROWN</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="20">20: Revov</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="21">21: BeebeeJ</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="22">22: Naxin</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="23">23: Soltaro</option>');
+    $lithiumTypeModelInput.parents('.lithiumBrandBox').show();
+}
+
+function fillReactivePowerCMDTypeInput() {
+    var $reactivePowerCMDTypeInput = $('#reactivePowerCMDTypeInput');
+    $reactivePowerCMDTypeInput.find('option.custom').remove();
+    if(isBess200K()) {
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="0">'+ reactivePowerCMDTypeText0 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="1">'+ reactivePowerCMDTypeText1 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="2">'+ reactivePowerCMDTypeText2 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="3">'+reactivePowerCMDTypeText3 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="4">'+ reactivePowerCMDTypeText4_0 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="5">'+ reactivePowerCMDTypeText5_0 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="6">'+ reactivePowerCMDTypeText6_0 +'</option>');
+    } else {
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="0">'+ reactivePowerCMDTypeText0 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="1">'+ reactivePowerCMDTypeText1 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="2">'+ reactivePowerCMDTypeText2 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="4">'+ reactivePowerCMDTypeText4 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="5">'+ reactivePowerCMDTypeText5 +'</option>');
+        $reactivePowerCMDTypeInput.append('<option class="custom" value="6">'+ reactivePowerCMDTypeText6 +'</option>');
+    }
+}
+
+function fillLithiumTypeModels_Bess200k() {
+    var $lithiumTypeModelInput = $('#lithiumTypeModelInput');
+    $lithiumTypeModelInput.find('option.custom').remove();
+    $lithiumTypeModelInput.append('<option class="custom" value="1">1: HINA Battery</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="6">6: Luxpower</option>');
+    $lithiumTypeModelInput.parents('.lithiumBrandBox').show();
+}
+
+function fillLithiumTypeModels_US() {
+	var $lithiumTypeModelInput = $('#lithiumTypeModelInput');
+	$lithiumTypeModelInput.find('option.custom').remove();
+
+	if((currentDeviceType == 9 || currentDeviceType == 6) && currentPhase == 1 && isEG4Platform) {
+		$lithiumTypeModelInput.append('<option class="custom" value="0">0: EG4</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="1">1: EG4 Advanced</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="2">2</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="3">3</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="5">5</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="6">6</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="8">8</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="11">11</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="14">14</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="18">18</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="19">19</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="20">20</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="21">21</option>');
+	} else {
+		$lithiumTypeModelInput.append('<option class="custom" value="0">0: EG4</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="1">1: EG4 Advanced</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="2">2</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="3">3</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="4">4</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="5">5</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="6">6</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="7">7</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="8">8</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="9">9</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="10">10</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="11">11</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="14">14</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="15">15</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="16">16</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="17">17</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="18">18</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="19">19</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="20">20</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="21">21</option>');
+	}
+	
+	if(isEG4Platform) {
+		$lithiumTypeModelInput.append('<option class="custom" value="22">22: BRIGGS</option>');
+	} else if(isAdmin || isEG4Admin || isDevAccount) {
+		$lithiumTypeModelInput.append('<option class="custom" value="22">22</option>');
+	}
+	
+	$lithiumTypeModelInput.append('<option class="custom" value="28">28</option>');
+	if(currentDeviceType == 6) {
+		$lithiumTypeModelInput.append('<option class="custom" value="30">30: Lithium no comms: 15 cells in series</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="31">31: Lithium no comms: 16 cells in series</option>');
+	}
+	
+	$lithiumTypeModelInput.parents('.lithiumBrandBox').show();
+}
+
+function fillLithiumTypeModels_12KSeries_NA() {
+	var $lithiumTypeModelInput = $('#lithiumTypeModelInput');
+	$lithiumTypeModelInput.find('option.custom').remove();
+	
+    if(isPowerZone) {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard/Pytes/EG4/BSL/Stackrack/Ampace/BigBattery/Powerzone</option>');
+    } else {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard/Pytes/EG4/BSL/Stackrack/Ampace/BigBattery/Meritsun</option>');
+    }
+	$lithiumTypeModelInput.append('<option class="custom" value="1">1: HINAESS</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="2">2: Pylon/UZ Energy/Shoto/Hubble/FreedomWon/BlueNova</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="3">3: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="4">4: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="5">5: GSL Energy</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="6">6: Luxpower</option>');
+    $lithiumTypeModelInput.append('<option class="custom" value="7">7: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="8">8: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="9">9: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="10">10: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="11">11: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="12">12: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="13">13: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="14">14: Green Battery</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="15">15: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="16">16: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="17">17: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="18">18: Fortress</option>');
+	
+	if(currentDeviceType == 8 || currentDeviceType == 10) {
+		$lithiumTypeModelInput.append('<option class="custom" value="19">19: CROWN</option>');
+	} else {
+		$lithiumTypeModelInput.append('<option class="custom" value="19">19: Sunwoda/Renogy</option>');
+	}
+	
+	$lithiumTypeModelInput.append('<option class="custom" value="20">20: Aobo</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="21">21: Weco</option>');
+	if(isEG4Platform) {
+		$lithiumTypeModelInput.append('<option class="custom" value="22">22: BRIGGS</option>');
+	} else {
+		$lithiumTypeModelInput.append('<option class="custom" value="22">22</option>');
+	}
+	
+	$lithiumTypeModelInput.append('<option class="custom" value="28">28</option>');
+	if(currentDeviceType == 6) {
+		$lithiumTypeModelInput.append('<option class="custom" value="30">30: Lithium no comms: 15 cells in series</option>');
+		$lithiumTypeModelInput.append('<option class="custom" value="31">31: Lithium no comms: 16 cells in series</option>');
+	}
+	$lithiumTypeModelInput.parents('.lithiumBrandBox').show();
+}
+
+function fillLithiumTypeModels_12KSeries_Normal() {
+	var $lithiumTypeModelInput = $('#lithiumTypeModelInput');
+	$lithiumTypeModelInput.find('option.custom').remove();
+
+    if(isMega24K()) {
+        if(isPowerZone) {
+            $lithiumTypeModelInput.append('<option class="custom" value="0">0: Powerzone</option>');
+        } else {
+            $lithiumTypeModelInput.append('<option class="custom" value="0">0: HINAESS</option>');
+        }
+        $lithiumTypeModelInput.append('<option class="custom" value="1">1: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="2">2: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="3">3: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="4">4: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="5">5: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="6">6: Luxpower</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="7">7: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="8">8: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="9">9: Zetara</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="10">10: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="11">11: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="12">12: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="13">13: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="14">14: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="15">15: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="16">16: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="17">17: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="18">18: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="19">19: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="20">20: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="21">21: Rsvd</option>');
+        if(isEG4Platform) {
+            $lithiumTypeModelInput.append('<option class="custom" value="22">22: BRIGGS</option>');
+        } else {
+            $lithiumTypeModelInput.append('<option class="custom" value="22">22: Rsvd</option>');
+        }
+        $lithiumTypeModelInput.append('<option class="custom" value="28">28: Rsvd</option>');
+    } else {
+        if(isPowerZone) {
+            $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard/Zetara/Pytes/EG4/BSL/Stackrack/Ampace/BigBattery/Powerzone</option>');
+        } else {
+            $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard/Zetara/Pytes/EG4/BSL/Stackrack/Ampace/BigBattery/Meritsun/LBSA/HANCHU</option>');
+        }
+        $lithiumTypeModelInput.append('<option class="custom" value="1">1: HINAESS</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="2">2: Pylon/UZ Energy/Shoto/Hubble/FreedomWon/BlueNova/Greenrich/VOLTA</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="3">3: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="4">4: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="5">5: GSL Energy</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="6">6: Luxpower</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="7">7: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="8">8: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="9">9: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="10">10: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="11">11: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="12">12: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="13">13: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="14">14: Green Battery</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="15">15: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="16">16: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="17">17: Rsvd</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="18">18: Fortress</option>');
+
+        if(currentDeviceType == 8 || currentDeviceType == 10) {
+            $lithiumTypeModelInput.append('<option class="custom" value="19">19: CROWN</option>');
+        } else {
+            $lithiumTypeModelInput.append('<option class="custom" value="19">19: Sunwoda/Renogy</option>');
+        }
+
+        $lithiumTypeModelInput.append('<option class="custom" value="20">20: Aobo</option>');
+        $lithiumTypeModelInput.append('<option class="custom" value="21">21: Weco</option>');
+        if(isEG4Platform) {
+            $lithiumTypeModelInput.append('<option class="custom" value="22">22: BRIGGS</option>');
+        } else {
+            $lithiumTypeModelInput.append('<option class="custom" value="22">22</option>');
+        }
+
+        $lithiumTypeModelInput.append('<option class="custom" value="28">28</option>');
+
+        if(currentDeviceType == 6) {
+            $lithiumTypeModelInput.append('<option class="custom" value="30">30: Lithium no comms: 15 cells in series</option>');
+            $lithiumTypeModelInput.append('<option class="custom" value="31">31: Lithium no comms: 16 cells in series</option>');
+        }
+    }
+	
+	$lithiumTypeModelInput.parents('.lithiumBrandBox').show();
+}
+
+function fillLithiumTypeModels_Trip12K() {
+	var $lithiumTypeModelInput = $('#lithiumTypeModelInput');
+	$lithiumTypeModelInput.find('option.custom').remove();
+
+    if(gigabiz1User) {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard/Aoboet/Hanchu</option>');
+    } else if(isPowerZone) {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard/Powerzone</option>');
+    } else {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Standard/Zetara/Aoboet</option>');
+    }
+	$lithiumTypeModelInput.append('<option class="custom" value="1">1: HINAESS</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="2">2: Pylon</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="3">3: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="4">4: ATL</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="5">5: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="6">6: Luxpower</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="7">7: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="8">8: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="9">9: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="10">10: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="11">11: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="12">12: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="13">13: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="14">14: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="15">15: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="16">16: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="17">17: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="18">18: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="19">19: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="20">20: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="21">21: Rsvd</option>');
+	$lithiumTypeModelInput.parents('.lithiumBrandBox').show();
+}
+
+function fillLithiumTypeModels_AllInOne() {
+	var $lithiumTypeModelInput = $('#lithiumTypeModelInput');
+	$lithiumTypeModelInput.find('option.custom').remove();
+    if(isPowerZone) {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Powerzone</option>');
+    } else {
+        $lithiumTypeModelInput.append('<option class="custom" value="0">0: Rsvd</option>');
+    }
+	$lithiumTypeModelInput.append('<option class="custom" value="1">1: HINAESS</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="2">2: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="3">3: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="4">4: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="5">5: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="6">6: Luxpower</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="7">7: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="8">8: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="9">9: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="10">10: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="11">11: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="12">12: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="13">13: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="14">14: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="15">15: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="16">16: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="17">17: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="18">18: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="19">19: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="20">20: Rsvd</option>');
+	$lithiumTypeModelInput.append('<option class="custom" value="21">21: Rsvd</option>');
+	
+	if(!isGTECPlatform || isAdmin) {
+		$lithiumTypeModelInput.parents('.lithiumBrandBox').show();
+	} else {
+		$lithiumTypeModelInput.parents('.lithiumBrandBox').hide();
+	}
+}
+
+function fillEpsVoltageSetInput() {
+	if(isSnaSeriesOrGeta()) {			//Off-Grid
+		$('#epsVoltageSetInput option.custom').remove();
+		if(currentDtc == 1) {				//Split
+			$('#epsVoltageSetInput').append('<option class="custom" value="127">127/220 three phase</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="200">100/200 split phase</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="208">120/208</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="220">110/220</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="230">115/230</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="240">120/240</option>');
+		} else {
+			$('#epsVoltageSetInput').append('<option class="custom" value="120">120</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="200">200</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="208">208</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="220">220</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="230">230</option>');
+			$('#epsVoltageSetInput').append('<option class="custom" value="240">240</option>');
+		}
+	} else if(isGen3()) {
+        $('#epsVoltageSetInput option.custom').remove();
+        $('#epsVoltageSetInput').append('<option class="custom" value="120">120</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="200">200</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="208">208</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="220">220</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="230">230</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="240">240</option>');
+    } else {
+        $('#epsVoltageSetInput option.custom').remove();
+        $('#epsVoltageSetInput').append('<option class="custom" value="202">202</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="208">208</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="220">220</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="230">230</option>');
+        $('#epsVoltageSetInput').append('<option class="custom" value="240">240</option>');
+    }
+}
+
+function fillCtSampleRatioInput() {
+	$('#ctSampleRatioInput option.custom').remove();
+	$('#ctSampleRatioInput').append('<option class="custom" value="0">1/1000</option>');
+	$('#ctSampleRatioInput').append('<option class="custom" value="1">1/3000</option>');
+	$('#ctSampleRatioInput').append('<option class="custom" value="2">1/2000</option>');
+	if(currentDeviceType == 6 && (currentStandard == 'FAAB' || currentStandard == 'fAAB') && currentSlaveVersion >= 0x1F && currentFwVersion >= 0x1F || currentDeviceType == 8 && (currentStandard == 'HAAA' || currentStandard == 'hAAA') && currentSlaveVersion >= 0x08 && currentFwVersion >= 0x07 || isGen2_7_14K()) {
+		$('#ctSampleRatioInput').append('<option class="custom" value="3">1/4000</option>');
+		$('#ctSampleRatioInput').append('<option class="custom" value="4">1/6000</option>');
+	}
+}
+
+function fillComposedPhaseInput() {
+    $('#setComposedPhaseInput option.custom').remove();
+    if(isType6() && isEG4Platform) {
+        $('#setComposedPhaseInput').append('<option class="custom" value="1">Phase A/B</option>');
+        $('#setComposedPhaseInput').append('<option class="custom" value="2">Phase B/C</option>');
+        $('#setComposedPhaseInput').append('<option class="custom" value="3">Phase C/A</option>');
+    } else if(currentClusterId != 4 && !isSecondCluster) {
+        $('#setComposedPhaseInput').append('<option class="custom" value="1">' + composedPhaseText1 + '</option>');
+        $('#setComposedPhaseInput').append('<option class="custom" value="2">' + composedPhaseText2 + '</option>');
+        $('#setComposedPhaseInput').append('<option class="custom" value="3">' + composedPhaseText3 + '</option>');
+    } else if(currentClusterId == 4 || isSecondCluster) {
+        $('#setComposedPhaseInput').append('<option class="custom" value="1">Phase U</option>');
+        $('#setComposedPhaseInput').append('<option class="custom" value="2">Phase V</option>');
+        $('#setComposedPhaseInput').append('<option class="custom" value="3">Phase W</option>');
+    }
+}
+
+function fillMeterBrandSetInput() {
+	$('#meterBrandModelInput option.custom').remove();
+	if(isFlex100()) {
+        $('#meterBrandModelInput').append('<option class="custom" value="0">' + meterBrand0 + '</option>');
+        $('#meterBrandModelInput').append('<option class="custom" value="1">' + meterBrand1_2 + '</option>');
+        $('#meterBrandModelInput').append('<option class="custom" value="2">' + meterBrand2_2 + '</option>');
+    } else if(currentDeviceType == 6 || isMidbox()) {
+		$('#meterBrandModelInput').append('<option class="custom" value="0">' + meterBrand0 + '</option>');
+		$('#meterBrandModelInput').append('<option class="custom" value="1">' + meterBrand1_2 + '</option>');
+		$('#meterBrandModelInput').append('<option class="custom" value="2">' + meterBrand2 + '</option>');
+		$('#meterBrandModelInput').append('<option class="custom" value="3">' + meterBrand3 + '</option>');
+	} else if(currentDeviceType == 10) {
+		$('#meterBrandModelInput').append('<option class="custom" value="0">' + meterBrand0 + '</option>');
+		$('#meterBrandModelInput').append('<option class="custom" value="1">' + meterBrand1_1 + '</option>');
+		$('#meterBrandModelInput').append('<option class="custom" value="3">' + meterBrand3 + '</option>');
+	} else if(isHybird()) {
+		$('#meterBrandModelInput').append('<option class="custom" value="0">' + meterBrand0 + '</option>');
+	}  else if(isMega24K()) {
+		$('#meterBrandModelInput').append('<option class="custom" value="0">' + meterBrand0 + '</option>');
+	} else {
+		$('#meterBrandModelInput').append('<option class="custom" value="0">' + meterBrand0 + '</option>');
+		$('#meterBrandModelInput').append('<option class="custom" value="1">' + meterBrand1_1 + '</option>');
+		$('#meterBrandModelInput').append('<option class="custom" value="2">' + meterBrand2 + '</option>');
+		$('#meterBrandModelInput').append('<option class="custom" value="3">' + meterBrand3 + '</option>');
+	}
+}
+
+function fillGridTypeInput() {
+	$('#gridTypeInput option.custom').remove();
+	if(isTrip12K()) {
+        $('#gridTypeInput').append('<option class="custom" value="0">0: 230V/230V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="1">1: 120V/208V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="2">2: 240V/415V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="3">3: 230V/400V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="4">4: Rsvd</option>');
+        $('#gridTypeInput').append('<option class="custom" value="5">5: 220V/380V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="6">6: 220/220V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="7">7: 240/240V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="8">8: 127V/220V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="9">9: 138V/240V</option>');
+	} else if(isBess200K()) {
+        $('#gridTypeInput').append('<option class="custom" value="0">0: 230V/230V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="1">1: 120V/208V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="2">2: 240V/415V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="3">3: 230V/400V</option>');
+        $('#gridTypeInput').append('<option class="custom" value="4">4: Rsvd</option>');
+        $('#gridTypeInput').append('<option class="custom" value="5">5: 220V/380V</option>');
+	} else {
+		$('#gridTypeInput').append('<option class="custom" value="0">0: 240V/120V</option>');
+		$('#gridTypeInput').append('<option class="custom" value="1">1: 208V/120V</option>');
+		$('#gridTypeInput').append('<option class="custom" value="2">2: 240V</option>');
+		$('#gridTypeInput').append('<option class="custom" value="3">3: 230V</option>');
+		$('#gridTypeInput').append('<option class="custom" value="4">4: 200V/100V</option>');
+		if((currentDeviceType == 6 && currentSlaveVersion >= 0x1F && currentFwVersion >= 0x1F) || isMega24K()) {
+			$('#gridTypeInput').append('<option class="custom" value="5">5: 220V/127V</option>');
+		}
+	}
+}
+
+function fillPowerRatingModelInput() {
+	$('#powerRatingModelInput option.custom').remove();
+
+	if(isMega24K()) {			//Mega 24K
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_MEGA_24KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_MEGA_24KText + '</option>');
+	} else if(isFlex100()) {
+		$('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="7">' + powerRating7_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="8">' + powerRating8_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="9">' + powerRating9_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="10">' + powerRating10_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="11">' + powerRating11_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="12">' + powerRating12_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="13">' + powerRating13_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="14">' + powerRating14_Flex100Text + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="15">' + powerRating15_Flex100Text + '</option>');
+	} else if(currentDeviceType == 6 || currentDeviceType == 7 || isGen2_7_14K()) {
+		$('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="7">' + powerRating7_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="8">' + powerRating8_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="9">' + powerRating9_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="10">' + powerRating10_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="11">' + powerRating11_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="12">' + powerRating12_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="13">' + powerRating13_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="14">' + powerRating14_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="15">' + powerRating15_12KText + '</option>');
+	} else if(currentDeviceType == 11) {
+		$('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_SNA12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_SNA12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_SNA12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_SNA12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_SNA12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_SNA12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6_SNA12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="7">' + powerRating7_SNA12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="8">' + powerRating8_SNA12KText + '</option>');
+	} else if(currentDeviceType == 8) {					//7_10K Devices...
+		if(isGen3()) {
+			$('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="7">' + powerRating7_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="8">' + powerRating8_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="9">' + powerRating9_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="10">' + powerRating10_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="11">' + powerRating11_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="12">' + powerRating12_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="13">' + powerRating13_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="14">' + powerRating14_GEN3_Text + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="15">' + powerRating15_GEN3_Text + '</option>');
+		} else if(isGenova()) {
+            $('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_GenovaText + '</option>');
+            $('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6_GenovaText + '</option>');
+            $('#powerRatingModelInput').append('<option class="custom" value="7">' + powerRating7_GenovaText + '</option>');
+        }  else if(isResona()) {
+            $('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_ResonaText + '</option>');
+            $('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_ResonaText + '</option>');
+            $('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_ResonaText + '</option>');
+        } else {
+			$('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_7_10KText + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_7_10KText + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_7_10KText + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_7_10KText + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_7_10KText + '</option>');
+			$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_7_10KText + '</option>');
+		}
+    } else if(isTripV2()) {		//Trip 12K device...
+        $('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_TRIP_V2Text + '</option>');
+        $('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_TRIP_V2Text + '</option>');
+        $('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_TRIP_V2Text + '</option>');
+        $('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_TRIP_V2Text + '</option>');
+        $('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_TRIP_V2Text + '</option>');
+        $('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_TRIP_V2Text + '</option>');
+    } else if(isTripLv()) {
+		$('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_TRIP_LvText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_TRIP_LvText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_TRIP_LvText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_TRIP_LvText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_TRIP_LvText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_TRIP_LvText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="6">6: 20kW</option>');
+	} else if(isTrip12K()) {		//Trip 12K device...
+		$('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_TRIP_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_TRIP_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_TRIP_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_TRIP_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_TRIP_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_TRIP_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6_TRIP_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="7">' + powerRating7_TRIP_12KText + '</option>');
+	}  else if(isBess200K()) {
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_BESS200K_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_BESS200K_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_BESS200K_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_BESS200K_12KText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_BESS200K_12KText + '</option>');
+	} else if((currentDeviceType == 3 && currentDtc == 0) || currentDeviceType == 10) {
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="7">' + powerRating7DefaultText + '</option>');
+	}  else if(isGeta()) {
+		$('#powerRatingModelInput').append('<option class="custom" value="0">' + powerRating0_GETAText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1_GETAText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2_GETAText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3_GETAText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4_GETAText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5_GETAText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6_GETAText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="7">' + powerRating7_GETAText + '</option>');
+	} else {
+		$('#powerRatingModelInput').append('<option class="custom" value="1">' + powerRating1DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="2">' + powerRating2DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="3">' + powerRating3DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="4">' + powerRating4DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="5">' + powerRating5DefaultText + '</option>');
+		$('#powerRatingModelInput').append('<option class="custom" value="6">' + powerRating6DefaultText + '</option>');
+	}
+}
+
+function fillMachineTypeModelInput() {
+    $('#machineTypeModelInput option.custom').remove();
+    $('#machineTypeModelInput').append('<option class="custom" value="0">0: Defaul</option>');
+    if(!isMega24K()) {			//Mega 24K
+        $('#machineTypeModelInput').append('<option class="custom" value="1">1: FlexBoss18/21</option>');
+    }
+}
+
+function fillRuleModelInput() {
+	$('#ruleModelInput option.custom').remove();
+	if(isMega24K() && currentUsVersion != 1) {
+		$('#ruleModelInput').append('<option class="custom" value="3">' + '3: SouthAfrica' + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="4">' + '4: General' + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="5">' + '5: PR-LUMA' + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="6">' + '6: KIUC' + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="11">' + '11: G99' + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="12">' + '12: G98' + '</option>');
+	} else if(currentDtc == 1 && (currentDeviceType != 3 && currentMachineType != 0)) {
+		$('#ruleModelInput').append('<option class="custom" value="0">' + phraseModelAmericaRule0Text + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="1">' + phraseModelAmericaRule1Text + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="2">' + phraseModelAmericaRule2Text + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="3">' + phraseModelAmericaRule3Text + '</option>');
+		$('#ruleModelInput').append('<option class="custom" value="4">' + phraseModelAmericaRule4Text + '</option>');
+		if(currentDeviceType == 6 && isDevAccount) {
+			$('#ruleModelInput').append('<option class="custom" value="5">' + phraseModelAmericaRule5Text + '</option>');
+		}
+        if((currentDeviceType == 6 && currentPhase == 1 && (currentUsVersion == 1 || currentDtc == 1) || currentDeviceType == 9) && currentSlaveVersion >= 0x27 && currentFwVersion >= 0x27) {
+            $('#ruleModelInput').append('<option class="custom" value="6">' + phraseModelAmericaRule6Text + '</option>');
+        }
+	} else if(currentDeviceType == 6 && currentPhase == 1 && (currentUsVersion == 1 || currentDtc == 1) || isMega24K() && currentUsVersion == 1) {
+        $('#ruleModelInput').append('<option class="custom" value="0">' + phraseModelAmericaRule0Text + '</option>');
+        $('#ruleModelInput').append('<option class="custom" value="1">' + phraseModelAmericaRule1Text + '</option>');
+        $('#ruleModelInput').append('<option class="custom" value="2">' + phraseModelAmericaRule2Text + '</option>');
+        $('#ruleModelInput').append('<option class="custom" value="3">' + phraseModelAmericaRule3Text + '</option>');
+        $('#ruleModelInput').append('<option class="custom" value="4">' + phraseModelAmericaRule4Text + '</option>');
+        if((currentDeviceType == 6 || isMega24K()) && isDevAccount) {
+            $('#ruleModelInput').append('<option class="custom" value="5">' + phraseModelAmericaRule5Text + '</option>');
+        }
+        if(currentSlaveVersion >= 0x27 && currentFwVersion >= 0x27) {
+            $('#ruleModelInput').append('<option class="custom" value="6">' + phraseModelAmericaRule6Text + '</option>');
+        }
+    } else {
+		if(isSnaSeriesOrGetaOrGen3()) {
+			$('#ruleModelInput').append('<option class="custom" value="0">' + '0: EU (General 50Hz)' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="1">' + '1: US (Off-grid 60Hz)' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="2">' + '2: US (General 60Hz)' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="3">' + '3: BR (220V 60Hz)' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="4">' + '4: BR (120V 60Hz)' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="5">' + '5: EU (Off-grid 50Hz)' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="6">' + '6: JP (200V 50Hz)' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="7">' + '7: 7' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="8">' + '8: IT (CEI0-21)' + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="16">' + '16: SA (NRS097-1)' + '</option>');
+		} else if(!(isTripLvUs() || isTripHvUs())) {
+			$('#ruleModelInput').append('<option class="custom" value="0">' + phraseModelRule0Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="1">' + phraseModelRule1Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="2">' + phraseModelRule2Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="3">' + phraseModelRule3Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="4">' + phraseModelRule4Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="5">' + phraseModelRule5Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="6">' + phraseModelRule6Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="7">' + phraseModelRule7Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="8">' + phraseModelRule8Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="9">' + phraseModelRule9Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="10">' + phraseModelRule10Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="11">' + phraseModelRule11Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="12">' + phraseModelRule12Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="13">' + phraseModelRule13Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="14">' + phraseModelRule14Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="15">' + phraseModelRule15Text + '</option>');
+			$('#ruleModelInput').append('<option class="custom" value="16">' + phraseModelRule16Text + '</option>');
+		} else if(isTripLvUs()) {
+            $('#ruleModelInput').append('<option class="custom" value="0">' + phraseModelAmericaRule0Text + '</option>');
+            $('#ruleModelInput').append('<option class="custom" value="5">' + phraseModelAmericaRule5Text + '</option>');
+        } else if(isTripHvUs()) {
+            $('#ruleModelInput').append('<option class="custom" value="0">' + phraseModelAmericaRule0Text + '</option>');
+        }
+		if(isTrip12K() && !isTripLvUs() && !isTripHvUs() || isBess200K()) {		//Trip 12K device...
+			$('#ruleModelInput').append('<option class="custom" value="19">19: EN50549 / EN 50549 Hungary</option>');
+			$('#ruleModelInput').append('<option class="custom" value="20">20: Denmark</option>');
+			$('#ruleModelInput').append('<option class="custom" value="22">22: SPAIN</option>');
+			$('#ruleModelInput').append('<option class="custom" value="23">' + phraseModelRule23Text + '</option>');
+		}
+
+        if(!isSnaSeriesOrGetaOrGen3() && !isTripLvUs() && !isTripHvUs()) {
+            $('#ruleModelInput').append('<option class="custom" value="21">' + phraseModelRule21Text + '</option>');
+            $('#ruleModelInput').append('<option class="custom" value="24">' +  phraseModelRule24Text + '</option>');
+        }
+		
+		if(isTrip12K() && !isTripLvUs() && !isTripHvUs() || isBess200K()) {
+			$('#ruleModelInput').append('<option class="custom" value="25">25: Denmark-DK2</option>');
+		}
+		if(isGen2_7_14K() || isTrip12K() && !isTripLvUs() && !isTripHvUs() || isBess200K()) {
+			$('#ruleModelInput').append('<option class="custom" value="26">26.Brazil</option>');
+		}
+	}
+}
+
+function fillPvInputModeInput() {
+	$('#pvInputModeInput option.custom').remove();
+    if(isGen3()) {
+        $('#pvInputModeInput').append('<option class="custom" value="0">' + pvInputMode0_Gen3Text + '</option>');
+        $('#pvInputModeInput').append('<option class="custom" value="3">' + pvInputMode3_Gen3Text + '</option>');
+        $('#pvInputModeInput').append('<option class="custom" value="4">' + pvInputMode4_Gen3Text + '</option>');
+    } else if(currentDeviceType == 8 && (currentStandard == 'HAAA' || currentStandard == 'hAAA') && currentSlaveVersion >= 0x07 && currentFwVersion >= 0x06 && !isGen2_7_14K()) {
+		$('#pvInputModeInput').append('<option class="custom" value="0">' + pvInputMode0_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="1">' + pvInputMode1_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="2">' + pvInputMode2_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="3">3: ' + pvInputMode3DefaultText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="4">4: ' + pvInputMode4DefaultText + '</option>');
+	} else if(currentDeviceType == 6 || currentDeviceType == 7 || currentDeviceType == 8) {
+		$('#pvInputModeInput').append('<option class="custom" value="0">' + pvInputMode0_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="1">' + pvInputMode1_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="2">' + pvInputMode2_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="3">' + pvInputMode3_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="4">' + pvInputMode4_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="5">' + pvInputMode5_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="6">' + pvInputMode6_12KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="7">' + pvInputMode7_12KText + '</option>');
+	} else if(isTrip12K()) {
+		$('#pvInputModeInput').append('<option class="custom" value="0">' + pvInputMode0_TripText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="1">' + pvInputMode1_TripText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="2">' + pvInputMode2_TripText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="3">' + pvInputMode3_TripText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="4">' + pvInputMode4_TripText + '</option>');
+	}  else if(isBess200K()) {
+		$('#pvInputModeInput').append('<option class="custom" value="0">' + pvInputMode0_Bess200kText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="1">' + pvInputMode1_Bess200kText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="2">' + pvInputMode2_Bess200kText + '</option>');
+	} else if(isMega24K()) {
+		$('#pvInputModeInput').append('<option class="custom" value="0">' + pvInputMode0DefaultText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="1">' + pvInputMode1_24KText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="2">' + pvInputMode2_24KText + '</option>');
+	} else if(!isSnaSeries() && currentDeviceType != 5) {
+		$('#pvInputModeInput').append('<option class="custom" value="0">' + pvInputMode0DefaultText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="1">' + pvInputMode1DefaultText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="2">' + pvInputMode2DefaultText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="3">' + pvInputMode3DefaultText + '</option>');
+		$('#pvInputModeInput').append('<option class="custom" value="4">' + pvInputMode4DefaultText + '</option>');
+	}
+}
+
+function fillGridRegulationInput() {
+	$('#gridRegulationInput option.custom').remove();
+    if(isMega24K()) {
+        if(isFortressPlatform) {
+            $('#gridRegulationInput').append('<option class="custom" value="0">0: UL1741&IEEE1547-2018</option>');
+        } else {
+            $('#gridRegulationInput').append('<option class="custom" value="0">0: UL1741&IEEE1547</option>');
+        }
+        $('#gridRegulationInput').append('<option class="custom" value="1">1: Rsvd</option>');
+        $('#gridRegulationInput').append('<option class="custom" value="2">2: Rsvd</option>');
+        $('#gridRegulationInput').append('<option class="custom" value="5">5: Rsvd</option>');
+        $('#gridRegulationInput').append('<option class="custom" value="6">6: Rsvd</option>');
+        $('#gridRegulationInput').append('<option class="custom" value="10">10: Rsvd</option>');
+
+    } else {
+        if(currentDeviceType != 10) {
+            if(isFortressPlatform) {
+                $('#gridRegulationInput').append('<option class="custom" value="0">0: UL1741&IEEE1547-2018</option>');
+            } else {
+                $('#gridRegulationInput').append('<option class="custom" value="0">0: UL1741&IEEE1547</option>');
+            }
+            $('#gridRegulationInput').append('<option class="custom" value="1">1: HECO</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="2">2: USA(rule21)</option>');
+        }
+        if(!(currentDeviceType == 6 && currentPhase == 1 && (currentUsVersion == 1 || currentDtc == 1) || currentDeviceType == 9 || isMega24K() && currentUsVersion == 1)) {
+            $('#gridRegulationInput').append('<option class="custom" value="3">3: South Africa</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="4">4: General</option>');
+        }
+        if(currentDeviceType != 10) {
+            $('#gridRegulationInput').append('<option class="custom" value="5">5: PR-LUMA</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="6">6: KIUC</option>');
+
+            if((currentDeviceType == 6 && currentPhase == 1 && (currentUsVersion == 1 || currentDtc == 1)) && currentSlaveVersion >= 0x27 && currentFwVersion >= 0x27) {
+                $('#gridRegulationInput').append('<option class="custom" value="7">7: NewEngland</option>');
+            }
+            if(isMidbox() && currentSetPageType != 'remoteSetMidbox' && (masterInverterDeviceType == 6 && masterInverterPhase == 1 && (masterInverterUsVersion == 1 || masterInverterDtc == 1)) && masterInverterSlaveVersion >= 0x27 && masterInverterFwVersion >= 0x27) {
+                $('#gridRegulationInput').append('<option class="custom" value="7">7: NewEngland</option>');
+            }
+        }
+        if(currentDeviceType == 10) {
+            $('#gridRegulationInput').append('<option class="custom" value="7">7: VDE0123</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="8">8: AS4777</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="9">9: Newzealand</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="10">10: CGC</option>');
+        }
+        if(currentDeviceType == 10) {
+            $('#gridRegulationInput').append('<option class="custom" value="10">10: CGC</option>');
+        }
+        if(currentDeviceType == 6 || currentDeviceType == 9) {
+            $('#gridRegulationInput').append('<option class="custom" value="10">10: Brazil</option>');
+        }
+        if(!(currentDeviceType == 6 && currentPhase == 1 && (currentUsVersion == 1 || currentDtc == 1) || currentDeviceType == 9 || isMega24K() && currentUsVersion == 1)) {
+            $('#gridRegulationInput').append('<option class="custom" value="11">11: G99</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="12">12: G98</option>');
+        }
+        if(isLxpUS8_12k() && isFortressPlatform) {
+            $('#gridRegulationInput').append('<option class="custom" value="13">13: IEEE 1547 2014</option>');
+        }
+        if(currentDeviceType == 10) {
+            $('#gridRegulationInput').append('<option class="custom" value="13">13.N4105</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="14">14.CEI021</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="15">15.EN50438</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="16">16.EN50438Finland</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="17">17.Japan</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="18">18.PEA</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="19">19.MEA</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="20">20.EN50438Ireland</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="21">21.Czech</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="22">22.Barbados</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="23">23.CEI021ARETI</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="24">24.EN50549</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="25">25.Denmark</option>');
+            $('#gridRegulationInput').append('<option class="custom" value="26">26.PTPiREE(Poland)</option>');
+        }
+        // if(isGen2_7_14k()) {
+        // 	$('#gridRegulationInput').append('<option class="custom" value="27">27.SPINA</option>');
+        // 	$('#gridRegulationInput').append('<option class="custom" value="28">28.C10C11</option>');
+        // 	$('#gridRegulationInput').append('<option class="custom" value="29">29.TOR</option>');
+        // 	$('#gridRegulationInput').append('<option class="custom" value="30">30.Denmark2</option>');
+        // 	$('#gridRegulationInput').append('<option class="custom" value="31">31.CGC</option>');
+        // }
+    }
+}
+
+function fillSetMasterOrSlaveInput() {
+	$('#setMasterOrSlaveInput option.custom').remove();
+	if(currentSetPageType == 'remoteSet12K' || currentSetPageType == 'workingMode2_12K') {
+		if(isTrip12K() || isBess200K()) {			//Trip 12K...
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="3">' + slaveHybrid1TextTrip12K + '</option>');
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="2">' + slaveHybrid2Text + '</option>');
+		} else if(isGen3()) {
+            $('#setMasterOrSlaveInput').append('<option class="custom" value="0">' + slaveGen3_0Text + '</option>');
+            $('#setMasterOrSlaveInput').append('<option class="custom" value="1">' + slaveGen3_1Text + '</option>');
+            $('#setMasterOrSlaveInput').append('<option class="custom" value="3">' + slaveGen3_3Text + '</option>');
+        } else if((currentDeviceType == 8 && currentDtc != 1) || currentDeviceType == 10) {
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="1">' + slaveHybrid1Text + '</option>');
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="2">' + slaveHybrid2Text + '</option>');
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="3">' + slaveHybrid3Text + '</option>');
+		} else{
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="1">' + slaveHybrid1Text + '</option>');
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="2">' + slaveHybrid2Text + '</option>');
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="3">' + slaveHybrid3Text + '</option>');
+			$('#setMasterOrSlaveInput').append('<option class="custom" value="4">' + slaveHybrid4Text + '</option>');
+		}
+	}
+}
+
+// function fillAcChargeTypeInput() {
+//     $('#acChargeTypeInput option.custom').remove();
+//     if (isGen3()) {
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom" value="0">' + acChargeBaseOnGen3_0 + '</option>');
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom" value="1">' + acChargeBaseOnGen3_1 + '</option>');
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom" value="2">' + acChargeBaseOnGen3_2 + '</option>');
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom" value="3">' + acChargeBaseOnGen3_3 + '</option>');
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom" value="4">' + acChargeBaseOnGen3_4 + '</option>');
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom" value="5">' + acChargeBaseOnGen3_5 + '</option>');
+//     } else {
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom" value="0">' + acChargeBaseOn_0 + '</option>');
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom" value="1">' + acChargeBaseOn_1 + '</option>');
+//         $('.acChargeAcco #acChargeTypeInput, .acChargeAcco2 #acChargeTypeInput').append('<option class="custom is12kHybrid" value="2">' + acChargeBaseOn_2 + '</option>');
+//     }
+// }
+
+function fillSmartPortModeInput() {
+    $('#smartPort1ModeInput option.invPort').remove();
+    $('#smartPort1ModeInput option[value="0"]').text('Unused');
+    $('#smartPort2ModeInput .acCouple').show();
+    $('.smartPortBox2, .smartPortBox3, .smartPortBox4').show()
+    $('.smartPortBox2 .smartPortLabel').show()
+    $('.smartPortBox2 .smartLoadLabel').hide()
+    $('.smartPortBox1 .smartPortLabel').show()
+    $('.smartPortBox1 .smartPort1Label').hide()
+    $('.smartPortBox1 .smartLoadLabel').hide()
+    if(isMidMini()) {
+        $('#smartPort1ModeInput').append('<option class="invPort" value="3">INV</option>');
+        $('#smartPort2ModeInput .acCouple').hide();
+        $('.smartPortBox3, .smartPortBox4').hide()
+        $('.smartPortBox2 .smartPortLabel').hide()
+        $('.smartPortBox2 .smartLoadLabel').show()
+        $('.smartPortBox1 .smartPort1Label').show()
+        $('.smartPortBox1 .smartPortLabel').hide()
+        $('.smartPortBox1 .smartLoadLabel').hide()
+    }
+    if(isPowerHubLink()) {
+        $('#smartPort1ModeInput option[value="0"]').text('Hybrid Inverter');
+        $('.smartPortBox2, .smartPortBox3, .smartPortBox4').hide()
+    }
+}
+
+function checkFuncNPEHolder() {
+    if (isAdmin || isMaintain || isEG4Admin || isDevAccount) {
+        $('.funcNPEHolder').show();
+    } else if ((currentDeviceType == 8 || currentDeviceType == 10) && !isViewer) {
+        $('.funcNPEHolder').show();
+    } else {
+        $('.funcNPEHolder').hide();
+    }
+}

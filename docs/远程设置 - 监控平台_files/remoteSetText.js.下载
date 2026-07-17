@@ -1,0 +1,223 @@
+var powerRating1DefaultText = '1: 3kW';
+var powerRating2DefaultText = '2: 4kW';
+var powerRating3DefaultText = '3: 4.5kW';
+var powerRating4DefaultText = '4: 5kW';
+var powerRating5DefaultText = '5: 3.6kW';
+var powerRating6DefaultText = '6: 6kW';
+var powerRating7DefaultText = '7: 6.5kW';
+
+var powerRating0_12KText = '0: 5kW';
+var powerRating1_12KText = '1: 7.6kW';
+var powerRating2_12KText = '2: 8kW';
+var powerRating3_12KText = '3: 11.4kW';
+var powerRating4_12KText = '4: 10kW';
+var powerRating5_12KText = '5: 9.6kW';
+var powerRating6_12KText = '6: 12kW';
+var powerRating7_12KText = '7: 7kW';
+var powerRating8_12KText = '8: 16kW';
+var powerRating9_12KText = '9: 13kW';
+var powerRating10_12KText = '10: 14kW';
+var powerRating11_12KText = '11: 15kW';
+var powerRating12_12KText = '12: 10.5kW';
+var powerRating13_12KText = '13: 9.6kW_Pro';
+var powerRating14_12KText = '14: 6kW';
+var powerRating15_12KText = '15: 13kW_Pro';
+
+var powerRating0_Flex100Text = '0: 5kW';
+var powerRating1_Flex100Text = '1: 7.6kW';
+var powerRating2_Flex100Text = '2: 8kW';
+var powerRating3_Flex100Text = '3: 11.4kW';
+var powerRating4_Flex100Text = '4: 10kW';
+var powerRating5_Flex100Text = '5: 9.6kW';
+var powerRating6_Flex100Text = '6: 12kW';
+var powerRating7_Flex100Text = '7: 7kW';
+var powerRating8_Flex100Text = '8: 16kW';
+var powerRating9_Flex100Text = '9: 13kW';
+var powerRating10_Flex100Text = '10: 14kW';
+var powerRating11_Flex100Text = '11: 15kW';
+var powerRating12_Flex100Text = '12: 18kW';
+var powerRating13_Flex100Text = '13: 9.6kW_Pro';
+var powerRating14_Flex100Text = '14: 6kW';
+var powerRating15_Flex100Text = '15: 13kW_Pro';
+
+var powerRating0_SNA12KText = '0: 10.5kW';
+var powerRating1_SNA12KText = '1: 7.5kW';
+var powerRating2_SNA12KText = '2: 13kW';
+var powerRating3_SNA12KText = '3: 10kW';
+var powerRating4_SNA12KText = '4: 12.6kW';
+var powerRating5_SNA12KText = '5: 14kW';
+var powerRating6_SNA12KText = '6: 12kW';
+var powerRating7_SNA12KText = '7: 15kW';
+var powerRating8_SNA12KText = '8: 7.3kW';
+
+var powerRating0_GETAText = '0: 1.5kW';
+var powerRating1_GETAText = '1: 3kW';
+var powerRating2_GETAText = '2: 2.5kW';
+var powerRating3_GETAText = '3: 3.6kW';
+var powerRating4_GETAText = '4: 5kW';
+var powerRating5_GETAText = '5: 4.5kW';
+var powerRating6_GETAText = '6: 6kW';
+var powerRating7_GETAText = '7: 6.5kW';
+
+var powerRating0_7_10KText = '0: 4.6kW';
+var powerRating1_7_10KText = '1: 5kW';
+var powerRating2_7_10KText = '2: 6kW';
+var powerRating3_7_10KText = '3: 7kW';
+var powerRating4_7_10KText = '4: 8kW';
+var powerRating5_7_10KText = '5: 10kW';
+
+var powerRating0_TRIP_12KText = '0: 6kW';
+var powerRating1_TRIP_12KText = '1: 8kW';
+var powerRating2_TRIP_12KText = '2: 10kW';
+var powerRating3_TRIP_12KText = '3: 12kW';
+var powerRating4_TRIP_12KText = '4: 15kW';
+var powerRating5_TRIP_12KText = '5: 20kW';
+var powerRating6_TRIP_12KText = '6: 25kW';
+var powerRating7_TRIP_12KText = '7: 30kW';
+
+var powerRating0_TRIP_LvText = '0: 5kW';
+var powerRating1_TRIP_LvText = '1: 6kW';
+var powerRating2_TRIP_LvText = '2: 8kW'
+var powerRating3_TRIP_LvText = '3: 10kW';
+var powerRating4_TRIP_LvText = '4: 12kW';
+var powerRating5_TRIP_LvText = '5: 15kW';
+var powerRating6_TRIP_LvText = '6: 20kW';
+
+var powerRating0_TRIP_V2Text = '0: 10kW';
+var powerRating1_TRIP_V2Text = '1: 12kW';
+var powerRating2_TRIP_V2Text = '2: 15kW'
+var powerRating3_TRIP_V2Text = '3: 20kW';
+var powerRating4_TRIP_V2Text = '4: 25kW';
+var powerRating5_TRIP_V2Text = '5: 30kW';
+
+var powerRating1_MEGA_24KText = '1: 24kW';
+var powerRating2_MEGA_24KText = '2: 25kW';
+
+var powerRating0_GEN3_Text = '0: 8kW';
+var powerRating1_GEN3_Text = '1: 3kW';
+var powerRating2_GEN3_Text = '2: 4kW';
+var powerRating3_GEN3_Text = '3: 4.6kW';
+var powerRating4_GEN3_Text = '4: 5kW';
+var powerRating5_GEN3_Text = '5: 3.6kW';
+var powerRating6_GEN3_Text = '6: 6kW';
+var powerRating7_GEN3_Text = '7: 6.5kW';
+var powerRating8_GEN3_Text = '8: 8kW-Pro';
+var powerRating9_GEN3_Text = '9: 10kW-Pro';
+var powerRating10_GEN3_Text = '10: 12.6kW-Pro';
+var powerRating11_GEN3_Text = '11: 14kW-Pro';
+var powerRating12_GEN3_Text = '12: 12kW-Pro';
+var powerRating13_GEN3_Text = '13: 15kW-Pro';
+var powerRating14_GEN3_Text = '14: 13kW-Pro';
+var powerRating15_GEN3_Text = '15: 7kW';
+
+var powerRating0_GenovaText = '0: 8kW';
+var powerRating6_GenovaText = '6: 6kW';
+var powerRating7_GenovaText = '7: 6.5kW';
+
+var powerRating1_ResonaText = '1: 3kW';
+var powerRating2_ResonaText = '2: 2.5kW';
+var powerRating5_ResonaText = '5: 3.6kW';
+
+var powerRating1_BESS200K_12KText = '1: 70kW(120Vac)';
+var powerRating2_BESS200K_12KText = '2: 80kW(230Vac)';
+var powerRating3_BESS200K_12KText = '3: 100kW(230Vac)';
+var powerRating4_BESS200K_12KText = '4: 125kW(230Vac)';
+var powerRating5_BESS200K_12KText = '5: 150kW(277Vac)';
+
+function go2SetupWizard() {
+    window.open(baseUrl + '/web/maintain/setupWizard?serialNum=' + $('#inverterSearchInput').combogrid('getValue'));
+}
+
+function exportPdf(isNew) {
+    if (typeof html2pdf !== 'undefined') {
+        exportPdfConfirm(isNew)
+    } else {
+        $('#exportPdfButton').button('loading')
+        $.getScript(`${baseUrl}/web/lib/html2pdf/html2pdf.bundle.min.js`, function () {
+            $('#exportPdfButton').button('reset')
+            exportPdfConfirm(isNew)
+        });
+    }
+}
+
+function exportPdfConfirm(isNew) {
+    var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+    if (!inverterSn) {
+        return;
+    }
+
+    //Scroll to top...
+    $(window).scrollTop(0);
+
+    //Expand all component...
+    $('.setToggleHolder').each(function (index, element) {
+        var $setToggleButton = $(element).find('.setToggleButton');
+        var $targetId = $('#' + $setToggleButton.attr('id') + 'Target');
+        if (!$targetId.is(':visible')) {
+            $targetId.show();
+            $setToggleButton.attr('src', resourceBaseUrl + '/web/img/maintain/ic_action_expand.png');
+        }
+    });
+
+    //Hide all set buttons...
+    $('#remoteSetContainer label.control-label').addClass('input-sm');
+    $('#remoteSetContainer input.form-control').addClass('input-sm');
+    $('#remoteSetContainer select.form-control').addClass('input-sm');
+    $('#remoteSetContainer button').addClass('btn-sm').find(':not([onclick^="javascript: functionControl"]):not([onclick^="javascript: execActionNotice"])').hide();
+
+    $('#pageContainer').css('margin-left', '0');
+    $('#pageContainer').css('padding-top', '0');
+    $('#pageContainer').css('width', '100%');
+
+    if (!isNew) {
+        var remoteSetContainer = document.getElementById('pageContainer');
+    } else {
+        checkScreenSize(true)
+        $('.underline').each(function () {
+            this.style.setProperty('width', '60%', 'important');
+        });
+        const targetTabValue = $("#remoteSetContainer span[targettab]")
+        $.each(targetTabValue, (index, item) => {
+            if (!$('.' + $(item).attr('targettab')).is(':visible')) {
+                $('.' + $(item).attr('targettab')).show().addClass('tempOperateClass')
+            }
+        })
+        const modeList = $('#WorkModeSelectionToggleButtonTarget .workingModeList li')
+        $.each(modeList, (index, item) => {
+            if ($(item).is(':visible') && !$(item).hasClass("activeModeBtn")) {
+                var match = $(item).attr('onclick').replace('javascript: ', '').match(/openSetting\(.*?,\s*['"](.+?)['"]\)/);
+                $('.' + match[1] + ':not(.chart *)').show().addClass('tempOperateClass')
+            }
+        })
+        var remoteSetContainer = document.getElementById('remoteSetContainer');
+    }
+    setTimeout(() => {
+        var opt = {filename: 'Remote_Set_' + inverterSn + '.pdf'};
+        // New Promise-based usage:
+        html2pdf().set(opt).from(remoteSetContainer).save();
+    })
+
+
+    //Recover
+    setTimeout(function () {
+        recoverPageContainer(isNew);
+    }, 1000);
+}
+
+//Recover
+function recoverPageContainer(isNew) {
+    $('#pageContainer').css('margin-left', '210px');
+    $('#pageContainer').css('padding-top', '80px');
+    $('#pageContainer').css('width', 'calc(100% - 211px)');
+
+    $('#remoteSetContainer label.control-label').removeClass('input-sm');
+    $('#remoteSetContainer input.form-control').removeClass('input-sm');
+    $('#remoteSetContainer select.form-control').removeClass('input-sm');
+    $('#remoteSetContainer button').removeClass('btn-sm').find(':not([onclick^="javascript: functionControl"]):not([onclick^="javascript: execActionNotice"])').fadeIn();
+    if (isNew) {
+        $('.underline').css('width', 'auto');
+        $('.tempOperateClass').hide()
+        $('.remoteSetContainer').removeClass('tempOperateClass')
+        checkScreenSize()
+    }
+}

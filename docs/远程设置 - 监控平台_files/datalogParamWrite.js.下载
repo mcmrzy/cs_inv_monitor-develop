@@ -1,0 +1,73 @@
+function writeDatalogParam(button) {
+	var $paramSetHolder = $(button).parent();
+	var $valueInput = $paramSetHolder.find('input');
+	
+	var valueText = $valueInput.val();
+	
+	if(!valueText) {
+		alert(paramEmptyAlertText);
+		return;
+	}
+	
+	if($valueInput.is('[intCheck]')) {
+		if(!valueText.search('0x') == 0 && !checkInt(valueText)) {
+			alert(paramShouldIntText);
+			return;
+		}
+	}
+	
+	if($valueInput.is('[floatCheck]')) {
+		if(!checkFloat(valueText)) {
+			alert(paramShouldFloatText);
+			return;
+		}
+	}
+	
+	if($valueInput.is('[characterCheck]')) {
+		for(var i = 0; i < valueText.length; i++) {
+			var c = valueText.charCodeAt(i);
+			if(!(c >= 0x41 && c <= 0x5A) && !(c >= 0x61 && c <= 0x7A)) {
+				alert(paramShouldCharText);
+				return;
+			}
+		}
+	}
+	
+	var datalogParam = $valueInput.attr('datalogParam');
+	var validType = $valueInput.attr('validType');
+	
+	switch(validType) {
+		case 'range': {
+			var min = $valueInput.is('[min]') ? $valueInput.attr('min') : 0;
+			var max = $valueInput.attr('max');
+			if(parseFloat(valueText) < min || parseFloat(valueText) > max) {
+				alert(paramOutRangeText + ': [' + min + ', ' + max + ']');
+				return;
+			}
+			break;
+		}
+	}
+	
+	postWriteDatalogParam(datalogParam, valueText);
+}
+
+function writeDatalogComboParam(button) {
+	var $paramSetHolder = $(button).parent();
+	var $valueCombo = $paramSetHolder.find('select[datalogParam]');
+	
+	var valueText = $valueCombo.val();
+	var datalogParam = $valueCombo.attr('datalogParam');
+	
+	postWriteDatalogParam(datalogParam, valueText);
+}
+
+function postWriteDatalogParam(datalogParam, valueText) {
+	$.post(baseUrl + '/web/maintain/writeDatalogParam/write', {
+			datalogSn: currentDatalogSn,
+			datalogParam: datalogParam,
+			valueText: valueText,
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}

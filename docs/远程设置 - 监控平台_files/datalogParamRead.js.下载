@@ -1,0 +1,52 @@
+function readDatalogParam(button) {
+	var $paramSetHolder = $(button).parent();
+	var $valueInput = $paramSetHolder.find('input');
+	var datalogParam = $valueInput.attr('datalogParam');
+	
+	postReadDatalogParam(datalogParam);
+}
+
+function readDatalogComboParam(button) {
+	var $paramSetHolder = $(button).parent();
+	var $valueCombo = $paramSetHolder.find('select[datalogParam]');
+	$valueCombo.val('-1');
+	var datalogParam = $valueCombo.attr('datalogParam');
+	
+	postReadDatalogParam(datalogParam);
+}
+
+function postReadDatalogParam(datalogParam) {
+	$.post(baseUrl + '/web/maintain/readDatalogParam/read', {
+		datalogSn: currentDatalogSn,
+		datalogParam: datalogParam }, function(response) {
+			if(response.success) {			//参数读取成功
+				showReadDatalogParamResult(response);
+			} else {						//参数读取失败
+				showPostWriteResult(response);
+			}
+	}, 'json');
+}
+
+function readDatalogEn(button) {
+	var $paramSetHolder = $(button).parent().attr('datalogParam');
+	postReadDatalogParam($paramSetHolder)
+}
+
+
+function showReadDatalogParamResult(response) {
+	if(response.hasOwnProperty('INPUT_INTERVAL')) {
+		$('input[datalogParam="INPUT_INTERVAL"]').val(response.INPUT_INTERVAL);
+	}
+	if(response.hasOwnProperty('DONGLE_SN')) {
+		$('input[datalogParam="DONGLE_SN"]').val(response.DONGLE_SN);
+	}
+	if(response.hasOwnProperty('FIRMWARE_VERSION')) {
+		$('input[datalogParam="FIRMWARE_VERSION"]').val(response.FIRMWARE_VERSION);
+	}
+	if(response.hasOwnProperty('SERVER_IP_PORT')) {
+		$('select[datalogParam="SERVER_IP_PORT"]').val(response.SERVER_IP_PORT);
+	}
+	if(response.hasOwnProperty('DONGLE_WIFI_ENABLE')) {
+		$('select[datalogParam="DONGLE_WIFI_ENABLE"]').val(response.DONGLE_WIFI_ENABLE);
+	}
+}

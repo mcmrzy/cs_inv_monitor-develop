@@ -1,0 +1,145 @@
+
+//list数组子项可以是普通字符串，也可以是对象
+// 如：["参数名", {param: '参数名', value: 赋值需要处理的处理后的值, isMultipleData: true(循环参数名需要传true), firstIndex: '循环参数名第一个索引值', firstIndex: '循环参数名最后一个索引值'}]
+//
+function setInputHoldParam(list, response) {
+    $.each(list, function(index, item){
+        let formParam = {}
+        if(!item.isMultipleData) {
+            formParam.firstIndex = 1
+            formParam.lastIndex = 1
+            formParam.param = (item.value || item.value ==0) ? item.param:item
+        }else {
+            formParam = item
+        }
+        for(let i = formParam.firstIndex; i<=formParam.lastIndex; i++) {
+            let name = formParam.isMultipleData? formParam.param.replace(/\{(\w+)\}/g, i):formParam.param
+            if(response.hasOwnProperty(name)) {
+                $('input[holdParam="'+name+'"]').val((item.value||item.value==0)? item.value : response[name]);
+            }
+        }
+    })
+}
+
+function setInputBitParam(list, response) {
+    $.each(list, function(index, item){
+        let formParam = {}
+        if(!item.isMultipleData) {
+            formParam.firstIndex = 1
+            formParam.lastIndex = 1
+            formParam.param = (item.value || item.value ==0) ? item.param:item
+        }else {
+            formParam = item
+        }
+        for(let i = formParam.firstIndex; i<=formParam.lastIndex; i++) {
+            let name = formParam.isMultipleData? formParam.param.replace(/\{(\w+)\}/g, i):formParam.param
+            if(response.hasOwnProperty(name)) {
+                $('input[bitParam="'+name+'"]').val((item.value||item.value==0)? item.value : response[name]);
+            }
+        }
+    })
+}
+
+function setSelectHoldParam(list, response) {
+    $.each(list, function(index, item){
+        let formParam = {}
+        if(!item.isMultipleData) {
+            formParam.firstIndex = 1
+            formParam.lastIndex = 1
+            formParam.param = (item.value || item.value ==0) ? item.param:item
+        }else {
+            formParam = item
+        }
+        for(let i = formParam.firstIndex; i<=formParam.lastIndex; i++) {
+            let name = formParam.isMultipleData? formParam.param.replace(/\{(\w+)\}/g, i):formParam.param
+            if(response.hasOwnProperty(name)) {
+                $('select[holdParam="'+name+'"]').val((item.value||item.value==0)? item.value : response[name]);
+            }
+        }
+    })
+}
+
+function setSelectBitParam(list, response) {
+    $.each(list, function(index, item){
+        let formParam = {}
+        if(!item.isMultipleData) {
+            formParam.firstIndex = 1
+            formParam.lastIndex = 1
+            formParam.param = (item.value || item.value ==0) ? item.param:item
+        }else {
+            formParam = item
+        }
+        for(let i = formParam.firstIndex; i<=formParam.lastIndex; i++) {
+            let name = formParam.isMultipleData? formParam.param.replace(/\{(\w+)\}/g, i):formParam.param
+            if(response.hasOwnProperty(name)) {
+                $('select[bitParam="'+name+'"]').val((item.value||item.value==0)? item.value : response[name]);
+            }
+        }
+    })
+}
+
+function setDateHoldParam(list, response) {
+    $.each(list, function(index, item){
+        let formParam = {}
+        if(!item.isMultipleData) {
+            formParam.firstIndex = 1
+            formParam.lastIndex = 1
+            formParam.param = (item.value || item.value ==0) ? item.param:item
+        }else {
+            formParam = item
+        }
+        for(let i = formParam.firstIndex; i<=formParam.lastIndex; i++) {
+            let name = formParam.isMultipleData? formParam.param.replace(/\{(\w+)\}/g, i):formParam.param
+            if(response.hasOwnProperty(name)) {
+                $('input[holdParam="'+name+'"]').data('time',(item.value||item.value==0)? item.value : response[name]);
+            }
+        }
+    })
+}
+
+function setDivFunctionParam(list, response) {
+    $.each(list, function(index, item){
+        let formParam = {}
+        if(!item.isMultipleData) {
+            formParam.firstIndex = 1
+            formParam.lastIndex = 1
+            formParam.param = (item.value || item.value ==0) ? item.param:item
+        }else {
+            formParam = item
+        }
+        for(let i = formParam.firstIndex; i<=formParam.lastIndex; i++) {
+            let name = formParam.isMultipleData? formParam.param.replace(/\{(\w+)\}/g, i):formParam.param
+            if(response.hasOwnProperty(name)) {
+                $('div[functionParam="'+name+'"] button').each(function(inx, element) {
+                    if($(element).hasClass('btn-success')) {
+                        $(element).addClass('btn-default').removeClass('btn-success');
+                    }
+                });
+                $('div[functionParam="'+name+'"] button[onclick*="' + ((item.value||item.value==0)? item.value : response[name]) + '"]').addClass('btn-success').removeClass('btn-default');
+            }
+        }
+    })
+}
+function setDivHoldParam(list, response) {
+    $.each(list, function(index, item){
+        let formParam = {}
+        if(!item.isMultipleData) {
+            formParam.firstIndex = 1
+            formParam.lastIndex = 1
+            formParam.param = (item.value || item.value ==0) ? item.param:item
+        }else {
+            formParam = item
+        }
+        for(let i = formParam.firstIndex; i<=formParam.lastIndex; i++) {
+            let name  = formParam.isMultipleData? formParam.param.replace(/\{(\w+)\}/g, i):formParam.param
+            if(response.hasOwnProperty(name)) {
+                $('div[holdParam="'+name+'"] button').each(function(inx, element) {
+                    if($(element).hasClass('btn-success')) {
+                        $(element).addClass('btn-default').removeClass('btn-success');
+                    }
+                });
+                $('div[functionParam="'+name+'"] button[onclick*="' + ((item.value||item.value==0)? item.value : response[name]) + '"]').addClass('btn-success').removeClass('btn-default');
+            }
+        }
+    })
+}

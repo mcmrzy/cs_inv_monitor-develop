@@ -1,0 +1,84 @@
+#remoteSetContainer input[type=text] {
+	font-size: 12px;
+}
+
+.setToggleHolder {
+	cursor: pointer;
+}
+
+.remoteSetTitle {
+	color: white;
+	margin: 0;
+	padding: 20px 20px 20px 62px;
+	background-color: rgba(99, 173, 130, 1);
+	border-top-left-radius: 5px;
+	border-top-right-radius: 5px;
+}
+
+.form-group label {
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.timeInputHolder {
+	padding-right: 5px;
+	padding-left: 5px;
+	width: 12.6666667%;
+}
+
+.doubleInputHolder {
+	padding-right: 5px;
+	padding-left: 5px;
+	width: 16.66666667%;
+}
+
+.timeInputHolder input, .doubleInputHolder input {
+	padding-left: 3px;
+	padding-right: 3px;
+}
+
+.colonSpan {
+	float: left;
+	height: 34px;
+	line-height: 34px;
+}
+
+.leadAcidBatteryParamHolder {
+	display: none;
+}
+
+.groupInnerHolder {
+	padding-top: 10px!important;
+}
+
+.toggleButtonTargetHolder {
+	padding-top: 15px;
+	background-color: white;
+}
+
+.feedInParamHolder {
+	display: none;
+}
+
+.offGridHardV11ShowHolder {
+	display: none;
+}
+
+.testValue {
+	display: inline-block;
+	width: 100px;
+	border-bottom: 1px solid #000;
+	height: 28px;
+	padding-top: 6px;
+}
+.pfw10 {
+    width: calc(100% - 10px);
+    float: left;
+    margin-right: 10px;
+}
+.flexM10 {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0;
+    margin-left: 10px;
+}

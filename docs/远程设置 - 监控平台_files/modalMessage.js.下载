@@ -1,0 +1,108 @@
+var tempActionName = ''
+var tempParam = ''
+var tempIndex = 0
+
+function batteryVoltageActionClick(actionName, param, index = 0) {
+    if(!isFortressAccount) {
+        execActionNotice(actionName, param, index)
+    } else {
+        tempActionName = actionName
+        tempParam = param
+        tempIndex = index
+        $('#confirmBatteryVoltageModal').modal()
+    }
+}
+$('#batteryVoltageModalSubmit').click(function() {
+    execActionNotice(tempActionName, tempParam, tempIndex)
+    $('#confirmBatteryVoltageModal').modal('hide')
+})
+function execActionNotice(actionName, param, index=0) {
+    switch(actionName) {
+        case 'FUNC_ISO_EN_disable_false':
+            $('#actionNoticeTextHolder').text(isoDisableNoticeText);
+            $('#actionNoticeModalSubmit').attr('onclick', "javascript: $('#actionNoticeModal').modal('hide'); functionControlByBtnId('FUNC_ISO_EN_disableBtn', false);");
+            $('#actionNoticeModal').modal();
+            break;
+        case 'FUNC_AC_COUPLING_FUNCTION_true':
+            $('#actionNoticeTextHolder').html('<p>' + isAcCoupleNoticeText1 + '<br>' + isAcCoupleNoticeText2 + '</p><p>'+ isAcCoupleNoticeText3 +' <br> ' + isAcCoupleNoticeText4 + '</p>');
+            $('#actionNoticeModalSubmit').attr('onclick', "javascript: $('#actionNoticeModal').modal('hide'); functionControlByBtnId('FUNC_AC_COUPLING_FUNCTION', true);");
+            $('#actionNoticeModal').modal();
+            break;
+        case 'FUNC_SMART_LOAD_ENABLE_true':
+            $('#actionNoticeTextHolder').html('<p>' + isSmartLoadNoticeText1 + '</p> <p>'+ isSmartLoadNoticeText2 +'.</p>');
+            $('#actionNoticeModalSubmit').attr('onclick', "javascript: $('#actionNoticeModal').modal('hide'); functionControlByBtnId('FUNC_SMART_LOAD_ENABLE', true);");
+            $('#actionNoticeModal').modal();
+            break;
+        case 'FUNC_MIDBOX_EN_true':
+            if(isGenova()) {
+                $('#actionNoticeTextHolder').html('<p>' + isMidBoxGoLinkEnableText + '</p>');
+            } else {
+                $('#actionNoticeTextHolder').html('<p>' + isMidBoxEnableText + '</p>');
+            }
+            $('#actionNoticeModalSubmit').attr('onclick', "javascript: $('#actionNoticeModal').modal('hide'); functionControlByBtnId('FUNC_MIDBOX_EN', true);");
+            $('#actionNoticeModal').modal();
+            break;
+        case 'HOLD_SERIAL_NUM':
+            $('#actionNoticeTextHolder').html('<p>' + setSerialNumberMessageText + '</p>');
+            $('#actionNoticeModalSubmit').off('click').on('click', function() {
+                $('#actionNoticeModal').modal('hide');
+                writeParamValue(param);
+            });
+            $('#actionNoticeModal').modal();
+            break;
+        case 'INPUT_BATTERY_VOLTAGE':
+            $('#actionNoticeTextHolder').html('<p>' + setBatteryVoltageCorrectionMessageText + '</p>');
+            $('#actionNoticeModalSubmit').off('click').on('click', function() {
+                $('#actionNoticeModal').modal('hide');
+                writeParamValue(param, index);
+            });
+            $('#actionNoticeModal').modal();
+            break;
+        case 'ENERGY_RECORD_CLEAR_BUTTON':
+            $('#actionNoticeTextHolder').html('<p>' + setClearEnergyRatioMessageText + '</p>');
+            $('#actionNoticeModalSubmit').off('click').on('click', function() {
+                $('#actionNoticeModal').modal('hide');
+                resetParamValue($(param).attr('id'));
+            });
+            $('#actionNoticeModal').modal();
+            break;
+        case 'ADJ_RATIO_CLEAR':
+            $('#actionNoticeTextHolder').html('<p>' + setClearAdjRatioMessageText + '</p>');
+            $('#actionNoticeModalSubmit').off('click').on('click', function() {
+                $('#actionNoticeModal').modal('hide');
+                resetParamValue($(param).attr('id'));
+            });
+            $('#actionNoticeModal').modal();
+            break;
+        case 'FAULT_RECORD_CLEAR':
+            $('#actionNoticeTextHolder').html('<p>' + setClearFaultRecordMessageText + '</p>');
+            $('#actionNoticeModalSubmit').off('click').on('click', function() {
+                $('#actionNoticeModal').modal('hide');
+                resetParamValue($(param).attr('id'));
+            });
+            $('#actionNoticeModal').modal();
+            break;
+        case 'RESET_2_FACTORY':
+            $('#actionNoticeTextHolder').html('<p>' + setResetToFactoryMessageText + '</p>');
+            $('#actionNoticeModalSubmit').off('click').on('click', function() {
+                $('#actionNoticeModal').modal('hide');
+                writeDatalogParam($(param));
+            });
+            $('#actionNoticeModal').modal();
+            break;
+        case 'REBOOT_DONGLE':
+            $('#actionNoticeTextHolder').html('<p>' + setRebootDongleMessageText + '</p>');
+            $('#actionNoticeModalSubmit').off('click').on('click', function() {
+                $('#actionNoticeModal').modal('hide');
+                writeDatalogParam($(param));
+            });
+            $('#actionNoticeModal').modal();
+            break;
+        case 'FUNC_BATTERY_CALIBRATION_EN_true':
+            $('#actionNoticeTextHolder').html('<p>' + isBatteryCalibration + '</p>');
+            $('#actionNoticeModalSubmit').attr('onclick', "javascript: $('#actionNoticeModal').modal('hide'); functionControlByBtnId('FUNC_BATTERY_CALIBRATION_EN', true);");
+            $('#actionNoticeModal').modal();
+            break;
+
+    }
+}

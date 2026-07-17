@@ -1,0 +1,545 @@
+var currentReadMultiParamsStartRegister = -1;
+//var readMultiParamsErrorCount = 0;
+var panelMode = false
+function readMultiParams(startRegister, pointNumber) {
+	if(startRegister != 5000) {
+		pointNumber = ((currentProtocolVersion == '4' || currentProtocolVersion == '5' || currentProtocolVersion == '6') ? 127 : 40)
+	}
+	
+	if(currentReadMultiParamsStartRegister != startRegister) {
+		currentReadMultiParamsStartRegister = startRegister;
+//		readMultiParamsErrorCount = 0;
+	}
+	
+	var $readButton = ((startRegister == 5000) ? $('#readBatteryParamButton') : $('#readAllParamButton'));
+	$readButton.button('loading');
+	var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+	$.post(baseUrl + '/web/maintain/remoteRead/read', {
+		inverterSn: inverterSn,
+		startRegister: startRegister,
+		pointNumber: pointNumber,
+		autoRetry: true }, function(response) {
+			if(response.success) {			//参数读取成功
+				//Read All Parameter...
+				if(currentDeviceType != 5 && currentDeviceType != 9) {		//Not LSP 100K and Not Midbox
+					showReadParamsResult(response);
+
+					if(currentProtocolVersion == '4' || currentProtocolVersion == '5' || currentProtocolVersion == '6') {
+						if(startRegister == 0) {
+                            panelMode = response.panelMode
+							setTimeout("readMultiParams(127, 127)", 1000);
+						} else {
+							var finished = true;
+
+							if(startRegister == 127) {
+								if(isSnaSeries() || currentDeviceType == 6) {
+									finished = false;
+									setTimeout("readMultiParams(240, 40)", 1000);
+								}
+							}
+							if(startRegister == 240) {
+								if(isSnaSeries() && allowCtrlHold601) {			//Off-Grid
+									finished = false;
+									setTimeout("readMultiParams(600, 40)", 1000);
+								}
+							}
+							if(finished) {
+								currentReadMultiParamsStartRegister = -1;
+								$readButton.button('reset');
+							}
+						}
+					} else {
+						if(startRegister == 0) {
+							setTimeout("readMultiParams(40, 40)", 1000);
+						} else if(startRegister == 40) {
+							setTimeout("readMultiParams(80, 40)", 1000);
+						} else if(startRegister == 80) {
+							setTimeout("readMultiParams(120, 40)", 1000);
+						} else if(startRegister == 120) {
+							setTimeout("readMultiParams(160, 40)", 1000);
+						} else if(startRegister == 160) {
+							setTimeout("readMultiParams(200, 40)", 1000);
+						} else {
+							var finished = true;
+
+							if(startRegister == 200) {
+								if(isSnaSeries() || currentDeviceType == 6) {
+									finished = false;
+									setTimeout("readMultiParams(240, 40)", 1000);
+								}
+							}
+							if(startRegister == 240) {
+								if(isSnaSeries() && allowCtrlHold601) {			//Off-Grid
+									finished = false;
+									setTimeout("readMultiParams(600, 40)", 1000);
+								}
+							}
+
+//						if(finished && startRegister != 5000) {
+//							if(readBattInfoIfNeed && currentWithbatteryData) {		//Battery data
+//								finished = false;
+//								setTimeout("readMultiParams(5000, 40)", 1000);
+//							}
+//						}
+
+							if(finished) {
+								currentReadMultiParamsStartRegister = -1;
+								$readButton.button('reset');
+							}
+						}
+					}
+				} else if(currentDeviceType == 9) {			//Midbox
+					showMidboxReadParamsResult(response);
+					if(currentProtocolVersion == '4' || currentProtocolVersion == '5' || currentProtocolVersion == '6') {
+						if(startRegister == 0) {
+							setTimeout("readMultiParams(127, 127)", 1000);
+						} else if(startRegister == 127) {
+							setTimeout("readMultiParams(254, 127)", 1000);
+						} else if(startRegister == 254) {
+							setTimeout("readMultiParams(2032, 127)", 1000);
+						}else {
+							currentReadMultiParamsStartRegister = -1;
+							$readButton.button('reset');
+						}
+					} else {
+						if(startRegister == 0) {
+							setTimeout("readMultiParams(40, 40)", 1000);
+						} else if(startRegister == 40) {
+							setTimeout("readMultiParams(80, 40)", 1000);
+						} else if(startRegister == 80) {
+							setTimeout("readMultiParams(120, 40)", 1000);
+						} else if(startRegister == 120) {
+							setTimeout("readMultiParams(160, 40)", 1000);
+						} else if(startRegister == 160) {
+							setTimeout("readMultiParams(200, 40)", 1000);
+						} else if(startRegister == 200) {
+							setTimeout("readMultiParams(240, 40)", 1000);
+						} else if(startRegister == 240) {
+							setTimeout("readMultiParams(280, 40)", 1000);
+						} else {
+							currentReadMultiParamsStartRegister = -1;
+							$readButton.button('reset');
+						}
+					}
+				} else {			//LSP 100K
+					showLspReadParamsResult(response);
+					
+					if(startRegister == 0) {
+						setTimeout("readMultiParams(127, 127)", 1000);
+					} else {
+						currentReadMultiParamsStartRegister = -1;
+						$readButton.button('reset');
+						
+						$('.lspGroup button').removeAttr('disabled');
+					}
+				}
+			} else {						//参数读取失败
+//				if(++readMultiParamsErrorCount >= 3 || response.msg == 'DEVICE_OFFLINE') {
+					currentReadMultiParamsStartRegister = -1;
+					$readButton.button('reset');
+					showPostWriteFailReason(response, true);
+//				} else {
+//					setTimeout("readMultiParams(" + startRegister + ", " + pointNumber + ")", 1000);
+//				}
+			}
+	}, 'json');
+}
+
+var HOLDMODELRule = ''
+var HOLDMODEL = ''
+function handleModelData(response) {
+	if(response.hasOwnProperty('HOLD_MODEL')) {
+		$('input[holdParam="HOLD_MODEL"]').val(response.HOLD_MODEL);
+		HOLDMODEL = response.HOLD_MODEL
+		$('#wirelessMeterModelInput').val(response.HOLD_MODEL_wirelessMeter);
+		$('#meterTypeModelInput').val(response.HOLD_MODEL_meterType);
+		$('#usVersionModelInput').val(response.HOLD_MODEL_usVersion);
+		$('#meterBrandModelInput').val(response.HOLD_MODEL_meterBrand);
+		
+		$('#measurementModelInput').val(response.HOLD_MODEL_measurement);
+		if(currentSetPageType == 'remoteSet' || currentSetPageType == 'remoteSet12K') {
+			$('#measurementModelInput').change();
+		}
+		
+		$('#ruleMaskModelInput').val(response.HOLD_MODEL_ruleMask);
+		$('#batteryTypeModelInput').val(response.HOLD_MODEL_batteryType);
+		$('#batteryTypeModelInput').change();
+		
+		$leadAcidTypeModelInput = $('#leadAcidTypeModelInput');
+		$lithiumTypeModelInput = $('#lithiumTypeModelInput');
+		if(response.HOLD_MODEL_batteryType == 1) {
+			$lithiumTypeModelInput.val("-1");
+			$lithiumTypeModelInput.attr('disabled', 'disabled');
+			
+			$leadAcidTypeModelInput.removeAttr('disabled');
+			$leadAcidTypeModelInput.val(response.HOLD_MODEL_leadAcidType);
+			if(response.HOLD_MODEL_leadAcidType == 31) {
+				$('.customBatteryCapacity').fadeIn();
+			} else {
+				$('.customBatteryCapacity').fadeOut();
+			}
+		} else if(response.HOLD_MODEL_batteryType == 2) {
+			$leadAcidTypeModelInput.val("-1");
+			$leadAcidTypeModelInput.attr('disabled', 'disabled');
+			$('.customBatteryCapacity').hide();
+			
+			$lithiumTypeModelInput.removeAttr('disabled');
+			$lithiumTypeModelInput.val(response.HOLD_MODEL_lithiumType);
+			
+			if(response.HOLD_MODEL_lithiumType == 1 && (isAdmin || (userId && userId == 57103))) {
+				$('#battComponent').show();
+			}
+		} else {
+			$leadAcidTypeModelInput.val("-1");
+			$leadAcidTypeModelInput.attr('disabled', 'disabled');
+			$('.customBatteryCapacity').hide();
+			
+			$lithiumTypeModelInput.val("-1");
+			$lithiumTypeModelInput.attr('disabled', 'disabled');
+		}
+		$leadAcidTypeModelInput.val(response.HOLD_MODEL_leadAcidType);
+		
+		$('#powerRatingModelInput').val(response.HOLD_MODEL_powerRating);
+		
+		$('#ruleModelInput').val(response.HOLD_MODEL_rule);
+		if($('#ruleModelInput').val() == '2') {
+			$('#DRMS_box').show()
+		} else {
+			$('#DRMS_box').hide()
+		}
+		if(currentSetPageType == 'remoteSetOffGrid' || currentSetPageType == 'workingMode2_OffGrid') {
+			HOLDMODELRule = response.HOLD_MODEL_rule
+			$('#ruleModelInput').change();
+		}
+	}
+}
+
+function showLspReadParamsResult(response) {
+	handleModelData(response);
+	let inputHoldParam = ['HOLD_SERIAL_NUM','HOLD_TIME','HOLD_COM_ADDR','LSP_HOLD_CHARGE_VOLT_LIMIT','LSP_HOLD_CHARGE_POWER','LSP_HOLD_DISCHG_POWER','LSP_HOLD_OUTPUT_POWER','LSP_HOLD_LCD_VERSION','LSP_HOLD_CHG_END_VOLT','LSP_HOLD_DISCHG_END_VOLT','LSP_HOLD_CHG_END_SOC','LSP_HOLD_DISCHG_END_SOC'
+		,'LSP_HOLD_WHOLE_START_HOUR_1','LSP_HOLD_WHOLE_START_MINUTE_1','LSP_HOLD_WHOLE_STOP_HOUR_1','LSP_HOLD_WHOLE_STOP_MINUTE_1'
+		,'LSP_HOLD_WHOLE_START_HOUR_2','LSP_HOLD_WHOLE_START_MINUTE_2','LSP_HOLD_WHOLE_STOP_HOUR_2','LSP_HOLD_WHOLE_STOP_MINUTE_2'
+		,'LSP_HOLD_WHOLE_START_HOUR_3','LSP_HOLD_WHOLE_START_MINUTE_3','LSP_HOLD_WHOLE_STOP_HOUR_3','LSP_HOLD_WHOLE_STOP_MINUTE_3'
+		,'LSP_HOLD_WHOLE_CHG_POWER_1','LSP_HOLD_WHOLE_CHG_POWER_2','LSP_HOLD_WHOLE_CHG_POWER_3','LSP_HOLD_WHOLE_DISCHG_POWER_1','LSP_HOLD_WHOLE_DISCHG_POWER_2','LSP_HOLD_WHOLE_DISCHG_POWER_3','LSP_HOLD_WHOLE_OUTPUT_POWER_1','LSP_HOLD_WHOLE_OUTPUT_POWER_2','LSP_HOLD_WHOLE_OUTPUT_POWER_3'
+		,{isMultipleData: true, firstIndex:1,lastIndex:48,param:'LSP_HOLD_CHG_TIME_{i}'},{isMultipleData: true, firstIndex:1,lastIndex:48,param:'LSP_HOLD_DISCHG_TIME_{i}'},{isMultipleData: true, firstIndex:1,lastIndex:48,param:'LSP_HOLD_DIS_CHG_POWER_TIME_{i}'}]
+	let selectHoldParam = ['HOLD_LANGUAGE','HOLD_PV_INPUT_MODE']
+	let divFunctionParam = ['FUNC_LSP_SET_TO_STANDBY','FUNC_LSP_ISO_EN','FUNC_LSP_FAN_CHECK_EN','FUNC_LSP_WHOLE_DAY_SCHEDULE_EN','FUNC_LSP_LCD_REMOTE_DIS_CHG_EN','FUNC_LSP_SELF_CONSUMPTION_EN','FUNC_LSP_AC_CHARGE','FUNC_LSP_BAT_ACTIVATION_EN','FUNC_LSP_BYPASS_EN','FUNC_LSP_CHARGE_PRIORITY_EN','FUNC_LSP_BATT_VOLT_OR_SOC',{isMultipleData: true, firstIndex:1,lastIndex:12,param:'FUNC_LSP_OUTPUT_{i}_EN'}]
+	setInputHoldParam(inputHoldParam, response)
+	setSelectHoldParam(selectHoldParam, response)
+	setDivFunctionParam(divFunctionParam, response)
+	
+	if(response.hasOwnProperty('FUNC_LSP_LCD_REMOTE_DIS_CHG_EN')) {
+		handleScheduleMode(response.FUNC_LSP_LCD_REMOTE_DIS_CHG_EN);
+	}
+	
+	if(response.hasOwnProperty('FUNC_LSP_WHOLE_BYPASS_1_EN')) {
+		for(var i = 1; i <= 3; i++) {
+			if(response.hasOwnProperty('FUNC_LSP_WHOLE_BYPASS_' + i + '_EN')) {
+				$('#wholeBit' + (i - 1)).prop('checked', response['FUNC_LSP_WHOLE_BYPASS_' + i + '_EN']);
+			}
+		}
+		for(var i = 1; i <= 3; i++) {
+			if(response.hasOwnProperty('FUNC_LSP_WHOLE_BAT_FIRST_' + i + '_EN')) {
+				$('#wholeBit' + (i + 2)).prop('checked', response['FUNC_LSP_WHOLE_BAT_FIRST_' + i + '_EN']);
+			}
+		}
+		for(var i = 1; i <= 3; i++) {
+			if(response.hasOwnProperty('FUNC_LSP_WHOLE_SELF_CONSUMPTION_' + i + '_EN')) {
+				$('#wholeBit' + (i + 5)).prop('checked', response['FUNC_LSP_WHOLE_SELF_CONSUMPTION_' + i + '_EN']);
+			}
+		}
+	}
+	if(response.hasOwnProperty('FUNC_LSP_BAT_FIRST_1_EN')) {
+		for(var i = 1; i <= 48; i++) {
+			if(response.hasOwnProperty('FUNC_LSP_BAT_FIRST_' + i + '_EN')) {
+				$('#batFirstBit' + (i - 1)).prop('checked', response['FUNC_LSP_BAT_FIRST_' + i + '_EN']);
+			}
+		}
+	}
+	if(response.hasOwnProperty('FUNC_LSP_BYPASS_1_EN')) {
+		for(var i = 1; i <= 48; i++) {
+			if(response.hasOwnProperty('FUNC_LSP_BYPASS_' + i + '_EN')) {
+				$('#bypassBit' + (i - 1)).prop('checked', response['FUNC_LSP_BYPASS_' + i + '_EN']);
+			}
+		}
+	}
+}
+
+function showReadParamsResult(response) {
+	handleModelData(response);
+	let inputHoldParam=['HOLD_SERIAL_NUM','HOLD_FW_CODE','HOLD_LCD_VERSION','HOLD_CUSTOM_PASSWORD','HOLD_TIME','HOLD_COM_ADDR','HOLD_START_PV_VOLT','HOLD_CONNECT_TIME','HOLD_RECONNECT_TIME','HOLD_GRID_VOLT_CONN_LOW','HOLD_GRID_VOLT_CONN_HIGH','HOLD_GRID_FREQ_CONN_LOW','HOLD_GRID_FREQ_CONN_HIGH','HOLD_GRID_VOLT_LIMIT1_LOW','HOLD_GRID_VOLT_LIMIT1_HIGH','HOLD_GRID_VOLT_LIMIT2_LOW','HOLD_GRID_VOLT_LIMIT2_HIGH','HOLD_GRID_VOLT_LIMIT3_LOW','HOLD_GRID_VOLT_LIMIT3_HIGH','HOLD_GRID_VOLT_MOV_AVG_HIGH','HOLD_GRID_FREQ_LIMIT1_LOW','HOLD_GRID_FREQ_LIMIT1_HIGH','HOLD_GRID_FREQ_LIMIT2_LOW','HOLD_GRID_FREQ_LIMIT2_HIGH','HOLD_GRID_FREQ_LIMIT3_LOW',
+		'HOLD_GRID_FREQ_LIMIT3_HIGH','HOLD_MAX_Q_PERCENT_FOR_QV','HOLD_ACTIVE_POWER_PERCENT_CMD','HOLD_REACTIVE_POWER_PERCENT_CMD','HOLD_PF_CMD','HOLD_POWER_SOFT_START_SLOPE','HOLD_NORMAL_RAMP_RATE','HOLD_CHARGE_POWER_PERCENT_CMD','HOLD_AC_CHARGE_POWER_CMD','HOLD_AC_CHARGE_SOC_LIMIT','HOLD_AC_CHARGE_START_HOUR','HOLD_AC_CHARGE_START_MINUTE','HOLD_AC_CHARGE_END_HOUR','HOLD_AC_CHARGE_END_MINUTE','HOLD_AC_CHARGE_START_HOUR_1','HOLD_AC_CHARGE_START_MINUTE_1','HOLD_AC_CHARGE_END_HOUR_1','HOLD_AC_CHARGE_END_MINUTE_1','HOLD_AC_CHARGE_START_HOUR_2','HOLD_AC_CHARGE_START_MINUTE_2','HOLD_AC_CHARGE_END_HOUR_2','HOLD_AC_CHARGE_END_MINUTE_2','HOLD_FORCED_CHG_POWER_CMD','HOLD_FORCED_CHG_SOC_LIMIT',
+		'HOLD_FORCED_CHARGE_START_HOUR','HOLD_FORCED_CHARGE_START_MINUTE','HOLD_FORCED_CHARGE_END_HOUR','HOLD_FORCED_CHARGE_END_MINUTE','HOLD_FORCED_CHARGE_START_HOUR_1','HOLD_FORCED_CHARGE_START_MINUTE_1','HOLD_FORCED_CHARGE_END_HOUR_1','HOLD_FORCED_CHARGE_END_MINUTE_1','HOLD_FORCED_CHARGE_START_HOUR_2','HOLD_FORCED_CHARGE_START_MINUTE_2','HOLD_FORCED_CHARGE_END_HOUR_2','HOLD_FORCED_CHARGE_END_MINUTE_2','HOLD_DISCHG_POWER_PERCENT_CMD','HOLD_FORCED_DISCHG_POWER_CMD','HOLD_FORCED_DISCHG_SOC_LIMIT','HOLD_FORCED_DISCHARGE_START_HOUR','HOLD_FORCED_DISCHARGE_START_MINUTE','HOLD_FORCED_DISCHARGE_END_HOUR','HOLD_FORCED_DISCHARGE_END_MINUTE','HOLD_FORCED_DISCHARGE_START_HOUR_1',
+		'HOLD_FORCED_DISCHARGE_START_MINUTE_1','HOLD_FORCED_DISCHARGE_END_HOUR_1','HOLD_FORCED_DISCHARGE_END_MINUTE_1','HOLD_FORCED_DISCHARGE_START_HOUR_2','HOLD_FORCED_DISCHARGE_START_MINUTE_2','HOLD_FORCED_DISCHARGE_END_HOUR_2','HOLD_FORCED_DISCHARGE_END_MINUTE_2','HOLD_LEAD_ACID_CHARGE_VOLT_REF','HOLD_LEAD_ACID_DISCHARGE_CUT_OFF_VOLT','HOLD_LEAD_ACID_CHARGE_RATE','HOLD_LEAD_ACID_DISCHARGE_RATE','HOLD_FEED_IN_GRID_POWER_PERCENT','HOLD_DISCHG_CUT_OFF_SOC_EOD','HOLD_SOC_LOW_LIMIT_EPS_DISCHG','HOLD_LEAD_ACID_TEMPR_LOWER_LIMIT_DISCHG','HOLD_LEAD_ACID_TEMPR_UPPER_LIMIT_DISCHG','HOLD_LEAD_ACID_TEMPR_LOWER_LIMIT_CHG','HOLD_LEAD_ACID_TEMPR_UPPER_LIMIT_CHG','HOLD_NOMINAL_BATTERY_VOLTAGE',
+		'HOLD_AC_FIRST_START_HOUR','HOLD_AC_FIRST_START_MINUTE','HOLD_AC_FIRST_END_HOUR','HOLD_AC_FIRST_END_MINUTE','HOLD_AC_FIRST_START_HOUR_1','HOLD_AC_FIRST_START_MINUTE_1','HOLD_AC_FIRST_END_HOUR_1','HOLD_AC_FIRST_END_MINUTE_1','HOLD_AC_FIRST_START_HOUR_2','HOLD_AC_FIRST_START_MINUTE_2','HOLD_AC_FIRST_END_HOUR_2','HOLD_AC_FIRST_END_MINUTE_2','HOLD_FLOATING_VOLTAGE','HOLD_EQUALIZATION_VOLTAGE','HOLD_EQUALIZATION_PERIOD','HOLD_EQUALIZATION_TIME','HOLD_AC_CHARGE_START_BATTERY_VOLTAGE','HOLD_AC_CHARGE_END_BATTERY_VOLTAGE','HOLD_AC_CHARGE_START_BATTERY_SOC','HOLD_AC_CHARGE_END_BATTERY_SOC','HOLD_BATTERY_WARNING_VOLTAGE','HOLD_BATTERY_WARNING_RECOVERY_VOLTAGE','HOLD_BATTERY_WARNING_SOC',
+		'HOLD_BATTERY_WARNING_RECOVERY_SOC','HOLD_BATTERY_LOW_TO_UTILITY_VOLTAGE','HOLD_BATTERY_LOW_TO_UTILITY_SOC','HOLD_AC_CHARGE_BATTERY_CURRENT','HOLD_ON_GRID_EOD_VOLTAGE','HOLD_P_TO_USER_START_DISCHG','HOLD_VBAT_START_DERATING','HOLD_CT_POWER_OFFSET','HOLD_SPEC_LOAD_COMPENSATE','HOLD_MAINTENANCE_COUNT','HOLD_SYSTEM_CHARGE_SOC_LIMIT','HOLD_SYSTEM_CHARGE_VOLT_LIMIT','HOLD_MAX_GENERATOR_INPUT_POWER','OFF_GRID_HOLD_GEN_CHG_START_VOLT','OFF_GRID_HOLD_GEN_CHG_END_VOLT','OFF_GRID_HOLD_GEN_CHG_START_SOC','OFF_GRID_HOLD_GEN_CHG_END_SOC','OFF_GRID_HOLD_MAX_GEN_CHG_BAT_CURR','INPUT_BATTERY_VOLTAGE','_12K_HOLD_GEN_COOL_DOWN_TIME', {param:'ASC_HOLD_ACCUMULATED_UNCALIBRATED_COUNT_DAYS',value:parseInt(response.ASC_HOLD_ACCUMULATED_UNCALIBRATED_COUNT_DAYS)},
+		{param:'ASC_HOLD_CALIBRATION_PERIOD_DAYS',value:parseInt(response.ASC_HOLD_CALIBRATION_PERIOD_DAYS)},'HOLD_DARK_START_POWER','HOLD_DARK_START_START_HOUR','HOLD_DARK_START_START_MINUTE','HOLD_DARK_START_END_HOUR','HOLD_DARK_START_END_MINUTE','_12K_HOLD_BUS_BAR_CURRENT']
+	let inputBitParam=['BIT_FAN_1_MAX_SPEED','BIT_FAN_2_MAX_SPEED','BIT_FAN_3_MAX_SPEED','BIT_FAN_4_MAX_SPEED','BIT_FAN_5_MAX_SPEED','']
+	let selectHoldParam = ['HOLD_PV_INPUT_MODE','HOLD_BATT_VOLT_SAMPLE_DISABLE','HOLD_REACTIVE_POWER_CMD_TYPE','HOLD_SET_MASTER_OR_SLAVE','HOLD_OUTPUT_CONFIGURATION','HOLD_LINE_MODE_INPUT','HOLD_LANGUAGE','HOLD_EPS_VOLT_SET','HOLD_EPS_FREQ_SET','_12K_HOLD_GRID_REGULATION','_12K_HOLD_GRID_TYPE']
+	let selectBitParam= ['BIT_WORKING_MODE','BIT_CT_SAMPLE_RATIO','BIT_PVCT_SAMPLE_TYPE','BIT_PVCT_SAMPLE_RATIO','BIT_ON_GRID_EOD_TYPE','BIT_METER_NUMBER','BIT_METER_PHASE', 'BIT_DRY_CONTRACTOR_MULTIPLEX','BIT_OUT_CT_POSITION']
+	let divFunctionParam = ['FUNC_BATTERY_CALIBRATION_EN','FUNC_ENERTEK_WORKING_MODE','FUNC_SET_TO_STANDBY','FUNC_EPS_EN','FUNC_ANTI_ISLAND_EN','FUNC_GRID_ON_POWER_SS_EN','FUNC_OVF_LOAD_DERATE_EN','FUNC_DRMS_EN','FUNC_NEUTRAL_DETECT_EN','FUNC_TOTAL_LOAD_COMPENSATION_EN','FUNC_FORCED_DISCHG_EN','FUNC_SW_SEAMLESSLY_EN','FUNC_AC_CHARGE','FUNC_FORCED_CHG_EN','FUNC_GFCI_EN','FUNC_DCI_EN','FUNC_FEED_IN_GRID_EN','FUNC_PV_GRID_OFF_EN','FUNC_RUN_WITHOUT_GRID','FUNC_RUN_WITHOUT_GRID_12K','FUNC_PV_SELL_TO_GRID_EN','FUNC_MICRO_GRID_EN','FUNC_BAT_SHARED','FUNC_BUZZER_EN','FUNC_TAKE_LOAD_TOGETHER','FUNC_GRID_CT_CONNECTION_EN','FUNC_GREEN_EN','FUNC_BATTERY_ECO_EN','FUNC_CHARGE_LAST',
+		'FUNC_BATTERY_BACKUP_CTRL','FUNC_GRID_PEAK_SHAVING','FUNC_AC_COUPLING_FUNCTION','FUNC_AC_COUPLE_DARK_START_EN','FUNC_MIDBOX_EN', 'FUNC_GO_TO_OFFGRID','FUNC_AC_COUPLE_ON_EPS_PORT_EN']
+
+	setInputHoldParam(inputHoldParam,response)
+	setInputBitParam(inputBitParam,response)
+	setSelectHoldParam(selectHoldParam,response)
+	setSelectBitParam(selectBitParam,response)
+	setDivFunctionParam(divFunctionParam,response)
+
+	let holdParam = ['HOLD_GRID_VOLT_LIMIT1_LOW_TIME','HOLD_GRID_VOLT_LIMIT1_HIGH_TIME','HOLD_GRID_VOLT_LIMIT2_LOW_TIME','HOLD_GRID_VOLT_LIMIT2_HIGH_TIME','HOLD_GRID_VOLT_LIMIT3_LOW_TIME','HOLD_GRID_VOLT_LIMIT3_HIGH_TIME','HOLD_GRID_FREQ_LIMIT1_LOW_TIME','HOLD_GRID_FREQ_LIMIT1_HIGH_TIME','HOLD_GRID_FREQ_LIMIT2_LOW_TIME','HOLD_GRID_FREQ_LIMIT2_HIGH_TIME','HOLD_GRID_FREQ_LIMIT3_LOW_TIME','HOLD_GRID_FREQ_LIMIT3_HIGH_TIME']
+	if(currentDeviceType == 6 || currentDeviceType == 10 || currentDeviceType == 8 || (currentDeviceType == 0 && currentPhase == 3)) {
+		setDateHoldParam(holdParam, response)
+	} else {
+		setInputHoldParam(holdParam, response)
+	}
+
+	if(response.hasOwnProperty('BIT_AC_CHARGE_TYPE')) {
+		setSelectBitParam(['BIT_AC_CHARGE_TYPE'],response)
+		if(currentSetPageType == 'remoteSetOffGrid' || currentSetPageType == 'remoteSet12K') {
+			checkAcChargeSetting();
+		}
+	}
+	if(response.hasOwnProperty('BIT_DISCHG_CONTROL_TYPE')) {
+		setSelectBitParam(['BIT_DISCHG_CONTROL_TYPE'],response)
+		if(currentSetPageType == 'remoteSetOffGrid') {
+			checkDischargeSetting();
+		}
+	}
+
+	if(response.hasOwnProperty('BIT_GENERATOR_CHARGE_TYPE')) {
+		setSelectBitParam(['BIT_GENERATOR_CHARGE_TYPE'],response)
+		if(currentSetPageType == 'remoteSetOffGrid') {
+			checkGenChargeSetting();
+		}
+	}
+	if(response.hasOwnProperty('HOLD_MAX_AC_INPUT_POWER')) {
+		var showNoLimitation = false;
+		if(currentDeviceType == 0 && currentPhase != 3 && response.HOLD_MAX_AC_INPUT_POWER > 65534) {
+			showNoLimitation = true;
+		} else if((currentDeviceType == 6 || (currentDeviceType == 0 && currentPhase == 3) || currentDeviceType == 7 || currentDeviceType == 8) && response.HOLD_MAX_AC_INPUT_POWER > 6553.4) {
+			showNoLimitation = true;
+		}
+		
+		if(showNoLimitation) {
+			setInputHoldParam([{param: 'HOLD_MAX_AC_INPUT_POWER', value: 'No limitation'}],response)
+		} else {
+			setInputHoldParam(['HOLD_MAX_AC_INPUT_POWER'],response)
+		}
+	}
+	if(response.hasOwnProperty('inverterRuntimeDeviceTime')) {
+		$('#inverterRuntimeDeviceTimeSpan').text(response.inverterRuntimeDeviceTime);
+	}
+	if(response.hasOwnProperty('HOLD_SET_COMPOSED_PHASE')) {
+		var composedPhase = parseInt(response.HOLD_SET_COMPOSED_PHASE);
+		$('#readComposedPhaseInput').val(Math.round(composedPhase / 256));
+		$('select[holdParam="HOLD_SET_COMPOSED_PHASE"]').val(Math.round(composedPhase % 256));
+	}
+	if(response.hasOwnProperty('FUNC_ISO_EN')) {
+		$('div[functionParam="FUNC_ISO_EN"] button').each(function(index, element) {
+			if($(element).hasClass('btn-success')) {
+				$(element).addClass('btn-default').removeClass('btn-success');
+			}
+		});
+		if(response.FUNC_ISO_EN) {
+			$('div[functionParam="FUNC_ISO_EN"] button[onclick*="true"]').addClass('btn-success').removeClass('btn-default');
+		} else {
+			$('div[functionParam="FUNC_ISO_EN"] button[onclick*="disable"]').addClass('btn-success').removeClass('btn-default');
+		}
+	}
+	
+	handleBatChgDisChgControl(response);
+
+	inputHoldParam=['_12K_HOLD_GRID_PEAK_SHAVING_POWER','_12K_HOLD_GRID_PEAK_SHAVING_POWER_2','_12K_HOLD_GRID_PEAK_SHAVING_SOC','_12K_HOLD_GRID_PEAK_SHAVING_VOLT','_12K_HOLD_GRID_PEAK_SHAVING_SOC_2','_12K_HOLD_GRID_PEAK_SHAVING_VOLT_2','_12K_HOLD_AC_COUPLE_START_SOC','_12K_HOLD_AC_COUPLE_END_SOC','_12K_HOLD_AC_COUPLE_START_VOLT','_12K_HOLD_AC_COUPLE_END_VOLT','_12K_HOLD_CHARGE_FIRST_VOLT','_12K_HOLD_STOP_DISCHG_VOLT','_12K_HOLD_LEAD_CAPACITY',{param:'LSP_HOLD_DIS_CHG_POWER_TIME_{i}',isMultipleData: true, firstIndex:37,lastIndex:44},'_12K_HOLD_SMART_LOAD_START_VOLT','_12K_HOLD_SMART_LOAD_END_VOLT','_12K_HOLD_SMART_LOAD_START_SOC','_12K_HOLD_SMART_LOAD_END_SOC','_12K_HOLD_START_PV_POWER','HOLD_OFFLINE_TIMEOUT']
+	divFunctionParam = ['FUNC_GEN_PEAK_SHAVING','FUNC_PV_ARC','FUNC_CT_DIRECTION_REVERSED','FUNC_RSD_DISABLE','FUNC_N_PE_CONNECT_INNER_EN','FUNC_FAN_SPEED_SLOPE_CTRL_1','FUNC_FAN_SPEED_SLOPE_CTRL_2','FUNC_FAN_SPEED_SLOPE_CTRL_3','FUNC_FAN_SPEED_SLOPE_CTRL_4','FUNC_FAN_SPEED_SLOPE_CTRL_5','FUNC_ON_GRID_ALWAYS_ON','FUNC_SMART_LOAD_ENABLE','FUNC_RETAIN_SHUTDOWN','FUNC_PARALLEL_DATA_SYNC_EN']
+	setInputHoldParam(inputHoldParam,response)
+	setDivFunctionParam(divFunctionParam,response)
+	if(response.hasOwnProperty('FUNC_RETAIN_STANDBY')) {
+		setDivFunctionParam(['FUNC_RETAIN_STANDBY'],response)
+		if(response.FUNC_RETAIN_STANDBY) {
+			$('#offlineTimeoutInput').removeAttr('disabled');
+		} else {
+			$('#offlineTimeoutInput').attr('disabled', 'disabled');
+		}
+	}
+	if(response.hasOwnProperty('FUNC_TRIP_TIME_UNIT')) {
+		if(currentDeviceType == 6 || currentDeviceType == 10 || currentDeviceType == 8 || (currentDeviceType == 0 && currentPhase == 3)) {
+			setDivFunctionParam(['FUNC_TRIP_TIME_UNIT'],response)
+			
+			var precision = response.FUNC_TRIP_TIME_UNIT ? 10 : 100;
+			if(currentDeviceType == 0 && currentPhase == 3) {
+				precision = 100;
+			}
+			
+			$('#funcTripTimeUnitHolder').data('precision', precision);
+			$('#protectionTimeContainer .protectionTime').each(function(index, element) {
+				$(element).attr('time', precision).val($(element).data('time') / precision);
+			});
+			$('#protectionTimeContainer .timeSetBtn').removeAttr('disabled');
+		}
+	}
+	
+	if(currentWithbatteryData) {
+		setInputHoldParam([{param:'HOLD_BATT_MODULE_SOC_{i}', isMultipleData: true, firstIndex:0,lastIndex:31}],response)
+	}
+}
+
+function handleBatChgDisChgControl(response) {
+	if(response.hasOwnProperty('FUNC_BAT_CHARGE_CONTROL')) {
+		$('div[functionParam="FUNC_BAT_CHARGE_CONTROL"] button').each(function(index, element) {
+			if($(element).hasClass('btn-success')) {
+				$(element).addClass('btn-default').removeClass('btn-success');
+			}
+		});
+		$('div[functionParam="FUNC_BAT_CHARGE_CONTROL"] button[onclick*="' + response.FUNC_BAT_CHARGE_CONTROL + '"]').addClass('btn-success').removeClass('btn-default');
+		
+		if(response.FUNC_BAT_CHARGE_CONTROL) {
+			$('.chgVoltEnable').removeAttr('disabled');
+			$('.chgSocEnable').attr('disabled', 'disabled');
+		} else {
+			$('.chgSocEnable').removeAttr('disabled');
+			$('.chgVoltEnable').attr('disabled', 'disabled');
+		}
+	}
+	if(response.hasOwnProperty('FUNC_BAT_DISCHARGE_CONTROL')) {
+		$('div[functionParam="FUNC_BAT_DISCHARGE_CONTROL"] button').each(function(index, element) {
+			if($(element).hasClass('btn-success')) {
+				$(element).addClass('btn-default').removeClass('btn-success');
+			}
+		});
+		$('div[functionParam="FUNC_BAT_DISCHARGE_CONTROL"] button[onclick*="' + response.FUNC_BAT_DISCHARGE_CONTROL + '"]').addClass('btn-success').removeClass('btn-default');
+		
+		if(response.FUNC_BAT_DISCHARGE_CONTROL) {
+			$('.disChgVoltEnable').removeAttr('disabled');
+			$('.disChgSocEnable').attr('disabled', 'disabled');
+		} else {
+			$('.disChgSocEnable').removeAttr('disabled');
+			$('.disChgVoltEnable').attr('disabled', 'disabled');
+		}
+	}
+}
+
+function handleMidboxUseSheddingMode(i, useSheddingMode) {
+	if(useSheddingMode) {
+		$('.useSheddingModeCtrl' + i).removeAttr('disabled');
+		if($('div[functionparam="FUNC_BAT_DISCHARGE_CONTROL"] button[onclick*="true"]').hasClass('btn-success')) {		//Volt
+			$('.disChgSocEnable.useSheddingModeCtrl' + i).attr('disabled', 'disabled');
+		}
+		if($('div[functionparam="FUNC_BAT_DISCHARGE_CONTROL"] button[onclick*="false"]').hasClass('btn-success')) {		//SOC
+			$('.disChgVoltEnable.useSheddingModeCtrl' + i).attr('disabled', 'disabled');
+		}
+	} else {
+		$('.useSheddingModeCtrl' + i).attr('disabled', 'disabled');
+	}
+}
+
+function showMidboxReadParamsResult(response) {
+	if(response.hasOwnProperty('HOLD_MODEL')) {
+		$('#ruleMaskModelInput').val(response.HOLD_MODEL_ruleMask);
+	}
+	if(response.hasOwnProperty('BIT_MID_INSTALL_POSITION')) {
+		$('#midInstallPosition').val(response.BIT_MID_INSTALL_POSITION);
+	}
+	if(response.hasOwnProperty('HOLD_TIME')) {
+		$('input[holdParam="HOLD_TIME"]').val(response.HOLD_TIME);
+	}
+	for(let i = 1; i <= 4; i++) {
+		if(response.hasOwnProperty('BIT_SMART_LOAD_BASE_ON_' + i)) {
+			$('#samrtLoadBaseOnInput' + i).val(response['BIT_SMART_LOAD_BASE_ON_' + i]);
+		}
+		$('#samrtLoadBaseOnInput' + i).change()
+	}
+	handleBatChgDisChgControl(response);
+	
+	for(var i = 1; i <= 4; i++) {
+		if(response.hasOwnProperty('BIT_MIDBOX_SP_MODE_' + i)) {
+			$('select[bitParam="BIT_MIDBOX_SP_MODE_' + i + '"]').val(response["BIT_MIDBOX_SP_MODE_" + i]).change();
+		}
+		
+		let divFunctionParam = ['FUNC_SMART_LOAD_EN_' + i,'FUNC_SMART_LOAD_GRID_ON_' + i]
+		setDivFunctionParam(divFunctionParam,response)
+
+		if(response.hasOwnProperty('FUNC_SHEDDING_MODE_EN_' + i)) {
+			var useSheddingMode = response["FUNC_SHEDDING_MODE_EN_" + i];
+			setDivFunctionParam([{param: 'FUNC_SHEDDING_MODE_EN_' + i, value: useSheddingMode}],response)
+			handleMidboxUseSheddingMode(i, useSheddingMode);
+		}
+		inputHoldParam=['MIDBOX_HOLD_SL_START_SOC_' + i,'MIDBOX_HOLD_SL_END_SOC_' + i,'MIDBOX_HOLD_SL_START_VOLT_' + i,'MIDBOX_HOLD_SL_END_VOLT_' + i,'MIDBOX_HOLD_SL_START_PV_P_' + i,'MIDBOX_HOLD_SL_PS_START_SOC_' + i,'MIDBOX_HOLD_SL_PS_END_SOC_' + i,'MIDBOX_HOLD_SL_PS_START_VOLT_' + i,'MIDBOX_HOLD_SL_PS_END_VOLT_' + i,'MIDBOX_HOLD_AC_START_SOC_' + i,'MIDBOX_HOLD_AC_END_SOC_' + i,'MIDBOX_HOLD_AC_START_VOLT_' + i,'MIDBOX_HOLD_AC_END_VOLT_' + i]
+		divFunctionParam = ['FUNC_AC_COUPLE_EN_' + i,]
+		setInputHoldParam(inputHoldParam,response)
+		setDivFunctionParam(divFunctionParam,response)
+		
+		for(var j = 1; j <= 3; j++) {
+			inputHoldParam=['HOLD_MIDBOX_SL_' + i + '_START_HOUR_' + j,'HOLD_MIDBOX_SL_' + i + '_START_MINUTE_' + j,'HOLD_MIDBOX_SL_' + i + '_END_HOUR_' + j,'HOLD_MIDBOX_SL_' + i + '_END_MINUTE_' + j]
+			setInputHoldParam(inputHoldParam,response)
+		}
+		
+		for(var j = 1; j <= 3; j++) {
+			inputHoldParam = ['HOLD_MIDBOX_AC_COUPLE_' + i + '_START_HOUR_' + j,'HOLD_MIDBOX_AC_COUPLE_' + i + '_START_MINUTE_' + j,'HOLD_MIDBOX_AC_COUPLE_' + i + '_END_HOUR_' + j,'HOLD_MIDBOX_AC_COUPLE_' + i + '_END_MINUTE_' + j]
+			setInputHoldParam(inputHoldParam,response)
+		}
+	}
+
+
+	inputHoldParam=['MIDBOX_HOLD_BUSBAR_PCS_RATING', 'HOLD_GRID_VOLT_LIMIT1_LOW','HOLD_GRID_VOLT_LIMIT1_HIGH','HOLD_GRID_VOLT_LIMIT1_LOW_TIME','HOLD_GRID_VOLT_LIMIT1_HIGH_TIME','HOLD_GRID_VOLT_LIMIT2_LOW','HOLD_GRID_VOLT_LIMIT2_HIGH','HOLD_GRID_VOLT_LIMIT3_LOW','HOLD_GRID_VOLT_LIMIT3_HIGH','HOLD_GRID_VOLT_MOV_AVG_HIGH','HOLD_GRID_FREQ_LIMIT1_LOW','HOLD_GRID_FREQ_LIMIT1_HIGH','HOLD_GRID_FREQ_LIMIT2_LOW','HOLD_GRID_FREQ_LIMIT2_HIGH','HOLD_GRID_FREQ_LIMIT3_LOW','HOLD_GRID_FREQ_LIMIT3_HIGH','HOLD_POWER_SOFT_START_SLOPE','HOLD_NORMAL_RAMP_RATE','12K_HOLD_BUS_BAR_CURRENT']
+
+	dateHoldParam = ['HOLD_GRID_VOLT_LIMIT1_LOW_TIME','HOLD_GRID_VOLT_LIMIT1_HIGH_TIME','HOLD_GRID_VOLT_LIMIT2_LOW_TIME','HOLD_GRID_VOLT_LIMIT2_HIGH_TIME','HOLD_GRID_VOLT_LIMIT3_LOW_TIME','HOLD_GRID_VOLT_LIMIT3_HIGH_TIME','HOLD_GRID_FREQ_LIMIT1_LOW_TIME','HOLD_GRID_FREQ_LIMIT1_HIGH_TIME','HOLD_GRID_FREQ_LIMIT2_LOW_TIME','HOLD_GRID_FREQ_LIMIT2_HIGH_TIME','HOLD_GRID_FREQ_LIMIT3_LOW_TIME','HOLD_GRID_FREQ_LIMIT3_HIGH_TIME']
+	setInputHoldParam(inputHoldParam,response)
+	setDateHoldParam(dateHoldParam,response)
+
+	//Generator...
+	inputHoldParam=['OFF_GRID_HOLD_MAX_GEN_CHG_BAT_CURR','HOLD_MAX_GENERATOR_INPUT_POWER','OFF_GRID_HOLD_GEN_CHG_START_VOLT','OFF_GRID_HOLD_GEN_CHG_END_VOLT','OFF_GRID_HOLD_GEN_CHG_START_SOC','OFF_GRID_HOLD_GEN_CHG_END_SOC','OFF_GRID_HOLD_MAX_GEN_CHG_BAT_CURR','MIDBOX_HOLD_GEN_WARN_UP_TIME','MIDBOX_HOLD_GEN_REMOTE_TURN_OFF_TIME','MIDBOX_HOLD_GEN_COOL_DOWN_TIME']
+	divFunctionParam = ['MIDBOX_HOLD_GEN_VOLT_SOC_ENABLE','MIDBOX_HOLD_GEN_REMOTE_CTRL','FUNC_GRID_ON_POWER_SS_EN']
+
+
+	setInputHoldParam(inputHoldParam,response)
+	setDivFunctionParam(divFunctionParam,response)
+	
+	if(response.hasOwnProperty('MIDBOX_HOLD_GEN_VOLT_SOC_ENABLE')) {
+		$('div[holdParam="MIDBOX_HOLD_GEN_VOLT_SOC_ENABLE"] button').each(function(index, element) {
+			if($(element).hasClass('btn-success')) {
+				$(element).addClass('btn-default').removeClass('btn-success');
+			}
+		});
+		$('div[holdParam="MIDBOX_HOLD_GEN_VOLT_SOC_ENABLE"] button[onclick*="' + response.MIDBOX_HOLD_GEN_VOLT_SOC_ENABLE + '"]').addClass('btn-success').removeClass('btn-default');
+	}
+	if(response.hasOwnProperty('MIDBOX_HOLD_GEN_REMOTE_CTRL')) {
+		$('div[holdParam="MIDBOX_HOLD_GEN_REMOTE_CTRL"] button').each(function(index, element) {
+			if($(element).hasClass('btn-success')) {
+				$(element).addClass('btn-default').removeClass('btn-success');
+			}
+		});
+		$('div[holdParam="MIDBOX_HOLD_GEN_REMOTE_CTRL"] button[onclick*="' + response.MIDBOX_HOLD_GEN_REMOTE_CTRL + '"]').addClass('btn-success').removeClass('btn-default');
+	}
+	if(response.hasOwnProperty('FUNC_TRIP_TIME_UNIT')) {
+		setDivFunctionParam(['FUNC_TRIP_TIME_UNIT'],response)
+
+		var precision = response.FUNC_TRIP_TIME_UNIT ? 10 : 100;
+		$('#funcTripTimeUnitHolder').data('precision', precision);
+		$('#protectionTimeContainer .protectionTime').each(function(index, element) {
+			$(element).attr('time', precision).val($(element).data('time') / precision);
+		});
+		$('#protectionTimeContainer .timeSetBtn').removeAttr('disabled');
+	}
+
+}
+
+function getPageSwitching() {
+	$.post(baseUrl + '/web/system/user/getUseNewSettingPageValue', { userId: userId },
+		function(response) {
+			if(response) {			//参数读取成功
+				isShowNewSettingPage = response.useNewSettingPage
+			/*	if (isShowNewSettingPage) {
+					$('#toNewSettingsPageButton').hide()
+					$('#toggleSettingsPageButton').show()
+				}
+				if (!isShowNewSettingPage) {
+					$('#toNewSettingsPageButton').show()
+					$('#toggleSettingsPageButton').hide()
+				}*/
+			}
+		}, 'json');
+}
+
+$(function () {
+	getPageSwitching()
+})
