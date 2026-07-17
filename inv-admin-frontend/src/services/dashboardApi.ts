@@ -8,5 +8,5 @@ export const dashboardApi = {
   compareDevices: (params: any) => api.get('/dashboard/compare', { params }),
   getEnergyStats: (params?: { type?: string; stationId?: number }) => api.get('/dashboard/energy-stats', { params, expectedDataShape: 'object' }),
   getStationRanking: (params?: { period?: string; limit?: number }) => api.get('/dashboard/station-ranking', { params, expectedDataShape: 'array' }),
-  getEnergyFlow: (params: { date: string; stationId?: string; deviceSn?: string }) => api.get('/dashboard/energy-flow', { params, expectedDataShape: 'object' }),
+  getEnergyFlow: (params: { date: string; stationId?: string | number; deviceSn?: string }) => api.get('/dashboard/energy-flow', { params, expectedDataShape: 'object' }),
 }

@@ -18,16 +18,34 @@ interface StationHistoryTabProps {
 
 /** 默认可见的数据字段 */
 const DEFAULT_VISIBLE_FIELDS = [
-  'pv_total_power', 'ac_power', 'battery_soc', 'battery_power', 'inverter_temp',
+  'pv_total_power', 'ac_active_power', 'battery_soc', 'battery_power', 'inverter_temperature',
 ]
 
 /** 字段标签映射 key */
 const FIELD_LABEL_KEYS: Record<string, string> = {
   pv_total_power: 'station.field_pv_total_power',
   ac_power: 'station.field_ac_power',
+  ac_active_power: 'station.field_ac_active_power',
   battery_soc: 'station.field_battery_soc',
   battery_power: 'station.field_battery_power',
   inverter_temp: 'station.field_inverter_temp',
+  inverter_temperature: 'station.field_inverter_temperature',
+  mos_temperature: 'station.field_mos_temperature',
+  ambient_temperature: 'station.field_ambient_temperature',
+  battery_soh: 'station.field_battery_soh',
+  battery_temperature: 'station.field_battery_temperature',
+  daily_pv_energy: 'station.field_daily_pv',
+  total_pv_energy: 'station.field_total_pv',
+  daily_charge_energy: 'station.field_daily_charge',
+  total_charge_energy: 'station.field_total_charge',
+  daily_discharge_energy: 'station.field_daily_discharge',
+  total_discharge_energy: 'station.field_total_discharge',
+  daily_load_energy: 'station.field_daily_load',
+  total_load_energy: 'station.field_total_load',
+  work_state: 'station.field_work_state',
+  mppt_state: 'station.field_mppt_state',
+  ac_apparent_power: 'station.field_ac_apparent_power',
+  ac_power_factor: 'station.field_ac_power_factor',
   pv1_power: 'station.field_pv1_power',
   pv2_power: 'station.field_pv2_power',
   pv1_voltage: 'station.field_pv1_voltage',

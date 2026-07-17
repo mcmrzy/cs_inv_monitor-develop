@@ -718,6 +718,15 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		return
 	}
 
+	// 可选 stationId 过滤
+	stationIDStr := c.Query("stationId")
+	var stationID int64
+	if stationIDStr != "" {
+		if v, e := strconv.ParseInt(stationIDStr, 10, 64); e == nil {
+			stationID = v
+		}
+	}
+
 	// 数据库存的是UTC，将本地日期转为UTC范围
 	loc := timezone.LoadLocation(tz)
 	localDate := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, loc)
@@ -733,6 +742,12 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 		BatteryDischarge float64   `json:"batteryDischarge"`
 	}
 
+	// 构建可选 station 过滤条件
+	stationFilter := ""
+	if stationID > 0 {
+		stationFilter = fmt.Sprintf(" AND d.station_id = %d", stationID)
+	}
+
 	// 查询PV功率（time_bucket 做分钟级聚合）— 返回UTC时间，前端负责时区转换
 	var pvQuery string
 	var pvArgs []interface{}
@@ -741,7 +756,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.pv_total_power,0))
 			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE d.deleted_at IS NULL AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
+			WHERE d.deleted_at IS NULL` + stationFilter + ` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		pvArgs = append(pvArgs, startUTC, endUTC)
@@ -750,7 +765,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.pv_total_power,0))
 			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE d.deleted_at IS NULL AND d.user_id = $1
+			WHERE d.deleted_at IS NULL AND d.user_id = $1` + stationFilter + `
 				AND dt.event_time >= $2::timestamptz AND dt.event_time < $3::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
@@ -765,7 +780,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.battery_power,0))
 			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE d.deleted_at IS NULL AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
+			WHERE d.deleted_at IS NULL` + stationFilter + ` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		battArgs = append(battArgs, startUTC, endUTC)
@@ -774,7 +789,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.battery_power,0))
 			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE d.deleted_at IS NULL AND d.user_id = $1
+			WHERE d.deleted_at IS NULL AND d.user_id = $1` + stationFilter + `
 				AND dt.event_time >= $2::timestamptz AND dt.event_time < $3::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
@@ -789,7 +804,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.ac_active_power,0))
 			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE d.deleted_at IS NULL AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
+			WHERE d.deleted_at IS NULL` + stationFilter + ` AND dt.event_time >= $1::timestamptz AND dt.event_time < $2::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
 		loadArgs = append(loadArgs, startUTC, endUTC)
@@ -798,7 +813,7 @@ func (h *DashboardHandler) GetEnergyFlow(c *gin.Context) {
 			SELECT time_bucket('3 minutes', dt.event_time) as time_slot, AVG(COALESCE(dt.ac_active_power,0))
 			FROM device_telemetry_3min dt
 			JOIN devices d ON d.sn = dt.device_sn
-			WHERE d.deleted_at IS NULL AND d.user_id = $1
+			WHERE d.deleted_at IS NULL AND d.user_id = $1` + stationFilter + `
 				AND dt.event_time >= $2::timestamptz AND dt.event_time < $3::timestamptz
 			GROUP BY time_slot ORDER BY time_slot
 		`
