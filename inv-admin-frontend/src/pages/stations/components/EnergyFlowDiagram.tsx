@@ -15,6 +15,8 @@ interface FlowEdge {
   active: boolean;
   power: number;
   markerId: string;
+  solid?: boolean;
+  noArrows?: boolean;
 }
 
 interface NodeConfig {
@@ -74,37 +76,28 @@ function computeFlowEdges(
     markerId: 'arrow-pv',
   });
 
-  // 2. Inverter → Load (straight down)
+  // 2. Inverter → Load (straight down) — active when PV generating or battery discharging
   edges.push({
     id: 'inv-load',
     path: 'M 300 325 L 300 415',
     color: NODE_COLORS.inverter,
-    active: loadPower > 0,
+    active: pvPower > 0 || battPower < 0,
     power: loadPower,
     markerId: 'arrow-inv',
   });
 
-  // 3. PV → Battery (curve, upper-left) — charging
-  edges.push({
-    id: 'pv-batt',
-    path: 'M 265 105 Q 155 150 110 225',
-    color: NODE_COLORS.battery,
-    active: pvPower > 0 && battPower > 0,
-    power: battPower > 0 ? battPower : 0,
-    markerId: 'arrow-batt',
-  });
-
-  // 4. Battery → Inverter (curve, left-center) — discharging
+  // 3. Battery → Inverter (straight, left to center) — discharging
   edges.push({
     id: 'batt-inv',
-    path: 'M 130 275 Q 190 295 250 280',
-    color: NODE_COLORS.battery,
+    path: 'M 130 275 L 250 275',
+    color: NODE_COLORS.inverter,
+    solid: true,
     active: battPower < 0,
     power: battPower < 0 ? Math.abs(battPower) : 0,
-    markerId: 'arrow-batt',
+    markerId: 'arrow-inv',
   });
 
-  // 5. Grid → Inverter (straight, right to center) — consuming
+  // 4. Grid → Inverter (straight, right to center) — consuming
   edges.push({
     id: 'grid-inv',
     path: 'M 470 265 L 350 265',
@@ -114,7 +107,7 @@ function computeFlowEdges(
     markerId: 'arrow-grid',
   });
 
-  // 6. Inverter → Grid (straight, center to right) — feeding
+  // 5. Inverter → Grid (straight, center to right) — feeding
   edges.push({
     id: 'inv-grid',
     path: 'M 350 285 L 470 285',
@@ -138,6 +131,14 @@ const svgAnimations = `
   }
   .flow-path-inactive {
     stroke-dasharray: 4 8;
+    opacity: 0.15;
+  }
+  .flow-path-solid-active {
+    stroke-dasharray: none;
+    opacity: 0.8;
+  }
+  .flow-path-solid-inactive {
+    stroke-dasharray: none;
     opacity: 0.15;
   }
   @keyframes arrowPulse {
@@ -277,6 +278,9 @@ FlowNode.displayName = 'FlowNode';
 
 const FlowPath: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
   const sw = calcStrokeWidth(edge.power);
+  const cls = edge.solid
+    ? (edge.active ? 'flow-path-solid-active' : 'flow-path-solid-inactive')
+    : (edge.active ? 'flow-path-active' : 'flow-path-inactive');
 
   return (
     <path
@@ -287,8 +291,8 @@ const FlowPath: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
       strokeWidth={sw}
       strokeLinecap="round"
       markerEnd={edge.active ? `url(#${edge.markerId})` : undefined}
-      className={edge.active ? 'flow-path-active' : 'flow-path-inactive'}
-      style={edge.active ? { opacity: 0.8 } : undefined}
+      className={cls}
+      style={edge.active && !edge.solid ? { opacity: 0.8 } : undefined}
     />
   );
 });
@@ -296,7 +300,7 @@ const FlowPath: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
 FlowPath.displayName = 'FlowPath';
 
 const FlowArrows: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
-  if (!edge.active) return null;
+  if (!edge.active || edge.noArrows) return null;
   const N = 3;
   const dur = 1.8;
   return (
