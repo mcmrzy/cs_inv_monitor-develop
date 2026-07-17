@@ -5,6 +5,7 @@ import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import ReactECharts from '@/lib/echarts'
 import dayjs, { type Dayjs } from 'dayjs'
 import api from '@/services/api'
+import { dashboardApi } from '@/services/dashboardApi'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
@@ -33,6 +34,24 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
   const { t } = useTranslation()
   const [period, setPeriod] = useState<string>('day')
   const [currentDate, setCurrentDate] = useState<Dayjs>(dayjs().tz(timezone))
+
+  // 30日发电趋势
+  const { data: trend30Res } = useQuery({
+    queryKey: ['station-trend-30d', stationId],
+    queryFn: () => dashboardApi.getTrend('30days').then(r => r.data),
+    enabled: !!stationId,
+  })
+  const trend30Data = Array.isArray(trend30Res?.data) ? trend30Res.data :
+    (Array.isArray(trend30Res?.data?.data) ? trend30Res.data.data : [])
+
+  // 电量概览
+  const [overviewPeriod, setOverviewPeriod] = useState('day')
+  const { data: energyOverviewRes } = useQuery({
+    queryKey: ['station-energy-overview', stationId, overviewPeriod],
+    queryFn: () => dashboardApi.getEnergyStats({ type: overviewPeriod, stationId }).then(r => r.data),
+    enabled: !!stationId,
+  })
+  const energyOverview = energyOverviewRes?.data ?? energyOverviewRes ?? {}
 
   const getDateRange = () => {
     switch (period) {
@@ -147,23 +166,23 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
       series: [
         {
           name: 'PV功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.energy_produce)),
+          data: statsData.map((d: any) => safeNum(d.daily_pv ?? d.energy_produce)),
           lineStyle: { color: '#f59e0b', width: 2 }, itemStyle: { color: '#f59e0b' },
           areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.3)' }, { offset: 1, color: 'rgba(245,158,11,0.02)' }] } },
         },
         {
           name: '电池功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.battery_charge) - safeNum(d.battery_discharge)),
+          data: statsData.map((d: any) => safeNum(d.daily_charge ?? d.battery_charge) - safeNum(d.daily_discharge ?? d.battery_discharge)),
           lineStyle: { color: '#22c55e', width: 2 }, itemStyle: { color: '#22c55e' },
         },
         {
           name: '负载功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.energy_consume)),
+          data: statsData.map((d: any) => safeNum(d.daily_load ?? d.energy_consume)),
           lineStyle: { color: '#ef4444', width: 2 }, itemStyle: { color: '#ef4444' },
         },
         {
           name: '电网功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.grid_power)),
+          data: statsData.map((d: any) => safeNum(d.daily_pv ?? d.energy_produce) - safeNum(d.daily_load ?? d.energy_consume) - (safeNum(d.daily_charge ?? d.battery_charge) - safeNum(d.daily_discharge ?? d.battery_discharge))),
           lineStyle: { color: '#3b82f6', width: 2 }, itemStyle: { color: '#3b82f6' },
         },
       ],
@@ -202,6 +221,68 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
       })),
     }
   }, [statsData, period, timezone])
+
+  // 30日发电趋势 ECharts 配置
+  const trend30Option = useMemo(() => {
+    if (!trend30Data?.length) return null
+    return {
+      tooltip: { trigger: 'axis' as const },
+      grid: { left: '3%', right: '4%', bottom: '12%', top: 40, containLabel: true },
+      xAxis: {
+        type: 'category' as const,
+        data: trend30Data.map((d: any) => dayjs(d.date).format('MM-DD')),
+        axisLabel: { fontSize: 11, interval: 2 },
+      },
+      yAxis: { type: 'value' as const, name: 'kWh' },
+      dataZoom: [{ type: 'inside' }, { type: 'slider', height: 20, bottom: 8 }],
+      series: [{
+        name: t('station.genEnergy'),
+        type: 'line' as const,
+        smooth: true,
+        symbol: 'none',
+        data: trend30Data.map((d: any) => safeNum(d.energy)),
+        lineStyle: { color: '#f59e0b', width: 2 },
+        itemStyle: { color: '#f59e0b' },
+        areaStyle: {
+          color: {
+            type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(245,158,11,0.3)' },
+              { offset: 1, color: 'rgba(245,158,11,0.02)' },
+            ],
+          },
+        },
+      }],
+    }
+  }, [trend30Data, t])
+
+  // 电量概览 ECharts 配置
+  const energyOverviewOption = useMemo(() => {
+    if (!energyOverview || typeof energyOverview !== 'object') return null
+    const categories = Array.isArray(energyOverview.categories) ? energyOverview.categories :
+      (Array.isArray(energyOverview.dates) ? energyOverview.dates : [])
+    const pvData = Array.isArray(energyOverview.pv) ? energyOverview.pv : []
+    const chargeData = Array.isArray(energyOverview.charge) ? energyOverview.charge :
+      (Array.isArray(energyOverview.batteryCharge) ? energyOverview.batteryCharge : [])
+    const dischargeData = Array.isArray(energyOverview.discharge) ? energyOverview.discharge :
+      (Array.isArray(energyOverview.batteryDischarge) ? energyOverview.batteryDischarge : [])
+    const loadData = Array.isArray(energyOverview.load) ? energyOverview.load :
+      (Array.isArray(energyOverview.dailyLoad) ? energyOverview.dailyLoad : [])
+    if (!categories.length) return null
+    return {
+      tooltip: { trigger: 'axis' as const, axisPointer: { type: 'shadow' as const } },
+      legend: { data: ['PV发电', '电池充电', '电池放电', '负载用电'], top: 0, itemGap: 16 },
+      grid: { left: '3%', right: '4%', bottom: '12%', top: 45, containLabel: true },
+      xAxis: { type: 'category' as const, data: categories, axisLabel: { fontSize: 11 } },
+      yAxis: { type: 'value' as const, name: 'kWh' },
+      series: [
+        { name: 'PV发电', type: 'bar' as const, data: pvData.map((v: any) => safeNum(v)), itemStyle: { color: '#f59e0b', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: '电池充电', type: 'bar' as const, data: chargeData.map((v: any) => safeNum(v)), itemStyle: { color: '#22c55e', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: '电池放电', type: 'bar' as const, data: dischargeData.map((v: any) => safeNum(v)), itemStyle: { color: '#3b82f6', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: '负载用电', type: 'bar' as const, data: loadData.map((v: any) => safeNum(v)), itemStyle: { color: '#ef4444', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+      ],
+    }
+  }, [energyOverview])
 
   const dateFormat = period === 'day' ? 'YYYY-MM-DD' : period === 'month' ? 'YYYY-MM' : 'YYYY'
 
@@ -247,17 +328,52 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
 
       {/* 功率折线图（仅日粒度） */}
       {period === 'day' && powerLineOption && (
-        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title="功率曲线" size="small">
+        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title={t('station.powerTrend')} size="small">
           <ReactECharts option={powerLineOption} style={{ height: 320 }} />
         </Card>
       )}
 
       {/* 电量柱状图 */}
       {energyBarOption && (
-        <Card bordered={false} style={{ borderRadius: 12 }} title="电量统计" size="small">
+        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title="电量统计" size="small">
           <ReactECharts option={energyBarOption} style={{ height: 320 }} />
         </Card>
       )}
+
+      {/* 30日发电趋势折线图（新增） */}
+      {trend30Option && (
+        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title={t('station.genTrend30Days')} size="small">
+          <ReactECharts option={trend30Option} style={{ height: 320 }} />
+        </Card>
+      )}
+
+      {/* 电量概览柱状图 + Segmented 切换（新增） */}
+      <Card
+        bordered={false}
+        style={{ borderRadius: 12, marginBottom: 16 }}
+        title={t('station.energyOverview')}
+        size="small"
+        extra={
+          <Segmented
+            size="small"
+            options={[
+              { label: t('station.dayPeriod'), value: 'day' },
+              { label: t('station.monthPeriod'), value: 'month' },
+              { label: t('station.yearPeriod'), value: 'year' },
+            ]}
+            value={overviewPeriod}
+            onChange={v => setOverviewPeriod(v as string)}
+          />
+        }
+      >
+        {energyOverviewOption ? (
+          <ReactECharts option={energyOverviewOption} style={{ height: 320 }} />
+        ) : (
+          <div style={{ textAlign: 'center', padding: '48px 0' }}>
+            <Text type="secondary">{t('station.noData')}</Text>
+          </div>
+        )}
+      </Card>
 
       {!isLoading && (!statsData || statsData.length === 0) && (
         <Card bordered={false} style={{ borderRadius: 12, textAlign: 'center', padding: '48px 24px' }}>
