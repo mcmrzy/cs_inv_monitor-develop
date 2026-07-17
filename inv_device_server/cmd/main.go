@@ -143,6 +143,13 @@ func main() {
 	// 创建共享的设备状态管理器：MQTT 层和 Kafka 消费层使用同一实例
 	stateManager := service.NewDeviceStateManager(rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
 
+	// 创建告警消费者（MQTT 直连告警也需要此实例，即使 Kafka 未启用）
+	var alertConsumer *service.AlertConsumer
+	if cfg.Kafka.Enabled && len(cfg.Kafka.Brokers) > 0 {
+		alertConsumer = service.NewAlertConsumer(
+			cfg.Kafka.Brokers, cfg.Kafka.AlarmTopic, "inv-device-server-alerts", rdb, deviceRepo, cfg.Backends.APIServer, cfg.Backends.InternalKey)
+	}
+
 	// 注册 OTA 状态回调：MQTT 收到设备 OTA 状态后转发给 API Server
 	if mqttClient != nil {
 		mqttClient.SetOtaStatusHandler(dataService.HandleOTAStatus)
@@ -160,6 +167,13 @@ func main() {
 			}
 		})
 		mqttClient.SetCmdResultHandler(dataService.HandleCmdResult)
+
+		// 注册 MQTT 直连告警处理：alarm 主题消息直接 POST 到 api-server
+		if alertConsumer != nil {
+			mqttClient.SetAlarmHandler(func(sn string, payload []byte) {
+				alertConsumer.HandleMQTTAlarm(sn, payload)
+			})
+		}
 	}
 	dataService.StartMetadataRefresh(ctx)
 
@@ -174,9 +188,9 @@ func main() {
 		protocolParser.SetStateManager(stateManager)
 		protocolParser.Start(ctx)
 
-		alertConsumer := service.NewAlertConsumer(
-			cfg.Kafka.Brokers, cfg.Kafka.AlarmTopic, "inv-device-server-alerts", rdb, deviceRepo, cfg.Backends.APIServer, cfg.Backends.InternalKey)
-		alertConsumer.Start(ctx)
+		if alertConsumer != nil {
+			alertConsumer.Start(ctx)
+		}
 
 		logger.Info("Kafka consumers started (protocol parser + alert consumer)",
 			zap.Strings("brokers", cfg.Kafka.Brokers),

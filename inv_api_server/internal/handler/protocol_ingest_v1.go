@@ -639,16 +639,9 @@ func (s *postgresProtocolV1Store) IngestAlarm(ctx context.Context, record protoc
 		return protocolV1Result{}, err
 	}
 
-	var newerExists bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM device_alarm_events WHERE device_sn=$1 AND source=$2 AND code=$3 AND (event_time>$4 OR (event_time=$4 AND state='recovered' AND $5='active')))`, record.SN, data.Source, code, record.EventTime, stateName).Scan(&newerExists); err != nil {
-		return protocolV1Result{}, err
-	}
-	if newerExists {
-		if err := tx.Commit(ctx); err != nil {
-			return protocolV1Result{}, err
-		}
-		return protocolV1Result{ID: eventID, OutOfOrder: true}, nil
-	}
+	// 始终更新 alarms 投影表，移除乱序跳过逻辑
+	// UPSERT 模式（UPDATE + INSERT fallback）和 recovery 的 occurred_at 条件
+	// 已足够保证幂等性和正确性
 
 	alarmLevel := 2
 	if data.Level == 2 {
