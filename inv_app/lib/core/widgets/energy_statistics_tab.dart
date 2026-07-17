@@ -182,8 +182,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     try {
       final dt = DateTime.parse(rawTime).toLocal();
       switch (_period) {
-        case 'day': // hour 模式 → "HH:00"
-          return '${dt.hour.toString().padLeft(2, '0')}:00';
+        case 'day': // hour 模式 → "Xh"
+          return '${dt.hour}h';
         case 'month': // day 模式 → "MM-DD"
           return '${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
         case 'year': // month 模式 → "M月"
@@ -197,7 +197,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       switch (_period) {
         case 'day':
           if (tIndex >= 0 && rawTime.length > tIndex + 2) {
-            return '${rawTime.substring(tIndex + 1, tIndex + 3)}:00';
+            return '${int.tryParse(rawTime.substring(tIndex + 1, tIndex + 3)) ?? rawTime.substring(tIndex + 1, tIndex + 3)}h';
           }
           break;
         case 'month':
@@ -823,7 +823,9 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       child: LineChart(
         LineChartData(
           minX: _period == 'day' ? 0.0 : null,
-          maxX: _period == 'day' ? 23.0 : null,
+          maxX: _period == 'day' && _dataPoints.isNotEmpty
+              ? (_dataPoints.length - 1).toDouble()
+              : null,
           minY: -yRange,
           maxY: yRange,
           gridData: FlGridData(
@@ -856,16 +858,21 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 20.h,
-                interval: _period == 'day' ? 3.0 : null,
+                interval: _period == 'day'
+                    ? (_dataPoints.length <= 6 ? 1.0 : 2.0)
+                    : null,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
                   if (index < 0 || index >= _dataPoints.length) return const SizedBox.shrink();
+                  final lastIdx = _dataPoints.length - 1;
                   if (_period == 'day') {
-                    if (index % 3 != 0) return const SizedBox.shrink();
+                    // ≤6个点全部显示，>6个点每隔2个显示，始终显示最后一个
+                    final step = _dataPoints.length <= 6 ? 1 : 2;
+                    if (index != lastIdx && index % step != 0) return const SizedBox.shrink();
                   } else {
                     final maxLabels = 4;
                     final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
-                    if (index % step != 0) return const SizedBox.shrink();
+                    if (index != lastIdx && index % step != 0) return const SizedBox.shrink();
                   }
                   return Text(
                     _formatTimeLabel(_dataPoints[index].time),

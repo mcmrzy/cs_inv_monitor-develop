@@ -321,6 +321,18 @@ const StationDetailPage: React.FC = () => {
       totalDisplay: (deviceEnergy?.totalDischarge ?? 0) > 0 || station.total_discharge != null ? undefined : `${Math.round(avgSoc)}%`,
     },
     {
+      key: 'load',
+      label: t('station.loadConsumption'),
+      color: '#22C55E',
+      today: (deviceEnergy?.dailyLoad ?? 0) > 0 ? deviceEnergy!.dailyLoad : station.today_consumption,
+      total: (deviceEnergy?.totalLoad ?? 0) > 0 ? deviceEnergy!.totalLoad : station.total_consumption,
+      todayLabel: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? t('station.todayConsumption') : t('station.power'),
+      totalLabel: t('station.cumulative'),
+      unit: 'kWh',
+      todayDisplay: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? undefined : `${Math.round(aggregatedLoad)} W`,
+      totalDisplay: (deviceEnergy?.totalLoad ?? 0) > 0 || station.total_consumption != null ? undefined : '--',
+    },
+    {
       key: 'grid',
       label: hasGridData ? t('station.gridExport') : t('station.grid'),
       color: '#F59E0B',
@@ -332,18 +344,6 @@ const StationDetailPage: React.FC = () => {
       // 离网设备无电网数据，显示"无电网"
       todayDisplay: hasGridData ? undefined : '--',
       totalDisplay: hasGridData ? (station.total_grid_export != null ? undefined : '--') : '--',
-    },
-    {
-      key: 'load',
-      label: t('station.loadConsumption'),
-      color: '#22C55E',
-      today: (deviceEnergy?.dailyLoad ?? 0) > 0 ? deviceEnergy!.dailyLoad : station.today_consumption,
-      total: (deviceEnergy?.totalLoad ?? 0) > 0 ? deviceEnergy!.totalLoad : station.total_consumption,
-      todayLabel: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? t('station.todayConsumption') : t('station.power'),
-      totalLabel: t('station.cumulative'),
-      unit: 'kWh',
-      todayDisplay: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? undefined : `${Math.round(aggregatedLoad)} W`,
-      totalDisplay: (deviceEnergy?.totalLoad ?? 0) > 0 || station.total_consumption != null ? undefined : '--',
     },
   ]
 
