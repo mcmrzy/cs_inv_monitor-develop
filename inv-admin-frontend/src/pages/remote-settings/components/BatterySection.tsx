@@ -18,7 +18,7 @@ const BatterySection: React.FC = () => {
   }
 
   return (
-    <Row gutter={[16, 8]}>
+    <Row gutter={[0, 8]}>
       <Col span={24}>
         <div style={fieldRowStyle}>
           <Text style={{ fontSize: 12, color: '#888', marginBottom: 8, display: 'block' }}>

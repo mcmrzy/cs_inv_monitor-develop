@@ -22,7 +22,7 @@ const OtherSection: React.FC = () => {
   }
 
   return (
-    <Row gutter={[16, 8]}>
+    <Row gutter={[0, 8]}>
       <FieldRow label="CT功率补偿(W)" range="[-199, 199]">
         <InputNumber min={-199} max={199} value={ctCompensation} onChange={(v) => setCtCompensation(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('CT功率补偿')} />
@@ -43,9 +43,9 @@ const OtherSection: React.FC = () => {
       </FieldRow>
 
       {/* 转速斜率控制1 - 两个按钮 */}
-      <Col span={12}>
-        <div style={fieldRowStyle}>
-          <Text style={labelStyle}>转速斜率控制1</Text>
+      <Col span={24}>
+        <div style={{ ...fieldRowStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <Text style={{ ...labelStyle, marginBottom: 0, flexShrink: 0, marginRight: 12 }}>转速斜率控制1</Text>
           <Space size={4}>
             <Button
               type={fan1SlopeMode === 'default' ? 'primary' : 'default'}
@@ -65,7 +65,7 @@ const OtherSection: React.FC = () => {
             </Button>
           </Space>
           {fan1SlopeMode === 'custom' && (
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 6, width: '100%' }}>
               <Space>
                 <InputNumber min={1} max={100} value={fan1Slope} onChange={(v) => setFan1Slope(v ?? 1)} style={{ width: 100 }} />
                 <SettingButton onClick={() => handleSet('转速斜率控制1')} />
@@ -81,9 +81,9 @@ const OtherSection: React.FC = () => {
       </FieldRow>
 
       {/* 转速斜率控制2 - 两个按钮 */}
-      <Col span={12}>
-        <div style={fieldRowStyle}>
-          <Text style={labelStyle}>转速斜率控制2</Text>
+      <Col span={24}>
+        <div style={{ ...fieldRowStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <Text style={{ ...labelStyle, marginBottom: 0, flexShrink: 0, marginRight: 12 }}>转速斜率控制2</Text>
           <Space size={4}>
             <Button
               type={fan2SlopeMode === 'default' ? 'primary' : 'default'}
@@ -103,7 +103,7 @@ const OtherSection: React.FC = () => {
             </Button>
           </Space>
           {fan2SlopeMode === 'custom' && (
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 6, width: '100%' }}>
               <Space>
                 <InputNumber min={1} max={100} value={fan2Slope} onChange={(v) => setFan2Slope(v ?? 1)} style={{ width: 100 }} />
                 <SettingButton onClick={() => handleSet('转速斜率控制2')} />

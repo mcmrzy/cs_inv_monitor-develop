@@ -114,7 +114,7 @@ const DischargeSection: React.FC = () => {
   const sectionColor = SECTION_COLORS.discharge
 
   return (
-    <Row gutter={[16, 8]}>
+    <Row gutter={[0, 8]}>
       {/* 放电控制 */}
       <FieldRow
         label="放电控制"
