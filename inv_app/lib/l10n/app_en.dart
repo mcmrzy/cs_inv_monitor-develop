@@ -1007,4 +1007,6 @@ const Map<String, String> en = {
   'alarm_label': 'Alarm',
   'source_label': 'Source',
   'inverter_no_response': 'Inverter not responding, auto-disconnected from device AP and switched to home WiFi',
+  'load_power': 'Load Power',
+  'no_data_available': 'No data available',
 };
