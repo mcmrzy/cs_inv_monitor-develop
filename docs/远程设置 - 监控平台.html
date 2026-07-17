@@ -1,0 +1,3919 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!-- saved from url=(0068)https://server.luxpowertek.com/WManage/web/maintain/remoteSetOffGrid -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="renderer" content="webkit">
+	
+	
+
+
+
+
+
+	
+		<link rel="shortcut icon" href="https://resource.solarcloudsystem.com/WManage/web/img/format/LOGO_32.png">
+	
+
+
+
+<link rel="stylesheet" href="./远程设置 - 监控平台_files/easyui.css">
+<link rel="stylesheet" href="./远程设置 - 监控平台_files/icon.css">
+<link rel="stylesheet" href="./远程设置 - 监控平台_files/font-awesome.min.css">
+<link rel="stylesheet" href="./远程设置 - 监控平台_files/bootstrap.min.css">
+<link rel="stylesheet" href="./远程设置 - 监控平台_files/header.css">
+
+
+
+	
+	
+		<link rel="stylesheet" href="./远程设置 - 监控平台_files/custom.css">
+	
+
+
+<script src="./远程设置 - 监控平台_files/jquery-1.11.1.min.js.下载" type="text/javascript"></script>
+<script src="./远程设置 - 监控平台_files/moment_20240403.min.js.下载" type="text/javascript"></script>
+<script src="./远程设置 - 监控平台_files/bootstrap.min.js.下载" type="text/javascript"></script>
+<script src="./远程设置 - 监控平台_files/jquery.easyui.min_1.4.5.js.下载" type="text/javascript"></script>
+<!-- <script src="https://resource.solarcloudsystem.com/WManage/web/lib/easyui/js/locale/easyui-lang-zh_CN.js" type="text/javascript"></script> -->
+
+<script src="./远程设置 - 监控平台_files/header.js.下载" type="text/javascript"></script>
+
+<script language="JavaScript">
+	var userId = '4408'
+	var headerPlatform = 'LUX_POWER';
+	var loginLabel = '登录页面'
+	function formatDate(date) {
+		return moment(date).format("YYYY-MM-DD");
+	}
+
+	$.fn.datebox.defaults.formatter = formatDate;
+
+	var language = 'zh_CN';
+	var language4Datetimepicker = language.replace('_', '-');
+
+	var baseUrl = '/WManage';
+	var resourceBaseUrl = 'https://resource.solarcloudsystem.com/WManage';
+
+	
+		var isAdmin = false;
+	
+	
+	
+		var isMaintain = false;
+	
+	
+	
+		var isDevAccount = false;
+	
+	
+
+	
+		var isEG4Admin = false;
+	
+	
+
+	
+	
+		var isOwnerLevel = true;
+	
+
+	
+	
+		var isInstallerLevel = false;
+	
+
+	var gigabiz1User = false;
+	
+
+	
+	
+		var isSecondCluster = false;
+	
+
+	
+	
+		var isIndiaCluster = false;
+	
+
+	var redisRunning = true;
+
+	
+		var isViewer = false;
+		var plantListUrl = baseUrl + '/web/config/plant/list';
+	
+	
+	
+	var isPowerZone = false
+	
+
+	var currentClusterId = 1;
+
+	var serverTimezone = 8;
+
+	var defaultLng = 114.062944;
+	var defaultLat = 22.550805;
+
+	var noPermissionText = '没有权限';
+
+	var successText = '成功';
+	var failedText = '失败';
+
+	var setSuccessText = '设置成功';
+
+	var beforePageText = '第';
+	var afterPageText = '页 共 {pages} 页';
+	var displayMsg = '当前显示 {from} - {to} 条记录 共 {total} 条记录';
+	var isLuxPlatform = false;
+	
+		isLuxPlatform = true;
+	
+	
+	
+		var isEG4Platform = false;
+	
+    var isCrownPlatform = false;
+    
+
+	
+	
+		var isFortressPlatform = false;
+	
+
+	
+	
+		var isGTECPlatform = false;
+	
+
+	var parentUserId = '1'
+
+	function resultFailed(code) {
+		return ' (来自逆变器)'
+	}
+
+	function tableLostFormatter(value, row) {
+		if (value) {
+			return '<span style="color: gray">未连接</span>';
+		} else {
+			return '<span style="color: green">已连接</span>';
+		}
+	}
+
+	function tableStatusFormatter(value, row) {
+		if (value) {
+			var imgElementHtml = '<img style="margin-right: 5px;" width="16" height="16" src="' + resourceBaseUrl + '/web/img/format/status/status_' + value + '.png" />';
+			switch (value) {
+				case 'offline':
+					return '<div>' + imgElementHtml + '<span style="position: relative; top: 2px;">离线</span></div>';
+				case 'warning':
+					return '<div>' + imgElementHtml + '<span style="position: relative; top: 2px;">告警</span></div>';
+				case 'error':
+					return '<div>' + imgElementHtml + '<span style="position: relative; top: 2px;">故障</span></div>';
+				case 'normal':
+					return '<div>' + imgElementHtml + '<span style="position: relative; top: 2px;">正常</span></div>';
+			}
+		}
+		return '';
+	}
+
+	function booleanFormatter(value, row) {
+		if (typeof (value) == 'undefined') {
+			return '';
+		}
+		return value ? '是' : '否';
+	}
+
+	function successFormatter(value, row) {
+		if (typeof (value) == 'undefined') {
+			return '';
+		}
+		if (value) {
+			return '<span style="color: green;">成功</span>';
+		} else {
+			return '<span style="color: red;">失败</span>';
+		}
+	}
+
+	function doneFormatter(value, row) {
+		if (typeof (value) == 'undefined') {
+			return '';
+		}
+		if (value) {
+			return '<span style="color: green;">已完成</span>';
+		} else {
+			return '未完成';
+		}
+	}
+
+	const dateFormatTypeList = {
+		'YYYY_MM_DD_SLASH': 'YYYY-MM-DD',
+		'YYYY_MM_DD': 'YYYY/MM/DD',
+		'MM_DD_YYYY': 'MM/DD/YYYY',
+		'DD_MM_YYYY': 'DD/MM/YYYY'
+	}
+	const dateFormatTypeList_month = {
+		'YYYY_MM_DD_SLASH': 'YYYY-MM',
+		'YYYY_MM_DD': 'YYYY/MM',
+		'MM_DD_YYYY': 'MM/YYYY',
+		'DD_MM_YYYY': 'MM/YYYY'
+	}
+	const dateFormatType = dateFormatTypeList[''] || 'YYYY-MM-DD'
+	const dateFormatType_month = dateFormatTypeList_month[''] || 'YYYY-MM'
+	
+	const temperatureUnitList = {
+		'C': '℃',
+		'F': '℉'
+	}
+	const temperatureUnit = temperatureUnitList['' || 'C']
+</script>
+	
+	
+
+
+
+<link rel="stylesheet" type="text/css" href="./远程设置 - 监控平台_files/data.css">
+
+<script language="JavaScript">
+	var paramAuthority = null
+	
+	paramAuthority = {"invisibleParams":[],"notWriteableParams":[],"visibleParams":[],"writeableParams":[]};
+	
+
+	
+	var isHuayuAccount = false;
+	var userId = 4408;
+	
+	
+
+	var allowExport2Grid = false;
+    var accountName = 'BBJ-Ni'
+    var isFirstCluster = true
+
+	
+	
+	var useOriginMSText = false;
+
+	var slaveHybrid1Text = '单相并机';
+	var slaveHybrid2Text = '从机';
+	var slaveHybrid3Text = '三相并机';
+	var slaveHybrid4Text = '2x208 主机';
+
+	var slaveHybrid1TextTrip12K = '主机';
+	
+    var slaveGen3_0Text = '单机';
+    var slaveGen3_1Text = '单相并机';
+    var slaveGen3_3Text = '三相并机';
+
+	var paramEmptyAlertText = '参数不能为空';
+	var paramShouldIntText = '参数非法，需为整数';
+	var paramShouldFloatText = '参数非法，需为浮点数';
+	var paramShouldCharText = '参数非法，需为[a-z]或[A-Z]';
+	var paramOutRangeText = '参数值超出范围';
+	var setResultSuccessText = '设置成功';
+	var resetResultSuccessText = '重置成功';
+	var controlResultSuccessText = '控制成功';
+	var resultParamErrorText = '参数异常';
+	var resultUndoText = '操作未执行';
+	var resultDeviceOfflineText = '设备不在线';
+	var resultCommandNotSendText = '命令未成功发送';
+	var hostInverterText = '逆变器';
+	var resultTimeoutText = '超时';
+	var resultServerExceptionText = '服务器集群异常';
+	var resultFailedText = '操作出错，异常码:';
+	var resultUnknownErrorText = '未知错误';
+
+	var phraseModelRule0Text = '0: 通用 - 同VDE0126';
+	var phraseModelRule1Text = '1: VDE0126 - 德国';
+	var phraseModelRule2Text = '2: AS4777 - 澳洲';
+	var phraseModelRule3Text = '3: NEWZEALAND - 新西兰';
+	var phraseModelRule4Text = '4: CGC - 中国';
+	var phraseModelRule5Text = '5: G99';
+	var phraseModelRule6Text = '6: G98';
+	var phraseModelRule7Text = '7: N4105 - 德国';
+	var phraseModelRule8Text = '8: CEI0-21 - 意大利';
+	var phraseModelRule9Text = '9: EN50438';
+	var phraseModelRule10Text = '10: EN50438_芬兰';
+	var phraseModelRule11Text = '11: 日本';
+	var phraseModelRule12Text = '12: PEA';
+	var phraseModelRule13Text = '13: MEA';
+	var phraseModelRule14Text = '14: EN50438_爱尔兰';
+	var phraseModelRule15Text = '15: 捷克';
+	var phraseModelRule16Text = '16: 南非';
+	var phraseModelRule21Text = '21: PTPiREE (波兰)';
+	var phraseModelRule23Text = '23: 比利时';
+	var phraseModelRule24Text = '24: TOR';
+
+	var phraseModelAmericaRule0Text = '0: UL1741&IEEE1547';
+	var phraseModelAmericaRule1Text = '1: HECO';
+	var phraseModelAmericaRule2Text = '2: USA(rule21)';
+	var phraseModelAmericaRule3Text = '3: PR-LUMA';
+	var phraseModelAmericaRule4Text = '4: KIUC';
+	var phraseModelAmericaRule5Text = '5: Brazil';
+	var phraseModelAmericaRule6Text = '6: NewEngland';
+
+	var meterBrand0 = '0: Eastron';
+	var meterBrand1_1 = '1: 保留';
+	var meterBrand1_2 = '1: WattNode';
+	var meterBrand2 = '2: 保留';
+	var meterBrand2_2 = '2: Accuenergy';
+	var meterBrand3 = '3: 正泰';
+
+	var forbiddenText = '禁止';
+	var allowedText = '允许';
+
+    var acChargeBaseOn_0 = '时间 (根据)'
+    var acChargeBaseOn_1 = 'SOC/电压 (根据)'
+    var acChargeBaseOn_2 = '时间+SOC/电压（根据）'
+
+    var acChargeBaseOnGen3_0 = '禁用'
+    var acChargeBaseOnGen3_1 = '时间 (根据)'
+    var acChargeBaseOnGen3_2 = '电池电压 (根据)'
+    var acChargeBaseOnGen3_3 = '电池SOC (根据)'
+    var acChargeBaseOnGen3_4 = '电池电压和时间 (根据)'
+    var acChargeBaseOnGen3_5 = '电池SOC和时间 (根据)'
+
+	
+
+	var pvInputMode0DefaultText = '无PV面板接入';
+	var pvInputMode1DefaultText = '仅PV1接入';
+	var pvInputMode2DefaultText = '仅PV2接入';
+	var pvInputMode3DefaultText = 'PV1和PV2连接相同的PV组串';
+	var pvInputMode4DefaultText = 'PV1和PV2连接不同的PV组串';
+
+    var pvInputMode0_Bess200kText = '无光伏输入';
+    var pvInputMode1_Bess200kText = 'PV1-8并联';
+    var pvInputMode2_Bess200kText = '光伏1-8独立';
+
+	var pvInputMode0_12KText = '0: NO PV';
+	var pvInputMode1_12KText = '1: PV1 in';
+	var pvInputMode2_12KText = '2: PV2 in';
+	var pvInputMode3_12KText = '3: PV3 in';
+	var pvInputMode4_12KText = '4: PV1&2 in';
+	var pvInputMode5_12KText = '5: PV1&3 in';
+	var pvInputMode6_12KText = '6: PV2&3 in';
+	var pvInputMode7_12KText = '7: PV1&2&3 in';
+
+	var pvInputMode0_TripText = '0: No PV parallel';
+	var pvInputMode1_TripText = '1: PV1, PV2 连接相同的PV组串';
+	var pvInputMode2_TripText = '2: PV1, PV3 连接相同的PV组串';
+	var pvInputMode3_TripText = '3: PV2, PV3 连接相同的PV组串';
+	var pvInputMode4_TripText = '4: PV1, PV2, PV3 连接相同的PV组串';
+
+	var pvInputMode1_24KText = '1: PV1~PV6 连接不同的PV组串';
+	var pvInputMode2_24KText = '2: PV12, PV34, PV56 连接相同的PV组串';
+
+	var pvInputMode0_Gen3Text = '0: 直流源模式';
+	var pvInputMode3_Gen3Text = '3: 并联最大功率点跟踪输入';
+	var pvInputMode4_Gen3Text = '4: 独立最大功率点跟踪输入';
+	var pvInputMode3_Offgrid3Text = '3: 两个MPPT连接到同一个串';
+	var pvInputMode4_Offgrid4Text = '4: 两个MPPT连接到不同串';
+
+    var acChargeBatteryCurrentOffGridTipText = '根据电池要求进行设置，SNA 5K 范围：0~110A，SNA 6K 范围：0~140A。';
+	var acChargeBatteryCurrentOffGridSplitTipText = '根据电池要求进行设置，范围：0~100A。';
+
+	var isoDisableNoticeText = 'PV ISO低表示光伏隔离保护，系统可能存在光伏隔离低的问题。在禁用ISO保护功能之前，请确认客户的光伏电缆没有浸入水中，其外皮没有损坏，系统接地良好，并且没有其他隔离问题！！';
+
+	var isAcCoupleNoticeText1 = '如果您启用交流耦合，请确保发电端口已连接到';
+	var isAcCoupleNoticeText2 = '并网太阳能系统，而不是发电机。';
+	var isAcCoupleNoticeText3 = '按确认按钮以保存更改，或按取消以保留原设置。';
+	var isAcCoupleNoticeText4 = '当前设置。';
+	var isSmartLoadNoticeText1 = '如果您启用智能负载功能，则禁止同时连接发电机或交流耦合系统，否则设备将会损坏！';
+	var isSmartLoadNoticeText2 = '按确认按钮以保存更改，或按取消按钮以不进行更改。';
+
+	var isMidBoxEnableText = '您即将启用GridBoss。请确保GridBoss已正确安装并连接到您的逆变器。否则，它可能会损坏您的设备。';
+	var isMidBoxGoLinkEnableText = '请确认机器已连接到Midbox Golink；否则，启用此设置将导致机器故障';
+	var isBatteryCalibration = '提示：禁用此功能可能会导致电池过放电。请小心操作！';
+
+	var setSerialNumberMessageText = '弹出通知：此操作将覆盖设备的序列号，请在按下“设置”按钮之前再次检查序列号是否正确。';
+	var setBatteryVoltageCorrectionMessageText = '弹出通知：此操作可能导致电池过充或过放电，请在逆变器待机状态下比较实际电压读数并纠正电池电压。';
+	var setClearEnergyRatioMessageText = '弹出通知：此操作将删除逆变器的所有能量记录，请在操作之前与客户核实。';
+	var setClearAdjRatioMessageText = '弹出通知：此操作将删除工厂取样校正，请谨慎操作。';
+	var setClearFaultRecordMessageText = '弹出通知：此操作将从LCD显示屏删除所有错误记录，请在操作之前与客户核实。';
+	var setResetToFactoryMessageText = '弹出通知：此操作将把加密狗重置为出厂设置，请谨慎操作。';
+    var setRebootDongleMessageText = '弹窗提示：此操作将重启采集器，请谨慎操作';
+
+    var reactivePowerCMDTypeText0 = '0 - 单位功率因数输出'
+    var reactivePowerCMDTypeText1 = '1 - 固定PF输出'
+    var reactivePowerCMDTypeText2 = '2 - 默认无功曲线输出'
+    var reactivePowerCMDTypeText4 = '4 - 容性无功百分比输出'
+    var reactivePowerCMDTypeText5 = '5 - 感性无功百分比输出'
+    var reactivePowerCMDTypeText6 = '6 - Q(V)曲线'
+    var reactivePowerCMDTypeText3 = '3 - 容性无功百分比输出'
+    var reactivePowerCMDTypeText4_0 = '4 - 感性无功百分比输出'
+    var reactivePowerCMDTypeText5_0 = '5 - Q(V)曲线'
+    var reactivePowerCMDTypeText6_0 = '6 - 动态Q(V)曲线'
+
+	var workingModeEnableFailedText = '注意：请注意，交流充电和电池备份模式不能同时启用，因为它们的功能相似。如果您想启用当前设置，请禁用另一种模式。';
+	let defaultValue = false
+	
+	
+	var readBattInfoIfNeed = false;
+	
+
+    var composedPhaseText1 = 'R相'
+    var composedPhaseText2 = 'S相'
+    var composedPhaseText3 = 'T相'
+
+    var hpTest2TimeEmptyTip = 'HP测试2时长不能为空'
+
+	$(document).ready(function () {
+//		$('input').blur(function() {
+//			const maxValue = $(this).attr('max')
+//			let minValue = $(this).attr('min')
+//			if(maxValue !== undefined && maxValue !== null) {
+//				const currentValue = parseFloat($(this).val())
+//				if (currentValue > maxValue) {
+//					$(this).val(maxValue)
+//				}
+//				if(minValue == undefined || minValue == null) {
+//					minValue = 0
+//					if (currentValue < minValue) {
+//						$(this).val(minValue)
+//					}
+//				}
+//				$(this).trigger('input')
+//				$(this).trigger('propertychange')
+//			}
+//			if(minValue !== undefined && minValue !== null) {
+//				const currentValue = parseFloat($(this).val())
+//				if (currentValue < minValue) {
+//					$(this).val(minValue)
+//					$(this).trigger('input')
+//					$(this).trigger('propertychange')
+//				}
+//			}
+//		})
+
+		$(window).trigger('resize')
+		
+		
+
+		$('#exportPdfButton').removeAttr('disabled');
+	});
+</script>
+<script type="text/javascript" src="./远程设置 - 监控平台_files/remoteSetText.js.下载"></script>
+<script type="text/javascript" src="./远程设置 - 监控平台_files/paramAuthority.js.下载"></script>
+
+<!-- Action notice modal dialog -->
+</head><body class="page-header-fixed"><div id="actionNoticeModal" class="modal fade" tabindex="-1" role="dialog">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal">×</button>
+				<h4 class="modal-title">
+					通知
+				</h4>
+			</div>
+			<div class="modal-body form-horizontal">
+				<p id="actionNoticeTextHolder"></p>
+			</div>
+			<div class="modal-footer">
+				<button id="actionNoticeModalSubmit" type="button" class="btn btn-success" data-loading-text="确认…">
+					确认
+				</button>
+				<button type="button" class="btn btn-default" data-dismiss="modal">
+					取消
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+	
+	<link rel="stylesheet" type="text/css" href="./远程设置 - 监控平台_files/remoteSet.css">
+	
+	<style type="text/css">
+		.offGridConnectHolder {
+			display: none;
+		}
+	</style>
+	
+	<script language="JavaScript">
+		var currentSetPageType = 'remoteSetOffGrid';
+
+		
+			allowExport2Grid = true;
+		
+		
+		var allowCtrlHold601 = true;
+		function checkDischargeSetting() {
+			var index = $('#disChgControlInput').val();
+			if(index == 0) {
+				$('.dischargeSettingVoltage').removeAttr('disabled');
+				$('.dischargeSettingSoc').attr('disabled', 'disabled');
+			} else if(index == 1) {
+				$('.dischargeSettingSoc').removeAttr('disabled');
+				$('.dischargeSettingVoltage').attr('disabled', 'disabled');
+			}
+		}
+		
+		function checkAcChargeSetting() {
+			$('.acChargeControl').attr('disabled', 'disabled');
+			
+			var index = $('#acChargeTypeInput').val();
+			if(index > 0) {
+				$('.acChargeTime').removeAttr('disabled');
+				$('.acChargeCurrent').removeAttr('disabled');
+				
+				if(index == 1) {					//According to Time
+					
+				} else if(index == 2 || index == 4) {			//According to Battery Voltage
+					$('.acChargeVoltage').removeAttr('disabled');
+					if(index == 2) {
+						$('.acChargeTime').attr('disabled', 'disabled');
+					}
+				} else if(index == 3 || index == 5) {			//According to Battery SOC
+					$('.acChargeSoc').removeAttr('disabled');
+					if(index == 3) {
+						$('.acChargeTime').attr('disabled', 'disabled');
+					}				}
+			}
+		}
+		
+		function checkGenChargeSetting() {
+			var index = $('#generatorChargeTypeInput').val();
+			if(index == 0) {
+				$('.genChargeVoltage').removeAttr('disabled');
+				$('.genChargeSoc').attr('disabled', 'disabled');
+			} else if(index == 1) {
+				$('.genChargeSoc').removeAttr('disabled');
+				$('.genChargeVoltage').attr('disabled', 'disabled');
+			}
+		}
+		
+		function checkRuleModelSetting() {
+			var currentRule = $('#ruleModelInput').val();
+			if(currentRule == 16 && currentSubDeviceType != 131) {
+				$('.offGridConnectHolder').fadeIn();
+			} else {
+				$('.offGridConnectHolder').hide();
+			}
+		}
+		
+		$(document).ready(function() {
+			$('#disChgControlInput').change(function() {
+				checkDischargeSetting();
+			});
+			checkDischargeSetting();
+			
+			$('#acChargeTypeInput').change(function() {
+				checkAcChargeSetting();
+			});
+			checkAcChargeSetting();
+			
+			$('#generatorChargeTypeInput').change(function() {
+				checkGenChargeSetting();
+			});
+			checkGenChargeSetting();
+			
+			
+				if(!isViewer) {
+					$('#hybridSetGroupHolder').show();
+				}
+			
+
+			$('#ruleModelInput').change(function() {
+				checkRuleModelSetting();
+			});
+		});
+	</script>
+	
+    <title>远程设置 - 监控平台</title>
+
+
+
+
+	
+
+
+
+
+<link rel="stylesheet" href="./远程设置 - 监控平台_files/headerMenu.css">
+
+
+
+<header id="header" style="z-index: 11000; box-shadow: rgba(0, 0, 0, 0.15) 0px 2px 4px; position: fixed; top: 0px; width: 100%; height: 160px;">
+	<div style="height: 80px;">
+		
+		
+		
+		
+		
+		
+		
+		
+		
+
+		
+			<div class="ebase-frame-header-userTopBar" data-spm="userTopBar" style="padding-top: 80px;">
+				
+				
+					
+
+
+
+
+
+	
+
+
+
+<div class="userFavPlantRecordHolder" onclick="showTabelDialog()" style="margin-right: 16px;" title="收藏的电站">
+	<img class="userFavPlantRecordImg" style="width: 100%" src="./远程设置 - 监控平台_files/collectorPowerStation.png" alt="Collector power station">
+</div>
+
+<div id="tabelDialog" class="modal fade" tabindex="-1" role="dialog" style="z-index: 12000">
+	<div class="modal-dialog" style="width: 1000px; max-width: 1000px;">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal">×</button>
+				<h4 class="modal-title"><span>收藏的电站</span></h4>
+			</div>
+			<div class="modal-body form-horizontal">
+				<div id="collectorPowerStationContainer" style="width:968px;">
+					<table id="collectorPowerStationTable" style="width:100%;height:300px;">
+					</table>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button style="display: none;" type="button" class="btn btn-success" id="favoriteBtn">收藏当前电站</button>
+				<button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Collector power station dialog -->
+<div class="modal fade" id="collectorPowerStationDialog" tabindex="-1" role="dialog">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal">×</button>
+				<h4 class="modal-title">Favorites</h4>
+			</div>
+			<div class="modal-body form-horizontal">
+				<p id="collectorPowerStationTitle" style="display: none">Set station '<span id="collectorPowerStationModal"></span>' as favorite </p>
+				<div class="form-group has-feedback">
+					<label for="remarksTextareaEditCollectorPower" class="col-sm-3 control-label">备注</label>
+					<div class="col-sm-7">
+						<textarea id="remarksTextareaEditCollectorPower" class="form-control" rows="5" maxlength="255"></textarea>
+						<div class="alert alert-danger remarksEmpty">备注不能为空</div>
+					</div>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button id="collectorPowerStationSubmit" type="button" class="btn btn-success" data-loading-text="collect…">Confirm</button>
+				<button id="deleteCollectorPowerStationSubmit" style="display: none" type="button" class="btn btn-success" data-loading-text="collect…">Confirm</button>
+				<button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+			</div>
+		</div>
+	</div>
+</div>
+				
+
+				
+					
+						<span style="float: left; margin-right: 10px;">
+							<a class="ebase-frame-header-userLink" href="javascript:void();" style="font-size: 13px;">集群: </a>
+						</span>
+						<ul class="navbar-nav" style="margin-right: 16px;">
+							<li class="nav-item dropdown show">
+								<a class="nav-link dropdown-toggle text-muted waves-effect waves-dark ebase-frame-header-userLink" style="margin-left: 5px; font-size: 13px;" href="https://server.luxpowertek.com/WManage/web/maintain/remoteSetOffGrid" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+									
+										
+											中国大陆
+											<span class="caret" style="margin-left: 8px;"></span>
+										
+									
+										
+									
+										
+									
+										
+									
+										
+									
+								</a>
+								<div class="dropdown-menu ulBged dropdown-menu-right animated bounceInDown">
+									
+										<a class="dropdown-item" href="javascript:goToCluster(&#39;1&#39;, &#39;https://solarcloudsystem.com&#39;);">中国大陆</a>
+									
+										<a class="dropdown-item" href="javascript:goToCluster(&#39;2&#39;, &#39;https://eu.solarcloudsystem.com&#39;);">欧洲</a>
+									
+										<a class="dropdown-item" href="javascript:goToCluster(&#39;3&#39;, &#39;https://af.solarcloudsystem.com&#39;);">中东和非洲</a>
+									
+										<a class="dropdown-item" href="javascript:goToCluster(&#39;4&#39;, &#39;https://na.solarcloudsystem.com&#39;);">美洲</a>
+									
+										<a class="dropdown-item" href="javascript:goToCluster(&#39;5&#39;, &#39;https://sea.solarcloudsystem.com&#39;);">亚太地区</a>
+									
+									
+									
+                                    
+								</div>
+							</li>
+						</ul>
+					
+				
+
+				<ul class="navbar-nav" style="margin-right: 16px;">
+					<li class="nav-item dropdown show">
+						<a class="nav-link dropdown-toggle text-muted waves-effect waves-dark ebase-frame-header-userLink" style="margin-left: 5px;" href="https://server.luxpowertek.com/WManage/web/maintain/remoteSetOffGrid" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+							
+								
+							
+								
+									<i class="fa fa-language" aria-hidden="true" style="margin-right: 5px;"></i> 简体中文
+									<span class="caret" style="margin-left: 8px;"></span>
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+								
+							
+						</a>
+						<div class="dropdown-menu ulBged dropdown-menu-right animated bounceInDown">
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;ENGLISH&#39;);">English</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;CHINESE&#39;);">简体中文</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;JAPANESE&#39;);">日本語</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;ITALIAN&#39;);">Italiano</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;SPANISH&#39;);">Español</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;GERMAN&#39;);">Deutsch</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;FRENCH&#39;);">Français</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;DUTCH&#39;);">Nederlands</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;PORTUGUESE&#39;);">Português</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;POLISH&#39;);">Polski</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;RUSSIA&#39;);">Россия</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;HEBREW&#39;);">עִבְרִית</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;UKRAINIAN&#39;);">Українська</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;THAI&#39;);">ภาษาไทย</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;TURKISH&#39;);">Türkçe</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;URDU&#39;);">اردو‎</a>
+							
+								<a class="dropdown-item" href="javascript:changeLocale(&#39;ARABIC&#39;);">اللغة العربية</a>
+							
+						</div>
+					</li>
+				</ul>
+				<ul class="navbar-nav">
+					<li class="nav-item dropdown show">
+						<a class="nav-link dropdown-toggle text-muted waves-effect waves-dark ebase-frame-header-userLink" style="margin-left: 5px; font-size: 13px;" href="https://server.luxpowertek.com/WManage/web/maintain/remoteSetOffGrid" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+							<i class="fa fa-user-circle-o" aria-hidden="true"></i>
+							BBJ-Ni<span class="caret" style="margin-left: 8px;"></span>
+						</a>
+						<div class="dropdown-menu ulBged dropdown-menu-right animated bounceInDown">
+							
+								<a class="dropdown-item" href="https://server.luxpowertek.com/WManage/web/system/user/center">个人中心</a>
+							
+							
+								<a class="dropdown-item" href="https://server.luxpowertek.com/WManage/web/system/user/modifyPassword/4408">修改密码</a>
+							
+							
+							
+							
+							<a id="logout" class="dropdown-item" href="https://server.luxpowertek.com/WManage/web/logout">
+								退出
+							</a>
+						</div>
+					</li>
+				</ul>
+			</div>
+		
+	</div>
+
+	<div id="topMenuContainer" class="ebase-frame-header-root fixed-width" style="background-color: white;">
+		<section class="ebase-frame-header ebase-frame-header-top">
+			<div class="ebase-frame-header-inner">
+				<div id="firstMenu" style="height: 80px; display: inline-block; margin-left: 240px; position: fixed; top: 0;">
+					<div class="op-ebase-topMenu ebase-frame-header-topMenu" data-ebase="TopMenu" data-spm="TopMenu">
+						<ul class="menu-list clearfix">
+							<li class="item level-1 false menuNameLen4">
+								<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/monitor/inverter" style="padding: 0px 30px 8px;">
+									<p style="margin: 11px 0 0 0;">
+										
+										
+											<img height="27" src="./远程设置 - 监控平台_files/icon_monitor_green.png">
+										
+									</p>
+									<span class="name">实时监控</span>
+								</a>
+							</li>
+							<li class="item level-1 false menuNameLen4">
+								<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/analyze/chart" style="padding: 0px 30px 8px;">
+									<p style="margin: 11px 0 0 0;">
+										
+										
+											<img height="27" src="./远程设置 - 监控平台_files/icon_history_record_green.png">
+										
+									</p>
+									<span class="name">数据分析</span>
+								</a>
+							</li>
+							
+								<li class="item level-1 false menuNameLen4">
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/config/plant" style="padding: 0px 30px 8px;">
+										<p style="margin: 11px 0 0 0;">
+											<img height="27" src="./远程设置 - 监控平台_files/icon_plant_details_green.png">
+										</p>
+										<span class="name">站点管理</span>
+									</a>
+								</li>
+							
+							<li class="item level-1 false menuNameLen4">
+								<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/overview/global" style="padding: 0px 30px 8px;">
+									<p style="margin: 11px 0 0 0;">
+										<img height="27" src="./远程设置 - 监控平台_files/icon_overview_green.png">
+									</p>
+									<span class="name">概览</span>
+								</a>
+							</li>
+							
+								<li class="item level-1 selected false menuNameLen4">
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/workingMode/hybrid" style="padding: 0px 30px 8px;">
+										<p style="margin: 11px 0 0 0;">
+											<img height="27" src="./远程设置 - 监控平台_files/icon_maintain_green.png">
+										</p>
+										<span class="name">维护售后</span>
+									</a>
+								</li>
+							
+							
+						</ul>
+					</div>
+				</div>
+			</div>
+		</section>
+	</div>
+</header>
+
+<script language="JavaScript">
+    var customCompany = '';
+</script>
+
+<script type="text/javascript" src="./远程设置 - 监控平台_files/headerMenu.js.下载"></script>
+
+	
+	
+
+
+
+
+
+
+
+
+
+<nav id="nav" data-menuid="" style="position: fixed; top: 95px; bottom:0;overflow-y: auto;overflow-x: hidden;">
+	<div data-reactroot="" style="padding-top: 80px;">
+		<div class="op-ebase-leftMenu undefined" data-ebase="LeftMenu" data-spm="LeftMenu">
+			<ul class="menuList">
+				<li class="menuItem level-leaf selected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/workingMode/hybrid">
+										
+										<span class="name">远程设置</span>
+									</a>
+								</li>
+				<li class="menuItem level-leaf unselected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/batchSet">
+										
+										<span class="name">批量设置</span>
+									</a>
+								</li>
+				<li class="menuItem level-leaf unselected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/remoteSetRecord">
+										
+										<span class="name">设置记录</span>
+									</a>
+								</li>
+				<li class="menuItem level-leaf unselected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/remoteUpdate">
+										
+										<span class="name">远程升级</span>
+									</a>
+								</li>
+				<li class="menuItem level-leaf unselected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/betaUpdate">
+										
+										<span class="name">升级Beta测试</span>
+									</a>
+								</li>
+				<li class="menuItem level-leaf unselected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/lcdUpdate">
+										
+										<span class="name">LCD远程升级</span>
+									</a>
+								</li>
+				<li class="menuItem level-leaf unselected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/remoteUpdateRecord">
+										
+										<span class="name">升级记录</span>
+									</a>
+								</li>
+				<li class="menuItem level-leaf unselected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/generalGridRegulations">
+										
+										<span class="name">通用并网规范</span>
+									</a>
+								</li>
+				<li class="menuItem level-leaf unselected false leaf">
+									<div class="selected-mask"></div>
+									<a class="nameWrapper" href="https://server.luxpowertek.com/WManage/web/maintain/support">
+										
+										<span class="name">技术支持</span>
+									</a>
+								</li>
+				
+			</ul>
+		</div>
+		<!-- react-empty: 28 -->
+	</div>
+</nav>
+
+	<div id="pageContainer" class="page-container" style="padding-top: 160px;">
+		<!-- Page Content Part -->
+			<div id="pageToolHolder" class="menuContent btn-group" style="padding: 8px; height: 46px; width: calc(100% - 210px); background-color: white; position: fixed; z-index: 1040; border-bottom: 1px solid #AAA;">
+                
+
+
+
+
+<style type="text/css">
+	.combo-p .combo-panel {
+		padding: 0;
+	}
+</style>
+
+<div class="checkbox" style="float: left; margin: 5px 10px 0 0;">
+	<label>
+		<input type="checkbox" id="selectPlantFirstCheckbox" checked="checked"> 先选择电站
+	</label>
+</div>
+
+<div id="plantSearchHolder" class="deviceSearchModuleSelectHolder" style="float: left; margin-top: 4px; margin-right: 15px;">
+	<input id="plantSearchInput" style="width: 150px; display: none;" class="combogrid-f combo-f textbox-f"><span class="textbox combo" style="width: 150px; height: 22px;"><span class="textbox-addon textbox-addon-right" style="right: 0px;"><a href="javascript:void(0)" class="textbox-icon combo-arrow" icon-index="0" tabindex="-1" style="width: 18px; height: 20px;"></a></span><input type="text" class="textbox-text validatebox-text textbox-prompt" autocomplete="off" placeholder="" style="margin-left: 0px; margin-right: 18px; padding-top: 0px; padding-bottom: 0px; height: 20px; line-height: 20px; width: 130px;"><input type="hidden" class="textbox-value" name="" value=""></span>
+</div>
+
+<div class="deviceSearchModuleSelectHolder" style="float: left; margin-top: 4px; margin-right: 15px;" title="执行搜索功能至少必须输入四个字符">
+	<input id="inverterSearchInput" style="width: 150px;">
+</div>
+
+<script language="JavaScript">
+    var isOldSettingPage = false;
+    
+    isOldSettingPage = true
+    
+	var serialNumLabel = '序列号'
+	var plantNameLabel = '电站名称'
+	
+	var userVisitRecordPlantId = '347856';
+	var userVisitRecordSerialNum = '1043022113';
+
+	var selectPlantId = -1;
+	var selectPlantName = '';
+
+	var currentModuleInverterSn = '';
+	var currentDatalogSn = '';
+	var currentProtocolVersion = -1;
+	var currentPhase = 1;
+	var currentDeviceType = -1;
+	var currentSubDeviceType = -1;
+	var currentPowerRating = -1;
+	var currentDtc = -1;
+	var currentVoltClass = -1;
+	var currentMachineType = -1;
+	var currentMeterType = -1;
+	var currentParallelEnabled = false;
+	var currentMasterOrSlaveNotOffGrid = -1;
+	var currentComposedPhaseNotOffGrid = -1;
+
+	var currentPvStringNumber = 0;
+	var currentStandard = '';
+	var currentSlaveVersion = -1;
+	var currentFwVersion = -1;
+	var currentHardwareVersion = -1;
+
+	var currentBatteryType = '';
+	var currentWithbatteryData = false;
+
+	var currentBindTigoInfo = false;
+	var currentBindPhnixInfo = false;
+	var currentBindChargePoint = false;
+
+	var currentAllowExport2Grid = false;
+	var currentSetG98Already = false;
+
+	var currentShowAutoParallelButton = false;
+
+	var currentOdm = -1;
+	var currentUsVersion = -1;
+
+	var firstLoad = false
+	var currentLost = false
+	
+	
+
+	var isCrownPlatform = false;
+	
+	
+	var isPowerZone = false
+	
+	
+	var hasCustomPlatformImg = false;
+	var customPlatform = '';
+	var firstPlantSearchSuccess = true;
+	var plantSearchTextBeforeLoad = '';
+	var firstInverterSearchSuccess = true;
+	
+	$(document).ready(function () {
+		if (typeof (initPageWhenReady) == "function") {
+			initPageWhenReady();
+		}
+
+		
+        });
+
+        let isInit = true
+        var inverterImgSrc = '';
+        var midboxImgSrc = '';
+        var eqbImgSrc = '';
+        var parallelInverterImgPath = '';
+        var parallelMidInverterImgPath = '';
+        var platform = 'MID';
+
+        var viewDemoPlant = true
+
+        
+		viewDemoPlant = false
+	
+	var isLuxpower = false
+	
+
+</script>
+
+<script src="./远程设置 - 监控平台_files/deviceSearchModule.js.下载" type="text/javascript"></script>
+
+				<button id="readAllParamButton" class="btn btn-success btn-sm" style="float: left; border-radius: 3px;" onclick="javascript:readMultiParams(0, 40);" data-loading-text="读取…">读取</button>
+                <div class="responsive-toolbar-box" id="rtb_t7glcrl1w">
+                    <button id="exportPdfButton" class="btn btn-success btn-sm" style="border-radius: 3px; border-top-left-radius: 3px; border-bottom-left-radius: 3px;" onclick="javascript:exportPdf();" data-loading-text="导出 PDF…">导出 PDF</button>
+                    <button id="toggleSettingsPageButton" class="btn btn-success btn-sm" style="border-radius: 3px;border-top-left-radius: 3px; border-bottom-left-radius: 3px;" onclick="javascript:pageSwitching(false);" data-loading-text="setting">默认为使用设置页面</button>
+                    <a id="toNewSettingsPageButton" class="btn btn-success btn-sm" href="https://server.luxpowertek.com/WManage/web/maintain/workingMode/sna" style="border-radius: 3px;">工作模式</a>
+                </div>
+			</div>
+			
+			<div id="remoteSetContainer" style="padding-top: 56px;">
+				
+					<div style="position: relative;" class="setToggleHolder">
+						<img id="commonToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+						<h4 class="remoteSetTitle">通用设置</h4>
+					</div>
+					
+					<div id="commonToggleButtonTarget" class="toggleButtonTargetHolder">
+						
+
+
+
+
+<div style="background-color: white;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="timeInput" class="col-sm-5 control-label">
+				时间
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="当逆变器在线时，时间基于设定的时区。请前往配置/站点/站点管理/编辑页面设置时区和夏令时。 yyyy-MM-dd HH:mm:ss">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<input type="text" id="timeInput" class="form-control setInput" holdparam="HOLD_TIME" placeholder="yyyy-MM-dd HH:mm:ss">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="pvInputModeInput" class="col-sm-5 control-label">PV接线方式
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="这使用户能够选择逆变器的光伏来源。这可以是：
+0：直流源模式，3：两个MPPT连接到同一串，或4：两个MPPT连接到
+不同的串。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<select id="pvInputModeInput" class="form-control" holdparam="HOLD_PV_INPUT_MODE">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">0: 直流源模式</option>
+					<option value="3">3: 两个MPPT连接到同一个串</option>
+					<option value="4">4: 两个MPPT连接到不同串</option>
+				</select>
+				
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamCombo(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+						
+						
+						
+						
+							<div style="padding: 15px 15px 5px 15px; background-color: white; position: relative;">
+								<strong class="groupWithTitle">型号</strong>
+								<div style="border: 2px solid #DDD; padding-top: 5px; border-radius: 5px;">
+									
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<!-- Line 0 -->
+	<input type="hidden" id="wirelessMeterModelInput" value="-1">
+	<input type="hidden" id="meterTypeModelInput" value="-1">
+	<input type="hidden" id="usVersionModelInput" value="-1">
+
+	<!-- Line 1 -->
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+		<div class="form-group paramSetHolder">
+			<label for="meterBrandModelInput" class="col-sm-5 control-label">电表品牌</label>
+			<div class="col-sm-5">
+				<select id="meterBrandModelInput" class="form-control">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">0: Eastron</option>
+					<option value="1">1: 保留</option>
+				</select>
+			</div>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; display: none;">
+		<div class="form-group paramSetHolder">
+			<label for="measurementModelInput" class="col-sm-5 control-label">检测方式</label>
+			<div class="col-sm-5">
+				<select id="measurementModelInput" class="form-control">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">0: 电表</option>
+					<option value="1">1: CT</option>
+				</select>
+			</div>
+		</div>
+	</div>
+	
+	<!-- Line 2 -->
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+		<div class="form-group paramSetHolder">
+			<label for="ruleMaskModelInput" class="col-sm-5 control-label">法规执行</label>
+			<div class="col-sm-5">
+				<select id="ruleMaskModelInput" class="form-control" disabled="disabled">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">0: 严格</option>
+					<option value="1">1: 宽松</option>
+				</select>
+			</div>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="batteryTypeModelInput" class="col-sm-5 control-label">电池类型
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="逆变器支持铅酸和锂电池选项，使用前请查询逆变器与锂电池之间的兼容性。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<select id="batteryTypeModelInput" class="form-control">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">0: 没有电池</option>
+					<option value="1">1: 铅酸电池</option>
+					<option value="2">2: 锂电池</option>
+				</select>
+			</div>
+		</div>
+	</div>
+	
+	<!-- Line 3 -->
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="leadAcidTypeModelInput" class="col-sm-5 control-label">铅酸电池类型
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="为铅酸电池组选择您的总电池容量。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<select id="leadAcidTypeModelInput" class="form-control">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">0: 50Ah</option>
+					<option value="1">1: 100Ah</option>
+					<option value="2">2: 150Ah</option>
+					<option value="3">3: 200Ah</option>
+					<option value="4">4: 250Ah</option>
+					<option value="5">5: 300Ah</option>
+					<option value="6">6: 350Ah</option>
+					<option value="7">7: 400Ah</option>
+					<option value="8">8: 450Ah</option>
+					<option value="9">9: 500Ah</option>
+					<option value="10">10: 550Ah</option>
+					<option value="11">11: 600Ah</option>
+					<option value="12">12: 650Ah</option>
+					<option value="13">13: 700Ah</option>
+					<option value="14">14: 750Ah</option>
+					<option value="15">15: 800Ah</option>
+					<option value="16">16: 850Ah</option>
+					<option value="17">17: 900Ah</option>
+					<option value="18">18: 950Ah</option>
+					<option value="19">19: 1000Ah</option>
+					<option value="20">20: 1050Ah</option>
+					<option value="21">21: 1100Ah</option>
+					<option value="22">22: 1150Ah</option>
+					<option value="23">23: 1200Ah</option>
+					<option value="24">24: 1250Ah</option>
+					<option value="25">25: 1300Ah</option>
+					<option value="26">26: 1350Ah</option>
+					<option value="27">27: 1400Ah</option>
+					<option value="28">28: 1450Ah</option>
+					<option value="29">29: 1500Ah</option>
+					<option value="30">30: 1550Ah</option>
+					<option value="31">31: 自定义容量设置</option>
+				</select>
+			</div>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal customBatteryCapacity" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+		<div class="form-group paramSetHolder">
+			<label class="col-sm-5 control-label"> </label>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal customBatteryCapacity" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+		<div class="form-group paramSetHolder">
+			<label for="batteryCapacityInput" class="col-sm-5 control-label">
+				自定义容量(Ah)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="定制铅酸电池容量设置(1-65535)">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<input type="text" id="batteryCapacityInput" class="form-control setInput" holdparam="_12K_HOLD_LEAD_CAPACITY" intcheck="" validtype="range" min="1" max="65535" placeholder="[1, 65535]">
+			</div>
+			<button id="batteryCapacitySetBtn" class="btn btn-default" style="display: none;" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal lithiumBrandBox" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="lithiumTypeModelInput" class="col-sm-5 control-label">锂电池类型
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="此设置允许用户从兼容电池列表中选择用于
+闭环通信的电池。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<select id="lithiumTypeModelInput" class="form-control">
+					<option value="-1">&lt;空&gt;</option>
+					
+					
+						<option value="0">0: 标准电池</option>
+						<option value="1">1: HINA电池</option>
+						<option value="2">2: Pylon/自由胜利/太阳MD/哈勃/蓝色新星</option>
+						<option value="3">3: Enopte</option>
+						<option value="4">4: MSUN</option>
+						<option value="5">5: GSL1电池</option>
+						<option value="6">6: Luxpower</option>
+						<option value="7">7: Aobo电池</option>
+						<option value="8">8: Rsvd</option>
+						<option value="9">9: Stealth</option>
+						<option value="10">10: TeLongMei</option>
+						<option value="11">11: Merit</option>
+						
+						<option value="14">14: WECO</option>
+						<option value="15">15: 村田</option>
+						<option value="16">16: BITEK</option>
+						<option value="17">17: OKSolar</option>
+						<option value="18">18: GW电池</option>
+						<option value="19">19: CROWN</option>
+						<option value="20">20: Revov</option>
+						<option value="21">21: Beebeejump</option>
+					
+				</select>
+			</div>
+		</div>
+	</div>
+	
+	<!-- Line 4 -->
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; display: none;">
+		<div class="form-group paramSetHolder">
+			<label for="powerRatingModelInput" class="col-sm-5 control-label">功率等级</label>
+			<div class="col-sm-5">
+				<select id="powerRatingModelInput" class="form-control" disabled="disabled">
+					<option value="-1">&lt;空&gt;</option>
+				</select>
+			</div>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal _131OffGridSHide normalOffGridShow" style="width: calc(45% - 10px); float: left; display: none;">
+		<div class="form-group paramSetHolder">
+			<label for="ruleModelInput" class="col-sm-5 control-label">法规</label>
+			<div class="col-sm-5">
+				<select id="ruleModelInput" class="form-control">
+					<option value="-1">&lt;空&gt;</option>
+				</select>
+			</div>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="float: left; margin-left: calc(-6.7%);">
+		
+		
+			<button class="btn btn-default" onclick="javascript: writeModelOffGrid();" title="按下时，逆变器将会重启。">设置</button>
+		
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+								</div>
+							</div>
+							
+							
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	
+		
+		
+		<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder" functionparam="FUNC_GREEN_EN">
+				<label class="col-sm-5 control-label">节能模式
+					<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="当绿色功能启用时，如果EPS负载读数在10分钟内低于60W，则EPS输出将被切断。">(?)</a>
+				</label>
+				<div class="col-sm-7">
+					<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+					<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+				</div>
+			</div>
+		</div>
+	
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_SET_TO_STANDBY">
+			<label class="col-sm-5 control-label">开机/待机
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="设置为正常：逆变器正常工作。
+设置为待机：逆变器将停止电源输入和输出并进入待机模式。
+设置为正常或重启逆变器将恢复为‘设置为标准’。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">开机</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">待机</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_BATTERY_ECO_EN">
+			<label class="col-sm-5 control-label">电池节能模式
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="如果启用：
+1：当电池达到并网EOD值且交流充电被禁用时，逆变器将切换到旁路模式，直到电池再次充电。
+2：切换时间可以达到15毫秒。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label class="col-sm-5 control-label">重启逆变器
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="这将重启逆变器。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<button id="INV_REBOOT_BUTTON" class="btn btn-default" resetparam="INV_REBOOT" onclick="javascript: resetParamModal(this);">重启</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_BUZZER_EN">
+			<label class="col-sm-5 control-label">蜂鸣器启用
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="启用/禁用警报蜂鸣器。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	
+	
+	<div style="clear: both;"></div>
+</div>
+							
+							
+								
+
+
+
+
+<div class="_131OffGridShow normalOffGridHide" style="background-color: white; width: 100%; display: none;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_ISO_EN">
+			<label class="col-sm-5 control-label">ISO使能
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="启用/禁用光伏接地故障断路器。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<!-- <button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button> -->
+				<button id="FUNC_ISO_EN_disableBtn" class="btn btn-default" onclick="javascript: execActionNotice(&#39;FUNC_ISO_EN_disable_false&#39;);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+							
+							
+								
+									
+
+
+
+
+<div class="offGridHardV11ShowHolder" style="background-color: white; width: 100%;">
+	<div id="ctSampleRatioInputHolder" class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="ctSampleRatioInput" class="col-sm-5 control-label">CT采样比
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="正在使用的CT的采样比率。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<select id="ctSampleRatioInput" class="form-control" bitparam="BIT_CT_SAMPLE_RATIO"></select>
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamBitCombo(this);">设置</button>
+		</div>
+	</div>
+	
+		<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder" functionparam="FUNC_CT_DIRECTION_REVERSED">
+				<label class="col-sm-5 control-label">反转CT方向
+					<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="用于反转CT的方向，以防它们安装错误。">(?)</a>
+				</label>
+				<div class="col-sm-7">
+					<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+					<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+				</div>
+			</div>
+		</div>
+	
+
+	<div style="clear: both;"></div>
+</div>
+								
+							
+						
+					</div>
+				
+				
+				<div style="position: relative; margin-top: 10px;" class="setToggleHolder">
+					<img id="applicationToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+					<h4 class="remoteSetTitle">应用设置</h4>
+				</div>
+					
+				<div id="applicationToggleButtonTarget" class="toggleButtonTargetHolder">
+					
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	
+		<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder">
+				<label for="epsVoltageSetInput" class="col-sm-5 control-label">离网输出电压设置(V)
+					<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="设置电压以适应额定电网电压。">(?)</a>
+				</label>
+				<div class="col-sm-5">
+					<select id="epsVoltageSetInput" class="form-control" holdparam="HOLD_EPS_VOLT_SET">
+						<option value="-1">&lt;空&gt;</option>
+					</select>
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamCombo(this);">设置</button>
+			</div>
+		</div>
+	
+	
+		<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder">
+				<label for="epsFreqSetInput" class="col-sm-5 control-label">离网输出频率设置(Hz)
+					<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="选择电网频率。">(?)</a>
+				</label>
+				<div class="col-sm-5">
+					<select id="epsFreqSetInput" class="form-control" holdparam="HOLD_EPS_FREQ_SET">
+						<option value="-1">&lt;空&gt;</option>
+						<option value="50">50</option>
+						<option value="60">60</option>
+					</select>
+					
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamCombo(this);">设置</button>
+			</div>
+		</div>
+	
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+					
+						
+
+
+
+
+<div style="background-color: white;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="lineModeInputInput" class="col-sm-5 control-label">交流输入范围
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="APL：电网电压范围 90~280Vac，逆变器切换时间超过 20ms
+UPS：电网电压范围 170~280Vac，在单个逆变器使用时逆变器切换时间在 20ms以内。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<select id="lineModeInputInput" class="form-control" holdparam="HOLD_LINE_MODE_INPUT">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">0: APL(公用电范围90-280V 20毫秒)</option>
+					<option value="1">1: UPS(公用电范围170-280V 10毫秒)</option>
+				</select>
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamCombo(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal pvGridOffHold" style="width: calc(45% - 10px); float: left;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_PV_GRID_OFF_EN">
+			<label class="col-sm-5 control-label">
+				PV离网
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="在没有电池且仅有太阳能输入时允许访问离网模式。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+						
+						
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	
+	
+	<div class="pageSetColumn form-horizontal offGridHardV11ShowHolder" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_N_PE_CONNECT_INNER_EN">
+			<label class="col-sm-5 control-label">
+				N-PE连接
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="启用EPS中性线(N)和交流接地(PE)连接。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+					
+					
+					<div style="padding: 5px 15px 10px 15px; background-color: white; position: relative;">
+						<strong style="position: absolute; left: 35px; top: -4px; background-color: white; padding: 0 5px 0 5px;">先使用交流电
+							<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="逆变器将在交流首次时间帧内始终优先承载负载。">(?)</a>
+						</strong>
+						<div style="border: 2px solid #DDD; padding-top: 15px; border-radius: 5px;">
+							
+
+
+
+
+<div style="background-color: white;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acFirstStartHourInput" class="col-sm-7 control-label">交流电优先启动时间 1
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="设置范围为 00:00~23:59">(?)</a>
+			</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstStartHourInput" class="form-control setInput hour" maxlength="2" holdparam="HOLD_AC_FIRST_START_HOUR" intcheck="" validtype="range" max="23" placeholder="[0, 23]">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstStartMinuteInput" class="form-control setInput minute" maxlength="2" holdparam="HOLD_AC_FIRST_START_MINUTE" intcheck="" validtype="range" max="59" placeholder="[0, 59]">
+			</div>
+			<button class="btn btn-default" timeparam="HOLD_AC_FIRST_START_TIME" onclick="javascript: writeTimeParamValue(this);">设置</button>
+		</div>
+		<div class="form-group paramSetHolder">
+			<label for="acFirstEndHourInput" class="col-sm-7 control-label">交流电优先结束时间 1
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="设置范围为 00:00~23:59">(?)</a>
+			</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstEndHourInput" class="form-control setInput hour" maxlength="2" holdparam="HOLD_AC_FIRST_END_HOUR" intcheck="" validtype="range" max="23" placeholder="[0, 23]">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstEndMinuteInput" class="form-control setInput minute" maxlength="2" holdparam="HOLD_AC_FIRST_END_MINUTE" intcheck="" validtype="range" max="59" placeholder="[0, 59]">
+			</div>
+			<button class="btn btn-default" timeparam="HOLD_AC_FIRST_END_TIME" onclick="javascript: writeTimeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acFirstStartHourInput1" class="col-sm-7 control-label">交流电优先启动时间 2</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstStartHourInput1" class="form-control setInput hour" maxlength="2" holdparam="HOLD_AC_FIRST_START_HOUR_1" intcheck="" validtype="range" max="23" placeholder="[0, 23]">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstStartMinuteInput1" class="form-control setInput minute" maxlength="2" holdparam="HOLD_AC_FIRST_START_MINUTE_1" intcheck="" validtype="range" max="59" placeholder="[0, 59]">
+			</div>
+			<button class="btn btn-default" timeparam="HOLD_AC_FIRST_START_TIME_1" onclick="javascript: writeTimeParamValue(this);">设置</button>
+		</div>
+		<div class="form-group paramSetHolder">
+			<label for="acFirstEndHourInput1" class="col-sm-7 control-label">交流电优先结束时间 2</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstEndHourInput1" class="form-control setInput hour" maxlength="2" holdparam="HOLD_AC_FIRST_END_HOUR_1" intcheck="" validtype="range" max="23" placeholder="[0, 23]">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstEndMinuteInput1" class="form-control setInput minute" maxlength="2" holdparam="HOLD_AC_FIRST_END_MINUTE_1" intcheck="" validtype="range" max="59" placeholder="[0, 59]">
+			</div>
+			<button class="btn btn-default" timeparam="HOLD_AC_FIRST_END_TIME_1" onclick="javascript: writeTimeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acFirstStartHourInput2" class="col-sm-7 control-label">交流电优先启动时间 3</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstStartHourInput2" class="form-control setInput hour" maxlength="2" holdparam="HOLD_AC_FIRST_START_HOUR_2" intcheck="" validtype="range" max="23" placeholder="[0, 23]">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstStartMinuteInput2" class="form-control setInput minute" maxlength="2" holdparam="HOLD_AC_FIRST_START_MINUTE_2" intcheck="" validtype="range" max="59" placeholder="[0, 59]">
+			</div>
+			<button class="btn btn-default" timeparam="HOLD_AC_FIRST_START_TIME_2" onclick="javascript: writeTimeParamValue(this);">设置</button>
+		</div>
+		<div class="form-group paramSetHolder">
+			<label for="acFirstEndHourInput2" class="col-sm-7 control-label">交流电优先结束时间 3</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstEndHourInput2" class="form-control setInput hour" maxlength="2" holdparam="HOLD_AC_FIRST_END_HOUR_2" intcheck="" validtype="range" max="23" placeholder="[0, 23]">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acFirstEndMinuteInput2" class="form-control setInput minute" maxlength="2" holdparam="HOLD_AC_FIRST_END_MINUTE_2" intcheck="" validtype="range" max="59" placeholder="[0, 59]">
+			</div>
+			<button class="btn btn-default" timeparam="HOLD_AC_FIRST_END_TIME_2" onclick="javascript: writeTimeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+						</div>
+					</div>
+					
+					<div id="hybridSetGroupHolder" style="padding: 15px 15px 5px; background-color: white; position: relative;">
+						<strong class="groupWithTitle">混合设置</strong>
+						<div style="border: 2px solid #DDD; padding-top: 15px; border-radius: 5px;">
+							
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_TAKE_LOAD_TOGETHER">
+			<label class="col-sm-5 control-label">光伏与交流共同负荷
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="PV与交流共同负载启用：
+在交流首次时间帧或交流充电条件下（根据时间/电压/SOC），如果有多余的能量，光伏将首先给电池充电并承担负载，交流将提供其余所需的能量。
+在交流首次时间帧或交流充电条件之外（根据时间/电压/SOC），光伏将承担负载并给电池充电，或者光伏和电池共同承担负载。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div id="gridCtConnectionHolder" class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_GRID_CT_CONNECTION_EN">
+			<label class="col-sm-5 control-label">电网 CT 连接</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	
+	
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+<div class="feedInParamHolder" style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_FEED_IN_GRID_EN">
+			<label class="col-sm-5 control-label">送电至电网
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="当启用‘光伏与交流共同负载’时，逆变器可以在满足所有负载和电池充电需求后，将多余的光伏电力馈送到电网中。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+		<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder">
+				<label for="maxBackFlowInput" class="col-sm-5 control-label">输出功率百分比(%)
+					<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="逆变器可以设置馈入功率百分比从 0% 到 100%。">(?)</a>
+				</label>
+				<div class="col-sm-5">
+					<input type="text" id="maxBackFlowInput" class="form-control setInput" holdparam="HOLD_FEED_IN_GRID_POWER_PERCENT" intcheck="" validtype="range" max="255" placeholder="[0, 100]">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		</div>
+	
+	
+	<div style="clear: both;"></div>
+</div>
+						</div>
+					</div>
+					
+					
+						<div style="padding: 15px 15px 5px 15px; background-color: white; position: relative;">
+							<strong class="groupWithTitle">并联设置</strong>
+							<div style="border: 2px solid #DDD; padding-top: 15px; border-radius: 5px;">
+								
+
+
+
+
+<div style="background-color: white; width: 100%; padding-top: 5px;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="setMasterOrSlaveInput" class="col-sm-5 control-label">
+				系统类型
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="用于并联逆变器时。只能在待机模式或故障状态下设置。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<select id="setMasterOrSlaveInput" class="form-control" holdparam="HOLD_SET_MASTER_OR_SLAVE">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">单机</option>
+					<option value="1">单相并机</option>
+					
+					<option value="3">三相并机</option>
+				</select>
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamCombo(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_BAT_SHARED">
+			<label class="col-sm-5 control-label">共用电池
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="当逆变器在并联逆变器系统中共享一个电池组时，启用电池共享。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+								
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="setComposedPhaseInput" class="col-sm-5 control-label">
+				设置组网相位
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="用于设置EPS相位（如果未自动设置）。只能在待机模式或故障状态下设置。">(?)</a>
+			</label>
+			<div class="col-sm-3" style="width: 20.8333333%; display: none;">
+				<select id="readComposedPhaseInput" class="form-control">
+					<option value="-1">&lt;空&gt;</option>
+					
+	                	<option value="1">R相</option>
+						<option value="2">S相</option>
+						<option value="3">T相</option>
+					
+					
+				</select>
+			</div>
+			<div class="col-sm-5">
+				<select id="setComposedPhaseInput" class="form-control" holdparam="HOLD_SET_COMPOSED_PHASE">
+					<option value="-1">&lt;空&gt;</option>
+					
+					
+	                	<option value="1">R相</option>
+						<option value="2">S相</option>
+						<option value="3">T相</option>
+					
+					
+				</select>
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamCombo(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(10% - 10px); float: left; margin-right: 10px;">
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							</div>
+						</div>
+					
+					
+					
+					
+					
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_RUN_WITHOUT_GRID_12K">
+			<label class="col-sm-5 control-label">无市电输入
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+				</div>
+				
+				
+					<!-- Connect Setting -->
+					<div style="position: relative; margin-top: 10px;" class="setToggleHolder offGridConnectHolder">
+						<img id="connectToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+						<h4 class="remoteSetTitle">系统并网设置</h4>
+					</div>
+
+					<div id="connectToggleButtonTarget" class="toggleButtonTargetHolder offGridConnectHolder">
+						<div style="padding: 15px 15px 5px 15px; background-color: white; position: relative;">
+							<strong class="groupWithTitle">并网</strong>
+							<div style="border: 2px solid #DDD; padding-top: 5px; border-radius: 5px;">
+								
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="connectTimeInput" class="col-sm-5 control-label">并网等待时间(s)</label>
+			<div class="col-sm-5">
+				<input type="text" id="connectTimeInput" class="form-control setInput" holdparam="HOLD_CONNECT_TIME" intcheck="" validtype="range" min="10" max="600" placeholder="[30, 600]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="reconnectTimeInput" class="col-sm-5 control-label">重新并网等待时间(s)</label>
+			<div class="col-sm-5">
+				<input type="text" id="reconnectTimeInput" class="form-control setInput" holdparam="HOLD_RECONNECT_TIME" intcheck="" validtype="range" max="600" placeholder="[0, 600]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+								
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="gridVoltConnHighInput" class="col-sm-5 control-label">并网市电电压上限(V)</label>
+			<div class="col-sm-5">
+				<input type="text" id="gridVoltConnHighInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_CONN_HIGH" floatcheck="">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="gridVoltConnLowInput" class="col-sm-5 control-label">并网市电电压下限(V)</label>
+			<div class="col-sm-5">
+				<input type="text" id="gridVoltConnLowInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_CONN_LOW" floatcheck="">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+								
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="gridFreqConnHighInput" class="col-sm-5 control-label">并网市电频率上限(Hz)</label>
+			<div class="col-sm-5">
+				<input type="text" id="gridFreqConnHighInput" class="form-control setInput" holdparam="HOLD_GRID_FREQ_CONN_HIGH" floatcheck="">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="gridFreqConnLowInput" class="col-sm-5 control-label">并网市电频率下限(Hz)</label>
+			<div class="col-sm-5">
+				<input type="text" id="gridFreqConnLowInput" class="form-control setInput" holdparam="HOLD_GRID_FREQ_CONN_LOW" floatcheck="">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							</div>
+						</div>
+
+						
+							<div style="padding: 15px 15px 5px 15px; background-color: white; position: relative;">
+								<strong class="groupWithfTitle">功率控制</strong>
+								<div style="border: 2px solid #DDD; padding-top: 5px; border-radius: 5px;">
+									
+										
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_OVF_LOAD_DERATE_EN">
+			<label class="col-sm-5 control-label">过频降载使能</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+										
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="reactivePowerCMDTypeInput" class="col-sm-5 control-label">无功输出模式</label>
+			<div class="col-sm-5">
+				<select id="reactivePowerCMDTypeInput" class="form-control" holdparam="HOLD_REACTIVE_POWER_CMD_TYPE">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">0 - 单位功率因数输出</option>
+					<option value="1">1 - 固定PF输出</option>
+					<option value="2">2 - 默认无功曲线输出</option>
+					<option value="4">4 - 容性无功百分比输出</option>
+					<option value="5">5 - 感性无功百分比输出</option>
+					<option value="6">6 - Q(V)曲线</option>
+				</select>
+				
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamCombo(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="reactivePowerPercentCMDInput" class="col-sm-5 control-label">无功百分比设定值(%)</label>
+			<div class="col-sm-5">
+				<input type="text" id="reactivePowerPercentCMDInput" class="form-control setInput" holdparam="HOLD_REACTIVE_POWER_PERCENT_CMD" intcheck="" validtype="range" max="60" placeholder="[0, 60]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+										
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left;">
+		<div class="form-group paramSetHolder">
+			<label for="pfCMDInput" class="col-sm-5 control-label">
+				PF设定值
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="你可以设置750-1000达到超前，1750-2000达到滞后">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<input type="text" id="pfCMDInput" class="form-control setInput" holdparam="HOLD_PF_CMD" intcheck="" validtype="range" min="750" max="2000" placeholder="[750, 1000], [1750-2000]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+									
+
+									
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="activePowerPercentCMDInput" class="col-sm-5 control-label">有功百分比设定值(%)</label>
+			<div class="col-sm-5">
+				<input type="text" id="activePowerPercentCMDInput" class="form-control setInput" holdparam="HOLD_ACTIVE_POWER_PERCENT_CMD" intcheck="" validtype="range" max="100" placeholder="[0, 100]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	
+		<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder" functionparam="FUNC_GRID_ON_POWER_SS_EN">
+				<label class="col-sm-5 control-label">电网软启动</label>
+				<div class="col-sm-7">
+					<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+					<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+				</div>
+			</div>
+		</div>
+	
+	
+	<div style="clear: both;"></div>
+</div>
+								</div>
+							</div>
+						
+
+						
+							<div style="padding: 15px; background-color: white; position: relative;">
+								<strong class="groupWithTitle">市电保护等级</strong>
+								<div style="border: 2px solid #DDD; padding-top: 5px; border-radius: 5px;">
+									
+
+
+
+
+<div style="background-color: white; padding-top: 5px;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		
+			<div class="form-group paramSetHolder">
+				<label for="gridVoltLimit1LowInput" class="col-sm-7 control-label">电网电压1级欠压保护点(V)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridVoltLimit1LowInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_LIMIT1_LOW" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+			<div class="form-group paramSetHolder">
+				<label for="gridVoltLimit1HighInput" class="col-sm-7 control-label">电网电压1级过压保护点(V)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridVoltLimit1HighInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_LIMIT1_HIGH" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		
+		
+		
+			<div class="form-group paramSetHolder">
+				<label for="gridFreqLimit1LowInput" class="col-sm-7 control-label">电网频率1级欠频保护点(Hz)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridFreqLimit1LowInput" class="form-control setInput" holdparam="HOLD_GRID_FREQ_LIMIT1_LOW" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+			<div class="form-group paramSetHolder">
+				<label for="gridFreqLimit1HighInput" class="col-sm-7 control-label">电网频率1级过频保护点(Hz)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridFreqLimit1HighInput" class="form-control setInput" holdparam="HOLD_GRID_FREQ_LIMIT1_HIGH" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		
+		
+		
+			<div class="form-group paramSetHolder">
+				<label for="gridVoltMovAvgHighInput" class="col-sm-7 control-label">电网电压滑动平均过压保护点(V)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridVoltMovAvgHighInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_MOV_AVG_HIGH" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		
+			<div class="form-group paramSetHolder">
+				<label for="gridVoltLimit2LowInput" class="col-sm-7 control-label">电网电压2级欠压保护点(V)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridVoltLimit2LowInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_LIMIT2_LOW" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+			<div class="form-group paramSetHolder">
+				<label for="gridVoltLimit2HighInput" class="col-sm-7 control-label">电网电压2级过压保护点(V)</label>
+				<div class="col-sm-3">
+				<input type="text" id="gridVoltLimit2HighInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_LIMIT2_HIGH" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		
+		
+		
+			<div class="form-group paramSetHolder">
+				<label for="gridFreqLimit2LowInput" class="col-sm-7 control-label">电网频率2级欠频保护点(Hz)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridFreqLimit2LowInput" class="form-control setInput" holdparam="HOLD_GRID_FREQ_LIMIT2_LOW" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+			<div class="form-group paramSetHolder">
+				<label for="gridFreqLimit2HighInput" class="col-sm-7 control-label">电网频率2级过频保护点(Hz)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridFreqLimit2HighInput" class="form-control setInput" holdparam="HOLD_GRID_FREQ_LIMIT2_HIGH" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		
+		
+		
+			<div class="form-group paramSetHolder">
+				<label for="powerSoftStartSlopeInput" class="col-sm-7 control-label">加载速率(%/min)</label>
+				<div class="col-sm-3">
+					<input type="text" id="powerSoftStartSlopeInput" class="form-control setInput" holdparam="HOLD_POWER_SOFT_START_SLOPE" floatcheck="" validtype="range" min="1" max="100" placeholder="[1, 100]">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		
+			<div class="form-group paramSetHolder">
+				<label for="gridVoltLimit3LowInput" class="col-sm-7 control-label">电网电压3级欠压保护点(V)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridVoltLimit3LowInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_LIMIT3_LOW" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+			<div class="form-group paramSetHolder">
+				<label for="gridVoltLimit3HighInput" class="col-sm-7 control-label">电网电压3级过压保护点(V)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridVoltLimit3HighInput" class="form-control setInput" holdparam="HOLD_GRID_VOLT_LIMIT3_HIGH" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		
+		
+		
+			<div class="form-group paramSetHolder">
+				<label for="gridFreqLimit3LowInput" class="col-sm-7 control-label">电网频率3级欠频保护点(Hz)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridFreqLimit3LowInput" class="form-control setInput" holdparam="HOLD_GRID_FREQ_LIMIT3_LOW" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+			<div class="form-group paramSetHolder">
+				<label for="gridFreqLimit3HighInput" class="col-sm-7 control-label">电网频率3级过频保护点(Hz)</label>
+				<div class="col-sm-3">
+					<input type="text" id="gridFreqLimit3HighInput" class="form-control setInput" holdparam="HOLD_GRID_FREQ_LIMIT3_HIGH" floatcheck="">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		
+		
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+								</div>
+							</div>
+						
+					</div>
+				
+				
+				<!-- Advanced Setting -->
+				
+				
+				<div style="position: relative; margin-top: 10px;" class="setToggleHolder">
+					<img id="chargeToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+					<h4 class="remoteSetTitle">充电设置</h4>
+				</div>
+				
+				<div id="chargeToggleButtonTarget" class="toggleButtonTargetHolder">
+					
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="leadAcidChargeRateInput" class="col-sm-6 control-label">
+				充电电流限制(Adc)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：0~110（单台）4480（并联）。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="leadAcidChargeRateInput" class="form-control setInput" holdparam="HOLD_LEAD_ACID_CHARGE_RATE" intcheck="" validtype="range" max="4480" placeholder="[0, 110/4480]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+					
+					<div style="padding: 15px 15px 5px 15px; background-color: white; position: relative;">
+						<strong class="groupWithTitle">铅酸</strong>
+						<div style="border: 2px solid #DDD; padding-top: 15px; border-radius: 5px;">
+							
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="leadAcidChargeVoltRefInput" class="col-sm-6 control-label">
+				充电电压(V)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：50~59V。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="leadAcidChargeVoltRefInput" class="form-control setInput" holdparam="HOLD_LEAD_ACID_CHARGE_VOLT_REF" floatcheck="" validtype="range" min="50" max="59" placeholder="[50, 59]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+							
+								
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="floatingVoltageInput" class="col-sm-6 control-label">
+				浮动电压(V)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：50~56V。
+1：使用铅酸电池时，必须设置低于充电电压。
+2：在铅酸模式下使用锂电池时，可以设置为等于或低于充电电压。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="floatingVoltageInput" class="form-control setInput" holdparam="HOLD_FLOATING_VOLTAGE" floatcheck="" validtype="range" min="50" max="56" placeholder="[50, 56]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="equalizationVoltageInput" class="col-sm-6 control-label">
+				均衡电压(V)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="1：使用铅酸电池时，设置范围：50~59。
+2：在铅酸模式下使用锂电池时，输入 0。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="equalizationVoltageInput" class="form-control setInput" holdparam="HOLD_EQUALIZATION_VOLTAGE" floatcheck="" validtype="range" min="50" max="59" placeholder="[50, 59]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+								
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="equalizationPeriodInput" class="col-sm-6 control-label">
+				均衡周期(天)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="1：使用铅酸电池时，设置范围：0~365。
+2：在铅酸模式下使用锂电池时，输入 0。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="equalizationPeriodInput" class="form-control setInput" holdparam="HOLD_EQUALIZATION_PERIOD" intcheck="" validtype="range" max="365" placeholder="[0, 365]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="equalizationTimeInput" class="col-sm-6 control-label">
+				均衡时间(小时)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="1：使用铅酸电池时，设置范围：0~24。
+在铅酸模式下使用锂电池时，输入 0。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="equalizationTimeInput" class="form-control setInput" holdparam="HOLD_EQUALIZATION_TIME" intcheck="" validtype="range" max="24" placeholder="[0, 24]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+						</div>
+					</div>
+					
+					<div style="padding: 15px 15px 5px 15px; background-color: white; position: relative;">
+						<strong class="groupWithTitle">交流充电</strong>
+						<div style="border: 2px solid #DDD; padding-top: 15px; border-radius: 5px;">
+							
+
+
+
+
+<div style="background-color: white; padding-top: 5px;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChargeTypeInput" class="col-sm-6 control-label">AC充电控制依据
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据时间：设定一个优选的充电时间段给电池。根据SOC/电压：当SOC/电压下降到设定阈值时设定交流电充电电池。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<select id="acChargeTypeInput" class="form-control" bitparam="BIT_AC_CHARGE_TYPE">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">禁用</option>
+					<option value="1">时间 (根据)</option>
+					<option value="2">电池电压 (根据)</option>
+					<option value="3">电池SOC (根据)</option>
+					<option value="4">电池电压和时间 (根据)</option>
+					<option value="5">电池SOC和时间 (根据)</option>
+				</select>
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamBitCombo(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChgBatCurrentInput" class="col-sm-6 control-label">交流充电电池电流(A)
+				<a id="acChgBatCurrentTip" href="javascript:void(0);" title="根据电池要求进行设置，范围：0~100A。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="acChgBatCurrentInput" class="form-control setInput acChargeControl acChargeCurrent" holdparam="HOLD_AC_CHARGE_BATTERY_CURRENT" intcheck="" validtype="range" max="125" placeholder="[0, 150]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeCurrent" onclick="javascript: writeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+	</div>
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+<div style="background-color: white;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChgStartHourInput" class="col-sm-7 control-label">AC充电起始时间1</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgStartHourInput" class="form-control setInput hour acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_START_HOUR" intcheck="" validtype="range" max="23" placeholder="[0, 23]" disabled="disabled">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgStartMinuteInput" class="form-control setInput minute acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_START_MINUTE" intcheck="" validtype="range" max="59" placeholder="[0, 59]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeTime" timeparam="HOLD_AC_CHARGE_START_TIME" onclick="javascript: writeTimeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+		<div class="form-group paramSetHolder">
+			<label for="acChgEndHourInput" class="col-sm-7 control-label">AC充电结束时间1</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgEndHourInput" class="form-control setInput hour acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_END_HOUR" intcheck="" validtype="range" max="23" placeholder="[0, 23]" disabled="disabled">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgEndMinuteInput" class="form-control setInput minute acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_END_MINUTE" intcheck="" validtype="range" max="59" placeholder="[0, 59]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeTime" timeparam="HOLD_AC_CHARGE_END_TIME" onclick="javascript: writeTimeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChgStartHourInput1" class="col-sm-7 control-label">AC充电起始时间2</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgStartHourInput1" class="form-control setInput hour acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_START_HOUR_1" intcheck="" validtype="range" max="23" placeholder="[0, 23]" disabled="disabled">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgStartMinuteInput1" class="form-control setInput minute acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_START_MINUTE_1" intcheck="" validtype="range" max="59" placeholder="[0, 59]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeTime" timeparam="HOLD_AC_CHARGE_START_TIME_1" onclick="javascript: writeTimeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+		<div class="form-group paramSetHolder">
+			<label for="acChgEndHourInput1" class="col-sm-7 control-label">AC充电结束时间2</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgEndHourInput1" class="form-control setInput hour acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_END_HOUR_1" intcheck="" validtype="range" max="23" placeholder="[0, 23]" disabled="disabled">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgEndMinuteInput1" class="form-control setInput minute acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_END_MINUTE_1" intcheck="" validtype="range" max="59" placeholder="[0, 59]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeTime" timeparam="HOLD_AC_CHARGE_END_TIME_1" onclick="javascript: writeTimeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChgStartHourInput2" class="col-sm-7 control-label">AC充电起始时间3</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgStartHourInput2" class="form-control setInput hour acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_START_HOUR_2" intcheck="" validtype="range" max="23" placeholder="[0, 23]" disabled="disabled">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgStartMinuteInput2" class="form-control setInput minute acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_START_MINUTE_2" intcheck="" validtype="range" max="59" placeholder="[0, 59]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeTime" timeparam="HOLD_AC_CHARGE_START_TIME_2" onclick="javascript: writeTimeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+		<div class="form-group paramSetHolder">
+			<label for="acChgEndHourInput2" class="col-sm-7 control-label">AC充电结束时间3</label>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgEndHourInput2" class="form-control setInput hour acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_END_HOUR_2" intcheck="" validtype="range" max="23" placeholder="[0, 23]" disabled="disabled">
+			</div>
+			<span class="colonSpan">:</span>
+			<div class="col-sm-2 timeInputHolder">
+				<input type="text" id="acChgEndMinuteInput2" class="form-control setInput minute acChargeControl acChargeTime" maxlength="2" holdparam="HOLD_AC_CHARGE_END_MINUTE_2" intcheck="" validtype="range" max="59" placeholder="[0, 59]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeTime" timeparam="HOLD_AC_CHARGE_END_TIME_2" onclick="javascript: writeTimeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChargeStartBatteryVoltageInput" class="col-sm-6 control-label">
+				交流充电开始电池电压(V)
+				<a href="javascript:void(0);" class="_131OffGridSHide normalOffGridShow" title="根据电池要求进行设置，范围：38.4~52V。">(?)</a>
+				<a href="javascript:void(0);" class="_131OffGridShow normalOffGridHide" title="根据电池要求进行设置，范围：38.4~57V。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="acChargeStartBatteryVoltageInput" class="form-control setInput acChargeControl acChargeVoltage" holdparam="HOLD_AC_CHARGE_START_BATTERY_VOLTAGE" floatcheck="" validtype="range" min="38.4" max="52" placeholder="[38.4, 52]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeVoltage" onclick="javascript: writeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChargeEndBatteryVoltageInput" class="col-sm-6 control-label">
+				交流充电结束电池电压(V)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：48~59V。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="acChargeEndBatteryVoltageInput" class="form-control setInput acChargeControl acChargeVoltage" holdparam="HOLD_AC_CHARGE_END_BATTERY_VOLTAGE" floatcheck="" validtype="range" min="48" max="59" placeholder="[48, 59]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeVoltage" onclick="javascript: writeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChargeStartBatterySocInput" class="col-sm-6 control-label">
+				交流充电开始电池SOC(%)
+				<a href="javascript:void(0);" class="_131OffGridSHide normalOffGridShow" title="根据电池要求进行设置，范围：0~90%。">(?)</a>
+				<a href="javascript:void(0);" class="_131OffGridShow normalOffGridHide" title="根据电池要求进行设置，范围：1~90%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="acChargeStartBatterySocInput" class="form-control setInput acChargeControl acChargeSoc" holdparam="HOLD_AC_CHARGE_START_BATTERY_SOC" intcheck="" validtype="range" max="90" placeholder="[0, 90]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeSoc" onclick="javascript: writeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acChargeEndBatterySocInput" class="col-sm-6 control-label">
+				交流充电结束电池SOC(%)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：20%~100%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="acChargeEndBatterySocInput" class="form-control setInput acChargeControl acChargeSoc" holdparam="HOLD_AC_CHARGE_END_BATTERY_SOC" intcheck="" validtype="range" min="20" max="100" placeholder="[20, 100]" disabled="disabled">
+			</div>
+			<button class="btn btn-default acChargeControl acChargeSoc" onclick="javascript: writeParamValue(this);" disabled="disabled">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+						</div>
+					</div>
+					
+					<div style="padding: 15px 15px 5px 15px; background-color: white; position: relative;" class="offGridGeneratorBox">
+						<strong class="groupWithTitle">发电机充电</strong>
+						<div style="border: 2px solid #DDD; padding-top: 15px; border-radius: 5px;">
+							
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(48% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="generatorChargeTypeInput" class="col-sm-6 control-label">发电机充电类型
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池电压或电池SOC设置发电机充电。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<select id="generatorChargeTypeInput" class="form-control" bitparam="BIT_GENERATOR_CHARGE_TYPE">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">电池电压 (根据)</option>
+					<option value="1">电池SOC (根据)</option>
+				</select>
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamBitCombo(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(48% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="maxGenChgBatCurrentInput" class="col-sm-6 control-label">发电机充电电池电流(A)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="设置发电机电池充电电流。范围为0-110安培。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="maxGenChgBatCurrentInput" class="form-control setInput" holdparam="OFF_GRID_HOLD_MAX_GEN_CHG_BAT_CURR" intcheck="" validtype="range" max="110" placeholder="[0, 110]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(48% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="genChgStartVoltageInput" class="col-sm-6 control-label">
+				发电机充电开始电池电压(V)
+				<a href="javascript:void(0);" class="_131OffGridSHide normalOffGridShow" title="根据电池要求进行设置，范围：38.4~52V。">(?)</a>
+				<a href="javascript:void(0);" class="_131OffGridShow normalOffGridHide" title="根据电池要求进行设置，范围：38.4~57V。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="genChgStartVoltageInput" class="form-control setInput genChargeVoltage" holdparam="OFF_GRID_HOLD_GEN_CHG_START_VOLT" floatcheck="" validtype="range" min="38.4" max="52" placeholder="[38.4, 52]">
+			</div>
+			<button class="btn btn-default genChargeVoltage" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(48% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="genChgEndVoltageInput" class="col-sm-6 control-label">
+				发电机充电结束电池电压(V)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：48~59V。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="genChgEndVoltageInput" class="form-control setInput genChargeVoltage" holdparam="OFF_GRID_HOLD_GEN_CHG_END_VOLT" floatcheck="" validtype="range" min="48" max="59" placeholder="[48, 59]">
+			</div>
+			<button class="btn btn-default genChargeVoltage" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(48% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="genChgStartSocInput" class="col-sm-6 control-label">
+				发电机充电开始电池SOC(%)
+				<a href="javascript:void(0);" class="_131OffGridSHide normalOffGridShow" title="根据电池要求进行设置，范围：0~90%。">(?)</a>
+				<a href="javascript:void(0);" class="_131OffGridShow normalOffGridHide" title="根据电池要求进行设置，范围：1~90%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="genChgStartSocInput" class="form-control setInput genChargeSoc" holdparam="OFF_GRID_HOLD_GEN_CHG_START_SOC" intcheck="" validtype="range" max="90" placeholder="[0, 90]">
+			</div>
+			<button class="btn btn-default genChargeSoc" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(48% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="genChgEndSocInput" class="col-sm-6 control-label">
+				发电机充电结束电池SOC(%)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：20%~100%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="genChgEndSocInput" class="form-control setInput genChargeSoc" holdparam="OFF_GRID_HOLD_GEN_CHG_END_SOC" intcheck="" validtype="range" min="20" max="100" placeholder="[20, 100]">
+			</div>
+			<button class="btn btn-default genChargeSoc" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+							
+
+
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(48% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="maxGeneratorInputPowerInput" class="col-sm-6 control-label">发电机额定功率(W)
+				<a class="isNotSna12k" href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="范围 0~7370（单台）65534（并联）。
+逆变器将限制功率为发电机总输入的 90% 以避免过载。">(?)</a>
+				<a class="isSna12k" style="display: none;" href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="范围 0~15000（单相）65534（并联）。
+逆变器将限制功率为发电机总输入的 90%，以避免过载。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="maxGeneratorInputPowerInput" class="form-control setInput" holdparam="HOLD_MAX_GENERATOR_INPUT_POWER" intcheck="" validtype="range" max="65534" placeholder="[0, 7370/65534]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+		
+			<div class="pageSetColumn form-horizontal" style="width: calc(48% - 10px); float: left; margin-right: 10px;">
+				<div class="form-group paramSetHolder" functionparam="FUNC_GEN_PEAK_SHAVING">
+					<label class="col-sm-6 control-label">
+						发电机提升
+					</label>
+					<div class="col-sm-5">
+						<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+						<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+					</div>
+				</div>
+			</div>
+		
+	
+	
+	<div style="clear: both;"></div>
+</div>
+
+						</div>
+					</div>
+				</div>
+                    <div style="position: relative; margin-top: 10px;" class="setToggleHolder">
+                        <img id="dischargeToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+                        <h4 class="remoteSetTitle">放电设置</h4>
+                    </div>
+
+                    <div id="dischargeToggleButtonTarget" class="toggleButtonTargetHolder">
+                        
+
+
+
+
+<div style="background-color: white;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="disChgControlInput" class="col-sm-6 control-label">放电控制
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="1: 在使用铅酸电池或在铅酸模式下使用锂电池时，根据电压选择。
+2: 在使用兼容的锂电池时，根据SOC选择。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<select id="disChgControlInput" class="form-control" bitparam="BIT_DISCHG_CONTROL_TYPE">
+					<option value="-1">&lt;空&gt;</option>
+					<option value="0">电压 (根据)</option>
+					<option value="1">SOC (根据)</option>
+					
+				</select>
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamBitCombo(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="leadAcidDischargeRateInput" class="col-sm-6 control-label">
+				放电电流限制(Adc)
+				<a class="isNotSna12k" href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：1~110（单台）4480（并联）。">(?)</a>
+				<a class="isSna12k" href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="根据电池要求进行设置，范围：1~250（单个）4480（并联）。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="leadAcidDischargeRateInput" class="form-control setInput" holdparam="HOLD_LEAD_ACID_DISCHARGE_RATE" intcheck="" validtype="range" max="4480" placeholder="[0, 110/4480]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+
+                        
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="batteryWarningVoltageInput" class="col-sm-6 control-label">
+				电池警告电压(V)
+				<a href="javascript:void(0);" class="_131OffGridSHide normalOffGridShow" title="当电池电压达到您设置的值时，逆变器将显示电池低电压警告，建议范围：40~50V。">(?)</a>
+				<a href="javascript:void(0);" class="_131OffGridShow normalOffGridHide" title="当电池电压达到您设置的值时，逆变器将显示电池低电压警告，建议范围：40~56V。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="batteryWarningVoltageInput" class="form-control setInput dischargeSettingVoltage" holdparam="HOLD_BATTERY_WARNING_VOLTAGE" floatcheck="" validtype="range" min="40" max="56" placeholder="[40, 56]">
+			</div>
+			<button class="btn btn-default dischargeSettingVoltage" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="batteryWarningSocInput" class="col-sm-6 control-label">
+				电池警告SOC(%)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="当电池电压达到您设置的值时，逆变器将显示电池低电压警告，建议范围：0~90%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="batteryWarningSocInput" class="form-control setInput dischargeSettingSoc" holdparam="HOLD_BATTERY_WARNING_SOC" intcheck="" validtype="range" max="90" placeholder="[0, 90]">
+			</div>
+			<button class="btn btn-default dischargeSettingSoc" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+
+                            
+
+                            
+
+                        
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="leadAcidDischargeCutOffVoltInput" class="col-sm-6 control-label">
+				铅酸电池放电截止电压(V)
+				<a href="javascript:void(0);" class="_131OffGridSHide normalOffGridShow" title="离网EOD电压，根据电池要求进行设置，范围：40V~50V。">(?)</a>
+				<a href="javascript:void(0);" class="_131OffGridShow normalOffGridHide" title="离网EOD电压，根据电池要求进行设置，范围：40V~56V。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="leadAcidDischargeCutOffVoltInput" class="form-control setInput dischargeSettingVoltage" holdparam="HOLD_LEAD_ACID_DISCHARGE_CUT_OFF_VOLT" floatcheck="" validtype="range" min="40" max="50" placeholder="[40, 50]">
+			</div>
+			<button class="btn btn-default dischargeSettingVoltage" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left;">
+		<div class="form-group paramSetHolder" style="margin-bottom: 0px;">
+			<label for="socLowLimitEpsDischgInput" class="col-sm-6 control-label">
+				放电截止SOC(%)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="离网EOD SOC，根据电池要求进行设置，范围：0~90%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="socLowLimitEpsDischgInput" class="form-control setInput dischargeSettingSoc" holdparam="HOLD_SOC_LOW_LIMIT_EPS_DISCHG" intcheck="" validtype="range" min="0" max="90" placeholder="[0, 90]">
+			</div>
+			<button class="btn btn-default dischargeSettingSoc" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+
+                            
+                        
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="onGridEodVoltageInput" class="col-sm-6 control-label">
+				并网EOD电压(V)
+				<a href="javascript:void(0);" class="_131OffGridSHide normalOffGridShow" title="当电池达到您设置的值时，它将停止放电，交流电将介入，范围：40~56V。">(?)</a>
+				<a href="javascript:void(0);" class="_131OffGridShow normalOffGridHide" title="当电池达到您设置的值时，它将停止放电，交流电将介入，范围：40~58V。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="onGridEodVoltageInput" class="form-control setInput dischargeSettingVoltage" holdparam="HOLD_ON_GRID_EOD_VOLTAGE" floatcheck="" validtype="range" min="40" max="56" placeholder="[40, 56]">
+			</div>
+			<button class="btn btn-default dischargeSettingVoltage" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" style="margin-bottom: 0px;">
+			<label for="disChgCutOffSocInput" class="col-sm-6 control-label">
+				并网截止SOC(%)
+				<a href="javascript:void(0);" class="_131OffGridSHide normalOffGridShow" title="当电池达到您设置的值时，它将停止放电，交流电将介入，范围：0%~90%。">(?)</a>
+				<a href="javascript:void(0);" class="_131OffGridShow normalOffGridHide" title="当电池达到您设置的值时，它将停止放电，交流电将介入，范围：10%~90%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="disChgCutOffSocInput" class="form-control setInput dischargeSettingSoc" holdparam="HOLD_DISCHG_CUT_OFF_SOC_EOD" intcheck="" validtype="range" max="90" placeholder="[0, 90]">
+			</div>
+			<button class="btn btn-default dischargeSettingSoc" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+
+                        
+                            <div class="offGridHardV11ShowHolder" style="padding: 15px; background-color: white; position: relative;">
+                                <strong class="groupWithTitle">交流耦合</strong>
+                                <div class="groupInnerHolder" style="border: 2px solid #DDD; padding-top: 5px; border-radius: 5px;">
+                                    
+                                        
+
+
+
+
+<div style="background-color: white; width: 100%; padding-top: 5px;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_AC_COUPLING_FUNCTION">
+			<label class="col-sm-5 control-label">
+				交流耦合
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="将现有的并网光伏逆变器连接到发电端口作为交流耦合系统。在并网模式下，请启用电网回售或离网模式。在离网模式下，请确保光伏逆变器已启用频率转移功能。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+                                    
+                                    
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acCoupleStartVoltInput" class="col-sm-5 control-label">AC Couple启动电压(V)</label>
+			<div class="col-sm-5">
+				<input type="text" id="acCoupleStartVoltInput" class="form-control setInput dischargeSettingVoltage" holdparam="_12K_HOLD_AC_COUPLE_START_VOLT" floatcheck="" validtype="range" min="40" max="59.5" placeholder="[40, 59.5]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acCoupleStartSocInput" class="col-sm-5 control-label">AC Couple启动SOC(%)</label>
+			<div class="col-sm-5">
+				<input type="text" id="acCoupleStartSocInput" class="form-control setInput dischargeSettingSoc" holdparam="_12K_HOLD_AC_COUPLE_START_SOC" intcheck="" validtype="range" max="80" placeholder="[0, 80]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+                                    
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acCoupleEndVoltInput" class="col-sm-5 control-label">AC Couple截止电压(V)</label>
+			<div class="col-sm-5">
+				<input type="text" id="acCoupleEndVoltInput" class="form-control setInput dischargeSettingVoltage" holdparam="_12K_HOLD_AC_COUPLE_END_VOLT" floatcheck="" validtype="range" min="42" max="80" placeholder="[42, 80]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="acCoupleEndSocInput" class="col-sm-5 control-label">AC Couple截止SOC(%)</label>
+			<div class="col-sm-5">
+				<input type="text" id="acCoupleEndSocInput" class="form-control setInput dischargeSettingSoc" holdparam="_12K_HOLD_AC_COUPLE_END_SOC" intcheck="" validtype="range" max="100" placeholder="[0, 100]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+                                </div>
+                            </div>
+                        
+
+                        
+                            <div class="offGridHardV11ShowHolder" style="padding: 15px; background-color: white; position: relative;">
+                                <strong class="groupWithTitle">智能负载</strong>
+                                <div class="groupInnerHolder" style="border: 2px solid #DDD; padding-top: 5px; border-radius: 5px;">
+                                    
+
+
+
+
+<div style="background-color: white; width: 100%; padding-top: 5px;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_SMART_LOAD_ENABLE">
+			<label class="col-sm-5 control-label">
+				智能负载
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="将发电端口重新用途为负载端口。逆变器将根据配置的设置为该负载提供电力。注意：如果启用了智能负载功能，禁止同时连接发电机或交流耦合系统，否则设备将会损坏！">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+                                    
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="startPvPowerInput" class="col-sm-5 control-label">启动PV功率(kW)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="这是与智能负载输出功能运作的最低光伏功率限制。">(?)</a>
+			</label>
+			<div class="col-sm-5">
+				<input type="text" id="startPvPowerInput" class="form-control setInput" holdparam="_12K_HOLD_START_PV_POWER" floatcheck="" validtype="range" max="25.5" placeholder="[0, 25.5]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_ON_GRID_ALWAYS_ON">
+			<label class="col-sm-5 control-label">
+				并网时常开
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="在电网正常时启用发电端口的持续供电。">(?)</a>
+			</label>
+			<div class="col-sm-7">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">启用</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">禁用</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+                                    
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="smartLoadStartVoltInput" class="col-sm-5 control-label">Smart Load启动电压(V)</label>
+			<div class="col-sm-5">
+				<input type="text" id="smartLoadStartVoltInput" class="form-control setInput dischargeSettingVoltage" holdparam="_12K_HOLD_SMART_LOAD_START_VOLT" floatcheck="" validtype="range" min="40" max="59" placeholder="[40, 59]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="smartLoadStartSocInput" class="col-sm-5 control-label">Smart Load启动SOC(%)</label>
+			<div class="col-sm-5">
+				<input type="text" id="smartLoadStartSocInput" class="form-control setInput dischargeSettingSoc" holdparam="_12K_HOLD_SMART_LOAD_START_SOC" floatcheck="" validtype="range" max="100" placeholder="[0, 100]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+                                    
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="smartLoadEndVoltInput" class="col-sm-5 control-label">Smart Load截止电压(V)</label>
+			<div class="col-sm-5">
+				<input type="text" id="smartLoadEndVoltInput" class="form-control setInput dischargeSettingVoltage" holdparam="_12K_HOLD_SMART_LOAD_END_VOLT" intcheck="" validtype="range" min="40" max="59" placeholder="[40, 59]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="smartLoadEndSocInput" class="col-sm-5 control-label">Smart Load截止SOC(%)</label>
+			<div class="col-sm-5">
+				<input type="text" id="smartLoadEndSocInput" class="form-control setInput dischargeSettingSoc" holdparam="_12K_HOLD_SMART_LOAD_END_SOC" intcheck="" validtype="range" max="100" placeholder="[0, 100]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+                                </div>
+                            </div>
+                        
+                    </div>
+
+				
+					<div style="position: relative; margin-top: 10px;" class="setToggleHolder">
+						<img id="otherToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+						<h4 class="remoteSetTitle">其他设置</h4>
+					</div>
+					
+					<div id="otherToggleButtonTarget" class="toggleButtonTargetHolder">
+						
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	
+		<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder">
+				<label for="ctPowerOffsetInput" class="col-sm-6 control-label">
+					CT功率补偿(W)
+				</label>
+				<div class="col-sm-4">
+					<input type="text" id="ctPowerOffsetInput" class="form-control setInput" holdparam="HOLD_CT_POWER_OFFSET" intcheck="" validtype="range" min="-199" max="199" placeholder="[-199, 199]">
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+			</div>
+		</div>
+	
+	
+	
+		<div class="pageSetColumn form-horizontal sna12KHide" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder">
+				<label for="battVoltSampleDisableInput" class="col-sm-6 control-label">电池电压采样
+					<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="设置为内部、外部或两者可用。">(?)</a>
+				</label>
+				<div class="col-sm-4">
+					<select id="battVoltSampleDisableInput" class="form-control" holdparam="HOLD_BATT_VOLT_SAMPLE_DISABLE">
+						<option value="1">禁止外部采样</option>
+						<option value="2">禁止内部采样</option>
+						<option value="0">两个采样使能</option>
+					</select>
+				</div>
+				<button class="btn btn-default" onclick="javascript: writeParamCombo(this);">设置</button>
+			</div>
+		</div>
+	
+	
+	<div style="clear: both;"></div>
+</div>
+						
+
+
+
+
+<div style="background-color: white; padding-top: 5px; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="fan1MaxSpeedInput" class="col-sm-6 control-label">
+				风扇 1 最大速度(%)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="这设置了冷却风扇1的最大速度。范围是10-100%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="fan1MaxSpeedInput" class="form-control setInput" bitparam="BIT_FAN_1_MAX_SPEED" intcheck="" validtype="range" min="10" max="100" placeholder="[10, 100]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_FAN_SPEED_SLOPE_CTRL_1">
+			<label class="col-sm-6 control-label">转速斜率控制1</label>
+			<div class="col-sm-5">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">默认</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">新坡度</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+						
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" style="margin-bottom: 0px;">
+			<label for="fan2MaxSpeedInput" class="col-sm-6 control-label">
+				风扇 2 最大速度(%)
+				<a href="javascript:void(0);" onclick="javascript:alertTitle(this);" title="这设置了冷却风扇2的最大速度。范围是10-100%。">(?)</a>
+			</label>
+			<div class="col-sm-4">
+				<input type="text" id="fan2MaxSpeedInput" class="form-control setInput" bitparam="BIT_FAN_2_MAX_SPEED" intcheck="" validtype="range" min="10" max="100" placeholder="[10, 100]">
+			</div>
+			<button class="btn btn-default" onclick="javascript: writeParamValue(this);">设置</button>
+		</div>
+	</div>
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder" functionparam="FUNC_FAN_SPEED_SLOPE_CTRL_2">
+			<label class="col-sm-6 control-label">转速斜率控制2</label>
+			<div class="col-sm-5">
+				<button class="btn btn-default" onclick="javascript: functionControl(this, false);">默认</button>
+				<button class="btn btn-default" onclick="javascript: functionControl(this, true);">新坡度</button>
+			</div>
+		</div>
+	</div>
+	
+	<div style="clear: both;"></div>
+</div>
+						
+						
+					</div>
+				
+				
+				<!-- Battery component -->
+				
+
+
+
+
+<!-- Battery -->
+	<div id="battComponent" style="display: none;">
+		<div style="position: relative; margin-top: 10px;" class="setToggleHolder">
+			<img id="batteryToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+			<h4 class="remoteSetTitle">电池</h4>
+			
+			<button id="readBatteryParamButton" class="btn btn-default btn-sm" style="position: absolute; top: 15.1px; left: 200px; border-top-left-radius: 3px; border-bottom-left-radius: 3px;" onclick="(function(e) { readMultiParams(5000, 40); e.preventDefault(); e.stopPropagation(); })(event)" data-loading-text="读取…">读取</button>
+		</div>
+		
+		<div id="batteryToggleButtonTarget" style="padding-top: 10px; background-color: white;">
+			
+			
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder0" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule0InputCheckbox" resetparam="BATT_RESTART_MODULE_0" style="bottom: 4px;" value="true"> <strong>重启电池模块 0</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder1" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule1InputCheckbox" resetparam="BATT_RESTART_MODULE_1" style="bottom: 4px;" value="true"> <strong>重启电池模块 1</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder2" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule2InputCheckbox" resetparam="BATT_RESTART_MODULE_2" style="bottom: 4px;" value="true"> <strong>重启电池模块 2</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder3" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule3InputCheckbox" resetparam="BATT_RESTART_MODULE_3" style="bottom: 4px;" value="true"> <strong>重启电池模块 3</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder4" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule4InputCheckbox" resetparam="BATT_RESTART_MODULE_4" style="bottom: 4px;" value="true"> <strong>重启电池模块 4</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder5" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule5InputCheckbox" resetparam="BATT_RESTART_MODULE_5" style="bottom: 4px;" value="true"> <strong>重启电池模块 5</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder6" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule6InputCheckbox" resetparam="BATT_RESTART_MODULE_6" style="bottom: 4px;" value="true"> <strong>重启电池模块 6</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder7" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule7InputCheckbox" resetparam="BATT_RESTART_MODULE_7" style="bottom: 4px;" value="true"> <strong>重启电池模块 7</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder8" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule8InputCheckbox" resetparam="BATT_RESTART_MODULE_8" style="bottom: 4px;" value="true"> <strong>重启电池模块 8</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder9" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule9InputCheckbox" resetparam="BATT_RESTART_MODULE_9" style="bottom: 4px;" value="true"> <strong>重启电池模块 9</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder10" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule10InputCheckbox" resetparam="BATT_RESTART_MODULE_10" style="bottom: 4px;" value="true"> <strong>重启电池模块 10</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder11" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule11InputCheckbox" resetparam="BATT_RESTART_MODULE_11" style="bottom: 4px;" value="true"> <strong>重启电池模块 11</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder12" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule12InputCheckbox" resetparam="BATT_RESTART_MODULE_12" style="bottom: 4px;" value="true"> <strong>重启电池模块 12</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder13" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule13InputCheckbox" resetparam="BATT_RESTART_MODULE_13" style="bottom: 4px;" value="true"> <strong>重启电池模块 13</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder14" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule14InputCheckbox" resetparam="BATT_RESTART_MODULE_14" style="bottom: 4px;" value="true"> <strong>重启电池模块 14</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder15" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule15InputCheckbox" resetparam="BATT_RESTART_MODULE_15" style="bottom: 4px;" value="true"> <strong>重启电池模块 15</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder16" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule16InputCheckbox" resetparam="BATT_RESTART_MODULE_16" style="bottom: 4px;" value="true"> <strong>重启电池模块 16</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder17" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule17InputCheckbox" resetparam="BATT_RESTART_MODULE_17" style="bottom: 4px;" value="true"> <strong>重启电池模块 17</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder18" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule18InputCheckbox" resetparam="BATT_RESTART_MODULE_18" style="bottom: 4px;" value="true"> <strong>重启电池模块 18</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder19" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule19InputCheckbox" resetparam="BATT_RESTART_MODULE_19" style="bottom: 4px;" value="true"> <strong>重启电池模块 19</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder20" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule20InputCheckbox" resetparam="BATT_RESTART_MODULE_20" style="bottom: 4px;" value="true"> <strong>重启电池模块 20</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder21" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule21InputCheckbox" resetparam="BATT_RESTART_MODULE_21" style="bottom: 4px;" value="true"> <strong>重启电池模块 21</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder22" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule22InputCheckbox" resetparam="BATT_RESTART_MODULE_22" style="bottom: 4px;" value="true"> <strong>重启电池模块 22</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder23" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule23InputCheckbox" resetparam="BATT_RESTART_MODULE_23" style="bottom: 4px;" value="true"> <strong>重启电池模块 23</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder24" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule24InputCheckbox" resetparam="BATT_RESTART_MODULE_24" style="bottom: 4px;" value="true"> <strong>重启电池模块 24</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder25" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule25InputCheckbox" resetparam="BATT_RESTART_MODULE_25" style="bottom: 4px;" value="true"> <strong>重启电池模块 25</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder26" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule26InputCheckbox" resetparam="BATT_RESTART_MODULE_26" style="bottom: 4px;" value="true"> <strong>重启电池模块 26</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder27" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule27InputCheckbox" resetparam="BATT_RESTART_MODULE_27" style="bottom: 4px;" value="true"> <strong>重启电池模块 27</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder28" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule28InputCheckbox" resetparam="BATT_RESTART_MODULE_28" style="bottom: 4px;" value="true"> <strong>重启电池模块 28</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder29" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule29InputCheckbox" resetparam="BATT_RESTART_MODULE_29" style="bottom: 4px;" value="true"> <strong>重启电池模块 29</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+				<div style="background-color: white; width: 100%;">
+					<div id="battRestartSetHolder30" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule30InputCheckbox" resetparam="BATT_RESTART_MODULE_30" style="bottom: 4px;" value="true"> <strong>重启电池模块 30</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div id="battRestartSetHolder31" class="battRestartSetHolder pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+						<div class="form-group paramSetHolder battRestartHolder">
+							<label class="col-sm-7 control-label checkbox-inline">
+								<input type="checkbox" id="restartModule31InputCheckbox" resetparam="BATT_RESTART_MODULE_31" style="bottom: 4px;" value="true"> <strong>重启电池模块 31</strong>
+							</label>
+						</div>
+					</div>
+					
+					<div style="clear: both;"></div>
+				</div>
+			
+			
+			<div id="battRestartSetBtnHolder" class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px; display: none;">
+				<div class="form-group paramSetHolder">
+					<label class="col-sm-7 control-label"></label>
+					<button style="margin-left: 15px;" class="btn btn-default" onclick="javascript: writeBattRestartValue(this);">重启电池模块</button>
+				</div>
+			</div>
+			
+			<div style="clear: both;"></div>
+		</div>
+	</div>
+	
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/battModuleSet.js.下载"></script>
+
+				
+				<!-- Reset component -->
+				<div style="position: relative; margin-top: 10px;" class="setToggleHolder">
+					<img id="resetToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+					<h4 class="remoteSetTitle">重置操作</h4>
+				</div>
+				
+				<div id="resetToggleButtonTarget" class="toggleButtonTargetHolder">
+					
+
+
+
+
+<div style="background-color: white;">
+	
+
+	
+		<div class="pageSetColumn form-horizontal" style="width: calc(33% - 10px); float: left; margin-right: 10px;">
+			<div class="form-group paramSetHolder">
+				<label class="col-sm-8 control-label">系统设置恢复默认值</label>
+				<button style="margin-left: 10px;" id="ALL_TO_DEFAULT_BUTTON" class="btn btn-default" resetparam="ALL_TO_DEFAULT" onclick="javascript: resetParamModal(this);">重置</button>
+			</div>
+		</div>
+	
+
+	
+	
+	
+
+	<div style="clear: both;"></div>
+</div>
+				</div>
+				
+
+
+
+
+
+
+				
+
+
+
+
+
+	<div style="position: relative; margin-top: 10px;" class="setToggleHolder">
+		<img id="datalogToggleButton" class="setToggleButton" style="position: absolute; top: 13.9px; left: 15px;" src="./远程设置 - 监控平台_files/ic_action_expand.png">
+		<h4 class="remoteSetTitle">采集器设置<span id="datalogText"></span> - <span id="datalogTypeText"></span></h4>
+	</div>
+
+	<div id="datalogToggleButtonTarget" class="toggleButtonTargetHolder">
+		
+
+		
+
+
+
+
+<div style="background-color: white; width: 100%;">
+	<div class="pageSetColumn form-horizontal" style="width: calc(45% - 10px); float: left; margin-right: 10px;">
+		<div class="form-group paramSetHolder">
+			<label for="datalogServerInput" class="col-sm-5 control-label">
+				服务器IP和端口
+			</label>
+			<div class="col-sm-4">
+				
+
+
+
+
+				<select id="datalogServerInput" class="form-control" datalogparam="SERVER_IP_PORT">
+					<option value="-1">&lt;空&gt;</option>
+					
+						
+	                            <option value="continent.asia">中国大陆</option>
+						
+	                            <option value="continent.europe">欧洲</option>
+						
+	                            <option value="continent.africa">中东和非洲</option>
+						
+	                            <option value="continent.north.america">美洲</option>
+						
+	                            <option value="region.asia.southeast">亚太地区</option>
+						
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+					
+				</select>
+			</div>
+			<button class="btn btn-default" onclick="javascript: readDatalogComboParam(this);">读取</button>
+			<button class="btn btn-default" onclick="javascript: writeDatalogComboParam(this);">设置</button>
+		</div>
+	</div>
+
+	<div style="clear: both;"></div>
+</div>
+	</div>
+
+			</div>
+			
+		<!-- Page Content Part -->
+	</div>
+	
+	<!-- Reset modal dialog -->
+	<div id="resetConfirmModal" class="modal fade" tabindex="-1" role="dialog">
+		<div class="modal-dialog">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal">×</button>
+					<h4 class="modal-title">重置</h4>
+				</div>
+				<div class="modal-body form-horizontal">
+					<p><span id="resetConfirmTextModal"></span>…</p>
+				</div>
+				<div class="modal-footer">
+					<button id="resetConfirmModalSubmit" type="button" class="btn btn-success" data-loading-text="重置…">重置</button>
+					<button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+				</div>
+			</div>
+		</div>
+	</div>
+    
+
+
+
+<style>
+    .responsive-toolbar-box {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 5px;
+        position: relative;
+        min-height: 30px;
+        justify-content: right;
+    }
+
+    .responsive-toolbar-box .toolbar-dropdown {
+        display: inline-block;
+        vertical-align: top;
+    }
+
+    .responsive-toolbar-box .toolbar-dropdown .dropdown-menu {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .responsive-toolbar-box .toolbar-dropdown .dropdown-menu > li {
+        margin: 0;
+        padding: 0;
+    }
+
+    .responsive-toolbar-box .toolbar-dropdown .dropdown-menu > li:hover {
+        background-color: #f5f5f5;
+    }
+
+    .responsive-toolbar-box .dropdown-item {
+        color: #333;
+        text-decoration: none;
+    }
+
+    .responsive-toolbar-box li:hover {
+        background-color: #f5f5f5;
+        color: #262626;
+        text-decoration: none;
+    }
+
+    .responsive-toolbar-box .l-btn {
+        margin-right: 5px;
+    }
+</style>
+<div id="toolbarMoreTemplate" style="display: none;">
+    <div class="btn-group dropdown toolbar-dropdown" style="margin-left: 5px; vertical-align: top;">
+        <button class="btn btn-default btn-sm dropdown-toggle" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            操作 <span class="caret"></span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-right" style="min-width: 120px;"></ul>
+    </div>
+</div>
+
+<script>
+    (function($) {
+        'use strict';
+        var _cache = {};
+        var _config = {
+            toolbarClass: 'responsive-toolbar-box',
+            debounceTime: 150
+        };
+        function _getTemplate() {
+            var $tpl = $('#toolbarMoreTemplate').children().first().clone();
+            return $tpl;
+        }
+
+        function _isWrapped($container) {
+            var $children = $container.children(':not(.toolbar-dropdown)');
+            if ($children.length < 2) return false;
+
+            var firstTop = $children.first().position().top;
+            var lastTop = $children.last().position().top;
+            return Math.abs(lastTop - firstTop) > 5;
+        }
+
+        function _getAvailableWidth($container) {
+            var containerWidth = $container.width();
+            return containerWidth - 100;
+        }
+
+        function _process($toolbar) {
+            var id = $toolbar.attr('id');
+            if (!id) {
+                id = 'rtb_' + Math.random().toString(36).substr(2, 9);
+                $toolbar.attr('id', id);
+            }
+
+            if (!_cache[id]) {
+                $toolbar.find('.toolbar-dropdown').remove();
+                _cache[id] = $toolbar.html();
+            }
+
+            $toolbar.html(_cache[id]);
+
+            if (!_isWrapped($toolbar)) {
+                return;
+            }
+
+            var availableWidth = _getAvailableWidth($toolbar);
+            var currentWidth = 0;
+            var $items = $toolbar.children();
+            var overflowItems = [];
+            var visibleItems = [];
+
+            $items.each(function() {
+                var $item = $(this);
+                var itemWidth = $item.outerWidth(true);
+
+                if (currentWidth + itemWidth <= availableWidth) {
+                    visibleItems.push($item[0]);
+                    currentWidth += itemWidth;
+                } else {
+                    overflowItems.push($item[0]);
+                }
+            });
+
+            if (overflowItems.length === 0) {
+                return;
+            }
+
+            var $dropdown = _getTemplate();
+            var $menu = $dropdown.find('ul');
+
+            $.each(overflowItems, function(i, item) {
+                var $item = $(item);
+                var $clone = $item.clone();
+
+                $clone.removeClass('btn btn-primary btn-success btn-info btn-warning btn-danger btn-default btn-sm btn-xs btn-lg');
+                $clone.addClass('dropdown-item').css({
+                    'display': 'block',
+                    'width': '100%',
+                    'text-align': 'left',
+                    'border': 'none',
+                    'background': 'none',
+                    'padding': '6px 15px',
+                    'cursor': 'pointer',
+                    'white-space': 'nowrap'
+                });
+
+                if ($item.attr('onclick')) {
+                    $clone.attr('onclick', $item.attr('onclick'));
+                }
+
+                $menu.append($('<li>').append($clone));
+                $item.remove();
+            });
+
+            $toolbar.append($dropdown);
+
+            if ($.fn.dropdown) {
+                $dropdown.find('.dropdown-toggle').dropdown();
+            }
+        }
+
+        function _debounce(func, wait) {
+            var timeout;
+            return function() {
+                var context = this, args = arguments;
+                clearTimeout(timeout);
+                timeout = setTimeout(function() {
+                    func.apply(context, args);
+                }, wait);
+            };
+        }
+
+        function _init($toolbar) {
+            var id = $toolbar.attr('id');
+
+            _process($toolbar);
+
+            var handler = _debounce(function() {
+                _process($toolbar);
+            }, _config.debounceTime);
+
+            $(window).off('resize.rtb.' + id).on('resize.rtb.' + id, handler);
+        }
+
+        $(function() {
+            $('.' + _config.toolbarClass).each(function() {
+                _init($(this));
+            });
+        });
+        //
+
+    })(jQuery);
+</script>
+
+    <script type="text/javascript" src="./远程设置 - 监控平台_files/paramValues.js.下载"></script>
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/readParams.js.下载"></script>
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/remoteCtrlCommon.js.下载"></script>
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/modalMessage.js.下载"></script>
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/remoteModelSet.js.下载"></script>
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/remoteSet.js.下载"></script>
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/remoteReadNew.js.下载"></script>
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/datalogParamRead.js.下载"></script>
+	<script type="text/javascript" src="./远程设置 - 监控平台_files/datalogParamWrite.js.下载"></script>
+
+
+<div class="panel combo-p" style="position: absolute; z-index: 10; display: none;"><div class="combo-panel panel-body panel-body-noheader" title="" id=""><div class="panel datagrid" style="width: 150px;"><div class="datagrid-wrap panel-body panel-body-noheader panel-body-noborder" title="" style="width: 148px; height: 20px;"><div class="datagrid-view" style="width: 148px; height: 0px;"><div class="datagrid-view1" style="width: 0px;"><div class="datagrid-header" style="width: 0px; height: 0px;"><div class="datagrid-header-inner" style="display: block;"><table class="datagrid-htable" border="0" cellspacing="0" cellpadding="0" style="height: 0px;"><tbody></tbody></table></div></div><div class="datagrid-body" style="width: 0px; margin-top: 0px; height: 20px;"><div class="datagrid-body-inner"></div></div><div class="datagrid-footer" style="width: 0px;"><div class="datagrid-footer-inner" style="display: none;"></div></div></div><div class="datagrid-view2" style="width: 148px;"><div class="datagrid-header" style="width: 148px; height: 0px;"><div class="datagrid-header-inner" style="display: block;"><table class="datagrid-htable" border="0" cellspacing="0" cellpadding="0" style="height: 0px;"><tbody><tr class="datagrid-header-row"><td field="name"><div class="datagrid-cell datagrid-cell-c1-name" style=""><span>电站名称</span><span class="datagrid-sort-icon"></span></div></td></tr></tbody></table></div></div><div class="datagrid-body" style="width: 148px; margin-top: 0px; height: 20px; overflow-x: hidden;"><table class="datagrid-btable" cellspacing="0" cellpadding="0" border="0"><tbody><tr id="datagrid-row-r1-2-0" class="" style="height: 1px; border-color: transparent; background: transparent;"><td field="name" style="height: 1px; border-color: transparent; background: transparent;"><div style="height: 1px; border-color: transparent; background: transparent;" class="datagrid-cell datagrid-cell-c1-name"></div></td></tr></tbody></table></div><div class="datagrid-footer" style="width: 148px;"><div class="datagrid-footer-inner" style="display: none;"></div></div></div><table class="datagrid-f" style="display: none;"></table><style type="text/css" easyui="true">
+.datagrid-cell-c1-name{width:79px}
+</style></div><div class="datagrid-pager pagination"><table cellspacing="0" cellpadding="0" border="0"><tbody><tr><td><select class="pagination-page-list"><option>10</option><option>20</option><option>30</option><option>40</option><option>50</option></select></td><td><div class="pagination-btn-separator"></div></td><td><a href="javascript:void(0)" class="l-btn l-btn-small l-btn-plain l-btn-disabled l-btn-plain-disabled" group="" id=""><span class="l-btn-left l-btn-icon-left"><span class="l-btn-text l-btn-empty">&nbsp;</span><span class="l-btn-icon pagination-first">&nbsp;</span></span></a></td><td><a href="javascript:void(0)" class="l-btn l-btn-small l-btn-plain l-btn-disabled l-btn-plain-disabled" group="" id=""><span class="l-btn-left l-btn-icon-left"><span class="l-btn-text l-btn-empty">&nbsp;</span><span class="l-btn-icon pagination-prev">&nbsp;</span></span></a></td><td><div class="pagination-btn-separator"></div></td><td><span style="padding-left:6px;">Page</span></td><td><input class="pagination-num" type="text" value="1" size="2"></td><td><span style="padding-right:6px;">of 1</span></td><td><div class="pagination-btn-separator"></div></td><td><a href="javascript:void(0)" class="l-btn l-btn-small l-btn-plain l-btn-disabled l-btn-plain-disabled" group="" id=""><span class="l-btn-left l-btn-icon-left"><span class="l-btn-text l-btn-empty">&nbsp;</span><span class="l-btn-icon pagination-next">&nbsp;</span></span></a></td><td><a href="javascript:void(0)" class="l-btn l-btn-small l-btn-plain l-btn-disabled l-btn-plain-disabled" group="" id=""><span class="l-btn-left l-btn-icon-left"><span class="l-btn-text l-btn-empty">&nbsp;</span><span class="l-btn-icon pagination-last">&nbsp;</span></span></a></td><td><div class="pagination-btn-separator"></div></td><td><a href="javascript:void(0)" class="l-btn l-btn-small l-btn-plain" group="" id=""><span class="l-btn-left l-btn-icon-left"><span class="l-btn-text l-btn-empty">&nbsp;</span><span class="l-btn-icon pagination-load">&nbsp;</span></span></a></td></tr></tbody></table><div class="pagination-info">Displaying 1 to 10 of 10 items</div><div style="clear:both;"></div></div></div></div></div></div></body></html>

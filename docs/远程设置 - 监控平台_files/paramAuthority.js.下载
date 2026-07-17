@@ -1,0 +1,22 @@
+$(function(){
+    getParamAuthority()
+})
+
+function getParamAuthority() {
+    if(paramAuthority) {
+        if(paramAuthority.writeableParams && paramAuthority.writeableParams.length) {
+            $.each(paramAuthority.writeableParams,(index,item)=>{
+                $('div[functionParam='+item+'] button').removeAttr('disabled')
+                $('input[holdParam='+item+']').removeAttr('disabled')
+            })
+        }
+
+
+        if(paramAuthority.notWriteableParams && paramAuthority.notWriteableParams.length) {
+            $.each(paramAuthority.notWriteableParams,item=>{
+                $('div[functionParam='+item+'] button').attr('disabled',true)
+                $('input[holdParam='+item+']').attr('disabled',true)
+            })
+        }
+    }
+}

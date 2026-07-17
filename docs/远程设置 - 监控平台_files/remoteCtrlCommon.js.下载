@@ -1,0 +1,437 @@
+$(document).ready(function() {
+	$('.setToggleHolder').click(function() {
+		var $setToggleButton = $(this).find('.setToggleButton');
+		var $targetId = $('#' + $setToggleButton.attr('id') + 'Target');
+		if($targetId.is(':visible')) {
+			$targetId.slideUp();
+			$setToggleButton.attr('src', resourceBaseUrl + '/web/img/maintain/ic_action_collapse.png');
+		} else {
+			$targetId.slideDown();
+			$setToggleButton.attr('src', resourceBaseUrl + '/web/img/maintain/ic_action_expand.png');
+		}
+	});
+
+	//Reset Modal
+	$('#resetConfirmModalSubmit').click(function() {
+		resetParamValue($('#resetConfirmTextModal').data('buttonId'));
+		$('#resetConfirmModal').modal('hide');
+	});
+
+	$('#resetConfirmModal').on('hidden.bs.modal', function (e) {
+		$('#resetConfirmTextModal').text('').removeData();
+	});
+	
+	//Action notice
+	$('#actionNoticeModal').on('hidden.bs.modal', function (e) {
+		$('#actionNoticeTextHolder').text('');
+		$('#actionNoticeModalSubmit').attr('onclick', 'javascript:void();');
+	});
+});
+
+function writeG98ParamValue(button) {
+	$.post(baseUrl + '/web/maintain/remoteSet/writeG98ValueForINF01', {
+			inverterSn: $('#inverterSearchInput').combogrid('getValue'),
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}
+
+function writeParamValue(button) {
+	var $paramSetHolder = $(button).parent();
+	var $valueInput = $paramSetHolder.find('input');
+	
+	var valueText = $valueInput.val();
+	
+	if(!valueText) {
+		alert(paramEmptyAlertText);
+		return;
+	}
+	
+/*	if($valueInput.is('[intCheck]')) {
+		if(!valueText.search('0x') == 0 && !checkAllInt(valueText)) {
+			alert(paramShouldIntText);
+			return;
+		}
+	}
+	
+	if($valueInput.is('[floatCheck]')) {
+		if(!checkFloat(valueText)) {
+			alert(paramShouldFloatText);
+			return;
+		}
+	}	*/
+	
+	if($valueInput.is('[characterCheck]')) {
+		for(var i = 0; i < valueText.length; i++) {
+			var c = valueText.charCodeAt(i);
+			if(!(c >= 0x41 && c <= 0x5A) && !(c >= 0x61 && c <= 0x7A)) {
+				alert(paramShouldCharText);
+				return;
+			}
+		}
+	}
+	
+	var isBitParam = $valueInput.is('input[bitParam]');
+	var paramName = isBitParam ? $valueInput.attr('bitParam') : $valueInput.attr('holdParam');
+//	var validType = $valueInput.attr('validType');
+	
+//	switch(validType) {
+//		case 'range': {
+//			var min = $valueInput.is('[min]') ? $valueInput.attr('min') : 0;
+//			var max = $valueInput.attr('max');
+//			if(parseFloat(valueText) < min || parseFloat(valueText) > max) {
+//				alert(paramOutRangeText + ': [' + min + ', ' + max + ']');
+//				return;
+//			}
+//			break;
+//		}
+//	}
+
+	if($valueInput.is('[opposite]')) {
+		valueText = -parseFloat(valueText)
+	}
+	
+	if($valueInput.is('[time]')) {
+		valueText = Math.round(parseFloat(valueText) * parseInt($valueInput.attr('time')));
+	}
+
+	if($valueInput.is('[offset]')) {
+		valueText = parseFloat(valueText) + parseInt($valueInput.attr('offset'));
+	}
+	var inverterSn = (currentSetPageType != 'workingMode' && currentSetPageType != 'setupWizard' ? $('#inverterSearchInput').combogrid('getValue') : currentSerialNum);
+	if(isBitParam) {
+		postBitParamWrite(inverterSn, paramName, valueText);
+	} else {
+		postWrite(inverterSn, paramName, valueText);
+	}
+}
+
+function postWrite(inverterSn, holdParam, valueText) {
+	$.post(baseUrl + '/web/maintain/remoteSet/write', {
+			inverterSn: inverterSn,
+			holdParam: holdParam,
+			valueText: valueText,
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		if(currentSetPageType == 'remoteSetOffGrid' && holdParam == '_12K_HOLD_LEAD_CAPACITY') {
+			if(response.success) {
+				writeModel();
+			} else {
+				showPostWriteFailReason(response);
+			}
+		} else {
+			showPostWriteResult(response, holdParam);
+		}
+	}, 'json');
+}
+
+function holdFunctionControl(button, valueText) {
+	var $button = $(button);
+	var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+	var holdParam = $button.parents('.paramSetHolder').attr('holdParam');
+	
+	$button.parent('div').find('button').each(function(index, element) {
+		if($(element).hasClass('btn-success')) {
+			$(element).addClass('btn-default').removeClass('btn-success');
+		}
+	});
+	
+	$.post(baseUrl + '/web/maintain/remoteSet/write', {
+			inverterSn: inverterSn,
+			holdParam: holdParam,
+			valueText: valueText,
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		if(response.success) {
+			$button.addClass('btn-success').removeClass('btn-default');
+			alert(controlResultSuccessText);
+		} else {
+			showPostWriteFailReason(response);
+		}
+	}, 'json');
+}
+
+function functionControl(button, enable) {
+	functionControlByBtnElement($(button), enable);
+}
+
+function functionControlByBtnId(buttonId, enable) {
+	functionControlByBtnElement($('#' + buttonId), enable);
+}
+
+function functionControlByBtnElement($button, enable) {
+	var functionParam = $button.parents('.paramSetHolder').attr('functionParam');
+	
+	$button.parent('div').find('button').each(function(index, element) {
+		if($(element).hasClass('btn-success')) {
+			$(element).addClass('btn-default').removeClass('btn-success');
+		}
+	});
+	
+	var inverterSn = (currentSetPageType != 'workingMode' && currentSetPageType != 'setupWizard' ? $('#inverterSearchInput').combogrid('getValue') : currentSerialNum);
+	$.post(baseUrl + '/web/maintain/remoteSet/functionControl', {
+		inverterSn: inverterSn, functionParam: functionParam, enable: enable, clientType: 'WEB', remoteSetType: 'NORMAL' }, function(response) {
+			if(response.success) {
+				$button.addClass('btn-success').removeClass('btn-default');
+				alert(controlResultSuccessText);
+				
+				if(currentDeviceType == 6 || currentDeviceType == 7 || (currentDeviceType == 0 && currentPhase == 3) || currentDeviceType == 8 || currentDeviceType == 9) {
+					if(functionParam == 'FUNC_BAT_CHARGE_CONTROL') {
+						if(enable) {
+							$('.chgVoltEnable').removeAttr('disabled');
+							$('.chgSocEnable').attr('disabled', 'disabled');
+						} else {
+							$('.chgSocEnable').removeAttr('disabled');
+							$('.chgVoltEnable').attr('disabled', 'disabled');
+						}
+					}
+					
+					if(functionParam == 'FUNC_BAT_DISCHARGE_CONTROL') {
+						if(enable) {
+							$('.disChgVoltEnable').removeAttr('disabled');
+							$('.disChgSocEnable').attr('disabled', 'disabled');
+						} else {
+							$('.disChgSocEnable').removeAttr('disabled');
+							$('.disChgVoltEnable').attr('disabled', 'disabled');
+						}
+					}
+					
+					if(currentDeviceType == 9) {
+						for(var i = 1; i <= 4; i++) {
+							if(functionParam == ('FUNC_SHEDDING_MODE_EN_' + i)) {
+								handleMidboxUseSheddingMode(i, enable);
+							}
+						}
+					}
+				}
+				
+				if(functionParam == 'FUNC_RETAIN_STANDBY') {
+					if(enable) {
+						$('#offlineTimeoutInput').removeAttr('disabled');
+					} else {
+						$('#offlineTimeoutInput').attr('disabled', 'disabled');
+					}
+				}
+				
+				if(functionParam == 'FUNC_LSP_SELF_CONSUMPTION_EN' || functionParam == 'FUNC_LSP_BYPASS_EN' || functionParam == 'FUNC_LSP_CHARGE_PRIORITY_EN') {
+					if(enable) {
+						var $otherBtnHolder = $('.lspScheduleModeFunctionHolder').find('.paramSetHolder:not([functionParam=' + functionParam + '])');
+						$otherBtnHolder.find('button[onclick*="true"]').addClass('btn-default').removeClass('btn-success');
+						$otherBtnHolder.find('button[onclick*="false"]').addClass('btn-success').removeClass('btn-default');
+					}
+				}
+				
+				if(functionParam == 'FUNC_LSP_LCD_REMOTE_DIS_CHG_EN') {
+					handleScheduleMode(enable);
+				}
+			} else {
+				showPostWriteFailReason(response);
+			}
+	}, 'json');
+}
+
+function writeParamCombo(button) {
+	var $paramSetHolder = $(button).parent();
+	var $valueCombo = $paramSetHolder.find('select[holdParam]');
+	
+	var valueText = $valueCombo.val();
+	var holdParam = $valueCombo.attr('holdParam');
+	
+	var inverterSn = (currentSetPageType != 'workingMode' && currentSetPageType != 'setupWizard' ? $('#inverterSearchInput').combogrid('getValue') : currentSerialNum);
+	postWrite(inverterSn, holdParam, valueText);
+}
+
+function writeParamBitCombo(button) {
+	var $paramSetHolder = $(button).parent();
+	var $valueCombo = $paramSetHolder.find('select[bitParam]');
+	
+	var value = $valueCombo.val();
+	var bitParam = $valueCombo.attr('bitParam');
+	
+	var inverterSn = (currentSetPageType != 'workingMode' && currentSetPageType != 'setupWizard' ? $('#inverterSearchInput').combogrid('getValue') : currentSerialNum);
+	postBitParamWrite(inverterSn, bitParam, value);
+}
+
+function postBitParamWrite(inverterSn, bitParam, value) {
+	$.post(baseUrl + '/web/maintain/remoteSet/bitParamControl', {
+			inverterSn: inverterSn,
+			bitParam: bitParam,
+			value: value,
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}
+
+function writeParamModelBitCombo(button) {
+	var $paramSetHolder = $(button).parent();
+	var $valueCombo = $paramSetHolder.find('select[modelBitParam]');
+	
+	var value = $valueCombo.val();
+	var modelBitParam = $valueCombo.attr('modelBitParam');
+
+	var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+	$.post(baseUrl + '/web/maintain/remoteSet/bitModelParamControl', {
+			inverterSn: inverterSn,
+			modelBitParam: modelBitParam,
+			value: value,
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}
+
+function resetParamModal(button) {
+	var $button = $(button);
+	$('#resetConfirmTextModal').text($button.parents('.paramSetHolder').find('label').text()).data('buttonId', $button.attr('id'));
+	$('#resetConfirmModal').find('.modal-title').text($button.text());
+	$('#resetConfirmModalSubmit').text($button.text()).attr('data-loading-text', $button.text() + '&hellip;');
+	$('#resetConfirmModal').modal();
+}
+
+function resetParamValue(buttonId) {
+	var $resetButton = $('#' + buttonId);
+	var resetParam = $resetButton.attr('resetParam');
+	
+	var inverterSn = (currentSetPageType != 'workingMode' && currentSetPageType != 'setupWizard' ? $('#inverterSearchInput').combogrid('getValue') : currentSerialNum);
+	$.post(baseUrl + '/web/maintain/remoteSet/reset', {
+		inverterSn: inverterSn,
+		resetParam: resetParam,
+		clientType: 'WEB',
+		remoteSetType: 'NORMAL' }, function(response) {
+			if(response.success) {
+				alert(controlResultSuccessText);
+			} else {
+				showPostWriteFailReason(response);
+			}
+	}, 'json');
+}
+
+function writeTimeParamValue(button) {			//Write hour and minute
+	var $paramSetHolder = $(button).parent();
+	var $hourValueInput = $paramSetHolder.find('input.hour');
+	var $minuteValueInput = $paramSetHolder.find('input.minute');
+	
+	var hourValueText = $hourValueInput.val();
+	var minuteValueText = $minuteValueInput.val();
+	
+	if(!hourValueText || !minuteValueText) {
+		alert(paramEmptyAlertText);
+		return;
+	}
+	
+	if((!hourValueText.search('0x') == 0 && !checkInt(hourValueText))
+			|| (!minuteValueText.search('0x') == 0 && !checkInt(minuteValueText))) {
+		alert(paramShouldIntText);
+		return;
+	}
+	
+	var timeParam = $(button).attr('timeParam');
+	
+	if(timeParam.indexOf('_SOC_') < 0) {
+		if(parseFloat(hourValueText) < 0 || parseFloat(hourValueText) > 23) {
+			alert(paramOutRangeText + ': [0, 23]');
+			return;
+		}
+		
+		if(parseFloat(minuteValueText) < 0 || parseFloat(minuteValueText) > 59) {
+			alert(paramOutRangeText + ': [0, 59]');
+			return;
+		}
+	}
+	
+	var inverterSn = (currentSetPageType != 'workingMode' && currentSetPageType != 'setupWizard' ? $('#inverterSearchInput').combogrid('getValue') : currentSerialNum);
+	$.post(baseUrl + '/web/maintain/remoteSet/writeTime', {
+			inverterSn: inverterSn,
+			timeParam: timeParam,
+			hour: hourValueText,
+			minute: minuteValueText,
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}
+
+function pageSwitching(val) {
+	$.post(baseUrl + '/web/system/user/useNewSettingPage', {
+		userId: userId,
+		useWorkingModePage: val,
+	}, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}
+
+function writeHardRest(button) {
+	var $paramSetHolder = $(button).parent();
+	var $value = $paramSetHolder.find('select');
+
+	var value = $value.val();
+
+	var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+	$.post(baseUrl + '/web/maintain/remoteSet/writeModelByDeviceType', {
+		inverterSn: inverterSn,
+		deviceType: value,
+		clientType: 'WEB',
+		remoteSetType: 'NORMAL'}, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}
+
+function showPostWriteResult(response, param = '') {
+	if(response.success) {
+		alert(setResultSuccessText);
+        if(param == 'HOLD_SERIAL_NUM') {
+            window.location.reload()
+        }
+	} else {
+		showPostWriteFailReason(response);
+	}
+}
+
+function showPostWriteFailReason(response, timeoutTip) {
+	switch(response.msg) {
+	case 'noPermission':
+	case 'NO_PERMISSION':
+		alert(noPermissionText);
+		break;
+	case 'PARAM_ERROR':
+		alert(resultParamErrorText);
+		break;
+	case 'ACTION_ERROR_UNDONE':
+		alert(resultUndoText);
+		break;
+	case 'DEVICE_OFFLINE':
+		alert(resultDeviceOfflineText);
+		break;
+	case 'DATAFRAME_UNSEND':
+		alert(resultCommandNotSendText);
+		break;
+	case 'DATAFRAME_TIMEOUT':
+		alert(resultTimeoutText + (timeoutTip ? ', dongle will offline and try to reconnect server soon, please try again after that.' : ''));
+		break;
+	case 'SERVER_HTTP_EXCEPTION':
+		alert(resultServerExceptionText);
+		break;
+	case 'REMOTE_SET_ERROR':
+	case 'REMOTE_READ_ERROR':
+		alert(resultFailedText + ' ' + response.errorCode + resultFailed(response.errorCode));
+		break;
+	case 'notAllowRemoteTechSupport':
+	case 'refusesOperateDevice':
+	case 'refusesViewDevice':
+		alert(response.msg);
+		break;
+	case 'apiBlocked':
+		alert('API blocked in 24 hours');
+		break;
+	default:
+		const smartFlexMsgPrefix = 'smartFlexControlActive: ';
+		if (typeof response.msg === 'string' && response.msg.startsWith(smartFlexMsgPrefix)) {
+			alert(response.msg.slice(smartFlexMsgPrefix.length));
+			break;
+		}
+		alert(resultUnknownErrorText);
+		break;
+	}
+}

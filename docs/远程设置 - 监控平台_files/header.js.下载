@@ -1,0 +1,329 @@
+function closeCurrentPage() {
+	window.opener = null; 
+	window.open('', '_self'); 
+	window.close();
+}
+
+/**
+ * Check if email address valid...
+ * @param email
+ * @returns {Boolean}
+ */
+function checkEmail(email) {
+	var emailRegExp = new RegExp("[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?");
+	if (!emailRegExp.test(email) || email.indexOf('.') == -1 || email.indexOf('.') == (email.length - 1)) {
+		return false;
+	} else {
+		return true;
+	}
+}
+
+/**
+ * Check if not negative integer...
+ * @param int
+ * @returns
+ */
+function checkInt(int) {
+	return /^\d+$/.test(int);
+}
+
+function checkAllInt(int) {
+	return /^-?\d+$/.test(int);
+}
+
+/**
+ * Check if positive float...
+ * @param float
+ * @returns
+ */
+function checkFloat(float) {
+	return new RegExp(/^(([0-9]+\.[0-9]*[1-9][0-9]*)|([0-9]*[1-9][0-9]*\.[0-9]+)|([0-9]*[1-9][0-9]*))$/).test(float);
+}
+
+/**
+ * Check if text contain invalid character
+ */
+function containInvalidCharacter(text) {
+	return text.indexOf('&') >= 0 || text.indexOf('\'') >= 0 || text.indexOf('"') >= 0 || text.indexOf('<') >= 0 || text.indexOf('>') >= 0 || text.indexOf(',') >= 0 || text.indexOf('\\') >= 0;
+}
+
+/**
+ * Validate password...
+ */
+function validatePassword(password) {
+	const requirements = {
+		letters : /[A-Za-z]/.test(password),
+		number: /[0-9]/.test(password)
+	};
+
+	return requirements;
+}
+
+/**
+ * Check valid password...
+ */
+function isPasswordValid(password) {
+	const reqs = validatePassword(password);
+	return Object.values(reqs).every(valid => valid);
+}
+
+/**
+ * fill with 0...
+ */
+function fillZeros(value, length) {
+	var length = arguments[1] ? arguments[1] : 2;
+	var valueText = new String(value);
+	while(valueText.length < length) {
+		valueText = '0' + valueText;
+	}
+	return valueText;
+}
+
+//Keep 2 decimal...
+function toDecimal(x) {
+    var f = parseFloat(x);
+    if (isNaN(f)) {
+        return;
+    }
+    f = round2(x);
+    return f;
+}
+
+//Keep 3 decimal...
+function toDecimal3(x) {
+    var f = parseFloat(x);
+    if (isNaN(f)) {
+        return;
+    }
+    f = round3(x);
+    return f;
+}
+
+function round1(x) {
+	return Math.round(x*10) / 10;
+}
+
+function round2(x) {
+	return Math.round(x*100) / 100;
+}
+
+function round3(x) {
+	return Math.round(x*1000) / 1000;
+}
+
+//Keep 2 decimal... fill with 00, like 2.00...
+function toDecimal2(x) {
+    var f = parseFloat(x);
+    if (isNaN(f)) {
+        return false;
+    }
+    var f = round2(x);
+    var s = f.toString();
+    var rs = s.indexOf('.');
+    if (rs < 0) {
+        rs = s.length;
+        s += '.';
+    }
+    while (s.length <= rs + 2) {
+        s += '0';
+    }
+    return s;
+}
+
+//金额相关同步变更文本框后提示信息
+function onMoneyInput2AddOn(element) {
+	var $addOn = $(element).next();
+	var valueText = $(element).val();
+	if(checkInt(valueText)) {
+		$addOn.text((valueText / 100) + ' ' + $addOn.attr('unit'));
+	} else {
+		$addOn.text('');
+	}
+}
+
+function rnd(seed) {
+	seed = (seed*9301+49297) % 233280;
+	return seed/(233280.0);
+};
+
+function setBtnLoading(btnId) {
+	var $button = $(btnId);
+	$button.attr('disabled', 'disabled');
+	$button.data('originText', $button.text());
+	$button.text($button.attr('data-loading-text'));
+}
+
+function resetBtn(btnId) {
+	var $button = $(btnId);
+	var originText = $button.data('originText');
+	if(originText) {
+		$button.text(originText);
+	}
+	$button.removeAttr('disabled');
+}
+
+function toHex2(data) {
+	var dataText = data.toString(16);
+	if(dataText.length < 2) {
+		dataText = '0' + dataText;
+	}
+	return dataText.toUpperCase();
+}
+
+function deepCopyObjArray(srcArray) {
+	var destArray = [];
+	if(srcArray && srcArray.length > 0) {
+		for(var i = 0; i < srcArray.length; i++) {
+			destArray.push(Object.assign({}, srcArray[i]));
+		}
+	}
+	return destArray;
+}
+
+function handleSecondText(second) {
+	if(second >= 0) {
+		return fillZeros(Math.floor(second / 60), 2) + ':' + fillZeros(second % 60, 2)
+	}
+	return '--';
+}
+
+function alertTitle(component) {
+	var $component = $(component);
+	if($component.is('[title]')) {
+		alert($component.attr('title'))
+	}
+}
+
+function jumpSerialNum(plantId, serialNum, url) {
+    $.post(baseUrl + '/api/userVisit/update', {
+        plantId: (plantId ? plantId : -1),
+        serialNum: serialNum
+    }, function (response) {
+        if(url) {
+            window.location.replace(baseUrl + url, '_blank');
+        } else {
+            window.open(baseUrl + '/web/monitor/inverter', '_blank');
+        }
+    }, 'json');
+}
+
+function initTablePaginationI18n(tableId) {
+    var pagination = $(tableId).datagrid('getPager');
+    $(pagination).pagination({
+        beforePageText: beforePageText,
+        afterPageText: afterPageText,
+        displayMsg: displayMsg
+    });
+}
+
+function notAllowSelect(index, row) {
+	return false;
+}
+
+function defaultRowStyler(index, row) {
+	if (index % 2 == 1) {
+		return 'background: rgb(245, 252, 222);';
+	}
+}
+
+function plantSearchNameFormatter(value, row) {
+	return value + (row.endUserAccount ? (' - ' + row.endUserAccount) : '') + (row.createDate ? (' - ' + row.createDate) : '');
+}
+
+function deviceOverviewJumpFormatter(value, row) {
+	if (row && value) {
+		return '<a href="javascript:jumpDeviceOverview(' + row.plantId + ')">' + value + '</a>';
+	}
+	return '';
+}
+
+function jumpDeviceOverview(plantId) {
+	$.post(baseUrl + '/api/userVisit/update', {plantId: (plantId ? plantId : -1)}, function (response) {
+		window.location.href = baseUrl + '/web/overview/plant?autoSelectPlant=true';
+	}, 'json');
+}
+
+function inverterJumpSerialNumFormatter(value, row) {
+	return '<a href="javascript:jumpSerialNum(' + row.plantId + ', \'' + value + '\')">' + value + '</a>';
+}
+
+function checkboxFormatter(value, row) {
+	return value ? '<input type="checkbox" disabled="disabeld" checked="checked"/>' : '<input type="checkbox" disabled="disabeld"/>';
+}
+
+function tableMoneyFormatter(value, row) {
+	return toDecimal2(value / 100);
+}
+
+function changeDateFormat_time(value, row) {
+	if(value) {
+		return moment(value).format(dateFormatType + ' HH:mm:ss')
+	}
+	return ''
+}
+function changeDateFormat(value, row) {
+	if(value) {
+		return moment(value).format(dateFormatType)
+	}
+	return ''
+}
+
+function changeTemperature(val) {
+	val = Number(val);
+	if (!Number.isFinite(val)) return null;
+
+	if ('${sessionScope.user.tempUnit}' === 'F') {
+		val = val * 1.8 + 32;
+		return Number(val.toFixed(2)); 
+	}
+	return val
+}
+
+
+async function downloadFile(fileUrl, fileName, formData) {
+    let response = ''
+    if(!formData) {
+        response = await fetch(fileUrl);
+    } else {
+        response = await fetch(fileUrl, formData);
+    }
+    if (response.headers.has('Content-Disposition') && response.headers.get('Content-Disposition').includes('filename')) {
+        fileName = response.headers.get('Content-Disposition').split('filename="')[1].split('"')[0]
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+$(document).ready(function() {
+	var activeBtn = null
+	$('.apiDebounce').click(function() {
+		activeBtn = this
+	})
+	$.ajaxSetup({
+		beforeSend: function() {
+			activeBtn && $('.apiDebounce').attr('disabled', 'disabled')
+		},
+		complete: function() {
+			if(activeBtn) {
+				$('.apiDebounce').removeAttr('disabled')
+				activeBtn = null
+			}
+		}
+	});
+})
+
+// $(document).ajaxComplete(function(event, jqXHR, ajaxOptions) {
+//     let responseText = jqXHR.responseText
+//     if (responseText && responseText.trim().startsWith("<!DOCTYPE")) {
+//         if (responseText.indexOf("/web/login") !== -1 || document.title.indexOf(loginLabel) !== -1) {
+//             window.location.href = baseUrl + "/web/login";
+//         }
+//     }
+// });

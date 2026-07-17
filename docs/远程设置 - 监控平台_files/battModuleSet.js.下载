@@ -1,0 +1,152 @@
+$(document).ready(function() {
+	$('.battSocHolder label.checkbox-inline input[type=checkbox]').change(function() {
+		var $checkbox = $(this);
+		if($checkbox.is(':checked')) {
+			$checkbox.parents('.battSocHolder').find('input[type=text]').removeAttr('disabled');
+		} else {
+			$checkbox.parents('.battSocHolder').find('input[type=text]').attr('disabled', 'disabled');
+		}
+	});
+});
+
+function writeBattSocValue() {
+	var params = new Array();
+	
+	var errorIndex = -1;
+	var hasValue = false;
+	
+	$('.battSocHolder').each(function(index, element) {
+		$element = $(element);
+		if(errorIndex < 0 && $element.find('input[type=checkbox]').is(':checked')) {
+			var value = $element.find('input[type=text]').val();
+			if(!value || value.indexOf(',') >= 0 || !checkInt(value)) {
+				if(errorIndex < 0) {
+					errorIndex = index;
+				}
+			} else {
+				hasValue = true;
+				params.push(value);
+			}
+		} else {
+			params.push('NaN');
+		}
+	});
+	
+	if(errorIndex >= 0) {
+		alert('SOC of Module ' + errorIndex + ' can not be empty or invalid');
+		return;
+	}
+	
+	if(!hasValue) {
+		alert(paramEmptyAlertText);
+	}
+	
+	var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+	$.post(baseUrl + '/web/maintain/remoteSetBatt/writeMultiSocValue', {
+			inverterSn: inverterSn,
+			paramValueText: params.toString(),
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}
+
+function writeBattRestartValue() {
+	var params = new Array();
+	
+	var hasValue = false;
+	
+	$('.battRestartHolder').each(function(index, element) {
+		$element = $(element);
+		if($element.find('input[type=checkbox]').is(':checked')) {
+			hasValue = true;
+			params.push(true);
+		} else {
+			params.push(false);
+		}
+	});
+	
+	if(!hasValue) {
+		alert(paramEmptyAlertText);
+	}
+	
+	var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+	$.post(baseUrl + '/web/maintain/remoteSetBatt/multiResetControl', {
+			inverterSn: inverterSn,
+			paramValueText: params.toString(),
+			clientType: 'WEB',
+			remoteSetType: 'NORMAL' }, function(response) {
+		showPostWriteResult(response);
+	}, 'json');
+}
+
+function writeBattSocValue12k(button) {
+    var params = new Array();
+
+    var errorIndex = -1;
+    var hasValue = false;
+    $(button).closest('.holdBox').find('.battSocHolder').each(function(index, element) {
+        $element = $(element);
+        if(errorIndex < 0 && $element.find('input[type=checkbox]').is(':checked')) {
+            var value = $element.find('input[type=text]').val();
+            if(!value || value.indexOf(',') >= 0 || !checkInt(value)) {
+                if(errorIndex < 0) {
+                    errorIndex = index;
+                }
+            } else {
+                hasValue = true;
+                params.push(value);
+            }
+        } else {
+            params.push('NaN');
+        }
+    });
+
+    if(errorIndex >= 0) {
+        alert('SOC of Module ' + errorIndex + ' can not be empty or invalid');
+        return;
+    }
+
+    if(!hasValue) {
+        alert(paramEmptyAlertText);
+    }
+
+    var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+    $.post(baseUrl + '/web/maintain/remoteSetBatt/writeMultiSocValue', {
+        inverterSn: inverterSn,
+        paramValueText: params.toString(),
+        holdParam: $(button).parents('.holdBox').attr('holdParam'),
+        clientType: 'WEB',
+        remoteSetType: 'NORMAL' }, function(response) {
+        showPostWriteResult(response);
+    }, 'json');
+}
+
+function writeBattRestartValue12k(button) {
+    var params = new Array();
+
+    var hasValue = false;
+    $(button).closest('.holdBox').find('.battRestartHolder').each(function(index, element) {
+        $element = $(element);
+        if($element.find('input[type=checkbox]').is(':checked')) {
+            hasValue = true;
+            params.push(true);
+        } else {
+            params.push(false);
+        }
+    });
+
+    if(!hasValue) {
+        alert(paramEmptyAlertText);
+    }
+
+    var inverterSn = $('#inverterSearchInput').combogrid('getValue');
+    $.post(baseUrl + '/web/maintain/remoteSetBatt/multiResetControl', {
+        inverterSn: inverterSn,
+        paramValueText: params.toString(),
+        holdParam: $(button).parents('.holdBox').attr('holdParam'),
+        clientType: 'WEB',
+        remoteSetType: 'NORMAL' }, function(response) {
+        showPostWriteResult(response);
+    }, 'json');
+}

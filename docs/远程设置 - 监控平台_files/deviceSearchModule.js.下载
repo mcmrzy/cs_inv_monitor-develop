@@ -1,0 +1,867 @@
+$(document).ready(function () {
+    function refreshPlantComboAndChart() {
+        firstPlantSearchSuccess = true;
+        firstInverterSearchSuccess = true;
+        $('#plantSearchInput').combogrid('setValue', '');
+        $('#plantSearchInput').combogrid('grid').datagrid('load');
+    }
+
+    $('#selectPlantFirstCheckbox').change(function () {
+        if ($('#selectPlantFirstCheckbox').is(':checked')) {
+            $('#plantSearchHolder').fadeIn(refreshPlantComboAndChart);
+        } else {
+            $('#plantSearchHolder').fadeOut(refreshInverterComboAndChart);
+        }
+    });
+
+    function refreshInverterComboAndChart() {
+        firstInverterSearchSuccess = true;
+        $('#inverterSearchInput').combogrid('setValue', '');
+        $('#inverterSearchInput').combogrid('grid').datagrid('load');
+    }
+
+    function initInverterSearchInput() {
+        $('#inverterSearchInput').combogrid({
+            panelWidth: 530,
+            url: baseUrl + '/web/config/inverter/list',
+            idField: 'serialNum',
+            textField: 'serialNum',
+            mode: 'remote',
+            delay: 1000,
+            fitColumns: true,
+            pagination: true,
+            pageSize: 10,
+            onBeforeLoad: function (param) {
+                if ($('#selectPlantFirstCheckbox').is(':checked')) {
+                    var plantSearchGridSelected = $('#plantSearchInput').combogrid('grid').datagrid('getSelected');
+                    if (!plantSearchGridSelected) {
+                        return false;
+                    }
+                    param.plantId = plantSearchGridSelected.id;
+                }
+                if($('#inverterSearchInput').combogrid('getValue') != userVisitRecordSerialNum) {
+                    param.searchText = $('#inverterSearchInput').combogrid('getValue')
+                }
+                if(param.searchText && param.searchText.length <4) {
+                    return false
+                }
+                param.targetSerialNum = userVisitRecordSerialNum;
+            },
+            onSelect: async function (index, row) {
+                currentModuleInverterSn = row.serialNum;
+                currentDatalogSn = row.datalogSn;
+                currentProtocolVersion = row.protocolVersion;
+                currentPhase = row.phase;
+                currentDeviceType = row.deviceType;
+                currentSubDeviceType = row.subDeviceType
+                currentPowerRating = row.powerRating;
+                currentDtc = row.dtc;
+                currentVoltClass = row.voltClass;
+                currentMachineType = row.machineType;
+                currentMeterType = row.meterType;
+                currentParallelEnabled = row.parallelEnabled;
+                currentMasterOrSlaveNotOffGrid = (currentParallelEnabled ? row.masterOrSlave : -1);
+                currentComposedPhaseNotOffGrid = (currentParallelEnabled ? row.composedPhase : -1);
+                currentPvStringNumber = row.pvStringNumber;
+                currentStandard = row.standard;
+                currentSlaveVersion = row.slaveVersion;
+                currentFwVersion = row.fwVersion;
+                currentHardwareVersion = row.hardwareVersion
+                currentBatteryType = row.batteryType;
+                currentWithbatteryData = row.withbatteryData;
+                currentBindTigoInfo = row.bindTigoInfo
+                currentBindPhnixInfo = row.bindPhnixInfo
+                currentBindChargePoint = row.bindChargePoint
+                currentAllowExport2Grid = row.allowExport2Grid
+                currentSetG98Already = row.setG98Already
+                currentOdm = row.odm
+                currentUsVersion = row.usVersion
+                currentLost = row.lost
+                var plantId = -1;
+                if ($('#selectPlantFirstCheckbox').is(':checked')) {
+                    var plantSearchGridSelected = $('#plantSearchInput').combogrid('grid').datagrid('getSelected');
+                    if (plantSearchGridSelected) {
+                        plantId = plantSearchGridSelected.id;
+                    }
+                }
+                await refreshUserVisitRecordAndNotice(row.serialNum, plantId);
+                // if(isEQB(row) || isOldSettingPage) {
+                    window.location.reload()
+                // }
+            },
+            onLoadSuccess: function (data) {
+                isChangePage = false
+                currentShowAutoParallelButton = data.showAutoParallelButton;
+                if(currentShowAutoParallelButton && typeof hideAutoParallelButton == 'function') {
+                    $('#autoParallelButton').fadeIn();
+                    setTimeout(hideAutoParallelButton, 30000);
+                }
+                if (firstInverterSearchSuccess) {
+                    firstInverterSearchSuccess = false;
+                    $('#inverterSearchInput').combogrid('setValue', data.total > 0 ? data.rows[0].serialNum : '');
+
+                    var backupModuleInverterSn = currentModuleInverterSn;
+
+                    if (data.total > 0) {
+                        currentModuleInverterSn = data.rows[0].serialNum;
+                        currentDatalogSn = data.rows[0].datalogSn;
+                        currentProtocolVersion = data.rows[0].protocolVersion;
+                        currentPhase = data.rows[0].phase;
+                        currentDeviceType = data.rows[0].deviceType;
+                        currentSubDeviceType = data.rows[0].subDeviceType;
+                        currentPowerRating = data.rows[0].powerRating;
+                        currentDtc = data.rows[0].dtc;
+                        currentVoltClass = data.rows[0].voltClass;
+                        currentMachineType = data.rows[0].machineType;
+                        currentMeterType = data.rows[0].meterType;
+                        currentParallelEnabled = data.rows[0].parallelEnabled;
+                        currentMasterOrSlaveNotOffGrid = (currentParallelEnabled ? data.rows[0].masterOrSlave : -1);
+                        currentComposedPhaseNotOffGrid = (currentParallelEnabled ? data.rows[0].composedPhase : -1);
+                        currentPvStringNumber = data.rows[0].pvStringNumber;
+                        currentStandard = data.rows[0].standard;
+                        currentSlaveVersion = data.rows[0].slaveVersion;
+                        currentFwVersion = data.rows[0].fwVersion;
+                        currentHardwareVersion = data.rows[0].hardwareVersion;
+                        currentBatteryType = data.rows[0].batteryType;
+                        currentWithbatteryData = data.rows[0].withbatteryData;
+                        currentBindTigoInfo = data.rows[0].bindTigoInfo
+                        currentBindPhnixInfo = data.rows[0].bindPhnixInfo
+                        currentBindChargePoint = data.rows[0].bindChargePoint
+                        currentAllowExport2Grid = data.rows[0].allowExport2Grid
+                        currentSetG98Already = data.rows[0].setG98Already
+                        currentOdm = data.rows[0].odm
+                        currentUsVersion = data.rows[0].usVersion
+                        currentLost = data.rows[0].lost
+                    }
+
+                    //Update visit record
+                    var plantId = -1;
+                    if ($('#selectPlantFirstCheckbox').is(':checked')) {
+                        var plantSearchGridSelected = $('#plantSearchInput').combogrid('grid').datagrid('getSelected');
+                        if (plantSearchGridSelected) {
+                            plantId = plantSearchGridSelected.id;
+                        }
+                    }
+
+                    if (!firstLoad || (data.rows.length > 0 && backupModuleInverterSn != data.rows[0].serialNum)) {
+                        isInit = false;
+                        refreshUserVisitRecordAndNotice(data.total > 0 ? data.rows[0].serialNum : '', plantId);
+                    } else {
+                        firstLoad = false
+                    }
+                }
+            },
+            columns: [[
+                {field: 'serialNum', title: serialNumLabel, width: 80}
+            ]]
+        });
+    }
+
+    $('#plantSearchInput').combogrid({
+        panelWidth: 530,
+        url: plantListUrl,
+        idField: 'id',
+        textField: 'name',
+        mode: 'remote',
+        delay: 1000,
+        fitColumns: true,
+        pagination: true,
+        pageSize: 10,
+        onBeforeLoad: function (param) {
+            plantSearchTextBeforeLoad = $('#plantSearchInput').combogrid('getText');
+            param.searchText = plantSearchTextBeforeLoad;
+            param.targetPlantId = userVisitRecordPlantId;
+            param.forSelect = true
+            param.sort = 'createDate';
+            param.order = 'desc';
+        },
+        onSelect: function (index, row) {
+            selectPlantId = row.id;
+            selectPlantName = row.name;
+
+            if (typeof (onPlantChanged) == "function") {
+                onPlantChanged(selectPlantId, selectPlantName);
+            }
+
+            if (firstPlantSearchSuccess) {
+                firstPlantSearchSuccess = false;
+            } else {
+                refreshInverterComboAndChart();
+            }
+        },
+        onLoadSuccess: function (data) {
+            $('#plantSearchInput').combogrid('setText', plantSearchTextBeforeLoad)
+            if (firstPlantSearchSuccess) {
+                if (data.total > 0) {
+                    var plantSearchGrid = $('#plantSearchInput').combogrid('grid');
+                    plantSearchGrid.datagrid('selectRecord', data.rows[0].id);
+                } else {
+                    firstPlantSearchSuccess = false;
+                }
+
+                initInverterSearchInput();
+            }
+        },
+        columns: [[
+            {
+                field: 'name',
+                title: plantNameLabel,
+                formatter: plantSearchNameFormatter,
+                width: 80
+            }
+        ]]
+    });
+
+})
+function isLowVoltBattery(device) {
+    return !isHighVoltBattery(device);
+}
+
+function isHighVoltBattery(device) {
+    if(device) {
+        return device.voltClass == 1;
+    }
+    return currentVoltClass == 1;
+}
+
+function isHybird(device) {
+    if(device) {
+        return device.deviceType == 0 && device.phase != 3;
+    }
+    return currentDeviceType == 0 && currentPhase != 3;
+}
+
+function isAcCharger(device) {
+    if(device) {
+        return device.deviceType == 2;
+    }
+    return currentDeviceType == 2;
+}
+
+function isSna2_12k(device) {
+    if(device) {
+        return device.deviceType == 3 && device.machineType == 1
+    }
+    return currentDeviceType == 3 && currentMachineType == 1
+}
+
+function isSunKing(device) {
+    if(device) {
+        return device.deviceType == 3 && device.odm == 2
+    }
+    return currentDeviceType == 3 && currentOdm == 2
+}
+
+function isTrip12K(device) {
+    if(device) {
+        return (device.deviceType == 0 || device.deviceType == 16) && device.phase == 3;
+    }
+    return (currentDeviceType == 0 || currentDeviceType == 16) && currentPhase == 3;
+}
+
+function isTripV2(device) {
+    if(device) {
+        return device.deviceType == 16 && device.phase == 3;
+    }
+    return currentDeviceType == 16 && currentPhase == 3;
+}
+
+function isBess200K(device) {
+    if(device) {
+        return device.deviceType == 14 && device.phase == 3
+    }
+    return currentDeviceType == 14 && currentPhase == 3
+}
+
+function isMega24K(device) {
+    if(device) {
+        return (device.deviceType == 4 && device.dtc == 1);
+    }
+    return (currentDeviceType == 4 && currentDtc == 1);
+}
+
+function isTripHv(device) {
+    return isTrip12K(device) && isHighVoltBattery(device);
+}
+function isTripHvUs(device) {
+    if(device) {
+        return isTrip12K(device) && isHighVoltBattery(device) && device.usVersion == 1;
+    }
+    return isTrip12K() && isHighVoltBattery() && currentUsVersion == 1;
+}
+
+function isTripLv(device) {
+    return isTrip12K(device) && isLowVoltBattery(device);
+}
+function isTripLvUs(device) {
+    if(device) {
+        return isTrip12K(device) && isLowVoltBattery(device) && device.usVersion == 1;
+    }
+    return isTrip12K() && isLowVoltBattery() && currentUsVersion == 1;
+}
+
+function isOffGrid(device) {
+    if(device) {
+        return device.deviceType == 3;
+    }
+    return currentDeviceType == 3;
+}
+
+function isOffGridUs(device) {
+    if(device) {
+        return device.deviceType == 3 && device.phase == 1 && device.dtc == 1 && device.machineType == 0;
+    }
+    return currentDeviceType == 3 && currentPhase == 1 && currentDtc == 1 && currentMachineType == 0;
+}
+
+
+function isSna12K(device) {
+    if(device) {
+        return device.deviceType == 11;
+    }
+    return currentDeviceType == 11;
+}
+
+function isSnaSeries(device) {
+    return isOffGrid(device) || isSna12K(device);
+}
+
+function isSnaSeriesOrGeta(device) {
+    return isSnaSeries(device) || isGeta(device);
+}
+function isSnaSeriesOrGetaOrGen3(device) {
+    return isSnaSeries(device) || isGeta(device) || isGen3(device) || isGenova(device) || isResona(device);
+}
+
+function isSplitPhaseOffGrid(device) {
+    if(device) {
+        return isSnaSeries(device) && device.dtc == 1;
+    }
+    return isSnaSeries() && currentDtc == 1;
+}
+
+function isEcoBeast6k(device) {
+    if(device) {
+        return device.deviceType == 3 && !(device.dtc == 1) && device.machineType == 4;
+    }
+    return currentDeviceType == 3 && !(currentDtc == 1) && currentMachineType == 4;
+}
+
+function isEcoBeast6kPro(device) {
+    if(device) {
+        return device.deviceType == 3 && !(device.dtc == 1) && device.phase == 1 && device.machineType == 5
+    }
+    return currentDeviceType == 3 && !(currentDtc == 1) && currentPhase == 1 && currentMachineType == 5
+}
+
+function isSna6kUsAio(device) {
+    if(device) {
+        return device.deviceType == 3 && device.dtc == 1 && device.machineType == 4;
+    }
+    return currentDeviceType == 3 && currentDtc == 1 && currentMachineType == 4;
+}
+
+function isFlexBoss18(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.machineType == 1 && device.powerRating == 9 && device.odm == 4
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentMachineType == 1 && currentPowerRating == 9 && currentOdm == 4
+}
+function isFlexBoss21(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.machineType == 1 && device.powerRating == 8 && device.odm == 4
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentMachineType == 1 && currentPowerRating == 8 && currentOdm == 4
+}
+
+function isGenUs13_16K(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.usVersion == 1 && device.machineType == 0 && (device.powerRating == 8 || device.powerRating == 9 || device.powerRating == 10 || device.powerRating == 11) && device.odm == 0
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentUsVersion == 1 && currentMachineType == 0 && (currentPowerRating == 8 || currentPowerRating == 9 || currentPowerRating == 10 || currentPowerRating == 11) && currentOdm == 0
+}
+
+function checkType6Series(device) {
+    if(device) {
+        return (device.deviceType == 6 || device.deviceType == 7 || (device.deviceType == 8 && !isGen3(device)) || device.deviceType == 10 || isTrip12K(device) || isMega24K(device));
+    }
+    return (currentDeviceType == 6 || currentDeviceType == 7 || (currentDeviceType == 8 && !isGen3()) || currentDeviceType == 10 || isTrip12K() || isMega24K());
+}
+
+function isLxpUS12k(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.subDeviceType == 164;
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentSubDeviceType == 164;
+}
+
+function isLxpUS16k(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.usVersion == 1 && device.odm == 0 && device.machineType == 1 && device.powerRating == 8;
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentUsVersion == 1 && currentOdm == 0 && currentMachineType == 1 && currentPowerRating == 8;
+}
+
+function isLxpUS8_12k(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.usVersion == 1;
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentUsVersion == 1;
+}
+
+function is12kHybridMinus(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.machineType == 1;
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentMachineType == 1;
+}
+
+function is6000XP(device) {
+    if(device) {
+        return device.deviceType == 3 && device.dtc == 1 && device.phase == 1 && device.machineType == 0
+    }
+    return currentDeviceType == 3 && currentDtc == 1 && currentPhase == 1 && currentMachineType == 0
+}
+
+function isSNA_3_6K_EU(device) {
+    if(device) {
+        return device.deviceType == 3 && device.dtc == 0 && device.phase == 1 && device.machineType == 0
+    }
+    return currentDeviceType == 3 && currentDtc == 0 && currentPhase == 1 && currentMachineType == 0
+}
+
+function isSna12kEu(device) {
+    if(device) {
+        return device.deviceType == 11 && device.phase == 1 && device.dtc == 0
+    }
+    return currentDeviceType == 11 && currentPhase == 1 && currentDtc == 0
+}
+
+function is12000XP(device) {
+    if(device) {
+        return device.deviceType == 11 && device.phase == 1 && device.dtc == 1
+    }
+    return currentDeviceType == 11 && currentPhase == 1 && currentDtc == 1
+}
+function isSNA2_12K_EU(device) {
+    if(device) {
+        return device.deviceType == 11 && device.phase == 1 && device.dtc == 0 && device.machineType == 1
+    }
+    return currentDeviceType == 11 && currentPhase == 1 && currentDtc == 0 && currentMachineType == 1
+}
+function is12KPV(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.powerRating == 2 && device.subDeviceType == 163
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentPowerRating == 2 && currentSubDeviceType == 163
+}
+function isFlex100(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.powerRating == 12 && device.machineType == 1 && device.voltClass == 1 && device.odm == 4
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentPowerRating == 12 && currentMachineType == 1 && currentVoltClass == 1 && currentOdm == 4
+}
+function isGenMbUs18K(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.powerRating == 12 && device.machineType == 1 && device.voltClass == 1 && device.odm == 0 && device.usVersion == 1
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentPowerRating == 12 && currentMachineType == 1 && currentVoltClass == 1 && currentOdm == 0 && currentUsVersion == 1
+}
+function is18KPV(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1 && device.subDeviceType == 164
+    }
+    return currentDeviceType == 6 && currentPhase == 1 && currentSubDeviceType == 164
+}
+function isType6(device) {
+    if(device) {
+        return device.deviceType == 6 && device.phase == 1
+    }
+    return currentDeviceType == 6 && currentPhase == 1
+}
+function is_ENELEAGE_ZERO(device) {
+    if(device) {
+        return device.deviceType == 3 && device.phase == 1 && device.dtc == 1 && device.machineType == 5 && device.odm == 8
+    }
+    return currentDeviceType == 3 && currentPhase == 1 && currentDtc == 1 && currentMachineType == 5 && currentOdm == 8
+}
+function isGen1_7_10K(device) {
+    if(device) {
+        return device.deviceType == 8 && device.phase == 1 && device.machineType == 0
+    }
+    return currentDeviceType == 8 && currentPhase == 1 && currentMachineType == 0
+}
+function isGen2_7_14K(device) {
+    if(device) {
+        return device.deviceType == 8 && device.phase == 1 && device.machineType == 1
+    }
+    return currentDeviceType == 8 && currentPhase == 1 && currentMachineType == 1
+}
+function isGen3(device) {
+    if(device) {
+        return device.deviceType == 8 && device.phase == 1 && (device.machineType == 2 || device.machineType == 6)
+    }
+    return currentDeviceType == 8 && currentPhase == 1 && (currentMachineType == 2 || currentMachineType == 6)
+}
+function isGen3Standard(device) {
+	var isGen3Device = isGen3(device);
+    if(device) {
+        return isGen3Device && (device.powerRating < 8 || device.powerRating == 15)
+    }
+    return isGen3Device && (currentPowerRating < 8 || currentPowerRating == 15)
+}
+function isGen3Pro(device) {
+	var isGen3Device = isGen3(device);
+    if(device) {
+        return isGen3Device && device.powerRating >= 8 && device.powerRating <= 14
+    }
+    return isGen3Device && currentPowerRating >= 8 && currentPowerRating <= 14
+}
+function isGenova(device) {
+    if(device) {
+        return device.deviceType == 8 && device.phase == 1 && device.machineType == 6 && device.dtc == 0 && device.voltClass == 0 && device.odm == 0 && (device.powerRating == 0 || device.powerRating == 6 || device.powerRating == 7)
+    }
+    return currentDeviceType == 8 && currentPhase == 1 && currentMachineType == 6 && currentDtc == 0 && currentVoltClass == 0 && currentOdm == 0 && (currentPowerRating == 0 || currentPowerRating == 6 || currentPowerRating == 7)
+}
+function isResona(device) {
+    if(device) {
+        return device.deviceType == 8 && device.phase == 1 && device.machineType == 6 && device.dtc == 0 && device.voltClass == 0 && device.odm == 0 && (device.powerRating == 1 || device.powerRating == 2 || device.powerRating == 5)
+    }
+    return currentDeviceType == 8 && currentPhase == 1 && currentMachineType == 6 && currentDtc == 0 && currentVoltClass == 0 && currentOdm == 0 && (currentPowerRating == 1 || currentPowerRating == 2 || currentPowerRating == 5)
+}
+function isSna3_6k_EU(device) {
+    if(device) {
+        return device.deviceType == 3 && device.phase == 1 && device.dtc == 0 && device.machineType == 2
+    }
+    return currentDeviceType == 3 && currentPhase == 1 && currentDtc == 0 && currentMachineType == 2
+}
+function isGeta(device) {
+    if(device) {
+        return device.deviceType == 13 && device.phase == 1
+    }
+    return currentDeviceType == 13 && currentPhase == 1
+}
+
+function isGen3_6K(device) {
+    if(device) {
+        return device.deviceType == 10 && device.phase == 1
+    }
+    return currentDeviceType == 10 && currentPhase == 1
+}
+
+function isMidbox(device) {
+    if(device) {
+        return device.deviceType == 9 && device.phase == 1
+    }
+    return currentDeviceType == 9 && currentPhase == 1
+}
+function isMidboxOnly(device) {
+    if(device) {
+        return device.deviceType == 9 && device.phase == 1 && device.machineType == 0
+    }
+    return currentDeviceType == 9 && currentPhase == 1 && currentMachineType == 0
+}
+function isMidMini(device) {
+    if(device) {
+        return device.deviceType == 9 && device.phase == 1 && device.machineType == 1
+    }
+    return currentDeviceType == 9 && currentPhase == 1 && currentMachineType == 1
+}
+function isEQB(device) {
+    if(device) {
+        return device.deviceType == 9 && device.phase == 1 && device.machineType == 2
+    }
+    return currentDeviceType == 9 && currentPhase == 1 && currentMachineType == 2
+}
+function isPowerHubLink(device) {
+    if(device) {
+        return device.deviceType == 9 && device.phase == 1 && device.machineType == 0 && device.dtc == 0 && device.voltClass == 0 && device.odm == 0
+    }
+    return currentDeviceType == 9 && currentPhase == 1 && currentMachineType == 0 && currentDtc == 0 && currentVoltClass == 0 && currentOdm == 0
+}
+function isMidboxNotEqb(device) {
+    return isMidbox(device) && !isEQB(device);
+}
+
+function checkHybridFirmware20240811(device) {
+    if (device && device.deviceType == 0 && device.phase != 3) {		//Hybrid
+        if(((device.standard == 'AAAA' || device.standard == 'aAAA') && device.slaveVersion >= 0x24 && device.fwVersion >= 0x20)
+            || ((device.standard == 'AAAB' || device.standard == 'aAAB') && device.slaveVersion >= 0x1D && device.fwVersion >= 0x1A)) {
+            return true;
+        }
+    }
+    if (currentDeviceType == 0 && currentPhase != 3) {		//Hybrid
+        if(((currentStandard == 'AAAA' || currentStandard == 'aAAA') && currentSlaveVersion >= 0x24 && currentFwVersion >= 0x20)
+            || ((currentStandard == 'AAAB' || currentStandard == 'aAAB') && currentSlaveVersion >= 0x1D && currentFwVersion >= 0x1A)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function checkShowPv3ViewByDevice() {
+    return currentPvStringNumber > 2;
+}
+
+async function refreshUserVisitRecordAndNotice(serialNum, plantId) {
+    userVisitRecordPlantId = plantId;
+    userVisitRecordSerialNum = serialNum;
+
+    if(!isInit) {
+        await new Promise((resolve) => {
+            $.post(baseUrl + '/api/userVisit/update', {plantId: plantId, serialNum: serialNum}, function (response) {
+                if (response.success) {
+                    userVisitRecordPlantId = response.plantId;
+                    resolve(true)
+                    if (typeof (onDeviceChangedDone) == "function") {
+                        onDeviceChangedDone(serialNum);
+                    }
+                }
+            }, 'json');
+        })
+    } else {
+        isInit = false
+    }
+
+    var needInverterImg = $('.hasInvertImg .inverterImg').length
+    if (needInverterImg) {
+        inverterImgSrc = getDeviceIcon()
+    }
+
+    if (!selectPlantId) {
+        $('#favoriteBtn').hide()
+    } else {
+        $('#favoriteBtn').show()
+    }
+    if(currentLost) {
+        $('.inverterImg').removeClass('inverterImgOnline')
+    } else {
+        $('.inverterImg').addClass('inverterImgOnline')
+    }
+    onDeviceChanged(serialNum);					//Custom method implements by page
+}
+
+function getDeviceIcon(device = null) {
+    let inverterImgSrc = ''
+    var selectDeviceType = currentDeviceType
+    var selectSubDeviceType = currentSubDeviceType
+    var selectPowerRating = currentPowerRating
+    var selectCurrentPhase = currentPhase
+    var selectMachineType = currentMachineType
+    if(device) {
+        selectDeviceType = device.deviceType
+        selectSubDeviceType = device.subDeviceType
+        selectPowerRating = device.powerRating
+        selectCurrentPhase = device.phase
+        selectMachineType = device.machineType
+    }
+    // let defaultValue = false
+    if (hasCustomPlatformImg) {
+        var monitorDirPath = '/web/platform/' + customPlatform + '/img/monitor/plant/deviceIcon/';
+        var midboxDirPath = '/web/platform/' + customPlatform + '/img/monitor/midbox/';
+    } else {
+        var monitorDirPath = '/web/img/monitor/plant/deviceIcon/';
+        var midboxDirPath = '/web/img/monitor/midbox/';
+    }
+    if(isPowerZone) {
+        var monitorDirPath = '/web/platform/POWER_ZONE/img/monitor/plant/deviceIcon/';
+    }
+    var getaImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_geta.png' : 'icon_geta_mid.png');
+    var minusFlexBossImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_minus_flex_boss.png' : 'icon_minus_flex_boss_mid.png');
+    var lxpUs16kImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_lxp_us_16k.png' : 'icon_lxp_us_16k_mid.png');
+    var flexBoss100ImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_flex_boss_100.png' : 'icon_flex_boss_100_mid.png');
+    var genMsUs18kImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_gen_ms_us_18.png' : 'icon_gen_ms_us_18_mid.png');
+    var acChargerImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_ac_charger.png' : 'icon_ac_charger_mid.png');
+    var offGridInverterImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'inverter_off_grid_20231003.png' : 'inverter_off_grid_mid.png');
+    var offGridUsInverterImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_sna_us_6k_20231004.png' : 'icon_sna_us_6k_mid.png');
+    var ecoBeastProImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_eco_beast_pro.png' : 'icon_eco_beast_pro_mid.png');
+    var snaProEu3_6_5kImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_sna_pro_eu3_6.5k.png' : 'icon_sna_pro_eu3_6.5k_mid.png');
+    var sna6000UsAioImagePath = monitorDirPath + 'icon_sna_6000_us_aio.png';
+    var ecoBeast6000ImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_eco_beast_6000.png' : 'icon_eco_beast_6000_mid.png');
+    var ecoBeast6000_6_5ImagePath = monitorDirPath + 'icon_eco_beast_6000_6.5_5.png';
+    var allInOneInverterImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'inverter_all_in_one_20240614.png' : 'inverter_all_in_one_20240614_mid.png');
+    var trip12KInverterImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_inverter_trip.png' : 'icon_inverter_trip_mid.png');
+    var trip12KLBInverterImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_inverter_trip_LB.png' : 'icon_inverter_trip_LB_mid.png');
+    var trip12KHBInverterImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_inverter_trip_HB.png' : 'icon_inverter_trip_HB_mid.png');
+    var midboxDirPathImagePath = midboxDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg) ? 'deviceIcon_20240729.png' : 'deviceIcon_20240729_mid.png');
+    var eqbDirPathImagePath = '/web/img/monitor/plant/deviceIcon/eqbIcon.png'
+
+    var gen3_6k_6ImagePath = monitorDirPath + 'icon_gen_3_6k_6.png';
+    var gen3_6k_6_5ImagePath = monitorDirPath + 'icon_gen_3_6k_6.5.png';
+    var gen3_6kImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_gen_3_6k.png' : 'icon_gen_3_6k_mid.png');
+    var gen7_10kImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_gen_7_10k.png' : 'icon_gen_7_10k_mid.png');
+    var gen2_7_10kPathImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg) ? 'icon_gen2_lb_eu_7_14k.png' : 'icon_gen2_lb_eu_7_14k_mid.png');
+    var gen7_10k_10ImagePath = monitorDirPath + 'icon_gen_7_10k_10.png';
+    var gen3EuPathImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg) ? 'icon_gen3_eu.png' : 'icon_gen3_eu_mid.png');
+    var resonaPathImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg) ? 'icon_resona.png' : 'icon_resona_mid.png');
+    var genovaPathImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg) ? 'icon_genova.png' : 'icon_genova_mid.png');
+
+    var sna12kEuImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_sna_12k_eu.png' : 'icon_sna_12k_eu_mid.png');
+    var sna12kUsImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_sna_12k_us.png' : 'icon_sna_12k_us_mid.png');
+    var sna2_12kImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'sna2_12k.png' : 'sna2_12k_mid.png');
+    var sna6k_6_6_5ImagePath = monitorDirPath + 'icon_sna_6_6k_6.5.png';
+    var sna12k_12_6ImagePath = monitorDirPath + 'icon_sna_12k_12.6.png';
+    var sna3ImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_sna3_3-6k.png' : 'icon_sna3_3-6k_mid.png');
+
+
+    var type6_8_10k_euImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_type6_8_10k_eu.png' : 'icon_type6_8_10k_eu_mid.png');
+    var type6_12k_euImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_type6_12k_eu.png' : 'icon_type6_12k_eu_mid.png');
+    var type6_8_10k_usImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_type6_8_10k_us.png' : 'icon_type6_8_10k_us_mid.png');
+    var type6_12k_usImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_type6_12k_us.png' : 'icon_type6_12k_us_mid.png');
+    var mega_24kImagePath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_mega_24k.png' : 'icon_mega_24k_mid.png');
+
+    var eneleage_zeroImagePath = '/web/img/monitor/plant/deviceIcon/icon_eneleage_zero.png'
+
+    parallelInverterImgPath = monitorDirPath + 'icon_inverter_parallel.jpg';
+    if(isCrownPlatform) {
+        if(selectDeviceType == '10' && selectPowerRating == 6) {
+            parallelInverterImgPath = monitorDirPath + 'icon_gen_3_6k_6_parallel.png';
+        }
+        if(selectDeviceType == '3' && selectPowerRating == 7) {
+            parallelInverterImgPath = monitorDirPath + 'icon_sna_6_6k_6.5_parallel.png';
+        }
+        if(selectDeviceType == '10' && selectPowerRating == 7) {
+            parallelInverterImgPath = monitorDirPath + 'icon_gen_3_6k_6.5_parallel.png';
+        }
+        if(selectDeviceType == '8' && selectPowerRating == 5) {
+            parallelInverterImgPath = monitorDirPath + 'icon_gen_7_10k_10_parallel.png';
+        }
+        if(selectDeviceType == '11' && selectCurrentPhase == 1 && currentDtc == 0) {
+            parallelInverterImgPath = monitorDirPath + 'icon_sna_12k_12.6_parallel.png';
+        }
+        if(selectDeviceType == 3 && isEcoBeast6k(device)) {
+            if((selectPowerRating == 7 || selectPowerRating == 0) && isCrownPlatform) {
+                parallelInverterImgPath = monitorDirPath + 'icon_eco_beast_6000_6.5_5_parallel.png';
+            }
+        }
+        if(isTripLv()) {
+            parallelInverterImgPath = monitorDirPath + 'icon_trip_lv_parallel.png';
+        }
+        if(isTripHv()) {
+            parallelInverterImgPath = monitorDirPath + 'icon_trip_hv_parallel.png';
+        }
+    }
+    parallelMidInverterImgPath = monitorDirPath + ((platform == 'LUX_POWER' || hasCustomPlatformImg || isPowerZone) ? 'icon_mid_parallel.png' : 'icon_mid_parallel_mid.png');
+    let notAcEssSrc = ''
+    if (!hasCustomPlatformImg) {
+        if (isLuxpower && !viewDemoPlant) {
+            notAcEssSrc = "icon_inverter.png"
+        }
+        if (!isLuxpower || viewDemoPlant) {
+            notAcEssSrc = "icon_inverter_mid.png"
+        }
+    } else {
+        notAcEssSrc = "icon_inverter.png"
+    }
+
+    if (selectDeviceType == 2) {
+        inverterImgSrc = resourceBaseUrl + acChargerImagePath;
+    } else if (isMega24K(device)) {
+        inverterImgSrc = resourceBaseUrl + mega_24kImagePath;
+    } else {
+        if (selectDeviceType == 3) {
+            if(is_ENELEAGE_ZERO(device)){
+                inverterImgSrc = resourceBaseUrl + eneleage_zeroImagePath;
+            }else if(isSna6kUsAio(device)) {
+                inverterImgSrc = resourceBaseUrl + sna6000UsAioImagePath;
+            } else if(isSna3_6k_EU(device)) {
+                inverterImgSrc = resourceBaseUrl + snaProEu3_6_5kImagePath;
+            } else if(isEcoBeast6k(device)) {
+                inverterImgSrc = resourceBaseUrl + ecoBeast6000ImagePath;
+                if((selectPowerRating == 7 || selectPowerRating == 0) && isCrownPlatform) {
+                    inverterImgSrc = resourceBaseUrl + ecoBeast6000_6_5ImagePath;
+                }
+            }  else if(isEcoBeast6kPro(device)) {
+                inverterImgSrc = resourceBaseUrl + ecoBeastProImagePath;
+            } else if (selectSubDeviceType == 131) {
+                inverterImgSrc = resourceBaseUrl + offGridUsInverterImagePath;
+            } else {
+                inverterImgSrc = resourceBaseUrl + offGridInverterImagePath;
+            }
+            if(selectPowerRating == 7 && isCrownPlatform && !isEcoBeast6k()) {
+                inverterImgSrc = resourceBaseUrl + sna6k_6_6_5ImagePath;
+            }
+        } else if (selectDeviceType == 11) {
+            if (selectSubDeviceType == 1111) {
+                inverterImgSrc = resourceBaseUrl + sna12kUsImagePath;
+            } else if(selectMachineType == 1) {
+                inverterImgSrc = resourceBaseUrl + sna2_12kImagePath;
+            } else {
+                inverterImgSrc = resourceBaseUrl + sna12kEuImagePath;
+                if(isCrownPlatform) {
+                    inverterImgSrc = resourceBaseUrl + sna12k_12_6ImagePath;
+                }
+            }
+            // if(isCrownPlatform && selectPowerRating == '') {
+            // 	inverterImgSrc = resourceBaseUrl + sna12k_12_6ImagePath;
+            // }
+        } else if (selectDeviceType == 6) {
+            if(isFlex100(device)) {
+                inverterImgSrc = resourceBaseUrl + flexBoss100ImagePath;
+            }else if(isGenMbUs18K(device)) {
+                inverterImgSrc = resourceBaseUrl + genMsUs18kImagePath;
+            } else if(isLxpUS16k(device)) {
+                inverterImgSrc = resourceBaseUrl + lxpUs16kImagePath;
+            } else if(selectMachineType == 1) {
+                inverterImgSrc = resourceBaseUrl + minusFlexBossImagePath;
+            } else {
+                if (selectSubDeviceType == 161) {
+                    inverterImgSrc = resourceBaseUrl + type6_8_10k_euImagePath;
+                } else if (selectSubDeviceType == 162) {
+                    inverterImgSrc = resourceBaseUrl + type6_12k_euImagePath;
+                } else if (selectSubDeviceType == 163) {
+                    inverterImgSrc = resourceBaseUrl + type6_8_10k_usImagePath;
+                } else if (selectSubDeviceType == 164) {
+                    inverterImgSrc = resourceBaseUrl + type6_12k_usImagePath;
+                } else {
+                    inverterImgSrc = resourceBaseUrl + monitorDirPath + notAcEssSrc;
+                }
+            }
+        } else if (selectDeviceType == 7) {
+            inverterImgSrc = resourceBaseUrl + allInOneInverterImagePath;
+        } else if (selectDeviceType == 8) {
+            inverterImgSrc = resourceBaseUrl + gen7_10kImagePath;
+            if(!isCrownPlatform){
+                if(isGen2_7_14K(device)) {
+                    inverterImgSrc = resourceBaseUrl + gen2_7_10kPathImagePath;
+                }
+            } else {
+                if(isCrownPlatform && selectPowerRating == '5') {
+                    inverterImgSrc = resourceBaseUrl + gen7_10k_10ImagePath;
+                }
+            }
+            if(isResona(device)) {
+                inverterImgSrc = resourceBaseUrl + resonaPathImagePath;
+            } else if(isGenova()) {
+                inverterImgSrc = resourceBaseUrl + genovaPathImagePath;
+            } else if(isGen3(device)) {
+                inverterImgSrc = resourceBaseUrl + gen3EuPathImagePath;
+            }
+        } else if (selectDeviceType == 10) {
+            inverterImgSrc = resourceBaseUrl + gen3_6kImagePath;
+            if(isCrownPlatform && selectPowerRating == 6) {
+                inverterImgSrc = resourceBaseUrl + gen3_6k_6ImagePath;
+            }
+            if(isCrownPlatform && selectPowerRating == 7) {
+                inverterImgSrc = resourceBaseUrl + gen3_6k_6_5ImagePath;
+            }
+        } else if (selectCurrentPhase == 3 && selectDeviceType == 0) {
+            inverterImgSrc = resourceBaseUrl + trip12KInverterImagePath;
+            if((platform == 'LUX_POWER' || !hasCustomPlatformImg || isCrownPlatform) && isTripLv(device)) {
+                inverterImgSrc = resourceBaseUrl + trip12KLBInverterImagePath;
+            }
+            if((platform == 'LUX_POWER' || !hasCustomPlatformImg || isCrownPlatform) && isTripHv(device)) {
+                inverterImgSrc = resourceBaseUrl + trip12KHBInverterImagePath;
+            }
+        } else if (isGeta(device)) {
+            inverterImgSrc = resourceBaseUrl + getaImagePath;
+        } else if (isMidboxNotEqb(device)) {
+            midboxImgSrc = resourceBaseUrl + midboxDirPathImagePath;
+        }  else if (isEQB(device)) {
+            eqbImgSrc = resourceBaseUrl + eqbDirPathImagePath;
+        } else {
+            inverterImgSrc = resourceBaseUrl + monitorDirPath + notAcEssSrc;
+        }
+    }
+    return inverterImgSrc
+}

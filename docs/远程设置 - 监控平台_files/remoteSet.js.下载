@@ -1,0 +1,831 @@
+var firstTimeAutoReadParams = true;
+
+function onDeviceChangedDone(serialNum) {
+	//首次进页面自动读取参数值
+	if(firstTimeAutoReadParams) {
+		firstTimeAutoReadParams = false;
+
+//		$('#readAllParamButton').click();
+		$('#readAllParamButton').removeAttr('disabled');
+	}
+}
+
+function refreshMeterParamters() {
+	$('#meterNumberHolder').hide();
+	$('#meterPhaseHolder').hide();
+	if(!isViewer && currentDeviceType == 2 && $('#measurementModelInput').val() == 0) {			//非终端用户、ACS机器、Meter检测方式，可以设置电表数量1~2
+		if(!currentParallelEnabled || currentMasterOrSlaveNotOffGrid != 2) {					//非并机或者不是从机
+			$('#meterNumberHolder').show();
+		}
+		if(currentMeterType == 1 && (!currentParallelEnabled || (currentMasterOrSlaveNotOffGrid != 3 && currentMasterOrSlaveNotOffGrid != 4))) {		//不是三相并机主机（三相并机时不可选择电表相位，指定安装相位）且Meter为三相电表时，可以设置电表相位InstallPhase选择L1,L2,L3（0~2）
+			$('#meterPhaseHolder').show();
+		}
+	}
+
+	refreshAcsMeterPhaseParam();
+}
+
+function refreshAcsMeterPhaseParam() {
+	if(!isAdmin && !isEG4Admin && !isMaintain) {
+		$('#meterBrandHolder').hide();
+		if(!isViewer && currentDeviceType == 2 && $('#measurementModelInput').val() == 0) {			//非终端用户、ACS机器、Meter检测方式，可以设置电表数量1~2
+			$('#meterBrandHolder').show();
+			$('#meterBrandModelInput').removeAttr('disabled');
+		} else {
+			$('#meterBrandHolder').hide();
+			$('#meterBrandModelInput').attr('disabled', 'disabled');
+		}
+	}
+}
+
+function onDeviceChanged(serialNum) {
+    $('.noNoComms').show()
+    $('.hasNoComms').hide()
+    if((isLuxPlatform || isEG4Platform) && is12000XP() && currentStandard == 'ceaa' && currentSlaveVersion >= 0x08 && currentFwVersion >= 0x0A) {
+        $('.noNoComms').hide()
+        $('.hasNoComms').show()
+    }
+    fillSmartPortModeInput()
+    $('.meterFunctionHold').hide()
+    if(isSna3_6k_EU()) {
+        $('.meterFunctionHold').show()
+    }
+    $('.acChargeBatCur').hide()
+    if(isGen3() || isPowerHubLink()) {
+        $('.acChargeBatCur').show()
+    }
+    $('.batWarnBuzzer').hide()
+    if(is6000XP() && (currentStandard == 'ccaa' && currentSlaveVersion >= 0x12 && currentFwVersion >= 0x12) || isSNA_3_6K_EU() && (currentStandard == 'CBAA' && currentSlaveVersion >= 0x24 && currentFwVersion >= 0x20) || is12000XP() && (currentStandard == 'ceaa' && currentSlaveVersion >= 0x06 && currentFwVersion >= 0x09) || isSna12kEu() && (currentStandard == 'cfaa' && currentSlaveVersion >= 0x07 && currentFwVersion >= 0x08)) {
+        $('.batWarnBuzzer').show()
+    }
+    $('.ruleBit').hide()
+	if(!isAcCharger() && !isMega24K() && (currentUsVersion == 1 && (isAdmin || isMaintain) || currentUsVersion == 0 && (!isViewer))) {
+	    $('.ruleBit').show()
+	}
+    $('.frequencySelfAdaptation').hide()
+    if(is6000XP() || is12000XP()) {
+        $('.frequencySelfAdaptation').show()
+    }
+    $('#hybridSetGroupHolder').hide()
+	$('#parallelSettings').show()
+	$('.npeBondHold').show()
+	if(isGeta()) {
+		$('#parallelSettings').hide()
+	}
+    if(isGeta() || !isOffGridUs()) {
+        $('.npeBondHold').hide()
+    }
+     $('.midboxParallelSettingsRole').hide()
+     $('.parallelSettingBox').hide()
+     $('.meterSettingBox').hide()
+    if(currentSlaveVersion >= 0x18 && isMidbox()) {
+        $('.midboxParallelSettingsRole').show()
+        $('.parallelSettingBox').show()
+        $('.meterSettingBox').show()
+    }
+    $('.runWithoutGrid').show()
+    $('.swSeamlessly').show()
+    $('.backupMode, #backupMode, .backupSetting ').show()
+    $('.peakShaving, #peakShaving').show()
+    $('.midGeneratorBox').show()
+    if(isPowerHubLink()) {
+        $('.runWithoutGrid').hide()
+        $('.swSeamlessly').hide()
+        $('.backupMode, #backupMode, .backupSetting ').hide()
+        $('.peakShaving, #peakShaving').hide()
+        $('li.acChargeAcco').click()
+        $('.midGeneratorBox').hide()
+    }
+	$('.weeklySet').hide()
+	if(currentDeviceType == 6 && currentPhase == 1) {
+		$('.weeklySet').show()
+	}
+	
+	$('.normalRampRateHolder').hide()
+	if(isFlex100() && currentStandard == 'FCAA' && currentSlaveVersion >= 0x06 && currentFwVersion >= 0x08 || currentDeviceType == 6 && currentStandard && currentStandard.endsWith('AAB') && currentSlaveVersion >= 0x27 && currentFwVersion >= 0x27) {
+		$('.normalRampRateHolder').show()
+	}
+	
+	$('.batteryCalibration').hide()
+	$('.newSlopeDesc').show()
+	$('.highSpeedDesc').hide()
+	if(currentDeviceType == 3 && currentPhase == 1 && (currentStandard == 'cbaa' && currentSlaveVersion >= 0x26 || currentStandard == 'cBaa' && currentSlaveVersion >= 0x8F) || isSunKing() && currentStandard == 'cbba' && currentSlaveVersion >= 0x0B) {
+		$('.batteryCalibration').show()
+		$('.newSlopeDesc').hide()
+		$('.highSpeedDesc').show()
+	}
+	$('.forceDischargeOrSellToGrid2Mode').hide()
+	if(isSNA_3_6K_EU() && (currentStandard == 'cbaa' && currentSlaveVersion >= 0x26 || currentStandard == 'cBaa' && currentSlaveVersion >= 0x8F) || isSunKing() && currentStandard == 'cbba' && currentSlaveVersion >= 0x0B || isSna3_6k_EU()) {
+		$('.forceDischargeOrSellToGrid2Mode').show()
+	}
+	$('.funcGreenEn').show()
+	$('.offGridModeSetting').hide()
+	if(isMidboxNotEqb()) {
+		$('.exportLockPower').show()
+		if(currentSetPageType == 'workingMode2_Midbox' && (isEG4Platform || isLuxPlatform || isFortressPlatform) && masterInverterSlaveVersion >= 0x26 && masterInverterFwVersion >= 0x26) {
+			$('.funcGreenEn').hide()
+			$('.offGridModeSetting').show()
+		}
+	}
+	
+	$('.noCommLithiumBatt').hide()
+	$('.briggsBrand').hide()
+	if(currentDeviceType == 3 && ((currentDtc == 1 && currentStandard == 'ccaa' && currentSlaveVersion >= 0x12) || (currentStandard == 'cbaa' && currentSlaveVersion >= 0x26 || currentStandard == 'cBaa' && currentSlaveVersion >= 0x8F)) || isSunKing() && currentStandard == 'cbba' && currentSlaveVersion >= 0x0B) {
+		$('.noCommLithiumBatt').show()
+	}
+    if((isLuxPlatform || isEG4Platform) && (is12000XP() && currentStandard == 'ceaa' && currentSlaveVersion >= 0x08 && currentFwVersion >= 0x0A || is6000XP() && currentStandard == 'ccaa' && currentSlaveVersion >= 0x15 && currentFwVersion >= 0x15)) {
+        $('.noCommLithiumBatt').show()
+        $('.briggsBrand').show()
+    }
+	
+	$('.modbusAddrInput').hide()
+	if(currentDeviceType == 3 || currentDeviceType == 11) {
+		$('.modbusAddrInput').show()
+		
+		if(currentDtc == 1 || isAdmin || isMaintain || isDevAccount) {
+			$('.funcIsoEnHolder').show()
+		} else {
+			$('.funcIsoEnHolder').hide()
+		}
+	}
+	
+	$('.pvInMode').show()
+	$('.pvGridOff').show()
+	$('.isPvSetting').show()
+	$('.offGridGeneratorBox').show()
+	$('.pvGridOffHold').show()
+	$('.genPortFunctionSetting').show()
+	if(is_ENELEAGE_ZERO()){
+		$('.pvInMode').hide()
+		$('.pvGridOff').hide()
+		$('.isPvSetting').hide()
+		$('.offGridGeneratorBox').hide()
+		$('.pvGridOffHold').hide()
+		$('.genPortFunctionSetting').hide()
+	}
+	$('.hybridSettingBox').show()
+	if(currentDeviceType == 0 && currentPhase == 1) {
+		$('.hybridSettingBox').hide()
+	}
+	fillCtSampleRatioInput()
+	$('.batDischarge').show()
+	if(currentDeviceType == 2) {
+		$('.batDischarge').hide()
+	}
+	$('.isHybrid_version').hide()
+    $('.pvChargeStopSoc').hide()
+    $('.pvChargeStopVolt').hide()
+	if(isSunKing() && currentStandard == 'cbba' && currentSlaveVersion >= 0x0A || isGeta() || currentDeviceType == 3 && (currentStandard == 'cbaa' && currentSlaveVersion >= 0x24 || currentStandard == 'cBaa' && currentSlaveVersion >= 0x8D || currentStandard == 'cBAA' && currentSlaveVersion >= 0x8D || currentDtc == 1 && currentStandard == 'ccaa' && currentSlaveVersion >= 0x12) || currentDeviceType == 11 && (currentDtc == 1 && currentStandard == 'ceaa' && currentSlaveVersion >= 0x06 || currentStandard == 'cfaa' && currentSlaveVersion >= 0x06)){
+		$('.isHybrid_version').show()
+		$('.pvChargeStopSoc').show()
+		$('.pvChargeStopVolt').show()
+	}
+    if(isSna3_6k_EU()) {
+        $('.isHybrid_version').show()
+    }
+	// $('#offSoc').show()
+	$('#userStartDischg').show()
+	if(currentDeviceType == 2 && currentPhase == 1) {
+		// $('#offSoc').hide()
+		$('#userStartDischg').hide()
+	}
+	$('.soc_volt_hysteresis').hide()
+	if(currentDeviceType == 2) {
+		$('.systemChargeSoc').hide()
+		$('.systemChargeVolt').hide()
+	} else {
+		$('.systemChargeSoc').show()
+		$('.systemChargeVolt').show()
+	}
+	if(isSunKing() && currentStandard == 'cbba' && currentSlaveVersion >= 0x0A 
+			|| isGeta() 
+			|| currentDeviceType == 3 && (currentStandard == 'cbaa' && currentSlaveVersion >= 0x24 
+			|| currentStandard == 'cBaa' && currentSlaveVersion >= 0x8D 
+			|| currentStandard == 'cBAA' && currentSlaveVersion >= 0x8D 
+			|| currentDtc == 1 && currentStandard == 'ccaa' && currentSlaveVersion >= 0x12) 
+			|| currentDeviceType == 11 && (currentStandard == 'ceaa' && currentSlaveVersion >= 0x06 
+			|| currentStandard == 'cfaa' && currentSlaveVersion >= 0x06)) {
+		$('#genHold').show()
+		$('.systemChargeSocOffGrid').show()
+		$('.systemChargeVoltOffGrid').show()
+	} else {
+		$('#genHold').hide()
+		$('.systemChargeSocOffGrid').hide()
+		$('.systemChargeVoltOffGrid').hide()
+	}
+    if(isSunKing() && currentStandard == 'cbba' && currentSlaveVersion >= 0x0A || isGeta()
+        || currentDeviceType == 3 && (currentStandard == 'cbaa' && currentSlaveVersion >= 0x24
+            || currentStandard == 'cBaa' && currentSlaveVersion >= 0x8D
+            || currentStandard == 'cBAA' && currentSlaveVersion >= 0x8D
+            || currentDtc == 1 && currentStandard == 'ccaa' && currentSlaveVersion >= 0x12)
+            || currentDeviceType == 11 && (currentStandard == 'ceaa' && currentSlaveVersion >= 0x06 && currentFwVersion >= 0x09
+            || currentStandard == 'cfaa' && currentSlaveVersion >= 0x06)){
+        $('.soc_volt_hysteresis').show()
+    }
+    if(isSna3_6k_EU()) {
+        $('.soc_volt_hysteresis').show()
+        $('.pvChargeStopSoc').show()
+        $('.pvChargeStopVolt').show()
+    }
+	if((currentDeviceType == 0 && currentPhase == 3 || isGen3()) && currentBatteryType == 'LEAD_ACID') {
+		$('.isPhase3Leadacid').show()
+	} else {
+		$('.isPhase3Leadacid').hide()
+	}
+	$('.samrtLoadBaseOnShow').hide();
+	$('.independentMidBossMode').hide();
+	$('.isOverIAAB_14').hide();
+	if(currentDeviceType == 9 && currentStandard == 'IAAB'  && currentSlaveVersion >= 0x11) {
+		$('.samrtLoadBaseOnShow').show()
+	} else {
+		$('.samrtLoadBaseOnShow').hide()
+	}
+	if(currentDeviceType == 9 && currentStandard == 'IAAB' && currentSlaveVersion >= 0x12) {
+		$('#independentMidBossMode').show()
+	} else {
+		$('#independentMidBossMode').hide()
+	}
+	if(currentDeviceType == 9 && currentStandard == 'IAAB' && currentSlaveVersion >= 0x14) {
+		$('.isOverIAAB_14').show()
+	} else {
+		$('.isOverIAAB_14').hide()
+	}
+	if((((currentStandard == 'ccaa' && currentSlaveVersion >= 0x0F && currentFwVersion >= 0x10) || (currentStandard == 'cCaa' && currentSlaveVersion >= 0x6A && currentFwVersion >= 0x70)) && currentDeviceType == 3 && currentSubDeviceType == 131) || (currentStandard == 'ceaa' && currentSlaveVersion >= 0x04 && currentFwVersion >= 0x05 && currentDeviceType == 11 && currentSubDeviceType == 1111) || (currentDeviceType == 11 && currentDtc == 0 && currentPhase == 1 && currentStandard == 'cfaa' && currentSlaveVersion >= 0x02 && currentFwVersion >= 0x02)) {
+		setTimeout(() => {
+			$('#exportAcCoupleHolder').show()
+		})
+	} else {
+		$('#exportAcCoupleHolder').hide()
+	}
+	if(isOffGridUs() && currentStandard == 'ccaa' && currentSlaveVersion >= 0x0F && currentFwVersion >= 0x10 || is12000XP()) {
+		$('.usVersionOrNot').show()
+	} else {
+		$('.usVersionOrNot').hide()
+	}
+	$('.socVoltControl').hide()
+	$('#wirelessMeterModelInputHolder').hide()
+	if(currentMachineType == 1 && !isGen2_7_14K()) {
+		$('#12kAcCoupleBox').hide()
+		$('#12kSmartLoadBox').hide()
+        if(isFlex100()) {
+            $('#12kGeneratorBox').show()
+        } else {
+            $('#12kGeneratorBox').hide()
+        }
+		$('#12kAcCoupleDarkStartBox').hide()
+	} else {
+		$('#12kAcCoupleBox').show()
+		$('#12kSmartLoadBox').show()
+		$('#12kGeneratorBox').show()
+		$('#12kAcCoupleDarkStartBox').show()
+	}
+
+	if(platform != 'HUAYU') {
+        inverterImgSrc && $('.inverterImg').attr('src', inverterImgSrc).fadeIn();
+        if($('.hostDevice .inverterImg').length){
+            setTimeout(() => {
+                if(isMidboxNotEqb()) {
+                    hostDeviceImgSrc && $('.hostDevice .inverterImg').attr('src', hostDeviceImgSrc).fadeIn()
+                    midboxImgSrc && $('.midboxDevice .inverterImg').attr('src', midboxImgSrc).fadeIn()
+                } else if(isEQB()) {
+                    hostDeviceImgSrc && $('.hostDevice .inverterImg').attr('src', hostDeviceImgSrc).fadeIn()
+                    eqbImgSrc && $('.eqbDevice .inverterImg').attr('src', eqbImgSrc).fadeIn()
+                }
+            }, 500)
+        }
+	}
+
+	autoSelectSettingPage();
+	if(!isWorkingModePage) {
+		if((isSnaSeriesOrGeta()) && currentSetPageType != 'remoteSetOffGrid') {
+			return;
+		} else if(!(isSnaSeriesOrGeta()) && currentSetPageType == 'remoteSetOffGrid') {
+			return;
+		} else if(currentDeviceType == 5 && currentSetPageType != 'remoteSetLsp') {
+			return;
+		} else if(currentDeviceType != 5 && currentSetPageType == 'remoteSetLsp') {
+			return;
+		} else if((currentDeviceType == 6 || (currentDeviceType == 7 && (isAdmin || isMaintain)) || (currentPhase == 3 && currentDeviceType == 0) || isBess200K() || currentDeviceType == 8 || currentDeviceType == 10 || isMega24K()) && !isHuayuAccount && currentSetPageType != 'remoteSet12K') {
+			return;
+		} else if(((currentDeviceType != 6 && currentDeviceType != 7 && !(currentPhase == 3 && currentDeviceType == 0) &&  !isBess200K() && currentDeviceType != 8 && currentDeviceType != 10 && !isMega24K()) || isHuayuAccount || (currentDeviceType == 7 && !isAdmin && !isMaintain)) && currentSetPageType == 'remoteSet12K') {
+			return;
+		} else if(currentDeviceType == 7 && !isAdmin && !isMaintain && currentSetPageType != 'remoteSetALLOne') {
+			return;
+		} else if(currentDeviceType != 7 && currentSetPageType == 'remoteSetALLOne') {
+			return;
+		} else if(currentDeviceType == 9 && !isAdmin && !isMaintain && currentSetPageType != 'remoteSetMidbox') {
+			return;
+		} else if(currentDeviceType != 9 && currentSetPageType == 'remoteSetMidbox') {
+			return;
+		}
+	} else {
+		if((isSnaSeriesOrGeta()) && currentSetPageType != 'workingMode2_OffGrid') {
+			return;
+		} else if(!(isSnaSeriesOrGeta()) && currentSetPageType == 'workingMode2_OffGrid') {
+			return;
+		}
+	}
+
+	$('.powerRatingLabel').text(currentPowerRating > 0 ? (currentPowerRating + 'W') : '');
+
+	if(isEG4Platform && currentBatteryType == 'LEAD_ACID') {
+		$('button.socEnableBtn').attr('disabled', 'disabled');
+	} else {
+		$('button.socEnableBtn').removeAttr('disabled');
+	}
+
+	if(currentParallelEnabled) {
+		$('#readComposedPhaseInput').attr('disabled', 'disabled');
+	} else if(!isSnaSeries()) {
+		$('#readComposedPhaseInput').removeAttr('disabled');
+	}
+
+	if((currentDeviceType == 0 && currentPhase != 3) || currentDeviceType == 6) {
+		$('#systemChargeLimitContainer').show();
+	} else {
+		$('#systemChargeLimitContainer').hide();
+	}
+
+	$('#offlineTimeoutInput').attr('disabled', 'disabled');
+	if(currentDeviceType == 0 || isSnaSeriesOrGeta() || (isGen1_7_10K() && currentStandard == 'HAAA' && currentSlaveVersion >= 0x09) || (currentDeviceType == 6 && (currentStandard == 'FAAB' || currentStandard == 'fAAB')&& currentSlaveVersion >= 0x09)) {			//ZETA: Hybrid or Solar Europe: Off-Grid or TRIP
+		$('.forOfflineTimeoutCtrlDevice').show();
+	} else {
+		$('.forOfflineTimeoutCtrlDevice').hide();
+	}
+
+	if(currentDeviceType == 7) {
+		$('#chargeFirstContainer').hide();
+	} else {
+		$('#chargeFirstContainer').show();
+	}
+
+	if(currentDeviceType == 2 && $('#pvctSampleTypeInput').val() == 1) {
+		$('.hideDeviceType2').fadeOut();
+		$('.hideDeviceTypeNot2').fadeIn();
+	} else {
+		$('.hideDeviceType2:not(.hybridFirmware20240811)').fadeIn();
+		$('.hideDeviceTypeNot2').fadeOut();
+		if(currentDeviceType == 2){
+			$('.stopSoc').show()
+		}
+	}
+
+	$('#pvctSampleTypeInput').change(function() {
+		if(currentDeviceType == 2 && $('#pvctSampleTypeInput').val() == 1) {
+			$('.hideDeviceType2').fadeOut();
+			$('.hideDeviceTypeNot2').fadeIn();
+		} else {
+			$('.hideDeviceType2:not(.hybridFirmware20240811)').fadeIn();
+			$('.hideDeviceTypeNot2').fadeOut();
+		}
+	})
+	refreshMeterParamters();
+	if(currentSetPageType == 'remoteSet' || currentSetPageType == 'workingMode2_Hybrid') {
+		if(isSecondCluster) {
+			fillLithiumTypeModels_US();
+		} else {
+			fillLithiumTypeModels_Hybrid();
+		}
+
+		if(currentDeviceType == 0 && currentPhase != 3) {
+			if(checkHybridFirmware20240811()) {
+				$('.hybridFirmware20240811').fadeIn();
+				if(currentSetPageType == 'workingMode2_Hybrid') {
+					$('#wirelessMeterModelInput').attr('disabled', 'disabled');
+					$('#wirelessMeterModelInputHolder').hide();
+				}
+			} else {
+				$('.hybridFirmware20240811').fadeOut();
+			}
+		}
+	}
+	if(((currentStandard == 'BAAA' && currentSlaveVersion >= 0x1B) || (currentStandard == 'BAAB' && currentSlaveVersion >= 0x0D))) {
+		$('.socVoltControl').show()
+	}
+	// if(currentDeviceType == 2 && (((currentStandard == 'BAAA' || currentStandard == 'bAAA') && currentSlaveVersion >= 0x1B && currentFwVersion >= 0x1A) || ((currentStandard == 'BAAB' || currentStandard == 'bAAB') && currentSlaveVersion >= 0x0D && currentFwVersion >= 0x0B))) {
+	// 	$('#wirelessMeterModelInputHolder').show()
+	// 	$('#pvctSampleRatioInput').append('<option id="pvctSampleRatioInputrOption" value="2">1/2000</option>')
+	// } else {
+	// 	$('#wirelessMeterModelInputHolder').hide()
+	// 	$('#pvctSampleRatioInputOption').remove()
+	// }
+
+	fillRuleModelInput();
+
+	fillPowerRatingModelInput();
+	fillPvInputModeInput();
+
+	if(currentDeviceType == 6 || currentDeviceType == 7 || currentDeviceType == 8) {
+		$('#leadAcidChargeRateInput').attr('max', '250').attr('placeHolder', '[0, 250]');
+		$('#leadAcidDischargeRateInput').attr('max', '250').attr('placeHolder', '[0, 250]');
+	} else if(currentDeviceType == 0 && currentPhase == 3) {
+		$('#leadAcidChargeRateInput').attr('max', '50').attr('placeHolder', '[0, 50]');
+	} else if(isSnaSeries()) {
+		if(currentDeviceType == 11) {			//SNA 12K
+			var leadAcidRateInputTipText = '[0, 250/65534]';
+			$('#leadAcidChargeRateInput').attr('max', '65534').attr('placeHolder', leadAcidRateInputTipText);
+			$('#leadAcidDischargeRateInput').attr('max', '65534').attr('placeHolder', leadAcidRateInputTipText);
+
+			$('#acChgBatCurrentInput').attr('max', '250').attr('placeHolder', '[0, 250]');
+			$('#maxGenChgBatCurrentInput').attr('max', '250').attr('placeHolder', '[0, 250]');
+		} else {
+			var leadAcidRateInputTipText = (isEG4Platform ? '[0, 140/4480]' : '[0, 110/4480]');
+			$('#leadAcidChargeRateInput').attr('max', '4480').attr('placeHolder', leadAcidRateInputTipText);
+			$('#leadAcidDischargeRateInput').attr('max', '4480').attr('placeHolder', leadAcidRateInputTipText);
+
+			var acChgBatCurrentInputTipText = (isEG4Platform ? '[0, 125]' : '[0, 150]');
+			$('#acChgBatCurrentInput').attr('max', '125').attr('placeHolder', acChgBatCurrentInputTipText);
+			$('#maxGenChgBatCurrentInput').attr('max', '110').attr('placeHolder', '[0, 110]');
+		}
+	} else {
+		$('#leadAcidChargeRateInput').attr('max', '655').attr('placeHolder', '[0, 655]');
+		$('#leadAcidDischargeRateInput').attr('max', '655').attr('placeHolder', '[0, 655]');
+	}
+
+	if(currentDeviceType == 11) {
+		$('#maxGeneratorInputPowerInput').attr('placeHolder', '[0, 15000/65534]');
+		$('.isSna12k').show()
+		$('.isNotSna12k').hide()
+	} else {
+		$('#maxGeneratorInputPowerInput').attr('placeHolder', '[0, 7370/65534]');
+		$('.isSna12k').hide()
+		$('.isNotSna12k').show()
+	}
+
+	if(checkType6Series()) {
+		$('.chgVoltEnable').attr('disabled', 'disabled');
+		$('.chgSocEnable').attr('disabled', 'disabled');
+		$('.disChgVoltEnable').attr('disabled', 'disabled');
+		$('.disChgSocEnable').attr('disabled', 'disabled');
+	}
+
+	if(currentDeviceType != 6) {
+		$('._12KDeviceShow').hide();
+	} else {
+		$('._12KDeviceShow').show();
+	}
+    $('#gridRegulationInputHolder').hide()
+	if(currentDeviceType == 10 || currentDeviceType == 9 && !isPowerHubLink()) {
+		$('#gridRegulationInputHolder').show()
+	}
+
+	if(isFlex100() || isGen3() || ((currentDeviceType == 6 || currentDeviceType == 9) || (currentDeviceType == 8 && isInstallerLevel)) && (currentStandard == 'EAAB' || currentStandard == 'eAAB' || currentStandard == 'FAAB' || currentStandard == 'fAAB') && currentSlaveVersion >= 0x18 && currentFwVersion >= 0x18) {
+		$('.funcDevice6_0x18Holder').show();
+	} else if(currentPhase == 3 && currentDeviceType == 0) {
+		$('.funcDevice6_0x18Holder').show();
+	} else {
+		$('.funcDevice6_0x18Holder').hide();
+	}
+
+	if(currentDeviceType == 6 && currentSlaveVersion >= 0x18 && currentFwVersion >= 0x18) {
+		$('.funcDevice6_0x18_NoStandardCheckHolder').show()
+	} else {
+		$('.funcDevice6_0x18_NoStandardCheckHolder').hide()
+	}
+
+	if(currentDeviceType == 6 && currentSlaveVersion >= 0x1D && currentFwVersion >= 0x1D) {
+		$('.funcDevice6_midboxEnableHolder').show()
+	} else {
+		$('.funcDevice6_midboxEnableHolder').hide()
+	}
+
+	if(currentSetPageType == 'workingMode2_Hybrid' || currentSetPageType == 'workingMode2_OffGrid' || isMidbox()) {
+		fillMeterBrandSetInput()
+	}
+	$('.acsHide').show();
+	if(currentDeviceType == 2) {
+		$('.acsHide').hide();
+	}
+	$('#gridTypeInput option.custom').remove();
+	fillGridTypeInput()
+    if(currentSetPageType == 'remoteSet12K' || currentSetPageType == 'workingMode2_Midbox' || currentSetPageType == 'workingMode2_Eqb') {
+        fillGridRegulationInput();
+    }
+	if(currentSetPageType == 'remoteSet12K') {
+        // fillAcChargeTypeInput()
+        fillEpsVoltageSetInput();
+        fillSetMasterOrSlaveInput();
+		if(currentDeviceType == 10) {							//GEN 3-6K
+			$('.gen3_6khide').hide();
+		} else {
+			$('.gen3_6khide').show();
+		}
+		fillMeterBrandSetInput()
+		if(currentDeviceType == 6 && (currentSubDeviceType == 161 || currentSubDeviceType == 162)) {				//12K - EU
+			$('.notEu12KHide').show();
+		} else {
+			$('.notEu12KHide').hide();
+		}
+        $('.ctPowerOffsetHolderCtrl').attr('max', '1000').attr('min', '-1000').attr('placeHolder', '[-1000, 1000]');
+        $('#equalizationVoltageInput').attr('max', '700').attr('min', '90').attr('placeHolder', '[90, 700]');
+        if(isGen3()) {
+            $('.ctPowerOffsetHolderCtrl').attr('max', '200').attr('min', '-200').attr('placeHolder', '[-200, 200]');
+            $('#equalizationVoltageInput').attr('max', '590').attr('min', '480').attr('placeHolder', '[480, 590]');
+        }
+        $('.batShareBox').show()
+        if(isTrip12K() || isMega24K()) {
+            $('.batShareBox').hide()
+        }
+
+		if(currentPhase == 3 && currentDeviceType == 0) {			//Trip 12K...
+			$('.trip12KHide').hide();
+
+			$('#chargePowerParamLabel').text(chargePowerParamTrip12kText);
+			$('#dischgPowerParamLabel').text(dischgPowerParamTrip12kText);
+			$('#chargePowerPercentCMDInput').attr('max', '25.5').attr('placeHolder', '[0, 25.5]');
+			$('#dischgPowerPercentCMDInput').attr('max', '25.5').attr('placeHolder', '[0, 25.5]');
+
+			$('#startAcChgVoltInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#stopAcChgVoltInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#chargeFirstVoltInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#leadAcidChargeVoltRefInput').attr('min', '80').attr('max', '70').attr('placeHolder', '[80, 700]');
+			$('#floatingVoltageInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('.paramSetHolder #batChargeCurrentLimitInput').attr('min', '0').attr('max', '50').attr('placeHolder', '[0, 50]');
+			$('.paramSetHolder #chargeStartVoltInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('.paramSetHolder #chargeEndVoltInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#leadAcidDischargeRateInput').attr('min', '0').attr('max', '50').attr('placeHolder', '[0, 50]');
+			$('#leadAcidDischargeCutOffVoltInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#onGridCutOffInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#stopDischgVoltInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#gridPeakShavingVoltInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#gridPeakShavingVolt2Input').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+			$('#acCoupleStartVoltInput').attr('min', '100').attr('max', '800').attr('placeHolder', '[100, 800]');
+			$('#acCoupleEndVoltInput').attr('min', '100').attr('max', '800').attr('placeHolder', '[100, 800]');
+			$('#smartLoadStartVoltInput').attr('min', '100').attr('max', '800').attr('placeHolder', '[100, 800]');
+			$('#smartLoadEndVoltInput').attr('min', '100').attr('max', '800').attr('placeHolder', '[100, 800]');
+			$('#inputBatteryVoltageInput').attr('min', '80').attr('max', '700').attr('placeHolder', '[80, 700]');
+
+			fillLithiumTypeModels_Trip12K();
+		} else {
+			$('#chargePowerParamLabel').text(chargePowerParamText);
+			$('#dischgPowerParamLabel').text(dischgPowerParamText);
+			$('#chargePowerPercentCMDInput').attr('max', '100').attr('placeHolder', '[0, 100]');
+			$('#dischgPowerPercentCMDInput').attr('max', '100').attr('placeHolder', '[0, 100]');
+
+			$('#startAcChgVoltInput').attr('min', '40').attr('max', '57').attr('placeHolder', '[40, 57]');
+			$('#stopAcChgVoltInput').attr('min', '42').attr('max', '59').attr('placeHolder', '[42, 59]');
+			$('#chargeFirstVoltInput').attr('min', '48').attr('max', '59').attr('placeHolder', '[48, 59]');
+			$('#leadAcidChargeVoltRefInput').attr('min', '50').attr('max', '59').attr('placeHolder', '[50, 59]');
+			$('#floatingVoltageInput').attr('min', '50').attr('max', '56').attr('placeHolder', '[50, 56]');
+			$('.paramSetHolder #batChargeCurrentLimitInput').attr('min', '0').attr('max', '4000').attr('placeHolder', '[0, 4000]');
+			$('.paramSetHolder #chargeStartVoltInput').attr('min', '40').attr('max', '57').attr('placeHolder', '[40, 57]');
+			$('.paramSetHolder #chargeEndVoltInput').attr('min', '42').attr('max', '59').attr('placeHolder', '[42, 59]');
+			$('#leadAcidDischargeRateInput').attr('min', '0').attr('max', '12').attr('placeHolder', '[0, 12]');
+			$('#leadAcidDischargeCutOffVoltInput').attr('min', '40').attr('max', '56').attr('placeHolder', '[40, 56]');
+			$('#onGridCutOffInput').attr('min', '40').attr('max', '56').attr('placeHolder', '[40, 56]');
+			$('#stopDischgVoltInput').attr('min', '40').attr('max', '56').attr('placeHolder', '[40, 56]');
+			$('#gridPeakShavingVoltInput').attr('min', '40').attr('max', '59').attr('placeHolder', '[40, 59]');
+			$('#gridPeakShavingVolt2Input').attr('min', '40').attr('max', '59').attr('placeHolder', '[40, 59]');
+			$('#acCoupleStartVoltInput').attr('min', '40').attr('max', '59.5').attr('placeHolder', '[40, 59.5]');
+			$('#acCoupleEndVoltInput').attr('min', '42').attr('max', '80').attr('placeHolder', '[42, 80]');
+			$('#smartLoadStartVoltInput').attr('min', '40').attr('max', '59').attr('placeHolder', '[40, 59]');
+			$('#smartLoadEndVoltInput').attr('min', '40').attr('max', '59').attr('placeHolder', '[40, 59]');
+			$('#inputBatteryVoltageInput').attr('min', '40').attr('max', '59').attr('placeHolder', '[40, 59]');
+            if(isMega24K()) {
+                $('.paramSetHolder #batChargeCurrentLimitInput').attr('min', '0').attr('max', '200').attr('placeHolder', '[0, 200]');
+                $('.paramSetHolder #chargeStartVoltInput').attr('min', '12').attr('max', '44').attr('placeHolder', '[12, 44]');
+                $('.paramSetHolder #chargeEndVoltInput').attr('min', '13').attr('max', '46').attr('placeHolder', '[13, 46]');
+            }
+            if(isGen3()) {
+                fillLithiumTypeModels_Gen3()
+            } else {
+                if(isSecondCluster) {
+                    fillLithiumTypeModels_US();
+                } else {
+                    if(currentDeviceType == 7) {
+                        fillLithiumTypeModels_AllInOne();
+                    } else if(currentDeviceType == 10) {
+                        fillLithiumTypeModels_Hybrid();
+                    } else if(currentClusterId == 4) {
+                        fillLithiumTypeModels_12KSeries_NA();
+                    } else {
+                        fillLithiumTypeModels_12KSeries_Normal();
+                    }
+                }
+            }
+		}
+	}
+	
+	if(currentDeviceType == 9 && isFlexBoss100_master) {
+		$('#smartPortStartVolt1Input,#smartPortStartVolt2Input,#smartPortStartVolt3Input,#smartPortStartVolt4Input').attr('min', '90').attr('max', '110').attr('placeHolder', '[90, 110]')
+		$('#smartPortEndVolt1Input,#smartPortEndVolt2Input,#smartPortEndVolt3Input,#smartPortEndVolt4Input').attr('min', '75').attr('max', '100').attr('placeHolder', '[75, 100]')
+		$('#acCoupleStartVolt1Input,#acCoupleStartVolt2Input,#acCoupleStartVolt3Input,#acCoupleStartVolt4Input').attr('min', '75').attr('max', '105').attr('placeHolder', '[75, 105]')
+		$('#acCoupleEndVolt1Input,#acCoupleEndVolt2Input,#acCoupleEndVolt3Input,#acCoupleEndVolt4Input').attr('min', '95').attr('max', '118').attr('placeHolder', '[95, 118]')
+	} else {
+		$('#smartPortStartVolt1Input,#smartPortStartVolt2Input,#smartPortStartVolt3Input,#smartPortStartVolt4Input').attr('min', '40').attr('max', '59').attr('placeHolder', '[40, 59]')
+		$('#smartPortEndVolt1Input,#smartPortEndVolt2Input,#smartPortEndVolt3Input,#smartPortEndVolt4Input').attr('min', '40').attr('max', '59').attr('placeHolder', '[40, 59]')
+		$('#acCoupleStartVolt1Input,#acCoupleStartVolt2Input,#acCoupleStartVolt3Input,#acCoupleStartVolt4Input').attr('min', '40').attr('max', '52').attr('placeHolder', '[40, 52]')
+		$('#acCoupleEndVolt1Input,#acCoupleEndVolt2Input,#acCoupleEndVolt3Input,#acCoupleEndVolt4Input').attr('min', '48').attr('max', '59').attr('placeHolder', '[48, 59]')
+	}
+    
+	if(isSnaSeriesOrGeta()) {			//Off-Grid
+		if(currentDeviceType == 11) {
+			$('.sna12KShow').show();
+			$('.sna12KHide').hide();
+		} else {
+			$('.sna12KShow').hide();
+			$('.sna12KHide').show();
+		}
+
+		fillEpsVoltageSetInput();
+
+		if(isGeta() || ((currentDeviceType == 3 && currentHardwareVersion >= 11) || currentSubDeviceType == 131 || currentDeviceType == 11) && !is_ENELEAGE_ZERO()) {
+			$('.offGridHardV11ShowHolder').fadeIn();
+		} else {
+			$('.offGridHardV11ShowHolder').hide();
+		}
+
+		if(currentDeviceType == 11) {
+			$('.removeAcCouplingContainer1').remove();
+		} else {
+			$('.removeAcCouplingContainer2').remove();
+		}
+
+		if(currentDtc == 1) {				//Split
+			$('#acChgBatCurrentTip').attr('title', acChargeBatteryCurrentOffGridSplitTipText);
+
+			if(currentSubDeviceType == 131 || currentHardwareVersion >= 11) {
+				$('#gridCtConnectionHolder').fadeIn();
+			} else {
+				$('#gridCtConnectionHolder').hide();
+			}
+		} else {
+			$('#acChgBatCurrentTip').attr('title', acChargeBatteryCurrentOffGridTipText);
+
+			if((currentSubDeviceType == 131 || currentHardwareVersion >= 11 || currentDeviceType == 11) && !isViewer) {
+				$('#gridCtConnectionHolder').fadeIn();
+			} else {
+				$('#gridCtConnectionHolder').hide();
+			}
+		}
+        $('#chargeFirstHold').attr('max', '59.5').attr('min', '40').attr('placeHolder', '[40, 59.5]');
+        $('#startAcChgVoltInput').attr('max', '57').attr('min', '38.4').attr('placeHolder', '[38.4, 57]');
+        $('#stopAcChgVoltInput').attr('max', '59').attr('min', '48').attr('placeHolder', '[48, 59]');
+        $('#systemChargeVoltLimitInput').attr('max', '59.5').attr('min', '40').attr('placeHolder', '[40, 59.5]');
+        $('#onGridCutOffInput').attr('max', '56').attr('min', '40').attr('placeHolder', '[40, 56]');
+        $('#voltHysteresisInput').attr('max', '20').attr('min', '10').attr('placeHolder', '[10, 20]');
+        $('.paramSetHolder #chargeStartVoltInput').attr('max', '57').attr('min', '38.4').attr('placeHolder', '[38.4, 57]');
+        $('#chargeEndVoltInput').attr('max', '59').attr('min', '48').attr('placeHolder', '[48, 59]');
+        $('#smartLoadStartVoltInput').attr('max', '59').attr('min', '40').attr('placeHolder', '[40, 59]');
+        $('#smartLoadEndVoltInput').attr('max', '59').attr('min', '40').attr('placeHolder', '[40, 59]');
+        $('#acCoupleStartVoltInput').attr('max', '52').attr('min', '40').attr('placeHolder', '[40, 52]');
+        $('#acCoupleEndVoltInput').attr('max', '56').attr('min', '40').attr('placeHolder', '[40, 56]');
+        $('#inputBatteryVoltageInput').attr('max', '59').attr('min', '40').attr('placeHolder', '[40, 59]');
+        $('#floatingVoltageInput').attr('max', '58').attr('min', '50').attr('placeHolder', '[50, 58]');
+        $('#leadAcidChargeVoltRefInput').attr('max', '58').attr('min', '50').attr('placeHolder', '[50, 58]');
+		if(currentSubDeviceType == 131 || currentSubDeviceType == 1111) {
+			$('._131OffGridSHide').hide();
+			$('._131OffGridShow').show();
+			if(is_ENELEAGE_ZERO()) {
+				$('._131OffGridShow').hide();
+			}
+			$('#leadAcidDischargeCutOffVoltInput').attr('max', '56').attr('placeHolder', '[40, 56]');
+			$('#onGridEodVoltageInput').attr('max', '58').attr('placeHolder', '[40, 58]');
+			$('#disChgCutOffSocInput').attr('min', '10').attr('placeHolder', '[10, 90]');
+			$('#batteryWarningVoltageInput').attr('max', '56').attr('placeHolder', '[40, 56]');
+			$('#acChargeStartBatteryVoltageInput').attr('max', '57').attr('placeHolder', '[38.4, 57]');
+			$('#genChgStartVoltageInput').attr('max', '57').attr('placeHolder', '[38.4, 57]');
+			$('#acChargeStartBatterySocInput').attr('min', '1').attr('placeHolder', '[1, 90]');
+			$('#genChgStartSocInput').attr('min', '1').attr('placeHolder', '[1, 90]');
+
+			$('.hybridSetting').hide()
+		} else if(isGeta() && (currentVoltClass == 2 || currentVoltClass == 3)) {
+            const divisor = currentVoltClass == 2 ? 2 : 4
+            $('#chargeFirstHold').attr('max', `${getNum(59.5, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(59.5, divisor)}]`);
+            $('#startAcChgVoltInput').attr('max', `${getNum(57, divisor)}`).attr('min', `${getNum(38.4, divisor)}`).attr('placeHolder', `[${getNum(38.4, divisor)}, ${getNum(57, divisor)}]`);
+            $('#stopAcChgVoltInput').attr('max', `${getNum(59, divisor)}`).attr('min', `${getNum(48, divisor)}`).attr('placeHolder', `[${getNum(48, divisor)}, ${getNum(59, divisor)}]`);
+            $('#systemChargeVoltLimitInput').attr('max', `${getNum(59.5, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(59.5, divisor)}]`);
+            $('#batteryWarningVoltageInput').attr('max', `${getNum(50, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(50, divisor)}]`);
+            $('#leadAcidDischargeCutOffVoltInput').attr('max', `${getNum(50, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(50, divisor)}]`);
+            $('#onGridCutOffInput').attr('max', `${getNum(56, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(56, divisor)}]`);
+            $('#voltHysteresisInput').attr('max', `${getNum(20, divisor)}`).attr('min', `${getNum(10, divisor)}`).attr('placeHolder', `[${getNum(10, divisor)}, ${getNum(20, divisor)}]`);
+            $('.paramSetHolder #chargeStartVoltInput').attr('max', `${getNum(57, divisor)}`).attr('min', `${getNum(38.4, divisor)}`).attr('placeHolder', `[${getNum(38.4, divisor)}, ${getNum(57, divisor)}]`);
+            $('#chargeEndVoltInput').attr('max', `${getNum(59, divisor)}`).attr('min', `${getNum(48, divisor)}`).attr('placeHolder', `[${getNum(48, divisor)}, ${getNum(59, divisor)}]`);
+            $('#smartLoadStartVoltInput').attr('max', `${getNum(59, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(59, divisor)}]`);
+            $('#smartLoadEndVoltInput').attr('max', `${getNum(59, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(59, divisor)}]`);
+            $('#acCoupleStartVoltInput').attr('max', `${getNum(52, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(52, divisor)}]`);
+            $('#acCoupleEndVoltInput').attr('max', `${getNum(56, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(56, divisor)}]`);
+            $('#inputBatteryVoltageInput').attr('max', `${getNum(59, divisor)}`).attr('min', `${getNum(40, divisor)}`).attr('placeHolder', `[${getNum(40, divisor)}, ${getNum(59, divisor)}]`);
+            $('#floatingVoltageInput').attr('max', `${getNum(58, divisor)}`).attr('min', `${getNum(50, divisor)}`).attr('placeHolder', `[${getNum(50, divisor)}, ${getNum(58, divisor)}]`);
+            $('#leadAcidChargeVoltRefInput').attr('max', `${getNum(58, divisor)}`).attr('min', `${getNum(50, divisor)}`).attr('placeHolder', `[${getNum(50, divisor)}, ${getNum(58, divisor)}]`);
+        } else {
+			$('.normalOffGridHide').hide();
+			$('.normalOffGridShow').show();
+			$('#leadAcidDischargeCutOffVoltInput').attr('max', '50').attr('placeHolder', '[40, 50]');
+			$('#onGridEodVoltageInput').attr('max', '50').attr('placeHolder', '[40, 50]');
+			$('#disChgCutOffSocInput').attr('min', '0').attr('placeHolder', '[0, 90]');
+			$('#batteryWarningVoltageInput').attr('max', '50').attr('placeHolder', '[40, 50]');
+			$('#acChargeStartBatteryVoltageInput').attr('max', '52').attr('placeHolder', '[38.4, 52]');
+			$('#genChgStartVoltageInput').attr('max', '52').attr('placeHolder', '[38.4, 52]');
+			$('#acChargeStartBatterySocInput').attr('min', '0').attr('placeHolder', '[0, 90]');
+			$('#genChgStartSocInput').attr('min', '0').attr('placeHolder', '[0, 90]');
+		}
+	}
+
+	if(isEG4Platform && isViewer) {
+		if(currentAllowExport2Grid) {
+			$('.feedInParamHolder').show();
+		} else {
+			$('.feedInParamHolder').hide();
+		}
+	}
+
+	if(allowExport2Grid) {
+		$('.feedInParamHolder').show();
+	}
+
+	if(currentSetG98Already && isViewer) {
+		$('.g98Ctrl').attr('disabled', 'disabled');
+		$('button.g98Ctrl').hide();
+	} else {
+		$('.g98Ctrl').removeAttr('disabled');
+		$('button.g98Ctrl').show();
+	}
+
+	if(currentWithbatteryData) {
+		$('#battComponent').show();
+
+		$.post(baseUrl + '/api/battery/getBatteryInfoForSet', { serialNum: serialNum }, function(response) {
+			if(response.success) {
+				//Refresh battery runtime data...
+				if(response.totalNumber > 0) {
+					$.each(response.batteryArray, function(index, element) {
+						if(isAdmin || isEG4Admin || isMaintain) {
+							$('#battSocSetHolder' + element.batIndex).show();
+						}
+						$('#battRestartSetHolder' + element.batIndex).show();
+					});
+
+					if(isAdmin || isEG4Admin || isMaintain) {
+						$('#battSocSetBtnHolder').show();
+					}
+					$('#battRestartSetBtnHolder').show();
+				} else {
+					hideAllBattSetComponent();
+				}
+			} else {
+				hideAllBattSetComponent();
+			}
+		}, 'json');
+	} else {
+		hideAllBattSetComponent();
+	}
+
+	//Reset dongle informations...
+	$('#datalogText').text((currentDatalogSn && currentDatalogSn.length > 0) ? ' - ' + currentDatalogSn : '')
+	$('#datalogTypeText').val('');
+	$('#dongleFwSetHolder').hide();
+
+	if(currentDatalogSn) {
+		$.post(baseUrl + '/web/config/datalog/getDongleInfo', { serialNum: currentDatalogSn }, function(response) {
+			if(response.success) {
+				$('#datalogTypeText').text(response.datalogTypeText);
+				if(response.datalogType != 'WIFI' && response.datalogType != 'WLAN' && response.datalogType != '_4G' && response.datalogType != 'GPRS') {
+					$('#dongleFwSetHolder').show();
+				} else {
+					$('#dongleFwSetHolder').hide();
+				}
+				if(response.datalogType == 'ESP_WIFI' || response.datalogType == 'ESP_WIFI_E') {
+					$('#dongleWifiEnableSetHolder').show();
+				} else {
+					$('#dongleWifiEnableSetHolder').hide();
+				}
+			}
+		}, 'json');
+	}
+}
+
+function getNum(num, divisor) {
+    return (num/divisor).toFixed(1)
+}
+
+function hideAllBattSetComponent() {
+	$('.battSocSetHolder').hide();
+	$('#battSocSetBtnHolder').hide();
+	$('.battRestartSetHolder').hide();
+	$('#battRestartSetBtnHolder').hide();
+	$('#battComponent').hide();
+}
+
+function showHybridSetting() {
+    if(((currentDeviceType == 3 && !is6000XP()) || isSNA2_12K_EU()) && (isViewer || parentUserId == '68186') && ($('#ruleModelInput').val() == 5 || HOLDMODELRule == 5) 
+			|| isEG4Platform || is_ENELEAGE_ZERO()) {
+        $('#hybridSetGroupHolder').hide()
+    } else if((is12000XP() || is6000XP()) && ($('#ruleModelInput').val() == 1 || HOLDMODELRule == 1) && !(isAdmin || isMaintain || (isFirstCluster && accountName == 'OZERK-EU'))) {
+        $('#hybridSetGroupHolder').hide()
+    } else {
+        $('#hybridSetGroupHolder').show()
+    }
+}
+
+$(function() {
+	$('#ruleModelInput').change(function() {
+        HOLDMODELRule = $('#ruleModelInput').val()
+		if($('#ruleModelInput').val() == '2') {
+			$('#DRMS_box').show()
+		} else {
+			$('#DRMS_box').hide()
+		}
+        showHybridSetting()
+	})
+})

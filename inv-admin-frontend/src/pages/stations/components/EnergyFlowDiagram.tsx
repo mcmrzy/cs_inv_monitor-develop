@@ -24,6 +24,7 @@ interface NodeConfig {
   color: string;
   label: string;
   image: string;
+  textSide?: 'left' | 'right'; // for right-category nodes: which side to place power text
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -150,35 +151,20 @@ const FlowNode: React.FC<{
   const displayPower = type === 'battery' && power < 0 ? Math.abs(power) : power;
 
   const imgSize = 100;
+  // Position category: 'top' = text above image (battery/grid), 'right' = text right of image (pv/load/inverter)
+  const posCategory = type === 'battery' || type === 'grid' ? 'top' : 'right';
+  const imgLeft = x - imgSize / 2;  // x - 50
+
+  // Image top/bottom/right edges
+  const imgTop = y - imgSize / 2;   // y - 50
+  const imgRight = x + imgSize / 2; // x + 50
+
+  // Tight gaps: text baseline/edge hugging image with minimal clearance
+  const topGap = 2;   // px between text baseline and image top edge
+  const rightGap = 2; // px between image right edge and text start
 
   return (
     <g>
-      {/* Label above image */}
-      <text
-        x={x}
-        y={y - 64}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="#333"
-        fontSize="13"
-        fontWeight="700"
-        style={{ textShadow: '0 0 4px rgba(255,255,255,0.9), 0 0 8px rgba(255,255,255,0.7)' }}
-      >
-        {label}
-      </text>
-      {/* Power value above image, below label */}
-      <text
-        x={x}
-        y={y - 50}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="#555"
-        fontSize="12"
-        fontWeight="600"
-        style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
-      >
-        {formatPower(displayPower)}
-      </text>
       {/* Node image */}
       <image
         href={image}
@@ -189,20 +175,95 @@ const FlowNode: React.FC<{
         preserveAspectRatio="xMidYMid meet"
         rx={10}
       />
-      {/* Extra info (SOC) below image */}
-      {extra && (
-        <text
-          x={x}
-          y={y + 60}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="#555"
-          fontSize="12"
-          fontWeight="500"
-          style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
-        >
-          {extra}
-        </text>
+
+      {posCategory === 'top' ? (
+        <>
+          {/* Power value: tightly above image top */}
+          <text
+            x={x}
+            y={imgTop - topGap}
+            textAnchor="middle"
+            dominantBaseline="auto"
+            fill="#555"
+            fontSize="12"
+            fontWeight="600"
+            style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
+          >
+            {formatPower(displayPower)}
+          </text>
+          {/* Label: above power text */}
+          <text
+            x={x}
+            y={imgTop - topGap - 15}
+            textAnchor="middle"
+            dominantBaseline="auto"
+            fill="#333"
+            fontSize="13"
+            fontWeight="700"
+            style={{ textShadow: '0 0 4px rgba(255,255,255,0.9), 0 0 8px rgba(255,255,255,0.7)' }}
+          >
+            {label}
+          </text>
+          {/* Extra info (SOC): above label */}
+          {extra && (
+            <text
+              x={x}
+              y={imgTop - topGap - 30}
+              textAnchor="middle"
+              dominantBaseline="auto"
+              fill="#555"
+              fontSize="12"
+              fontWeight="500"
+              style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
+            >
+              {extra}
+            </text>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Label: above image */}
+          <text
+            x={x}
+            y={imgTop - 14}
+            textAnchor="middle"
+            dominantBaseline="auto"
+            fill="#333"
+            fontSize="13"
+            fontWeight="700"
+            style={{ textShadow: '0 0 4px rgba(255,255,255,0.9), 0 0 8px rgba(255,255,255,0.7)' }}
+          >
+            {label}
+          </text>
+          {/* Power value: tightly right of image, vertically centered */}
+          <text
+            x={node.textSide === 'left' ? imgLeft - rightGap : imgRight + rightGap}
+            y={y + 2}
+            textAnchor={node.textSide === 'left' ? 'end' : 'start'}
+            dominantBaseline="central"
+            fill="#555"
+            fontSize="12"
+            fontWeight="600"
+            style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
+          >
+            {formatPower(displayPower)}
+          </text>
+          {/* Extra info below image (not expected for right-side nodes) */}
+          {extra && (
+            <text
+              x={x}
+              y={y + imgSize / 2 + 16}
+              textAnchor="middle"
+              dominantBaseline="auto"
+              fill="#555"
+              fontSize="12"
+              fontWeight="500"
+              style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
+            >
+              {extra}
+            </text>
+          )}
+        </>
       )}
     </g>
   );

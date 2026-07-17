@@ -1,0 +1,299 @@
+.clear {
+	clear: both;
+}
+
+.datagrid .panel-body {
+	padding: 0;
+}
+
+.table {
+	margin-bottom: 5px;
+}
+
+.modal-dialog .modal-footer {
+	margin-top: 0;
+}
+
+.form-horizontal .alert {
+	margin-bottom: 0;
+	display: none;
+}
+
+.modal.in .modal-dialog {
+	margin-top: 110px;
+}
+
+.modal-body .alert, .modal-footer .alert {
+	margin-bottom: 0;
+	display: none;
+}
+
+.panel.combo-p .panel-body, .datagrid .panel-body {
+	padding: 0;
+}
+
+.radius2 {
+	-moz-border-radius: 2px;      /* Gecko browsers */
+	-webkit-border-radius: 2px;   /* Webkit browsers */
+	border-radius: 2x;            /* W3C syntax */
+}
+
+.radius4 {
+	-moz-border-radius: 4px;      /* Gecko browsers */
+	-webkit-border-radius: 4px;   /* Webkit browsers */
+	border-radius: 4px;           /* W3C syntax */
+}
+
+#um_user_management .user-management {
+	min-height:500px;
+	height: calc(100vh - 110px);
+}
+
+.table.noBorder>tbody>tr>td {
+	border-top: none;
+}
+
+.fixed-table-pagination .page-list {
+	margin-top: 4px;
+}
+
+.fixed-table-pagination .page-list button.dropdown-toggle {
+	padding: 4px 6px;
+}
+
+.fixed-table-pagination .pagination li.page-number.active a {
+	font-weight: bold;
+	font-size: 13px;
+	position: relative;
+	bottom: 1px;
+}
+
+.componentHolder {
+	min-height: 100px;
+	width: 100%;
+	margin-top: 5px;
+	background-color: white;
+}
+
+.bootstrap-table {
+	background-color: white;
+}
+
+.easyui-fluid.panel {
+	margin-bottom: 0;
+}
+
+div.tool {
+	padding: 8px;
+	background-color: white;
+	margin-left: 0;
+	margin-right: 0;
+	margin-bottom: 5px;
+}
+
+div.tool button {
+	vertical-align: baseline;
+}
+
+.form-group .col-form-label {
+	text-align: right;
+}
+
+.modal-content .form-check {
+	position: relative;
+	top: 2px;
+}
+
+.modal-content .form-check .form-check-label .form-check-input {
+	position: relative;
+	top: 2px;
+}
+
+.form-inline .form-check-inline {
+	display: inline-block;
+}
+
+.table-striped>tbody>tr:nth-of-type(odd) {
+	background-color: white;
+}
+
+.table-striped>tbody>tr:nth-of-type(even) {
+	background-color: #f9f9f9;
+}
+
+.bootstrap-table .table tr td {
+	padding: 5px;
+}
+
+.panel-primary {
+    border-color: #aaa;
+}
+
+.panel-primary>.panel-heading {
+	background-color: #bbb;
+    border-color: #bbb;
+}
+
+.panel-title {
+	color: black;
+}
+
+.nav-pills .nav-link.active, .nav-pills .nav-link.active:focus, .nav-pills .nav-link.active:hover {
+    background-color: #868E96;
+}
+
+.nav-pills .nav-link {
+    color: #868E96;
+}
+
+.statusIcon {
+	margin-right: 5px;
+	float: left;
+	width: 8px;
+	height: 8px;
+	margin-top: 3px;
+}
+
+.statusIcon3 {
+	margin-right: 0;
+}
+
+.CHARGING_ICON_HOLDER img {
+	display: none;
+}
+
+.wjhide {
+	display: none;
+}
+
+.form-control-plaintext {
+	padding-top: .4rem;
+}
+
+.form-control-static {
+	padding-top: 4px;
+    padding-bottom: 5px;
+    margin-bottom: 0;
+    line-height: 25px;
+    border: solid transparent;
+    border-width: 1px 0;
+}
+
+.datagrid-row-selected span {
+    color: #fff!important;
+}
+
+.datagrid-row-selected button span.caret {
+    color: #333!important;
+}
+
+.datagrid-cell.datagrid-cell-c1-action, .datagrid-cell.datagrid-cell-c2-action, .datagrid-cell.datagrid-cell-c3-action, .datagrid-cell.datagrid-cell-c4-action {
+    overflow: visible;
+}
+
+.datagrid-body .datagrid-row.datagrid-row-selected .datagrid-cell a {
+	color: white;
+}
+
+.datagrid-body .datagrid-row.datagrid-row-selected .datagrid-cell a.dropdown-item {
+	color: #333;
+}
+
+.datagrid-body .datagrid-row.datagrid-row-selected .datagrid-cell .btn-xs.btn-default {
+	color: #333;
+}
+
+.datagrid-header-check input[type=checkbox], .datagrid-cell-check input[type=checkbox] {
+	margin-top: 2px!important;
+}
+
+.datagrid-cell-check input[type=checkbox], .datagrid-cell-check input[type=radio] {
+	margin-top: 2px!important;
+}
+
+.checkbox input[type=checkbox] {
+	position: relative;
+	top: 2px;
+}
+
+.page-container {
+	margin-left: 210px;
+	padding-top: 80px;
+	width: calc(100% - 211px);
+}
+
+.page-component {
+	margin-bottom: 5px;
+	min-height: 100px;
+	width: 100%;
+}
+
+.btn-success {
+	background-color: #63AD82!important;
+}
+
+.btn-success:hover {
+	background-color: #4B956A!important;
+}
+
+.mainColorBorder {
+	border: 2px solid #63AD82;
+}
+
+.colorGreen {
+	color: #63AD82!important;
+}
+
+.colorRed {
+	color: red!important;
+}
+.colorGray {
+	color: gray!important;
+}
+
+.op-ebase-leftMenu {
+	background-color: transparent!important;
+}
+
+.op-ebase-leftMenu .menuItem.level-leaf .nameWrapper {
+	color: #3d3d3d!important;
+	border-bottom: 1px solid white;
+	padding-left: 18px!important;
+}
+
+.op-ebase-leftMenu .menuItem.level-leaf.selected .nameWrapper, .op-ebase-leftMenu .menuItem.level-leaf:hover .nameWrapper {
+	padding-left: 18px!important;
+}
+
+.op-ebase-leftMenu .menuItem.level-leaf.selected>.nameWrapper .name, .op-ebase-leftMenu .menuItem.level-leaf:hover>.nameWrapper .name {
+	color: white!important;
+    line-height: 20px;
+}
+
+.groupWithTitle {
+	position: absolute;
+	top: 6px;
+	left: 35px;
+	background-color: white;
+	padding: 0 5px 0 5px;
+}
+
+.datagrid-cell {
+	white-space: pre;
+}
+
+.normal_color {
+	color: green;
+}
+
+.fault_color {
+	color: red;
+}
+
+.warning_color {
+	color: #d0753b;
+}
+
+._12KDeviceShow, .gen3_6khide, .sna12KShow, .sna12KHide, .hideDeviceType2, .hybridFirmware20240811 {
+	display: none;
+}

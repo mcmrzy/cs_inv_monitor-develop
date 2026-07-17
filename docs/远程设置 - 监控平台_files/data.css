@@ -1,0 +1,28 @@
+.dateInput {
+	border-radius: 0;
+	border-left: 0;
+	border-right: 0;
+	float: left;
+}
+
+#invDataToolHolder .dateInput {
+	width: 100px;
+}
+
+.menuContent button .glyphicon {
+	display: inline-block;
+	padding-bottom: 2px;
+}
+
+#invDataToolHolder {
+	margin-bottom: 5px;
+}
+
+.combo-p .combo-panel {
+	padding: 0;
+}
+
+#plantSearchInput, #inverterSearchInput, .textbox.combo {
+	float: left;
+	margin-top: 4px;
+}
