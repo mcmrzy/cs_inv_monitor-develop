@@ -122,12 +122,17 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   const items = historyRes?.items ?? []
   const total = historyRes?.total ?? 0
 
-  // 从数据中提取所有可用字段
+  // 从数据中提取所有可用字段（排除元数据字段）
+  const EXCLUDE_FIELDS = new Set([
+    'id', 'time', 'created_at', 'updated_at', 'event_time', 'received_at',
+    'protocol_version', 'sequence_no', 'quality_flags', 'topic', 'data_hash', 'raw_envelope',
+    'device_sn',
+  ])
   const allFields = useMemo(() => {
     const fieldSet = new Set<string>()
     items.forEach((item: any) => {
       Object.keys(item).forEach(key => {
-        if (key !== 'id' && key !== 'time' && key !== 'created_at' && key !== 'updated_at') {
+        if (!EXCLUDE_FIELDS.has(key)) {
           fieldSet.add(key)
         }
       })
