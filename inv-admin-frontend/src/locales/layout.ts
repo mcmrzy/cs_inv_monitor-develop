@@ -1,6 +1,6 @@
 export default {
   zh: {
-    'app.title': '逆变器物联平台',
+    'app.title': '辰烁科技|CSERGY',
     'menu.overview': '总览',
     'menu.dashboard': '仪表盘',
     'menu.bigScreen': '大屏监控',
@@ -61,7 +61,7 @@ export default {
     'msg.timezoneUpdateFailed': '时区更新失败',
   },
   en: {
-    'app.title': 'Inverter IoT Platform',
+    'app.title': 'CSERGY',
     'menu.overview': 'Overview',
     'menu.dashboard': 'Dashboard',
     'menu.bigScreen': 'Big Screen',
