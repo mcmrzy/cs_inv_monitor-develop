@@ -129,7 +129,10 @@ func (r *DeviceRepository) SetDesiredControlState(ctx context.Context, sn, taskI
 
 func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, startDate, endDate, period, tz string) ([]map[string]interface{}, error) {
 	query := `SELECT h.bucket, SUM(h.avg_pv_power), SUM(h.avg_ac_power), SUM(h.avg_battery_power),
-		SUM(h.daily_pv_energy), NULL::double precision, NULL::double precision, NULL::double precision
+		SUM(h.daily_pv_energy),
+		SUM(GREATEST(h.avg_battery_power, 0)) / 1000.0,
+		SUM(GREATEST(-h.avg_battery_power, 0)) / 1000.0,
+		SUM(h.avg_ac_power) / 1000.0
 		FROM device_telemetry_hour h JOIN devices d ON d.sn=h.device_sn
 		WHERE d.station_id=$1 AND d.deleted_at IS NULL AND h.bucket >= $2::timestamptz
 		AND h.bucket < ($3::date+1)::timestamptz GROUP BY h.bucket ORDER BY h.bucket`

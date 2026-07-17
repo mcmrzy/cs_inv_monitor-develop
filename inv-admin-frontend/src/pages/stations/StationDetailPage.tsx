@@ -140,7 +140,9 @@ const StationDetailPage: React.FC = () => {
         devices.map(async (dev: any) => {
           try {
             const res = await deviceApi.getRealtime(dev.sn)
-            results[dev.sn] = res.data?.data ?? res.data ?? {}
+            // API returns { code:0, data: { device_sn, online, realtime: {...flattened} } }
+            const body = res.data?.data ?? res.data ?? {}
+            results[dev.sn] = body?.realtime ?? body
           } catch { /* ignore */ }
         })
       )
@@ -274,8 +276,8 @@ const StationDetailPage: React.FC = () => {
   const pvVoltage1 = safeNum(firstDeviceRt?.pv1_voltage ?? firstDeviceRt?.pv?.pv1_voltage)
   const pvPower2 = safeNum(firstDeviceRt?.pv2_power ?? firstDeviceRt?.pv?.pv2_power)
   const pvVoltage2 = safeNum(firstDeviceRt?.pv2_voltage ?? firstDeviceRt?.pv?.pv2_voltage)
-  const battVoltage = safeNum(firstDeviceRt?.battery_voltage ?? firstDeviceRt?.batt?.voltage)
-  const battCurrent = safeNum(firstDeviceRt?.batt?.current)
+  const battVoltage = safeNum(firstDeviceRt?.battery_voltage ?? firstDeviceRt?.battery?.voltage ?? firstDeviceRt?.batt?.voltage)
+  const battCurrent = safeNum(firstDeviceRt?.battery_current ?? firstDeviceRt?.battery?.current ?? firstDeviceRt?.batt?.current ?? firstDeviceRt?.current)
   const gridVoltage = safeNum(firstDeviceRt?.grid_voltage ?? firstDeviceRt?.ac_voltage ?? firstDeviceRt?.ac?.voltage)
   const gridFreq = safeNum(firstDeviceRt?.grid_frequency ?? firstDeviceRt?.ac_frequency ?? firstDeviceRt?.ac?.frequency)
 
