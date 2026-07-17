@@ -57,10 +57,14 @@ export const FieldRow: React.FC<FieldRowProps> = ({ label, range, children, full
           </Tooltip>
         )}
       </Text>
-      <Space size={8} wrap>
-        {children}
-      </Space>
-      {range && <div style={rangeStyle}>{range}</div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div>
+          <Space size={8} wrap>
+            {children}
+          </Space>
+          {range && <div style={rangeStyle}>{range}</div>}
+        </div>
+      </div>
     </div>
   </Col>
 )
