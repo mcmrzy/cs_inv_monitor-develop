@@ -2,15 +2,17 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Table, Typography, Tag, Select, message, Space, Popconfirm,
-  Drawer, Descriptions, Tabs, Statistic, Input, Button, Form, Modal, Empty, Spin, Grid,
+  Row, Col, Card, Table, Typography, Tag, Select, message, Space,
+  Drawer, Descriptions, Tabs, Statistic, Input, InputNumber, Button, Form, Modal, Empty, Spin, Grid,
   Tooltip, Radio, Alert,
 } from 'antd'
+import Popconfirm from '@/components/LocalizedPopconfirm'
 import type { ColumnsType } from 'antd/es/table'
 import {
   ReloadOutlined, SwapOutlined, EyeOutlined, EditOutlined,
   ApartmentOutlined, DesktopOutlined, CheckCircleOutlined, ThunderboltOutlined,
   SunOutlined, ArrowUpOutlined, FireOutlined, PlusOutlined, DeleteOutlined,
+  SearchOutlined, AppstoreOutlined, UnorderedListOutlined,
 } from '@ant-design/icons'
 import ReactECharts from '@/lib/echarts'
 import dayjs from 'dayjs'
@@ -26,6 +28,7 @@ import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import useLocaleStore from '@/stores/localeStore'
 import StatisticCard from '@/components/StatisticCard'
+import StationCard from './components/StationCard'
 
 const { Title, Text } = Typography
 
@@ -148,6 +151,15 @@ const StationsPage: React.FC = () => {
   /* ---------- 设备筛选 ---------- */
   const [deviceKeyword, setDeviceKeyword] = useState('')
   const [deviceStatusFilter, setDeviceStatusFilter] = useState<number | undefined>(undefined)
+
+  /* ---------- 视图模式 ---------- */
+  const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
+    try { return (localStorage.getItem('stations_view_mode') as any) || 'card' } catch { return 'card' }
+  })
+
+  /* ---------- 状态筛选和搜索 ---------- */
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [searchKeyword, setSearchKeyword] = useState('')
 
   /* ---------- 趋势图时间范围 ---------- */
   const [trendRange, setTrendRange] = useState<7 | 30>(30)
@@ -357,6 +369,38 @@ const StationsPage: React.FC = () => {
       messageApi.error(t('station.deleteFailed'))
     }
   }
+
+  /* ---------- 电站筛选和搜索 ---------- */
+
+  const statusCounts = useMemo(() => {
+    const counts = { all: stations.length, normal: 0, fault: 0, offline: 0 }
+    stations.forEach((s: StationItem) => {
+      if ((s.fault_count ?? 0) > 0) counts.fault++
+      else if ((s.device_count ?? 0) > 0 && (s.online_count ?? 0) === 0) counts.offline++
+      else if (s.status === 1) counts.normal++
+    })
+    return counts
+  }, [stations])
+
+  const filteredStations = useMemo(() => {
+    let list = stations
+    if (statusFilter !== 'all') {
+      list = list.filter((s: StationItem) => {
+        if (statusFilter === 'fault') return (s.fault_count ?? 0) > 0
+        if (statusFilter === 'offline') return (s.device_count ?? 0) > 0 && (s.online_count ?? 0) === 0
+        if (statusFilter === 'normal') return s.status === 1 && (s.fault_count ?? 0) === 0
+        return true
+      })
+    }
+    if (searchKeyword) {
+      const kw = searchKeyword.toLowerCase()
+      list = list.filter((s: StationItem) =>
+        s.name?.toLowerCase().includes(kw) ||
+        [s.province, s.city, s.district, s.address].filter(Boolean).join(' ').toLowerCase().includes(kw)
+      )
+    }
+    return list
+  }, [stations, statusFilter, searchKeyword])
 
   /* ---------- 过滤后的设备列表 ---------- */
 
@@ -936,7 +980,7 @@ const StationsPage: React.FC = () => {
         />
       )}
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-        <Title level={4} style={{ margin: 0 }}>{t('station.title')}</Title>
+        <Title level={4} style={{ margin: 0 }}>⚡ {t('station.title')}</Title>
         <Space>
           {isAdmin && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
@@ -985,18 +1029,83 @@ const StationsPage: React.FC = () => {
         </Col>
       </Row>
 
-      {/* 电站列表 */}
-      <Card bordered={false} style={{ borderRadius: 12 }}>
-        <Table<StationItem>
-          columns={columns}
-          dataSource={stations}
-          rowKey="id"
-          loading={isLoading}
-          size="small"
-          pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => t('common.total', { total }) }}
-          scroll={{ x: 1200 }}
-        />
+      {/* 工具栏：视图切换 + 状态筛选 + 搜索 */}
+      <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} styles={{ body: { padding: '12px 16px' } }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          {/* 状态筛选按钮 */}
+          <Space wrap>
+            {([
+              { key: 'all', label: t('common.all') || '全部', color: '#1677ff' },
+              { key: 'normal', label: t('station.normal'), color: '#52c41a' },
+              { key: 'fault', label: t('station.fault') || '故障', color: '#ff4d4f' },
+              { key: 'offline', label: t('station.offline'), color: '#8c8c8c' },
+            ] as const).map(({ key, label, color }) => (
+              <Button
+                key={key}
+                type={statusFilter === key ? 'primary' : 'default'}
+                style={statusFilter === key ? { background: color, borderColor: color } : undefined}
+                onClick={() => setStatusFilter(key)}
+                size="small"
+              >
+                {label} ({statusCounts[key as keyof typeof statusCounts]})
+              </Button>
+            ))}
+          </Space>
+          {/* 搜索 + 视图切换 */}
+          <Space>
+            <Input
+              placeholder={t('station.searchStation') || '搜索电站'}
+              prefix={<SearchOutlined />}
+              allowClear
+              style={{ width: 200 }}
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
+            />
+            <Radio.Group
+              value={viewMode}
+              onChange={(e) => {
+                const mode = e.target.value
+                setViewMode(mode)
+                try { localStorage.setItem('stations_view_mode', mode) } catch {}
+              }}
+              optionType="button"
+              buttonStyle="solid"
+              size="small"
+            >
+              <Radio.Button value="card"><AppstoreOutlined /></Radio.Button>
+              <Radio.Button value="table"><UnorderedListOutlined /></Radio.Button>
+            </Radio.Group>
+          </Space>
+        </div>
       </Card>
+
+      {/* 电站列表 */}
+      <Spin spinning={isLoading}>
+        {viewMode === 'card' ? (
+          <Row gutter={[16, 16]}>
+            {filteredStations.map(station => (
+              <Col xs={24} sm={12} md={8} lg={6} key={station.id}>
+                <StationCard station={station} onClick={() => navigate(`/stations/${station.id}`)} />
+              </Col>
+            ))}
+            {filteredStations.length === 0 && !isLoading && (
+              <Col span={24}><Empty description={t('station.noData')} style={{ padding: 60 }} /></Col>
+            )}
+          </Row>
+        ) : (
+          <Card bordered={false} style={{ borderRadius: 12 }}>
+            <Table<StationItem>
+              columns={columns}
+              dataSource={filteredStations}
+              rowKey="id"
+              loading={isLoading}
+              size="small"
+              pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => t('common.total', { total }) }}
+              scroll={{ x: 1200 }}
+            />
+          </Card>
+        )}
+      </Spin>
 
       {/* 详情抽屉 */}
       <Drawer
@@ -1039,7 +1148,7 @@ const StationsPage: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item name="capacity" label={t('station.capacity_kW')}>
-                <Input type="number" />
+                <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -1064,12 +1173,12 @@ const StationsPage: React.FC = () => {
             </Col>
             <Col span={8}>
               <Form.Item name="panel_count" label={t('station.panelCount')}>
-                <Input type="number" />
+                <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item name="battery_capacity" label={t('station.batteryCapacity')}>
-                <Input type="number" />
+                <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -1156,7 +1265,7 @@ const StationsPage: React.FC = () => {
             </Col>
             <Col span={12}>
               <Form.Item name="capacity" label={t('station.capacity_kW')}>
-                <Input type="number" />
+                <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -1181,12 +1290,12 @@ const StationsPage: React.FC = () => {
             </Col>
             <Col span={8}>
               <Form.Item name="panel_count" label={t('station.panelCount')}>
-                <Input type="number" />
+                <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item name="battery_capacity" label={t('station.batteryCapacity')}>
-                <Input type="number" />
+                <InputNumber style={{ width: '100%' }} min={0} />
               </Form.Item>
             </Col>
             <Col span={8}>

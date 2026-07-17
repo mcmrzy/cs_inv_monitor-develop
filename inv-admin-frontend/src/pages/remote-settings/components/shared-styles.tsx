@@ -1,5 +1,6 @@
 import React from 'react'
-import { Button, Space, Typography, Col } from 'antd'
+import { Button, Space, Typography, Col, Tooltip } from 'antd'
+import { QuestionCircleOutlined, InfoCircleOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
 
@@ -10,9 +11,7 @@ export const PRIMARY = '#4f6ef7'
 export const SECTION_COLORS: Record<string, string> = {
   general: '#4f6ef7',
   application: '#7c3aed',
-  parallel: '#06b6d4',
   gridConnection: '#3b82f6',
-  powerControl: '#8b5cf6',
   charge: '#10b981',
   discharge: '#f59e0b',
   other: '#6b7280',
@@ -37,12 +36,20 @@ interface FieldRowProps {
   range?: string
   children: React.ReactNode
   full?: boolean
+  tooltip?: string
 }
 
-export const FieldRow: React.FC<FieldRowProps> = ({ label, range, children, full }) => (
+export const FieldRow: React.FC<FieldRowProps> = ({ label, range, children, full, tooltip }) => (
   <Col span={full ? 24 : 12}>
     <div style={fieldRowStyle}>
-      <Text style={labelStyle}>{label}</Text>
+      <Text style={labelStyle}>
+        {label}
+        {tooltip && (
+          <Tooltip title={tooltip} overlayStyle={{ maxWidth: 360 }}>
+            <QuestionCircleOutlined style={{ marginLeft: 4, color: '#bbb', cursor: 'help', fontSize: 13 }} />
+          </Tooltip>
+        )}
+      </Text>
       <Space size={8} wrap>
         {children}
       </Space>
@@ -58,14 +65,22 @@ interface SwitchFieldProps {
   onChange: (v: boolean) => void
   enableText?: string
   disableText?: string
+  tooltip?: string
 }
 
 export const SwitchField: React.FC<SwitchFieldProps> = ({
-  label, checked, onChange, enableText = '启用', disableText = '禁用',
+  label, checked, onChange, enableText = '启用', disableText = '禁用', tooltip,
 }) => (
   <Col span={12}>
     <div style={fieldRowStyle}>
-      <Text style={labelStyle}>{label}</Text>
+      <Text style={labelStyle}>
+        {label}
+        {tooltip && (
+          <Tooltip title={tooltip} overlayStyle={{ maxWidth: 360 }}>
+            <QuestionCircleOutlined style={{ marginLeft: 4, color: '#bbb', cursor: 'help', fontSize: 13 }} />
+          </Tooltip>
+        )}
+      </Text>
       <Space size={4}>
         <Button
           type={checked ? 'primary' : 'default'}
@@ -88,9 +103,87 @@ export const SwitchField: React.FC<SwitchFieldProps> = ({
   </Col>
 )
 
+// SubGroupTitle - 简单子分组标题（无帮助内容）
+export const SubGroupTitle: React.FC<{ title: string; color?: string }> = ({ title, color = '#3b82f6' }) => (
+  <Col span={24}>
+    <div style={{ marginTop: 16, marginBottom: 8, paddingBottom: 4, borderBottom: `1px solid ${color}` }}>
+      <Text strong style={{ fontSize: 13, color }}>
+        {title}
+      </Text>
+    </div>
+  </Col>
+)
+
 // SettingButton - 统一的蓝色设置按钮
 export const SettingButton: React.FC<{ onClick: () => void; loading?: boolean }> = ({ onClick, loading }) => (
   <Button type="primary" size="small" style={settingBtnStyle} onClick={onClick} loading={loading}>
     设置
   </Button>
 )
+
+// buildLabelMap - 从字段数组构建 fieldKey → 中文标签 映射
+export function buildLabelMap(...fieldArrays: { key: string; label: string }[][]) {
+  const map: Record<string, string> = {}
+  for (const arr of fieldArrays) {
+    for (const f of arr) {
+      map[f.key] = f.label
+    }
+  }
+  return map
+}
+
+// buildDefaults - 从字段数组构建 fieldKey → 默认值 映射
+export function buildDefaults(...fieldArrays: { key: string; default: any }[][]) {
+  const map: Record<string, any> = {}
+  for (const arr of fieldArrays) {
+    for (const f of arr) {
+      map[f.key] = f.default
+    }
+  }
+  return map
+}
+
+// displayLabel - 拼接 label + unit 作为展示标签
+export function displayLabel(f: { label: string; unit?: string }) {
+  return f.unit ? `${f.label}(${f.unit})` : f.label
+}
+
+// SubGroupHelp - 子分组标题 + 帮助图标（悬浮显示说明）
+// hint: 简短提示文案（推荐）；helpItems: 字段级详细说明（向后兼容）
+export const SubGroupHelp: React.FC<{
+  title: string
+  color: string
+  hint?: string
+  helpItems?: { label: string; value: string }[]
+}> = ({ title, color, hint, helpItems }) => {
+  const tooltipContent = hint
+    ? <span style={{ fontSize: 12 }}>{hint}</span>
+    : helpItems
+      ? (
+        <div style={{ fontSize: 12, lineHeight: 1.8 }}>
+          {helpItems.map((item, idx) => (
+            <div key={idx}>
+              <span style={{ color: '#93c5fd' }}>{item.label}</span>：{item.value}
+            </div>
+          ))}
+        </div>
+      )
+      : null
+
+  return (
+    <Col span={24}>
+      <div style={{ marginTop: 16, marginBottom: 8, paddingBottom: 4, borderBottom: `1px solid ${color}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 600, fontSize: 13, color }}>{title}</span>
+          {tooltipContent && (
+            <Tooltip overlayStyle={{ maxWidth: 400 }} title={tooltipContent}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color, cursor: 'pointer' }}>
+                <InfoCircleOutlined /> 说明
+              </span>
+            </Tooltip>
+          )}
+        </div>
+      </div>
+    </Col>
+  )
+}

@@ -83,7 +83,6 @@ const AppRoutes: React.FC = () => (
       <Route path="/stations/:id" element={<StationDetailPage />} />
       <Route path="/models" element={<ModelsPage />} />
       <Route path="/monitoring" element={<MonitoringPage />} />
-      <Route path="/monitoring/:id" element={<StationDetailPage />} />
       <Route path="/remote-settings" element={<RemoteSettingsPage />} />
       <Route path="/batch-settings" element={<BatchSettingsPage />} />
       <Route path="/operation-logs" element={<OperationLogsPage />} />
