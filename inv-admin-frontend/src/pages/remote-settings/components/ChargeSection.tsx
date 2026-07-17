@@ -1,11 +1,10 @@
-import React, { useState } from 'react'
-import { Row, Col, Select, InputNumber, Divider, App, Typography, Space } from 'antd'
-import { FieldRow, SwitchField, SettingButton, labelStyle, fieldRowStyle } from './shared-styles'
+import React, { useState, useCallback } from 'react'
+import { Row, Col, Select, InputNumber, Divider, App, Typography, Space, Tooltip } from 'antd'
+import { QuestionCircleOutlined } from '@ant-design/icons'
+import { FieldRow, SwitchField, SettingButton, SubGroupTitle, labelStyle, fieldRowStyle, SECTION_COLORS } from './shared-styles'
 
 const { Text } = Typography
 const { Option } = Select
-
-const subTitleStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: '#555', marginBottom: 8 }
 
 interface TimeRangeFieldProps {
   label: string
@@ -14,12 +13,20 @@ interface TimeRangeFieldProps {
   onHChange: (v: number | null) => void
   onMChange: (v: number | null) => void
   onSet: () => void
+  tooltip?: string
 }
 
-const TimeRangeField: React.FC<TimeRangeFieldProps> = ({ label, h, m, onHChange, onMChange, onSet }) => (
+const TimeRangeField: React.FC<TimeRangeFieldProps> = ({ label, h, m, onHChange, onMChange, onSet, tooltip }) => (
   <Col span={24}>
     <div style={fieldRowStyle}>
-      <Text style={labelStyle}>{label}</Text>
+      <Text style={labelStyle}>
+        {label}
+        {tooltip && (
+          <Tooltip title={tooltip} overlayStyle={{ maxWidth: 360 }}>
+            <QuestionCircleOutlined style={{ marginLeft: 4, color: '#bbb', cursor: 'help', fontSize: 13 }} />
+          </Tooltip>
+        )}
+      </Text>
       <Space>
         <InputNumber min={0} max={23} value={h} onChange={onHChange} style={{ width: 70 }} addonAfter="时" />
         <Text>:</Text>
@@ -44,7 +51,7 @@ const ChargeSection: React.FC = () => {
   const [equalTime, setEqualTime] = useState<number>(2)
 
   // 交流充电
-  const [acChargeControl, setAcChargeControl] = useState('voltage')
+  const [acChargeControl, setAcChargeControl] = useState<number>(0)
   const [acChargeCurrent, setAcChargeCurrent] = useState<number>(60)
   const [acStart1H, setAcStart1H] = useState(0)
   const [acStart1M, setAcStart1M] = useState(0)
@@ -64,7 +71,7 @@ const ChargeSection: React.FC = () => {
   const [acChargeEndSoc, setAcChargeEndSoc] = useState<number>(90)
 
   // 发电机充电
-  const [genChargeType, setGenChargeType] = useState('manual')
+  const [genChargeType, setGenChargeType] = useState<number>(0)
   const [genChargeCurrent, setGenChargeCurrent] = useState<number>(60)
   const [genChargeStartVoltage, setGenChargeStartVoltage] = useState<number>(46)
   const [genChargeEndVoltage, setGenChargeEndVoltage] = useState<number>(54)
@@ -77,15 +84,68 @@ const ChargeSection: React.FC = () => {
     message.success(`${fieldName} 指令已下发`)
   }
 
-  const showVoltage = acChargeControl === 'voltage' || acChargeControl === 'voltage_soc'
-  const showSoc = acChargeControl === 'soc' || acChargeControl === 'voltage_soc'
+  // AC充电：设置时自动将不相关的值归零
+  const handleAcControlSet = useCallback(() => {
+    const ctrl = acChargeControl
+    // 禁用时所有子字段归零
+    if (ctrl === 0) {
+      setAcChargeCurrent(0)
+      setAcChargeStartVoltage(0)
+      setAcChargeEndVoltage(0)
+      setAcChargeStartSoc(0)
+      setAcChargeEndSoc(0)
+      setAcStart1H(0); setAcStart1M(0)
+      setAcEnd1H(0); setAcEnd1M(0)
+      setAcStart2H(0); setAcStart2M(0)
+      setAcEnd2H(0); setAcEnd2M(0)
+      setAcStart3H(0); setAcStart3M(0)
+      setAcEnd3H(0); setAcEnd3M(0)
+    } else {
+      // 时间不相关 → 时间归零
+      if (![1, 4, 5].includes(ctrl)) {
+        setAcStart1H(0); setAcStart1M(0)
+        setAcEnd1H(0); setAcEnd1M(0)
+        setAcStart2H(0); setAcStart2M(0)
+        setAcEnd2H(0); setAcEnd2M(0)
+        setAcStart3H(0); setAcStart3M(0)
+        setAcEnd3H(0); setAcEnd3M(0)
+      }
+      // 电压不相关 → 电压归零
+      if (![2, 4].includes(ctrl)) {
+        setAcChargeStartVoltage(0)
+        setAcChargeEndVoltage(0)
+      }
+      // SOC不相关 → SOC归零
+      if (![3, 5].includes(ctrl)) {
+        setAcChargeStartSoc(0)
+        setAcChargeEndSoc(0)
+      }
+    }
+    handleSet('AC充电控制依据')
+  }, [acChargeControl])
+
+  // 发电机充电：设置时自动将不相关的值归零
+  const handleGenTypeSet = useCallback(() => {
+    if (genChargeType === 0) {
+      // 电压模式 → SOC归零
+      setGenChargeStartSoc(0)
+      setGenChargeEndSoc(0)
+    } else {
+      // SOC模式 → 电压归零
+      setGenChargeStartVoltage(0)
+      setGenChargeEndVoltage(0)
+    }
+    handleSet('发电机充电类型')
+  }, [genChargeType])
+
+  const sectionColor = SECTION_COLORS.charge
 
   return (
     <Row gutter={[16, 8]}>
       {/* 主充电参数 */}
-      <Col span={24}><Text style={subTitleStyle}>主充电参数</Text></Col>
+      <SubGroupTitle title="主充电参数" color={sectionColor} />
 
-      <FieldRow label="充电电流限制(A)" range="[0, 110]">
+      <FieldRow label="充电电流限制(A)" tooltip="根据电池要求进行设置，范围：0~110（单台）4480（并联）。">
         <InputNumber min={0} max={110} step={0.1} value={chargeCurrent} onChange={(v) => setChargeCurrent(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('充电电流限制')} />
       </FieldRow>
@@ -93,29 +153,29 @@ const ChargeSection: React.FC = () => {
       <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 铅酸充电参数 */}
-      <Col span={24}><Text style={subTitleStyle}>铅酸</Text></Col>
+      <SubGroupTitle title="铅酸" color={sectionColor} />
 
-      <FieldRow label="充电电压(V)" range="[50, 58]">
-        <InputNumber min={50} max={58} step={0.1} value={chargeVoltage} onChange={(v) => setChargeVoltage(v ?? 50)} style={{ width: 140 }} />
+      <FieldRow label="充电电压(V)" tooltip="根据电池要求进行设置，范围：50~59V。">
+        <InputNumber min={50} max={59} step={0.1} value={chargeVoltage} onChange={(v) => setChargeVoltage(v ?? 50)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('充电电压')} />
       </FieldRow>
 
-      <FieldRow label="浮动电压(V)" range="[50, 58]">
-        <InputNumber min={50} max={58} step={0.1} value={floatVoltage} onChange={(v) => setFloatVoltage(v ?? 50)} style={{ width: 140 }} />
+      <FieldRow label="浮动电压(V)" tooltip="根据电池要求进行设置，范围：50~56V。1：使用铅酸电池时，必须设置低于充电电压。2：在铅酸模式下使用锂电池时，可以设置为等于或低于充电电压。">
+        <InputNumber min={50} max={56} step={0.1} value={floatVoltage} onChange={(v) => setFloatVoltage(v ?? 50)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('浮动电压')} />
       </FieldRow>
 
-      <FieldRow label="均衡电压(V)" range="[50, 59]">
-        <InputNumber min={50} max={59} step={0.1} value={equalVoltage} onChange={(v) => setEqualVoltage(v ?? 50)} style={{ width: 140 }} />
+      <FieldRow label="均衡电压(V)" tooltip="1：使用铅酸电池时，设置范围：50~59。2：在铅酸模式下使用锂电池时，输入 0。">
+        <InputNumber min={0} max={59} step={0.1} value={equalVoltage} onChange={(v) => setEqualVoltage(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('均衡电压')} />
       </FieldRow>
 
-      <FieldRow label="均衡周期(天)" range="[0, 365]">
+      <FieldRow label="均衡周期(天)" tooltip="1：使用铅酸电池时，设置范围：0~365。2：在铅酸模式下使用锂电池时，输入 0。">
         <InputNumber min={0} max={365} value={equalCycle} onChange={(v) => setEqualCycle(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('均衡周期')} />
       </FieldRow>
 
-      <FieldRow label="均衡时间(小时)" range="[0, 24]">
+      <FieldRow label="均衡时间(小时)" tooltip="1：使用铅酸电池时，设置范围：0~24。2：在铅酸模式下使用锂电池时，输入 0。">
         <InputNumber min={0} max={24} value={equalTime} onChange={(v) => setEqualTime(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('均衡时间')} />
       </FieldRow>
@@ -123,49 +183,44 @@ const ChargeSection: React.FC = () => {
       <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 交流充电 */}
-      <Col span={24}><Text style={subTitleStyle}>交流充电</Text></Col>
+      <SubGroupTitle title="交流充电" color={sectionColor} />
 
-      <FieldRow label="AC充电控制依据">
-        <Select value={acChargeControl} onChange={setAcChargeControl} style={{ width: 140 }}>
-          <Option value="voltage">电池电压</Option>
-          <Option value="soc">SOC</Option>
-          <Option value="voltage_soc">电压+SOC</Option>
+      <FieldRow label="AC充电控制依据" tooltip="根据时间：设定一个优选的充电时间段给电池。根据SOC/电压：当SOC/电压下降到设定阈值时设定交流电充电电池。">
+        <Select value={acChargeControl} onChange={(v: number) => setAcChargeControl(v)} style={{ width: 180 }}>
+          <Option value={0}>禁用</Option>
+          <Option value={1}>时间</Option>
+          <Option value={2}>电池电压</Option>
+          <Option value={3}>电池SOC</Option>
+          <Option value={4}>电池电压+时间</Option>
+          <Option value={5}>电池SOC+时间</Option>
         </Select>
-        <SettingButton onClick={() => handleSet('AC充电控制依据')} />
+        <SettingButton onClick={handleAcControlSet} />
       </FieldRow>
 
-      <FieldRow label="交流充电电池电流(A)" range="[0, 150]">
-        <InputNumber min={0} max={150} step={0.1} value={acChargeCurrent} onChange={(v) => setAcChargeCurrent(v ?? 0)} style={{ width: 140 }} />
+      <FieldRow label="交流充电电池电流(A)" tooltip="根据电池要求进行设置，范围：0~100A。">
+        <InputNumber min={0} max={100} step={0.1} value={acChargeCurrent} onChange={(v) => setAcChargeCurrent(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('交流充电电池电流')} />
       </FieldRow>
 
-      {/* 电压字段 - 依据为 voltage 或 voltage_soc 时显示 */}
-      {showVoltage && (
-        <>
-          <FieldRow label="交流充电开始电池电压(V)" range="[38.4, 52]">
-            <InputNumber min={38.4} max={52} step={0.1} value={acChargeStartVoltage} onChange={(v) => setAcChargeStartVoltage(v ?? 38.4)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('交流充电开始电池电压')} />
-          </FieldRow>
-          <FieldRow label="交流充电结束电池电压(V)" range="[48, 59]">
-            <InputNumber min={48} max={59} step={0.1} value={acChargeEndVoltage} onChange={(v) => setAcChargeEndVoltage(v ?? 48)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('交流充电结束电池电压')} />
-          </FieldRow>
-        </>
-      )}
+      <FieldRow label="交流充电开始电池电压(V)" tooltip="根据电池要求进行设置，范围：38.4~52V。">
+        <InputNumber min={0} max={52} step={0.1} value={acChargeStartVoltage} onChange={(v) => setAcChargeStartVoltage(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('交流充电开始电池电压')} />
+      </FieldRow>
 
-      {/* SOC字段 - 依据为 soc 或 voltage_soc 时显示 */}
-      {showSoc && (
-        <>
-          <FieldRow label="交流充电开始电池SOC(%)" range="[0, 90]">
-            <InputNumber min={0} max={90} value={acChargeStartSoc} onChange={(v) => setAcChargeStartSoc(v ?? 0)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('交流充电开始电池SOC')} />
-          </FieldRow>
-          <FieldRow label="交流充电结束电池SOC(%)" range="[20, 100]">
-            <InputNumber min={20} max={100} value={acChargeEndSoc} onChange={(v) => setAcChargeEndSoc(v ?? 20)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('交流充电结束电池SOC')} />
-          </FieldRow>
-        </>
-      )}
+      <FieldRow label="交流充电结束电池电压(V)" tooltip="根据电池要求进行设置，范围：48~59V。">
+        <InputNumber min={0} max={59} step={0.1} value={acChargeEndVoltage} onChange={(v) => setAcChargeEndVoltage(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('交流充电结束电池电压')} />
+      </FieldRow>
+
+      <FieldRow label="交流充电开始电池SOC(%)" tooltip="根据电池要求进行设置，范围：0~90%。">
+        <InputNumber min={0} max={90} value={acChargeStartSoc} onChange={(v) => setAcChargeStartSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('交流充电开始电池SOC')} />
+      </FieldRow>
+
+      <FieldRow label="交流充电结束电池SOC(%)" tooltip="根据电池要求进行设置，范围：20~100%。">
+        <InputNumber min={0} max={100} value={acChargeEndSoc} onChange={(v) => setAcChargeEndSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('交流充电结束电池SOC')} />
+      </FieldRow>
 
       <TimeRangeField label="AC充电起始时间1" h={acStart1H} m={acStart1M} onHChange={(v) => setAcStart1H(v ?? 0)} onMChange={(v) => setAcStart1M(v ?? 0)} onSet={() => handleSet('AC充电起始时间1')} />
       <TimeRangeField label="AC充电结束时间1" h={acEnd1H} m={acEnd1M} onHChange={(v) => setAcEnd1H(v ?? 0)} onMChange={(v) => setAcEnd1M(v ?? 0)} onSet={() => handleSet('AC充电结束时间1')} />
@@ -177,42 +232,42 @@ const ChargeSection: React.FC = () => {
       <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 发电机充电 */}
-      <Col span={24}><Text style={subTitleStyle}>发电机充电</Text></Col>
+      <SubGroupTitle title="发电机充电" color={sectionColor} />
 
-      <FieldRow label="发电机充电类型">
-        <Select value={genChargeType} onChange={setGenChargeType} style={{ width: 140 }}>
-          <Option value="manual">手动</Option>
-          <Option value="auto">自动</Option>
+      <FieldRow label="发电机充电类型" tooltip="根据电池电压或电池SOC设置发电机充电。">
+        <Select value={genChargeType} onChange={(v: number) => setGenChargeType(v)} style={{ width: 140 }}>
+          <Option value={0}>电池电压</Option>
+          <Option value={1}>电池SOC</Option>
         </Select>
-        <SettingButton onClick={() => handleSet('发电机充电类型')} />
+        <SettingButton onClick={handleGenTypeSet} />
       </FieldRow>
 
-      <FieldRow label="发电机充电电池电流(A)" range="[0, 110]">
+      <FieldRow label="发电机充电电池电流(A)" tooltip="设置发电机电池充电电流。范围为0-110安培。">
         <InputNumber min={0} max={110} step={0.1} value={genChargeCurrent} onChange={(v) => setGenChargeCurrent(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('发电机充电电池电流')} />
       </FieldRow>
 
-      <FieldRow label="发电机充电开始电池电压(V)" range="[38.4, 52]">
-        <InputNumber min={38.4} max={52} step={0.1} value={genChargeStartVoltage} onChange={(v) => setGenChargeStartVoltage(v ?? 38.4)} style={{ width: 140 }} />
+      <FieldRow label="发电机充电开始电池电压(V)" tooltip="根据电池要求进行设置，范围：38.4~52V。">
+        <InputNumber min={0} max={52} step={0.1} value={genChargeStartVoltage} onChange={(v) => setGenChargeStartVoltage(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('发电机充电开始电池电压')} />
       </FieldRow>
 
-      <FieldRow label="发电机充电结束电池电压(V)" range="[48, 59]">
-        <InputNumber min={48} max={59} step={0.1} value={genChargeEndVoltage} onChange={(v) => setGenChargeEndVoltage(v ?? 48)} style={{ width: 140 }} />
+      <FieldRow label="发电机充电结束电池电压(V)" tooltip="根据电池要求进行设置，范围：48~59V。">
+        <InputNumber min={0} max={59} step={0.1} value={genChargeEndVoltage} onChange={(v) => setGenChargeEndVoltage(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('发电机充电结束电池电压')} />
       </FieldRow>
 
-      <FieldRow label="发电机充电开始电池SOC(%)" range="[0, 90]">
+      <FieldRow label="发电机充电开始电池SOC(%)" tooltip="根据电池要求进行设置，范围：0~90%。">
         <InputNumber min={0} max={90} value={genChargeStartSoc} onChange={(v) => setGenChargeStartSoc(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('发电机充电开始电池SOC')} />
       </FieldRow>
 
-      <FieldRow label="发电机充电结束电池SOC(%)" range="[20, 100]">
-        <InputNumber min={20} max={100} value={genChargeEndSoc} onChange={(v) => setGenChargeEndSoc(v ?? 20)} style={{ width: 140 }} />
+      <FieldRow label="发电机充电结束电池SOC(%)" tooltip="根据电池要求进行设置，范围：20~100%。">
+        <InputNumber min={0} max={100} value={genChargeEndSoc} onChange={(v) => setGenChargeEndSoc(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('发电机充电结束电池SOC')} />
       </FieldRow>
 
-      <FieldRow label="发电机额定功率(W)" range="[0, 7370]">
+      <FieldRow label="发电机额定功率(W)" tooltip="范围 0~7370（单台）65534（并联）。逆变器将限制功率为发电机总输入的 90% 以避免过载。">
         <InputNumber min={0} max={7370} value={genRatedPower} onChange={(v) => setGenRatedPower(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('发电机额定功率')} />
       </FieldRow>

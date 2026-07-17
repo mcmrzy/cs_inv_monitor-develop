@@ -9,7 +9,7 @@ const OtherSection: React.FC = () => {
   const { message } = App.useApp()
 
   const [ctCompensation, setCtCompensation] = useState<number>(0)
-  const [batteryVoltageSample, setBatteryVoltageSample] = useState('disabled')
+  const [batteryVoltageSample, setBatteryVoltageSample] = useState<number>(0)
   const [disableExternalSample, setDisableExternalSample] = useState(false)
   const [fan1MaxSpeed, setFan1MaxSpeed] = useState<number>(100)
   const [fan1SlopeMode, setFan1SlopeMode] = useState<'default' | 'custom'>('default')
@@ -29,17 +29,17 @@ const OtherSection: React.FC = () => {
         <SettingButton onClick={() => handleSet('CT功率补偿')} />
       </FieldRow>
 
-      <FieldRow label="电池电压采样">
-        <Select value={batteryVoltageSample} onChange={setBatteryVoltageSample} style={{ width: 140 }}>
-          <Option value="disabled">禁用</Option>
-          <Option value="battery_only">仅电池</Option>
-          <Option value="battery_and_bus">电池+母线</Option>
+      <FieldRow label="电池电压采样" tooltip="设置为内部、外部或两者可用。">
+        <Select<number> value={batteryVoltageSample} onChange={setBatteryVoltageSample} style={{ width: 160 }}>
+          <Option value={1}>禁止外部采样</Option>
+          <Option value={2}>禁止内部采样</Option>
+          <Option value={0}>两个采样使能</Option>
         </Select>
         <SettingButton onClick={() => handleSet('电池电压采样')} />
       </FieldRow>
       <SwitchField label="禁止外部采样" checked={disableExternalSample} onChange={(v) => { setDisableExternalSample(v); handleSet('禁止外部采样') }} />
 
-      <FieldRow label="风扇 1 最大速度(%)" range="[10, 100]">
+      <FieldRow label="风扇 1 最大速度(%)" range="[10, 100]" tooltip="这设置了冷却风扇1的最大速度。范围是10-100%。">
         <InputNumber min={10} max={100} value={fan1MaxSpeed} onChange={(v) => setFan1MaxSpeed(v ?? 10)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('风扇1最大速度')} />
       </FieldRow>
@@ -77,7 +77,7 @@ const OtherSection: React.FC = () => {
         </div>
       </Col>
 
-      <FieldRow label="风扇 2 最大速度(%)" range="[10, 100]">
+      <FieldRow label="风扇 2 最大速度(%)" range="[10, 100]" tooltip="这设置了冷却风扇2的最大速度。范围是10-100%。">
         <InputNumber min={10} max={100} value={fan2MaxSpeed} onChange={(v) => setFan2MaxSpeed(v ?? 10)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('风扇2最大速度')} />
       </FieldRow>

@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { Button, Empty, Typography, Space, App, Collapse } from 'antd'
+import { Empty, Typography, Space, App, Collapse } from 'antd'
 import {
   ReloadOutlined, SettingOutlined, ThunderboltOutlined,
   ToolOutlined, ArrowUpOutlined, ArrowDownOutlined,
-  ControlOutlined,
+  ApiOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { deviceApi } from '@/services/deviceApi'
@@ -11,8 +11,7 @@ import { queryKeys } from '@/utils/queryKeys'
 import DeviceSelector from './components/DeviceSelector'
 import GeneralSection from './components/GeneralSection'
 import ApplicationSection from './components/ApplicationSection'
-import ParallelSection from './components/ParallelSection'
-import PowerControlSection from './components/PowerControlSection'
+import GridConnectionSection from './components/GridConnectionSection'
 import ChargeSection from './components/ChargeSection'
 import DischargeSection from './components/DischargeSection'
 import OtherSection from './components/OtherSection'
@@ -36,7 +35,7 @@ const RemoteSettingsPage: React.FC = () => {
     return localStorage.getItem('remote-settings-device-sn')
   })
   const [reading, setReading] = useState(false)
-  const [activeKeys, setActiveKeys] = useState<string[]>(['general', 'application', 'parallel', 'powerControl', 'charge', 'discharge', 'other', 'reset'])
+  const [activeKeys, setActiveKeys] = useState<string[]>(['general', 'application', 'gridConnection', 'charge', 'discharge', 'other', 'reset'])
 
   const { data: devicesData } = useQuery({
     queryKey: queryKeys.devices.list({ page: 1, page_size: 200 }),
@@ -107,19 +106,11 @@ const RemoteSettingsPage: React.FC = () => {
             </Collapse.Panel>
 
             <Collapse.Panel
-              key="parallel"
-              header={<SectionHeader icon={<ToolOutlined />} title="并联设置" color={SECTION_COLORS.parallel} />}
-              style={panelStyle(SECTION_COLORS.parallel)}
+              key="gridConnection"
+              header={<SectionHeader icon={<ApiOutlined />} title="系统并网设置" color={SECTION_COLORS.gridConnection} />}
+              style={panelStyle(SECTION_COLORS.gridConnection)}
             >
-              <ParallelSection />
-            </Collapse.Panel>
-
-            <Collapse.Panel
-              key="powerControl"
-              header={<SectionHeader icon={<ControlOutlined />} title="功率控制" color={SECTION_COLORS.powerControl} />}
-              style={panelStyle(SECTION_COLORS.powerControl)}
-            >
-              <PowerControlSection deviceInfo={selectedDevice} />
+              <GridConnectionSection deviceInfo={selectedDevice} />
             </Collapse.Panel>
 
             <Collapse.Panel

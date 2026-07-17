@@ -8,8 +8,6 @@ import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
 import DeviceRealtimeModal from './DeviceRealtimeModal'
 
-import useTranslation from '@/hooks/useTranslation'
-
 const { Text } = Typography
 
 interface StationDevicesTabProps {
@@ -25,10 +23,7 @@ interface DeviceItem {
   rated_power?: number
   status: number | string
   last_online_at?: string
-  last_seen_at?: string
-  updated_at?: string
   firmware_version?: string
-  firmware_arm?: string
   firmware_dsp?: string
   firmware_bms?: string
   stationId?: string
@@ -36,7 +31,6 @@ interface DeviceItem {
 }
 
 const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezone }) => {
-  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined)
   const [modalSn, setModalSn] = useState<string | null>(null)
@@ -65,7 +59,7 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
       return results
     },
     enabled: !!devices?.length,
-    refetchInterval: () => document.visibilityState === 'visible' ? 15000 : false,
+    refetchInterval: 15000,
   })
 
   const filteredDevices = useMemo(() => {
@@ -101,7 +95,7 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
         <Col>
           <Space>
             <Input
-              placeholder={t('station.searchSN')}
+              placeholder="搜索 SN / 型号"
               prefix={<SearchOutlined />}
               allowClear
               value={search}
@@ -110,37 +104,36 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
               size="small"
             />
             <Select
-              placeholder={t('station.deviceStatus')}
+              placeholder="状态"
               allowClear
               style={{ width: 120 }}
               size="small"
               value={statusFilter}
               onChange={v => setStatusFilter(v)}
               options={[
-                { label: t('common.online'), value: '1' },
-                { label: t('common.offline'), value: '0' },
-                { label: t('station.deviceFault'), value: '2' },
+                { label: '在线', value: '1' },
+                { label: '离线', value: '0' },
+                { label: '故障', value: '2' },
               ]}
             />
           </Space>
         </Col>
         <Col>
-          <Button icon={<ReloadOutlined />} size="small" onClick={() => refetch()}>{t('common.refresh')}</Button>
+          <Button icon={<ReloadOutlined />} size="small" onClick={() => refetch()}>刷新</Button>
         </Col>
       </Row>
 
       <Spin spinning={isLoading}>
         {filteredDevices.length === 0 && !isLoading ? (
           <Card bordered={false} style={{ borderRadius: 12, textAlign: 'center', padding: '48px 24px' }}>
-            <Empty description={t('station.noStationDevice')} />
+            <Empty description="暂无关联设备" />
           </Card>
         ) : (
           <Row gutter={[12, 12]}>
             {filteredDevices.map(dev => {
               const statusCfg = getStatusCfg(dev.status)
               const rtPower = getRealtimePower(dev.sn)
-              const fw = dev.firmware_version || dev.firmware_arm || dev.firmware_dsp || dev.firmware_bms || '-'
-              const lastOnline = dev.last_online_at || dev.updated_at || dev.last_seen_at
+              const fw = dev.firmware_version || dev.firmware_dsp || '-'
               return (
                 <Col xs={24} sm={12} md={8} key={dev.sn}>
                   <Card
@@ -166,14 +159,14 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
                       {dev.rated_power != null && <Tag color="blue">{dev.rated_power}W</Tag>}
                     </div>
                     <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
-                      <DesktopOutlined /> {t('station.firmwareVersion')}: {fw}
+                      <DesktopOutlined /> 固件: {fw}
                     </div>
                     <div style={{ fontSize: 12, color: '#999' }}>
-                      {t('station.lastComm')}: {lastOnline ? formatInTimezone(lastOnline, timezone, 'MM-DD HH:mm:ss') : '-'}
+                      最后在线: {formatInTimezone(dev.last_online_at, timezone, 'MM-DD HH:mm:ss')}
                     </div>
                     {rtPower !== null && (
                       <div style={{ marginTop: 8, fontSize: 13, color: '#1677ff', fontWeight: 600 }}>
-                        {t('station.realtimePower_W')}: {rtPower.toFixed(0)} W
+                        实时功率: {rtPower.toFixed(0)} W
                       </div>
                     )}
                   </Card>
