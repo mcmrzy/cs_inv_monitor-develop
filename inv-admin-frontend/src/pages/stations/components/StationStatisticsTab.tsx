@@ -146,10 +146,14 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
     )
   }, [statsData, apiPeriod])
 
-  // 功率折线图（仅日粒度）
+  // 功率折线图（仅日粒度，使用 energy-flow API 获取真实功率数据）
   const powerLineOption = useMemo(() => {
-    if (period !== 'day' || !statsData || statsData.length === 0) return null
-    const times = statsData.map((d: any) => formatInTimezone(d.time, timezone, 'HH:mm'))
+    if (period !== 'day' || !flowData || flowData.length === 0) return null
+    const times = flowData.map((d: any) => formatInTimezone(d.time, timezone, 'HH:mm'))
+    const pvData = flowData.map((d: any) => safeNum(d.pvPower))
+    const battChargeData = flowData.map((d: any) => safeNum(d.batteryCharge))
+    const battDischargeData = flowData.map((d: any) => -safeNum(d.batteryDischarge))
+    const loadData = flowData.map((d: any) => -safeNum(d.loadPower))
     return {
       tooltip: {
         trigger: 'axis' as const,
@@ -157,12 +161,13 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
         formatter: (params: any) => {
           let html = `<div style="font-weight:600;margin-bottom:4px">${params[0].axisValue}</div>`
           params.forEach((p: any) => {
-            html += `<div>${p.marker} ${p.seriesName}: ${safeNum(p.value).toFixed(0)} W</div>`
+            const val = Math.abs(p.value)
+            html += `<div>${p.marker} ${p.seriesName}: ${val.toFixed(0)} W</div>`
           })
           return html
         },
       },
-      legend: { data: ['PV功率', '电池功率', '负载功率', '电网功率'], top: 0, itemGap: 16 },
+      legend: { data: [t('station.pvPower'), t('station.battChargeEnergy'), t('station.battDischargeEnergy'), t('station.loadPower')], top: 0, itemGap: 16 },
       grid: { left: '3%', right: '4%', bottom: '12%', top: '45', containLabel: true },
       xAxis: { type: 'category' as const, data: times, axisLabel: { fontSize: 11 } },
       yAxis: {
@@ -178,32 +183,33 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
       ],
       series: [
         {
-          name: 'PV功率', type: 'line' as const, smooth: true, symbol: 'none',
-          // hour粒度用 energy_produce（W功率），不要用 daily_pv（kWh能量）
-          data: statsData.map((d: any) => safeNum(d.energy_produce)),
+          name: t('station.pvPower'), type: 'line' as const, smooth: true, symbol: 'none',
+          data: pvData,
           lineStyle: { color: '#f59e0b', width: 2 }, itemStyle: { color: '#f59e0b' },
           areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.3)' }, { offset: 1, color: 'rgba(245,158,11,0.02)' }] } },
         },
         {
-          name: '电池功率', type: 'line' as const, smooth: true, symbol: 'none',
-          // hour粒度用 battery_charge/battery_discharge（W功率）
-          data: statsData.map((d: any) => safeNum(d.battery_charge) - safeNum(d.battery_discharge)),
+          name: t('station.battChargeEnergy'), type: 'line' as const, smooth: true, symbol: 'none',
+          data: battChargeData,
           lineStyle: { color: '#22c55e', width: 2 }, itemStyle: { color: '#22c55e' },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(34,197,94,0.3)' }, { offset: 1, color: 'rgba(34,197,94,0.02)' }] } },
         },
         {
-          name: '负载功率', type: 'line' as const, smooth: true, symbol: 'none',
-          // hour粒度用 energy_consume（W功率）
-          data: statsData.map((d: any) => safeNum(d.energy_consume)),
-          lineStyle: { color: '#ef4444', width: 2 }, itemStyle: { color: '#ef4444' },
-        },
-        {
-          name: '电网功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.grid_power)),
+          name: t('station.battDischargeEnergy'), type: 'line' as const, smooth: true, symbol: 'none',
+          data: battDischargeData,
           lineStyle: { color: '#3b82f6', width: 2 }, itemStyle: { color: '#3b82f6' },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(59,130,246,0.02)' }, { offset: 1, color: 'rgba(59,130,246,0.2)' }] } },
+        },
+        {
+          name: t('station.loadPower'), type: 'line' as const, smooth: true, symbol: 'none',
+          data: loadData,
+          lineStyle: { color: '#ef4444', width: 2 }, itemStyle: { color: '#ef4444' },
+          areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(239,68,68,0.02)' }, { offset: 1, color: 'rgba(239,68,68,0.2)' }] } },
         },
       ],
+      markLine: { silent: true, lineStyle: { color: '#94a3b8', type: 'solid' as const, width: 1 }, data: [{ yAxis: 0 }], label: { show: false } },
     }
-  }, [statsData, period, timezone])
+  }, [flowData, period, timezone, t])
 
   // 电量柱状图
   const energyBarOption = useMemo(() => {
@@ -342,10 +348,36 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
         ))}
       </Row>
 
-      {/* 功率折线图（仅日粒度） */}
-      {period === 'day' && powerLineOption && (
-        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title={t('station.powerTrend')} size="small">
-          <ReactECharts option={powerLineOption} style={{ height: 320 }} />
+      {/* 功率折线图（仅日粒度，使用 energy-flow API） */}
+      {period === 'day' && (
+        <Card
+          bordered={false}
+          style={{ borderRadius: 12, marginBottom: 16 }}
+          title={t('station.powerTrend')}
+          size="small"
+          extra={
+            <Space>
+              <DatePicker
+                value={dayjs(flowDate)}
+                onChange={(d) => d && setFlowDate(dayjs(d).tz(timezone).format('YYYY-MM-DD'))}
+                allowClear={false}
+                style={{ width: 150 }}
+                size="small"
+              />
+              <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).subtract(1, 'day').format('YYYY-MM-DD'))}>昨天</Button>
+              <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).format('YYYY-MM-DD'))}>今天</Button>
+            </Space>
+          }
+        >
+          {flowLoading ? (
+            <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+          ) : powerLineOption ? (
+            <ReactECharts option={powerLineOption} style={{ height: 320 }} />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '48px 0' }}>
+              <Text type="secondary">{t('station.noData')}</Text>
+            </div>
+          )}
         </Card>
       )}
 
