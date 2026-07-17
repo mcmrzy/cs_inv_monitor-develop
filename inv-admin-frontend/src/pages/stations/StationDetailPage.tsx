@@ -199,7 +199,7 @@ const StationDetailPage: React.FC = () => {
     let dailyDischarge = 0, totalDischarge = 0
     let dailyCharge = 0, totalCharge = 0
     let dailyLoad = 0, totalLoad = 0
-    let pvPower = 0, loadPower = 0, battPower = 0, battSoc = 0, socCount = 0
+    let pvPower = 0, loadPower = 0, battPower = 0, gridPowerSum = 0, battSoc = 0, socCount = 0
     rtList.forEach((rt: any) => {
       // 能量数据 - 扁平字段（已被 normalizeRealtimeData 展平）+ 嵌套回退
       dailyPv += safeNum(rt?.daily_pv ?? rt?.energy?.daily_pv)
@@ -211,16 +211,17 @@ const StationDetailPage: React.FC = () => {
       dailyCharge += safeNum(rt?.daily_charge ?? rt?.energy?.daily_charge)
       totalCharge += safeNum(rt?.total_charge ?? rt?.energy?.total_charge)
       // 实时功率
-      pvPower += safeNum(rt?.pv_total_power ?? rt?.pv?.pv_power_total ?? rt?.ac_power)
+      pvPower += safeNum(rt?.pv_total_power ?? rt?.pv?.pv_power_total)
       loadPower += safeNum(rt?.ac_power ?? rt?.ac?.power)
       battPower += safeNum(rt?.charge_power ?? rt?.batt?.power ?? rt?.battery_power)
+      gridPowerSum += safeNum(rt?.grid_power ?? rt?.meter_power)
       const soc = safeNum(rt?.battery_soc ?? rt?.soc ?? rt?.batt?.soc)
       if (soc > 0) { battSoc += soc; socCount++ }
     })
     return {
       dailyPv, totalPv, dailyDischarge, totalDischarge,
       dailyLoad, totalLoad, dailyCharge, totalCharge,
-      pvPower, loadPower, battPower,
+      pvPower, loadPower, battPower, gridPower: gridPowerSum,
       battSoc: socCount > 0 ? battSoc / socCount : 0,
     }
   }, [realtimeData])
@@ -263,8 +264,11 @@ const StationDetailPage: React.FC = () => {
   const aggregatedLoad = (station.load_power || 0) > 0 ? station.load_power! : (deviceEnergy?.loadPower ?? 0)
   const aggregatedBatt = (station.batt_power || 0) !== 0 ? station.batt_power! : (deviceEnergy?.battPower ?? 0)
   // 电网功率：仅使用实际数据，不使用能量守恒公式计算（离网设备无电网数据）
-  const hasGridData = (station.grid_power != null && station.grid_power !== 0)
-  const aggregatedGrid = hasGridData ? station.grid_power! : 0
+  const gridPowerRaw = (station.grid_power != null && station.grid_power !== 0)
+    ? station.grid_power
+    : (deviceEnergy?.gridPower ?? 0)
+  const hasGridData = gridPowerRaw !== 0
+  const aggregatedGrid = hasGridData ? gridPowerRaw : 0
   const avgSoc = (() => {
     const stationSoc = station.batt_soc || 0
     if (stationSoc > 0) return stationSoc

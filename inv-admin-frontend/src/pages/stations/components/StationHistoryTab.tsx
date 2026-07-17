@@ -135,7 +135,8 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       render: (v: unknown) => {
         if (v === null || v === undefined || v === '') return '--'
         const n = safeNum(v)
-        return isNaN(n) ? '--' : n.toFixed(2)
+        if (!Number.isFinite(n)) return '--'
+        return n !== 0 ? n.toFixed(2) : '0.00'
       },
     }))
     return [timeCol, ...dataCols]

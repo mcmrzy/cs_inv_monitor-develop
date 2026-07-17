@@ -577,7 +577,9 @@ func (h *DeviceHandler) GetHistory(c *gin.Context) {
 	endDate := c.Query("end_date")
 	period := c.DefaultQuery("period", "hour")
 
-	data, err := h.deviceService.GetHistoryData(c.Request.Context(), sn, startDate, endDate, period)
+	tz := getUserTimezone(c.Request.Context(), h.db, userID)
+
+	data, err := h.deviceService.GetHistoryData(c.Request.Context(), sn, startDate, endDate, period, tz)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("get history failed", err))
 		return

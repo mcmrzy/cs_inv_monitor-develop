@@ -24,20 +24,40 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
+    // API 可能返回 role 为 int（旧格式）或 Map（新格式，含 role_id/role_key 等）
+    final roleRaw = json['role'];
+    final int roleId;
+    if (roleRaw is Map<String, dynamic>) {
+      roleId = (roleRaw['role_id'] as num?)?.toInt() ?? 0;
+    } else {
+      roleId = (roleRaw as num?)?.toInt() ?? 0;
+    }
+
+    // status 同理，兼容 Map 和 int
+    final statusRaw = json['status'];
+    final int statusVal;
+    if (statusRaw is Map<String, dynamic>) {
+      statusVal = (statusRaw['status_id'] as num?)?.toInt() ?? (statusRaw['id'] as num?)?.toInt() ?? 1;
+    } else {
+      statusVal = (statusRaw as num?)?.toInt() ?? 1;
+    }
+
     return User(
-      id: json['id'] as int,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       phone: json['phone'] as String? ?? '',
       email: json['email'] as String?,
       nickname: json['nickname'] as String?,
       avatar: json['avatar'] as String?,
-      role: json['role'] as int,
-      status: json['status'] as int,
+      role: roleId,
+      status: statusVal,
       lastLoginAt: json['last_login_at'] != null
-          ? DateTime.parse(json['last_login_at'] as String)
+          ? DateTime.tryParse(json['last_login_at'].toString())
           : null,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      createdAt: json['created_at'] != null
+          ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
+          : DateTime.now(),
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
+          ? DateTime.tryParse(json['updated_at'].toString())
           : null,
     );
   }
@@ -85,13 +105,13 @@ class LoginResponse {
   });
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
-    final expiresIn = json['expires_in'] as int?;
+    final expiresIn = (json['expires_in'] as num?)?.toInt();
     return LoginResponse(
-      token: (json['access_token'] ?? json['token'] ?? json['accessToken']) as String,
+      token: (json['access_token'] ?? json['token'] ?? json['accessToken']) as String? ?? '',
       refreshToken: (json['refresh_token'] ?? json['refreshToken']) as String?,
-      user: User.fromJson(json['user'] as Map<String, dynamic>),
+      user: User.fromJson(json['user'] as Map<String, dynamic>? ?? {}),
       expireAt: json['expire_at'] != null
-          ? DateTime.parse(json['expire_at'] as String)
+          ? DateTime.tryParse(json['expire_at'].toString()) ?? DateTime.now().add(Duration(seconds: expiresIn ?? 7200))
           : DateTime.now().add(Duration(seconds: expiresIn ?? 7200)),
     );
   }

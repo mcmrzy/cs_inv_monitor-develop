@@ -664,8 +664,8 @@ func (s *DeviceService) insertCmdNotification(ctx context.Context, sn, taskID, c
 	_ = s.repo.InsertNotification(ctx, sn, stationID, device.UserID, "cmd_sent", title, content)
 }
 
-func (s *DeviceService) GetHistoryData(ctx context.Context, sn, startDate, endDate, period string) ([]map[string]interface{}, error) {
-	return s.repo.GetHistoryData(ctx, sn, startDate, endDate, period)
+func (s *DeviceService) GetHistoryData(ctx context.Context, sn, startDate, endDate, period, tz string) ([]map[string]interface{}, error) {
+	return s.repo.GetHistoryData(ctx, sn, startDate, endDate, period, tz)
 }
 
 func (s *DeviceService) GetStatistics(ctx context.Context, sn, startDate, endDate, period, tz string) (map[string]interface{}, error) {
