@@ -34,6 +34,7 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
   const { t } = useTranslation()
   const [period, setPeriod] = useState<string>('day')
   const [currentDate, setCurrentDate] = useState<Dayjs>(dayjs().tz(timezone))
+  const [flowDate, setFlowDate] = useState<string>(dayjs().tz(timezone).format('YYYY-MM-DD'))
 
   // 30日发电趋势
   const { data: trend30Res } = useQuery({
@@ -84,6 +85,18 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
 
   const { start: startDate, end: endDate, apiPeriod } = getDateRange()
 
+  // 功率趋势：使用 getEnergyFlow API 获取真实功率数据（与 Dashboard 一致）
+  const { data: flowRes, isLoading: flowLoading } = useQuery({
+    queryKey: ['station-power-flow', stationId, flowDate],
+    queryFn: () => dashboardApi.getEnergyFlow({ date: flowDate, stationId }).then(r => {
+      const d = r.data?.data ?? r.data ?? []
+      return Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : [])
+    }),
+    enabled: !!stationId && period === 'day',
+  })
+  const flowData = (Array.isArray(flowRes) ? flowRes : []) as any[]
+
+  // 电量柱状图 + 能量概览仍使用 statistics API
   const { data: statsData, isLoading } = useQuery({
     queryKey: ['station-statistics', stationId, period, startDate, endDate],
     queryFn: () => api.get(`/stations/${stationId}/statistics`, {
@@ -166,23 +179,26 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
       series: [
         {
           name: 'PV功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.daily_pv ?? d.energy_produce)),
+          // hour粒度用 energy_produce（W功率），不要用 daily_pv（kWh能量）
+          data: statsData.map((d: any) => safeNum(d.energy_produce)),
           lineStyle: { color: '#f59e0b', width: 2 }, itemStyle: { color: '#f59e0b' },
           areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.3)' }, { offset: 1, color: 'rgba(245,158,11,0.02)' }] } },
         },
         {
           name: '电池功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.daily_charge ?? d.battery_charge) - safeNum(d.daily_discharge ?? d.battery_discharge)),
+          // hour粒度用 battery_charge/battery_discharge（W功率）
+          data: statsData.map((d: any) => safeNum(d.battery_charge) - safeNum(d.battery_discharge)),
           lineStyle: { color: '#22c55e', width: 2 }, itemStyle: { color: '#22c55e' },
         },
         {
           name: '负载功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.daily_load ?? d.energy_consume)),
+          // hour粒度用 energy_consume（W功率）
+          data: statsData.map((d: any) => safeNum(d.energy_consume)),
           lineStyle: { color: '#ef4444', width: 2 }, itemStyle: { color: '#ef4444' },
         },
         {
           name: '电网功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.daily_pv ?? d.energy_produce) - safeNum(d.daily_load ?? d.energy_consume) - (safeNum(d.daily_charge ?? d.battery_charge) - safeNum(d.daily_discharge ?? d.battery_discharge))),
+          data: statsData.map((d: any) => safeNum(d.grid_power)),
           lineStyle: { color: '#3b82f6', width: 2 }, itemStyle: { color: '#3b82f6' },
         },
       ],
