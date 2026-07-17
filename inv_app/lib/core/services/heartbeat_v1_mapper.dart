@@ -35,7 +35,6 @@ class HeartbeatV1Mapper {
 
     return InverterRealtime(
       deviceSN: deviceSN,
-      protocolVersion: (payload['v'] as num).toInt(),
       ac: ACData(
         voltage: _number(ac[0]),
         current: _number(ac[1]),
@@ -68,8 +67,6 @@ class HeartbeatV1Mapper {
         chargeVoltageRef: _number(bat[18]),
         dischargeCutoffVoltage: _number(bat[19]),
         temperature: _number(bat[20]),
-        chargeRequestCurrentX10: _integer(bat[21]),
-        chargeRequestVoltageX10: _integer(bat[22]),
       ),
       pv: PVData(
         pvVoltage: _number(pv[0]),
@@ -92,7 +89,6 @@ class HeartbeatV1Mapper {
         runtimeHours: _integer(sys[7]),
         fanSpeedPercent: _number(sys[8]),
         efficiency: _number(sys[9]),
-        systemMode: _integer(sys[10]),
       ),
       energy: EnergyData(
         dailyPV: _number(eng[0]),
@@ -103,15 +99,10 @@ class HeartbeatV1Mapper {
         totalDischarge: _number(eng[5]),
         dailyLoad: _number(eng[6]),
         totalLoad: _number(eng[7]),
-        totalChargeCapacity: _number(eng[8]),
-        totalDischargeCapacity: _number(eng[9]),
-        totalChargeTime: _integer(eng[10]),
-        totalDischargeTime: _integer(eng[11]),
         runtimeHours: _integer(sys[7]),
       ),
       cells: CellsData(
           cellCount: voltages.length,
-          tempSensorCount: temperatures.length,
           voltages: voltages,
           temps: temperatures),
       onlineStatus: const OnlineStatus(online: true),

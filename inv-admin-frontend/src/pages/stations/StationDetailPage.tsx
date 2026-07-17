@@ -262,15 +262,16 @@ const StationDetailPage: React.FC = () => {
   const aggregatedPv = (station.pv_power || 0) > 0 ? station.pv_power! : (deviceEnergy?.pvPower ?? 0)
   const aggregatedLoad = (station.load_power || 0) > 0 ? station.load_power! : (deviceEnergy?.loadPower ?? 0)
   const aggregatedBatt = (station.batt_power || 0) !== 0 ? station.batt_power! : (deviceEnergy?.battPower ?? 0)
-  // 电网功率 = PV功率 - 负载功率 - 电池功率（能量守恒）
-  const aggregatedGrid = (station.grid_power || 0) !== 0 ? station.grid_power! : (aggregatedPv - aggregatedLoad - aggregatedBatt)
+  // 电网功率：仅使用实际数据，不使用能量守恒公式计算（离网设备无电网数据）
+  const hasGridData = (station.grid_power != null && station.grid_power !== 0)
+  const aggregatedGrid = hasGridData ? station.grid_power! : 0
   const avgSoc = (() => {
     const stationSoc = station.batt_soc || 0
     if (stationSoc > 0) return stationSoc
     return deviceEnergy?.battSoc ?? 0
   })()
 
-  // 从第一台设备实时数据中提取 PV1/PV2 分路、电池电压/电流、电网电压/频率（兼容扁平与嵌套字段）
+  // 从第一台设备实时数据中提取 PV1/PV2 分路、电池电压/电流（兼容扁平与嵌套字段）
   const firstDeviceRt = (devices.length > 0 ? (realtimeData?.[devices[0]?.sn] || {}) : Object.values(realtimeData ?? {})[0] || {}) as any
   const pvPower1 = safeNum(firstDeviceRt?.pv1_power ?? firstDeviceRt?.pv?.pv1_power)
   const pvVoltage1 = safeNum(firstDeviceRt?.pv1_voltage ?? firstDeviceRt?.pv?.pv1_voltage)
@@ -278,8 +279,9 @@ const StationDetailPage: React.FC = () => {
   const pvVoltage2 = safeNum(firstDeviceRt?.pv2_voltage ?? firstDeviceRt?.pv?.pv2_voltage)
   const battVoltage = safeNum(firstDeviceRt?.battery_voltage ?? firstDeviceRt?.battery?.voltage ?? firstDeviceRt?.batt?.voltage)
   const battCurrent = safeNum(firstDeviceRt?.battery_current ?? firstDeviceRt?.battery?.current ?? firstDeviceRt?.batt?.current ?? firstDeviceRt?.current)
-  const gridVoltage = safeNum(firstDeviceRt?.grid_voltage ?? firstDeviceRt?.ac_voltage ?? firstDeviceRt?.ac?.voltage)
-  const gridFreq = safeNum(firstDeviceRt?.grid_frequency ?? firstDeviceRt?.ac_frequency ?? firstDeviceRt?.ac?.frequency)
+  // 电网电压/频率：仅使用 meter_/grid_ 前缀字段，不使用 ac_voltage/ac_frequency（那是逆变器输出）
+  const gridVoltage = safeNum(firstDeviceRt?.meter_voltage ?? firstDeviceRt?.grid_voltage)
+  const gridFreq = safeNum(firstDeviceRt?.meter_frequency ?? firstDeviceRt?.grid_frequency)
 
   // 最后更新时间
   const lastUpdateTime = realtimeData ? new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '--'
@@ -316,16 +318,16 @@ const StationDetailPage: React.FC = () => {
     },
     {
       key: 'grid',
-      label: t('station.gridExport'),
+      label: hasGridData ? t('station.gridExport') : t('station.grid'),
       color: '#F59E0B',
-      today: station.today_grid_export,
-      total: station.total_grid_export,
-      todayLabel: station.today_grid_export != null ? t('station.todayExport') : t('station.power'),
-      totalLabel: t('station.cumulative'),
+      today: hasGridData ? station.today_grid_export : undefined,
+      total: hasGridData ? station.total_grid_export : undefined,
+      todayLabel: hasGridData ? (station.today_grid_export != null ? t('station.todayExport') : t('station.power')) : '',
+      totalLabel: hasGridData ? t('station.cumulative') : '',
       unit: 'kWh',
-      // 后端不返回电网能量，通过能量守恒计算实时功率: PV - 负载 - 电池
-      todayDisplay: station.today_grid_export != null ? undefined : `${Math.abs(aggregatedGrid).toFixed(0)} W`,
-      totalDisplay: station.total_grid_export != null ? undefined : '--',
+      // 离网设备无电网数据，显示"无电网"
+      todayDisplay: hasGridData ? undefined : '--',
+      totalDisplay: hasGridData ? (station.total_grid_export != null ? undefined : '--') : '--',
     },
     {
       key: 'load',
@@ -485,23 +487,31 @@ const StationDetailPage: React.FC = () => {
               </Row>
             </div>
 
-            {/* 电网 */}
+            {/* 电网 - 仅在有实际电网数据时显示数值（离网设备无电网数据） */}
             <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid #f0f0f0' }}>
               <Text strong style={{ color: '#F59E0B' }}>{t('station.grid')}</Text>
-              <Row gutter={16} style={{ marginTop: 8 }}>
-                <Col span={8}>
-                  <Text type="secondary">{t('station.power')}:</Text>{' '}
-                  <Text strong>{aggregatedGrid ?? 0} W</Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary">{t('station.voltage')}:</Text>{' '}
-                  <Text strong>{gridVoltage > 0 ? `${gridVoltage} V` : '--'}</Text>
-                </Col>
-                <Col span={8}>
-                  <Text type="secondary">{t('station.frequency')}:</Text>{' '}
-                  <Text strong>{gridFreq > 0 ? `${gridFreq} Hz` : '--'}</Text>
-                </Col>
-              </Row>
+              {!hasGridData && gridVoltage === 0 && gridFreq === 0 ? (
+                <Row style={{ marginTop: 8 }}>
+                  <Col span={24}>
+                    <Text type="secondary">{t('station.offGridNoGrid')}</Text>
+                  </Col>
+                </Row>
+              ) : (
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col span={8}>
+                    <Text type="secondary">{t('station.power')}:</Text>{' '}
+                    <Text strong>{hasGridData ? `${aggregatedGrid} W` : '--'}</Text>
+                  </Col>
+                  <Col span={8}>
+                    <Text type="secondary">{t('station.voltage')}:</Text>{' '}
+                    <Text strong>{gridVoltage > 0 ? `${gridVoltage} V` : '--'}</Text>
+                  </Col>
+                  <Col span={8}>
+                    <Text type="secondary">{t('station.frequency')}:</Text>{' '}
+                    <Text strong>{gridFreq > 0 ? `${gridFreq} Hz` : '--'}</Text>
+                  </Col>
+                </Row>
+              )}
             </div>
 
             {/* 负载 */}
