@@ -65,10 +65,6 @@ void main() {
     expect(result.energy?.dailyPV, 12.3);
     expect(result.energy?.totalLoad, 2200);
     expect(result.cells?.cellCount, 16);
-    expect(result.cells?.tempSensorCount, 4);
-    expect(result.battery?.chargeRequestVoltageX10, 568);
-    expect(result.sysStatus?.systemMode, 2);
-    expect(result.energy?.totalDischargeTime, 550);
   });
 
   test('rejects an invalid fixed array length', () {

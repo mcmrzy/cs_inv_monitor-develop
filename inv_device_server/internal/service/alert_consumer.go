@@ -58,8 +58,9 @@ func NewAlertConsumer(brokers []string, topic string, groupID string, rdb *redis
 			Brokers:  brokers,
 			Topic:    topic,
 			GroupID:  groupID,
-			MinBytes: 10e3,
+			MinBytes: 1,                // 降低阈值，避免低频小消息延迟
 			MaxBytes: 10e6,
+			MaxWait:  1 * time.Second, // 最多等待1秒即返回可用消息
 		}),
 		rdb:          rdb,
 		ingestErrors: ingestErrors,

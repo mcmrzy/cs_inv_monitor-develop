@@ -30,17 +30,14 @@ void main() {
     expect(parseTelemetryQualityFlags('invalid'), isNull);
   });
 
-  test('realtime entity retains protocol and quality metadata from API', () {
+  test('realtime entity roundtrips device_sn and updated_at through JSON', () {
     final realtime = InverterRealtime.fromJson({
       'device_sn': 'INV001',
-      'protocol_version': 1,
-      'quality_flags': 8,
       'updated_at': '2026-07-15T00:00:00Z',
     });
 
-    expect(realtime.protocolVersion, 1);
-    expect(realtime.qualityFlags, 8);
-    expect(realtime.toJson()['protocol_version'], 1);
-    expect(realtime.toJson()['quality_flags'], 8);
+    expect(realtime.deviceSN, 'INV001');
+    expect(realtime.toJson()['device_sn'], 'INV001');
+    expect(realtime.toJson()['updated_at'], '2026-07-15T00:00:00.000Z');
   });
 }

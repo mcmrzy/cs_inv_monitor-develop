@@ -334,9 +334,31 @@ var appAllowedPaths = []string{
 	"/api/v1/ota/packages/available/",
 }
 
+// appAllowedMethodPaths 定义 APP 端按 HTTP 方法精确控制的白名单。
+// 与 appAllowedPaths 不同，此配置同时匹配路径前缀和 HTTP 方法，
+// 适用于只开放特定操作（如仅允许创建不允许删除）给普通用户的场景。
+var appAllowedMethodPaths = []struct {
+	prefix string
+	method string
+}{
+	{"/api/v1/stations", "POST"},
+}
+
 func isAppAllowedPath(path string) bool {
 	for _, prefix := range appAllowedPaths {
 		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAppAllowedPathWithMethod(path, method string) bool {
+	if isAppAllowedPath(path) {
+		return true
+	}
+	for _, entry := range appAllowedMethodPaths {
+		if entry.method == method && (path == entry.prefix || strings.HasPrefix(path, entry.prefix+"/")) {
 			return true
 		}
 	}
@@ -351,7 +373,7 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		}
 
 		// APP 端接口已通 JWT 认证保护，对所有登录用户开放，跳过 RBAC
-		if isAppAllowedPath(c.Request.URL.Path) {
+		if isAppAllowedPathWithMethod(c.Request.URL.Path, c.Request.Method) {
 			c.Next()
 			return
 		}
