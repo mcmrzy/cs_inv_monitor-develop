@@ -80,7 +80,7 @@ const MonitoringPage: React.FC = () => {
         const exists = stations.some((s: StationItem) => String(s.id) === lastId)
         if (exists) {
           sessionStorage.setItem('monitoring_auto_nav', '1')
-          navigate(`/stations/${lastId}`)
+          navigate(`/monitoring/${lastId}`)
         }
       }
     }
@@ -303,7 +303,7 @@ const MonitoringPage: React.FC = () => {
                   station={station}
                   onClick={() => {
                     localStorage.setItem('last_selected_station', String(station.id))
-                    navigate(`/stations/${station.id}`)
+                    navigate(`/monitoring/${station.id}`)
                   }}
                 />
               </Col>

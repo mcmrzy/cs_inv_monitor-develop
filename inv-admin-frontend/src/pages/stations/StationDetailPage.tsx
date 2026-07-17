@@ -535,7 +535,7 @@ const StationDetailPage: React.FC = () => {
       <Row align="middle" gutter={16} style={{ marginBottom: 16 }}>
         <Col flex="auto">
           <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/stations')}>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/monitoring')}>
               {t('common.back')}
             </Button>
             <Title level={4} style={{ margin: 0 }}>{stationName}</Title>
