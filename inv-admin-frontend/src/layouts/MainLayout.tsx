@@ -232,7 +232,7 @@ const MainLayout: React.FC = () => {
       >
         <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <Typography.Text strong style={{ color: '#fff', fontSize: collapsed ? 16 : 18, whiteSpace: 'nowrap' }}>
-            {collapsed ? 'INV' : t('app.title')}
+            {collapsed ? 'CSERGY' : t('app.title')}
           </Typography.Text>
         </div>
         <Menu theme="dark" mode="inline" selectedKeys={[selectedKey]} items={displayMenuItems} onClick={handleMenuClick} />
