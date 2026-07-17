@@ -157,17 +157,19 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
         <SettingButton onClick={() => handleSet('开始光伏电压')} />
       </FieldRow>
 
-      {/* 电表类型 */}
-      <FieldRow label="电表类型">
-        <Select value={meterType} onChange={setMeterType} style={{ width: 160 }} options={METER_TYPE_OPTIONS} />
-        <SettingButton onClick={() => handleSet('电表类型')} />
-      </FieldRow>
-
       {/* 检测方式 */}
       <FieldRow label="检测方式">
         <Select value={detectionMethod} onChange={setDetectionMethod} style={{ width: 160 }} options={DETECTION_METHOD_OPTIONS} />
         <SettingButton onClick={() => handleSet('检测方式')} />
       </FieldRow>
+
+      {/* 电表类型 - 仅检测方式为电表时显示 */}
+      {detectionMethod === 2 && (
+        <FieldRow label="电表类型">
+          <Select value={meterType} onChange={setMeterType} style={{ width: 160 }} options={METER_TYPE_OPTIONS} />
+          <SettingButton onClick={() => handleSet('电表类型')} />
+        </FieldRow>
+      )}
 
       {/* 法规 */}
       <FieldRow label="法规">
@@ -234,6 +236,15 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
         <Select value={lithiumType} onChange={setLithiumType} style={{ width: 300 }} options={LITHIUM_TYPE_OPTIONS} disabled={lithiumDisabled} />
         <SettingButton onClick={() => handleSet('锂电池类型')} disabled={lithiumDisabled} />
       </FieldRow>
+
+      {/* 没有电池时的提示 */}
+      {batteryType === 0 && (
+        <Col span={24}>
+          <div style={{ padding: '12px 0', color: '#bbb', fontSize: 13 }}>
+            选择电池类型后可配置电池参数
+          </div>
+        </Col>
+      )}
 
       {/* CT采样比 */}
       <FieldRow label="CT采样比" tooltip={TIPS.ctRatio}>
