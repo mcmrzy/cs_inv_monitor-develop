@@ -248,10 +248,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             .toList();
 
         setState(() {
-          // 仅当 MQTT 尚未填充数据时才使用 API 数据（避免覆盖实时数据）
-          if (!_hasMqttData) {
-            _realtimeData = flatData;
-          }
+          // 合并 API 数据到现有数据（MQTT 实时数据优先）
+          _realtimeData.addAll(flatData);
           // 始终使用 API 返回的字段配置（比默认更完整）
           if (fields.isNotEmpty) {
             _modelFields = fields;
@@ -390,9 +388,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     final fields = <DeviceModelField>[];
     int sortIdx = 0;
     _fieldNameMap.forEach((key, _) {
-      // 只展示当前有数据且非零值的字段
+      // 只展示当前有数据的字段
       final value = _realtimeData[key];
-      if (value != null && value != 0 && value != '' && value != 0.0) {
+      if (value != null) {
         final idx = sortIdx++;
         final fType =
             value is int ? 'int' : (value is num ? 'float' : 'string');

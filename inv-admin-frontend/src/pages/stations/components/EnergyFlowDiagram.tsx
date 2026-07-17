@@ -44,9 +44,9 @@ const NODES: NodeConfig[] = [
 ];
 
 function formatPower(w: number): string {
-  const abs = Math.abs(w);
+  const abs = Math.abs(Math.round(w));
   if (abs >= 1000) return `${(abs / 1000).toFixed(1)}kW`;
-  return `${Math.round(abs)}W`;
+  return `${abs}W`;
 }
 
 function calcStrokeWidth(power: number): number {

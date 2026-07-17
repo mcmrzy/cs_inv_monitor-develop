@@ -822,6 +822,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       height: 220.h,
       child: LineChart(
         LineChartData(
+          minX: _period == 'day' ? 0.0 : null,
+          maxX: _period == 'day' ? 23.0 : null,
           minY: -yRange,
           maxY: yRange,
           gridData: FlGridData(
@@ -854,12 +856,17 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 20.h,
+                interval: _period == 'day' ? 3.0 : null,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
                   if (index < 0 || index >= _dataPoints.length) return const SizedBox.shrink();
-                  final maxLabels = _period == 'day' ? 5 : 4;
-                  final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
-                  if (index % step != 0) return const SizedBox.shrink();
+                  if (_period == 'day') {
+                    if (index % 3 != 0) return const SizedBox.shrink();
+                  } else {
+                    final maxLabels = 4;
+                    final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
+                    if (index % step != 0) return const SizedBox.shrink();
+                  }
                   return Text(
                     _formatTimeLabel(_dataPoints[index].time),
                     style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
@@ -945,12 +952,17 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 24.h,
+                interval: _period == 'day' ? 3.0 : null,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
                   if (index < 0 || index >= _dataPoints.length) return const SizedBox.shrink();
-                  final maxLabels = _period == 'day' ? 6 : 5;
-                  final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
-                  if (index % step != 0) return const SizedBox.shrink();
+                  if (_period == 'day') {
+                    if (index % 3 != 0) return const SizedBox.shrink();
+                  } else {
+                    final maxLabels = 5;
+                    final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
+                    if (index % step != 0) return const SizedBox.shrink();
+                  }
                   return Padding(
                     padding: EdgeInsets.only(top: 4.h),
                     child: Text(

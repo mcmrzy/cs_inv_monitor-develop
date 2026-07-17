@@ -312,6 +312,63 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 		if encoded, marshalErr := json.Marshal(latest); marshalErr == nil {
 			_ = p.rdb.Set(ctx, "device:latest:"+raw.SN, encoded, 10*time.Minute).Err()
 		}
+
+		// 将完整遥测数据写入 realtime:latest:{sn}，供前端实时展示
+		eventTimeUnix := sample.EventTime.Unix()
+		realtime := map[string]interface{}{
+			"ac": map[string]interface{}{
+				"data": map[string]interface{}{
+					"voltage": sample.AC.Voltage, "current": sample.AC.Current,
+					"active_power": sample.AC.ActivePower, "apparent_power": sample.AC.ApparentPower,
+					"frequency": sample.AC.Frequency, "power_factor": sample.AC.PowerFactor,
+					"load_percent": sample.AC.LoadPercent,
+				},
+				"timestamp": eventTimeUnix,
+			},
+			"batt": map[string]interface{}{
+				"data": map[string]interface{}{
+					"soc": sample.Battery.SOC, "soh": sample.Battery.SOH,
+					"voltage": sample.Battery.Voltage, "current": sample.Battery.Current,
+					"power": sample.Battery.Power, "temperature": sample.Battery.Temperature,
+				},
+				"timestamp": eventTimeUnix,
+			},
+			"pv": map[string]interface{}{
+				"data": map[string]interface{}{
+					"pv1_voltage": sample.PV.PV1Voltage, "pv1_current": sample.PV.PV1Current,
+					"pv1_power": sample.PV.PV1Power, "pv2_voltage": sample.PV.PV2Voltage,
+					"pv2_current": sample.PV.PV2Current, "pv2_power": sample.PV.PV2Power,
+					"total_power": sample.PV.TotalPower,
+				},
+				"timestamp": eventTimeUnix,
+			},
+			"sys": map[string]interface{}{
+				"data": map[string]interface{}{
+					"work_state": sample.System.WorkState,
+					"fault_code": sample.System.FaultCode, "alarm_code": sample.System.AlarmCode,
+					"inverter_temperature": sample.System.InverterTemperature,
+					"mos_temperature": sample.System.MOSTemperature,
+					"ambient_temperature": sample.System.AmbientTemperature,
+				},
+				"timestamp": eventTimeUnix,
+			},
+			"energy": map[string]interface{}{
+				"data": map[string]interface{}{
+					"daily_pv": sample.Energy.DailyPV, "total_pv": sample.Energy.TotalPV,
+					"daily_charge": sample.Energy.DailyCharge, "total_charge": sample.Energy.TotalCharge,
+					"daily_discharge": sample.Energy.DailyDischarge, "total_discharge": sample.Energy.TotalDischarge,
+					"daily_load": sample.Energy.DailyLoad, "total_load": sample.Energy.TotalLoad,
+				},
+				"timestamp": eventTimeUnix,
+			},
+			"_sn": raw.SN, "_msg_type": "heartbeat",
+			"_updated_at": time.Now().UTC().Format(time.RFC3339),
+			"_timestamp":  eventTimeUnix,
+		}
+		rtBytes, rtErr := json.Marshal(realtime)
+		if rtErr == nil {
+			_ = p.rdb.Set(ctx, "realtime:latest:"+raw.SN, rtBytes, 10*time.Minute).Err()
+		}
 	}
 	return nil
 }

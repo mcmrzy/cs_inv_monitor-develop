@@ -236,7 +236,9 @@ class MQTTServiceImpl implements MQTTService {
         } else if (topic.contains('/ota/notify')) {
           _handleOTANotifyMessage(sn, data);
         }
-      } catch (e) {}
+      } catch (e) {
+        debugPrint('MQTT heartbeat parse error: $e');
+      }
     }
   }
 

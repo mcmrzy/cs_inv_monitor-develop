@@ -10,13 +10,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, endDate, period string) ([]map[string]interface{}, error) {
+func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, endDate, period, tz string) ([]map[string]interface{}, error) {
 	query := `
 		SELECT bucket, avg_ac_power, max_ac_power, daily_pv_energy,
 		       avg_inverter_temperature, run_minutes
 		FROM device_telemetry_hour
-		WHERE device_sn=$1 AND bucket >= $2::timestamptz
-		  AND bucket < ($3::date + 1)::timestamptz
+		WHERE device_sn=$1 AND bucket >= ($2::date::timestamp AT TIME ZONE $4)
+		  AND bucket < (($3::date + 1)::timestamp AT TIME ZONE $4)
 		ORDER BY bucket`
 	if period != "hour" {
 		query = `
@@ -26,7 +26,7 @@ func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, en
 			WHERE device_sn=$1 AND stat_date >= $2::date AND stat_date <= $3::date
 			ORDER BY stat_date`
 	}
-	rows, err := r.db.Query(ctx, query, sn, startDate, endDate)
+	rows, err := r.db.Query(ctx, query, sn, startDate, endDate, tz)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +134,8 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 		SUM(GREATEST(-h.avg_battery_power, 0)) / 1000.0,
 		SUM(h.avg_ac_power) / 1000.0
 		FROM device_telemetry_hour h JOIN devices d ON d.sn=h.device_sn
-		WHERE d.station_id=$1 AND d.deleted_at IS NULL AND h.bucket >= $2::timestamptz
-		AND h.bucket < ($3::date+1)::timestamptz GROUP BY h.bucket ORDER BY h.bucket`
+		WHERE d.station_id=$1 AND d.deleted_at IS NULL AND h.bucket >= ($2::date::timestamp AT TIME ZONE $4)
+		AND h.bucket < (($3::date+1)::timestamp AT TIME ZONE $4) GROUP BY h.bucket ORDER BY h.bucket`
 	if period != "hour" {
 		query = `SELECT e.stat_date::timestamptz, SUM(e.pv_energy), SUM(e.max_ac_power), NULL::double precision,
 			SUM(e.pv_energy),SUM(e.charge_energy),SUM(e.discharge_energy),SUM(e.load_energy)
@@ -143,7 +143,7 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 			WHERE d.station_id=$1 AND d.deleted_at IS NULL AND e.stat_date >= $2::date AND e.stat_date <= $3::date
 			GROUP BY e.stat_date ORDER BY e.stat_date`
 	}
-	rows, err := r.db.Query(ctx, query, stationID, startDate, endDate)
+	rows, err := r.db.Query(ctx, query, stationID, startDate, endDate, tz)
 	if err != nil {
 		return nil, err
 	}
