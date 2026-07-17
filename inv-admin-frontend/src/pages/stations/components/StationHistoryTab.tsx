@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Row, Col, Card, Select, DatePicker, Button, Table, Space } from 'antd'
 import { ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
@@ -63,6 +63,13 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       }),
     enabled: !!stationId,
   })
+
+  // 自动选中第一台设备
+  useEffect(() => {
+    if (devices && devices.length > 0 && !selectedSn) {
+      setSelectedSn((devices[0] as any).sn)
+    }
+  }, [devices, selectedSn])
 
   // 获取历史遥测数据
   const { data: historyRes, isLoading } = useQuery({

@@ -140,6 +140,10 @@ const svgAnimations = `
     stroke-dasharray: 4 8;
     opacity: 0.15;
   }
+  @keyframes arrowPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
 `;
 
 const FlowNode: React.FC<{
@@ -276,6 +280,7 @@ const FlowPath: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
 
   return (
     <path
+      id={edge.id}
       d={edge.path}
       fill="none"
       stroke={edge.color}
@@ -289,6 +294,44 @@ const FlowPath: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
 });
 
 FlowPath.displayName = 'FlowPath';
+
+const FlowArrows: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
+  if (!edge.active) return null;
+  const N = 3;
+  const dur = 1.8;
+  return (
+    <g>
+      {Array.from({ length: N }).map((_, i) => (
+        <g key={i}>
+          <polygon
+            points="-6,-4 6,0 -6,4"
+            fill={edge.color}
+            opacity={0}
+          >
+            <animateMotion
+              dur={`${dur}s`}
+              repeatCount="indefinite"
+              begin={`${(i * dur) / N}s`}
+              rotate="auto"
+            >
+              <mpath href={`#${edge.id}`} />
+            </animateMotion>
+            <animate
+              attributeName="opacity"
+              values="0;0.9;0.9;0"
+              keyTimes="0;0.15;0.85;1"
+              dur={`${dur}s`}
+              repeatCount="indefinite"
+              begin={`${(i * dur) / N}s`}
+            />
+          </polygon>
+        </g>
+      ))}
+    </g>
+  );
+});
+
+FlowArrows.displayName = 'FlowArrows';
 
 const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
   pvPower,
@@ -347,6 +390,11 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
         {/* Flow paths (rendered behind nodes) */}
         {edges.map((edge) => (
           <FlowPath key={edge.id} edge={edge} />
+        ))}
+
+        {/* Animated flow arrows */}
+        {edges.map((edge) => (
+          <FlowArrows key={`arrows-${edge.id}`} edge={edge} />
         ))}
 
         {/* Nodes */}
