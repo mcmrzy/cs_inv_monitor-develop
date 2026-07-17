@@ -13,6 +13,7 @@ class EnergyDataPoint {
   final double batteryChargePower; // 电池充电功率 (W) - 仅小时模式
   final double batteryDischargePower; // 电池放电功率 (W) - 仅小时模式
   final double inverterPower; // 逆变器输出功率 (W) - 仅小时模式
+  final double gridPower; // 电网净功率 (W) = gridImport - gridExport，仅小时模式
 
   const EnergyDataPoint({
     required this.time,
@@ -28,6 +29,7 @@ class EnergyDataPoint {
     this.batteryChargePower = 0,
     this.batteryDischargePower = 0,
     this.inverterPower = 0,
+    this.gridPower = 0,
   });
 
   factory EnergyDataPoint.fromJson(Map<String, dynamic> json) {
@@ -64,6 +66,9 @@ class EnergyDataPoint {
     final rawBattCharge = (json['battery_charge'] ?? 0).toDouble();
     final rawBattDischarge = (json['battery_discharge'] ?? 0).toDouble();
 
+    final rawGridImport = (json['grid_import'] ?? 0).toDouble();
+    final rawGridExport = (json['grid_export'] ?? json['feed_energy'] ?? 0).toDouble();
+
     // 日累计电量 (kWh) - 来自 hour 模式的 daily_* 或 day/month 模式的顶层字段
     final dailyPvKwh = (json['daily_pv'] as num?)?.toDouble() ?? 0;
     final dailyChargeKwh = (json['daily_charge'] as num?)?.toDouble() ?? 0;
@@ -87,8 +92,8 @@ class EnergyDataPoint {
       batteryCharge: battChargeKwh,
       batteryDischarge: battDischargeKwh,
       inverterOutput: invOutputKwh,
-      gridImport: (json['grid_import'] ?? 0).toDouble(),
-      gridExport: (json['grid_export'] ?? json['feed_energy'] ?? 0).toDouble(),
+      gridImport: rawGridImport,
+      gridExport: rawGridExport,
       dailyPv: dailyPvKwh,
       dailyLoad: dailyLoadKwh,
       // 功率字段仅 hour 模式有效
@@ -96,6 +101,7 @@ class EnergyDataPoint {
       batteryChargePower: hasDailyFields ? rawBattCharge : 0,
       batteryDischargePower: hasDailyFields ? rawBattDischarge : 0,
       inverterPower: hasDailyFields ? rawAcPower : 0,
+      gridPower: hasDailyFields ? (rawGridImport - rawGridExport) : 0,
     );
   }
 

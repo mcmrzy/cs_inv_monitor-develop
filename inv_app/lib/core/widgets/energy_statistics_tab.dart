@@ -806,7 +806,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     final pvData = _dataPoints.map((e) => e.pvPower < 0 ? 0.0 : e.pvPower).toList();
     final battChargeData = _dataPoints.map((e) => e.batteryChargePower < 0 ? 0.0 : e.batteryChargePower).toList();
     final battDischargeData = _dataPoints.map((e) => e.batteryDischargePower < 0 ? 0.0 : e.batteryDischargePower).toList();
-    final inverterData = _dataPoints.map((e) => e.inverterPower < 0 ? 0.0 : e.inverterPower).toList();
+    final inverterData = _dataPoints.map((e) => e.gridPower < 0 ? 0.0 : e.gridPower).toList();
 
     // 计算Y轴最大值（所有正值中的最大）
     double maxVal = 0;
@@ -814,7 +814,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       if (p.pvPower > maxVal) maxVal = p.pvPower;
       if (p.batteryChargePower > maxVal) maxVal = p.batteryChargePower;
       if (p.batteryDischargePower > maxVal) maxVal = p.batteryDischargePower;
-      if (p.inverterPower > maxVal) maxVal = p.inverterPower;
+      if (p.gridPower > maxVal) maxVal = p.gridPower;
     }
     final double yMax = maxVal > 0 ? maxVal * 1.2 : 100.0;
     final yInterval = yMax / 4;
