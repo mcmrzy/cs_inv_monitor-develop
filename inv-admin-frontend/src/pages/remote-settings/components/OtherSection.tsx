@@ -22,7 +22,7 @@ const OtherSection: React.FC = () => {
   }
 
   return (
-    <Row gutter={[0, 8]}>
+    <Row gutter={[16, 8]}>
       <FieldRow label="CT功率补偿(W)" range="[-199, 199]">
         <InputNumber min={-199} max={199} value={ctCompensation} onChange={(v) => setCtCompensation(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('CT功率补偿')} />

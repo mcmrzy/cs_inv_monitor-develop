@@ -18,10 +18,10 @@ const BatterySection: React.FC = () => {
   }
 
   return (
-    <Row gutter={[0, 8]}>
+    <Row gutter={[16, 8]}>
       <Col span={24}>
         <div style={fieldRowStyle}>
-          <Text style={{ fontSize: 12, color: '#888', marginBottom: 8, display: 'block' }}>
+          <Text style={{ fontSize: 14, color: '#888', marginBottom: 8, display: 'block' }}>
             选择需要重启的电池模块
           </Text>
         </div>
@@ -34,7 +34,7 @@ const BatterySection: React.FC = () => {
         >
           <Row gutter={[8, 8]}>
             {Array.from({ length: 32 }, (_, i) => (
-              <Col key={i} span={3}>
+              <Col key={i} span={6}>
                 <Checkbox value={i}>模块 {i}</Checkbox>
               </Col>
             ))}

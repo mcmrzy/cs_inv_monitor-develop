@@ -137,7 +137,7 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
 
 
   return (
-    <Row gutter={[0, 8]}>
+    <Row gutter={[16, 8]}>
       {/* ── 型号信息子分组 ── */}
       <SubGroupTitle title="型号信息" color="#4f6ef7" />
 
