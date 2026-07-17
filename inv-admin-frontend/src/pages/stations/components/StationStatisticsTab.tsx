@@ -97,10 +97,10 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
     if (apiPeriod === 'hour') {
       const last = statsData[statsData.length - 1]
       return {
-        daily_pv: safeNum(last?.daily_pv),
-        daily_charge: safeNum(last?.daily_charge),
-        daily_discharge: safeNum(last?.daily_discharge),
-        daily_load: safeNum(last?.daily_load),
+        daily_pv: safeNum(last?.daily_pv ?? last?.energy_produce),
+        daily_charge: safeNum(last?.daily_charge ?? last?.battery_charge),
+        daily_discharge: safeNum(last?.daily_discharge ?? last?.battery_discharge),
+        daily_load: safeNum(last?.daily_load ?? last?.energy_consume),
       }
     }
     return statsData.reduce(
@@ -147,18 +147,18 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
       series: [
         {
           name: 'PV功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.energy_produce)),
+          data: statsData.map((d: any) => safeNum(d.daily_pv ?? d.energy_produce)),
           lineStyle: { color: '#f59e0b', width: 2 }, itemStyle: { color: '#f59e0b' },
           areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.3)' }, { offset: 1, color: 'rgba(245,158,11,0.02)' }] } },
         },
         {
           name: '电池功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.battery_charge) - safeNum(d.battery_discharge)),
+          data: statsData.map((d: any) => safeNum(d.daily_charge ?? d.battery_charge) - safeNum(d.daily_discharge ?? d.battery_discharge)),
           lineStyle: { color: '#22c55e', width: 2 }, itemStyle: { color: '#22c55e' },
         },
         {
           name: '负载功率', type: 'line' as const, smooth: true, symbol: 'none',
-          data: statsData.map((d: any) => safeNum(d.energy_consume)),
+          data: statsData.map((d: any) => safeNum(d.daily_load ?? d.energy_consume)),
           lineStyle: { color: '#ef4444', width: 2 }, itemStyle: { color: '#ef4444' },
         },
         {
