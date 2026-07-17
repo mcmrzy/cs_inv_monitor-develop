@@ -913,6 +913,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
           ),
         ),
       ),
+    ),
     );
   }
 
