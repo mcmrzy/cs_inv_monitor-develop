@@ -338,7 +338,7 @@ const StationDetailPage: React.FC = () => {
       todayLabel: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? t('station.todayConsumption') : t('station.power'),
       totalLabel: t('station.cumulative'),
       unit: 'kWh',
-      todayDisplay: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? undefined : `${aggregatedLoad.toFixed(0)} W`,
+      todayDisplay: (deviceEnergy?.dailyLoad ?? 0) > 0 || station.today_consumption != null ? undefined : `${Math.round(aggregatedLoad)} W`,
       totalDisplay: (deviceEnergy?.totalLoad ?? 0) > 0 || station.total_consumption != null ? undefined : '--',
     },
   ]
@@ -437,13 +437,13 @@ const StationDetailPage: React.FC = () => {
               <Row gutter={16} style={{ marginTop: 8 }}>
                 <Col span={12}>
                   <Text type="secondary">PV1:</Text>
-                  <Text strong style={{ marginLeft: 8 }}>{pvPower1 > 0 ? `${pvPower1} W` : '--'}</Text>
-                  <Text type="secondary" style={{ marginLeft: 8 }}>{pvVoltage1 > 0 ? `${pvVoltage1} V` : ''}</Text>
+                  <Text strong style={{ marginLeft: 8 }}>{pvPower1 > 0 ? `${Math.round(pvPower1)} W` : '--'}</Text>
+                  <Text type="secondary" style={{ marginLeft: 8 }}>{pvVoltage1 > 0 ? `${pvVoltage1.toFixed(1)} V` : ''}</Text>
                 </Col>
                 <Col span={12}>
                   <Text type="secondary">PV2:</Text>
-                  <Text strong style={{ marginLeft: 8 }}>{pvPower2 > 0 ? `${pvPower2} W` : '--'}</Text>
-                  <Text type="secondary" style={{ marginLeft: 8 }}>{pvVoltage2 > 0 ? `${pvVoltage2} V` : ''}</Text>
+                  <Text strong style={{ marginLeft: 8 }}>{pvPower2 > 0 ? `${Math.round(pvPower2)} W` : '--'}</Text>
+                  <Text type="secondary" style={{ marginLeft: 8 }}>{pvVoltage2 > 0 ? `${pvVoltage2.toFixed(1)} V` : ''}</Text>
                 </Col>
               </Row>
               <Row style={{ marginTop: 4 }}>
@@ -474,15 +474,15 @@ const StationDetailPage: React.FC = () => {
               <Row gutter={16} style={{ marginTop: 8 }}>
                 <Col span={8}>
                   <Text type="secondary">{t('station.power')}:</Text>{' '}
-                  <Text strong>{aggregatedBatt ?? 0} W</Text>
+                  <Text strong>{Math.round(aggregatedBatt ?? 0)} W</Text>
                 </Col>
                 <Col span={8}>
                   <Text type="secondary">{t('station.voltage')}:</Text>{' '}
-                  <Text strong>{battVoltage > 0 ? `${battVoltage} V` : '--'}</Text>
+                  <Text strong>{battVoltage > 0 ? `${battVoltage.toFixed(1)} V` : '--'}</Text>
                 </Col>
                 <Col span={8}>
                   <Text type="secondary">{t('station.current')}:</Text>{' '}
-                  <Text strong>{battCurrent > 0 ? `${battCurrent} A` : '--'}</Text>
+                  <Text strong>{battCurrent > 0 ? `${battCurrent.toFixed(1)} A` : '--'}</Text>
                 </Col>
               </Row>
             </div>
@@ -500,15 +500,15 @@ const StationDetailPage: React.FC = () => {
                 <Row gutter={16} style={{ marginTop: 8 }}>
                   <Col span={8}>
                     <Text type="secondary">{t('station.power')}:</Text>{' '}
-                    <Text strong>{hasGridData ? `${aggregatedGrid} W` : '--'}</Text>
+                    <Text strong>{hasGridData ? `${Math.round(aggregatedGrid)} W` : '--'}</Text>
                   </Col>
                   <Col span={8}>
                     <Text type="secondary">{t('station.voltage')}:</Text>{' '}
-                    <Text strong>{gridVoltage > 0 ? `${gridVoltage} V` : '--'}</Text>
+                    <Text strong>{gridVoltage > 0 ? `${gridVoltage.toFixed(1)} V` : '--'}</Text>
                   </Col>
                   <Col span={8}>
                     <Text type="secondary">{t('station.frequency')}:</Text>{' '}
-                    <Text strong>{gridFreq > 0 ? `${gridFreq} Hz` : '--'}</Text>
+                    <Text strong>{gridFreq > 0 ? `${gridFreq.toFixed(2)} Hz` : '--'}</Text>
                   </Col>
                 </Row>
               )}
@@ -520,7 +520,7 @@ const StationDetailPage: React.FC = () => {
               <Row style={{ marginTop: 8 }}>
                 <Col span={12}>
                   <Text type="secondary">{t('station.consumptionPower')}:</Text>{' '}
-                  <Text strong>{aggregatedLoad ?? 0} W</Text>
+                  <Text strong>{Math.round(aggregatedLoad ?? 0)} W</Text>
                 </Col>
               </Row>
             </div>

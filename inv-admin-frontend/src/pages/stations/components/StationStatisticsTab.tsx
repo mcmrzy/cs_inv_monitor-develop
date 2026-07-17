@@ -259,11 +259,15 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
   // 电量概览 ECharts 配置
   const energyOverviewOption = useMemo(() => {
     if (!energyOverview || typeof energyOverview !== 'object') return null
-    const categories = Array.isArray(energyOverview.categories) ? energyOverview.categories : []
+    const categories = Array.isArray(energyOverview.categories) ? energyOverview.categories :
+      (Array.isArray(energyOverview.dates) ? energyOverview.dates : [])
     const pvData = Array.isArray(energyOverview.pv) ? energyOverview.pv : []
-    const chargeData = Array.isArray(energyOverview.charge) ? energyOverview.charge : []
-    const dischargeData = Array.isArray(energyOverview.discharge) ? energyOverview.discharge : []
-    const loadData = Array.isArray(energyOverview.load) ? energyOverview.load : []
+    const chargeData = Array.isArray(energyOverview.charge) ? energyOverview.charge :
+      (Array.isArray(energyOverview.batteryCharge) ? energyOverview.batteryCharge : [])
+    const dischargeData = Array.isArray(energyOverview.discharge) ? energyOverview.discharge :
+      (Array.isArray(energyOverview.batteryDischarge) ? energyOverview.batteryDischarge : [])
+    const loadData = Array.isArray(energyOverview.load) ? energyOverview.load :
+      (Array.isArray(energyOverview.dailyLoad) ? energyOverview.dailyLoad : [])
     if (!categories.length) return null
     return {
       tooltip: { trigger: 'axis' as const, axisPointer: { type: 'shadow' as const } },

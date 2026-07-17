@@ -30,8 +30,20 @@ const FIELD_LABEL_KEYS: Record<string, string> = {
   inverter_temp: 'station.field_inverter_temp',
   pv1_power: 'station.field_pv1_power',
   pv2_power: 'station.field_pv2_power',
+  pv1_voltage: 'station.field_pv1_voltage',
+  pv2_voltage: 'station.field_pv2_voltage',
   grid_power: 'station.field_grid_power',
+  grid_voltage: 'station.field_grid_voltage',
+  grid_frequency: 'station.field_grid_frequency',
+  meter_voltage: 'station.field_meter_voltage',
+  meter_frequency: 'station.field_meter_frequency',
   load_power: 'station.field_load_power',
+  battery_voltage: 'station.field_battery_voltage',
+  battery_current: 'station.field_battery_current',
+  charge_power: 'station.field_charge_power',
+  total_active_power: 'station.field_total_active_power',
+  efficiency: 'station.field_efficiency',
+  run_status: 'station.field_run_status',
   daily_pv: 'station.field_daily_pv',
   daily_charge: 'station.field_daily_charge',
   daily_discharge: 'station.field_daily_discharge',
@@ -50,7 +62,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
     dayjs(),
   ])
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(10)
   const [visibleFields, setVisibleFields] = useState<string[]>(DEFAULT_VISIBLE_FIELDS)
 
   // 获取电站下设备列表
