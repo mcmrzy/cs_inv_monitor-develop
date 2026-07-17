@@ -21,21 +21,25 @@ const DEFAULT_VISIBLE_FIELDS = [
   'pv_total_power', 'ac_power', 'battery_soc', 'battery_power', 'inverter_temp',
 ]
 
-/** 字段标签映射 */
-const FIELD_LABELS: Record<string, string> = {
-  pv_total_power: 'PV总功率 (W)',
-  ac_power: 'AC功率 (W)',
-  battery_soc: '电池SOC (%)',
-  battery_power: '电池功率 (W)',
-  inverter_temp: '逆变器温度 (°C)',
-  pv1_power: 'PV1功率 (W)',
-  pv2_power: 'PV2功率 (W)',
-  grid_power: '电网功率 (W)',
-  load_power: '负载功率 (W)',
-  daily_pv: '日发电量 (kWh)',
-  daily_charge: '日充电量 (kWh)',
-  daily_discharge: '日放电量 (kWh)',
-  daily_load: '日负载用电 (kWh)',
+/** 字段标签映射 key */
+const FIELD_LABEL_KEYS: Record<string, string> = {
+  pv_total_power: 'station.field_pv_total_power',
+  ac_power: 'station.field_ac_power',
+  battery_soc: 'station.field_battery_soc',
+  battery_power: 'station.field_battery_power',
+  inverter_temp: 'station.field_inverter_temp',
+  pv1_power: 'station.field_pv1_power',
+  pv2_power: 'station.field_pv2_power',
+  grid_power: 'station.field_grid_power',
+  load_power: 'station.field_load_power',
+  daily_pv: 'station.field_daily_pv',
+  daily_charge: 'station.field_daily_charge',
+  daily_discharge: 'station.field_daily_discharge',
+  daily_load: 'station.field_daily_load',
+  total_pv: 'station.field_total_pv',
+  total_charge: 'station.field_total_charge',
+  total_discharge: 'station.field_total_discharge',
+  total_load: 'station.field_total_load',
 }
 
 const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezone }) => {
@@ -72,7 +76,8 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       sort: 'desc',
     }).then(r => {
       const d = r.data?.data ?? r.data
-      return { items: d?.items ?? (Array.isArray(d) ? d : []), total: d?.total ?? 0 }
+      if (Array.isArray(d)) return { items: d, total: d.length }
+      return { items: d?.items ?? [], total: d?.total ?? 0 }
     }),
     enabled: !!selectedSn && !!dateRange[0] && !!dateRange[1],
   })
@@ -96,7 +101,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   // 构建表格列
   const columns: ColumnsType<any> = useMemo(() => {
     const timeCol = {
-      title: '时间',
+      title: t('common.time'),
       dataIndex: 'time',
       key: 'time',
       width: 180,
@@ -104,17 +109,18 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
       render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm'),
     }
     const dataCols = visibleFields.map(field => ({
-      title: FIELD_LABELS[field] || field,
+      title: FIELD_LABEL_KEYS[field] ? t(FIELD_LABEL_KEYS[field]) : field,
       dataIndex: field,
       key: field,
       width: 140,
       render: (v: unknown) => {
+        if (v === null || v === undefined || v === '') return '--'
         const n = safeNum(v)
-        return n !== 0 ? n.toFixed(2) : '--'
+        return isNaN(n) ? '--' : n.toFixed(2)
       },
     }))
     return [timeCol, ...dataCols]
-  }, [visibleFields])
+  }, [visibleFields, t, timezone])
 
   // 导出
   const handleExport = async (format: 'csv' | 'excel') => {
@@ -200,7 +206,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
                 style={{ minWidth: 400 }}
                 maxTagCount={5}
                 options={allFields.map(f => ({
-                  label: FIELD_LABELS[f] || f,
+                  label: FIELD_LABEL_KEYS[f] ? t(FIELD_LABEL_KEYS[f]) : f,
                   value: f,
                 }))}
               />
