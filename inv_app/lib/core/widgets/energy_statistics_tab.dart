@@ -800,126 +800,120 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     }
   }
 
-  /// 折线图 - 实时功率（0在中间，上下有正负）
+  /// 折线图 - 实时功率（所有值 >= 0，Y轴从0开始）
   Widget _buildLineChart() {
-    // 功率折线图使用 *Power 字段（单位 W），正值为充电/发电，负值为放电/输出
-    final pvData = _dataPoints.map((e) => e.pvPower).toList();
-    final battChargeData = _dataPoints.map((e) => e.batteryChargePower).toList();
-    final battDischargeData = _dataPoints.map((e) => -e.batteryDischargePower).toList(); // 负值
-    final inverterData = _dataPoints.map((e) => -e.inverterPower).toList(); // 负值
+    // 功率折线图使用 *Power 字段（单位 W），负值截断为 0
+    final pvData = _dataPoints.map((e) => e.pvPower < 0 ? 0.0 : e.pvPower).toList();
+    final battChargeData = _dataPoints.map((e) => e.batteryChargePower < 0 ? 0.0 : e.batteryChargePower).toList();
+    final battDischargeData = _dataPoints.map((e) => e.batteryDischargePower < 0 ? 0.0 : e.batteryDischargePower).toList();
+    final inverterData = _dataPoints.map((e) => e.inverterPower < 0 ? 0.0 : e.inverterPower).toList();
 
-    // 计算Y轴范围
-    double maxAbs = 0;
+    // 计算Y轴最大值（所有正值中的最大）
+    double maxVal = 0;
     for (final p in _dataPoints) {
-      if (p.pvPower.abs() > maxAbs) maxAbs = p.pvPower.abs();
-      if (p.batteryChargePower.abs() > maxAbs) maxAbs = p.batteryChargePower.abs();
-      if (p.batteryDischargePower.abs() > maxAbs) maxAbs = p.batteryDischargePower.abs();
-      if (p.inverterPower.abs() > maxAbs) maxAbs = p.inverterPower.abs();
+      if (p.pvPower > maxVal) maxVal = p.pvPower;
+      if (p.batteryChargePower > maxVal) maxVal = p.batteryChargePower;
+      if (p.batteryDischargePower > maxVal) maxVal = p.batteryDischargePower;
+      if (p.inverterPower > maxVal) maxVal = p.inverterPower;
     }
-    final double yRange = maxAbs > 0 ? maxAbs * 1.2 : 100.0;
+    final double yMax = maxVal > 0 ? maxVal * 1.2 : 100.0;
+    final yInterval = yMax / 4;
 
-    // X轴范围：固定0-23小时，横向滚动解决数据点密度问题
-    const double chartMaxX = 23.0;
+    // X轴固定 0-23，横向滚动 2 倍屏宽保证间距
     final currentHour = DateTime.now().hour;
     final screenWidth = MediaQuery.of(context).size.width;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SizedBox(
-        width: screenWidth * 1.8,
+        width: screenWidth * 2,
         height: 220.h,
-      child: LineChart(
-        LineChartData(
-          minX: _period == 'day' ? 0.0 : null,
-          maxX: _period == 'day' ? chartMaxX : null,
-          minY: -yRange,
-          maxY: yRange,
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: yRange / 4,
-            getDrawingHorizontalLine: (value) => FlLine(
-              color: value == 0 
-                  ? AppColors.textSecondary.withValues(alpha: 0.5)
-                  : AppColors.divider.withValues(alpha: 0.3),
-              strokeWidth: value == 0 ? 1.0 : 0.5,
-            ),
-          ),
-          titlesData: FlTitlesData(
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 40.w,
-                interval: yRange / 4,
-                getTitlesWidget: (value, meta) {
-                  if (value == 0) return Text('0', style: TextStyle(fontSize: 10.sp, color: AppColors.textHint));
-                  return Text(
-                    value.abs() >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : value.toStringAsFixed(0),
-                    style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
-                  );
-                },
+        child: LineChart(
+          LineChartData(
+            minX: 0.0,
+            maxX: 23.0,
+            minY: 0.0,
+            maxY: yMax,
+            clipData: const FlClipData.all(),
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              horizontalInterval: yInterval,
+              getDrawingHorizontalLine: (value) => FlLine(
+                color: AppColors.divider.withValues(alpha: 0.3),
+                strokeWidth: 0.5,
               ),
             ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 20.h,
-                interval: _period == 'day' ? 3.0 : null,
-                getTitlesWidget: (value, meta) {
-                  final index = value.toInt();
-                  if (_period == 'day') {
-                    if (index < 0 || index >= _dataPoints.length) return const SizedBox.shrink();
-                    // 每3小时显示标签，始终显示当前小时
+            titlesData: FlTitlesData(
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 40.w,
+                  interval: yInterval,
+                  getTitlesWidget: (value, meta) {
+                    if (value < 0) return const SizedBox.shrink();
+                    return Text(
+                      value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : value.toStringAsFixed(0),
+                      style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                    );
+                  },
+                ),
+              ),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 20.h,
+                  interval: 1.0,
+                  getTitlesWidget: (value, meta) {
+                    final index = value.toInt();
+                    if (index < 0 || index > 23) return const SizedBox.shrink();
+                    // 每3小时显示标签 + 始终显示当前小时
                     if (index % 3 != 0 && index != currentHour) return const SizedBox.shrink();
                     return Text(
                       '${index}h',
-                      style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
+                      style: TextStyle(
+                        fontSize: 9.sp,
+                        color: index == currentHour ? AppColors.primary : AppColors.textHint,
+                        fontWeight: index == currentHour ? FontWeight.w600 : FontWeight.normal,
+                      ),
                     );
-                  } else {
-                    if (index < 0 || index >= _dataPoints.length) return const SizedBox.shrink();
-                    final maxLabels = 4;
-                    final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
-                    if (index != (_dataPoints.length - 1) && index % step != 0) return const SizedBox.shrink();
-                    return Text(
-                      _formatTimeLabel(_dataPoints[index].time),
-                      style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
-                    );
-                  }
-                },
+                  },
+                ),
               ),
+              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             ),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          borderData: FlBorderData(show: false),
-          lineBarsData: [
-            _buildLineData(pvData, AppColors.orange),
-            _buildLineData(battChargeData, AppColors.successLight),
-            _buildLineData(battDischargeData, AppColors.blue),
-            _buildLineData(inverterData, AppColors.purple),
-          ],
-          lineTouchData: LineTouchData(
-            touchTooltipData: LineTouchTooltipData(
-              getTooltipItems: (spots) => spots.map((spot) {
-                final labels = [_l10n.pvGeneration, _l10n.batteryCharge, _l10n.batteryDischarge, _l10n.inverterOutput];
-                final actualValue = spot.y.abs();
-                final direction = spot.y >= 0 ? '↑' : '↓';
-                return LineTooltipItem(
-                  '${labels[spot.barIndex]}: ${actualValue.toStringAsFixed(0)} W $direction\n',
-                  TextStyle(fontSize: 11.sp, color: Colors.white, fontWeight: FontWeight.w500),
-                );
-              }).toList(),
+            borderData: FlBorderData(show: false),
+            lineBarsData: [
+              _buildLineData(pvData, AppColors.orange),
+              _buildLineData(battChargeData, AppColors.successLight),
+              _buildLineData(battDischargeData, AppColors.blue),
+              _buildLineData(inverterData, AppColors.purple),
+            ],
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipItems: (spots) => spots.map((spot) {
+                  final labels = [_l10n.pvGeneration, _l10n.batteryCharge, _l10n.batteryDischarge, _l10n.inverterOutput];
+                  final val = spot.y < 0 ? 0.0 : spot.y;
+                  return LineTooltipItem(
+                    '${labels[spot.barIndex]}: ${val.toStringAsFixed(0)} W\n',
+                    TextStyle(fontSize: 11.sp, color: Colors.white, fontWeight: FontWeight.w500),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 
   LineChartBarData _buildLineData(List<double> data, Color color) {
     return LineChartBarData(
-      spots: data.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
+      spots: data.asMap().entries.map((e) {
+        final v = e.value < 0 ? 0.0 : e.value;
+        return FlSpot(e.key.toDouble(), v);
+      }).toList(),
       isCurved: true,
       color: color,
       barWidth: 2,
@@ -974,7 +968,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                   if (_period == 'day') {
                     if (index % 3 != 0) return const SizedBox.shrink();
                   } else {
-                    final maxLabels = 5;
+                    const maxLabels = 5;
                     final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
                     if (index % step != 0) return const SizedBox.shrink();
                   }
