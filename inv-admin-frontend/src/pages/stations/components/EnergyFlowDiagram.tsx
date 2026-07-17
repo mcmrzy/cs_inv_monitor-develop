@@ -46,7 +46,7 @@ const NODES: NodeConfig[] = [
 function formatPower(w: number): string {
   const abs = Math.abs(w);
   if (abs >= 1000) return `${(abs / 1000).toFixed(1)}kW`;
-  return `${abs.toFixed(0)}W`;
+  return `${Math.round(abs)}W`;
 }
 
 function calcStrokeWidth(power: number): number {
@@ -226,12 +226,12 @@ const FlowNode: React.FC<{
         </>
       ) : (
         <>
-          {/* Label: above image */}
+          {/* Label: right of image */}
           <text
-            x={x}
-            y={imgTop - 14}
-            textAnchor="middle"
-            dominantBaseline="auto"
+            x={imgRight + 4}
+            y={y - 6}
+            textAnchor="start"
+            dominantBaseline="central"
             fill="#333"
             fontSize="13"
             fontWeight="700"
@@ -239,11 +239,11 @@ const FlowNode: React.FC<{
           >
             {label}
           </text>
-          {/* Power value: tightly right of image, vertically centered */}
+          {/* Power value: right of image, below label */}
           <text
-            x={node.textSide === 'left' ? imgLeft - rightGap : imgRight + rightGap}
-            y={y + 2}
-            textAnchor={node.textSide === 'left' ? 'end' : 'start'}
+            x={imgRight + 4}
+            y={y + 10}
+            textAnchor="start"
             dominantBaseline="central"
             fill="#555"
             fontSize="12"
