@@ -37,8 +37,15 @@ const DischargeSection: React.FC = () => {
   const [smartLoadCutoffVoltage, setSmartLoadCutoffVoltage] = useState<number>(44)
   const [smartLoadCutoffSoc, setSmartLoadCutoffSoc] = useState<number>(10)
 
-  const showVoltageFields = dischargeControl === 0
-  const showSocFields = dischargeControl === 1
+  // 联动控制便捷变量
+  const voltageEnabled = dischargeControl === 0
+  const socEnabled = dischargeControl === 1
+
+  // 交流耦合子字段：仅在开关开启时启用
+  const acCoupleFieldDisabled = !acCoupleEnabled
+
+  // 智能负载子字段：仅在开关开启时启用
+  const smartLoadFieldDisabled = !smartLoadEnabled
 
   const handleSet = (fieldName: string) => {
     message.success(`${fieldName} 指令已下发`)
@@ -60,7 +67,7 @@ const DischargeSection: React.FC = () => {
         <SettingButton onClick={() => handleSet('放电控制')} />
       </FieldRow>
 
-      {/* 放电电流限制 - 始终显示 */}
+      {/* 放电电流限制 - 始终启用 */}
       <FieldRow
         label="放电电流限制(Adc)"
         range="[1, 110（单台）4480（并联）]"
@@ -71,68 +78,60 @@ const DischargeSection: React.FC = () => {
       </FieldRow>
 
       {/* 电压模式字段 */}
-      {showVoltageFields && (
-        <>
-          <FieldRow
-            label="电池警告电压(V)"
-            range="[40, 50]"
-            tooltip="当电池电压达到您设置的值时，逆变器将显示电池低电压警告，建议范围：40~50V。"
-          >
-            <InputNumber min={40} max={50} step={0.1} value={batteryWarnVoltage} onChange={(v) => setBatteryWarnVoltage(v ?? 40)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('电池警告电压')} />
-          </FieldRow>
+      <FieldRow
+        label="电池警告电压(V)"
+        range="[40, 50]"
+        tooltip="当电池电压达到您设置的值时，逆变器将显示电池低电压警告，建议范围：40~50V。"
+      >
+        <InputNumber disabled={!voltageEnabled} min={40} max={50} step={0.1} value={batteryWarnVoltage} onChange={(v) => setBatteryWarnVoltage(v ?? 40)} style={{ width: 140 }} />
+        <SettingButton disabled={!voltageEnabled} onClick={() => handleSet('电池警告电压')} />
+      </FieldRow>
 
-          <FieldRow
-            label="铅酸电池放电截止电压(V)"
-            range="[40, 50]"
-            tooltip="离网EOD电压，根据电池要求进行设置，范围：40V~50V。"
-          >
-            <InputNumber min={40} max={50} step={0.1} value={leadAcidCutoffVoltage} onChange={(v) => setLeadAcidCutoffVoltage(v ?? 40)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('铅酸电池放电截止电压')} />
-          </FieldRow>
+      <FieldRow
+        label="铅酸电池放电截止电压(V)"
+        range="[40, 50]"
+        tooltip="离网EOD电压，根据电池要求进行设置，范围：40V~50V。"
+      >
+        <InputNumber disabled={!voltageEnabled} min={40} max={50} step={0.1} value={leadAcidCutoffVoltage} onChange={(v) => setLeadAcidCutoffVoltage(v ?? 40)} style={{ width: 140 }} />
+        <SettingButton disabled={!voltageEnabled} onClick={() => handleSet('铅酸电池放电截止电压')} />
+      </FieldRow>
 
-          <FieldRow
-            label="并网EOD电压(V)"
-            range="[40, 56]"
-            tooltip="当电池达到您设置的值时，它将停止放电，交流电将介入，范围：40~56V。"
-          >
-            <InputNumber min={40} max={56} step={0.1} value={gridEodVoltage} onChange={(v) => setGridEodVoltage(v ?? 40)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('并网EOD电压')} />
-          </FieldRow>
-        </>
-      )}
+      <FieldRow
+        label="并网EOD电压(V)"
+        range="[40, 56]"
+        tooltip="当电池达到您设置的值时，它将停止放电，交流电将介入，范围：40~56V。"
+      >
+        <InputNumber disabled={!voltageEnabled} min={40} max={56} step={0.1} value={gridEodVoltage} onChange={(v) => setGridEodVoltage(v ?? 40)} style={{ width: 140 }} />
+        <SettingButton disabled={!voltageEnabled} onClick={() => handleSet('并网EOD电压')} />
+      </FieldRow>
 
       {/* SOC模式字段 */}
-      {showSocFields && (
-        <>
-          <FieldRow
-            label="电池警告SOC(%)"
-            range="[0, 90]"
-            tooltip="当电池达到您设置的值时，逆变器将显示电池低电压警告，建议范围：0~90%。"
-          >
-            <InputNumber min={0} max={90} value={batteryWarnSoc} onChange={(v) => setBatteryWarnSoc(v ?? 0)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('电池警告SOC')} />
-          </FieldRow>
+      <FieldRow
+        label="电池警告SOC(%)"
+        range="[0, 90]"
+        tooltip="当电池达到您设置的值时，逆变器将显示电池低电压警告，建议范围：0~90%。"
+      >
+        <InputNumber disabled={!socEnabled} min={0} max={90} value={batteryWarnSoc} onChange={(v) => setBatteryWarnSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton disabled={!socEnabled} onClick={() => handleSet('电池警告SOC')} />
+      </FieldRow>
 
-          <FieldRow
-            label="放电截止SOC(%)"
-            range="[0, 90]"
-            tooltip="离网EOD SOC，根据电池要求进行设置，范围：0~90%。"
-          >
-            <InputNumber min={0} max={90} value={cutoffSoc} onChange={(v) => setCutoffSoc(v ?? 0)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('放电截止SOC')} />
-          </FieldRow>
+      <FieldRow
+        label="放电截止SOC(%)"
+        range="[0, 90]"
+        tooltip="离网EOD SOC，根据电池要求进行设置，范围：0~90%。"
+      >
+        <InputNumber disabled={!socEnabled} min={0} max={90} value={cutoffSoc} onChange={(v) => setCutoffSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton disabled={!socEnabled} onClick={() => handleSet('放电截止SOC')} />
+      </FieldRow>
 
-          <FieldRow
-            label="并网截止SOC(%)"
-            range="[0, 90]"
-            tooltip="当电池达到您设置的值时，它将停止放电，交流电将介入，范围：0%~90%。"
-          >
-            <InputNumber min={0} max={90} value={gridCutoffSoc} onChange={(v) => setGridCutoffSoc(v ?? 0)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('并网截止SOC')} />
-          </FieldRow>
-        </>
-      )}
+      <FieldRow
+        label="并网截止SOC(%)"
+        range="[0, 90]"
+        tooltip="当电池达到您设置的值时，它将停止放电，交流电将介入，范围：0%~90%。"
+      >
+        <InputNumber disabled={!socEnabled} min={0} max={90} value={gridCutoffSoc} onChange={(v) => setGridCutoffSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton disabled={!socEnabled} onClick={() => handleSet('并网截止SOC')} />
+      </FieldRow>
 
       {/* 交流耦合子分组 */}
       <SubGroupTitle title="交流耦合" color={sectionColor} />
@@ -144,33 +143,27 @@ const DischargeSection: React.FC = () => {
         tooltip="将现有的并网光伏逆变器连接到发电端口作为交流耦合系统。在并网模式下，请启用电网回售或离网模式。在离网模式下，请确保光伏逆变器已启用频率转移功能。"
       />
 
-      {showVoltageFields && (
-        <>
-          <FieldRow label="AC Couple启动电压(V)" range="[40, 59.5]">
-            <InputNumber min={40} max={59.5} step={0.1} value={acCoupleStartVoltage} onChange={(v) => setAcCoupleStartVoltage(v ?? 40)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('AC Couple启动电压')} />
-          </FieldRow>
+      {/* AC Couple 电压字段 */}
+      <FieldRow label="AC Couple启动电压(V)" range="[40, 59.5]">
+        <InputNumber disabled={!voltageEnabled || acCoupleFieldDisabled} min={40} max={59.5} step={0.1} value={acCoupleStartVoltage} onChange={(v) => setAcCoupleStartVoltage(v ?? 40)} style={{ width: 140 }} />
+        <SettingButton disabled={!voltageEnabled || acCoupleFieldDisabled} onClick={() => handleSet('AC Couple启动电压')} />
+      </FieldRow>
 
-          <FieldRow label="AC Couple截止电压(V)" range="[42, 80]">
-            <InputNumber min={42} max={80} value={acCoupleCutoffVoltage} onChange={(v) => setAcCoupleCutoffVoltage(v ?? 42)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('AC Couple截止电压')} />
-          </FieldRow>
-        </>
-      )}
+      <FieldRow label="AC Couple截止电压(V)" range="[42, 80]">
+        <InputNumber disabled={!voltageEnabled || acCoupleFieldDisabled} min={42} max={80} value={acCoupleCutoffVoltage} onChange={(v) => setAcCoupleCutoffVoltage(v ?? 42)} style={{ width: 140 }} />
+        <SettingButton disabled={!voltageEnabled || acCoupleFieldDisabled} onClick={() => handleSet('AC Couple截止电压')} />
+      </FieldRow>
 
-      {showSocFields && (
-        <>
-          <FieldRow label="AC Couple启动SOC(%)" range="[0, 80]">
-            <InputNumber min={0} max={80} value={acCoupleStartSoc} onChange={(v) => setAcCoupleStartSoc(v ?? 0)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('AC Couple启动SOC')} />
-          </FieldRow>
+      {/* AC Couple SOC字段 */}
+      <FieldRow label="AC Couple启动SOC(%)" range="[0, 80]">
+        <InputNumber disabled={!socEnabled || acCoupleFieldDisabled} min={0} max={80} value={acCoupleStartSoc} onChange={(v) => setAcCoupleStartSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton disabled={!socEnabled || acCoupleFieldDisabled} onClick={() => handleSet('AC Couple启动SOC')} />
+      </FieldRow>
 
-          <FieldRow label="AC Couple截止SOC(%)" range="[0, 100]">
-            <InputNumber min={0} max={100} value={acCoupleCutoffSoc} onChange={(v) => setAcCoupleCutoffSoc(v ?? 0)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('AC Couple截止SOC')} />
-          </FieldRow>
-        </>
-      )}
+      <FieldRow label="AC Couple截止SOC(%)" range="[0, 100]">
+        <InputNumber disabled={!socEnabled || acCoupleFieldDisabled} min={0} max={100} value={acCoupleCutoffSoc} onChange={(v) => setAcCoupleCutoffSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton disabled={!socEnabled || acCoupleFieldDisabled} onClick={() => handleSet('AC Couple截止SOC')} />
+      </FieldRow>
 
       {/* 智能负载子分组 */}
       <SubGroupTitle title="智能负载" color={sectionColor} />
@@ -187,44 +180,39 @@ const DischargeSection: React.FC = () => {
         range="[0, 25.5]"
         tooltip="这是与智能负载输出功能运作的最低光伏功率限制。"
       >
-        <InputNumber min={0} max={25.5} step={0.1} value={smartLoadStartPv} onChange={(v) => setSmartLoadStartPv(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('启动PV功率')} />
+        <InputNumber disabled={smartLoadFieldDisabled} min={0} max={25.5} step={0.1} value={smartLoadStartPv} onChange={(v) => setSmartLoadStartPv(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton disabled={smartLoadFieldDisabled} onClick={() => handleSet('启动PV功率')} />
       </FieldRow>
 
       <SwitchField
         label="并网时常开"
         checked={smartLoadGridAlwaysOn}
         onChange={setSmartLoadGridAlwaysOn}
+        disabled={smartLoadFieldDisabled}
         tooltip="在电网正常时启用发电端口的持续供电。"
       />
 
-      {showVoltageFields && (
-        <>
-          <FieldRow label="Smart Load启动电压(V)" range="[40, 59]">
-            <InputNumber min={40} max={59} value={smartLoadStartVoltage} onChange={(v) => setSmartLoadStartVoltage(v ?? 40)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('Smart Load启动电压')} />
-          </FieldRow>
+      {/* Smart Load 电压字段 */}
+      <FieldRow label="Smart Load启动电压(V)" range="[40, 59]">
+        <InputNumber disabled={!voltageEnabled || smartLoadFieldDisabled} min={40} max={59} value={smartLoadStartVoltage} onChange={(v) => setSmartLoadStartVoltage(v ?? 40)} style={{ width: 140 }} />
+        <SettingButton disabled={!voltageEnabled || smartLoadFieldDisabled} onClick={() => handleSet('Smart Load启动电压')} />
+      </FieldRow>
 
-          <FieldRow label="Smart Load截止电压(V)" range="[40, 59]">
-            <InputNumber min={40} max={59} value={smartLoadCutoffVoltage} onChange={(v) => setSmartLoadCutoffVoltage(v ?? 40)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('Smart Load截止电压')} />
-          </FieldRow>
-        </>
-      )}
+      <FieldRow label="Smart Load截止电压(V)" range="[40, 59]">
+        <InputNumber disabled={!voltageEnabled || smartLoadFieldDisabled} min={40} max={59} value={smartLoadCutoffVoltage} onChange={(v) => setSmartLoadCutoffVoltage(v ?? 40)} style={{ width: 140 }} />
+        <SettingButton disabled={!voltageEnabled || smartLoadFieldDisabled} onClick={() => handleSet('Smart Load截止电压')} />
+      </FieldRow>
 
-      {showSocFields && (
-        <>
-          <FieldRow label="Smart Load启动SOC(%)" range="[0, 100]">
-            <InputNumber min={0} max={100} value={smartLoadStartSoc} onChange={(v) => setSmartLoadStartSoc(v ?? 0)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('Smart Load启动SOC')} />
-          </FieldRow>
+      {/* Smart Load SOC字段 */}
+      <FieldRow label="Smart Load启动SOC(%)" range="[0, 100]">
+        <InputNumber disabled={!socEnabled || smartLoadFieldDisabled} min={0} max={100} value={smartLoadStartSoc} onChange={(v) => setSmartLoadStartSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton disabled={!socEnabled || smartLoadFieldDisabled} onClick={() => handleSet('Smart Load启动SOC')} />
+      </FieldRow>
 
-          <FieldRow label="Smart Load截止SOC(%)" range="[0, 100]">
-            <InputNumber min={0} max={100} value={smartLoadCutoffSoc} onChange={(v) => setSmartLoadCutoffSoc(v ?? 0)} style={{ width: 140 }} />
-            <SettingButton onClick={() => handleSet('Smart Load截止SOC')} />
-          </FieldRow>
-        </>
-      )}
+      <FieldRow label="Smart Load截止SOC(%)" range="[0, 100]">
+        <InputNumber disabled={!socEnabled || smartLoadFieldDisabled} min={0} max={100} value={smartLoadCutoffSoc} onChange={(v) => setSmartLoadCutoffSoc(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton disabled={!socEnabled || smartLoadFieldDisabled} onClick={() => handleSet('Smart Load截止SOC')} />
+      </FieldRow>
     </Row>
   )
 }

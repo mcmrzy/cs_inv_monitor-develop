@@ -1,6 +1,6 @@
 import React from 'react'
 import { Button, Space, Typography, Col, Tooltip } from 'antd'
-import { QuestionCircleOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { QuestionCircleOutlined, InfoCircleOutlined, LockOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
 
@@ -19,7 +19,13 @@ export const SECTION_COLORS: Record<string, string> = {
 }
 
 // 设置按钮样式
-export const settingBtnStyle = { background: PRIMARY, borderColor: PRIMARY }
+export const settingBtnStyle: React.CSSProperties = { background: PRIMARY, borderColor: PRIMARY }
+
+// 禁用状态灰色按钮样式
+const disabledBtnStyle: React.CSSProperties = { background: '#d9d9d9', borderColor: '#d9d9d9', color: '#fff' }
+
+// 禁用字段灰色背景样式（供 InputNumber / Select 使用）
+export const disabledInputStyle: React.CSSProperties = { backgroundColor: '#f5f5f5' }
 
 // 字段行容器
 export const fieldRowStyle: React.CSSProperties = { marginBottom: 10 }
@@ -66,10 +72,11 @@ interface SwitchFieldProps {
   enableText?: string
   disableText?: string
   tooltip?: string
+  disabled?: boolean
 }
 
 export const SwitchField: React.FC<SwitchFieldProps> = ({
-  label, checked, onChange, enableText = '启用', disableText = '禁用', tooltip,
+  label, checked, onChange, enableText = '启用', disableText = '禁用', tooltip, disabled,
 }) => (
   <Col span={12}>
     <div style={fieldRowStyle}>
@@ -86,6 +93,7 @@ export const SwitchField: React.FC<SwitchFieldProps> = ({
           type={checked ? 'primary' : 'default'}
           size="small"
           onClick={() => onChange(true)}
+          disabled={disabled}
           style={checked ? { background: PRIMARY, borderColor: PRIMARY } : {}}
         >
           {enableText}
@@ -94,6 +102,7 @@ export const SwitchField: React.FC<SwitchFieldProps> = ({
           type={!checked ? 'primary' : 'default'}
           size="small"
           onClick={() => onChange(false)}
+          disabled={disabled}
           style={!checked ? { background: '#999', borderColor: '#999' } : {}}
         >
           {disableText}
@@ -114,10 +123,18 @@ export const SubGroupTitle: React.FC<{ title: string; color?: string }> = ({ tit
   </Col>
 )
 
-// SettingButton - 统一的蓝色设置按钮
-export const SettingButton: React.FC<{ onClick: () => void; loading?: boolean }> = ({ onClick, loading }) => (
-  <Button type="primary" size="small" style={settingBtnStyle} onClick={onClick} loading={loading}>
-    设置
+// SettingButton - 统一的蓝色设置按钮（disabled 时显示锁定图标 + 灰色）
+export const SettingButton: React.FC<{ onClick: () => void; loading?: boolean; disabled?: boolean }> = ({ onClick, loading, disabled }) => (
+  <Button
+    type="primary"
+    size="small"
+    style={disabled ? disabledBtnStyle : settingBtnStyle}
+    onClick={onClick}
+    loading={loading}
+    disabled={disabled}
+    icon={disabled ? <LockOutlined /> : undefined}
+  >
+    {disabled ? '已锁定' : '设置'}
   </Button>
 )
 
