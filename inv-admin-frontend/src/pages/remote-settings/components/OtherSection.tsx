@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Row, Col, InputNumber, App, Typography, Space, Button, Select } from 'antd'
-import { FieldRow, SwitchField, SettingButton, PRIMARY, labelStyle, fieldRowStyle } from './shared-styles'
+import { FieldRow, SettingButton, PRIMARY, labelStyle, fieldRowStyle } from './shared-styles'
 
 const { Text } = Typography
 const { Option } = Select
@@ -10,7 +10,6 @@ const OtherSection: React.FC = () => {
 
   const [ctCompensation, setCtCompensation] = useState<number>(0)
   const [batteryVoltageSample, setBatteryVoltageSample] = useState<number>(0)
-  const [disableExternalSample, setDisableExternalSample] = useState(false)
   const [fan1MaxSpeed, setFan1MaxSpeed] = useState<number>(100)
   const [fan1SlopeMode, setFan1SlopeMode] = useState<'default' | 'custom'>('default')
   const [fan1Slope, setFan1Slope] = useState<number>(50)
@@ -37,7 +36,6 @@ const OtherSection: React.FC = () => {
         </Select>
         <SettingButton onClick={() => handleSet('电池电压采样')} />
       </FieldRow>
-      <SwitchField label="禁止外部采样" checked={disableExternalSample} onChange={(v) => { setDisableExternalSample(v); handleSet('禁止外部采样') }} />
 
       <FieldRow label="风扇 1 最大速度(%)" range="[10, 100]" tooltip="这设置了冷却风扇1的最大速度。范围是10-100%。">
         <InputNumber min={10} max={100} value={fan1MaxSpeed} onChange={(v) => setFan1MaxSpeed(v ?? 10)} style={{ width: 140 }} />

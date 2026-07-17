@@ -26,7 +26,13 @@ func (r *DeviceRepository) GetHistoryData(ctx context.Context, sn, startDate, en
 			WHERE device_sn=$1 AND stat_date >= $2::date AND stat_date <= $3::date
 			ORDER BY stat_date`
 	}
-	rows, err := r.db.Query(ctx, query, sn, startDate, endDate, tz)
+	var rows pgx.Rows
+	var err error
+	if period == "hour" {
+		rows, err = r.db.Query(ctx, query, sn, startDate, endDate, tz)
+	} else {
+		rows, err = r.db.Query(ctx, query, sn, startDate, endDate)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +149,13 @@ func (r *StationRepository) GetStatistics(ctx context.Context, stationID int64, 
 			WHERE d.station_id=$1 AND d.deleted_at IS NULL AND e.stat_date >= $2::date AND e.stat_date <= $3::date
 			GROUP BY e.stat_date ORDER BY e.stat_date`
 	}
-	rows, err := r.db.Query(ctx, query, stationID, startDate, endDate, tz)
+	var rows pgx.Rows
+	var err error
+	if period == "hour" {
+		rows, err = r.db.Query(ctx, query, stationID, startDate, endDate, tz)
+	} else {
+		rows, err = r.db.Query(ctx, query, stationID, startDate, endDate)
+	}
 	if err != nil {
 		return nil, err
 	}

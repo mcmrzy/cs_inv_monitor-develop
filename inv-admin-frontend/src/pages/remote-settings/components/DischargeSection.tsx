@@ -1,8 +1,42 @@
 import React, { useState } from 'react'
-import { Row, Select, InputNumber, App } from 'antd'
-import { FieldRow, SwitchField, SubGroupTitle, SettingButton, SECTION_COLORS } from './shared-styles'
+import { Row, Col, Select, InputNumber, App, Typography, Space, Tooltip } from 'antd'
+import { QuestionCircleOutlined } from '@ant-design/icons'
+import { FieldRow, SwitchField, SubGroupTitle, SettingButton, labelStyle, fieldRowStyle, SECTION_COLORS, disabledInputStyle } from './shared-styles'
 
+const { Text } = Typography
 const { Option } = Select
+
+interface TimeRangeFieldProps {
+  label: string
+  h: number
+  m: number
+  onHChange: (v: number | null) => void
+  onMChange: (v: number | null) => void
+  onSet: () => void
+  tooltip?: string
+  disabled?: boolean
+}
+
+const TimeRangeField: React.FC<TimeRangeFieldProps> = ({ label, h, m, onHChange, onMChange, onSet, tooltip, disabled }) => (
+  <Col span={24}>
+    <div style={fieldRowStyle}>
+      <Text style={labelStyle}>
+        {label}
+        {tooltip && (
+          <Tooltip title={tooltip} overlayStyle={{ maxWidth: 360 }}>
+            <QuestionCircleOutlined style={{ marginLeft: 4, color: '#bbb', cursor: 'help', fontSize: 13 }} />
+          </Tooltip>
+        )}
+      </Text>
+      <Space>
+        <InputNumber min={0} max={23} value={h} onChange={onHChange} style={{ width: 70, ...(disabled ? disabledInputStyle : {}) }} addonAfter="时" disabled={disabled} />
+        <Text>:</Text>
+        <InputNumber min={0} max={59} value={m} onChange={onMChange} style={{ width: 70, ...(disabled ? disabledInputStyle : {}) }} addonAfter="分" disabled={disabled} />
+        <SettingButton onClick={onSet} disabled={disabled} />
+      </Space>
+    </div>
+  </Col>
+)
 
 const DischargeSection: React.FC = () => {
   const { message } = App.useApp()
@@ -28,6 +62,12 @@ const DischargeSection: React.FC = () => {
   const [acCoupleCutoffVoltage, setAcCoupleCutoffVoltage] = useState<number>(52)
   const [acCoupleCutoffSoc, setAcCoupleCutoffSoc] = useState<number>(50)
 
+  // 独立字段
+  const [dischargePowerPercent, setDischargePowerPercent] = useState<number>(100)
+  const [gridDischargeCutoffSoc, setGridDischargeCutoffSoc] = useState<number>(10)
+  const [offgridDischargeCutoffSoc, setOffgridDischargeCutoffSoc] = useState<number>(10)
+  const [dischargeStartPower, setDischargeStartPower] = useState<number>(100)
+
   // 智能负载
   const [smartLoadEnabled, setSmartLoadEnabled] = useState<boolean>(false)
   const [smartLoadStartPv, setSmartLoadStartPv] = useState<number>(3)
@@ -36,6 +76,23 @@ const DischargeSection: React.FC = () => {
   const [smartLoadStartSoc, setSmartLoadStartSoc] = useState<number>(30)
   const [smartLoadCutoffVoltage, setSmartLoadCutoffVoltage] = useState<number>(44)
   const [smartLoadCutoffSoc, setSmartLoadCutoffSoc] = useState<number>(10)
+
+  // 强制放电
+  const [forceDischargeEnable, setForceDischargeEnable] = useState<boolean>(false)
+  const [forceDischargePowerPercent, setForceDischargePowerPercent] = useState<number>(10)
+  const [forceDischargeCutoffSoc, setForceDischargeCutoffSoc] = useState<number>(20)
+  const [forceStart0H, setForceStart0H] = useState<number>(0)
+  const [forceStart0M, setForceStart0M] = useState<number>(0)
+  const [forceEnd0H, setForceEnd0H] = useState<number>(0)
+  const [forceEnd0M, setForceEnd0M] = useState<number>(0)
+  const [forceStart1H, setForceStart1H] = useState<number>(0)
+  const [forceStart1M, setForceStart1M] = useState<number>(0)
+  const [forceEnd1H, setForceEnd1H] = useState<number>(0)
+  const [forceEnd1M, setForceEnd1M] = useState<number>(0)
+  const [forceStart2H, setForceStart2H] = useState<number>(0)
+  const [forceStart2M, setForceStart2M] = useState<number>(0)
+  const [forceEnd2H, setForceEnd2H] = useState<number>(0)
+  const [forceEnd2M, setForceEnd2M] = useState<number>(0)
 
   // 联动控制便捷变量
   const voltageEnabled = dischargeControl === 0
@@ -46,6 +103,9 @@ const DischargeSection: React.FC = () => {
 
   // 智能负载子字段：仅在开关开启时启用
   const smartLoadFieldDisabled = !smartLoadEnabled
+
+  // 强制放电子字段：仅在开关开启时启用
+  const forceDischargeDisabled = !forceDischargeEnable
 
   const handleSet = (fieldName: string) => {
     message.success(`${fieldName} 指令已下发`)
@@ -61,8 +121,8 @@ const DischargeSection: React.FC = () => {
         tooltip="1: 在使用铅酸电池或在铅酸模式下使用锂电池时，根据电压选择。2: 在使用兼容的锂电池时，根据SOC选择。"
       >
         <Select value={dischargeControl} onChange={setDischargeControl} style={{ width: 140 }}>
-          <Option value={0}>电压</Option>
-          <Option value={1}>SOC</Option>
+          <Option value={0}>电压 (根据)</Option>
+          <Option value={1}>SOC (根据)</Option>
         </Select>
         <SettingButton onClick={() => handleSet('放电控制')} />
       </FieldRow>
@@ -131,6 +191,43 @@ const DischargeSection: React.FC = () => {
       >
         <InputNumber disabled={!socEnabled} min={0} max={90} value={gridCutoffSoc} onChange={(v) => setGridCutoffSoc(v ?? 0)} style={{ width: 140 }} />
         <SettingButton disabled={!socEnabled} onClick={() => handleSet('并网截止SOC')} />
+      </FieldRow>
+
+      {/* 独立字段 */}
+      <FieldRow
+        label="放电功率百分比(%)"
+        range="[0, 100]"
+        tooltip="设置放电功率百分比"
+      >
+        <InputNumber min={0} max={100} value={dischargePowerPercent} onChange={(v) => setDischargePowerPercent(v ?? 100)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('放电功率百分比')} />
+      </FieldRow>
+
+      <FieldRow
+        label="并网放电截止SOC限值(%)"
+        range="[0, 100]"
+        tooltip="并网模式下放电截止SOC"
+      >
+        <InputNumber min={0} max={100} value={gridDischargeCutoffSoc} onChange={(v) => setGridDischargeCutoffSoc(v ?? 10)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('并网放电截止SOC限值')} />
+      </FieldRow>
+
+      <FieldRow
+        label="离网放电截止SOC限值(%)"
+        range="[0, 100]"
+        tooltip="离网模式下放电截止SOC"
+      >
+        <InputNumber min={0} max={100} value={offgridDischargeCutoffSoc} onChange={(v) => setOffgridDischargeCutoffSoc(v ?? 10)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('离网放电截止SOC限值')} />
+      </FieldRow>
+
+      <FieldRow
+        label="放电起始功率设置(W)"
+        range="[0, 65535]"
+        tooltip="设置放电起始功率"
+      >
+        <InputNumber min={0} max={65535} value={dischargeStartPower} onChange={(v) => setDischargeStartPower(v ?? 100)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('放电起始功率设置')} />
       </FieldRow>
 
       {/* 交流耦合子分组 */}
@@ -213,6 +310,41 @@ const DischargeSection: React.FC = () => {
         <InputNumber disabled={!socEnabled || smartLoadFieldDisabled} min={0} max={100} value={smartLoadCutoffSoc} onChange={(v) => setSmartLoadCutoffSoc(v ?? 0)} style={{ width: 140 }} />
         <SettingButton disabled={!socEnabled || smartLoadFieldDisabled} onClick={() => handleSet('Smart Load截止SOC')} />
       </FieldRow>
+
+      {/* 强制放电子分组 */}
+      <SubGroupTitle title="强制放电" color={sectionColor} />
+
+      <SwitchField
+        label="强制放电使能"
+        checked={forceDischargeEnable}
+        onChange={setForceDischargeEnable}
+        tooltip="启用强制放电模式"
+      />
+
+      <FieldRow
+        label="强制放电功率百分比(%)"
+        range="[0, 100]"
+        tooltip="强制放电功率百分比"
+      >
+        <InputNumber disabled={forceDischargeDisabled} min={0} max={100} value={forceDischargePowerPercent} onChange={(v) => setForceDischargePowerPercent(v ?? 10)} style={{ width: 140 }} />
+        <SettingButton disabled={forceDischargeDisabled} onClick={() => handleSet('强制放电功率百分比')} />
+      </FieldRow>
+
+      <FieldRow
+        label="强制放电截止SOC(%)"
+        range="[0, 100]"
+        tooltip="强制放电截止SOC"
+      >
+        <InputNumber disabled={forceDischargeDisabled} min={0} max={100} value={forceDischargeCutoffSoc} onChange={(v) => setForceDischargeCutoffSoc(v ?? 20)} style={{ width: 140 }} />
+        <SettingButton disabled={forceDischargeDisabled} onClick={() => handleSet('强制放电截止SOC')} />
+      </FieldRow>
+
+      <TimeRangeField label="强制放电起始时间0" h={forceStart0H} m={forceStart0M} onHChange={(v) => setForceStart0H(v ?? 0)} onMChange={(v) => setForceStart0M(v ?? 0)} onSet={() => handleSet('强制放电起始时间0')} disabled={forceDischargeDisabled} />
+      <TimeRangeField label="强制放电结束时间0" h={forceEnd0H} m={forceEnd0M} onHChange={(v) => setForceEnd0H(v ?? 0)} onMChange={(v) => setForceEnd0M(v ?? 0)} onSet={() => handleSet('强制放电结束时间0')} disabled={forceDischargeDisabled} />
+      <TimeRangeField label="强制放电起始时间1" h={forceStart1H} m={forceStart1M} onHChange={(v) => setForceStart1H(v ?? 0)} onMChange={(v) => setForceStart1M(v ?? 0)} onSet={() => handleSet('强制放电起始时间1')} disabled={forceDischargeDisabled} />
+      <TimeRangeField label="强制放电结束时间1" h={forceEnd1H} m={forceEnd1M} onHChange={(v) => setForceEnd1H(v ?? 0)} onMChange={(v) => setForceEnd1M(v ?? 0)} onSet={() => handleSet('强制放电结束时间1')} disabled={forceDischargeDisabled} />
+      <TimeRangeField label="强制放电起始时间2" h={forceStart2H} m={forceStart2M} onHChange={(v) => setForceStart2H(v ?? 0)} onMChange={(v) => setForceStart2M(v ?? 0)} onSet={() => handleSet('强制放电起始时间2')} disabled={forceDischargeDisabled} />
+      <TimeRangeField label="强制放电结束时间2" h={forceEnd2H} m={forceEnd2M} onHChange={(v) => setForceEnd2H(v ?? 0)} onMChange={(v) => setForceEnd2M(v ?? 0)} onSet={() => handleSet('强制放电结束时间2')} disabled={forceDischargeDisabled} />
     </Row>
   )
 }

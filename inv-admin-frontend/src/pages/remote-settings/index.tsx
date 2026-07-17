@@ -3,7 +3,7 @@ import { Empty, Typography, Space, App, Collapse } from 'antd'
 import {
   ReloadOutlined, SettingOutlined, ThunderboltOutlined,
   ToolOutlined, ArrowUpOutlined, ArrowDownOutlined,
-  ApiOutlined,
+  ApiOutlined, ExperimentOutlined,
 } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { deviceApi } from '@/services/deviceApi'
@@ -15,6 +15,7 @@ import GridConnectionSection from './components/GridConnectionSection'
 import ChargeSection from './components/ChargeSection'
 import DischargeSection from './components/DischargeSection'
 import OtherSection from './components/OtherSection'
+import BatterySection from './components/BatterySection'
 import ResetSection from './components/ResetSection'
 import { SECTION_COLORS } from './components/shared-styles'
 import type { DeviceItem } from './types'
@@ -35,7 +36,7 @@ const RemoteSettingsPage: React.FC = () => {
     return localStorage.getItem('remote-settings-device-sn')
   })
   const [reading, setReading] = useState(false)
-  const [activeKeys, setActiveKeys] = useState<string[]>(['general', 'application', 'gridConnection', 'charge', 'discharge', 'other', 'reset'])
+  const [activeKeys, setActiveKeys] = useState<string[]>(['general', 'application', 'gridConnection', 'charge', 'discharge', 'other', 'battery', 'reset'])
 
   const { data: devicesData } = useQuery({
     queryKey: queryKeys.devices.list({ page: 1, page_size: 200 }),
@@ -135,6 +136,14 @@ const RemoteSettingsPage: React.FC = () => {
               style={panelStyle(SECTION_COLORS.other)}
             >
               <OtherSection />
+            </Collapse.Panel>
+
+            <Collapse.Panel
+              key="battery"
+              header={<SectionHeader icon={<ExperimentOutlined />} title="电池" color={SECTION_COLORS.battery} />}
+              style={panelStyle(SECTION_COLORS.battery)}
+            >
+              <BatterySection />
             </Collapse.Panel>
 
             <Collapse.Panel

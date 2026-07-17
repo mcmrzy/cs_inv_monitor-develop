@@ -109,10 +109,7 @@ const findGroupData = (data: any, aliases: string[]): Record<string, any> | null
 const DeviceRealtimeModal: React.FC<DeviceRealtimeModalProps> = ({ open, deviceSn, onClose }) => {
   const { data: rtData, isLoading } = useQuery({
     queryKey: ['device-realtime-modal', deviceSn],
-    queryFn: () => deviceApi.getRealtime(deviceSn!).then(res => {
-      const body = res.data?.data ?? res.data ?? {}
-      return body?.realtime ?? body
-    }),
+    queryFn: () => deviceApi.getRealtime(deviceSn!).then(res => res.data?.data ?? res.data ?? {}),
     enabled: !!deviceSn && open,
     refetchInterval: open ? 10000 : false,
   })

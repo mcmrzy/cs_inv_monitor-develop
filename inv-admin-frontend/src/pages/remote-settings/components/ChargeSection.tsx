@@ -41,6 +41,9 @@ const TimeRangeField: React.FC<TimeRangeFieldProps> = ({ label, h, m, onHChange,
 const ChargeSection: React.FC = () => {
   const { message } = App.useApp()
 
+  // 顶层
+  const [chargePowerPercent, setChargePowerPercent] = useState<number>(100)
+
   // 主充电参数
   const [chargeCurrent, setChargeCurrent] = useState<number>(60)
 
@@ -52,6 +55,7 @@ const ChargeSection: React.FC = () => {
   const [equalTime, setEqualTime] = useState<number>(2)
 
   // 交流充电
+  const [acChargeEnable, setAcChargeEnable] = useState(false)
   const [acChargeControl, setAcChargeControl] = useState<number>(0)
   const [acChargeCurrent, setAcChargeCurrent] = useState<number>(60)
   const [acStart1H, setAcStart1H] = useState(0)
@@ -80,6 +84,14 @@ const ChargeSection: React.FC = () => {
   const [genChargeEndSoc, setGenChargeEndSoc] = useState<number>(90)
   const [genRatedPower, setGenRatedPower] = useState<number>(3000)
   const [genBoost, setGenBoost] = useState(false)
+
+  // 充电优先级
+  const [batteryChargePriority, setBatteryChargePriority] = useState(false)
+  const [batteryChargePriorityPercent, setBatteryChargePriorityPercent] = useState<number>(0)
+  const [systemChargeSocLimit, setSystemChargeSocLimit] = useState<number>(100)
+  // 系统充电优先级
+  const [systemChargePriority, setSystemChargePriority] = useState(false)
+  const [systemChargePriorityPercent, setSystemChargePriorityPercent] = useState<number>(0)
 
   const handleSet = (fieldName: string) => {
     message.success(`${fieldName} 指令已下发`)
@@ -153,10 +165,18 @@ const ChargeSection: React.FC = () => {
 
   return (
     <Row gutter={[16, 8]}>
+      {/* 顶层字段 */}
+      <FieldRow label="充电功率百分比(%)" tooltip="设置充电功率百分比限制">
+        <InputNumber min={0} max={100} value={chargePowerPercent} onChange={(v) => setChargePowerPercent(v ?? 100)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('充电功率百分比')} />
+      </FieldRow>
+
+      <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
+
       {/* 主充电参数 */}
       <SubGroupTitle title="主充电参数" color={sectionColor} />
 
-      <FieldRow label="充电电流限制(A)" tooltip="根据电池要求进行设置，范围：0~110（单台）4480（并联）。">
+      <FieldRow label="充电电流限制(Adc)" tooltip="根据电池要求进行设置，范围：0~110（单台）4480（并联）。">
         <InputNumber min={0} max={110} step={0.1} value={chargeCurrent} onChange={(v) => setChargeCurrent(v ?? 0)} style={{ width: 140 }} />
         <SettingButton onClick={() => handleSet('充电电流限制')} />
       </FieldRow>
@@ -233,6 +253,8 @@ const ChargeSection: React.FC = () => {
         <SettingButton onClick={() => handleSet('交流充电结束电池SOC')} disabled={!acShowSoc} />
       </FieldRow>
 
+      <SwitchField label="AC充电使能" checked={acChargeEnable} onChange={(v) => { setAcChargeEnable(v); handleSet('AC充电使能') }} enableText="启用" disableText="禁用" tooltip="启用交流充电功能" />
+
       <TimeRangeField label="AC充电起始时间1" h={acStart1H} m={acStart1M} onHChange={(v) => setAcStart1H(v ?? 0)} onMChange={(v) => setAcStart1M(v ?? 0)} onSet={() => handleSet('AC充电起始时间1')} disabled={!acShowTime} />
       <TimeRangeField label="AC充电结束时间1" h={acEnd1H} m={acEnd1M} onHChange={(v) => setAcEnd1H(v ?? 0)} onMChange={(v) => setAcEnd1M(v ?? 0)} onSet={() => handleSet('AC充电结束时间1')} disabled={!acShowTime} />
       <TimeRangeField label="AC充电起始时间2" h={acStart2H} m={acStart2M} onHChange={(v) => setAcStart2H(v ?? 0)} onMChange={(v) => setAcStart2M(v ?? 0)} onSet={() => handleSet('AC充电起始时间2')} disabled={!acShowTime} />
@@ -284,6 +306,30 @@ const ChargeSection: React.FC = () => {
       </FieldRow>
 
       <SwitchField label="发电机提升" checked={genBoost} onChange={(v) => { setGenBoost(v); handleSet('发电机提升') }} enableText="启用" disableText="禁用" />
+
+      <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
+
+      {/* 充电优先级 */}
+      <SubGroupTitle title="充电优先级" color={sectionColor} />
+
+      <SwitchField label="电池充电优先" checked={batteryChargePriority} onChange={(v) => { setBatteryChargePriority(v); handleSet('电池充电优先') }} enableText="启用" disableText="禁用" tooltip="启用电池充电优先模式" />
+
+      <FieldRow label="电池充电优先百分比(%)" tooltip="电池充电优先功率百分比">
+        <InputNumber min={0} max={100} value={batteryChargePriorityPercent} onChange={(v) => setBatteryChargePriorityPercent(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('电池充电优先百分比')} />
+      </FieldRow>
+
+      <SwitchField label="系统充电优先级" checked={systemChargePriority} onChange={(v) => { setSystemChargePriority(v); handleSet('系统充电优先级') }} enableText="启用" disableText="禁用" tooltip="启用系统充电优先模式" />
+
+      <FieldRow label="系统充电优先级百分比(%)" tooltip="设置系统充电优先功率百分比。">
+        <InputNumber min={0} max={100} value={systemChargePriorityPercent} onChange={(v) => setSystemChargePriorityPercent(v ?? 0)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('系统充电优先级百分比')} />
+      </FieldRow>
+
+      <FieldRow label="系统充电SOC限值(%)" tooltip="系统充电SOC上限值">
+        <InputNumber min={0} max={100} value={systemChargeSocLimit} onChange={(v) => setSystemChargeSocLimit(v ?? 100)} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('系统充电SOC限值')} />
+      </FieldRow>
     </Row>
   )
 }

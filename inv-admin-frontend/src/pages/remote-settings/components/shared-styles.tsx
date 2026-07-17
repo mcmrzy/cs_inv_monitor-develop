@@ -15,6 +15,7 @@ export const SECTION_COLORS: Record<string, string> = {
   charge: '#10b981',
   discharge: '#f59e0b',
   other: '#6b7280',
+  battery: '#8b5cf6',
   reset: '#ef4444',
 }
 

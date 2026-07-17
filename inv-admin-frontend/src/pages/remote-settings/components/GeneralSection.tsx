@@ -10,6 +10,30 @@ interface Props {
 }
 
 /* ── 下拉选项常量 ── */
+const METER_TYPE_OPTIONS = [
+  { value: 0, label: '单相表' },
+  { value: 1, label: '三相表' },
+]
+
+const DETECTION_METHOD_OPTIONS = [
+  { value: 0, label: '不使用' },
+  { value: 1, label: 'CT' },
+  { value: 2, label: '电表' },
+]
+
+const REGULATION_OPTIONS = [
+  { value: 0, label: 'VDE0126' },
+  { value: 1, label: 'AS4777' },
+  { value: 2, label: 'G99' },
+  { value: 3, label: 'CQC' },
+  { value: 4, label: 'EN50549' },
+  { value: 5, label: 'IEC61727' },
+  { value: 6, label: '南非' },
+  { value: 7, label: '巴西' },
+  { value: 8, label: '泰国' },
+  { value: 9, label: '菲律宾' },
+]
+
 const PV_WIRING_OPTIONS = [
   { value: 0, label: '直流源模式' },
   { value: 3, label: '两个MPPT连接到同一串' },
@@ -94,6 +118,15 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
   const [batteryEco, setBatteryEco] = useState(false)
   const [buzzer, setBuzzer] = useState(true)
 
+  /* ── 型号信息字段状态 ── */
+  const [commAddress, setCommAddress] = useState<number>(1)
+  const [startPvVoltage, setStartPvVoltage] = useState<number>(100)
+  const [meterType, setMeterType] = useState<number>(0)
+  const [detectionMethod, setDetectionMethod] = useState<number>(1)
+  const [regulation, setRegulation] = useState<number>(0)
+  const [zeroGroundDetect, setZeroGroundDetect] = useState(false)
+  const [totalLoadCompensation, setTotalLoadCompensation] = useState(false)
+
   const handleSet = (fieldName: string) => {
     message.success(`${fieldName} 指令已下发`)
   }
@@ -109,6 +142,50 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
 
   return (
     <Row gutter={[16, 8]}>
+      {/* ── 型号信息子分组 ── */}
+      <SubGroupTitle title="型号信息" color="#4f6ef7" />
+
+      {/* 通讯地址 */}
+      <FieldRow label="通讯地址">
+        <InputNumber value={commAddress} onChange={(v) => setCommAddress(v ?? 1)} min={1} max={255} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('通讯地址')} />
+      </FieldRow>
+
+      {/* 开始光伏电压 */}
+      <FieldRow label="开始光伏电压(V)">
+        <InputNumber value={startPvVoltage} onChange={(v) => setStartPvVoltage(v ?? 100)} min={0} max={600} style={{ width: 140 }} />
+        <SettingButton onClick={() => handleSet('开始光伏电压')} />
+      </FieldRow>
+
+      {/* 电表类型 */}
+      <FieldRow label="电表类型">
+        <Select value={meterType} onChange={setMeterType} style={{ width: 160 }} options={METER_TYPE_OPTIONS} />
+        <SettingButton onClick={() => handleSet('电表类型')} />
+      </FieldRow>
+
+      {/* 检测方式 */}
+      <FieldRow label="检测方式">
+        <Select value={detectionMethod} onChange={setDetectionMethod} style={{ width: 160 }} options={DETECTION_METHOD_OPTIONS} />
+        <SettingButton onClick={() => handleSet('检测方式')} />
+      </FieldRow>
+
+      {/* 法规 */}
+      <FieldRow label="法规">
+        <Select value={regulation} onChange={setRegulation} style={{ width: 160 }} options={REGULATION_OPTIONS} />
+        <SettingButton onClick={() => handleSet('法规')} />
+      </FieldRow>
+
+      {/* 零地检测使能 */}
+      <SwitchField label="零地检测使能" checked={zeroGroundDetect} onChange={(v) => { setZeroGroundDetect(v); handleSet('零地检测使能') }} />
+
+      {/* 总负载补偿 */}
+      <SwitchField label="总负载补偿" checked={totalLoadCompensation} onChange={(v) => { setTotalLoadCompensation(v); handleSet('总负载补偿') }} tooltip="启用总负载补偿以提高计量精度" />
+
+      {/* 版本号（只读） */}
+      <FieldRow label="版本号">
+        <Text code>AAAB-0D11</Text>
+      </FieldRow>
+
       {/* 型号（只读） */}
       <FieldRow label="型号">
         <Text strong>{deviceInfo?.model || deviceInfo?.device_type || '-'}</Text>
