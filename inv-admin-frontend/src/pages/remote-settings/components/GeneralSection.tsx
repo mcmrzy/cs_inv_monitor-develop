@@ -135,10 +135,6 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
   const isLithium = batteryType === 2
   const isCustomCapacity = leadAcidType === 31
 
-  // 铅酸区域：仅在铅酸电池时启用，其余情况 disabled
-  const leadAcidDisabled = !isLeadAcid
-  // 锂电区域：仅在锂电池时启用，其余情况 disabled
-  const lithiumDisabled = !isLithium
 
   return (
     <Row gutter={[16, 8]}>
@@ -183,11 +179,6 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
       {/* 总负载补偿 */}
       <SwitchField label="总负载补偿" checked={totalLoadCompensation} onChange={(v) => { setTotalLoadCompensation(v); handleSet('总负载补偿') }} tooltip="启用总负载补偿以提高计量精度" />
 
-      {/* 版本号（只读） */}
-      <FieldRow label="版本号">
-        <Text code>AAAB-0D11</Text>
-      </FieldRow>
-
       {/* 型号（只读） */}
       <FieldRow label="型号">
         <Text strong>{deviceInfo?.model || deviceInfo?.device_type || '-'}</Text>
@@ -211,11 +202,13 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
         <SettingButton onClick={() => handleSet('电池类型')} />
       </FieldRow>
 
-      {/* 铅酸电池类型 - 始终显示，非铅酸时 disabled */}
-      <FieldRow label="铅酸电池类型" tooltip={TIPS.leadAcidType}>
-        <Select value={leadAcidType} onChange={setLeadAcidType} style={{ width: 160 }} options={LEAD_ACID_OPTIONS} disabled={leadAcidDisabled} />
-        <SettingButton onClick={() => handleSet('铅酸电池类型')} disabled={leadAcidDisabled} />
-      </FieldRow>
+      {/* 铅酸电池类型 - 仅铅酸时显示 */}
+      {isLeadAcid && (
+        <FieldRow label="铅酸电池类型" tooltip={TIPS.leadAcidType}>
+          <Select value={leadAcidType} onChange={setLeadAcidType} style={{ width: 160 }} options={LEAD_ACID_OPTIONS} />
+          <SettingButton onClick={() => handleSet('铅酸电池类型')} />
+        </FieldRow>
+      )}
 
       {/* 自定义容量 - 仅铅酸且自定义时显示 */}
       {isLeadAcid && isCustomCapacity && (
@@ -231,13 +224,15 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
         </FieldRow>
       )}
 
-      {/* 锂电池类型 - 始终显示，非锂电时 disabled */}
-      <FieldRow label="锂电池类型" tooltip={TIPS.lithiumType}>
-        <Select value={lithiumType} onChange={setLithiumType} style={{ width: 300 }} options={LITHIUM_TYPE_OPTIONS} disabled={lithiumDisabled} />
-        <SettingButton onClick={() => handleSet('锂电池类型')} disabled={lithiumDisabled} />
-      </FieldRow>
+      {/* 锂电池类型 - 仅锂电时显示 */}
+      {isLithium && (
+        <FieldRow label="锂电池类型" tooltip={TIPS.lithiumType}>
+          <Select value={lithiumType} onChange={setLithiumType} style={{ width: 300 }} options={LITHIUM_TYPE_OPTIONS} />
+          <SettingButton onClick={() => handleSet('锂电池类型')} />
+        </FieldRow>
+      )}
 
-      {/* 没有电池时的提示 */}
+      {/* 没有电池时的灰色提示 */}
       {batteryType === 0 && (
         <Col span={24}>
           <div style={{ padding: '12px 0', color: '#bbb', fontSize: 13 }}>
