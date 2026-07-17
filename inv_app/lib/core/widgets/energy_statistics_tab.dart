@@ -38,11 +38,14 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
   // 通知数据
   List<Map<String, dynamic>> _alarms = [];
   bool _alarmsLoading = false;
+  List<Map<String, dynamic>> _powerFlowData = []; // energy-flow API 原始数据
+  bool _powerFlowLoading = false;
 
   @override
   void initState() {
     super.initState();
     _fetchData();
+    _fetchPowerFlow();
     _fetchAlarms();
   }
 
@@ -51,6 +54,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stationId != widget.stationId) {
       _fetchData();
+      _fetchPowerFlow();
       _fetchAlarms();
     }
   }
@@ -170,6 +174,40 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     }
   }
 
+  Future<void> _fetchPowerFlow() async {
+    if (_period != 'day') {
+      if (mounted) setState(() { _powerFlowData = []; _powerFlowLoading = false; });
+      return;
+    }
+    if (mounted) setState(() => _powerFlowLoading = true);
+    try {
+      final dio = getIt<Dio>();
+      final response = await dio.get('/dashboard/energy-flow', queryParameters: {
+        'date': _formatDate(_selectedDate),
+        if (widget.stationId != null) 'stationId': widget.stationId,
+      });
+      if (response.statusCode == 200) {
+        final body = response.data;
+        if (body is Map<String, dynamic> && body['code'] == 0) {
+          final wrapper = body['data'];
+          if (wrapper is Map<String, dynamic>) {
+            final data = wrapper['data'];
+            if (data is List) {
+              if (mounted) {
+                setState(() {
+                  _powerFlowData = List<Map<String, dynamic>>.from(data);
+                  _powerFlowLoading = false;
+                });
+              }
+              return;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() { _powerFlowData = []; _powerFlowLoading = false; });
+  }
+
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
@@ -236,6 +274,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       }
     });
     _fetchData();
+    _fetchPowerFlow();
   }
 
   void _changePeriod(String newPeriod) {
@@ -245,6 +284,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       _selectedDate = DateTime.now();
     });
     _fetchData();
+    _fetchPowerFlow();
   }
 
   @override
@@ -265,6 +305,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               : RefreshIndicator(
                   onRefresh: () async {
                     await _fetchData();
+                    await _fetchPowerFlow();
                     await _fetchAlarms();
                   },
                   child: ListView(
@@ -523,7 +564,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
   /// 图表展示区
   /// 功率折线图区域
   Widget _buildPowerChartSection(AppLocalizations l10n) {
-    if (_dataPoints.isEmpty) {
+    if (_dataPoints.isEmpty && _powerFlowData.isEmpty && !_powerFlowLoading) {
       return Container(
         height: 260.h,
         decoration: AppColor.card(context),
@@ -551,7 +592,13 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
             style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
           ),
           SizedBox(height: 16.h),
-          _buildLineChart(),
+          if (_powerFlowLoading && _powerFlowData.isEmpty)
+            SizedBox(
+              height: 220.h,
+              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else
+            _buildLineChart(),
           SizedBox(height: 12.h),
           _buildPowerLegend(),
         ],
@@ -603,7 +650,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       {'label': '${_l10n.pvGeneration}↑', 'color': AppColors.orange},
       {'label': '${_l10n.batteryCharge}↑', 'color': AppColors.successLight},
       {'label': '${_l10n.batteryDischarge}↓', 'color': AppColors.blue},
-      {'label': '${_l10n.inverterOutput}↓', 'color': AppColors.purple},
+      {'label': '${_l10n.loadPower}↓', 'color': AppColors.purple},
     ];
 
     return Wrap(
@@ -800,26 +847,48 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     }
   }
 
-  /// 折线图 - 实时功率（所有值 >= 0，Y轴从0开始）
+  /// 折线图 - 实时功率（使用 energy-flow API 数据，所有值单位 W）
   Widget _buildLineChart() {
-    // 功率折线图使用 *Power 字段（单位 W），负值截断为 0
-    final pvData = _dataPoints.map((e) => e.pvPower < 0 ? 0.0 : e.pvPower).toList();
-    final battChargeData = _dataPoints.map((e) => e.batteryChargePower < 0 ? 0.0 : e.batteryChargePower).toList();
-    final battDischargeData = _dataPoints.map((e) => e.batteryDischargePower < 0 ? 0.0 : e.batteryDischargePower).toList();
-    final inverterData = _dataPoints.map((e) => e.inverterPower < 0 ? 0.0 : e.inverterPower).toList();
+    if (_powerFlowData.isEmpty) {
+      return SizedBox(
+        height: 220.h,
+        child: Center(
+          child: Text(
+            _l10n.noDataAvailable,
+            style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+          ),
+        ),
+      );
+    }
 
-    // 计算Y轴最大值（所有正值中的最大）
+    // 从 energy-flow 数据构建 4 条折线
+    final spotsList = <List<FlSpot>>[[], [], [], []]; // pv, charge, discharge, load
+
+    for (final d in _powerFlowData) {
+      final timeStr = d['time'] as String?;
+      if (timeStr == null) continue;
+      // API 返回 UTC 时间，需转为本地时区
+      final dt = DateTime.parse(timeStr).toLocal();
+      // X 轴：使用小数小时（如 6.05 表示 6:03），保证精确定位
+      final x = dt.hour + dt.minute / 60.0;
+
+      spotsList[0].add(FlSpot(x, (d['pvPower'] ?? 0).toDouble()));
+      spotsList[1].add(FlSpot(x, (d['batteryCharge'] ?? 0).toDouble()));
+      spotsList[2].add(FlSpot(x, (d['batteryDischarge'] ?? 0).toDouble()));
+      spotsList[3].add(FlSpot(x, (d['loadPower'] ?? 0).toDouble()));
+    }
+
+    // 计算 Y 轴最大值
     double maxVal = 0;
-    for (final p in _dataPoints) {
-      if (p.pvPower > maxVal) maxVal = p.pvPower;
-      if (p.batteryChargePower > maxVal) maxVal = p.batteryChargePower;
-      if (p.batteryDischargePower > maxVal) maxVal = p.batteryDischargePower;
-      if (p.inverterPower > maxVal) maxVal = p.inverterPower;
+    for (final spots in spotsList) {
+      for (final s in spots) {
+        if (s.y > maxVal) maxVal = s.y;
+      }
     }
     final double yMax = maxVal > 0 ? maxVal * 1.2 : 100.0;
-    final yInterval = yMax / 4;
+    final yInterval = _calcYInterval(yMax);
 
-    // X轴固定 0-23，横向滚动 2 倍屏宽保证间距
+    final colors = [AppColors.orange, AppColors.successLight, AppColors.blue, AppColors.purple];
     final currentHour = DateTime.now().hour;
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -831,7 +900,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         child: LineChart(
           LineChartData(
             minX: 0.0,
-            maxX: 23.0,
+            maxX: 24.0,
             minY: 0.0,
             maxY: yMax,
             clipData: const FlClipData.all(),
@@ -848,12 +917,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
-                  reservedSize: 40.w,
+                  reservedSize: 44.w,
                   interval: yInterval,
                   getTitlesWidget: (value, meta) {
                     if (value < 0) return const SizedBox.shrink();
                     return Text(
-                      value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : value.toStringAsFixed(0),
+                      _formatPowerLabel(value),
                       style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
                     );
                   },
@@ -863,18 +932,16 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                 sideTitles: SideTitles(
                   showTitles: true,
                   reservedSize: 20.h,
-                  interval: 1.0,
+                  interval: 3.0,
                   getTitlesWidget: (value, meta) {
-                    final index = value.toInt();
-                    if (index < 0 || index > 23) return const SizedBox.shrink();
-                    // 每3小时显示标签 + 始终显示当前小时
-                    if (index % 3 != 0 && index != currentHour) return const SizedBox.shrink();
+                    final hour = value.toInt();
+                    if (hour < 0 || hour > 23) return const SizedBox.shrink();
                     return Text(
-                      '${index}h',
+                      '${hour}h',
                       style: TextStyle(
                         fontSize: 9.sp,
-                        color: index == currentHour ? AppColors.primary : AppColors.textHint,
-                        fontWeight: index == currentHour ? FontWeight.w600 : FontWeight.normal,
+                        color: hour == currentHour ? AppColors.primary : AppColors.textHint,
+                        fontWeight: hour == currentHour ? FontWeight.w600 : FontWeight.normal,
                       ),
                     );
                   },
@@ -884,19 +951,17 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             ),
             borderData: FlBorderData(show: false),
-            lineBarsData: [
-              _buildLineData(pvData, AppColors.orange),
-              _buildLineData(battChargeData, AppColors.successLight),
-              _buildLineData(battDischargeData, AppColors.blue),
-              _buildLineData(inverterData, AppColors.purple),
-            ],
+            lineBarsData: List.generate(4, (i) => _buildLineData(spotsList[i], colors[i])),
             lineTouchData: LineTouchData(
               touchTooltipData: LineTouchTooltipData(
                 getTooltipItems: (spots) => spots.map((spot) {
-                  final labels = [_l10n.pvGeneration, _l10n.batteryCharge, _l10n.batteryDischarge, _l10n.inverterOutput];
-                  final val = spot.y < 0 ? 0.0 : spot.y;
+                  final labels = [_l10n.pvGeneration, _l10n.batteryCharge, _l10n.batteryDischarge, _l10n.loadPower];
+                  // 从 X 轴小数小时还原 HH:MM
+                  final totalMinutes = (spot.x * 60).round();
+                  final hh = (totalMinutes ~/ 60).toString().padLeft(2, '0');
+                  final mm = (totalMinutes % 60).toString().padLeft(2, '0');
                   return LineTooltipItem(
-                    '${labels[spot.barIndex]}: ${val.toStringAsFixed(0)} W\n',
+                    '$hh:$mm ${labels[spot.barIndex]}: ${spot.y.toStringAsFixed(0)} W',
                     TextStyle(fontSize: 11.sp, color: Colors.white, fontWeight: FontWeight.w500),
                   );
                 }).toList(),
@@ -908,21 +973,36 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     );
   }
 
-  LineChartBarData _buildLineData(List<double> data, Color color) {
+  LineChartBarData _buildLineData(List<FlSpot> spots, Color color) {
     return LineChartBarData(
-      spots: data.asMap().entries.map((e) {
-        final v = e.value < 0 ? 0.0 : e.value;
-        return FlSpot(e.key.toDouble(), v);
-      }).toList(),
+      spots: spots,
       isCurved: true,
+      curveSmoothness: 0.2,
       color: color,
       barWidth: 2,
-      dotData: FlDotData(show: data.length <= 31),
+      dotData: FlDotData(show: spots.length <= 48),
       belowBarData: BarAreaData(
         show: true,
-        color: color.withValues(alpha: 0.08),
+        color: color.withValues(alpha: 0.05),
       ),
     );
+  }
+
+  /// 计算 Y 轴间隔，确保标签为整洁数值
+  double _calcYInterval(double yMax) {
+    if (yMax <= 100) return 25;
+    if (yMax <= 500) return 100;
+    if (yMax <= 1000) return 250;
+    if (yMax <= 5000) return 1000;
+    return (yMax / 4 / 1000).ceil() * 1000.0;
+  }
+
+  /// 统一功率标签格式（Y 轴）
+  String _formatPowerLabel(double value) {
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(1)}kW';
+    }
+    return value.toStringAsFixed(0);
   }
 
   /// 柱状图
@@ -1114,6 +1194,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                         });
                         Navigator.pop(ctx);
                         _fetchData();
+                        _fetchPowerFlow();
                       },
                       child: Text(_l10n.confirm),
                     ),

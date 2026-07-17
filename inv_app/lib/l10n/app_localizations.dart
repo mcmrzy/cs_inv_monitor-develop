@@ -980,6 +980,8 @@ class AppLocalizations {
   }
 
   String get inverterNoResponse => _localizedStrings['inverter_no_response']!;
+  String get loadPower => _localizedStrings['load_power'] ?? 'Load Power';
+  String get noDataAvailable => _localizedStrings['no_data_available'] ?? 'No data available';
 }
 
 class _AppLocalizationsDelegate

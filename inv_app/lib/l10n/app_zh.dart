@@ -1007,4 +1007,6 @@ const Map<String, String> zh = {
   'alarm_label': '告警',
   'source_label': '来源',
   'inverter_no_response': '逆变器无响应，已自动断开设备热点并切回家用 WiFi',
+  'load_power': '负载用电',
+  'no_data_available': '暂无数据',
 };
