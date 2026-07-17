@@ -96,7 +96,7 @@ const ApplicationSection: React.FC = () => {
   }
 
   return (
-    <Row gutter={[16, 8]}>
+    <Row gutter={[0, 8]}>
       {/* 顶层新增字段 */}
       <FieldRow label="高网输出频率设置(Hz)" tooltip="选择高网输出频率。">
         <Select value={highGridFreq} onChange={setHighGridFreq} style={{ width: 140 }} showSearch>

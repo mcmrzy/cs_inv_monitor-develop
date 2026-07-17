@@ -32,7 +32,7 @@ export const disabledInputStyle: React.CSSProperties = { backgroundColor: '#f5f5
 export const fieldRowStyle: React.CSSProperties = { marginBottom: 10 }
 
 // 字段标签
-export const labelStyle: React.CSSProperties = { fontSize: 12, color: '#888', marginBottom: 3, display: 'block' }
+export const labelStyle: React.CSSProperties = { fontSize: 12, color: '#888' }
 
 // 范围提示文字
 export const rangeStyle: React.CSSProperties = { fontSize: 11, color: '#bbb', marginTop: 2 }
@@ -47,9 +47,9 @@ interface FieldRowProps {
 }
 
 export const FieldRow: React.FC<FieldRowProps> = ({ label, range, children, full, tooltip }) => (
-  <Col span={full ? 24 : 12}>
-    <div style={fieldRowStyle}>
-      <Text style={labelStyle}>
+  <Col span={24}>
+    <div style={{ ...fieldRowStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={{ ...labelStyle, marginBottom: 0, flexShrink: 0, marginRight: 12 }}>
         {label}
         {tooltip && (
           <Tooltip title={tooltip} overlayStyle={{ maxWidth: 360 }}>
@@ -79,9 +79,9 @@ interface SwitchFieldProps {
 export const SwitchField: React.FC<SwitchFieldProps> = ({
   label, checked, onChange, enableText = '启用', disableText = '禁用', tooltip, disabled,
 }) => (
-  <Col span={12}>
-    <div style={fieldRowStyle}>
-      <Text style={labelStyle}>
+  <Col span={24}>
+    <div style={{ ...fieldRowStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={{ ...labelStyle, marginBottom: 0, flexShrink: 0, marginRight: 12 }}>
         {label}
         {tooltip && (
           <Tooltip title={tooltip} overlayStyle={{ maxWidth: 360 }}>

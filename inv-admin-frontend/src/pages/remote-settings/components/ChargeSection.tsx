@@ -164,7 +164,7 @@ const ChargeSection: React.FC = () => {
   const genShowSoc = genChargeType === 1
 
   return (
-    <Row gutter={[16, 8]}>
+    <Row gutter={[0, 8]}>
       {/* 顶层字段 */}
       <FieldRow label="充电功率百分比(%)" tooltip="设置充电功率百分比限制">
         <InputNumber min={0} max={100} value={chargePowerPercent} onChange={(v) => setChargePowerPercent(v ?? 100)} style={{ width: 140 }} />

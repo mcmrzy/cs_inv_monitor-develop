@@ -137,7 +137,7 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
 
 
   return (
-    <Row gutter={[16, 8]}>
+    <Row gutter={[0, 8]}>
       {/* ── 型号信息子分组 ── */}
       <SubGroupTitle title="型号信息" color="#4f6ef7" />
 
@@ -256,9 +256,9 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
       <SwitchField label="蜂鸣器启用" checked={buzzer} onChange={(v) => { setBuzzer(v); handleSet('蜂鸣器启用') }} tooltip={TIPS.buzzer} />
 
       {/* 重启逆变器 */}
-      <Col span={12}>
-        <div style={fieldRowStyle}>
-          <Text style={labelStyle}>
+      <Col span={24}>
+        <div style={{ ...fieldRowStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ ...labelStyle, marginBottom: 0, flexShrink: 0, marginRight: 12 }}>
             重启逆变器
             <Tooltip title={TIPS.restart} overlayStyle={{ maxWidth: 360 }}>
               <ExclamationCircleOutlined style={{ marginLeft: 4, color: '#faad14', cursor: 'help', fontSize: 13 }} />
