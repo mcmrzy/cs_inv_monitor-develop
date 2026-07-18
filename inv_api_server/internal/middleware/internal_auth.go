@@ -1,32 +1,22 @@
 package middleware
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"log"
-	"os"
+	"crypto/subtle"
 
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
 
-func InternalAuth() gin.HandlerFunc {
-	secret := os.Getenv("INTERNAL_API_SECRET")
-	if secret == "" {
-		randomBytes := make([]byte, 32)
-		if _, err := rand.Read(randomBytes); err != nil {
-			log.Printf("[WARN] INTERNAL_API_SECRET is empty and failed to generate random key, internal API will be inaccessible")
-			secret = "inaccessible-no-valid-key-configured"
-		} else {
-			secret = hex.EncodeToString(randomBytes)
-			log.Printf("[WARN] INTERNAL_API_SECRET is not set, using random key. Internal API calls will fail unless the env var is configured.")
-		}
-	}
-
+// InternalAuth authenticates service-to-service requests with the validated
+// internal key from application configuration. An empty key always fails
+// closed. Constant-time comparison avoids leaking key prefixes through timing.
+func InternalAuth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := c.GetHeader("X-Internal-Key")
-		if key == "" || key != secret {
+		valid := secret != "" && key != "" && len(key) == len(secret) &&
+			subtle.ConstantTimeCompare([]byte(key), []byte(secret)) == 1
+		if !valid {
 			response.Unauthorized(c, "invalid internal key")
 			c.Abort()
 			return

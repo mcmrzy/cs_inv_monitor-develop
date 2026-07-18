@@ -1,4 +1,4 @@
-package com.example.inv_app
+package com.csinv.app
 
 import io.flutter.embedding.android.FlutterActivity
 

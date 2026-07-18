@@ -1,7 +1,7 @@
 import urllib.request
 import json
 
-data = json.dumps({"account": "13800138000", "password": "admin123"}).encode()
+data = json.dumps({"account": "13800138000", "password": "CHANGE_ME_JENKINS_PASSWORD"}).encode()
 req = urllib.request.Request(
     "http://localhost:3000/api/v1/auth/login",
     data=data,

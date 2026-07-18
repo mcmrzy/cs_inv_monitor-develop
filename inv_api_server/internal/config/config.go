@@ -129,7 +129,7 @@ func Load(configPath string) (*Config, error) {
 
 	viper.SetDefault("timezone", "Asia/Shanghai")
 	viper.SetDefault("backends.device_server", "http://inv-device-server:8081")
-	viper.SetDefault("backends.weather_api", "http://api.open-meteo.com/v1/forecast")
+	viper.SetDefault("backends.weather_api", "https://api.open-meteo.com/v1/forecast")
 	viper.SetDefault("backends.amap_api_key", "")
 	viper.SetDefault("backends.weather_source", "open-meteo")
 	viper.SetDefault("backends.upload_dir", "/data/firmware")

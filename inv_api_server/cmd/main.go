@@ -635,12 +635,14 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 	router.GET("/health", func(c *gin.Context) {
 		status := gin.H{"status": "ok"}
+		httpStatus := http.StatusOK
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
 
 		if deps.DB != nil {
 			if err := deps.DB.Ping(ctx); err != nil {
 				status["db"] = "error"
+				httpStatus = http.StatusServiceUnavailable
 			} else {
 				status["db"] = "ok"
 			}
@@ -648,17 +650,21 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		if deps.RDB != nil {
 			if err := deps.RDB.Ping(ctx).Err(); err != nil {
 				status["redis"] = "error"
+				httpStatus = http.StatusServiceUnavailable
 			} else {
 				status["redis"] = "ok"
 			}
 		}
 
-		c.JSON(http.StatusOK, status)
+		if httpStatus != http.StatusOK {
+			status["status"] = "degraded"
+		}
+		c.JSON(httpStatus, status)
 	})
 
 	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, deps.JPushService, nil, nil)
 
-	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth())
+	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth(cfg.Backends.InternalKey))
 	{
 		internal.POST("/device-status", internalHandler.DeviceStatus)
 		internal.POST("/device-info", internalHandler.DeviceInfo)

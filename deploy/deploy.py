@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-光伏逆变器监控系统 - 服务器部署脚本
-服务器: cskj@192.168.8.50
+光伏逆变器监控系�?- 服务器部署脚�?
+服务�? cskj@example.invalid
 """
 
 import subprocess
@@ -10,8 +10,8 @@ import time
 import os
 
 # 配置
-SERVER = "cskj@192.168.8.50"
-PASSWORD = "REDACTED_ROTATE_CREDENTIAL"
+SERVER = "cskj@example.invalid"
+PASSWORD = "CHANGE_ME_ROTATE_CREDENTIAL"
 REMOTE_DIR = "/opt/inv-mqtt"
 
 def run_ssh_command(command, interactive=True):
@@ -54,7 +54,7 @@ def run_scp_command(source, destination):
 
 def main():
     print("=" * 50)
-    print("光伏逆变器监控系统 - 服务器部署")
+    print("光伏逆变器监控系�?- 服务器部�?)
     print("=" * 50)
     print()
 
@@ -82,15 +82,15 @@ def main():
     print("\n[4/5] 等待服务启动...")
     time.sleep(30)
 
-    # 5. 检查服务状态
-    print("\n[5/5] 检查服务状态...")
+    # 5. 检查服务状�?
+    print("\n[5/5] 检查服务状�?..")
     process = run_ssh_command("docker ps")
     time.sleep(5)
     process.terminate()
 
     print("\n" + "=" * 50)
-    print("部署完成！")
-    print("访问地址: http://192.168.8.50:8888")
+    print("部署完成�?)
+    print("访问地址: http://example.invalid:8888")
     print("=" * 50)
 
 if __name__ == "__main__":

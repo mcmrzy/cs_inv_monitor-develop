@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties for local release builds.
+# Never commit android/key.properties or the keystore file.
+storeFile=/absolute/path/to/release-keystore.jks
+storePassword=CHANGE_ME_STORE_PASSWORD
+keyAlias=CHANGE_ME_KEY_ALIAS
+keyPassword=CHANGE_ME_KEY_PASSWORD

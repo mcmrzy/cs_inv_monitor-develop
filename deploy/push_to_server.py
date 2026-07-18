@@ -8,11 +8,11 @@ REMOTE_DIR = '/opt/inv-mqtt'
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect('192.168.8.50', username='cskj', password='REDACTED_ROTATE_CREDENTIAL')
+client.connect('example.invalid', username='cskj', password='CHANGE_ME_ROTATE_CREDENTIAL')
 
-print("=== 推送最新代码到服务器 ===\n")
+print("=== 推送最新代码到服务�?===\n")
 
-# 上传修改的文件
+# 上传修改的文�?
 files_to_upload = [
     ('inv_api_server', True),  # directory
     ('inv-admin-frontend', True),  # directory
@@ -24,7 +24,7 @@ files_to_upload = [
 for item, is_dir in files_to_upload:
     local_path = os.path.join(LOCAL_PATH, item)
     if not os.path.exists(local_path):
-        print(f"  跳过 {item}（不存在）")
+        print(f"  跳过 {item}（不存在�?)
         continue
     
     print(f"[上传] {item}...")
@@ -38,9 +38,9 @@ for item, is_dir in files_to_upload:
     except Exception as e:
         print(f"  错误: {e}")
 
-# 重新构建并部署
-print("\n[构建] 重新构建所有服务...")
-cmd = f"echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd {REMOTE_DIR}/deploy && docker compose up -d --build'"
+# 重新构建并部�?
+print("\n[构建] 重新构建所有服�?..")
+cmd = f"echo 'CHANGE_ME_ROTATE_CREDENTIAL' | sudo -S bash -c 'cd {REMOTE_DIR}/deploy && docker compose up -d --build'"
 stdin, stdout, stderr = client.exec_command(cmd, timeout=600)
 out = stdout.read().decode()
 for line in out.split('\n'):
@@ -51,11 +51,11 @@ for line in out.split('\n'):
 print("\n等待服务启动...")
 time.sleep(40)
 
-# 检查状态
+# 检查状�?
 stdin, stdout, stderr = client.exec_command(
-    "echo 'REDACTED_ROTATE_CREDENTIAL' | sudo -S docker ps --format '{{.Names}}: {{.Status}}' | grep inv"
+    "echo 'CHANGE_ME_ROTATE_CREDENTIAL' | sudo -S docker ps --format '{{.Names}}: {{.Status}}' | grep inv"
 )
-print(f"\n服务状态:\n{stdout.read().decode()}")
+print(f"\n服务状�?\n{stdout.read().decode()}")
 
 client.close()
-print("=== 推送完成 ===")
+print("=== 推送完�?===")

@@ -292,7 +292,7 @@ var stateTransitionMatrix = [3][6]DeviceState{
 	// EventOnlineReport, EventOfflineReport, EventFaultDetected, EventFaultRecovered, EventHeartbeatTimeout, EventLWTOffline
 	{StateOnline, -1, StateFault, -1, -1, -1},                                       // 当前: Offline
 	{-1, StateOffline, StateFault, -1, StateOffline, StateOffline},                  // 当前: Online
-	{StateOnline, StateOffline, StateFault, StateOnline, StateOffline, StateOffline}, // 当前: Fault (允许 Fault→Online)
+	{StateFault, StateOffline, StateFault, StateOnline, StateOffline, StateOffline}, // 当前: Fault（仅 FaultRecovered 可恢复在线）
 }
 
 // CanTransition 检查状态转换是否合法

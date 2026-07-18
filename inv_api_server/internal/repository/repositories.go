@@ -1495,7 +1495,12 @@ func (r *DeviceRepository) Create(ctx context.Context, sn, model string, ratedPo
 }
 
 func (r *DeviceRepository) Bind(ctx context.Context, sn string, userID, stationID int64) error {
-	query := `UPDATE devices SET user_id = $1, station_id = $2, timezone = COALESCE((SELECT timezone FROM stations WHERE id = $2), 'Asia/Shanghai'), updated_at = NOW() WHERE sn = $3 AND user_id = 0`
+	query := `UPDATE devices
+		SET user_id = $1,
+			station_id = NULLIF($2::bigint, 0),
+			timezone = COALESCE((SELECT timezone FROM stations WHERE id = NULLIF($2::bigint, 0)), 'Asia/Shanghai'),
+			updated_at = NOW()
+		WHERE sn = $3 AND user_id = 0`
 	tag, err := r.db.Exec(ctx, query, userID, stationID, sn)
 	if err != nil {
 		return err
