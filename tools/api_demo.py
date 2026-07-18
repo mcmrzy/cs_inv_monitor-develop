@@ -7,7 +7,7 @@ import requests
 import json
 
 # ============ 配置 ============
-BASE_URL = "http://192.168.8.50:8888/api/v1"
+BASE_URL = "http://example.invalid:8888/api/v1"
 ACCOUNT = "13800138000"    # 手机号、邮箱或昵称
 PASSWORD = "admin123"       # 替换为你的密码
 
