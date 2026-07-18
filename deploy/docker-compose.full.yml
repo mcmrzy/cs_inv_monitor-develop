@@ -30,7 +30,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pg-data:/var/lib/postgresql/data
+      - pg-data:/var/lib/postgresql
       - ../database/00-init.sql:/docker-entrypoint-initdb.d/00-init.sql
       - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
       - ../database/migration_architecture_upgrade_20260529.sql:/docker-entrypoint-initdb.d/02-upgrade.sql
@@ -49,7 +49,7 @@ services:
         max-file: "3"
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     container_name: inv-redis
     ports:
       - "6379:6379"
@@ -121,7 +121,9 @@ services:
         max-file: "3"
 
   inv-api-server:
-    build: ../inv_api_server
+    build:
+      context: ..
+      dockerfile: inv_api_server/Dockerfile
     container_name: inv-api-server
     expose:
       - "8080"

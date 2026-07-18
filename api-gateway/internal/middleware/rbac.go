@@ -357,6 +357,20 @@ func isAppAllowedPathWithMethod(path, method string) bool {
 	if isAppAllowedPath(path) {
 		return true
 	}
+	// Device binding and owner-checked unbinding are terminal-user self-service
+	// operations. Keep the exception exact so it cannot grant broad
+	// devices:create/delete privileges to other device administration routes.
+	if method == http.MethodPost && path == "/api/v1/devices/bind" {
+		return true
+	}
+	if (method == http.MethodPost || method == http.MethodDelete) &&
+		strings.HasPrefix(path, "/api/v1/devices/") {
+		remainder := strings.TrimPrefix(path, "/api/v1/devices/")
+		parts := strings.Split(remainder, "/")
+		if len(parts) == 2 && parts[0] != "" && parts[1] == "unbind" {
+			return true
+		}
+	}
 	for _, entry := range appAllowedMethodPaths {
 		if entry.method == method && (path == entry.prefix || strings.HasPrefix(path, entry.prefix+"/")) {
 			return true

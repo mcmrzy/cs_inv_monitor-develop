@@ -214,7 +214,7 @@ const Map<String, String> zh = {
   'select_power_unit': '选择功率单位',
   'unit_changed': '单位已切换为 {unit}',
   'server_address': '自定义服务器地址',
-  'server_hint': '例如: http://192.168.1.100:8080/api/v1',
+  'server_hint': '例如: https://jiuxiaoyw.online/api/v1',
   'server_saved': '服务器地址已保存，请重启应用生效',
   'reset_settings': '重置设置',
   'reset_confirm': '确定要重置所有设置为默认值吗？',

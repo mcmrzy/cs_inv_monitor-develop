@@ -41,6 +41,8 @@ cors:
   allowed_origins:
     - "http://localhost:3000"
     - "http://localhost:5173"
+    - "https://jiuxiaoyw.online"
+    - "https://www.jiuxiaoyw.online"
     # 生产环境添加实际域名
     # - "https://your-domain.com"
 

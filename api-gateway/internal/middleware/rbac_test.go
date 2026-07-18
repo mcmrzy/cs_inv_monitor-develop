@@ -46,6 +46,11 @@ func TestIsAppAllowedPathWithMethod(t *testing.T) {
 	}{
 		// POST /api/v1/stations 允许普通用户创建电站
 		{"/api/v1/stations", "POST", true},
+		{"/api/v1/devices/bind", "POST", true},
+		{"/api/v1/devices/DEV001/unbind", "POST", true},
+		{"/api/v1/devices/DEV001/unbind", "DELETE", true},
+		{"/api/v1/devices/batch-assign-installer", "POST", false},
+		{"/api/v1/devices/DEV001", "DELETE", false},
 		// GET/PUT/DELETE 仍走 RBAC，不通过白名单
 		{"/api/v1/stations", "GET", false},
 		{"/api/v1/stations/123", "PUT", false},

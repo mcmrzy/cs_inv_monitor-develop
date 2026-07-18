@@ -214,7 +214,7 @@ const Map<String, String> en = {
   'select_power_unit': 'Select Power Unit',
   'unit_changed': 'Unit changed to {unit}',
   'server_address': 'Custom Server URL',
-  'server_hint': 'e.g. http://192.168.1.100:8080/api/v1',
+  'server_hint': 'e.g. https://jiuxiaoyw.online/api/v1',
   'server_saved': 'Server URL saved. Please restart the app.',
   'reset_settings': 'Reset Settings',
   'reset_confirm': 'Reset all settings to default?',

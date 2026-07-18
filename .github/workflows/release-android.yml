@@ -1,0 +1,87 @@
+name: Release Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: HTTPS API base URL, for example https://api.example.com/api/v1
+        required: true
+        type: string
+
+jobs:
+  build-signed-aab:
+    name: Build signed Android App Bundle
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Validate release inputs
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          case "$API_BASE_URL" in
+            https://*) ;;
+            *) echo "api_base_url must start with https://" >&2; exit 1 ;;
+          esac
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "$name secret is required for a commercial Android release" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44'
+          channel: stable
+          cache: true
+
+      - name: Restore release keystore
+        working-directory: inv_app
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p android/secure
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/secure/release-keystore.jks
+
+      - name: Build signed AAB
+        working-directory: inv_app
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/inv_app/android/secure/release-keystore.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          JPUSH_APP_KEY: ${{ secrets.JPUSH_APP_KEY }}
+        run: |
+          set -euo pipefail
+          flutter pub get
+          flutter build appbundle --release \
+            --dart-define=API_BASE_URL='${{ inputs.api_base_url }}'
+
+      - name: Verify bundle signing
+        working-directory: inv_app
+        run: |
+          set -euo pipefail
+          test -s build/app/outputs/bundle/release/app-release.aab
+          jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
+
+      - name: Upload signed AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: inv-app-release-aab
+          path: inv_app/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14

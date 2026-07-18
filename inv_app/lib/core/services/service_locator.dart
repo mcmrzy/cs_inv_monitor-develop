@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -79,135 +80,154 @@ class ServiceLocator {
     );
     getIt.registerLazySingleton<FlutterSecureStorage>(() => secureStorage);
 
-    final dio = Dio(BaseOptions(
-      baseUrl: AppConfig.apiBaseUrl,
-      connectTimeout: const Duration(milliseconds: AppConfig.connectTimeout),
-      receiveTimeout: const Duration(milliseconds: AppConfig.receiveTimeout),
-      sendTimeout: const Duration(milliseconds: AppConfig.sendTimeout),
-    ),);
+    final dio = Dio(
+      BaseOptions(
+        baseUrl: AppConfig.apiBaseUrl,
+        connectTimeout: const Duration(milliseconds: AppConfig.connectTimeout),
+        receiveTimeout: const Duration(milliseconds: AppConfig.receiveTimeout),
+        sendTimeout: const Duration(milliseconds: AppConfig.sendTimeout),
+      ),
+    );
 
     // 拦截器1：Token 注入 + 自动刷新
-    dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        final token = await getIt<StorageService>().getToken();
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
-        }
-        return handler.next(options);
-      },
-      onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
-          if (error.requestOptions.path == '/auth/refresh') {
-            getIt<AuthBloc>().add(AuthLogoutRequested());
-            return handler.next(error);
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final token = await getIt<StorageService>().getToken();
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
           }
-
-          if (error.requestOptions.path == '/auth/logout') {
-            return handler.next(error);
-          }
-
-          if (_tokenRefreshLock) {
-            return _waitForRefresh(error, handler);
-          }
-
-          _tokenRefreshLock = true;
-          try {
-            final storageService = getIt<StorageService>();
-            final refreshToken = await storageService.getRefreshToken();
-
-            if (refreshToken == null) {
-              _tokenRefreshLock = false;
-              _refreshCompleter?.complete(false);
-              _refreshCompleter = null;
+          return handler.next(options);
+        },
+        onError: (error, handler) async {
+          if (error.response?.statusCode == 401) {
+            if (error.requestOptions.path == '/auth/refresh') {
               getIt<AuthBloc>().add(AuthLogoutRequested());
               return handler.next(error);
             }
 
-            final refreshDio = Dio(BaseOptions(
-              baseUrl: AppConfig.apiBaseUrl,
-              connectTimeout: const Duration(milliseconds: AppConfig.connectTimeout),
-              receiveTimeout: const Duration(milliseconds: AppConfig.receiveTimeout),
-            ),);
-
-            final refreshResponse = await refreshDio.post(
-              '/auth/refresh',
-              data: {'refresh_token': refreshToken},
-            );
-
-            final responseData = refreshResponse.data;
-            String? newToken;
-            String? newRefreshToken;
-
-            if (responseData is Map<String, dynamic>) {
-              if (responseData['code'] == 0 && responseData['data'] != null) {
-                final data = responseData['data'] as Map<String, dynamic>;
-                newToken = (data['access_token'] ?? data['token'] ?? data['accessToken']) as String?;
-                newRefreshToken = (data['refresh_token'] ?? data['refreshToken']) as String?;
-              } else if (responseData['access_token'] != null || responseData['token'] != null) {
-                newToken = (responseData['access_token'] ?? responseData['token'] ?? responseData['accessToken']) as String?;
-                newRefreshToken = (responseData['refresh_token'] ?? responseData['refreshToken']) as String?;
-              }
+            if (error.requestOptions.path == '/auth/logout') {
+              return handler.next(error);
             }
 
-            if (newToken != null) {
-              await storageService.saveToken(newToken);
-              if (newRefreshToken != null) {
-                await storageService.saveRefreshToken(newRefreshToken);
+            if (_tokenRefreshLock) {
+              return _waitForRefresh(error, handler);
+            }
+
+            _tokenRefreshLock = true;
+            try {
+              final storageService = getIt<StorageService>();
+              final refreshToken = await storageService.getRefreshToken();
+
+              if (refreshToken == null) {
+                _tokenRefreshLock = false;
+                _refreshCompleter?.complete(false);
+                _refreshCompleter = null;
+                getIt<AuthBloc>().add(AuthLogoutRequested());
+                return handler.next(error);
               }
 
-              _tokenRefreshLock = false;
-              _refreshCompleter?.complete(true);
-              _refreshCompleter = null;
-
-              final opts = Options(
-                method: error.requestOptions.method,
-                headers: {
-                  ...error.requestOptions.headers,
-                  'Authorization': 'Bearer $newToken',
-                },
-              );
-
-              final retryResponse = await dio.fetch(
-                RequestOptions(
-                  path: error.requestOptions.path,
-                  data: error.requestOptions.data,
-                  queryParameters: error.requestOptions.queryParameters,
-                  headers: opts.headers,
-                  method: opts.method,
-                  baseUrl: error.requestOptions.baseUrl,
-                  connectTimeout: error.requestOptions.connectTimeout,
-                  receiveTimeout: error.requestOptions.receiveTimeout,
-                  sendTimeout: error.requestOptions.sendTimeout,
+              final refreshDio = Dio(
+                BaseOptions(
+                  baseUrl: AppConfig.apiBaseUrl,
+                  connectTimeout:
+                      const Duration(milliseconds: AppConfig.connectTimeout),
+                  receiveTimeout:
+                      const Duration(milliseconds: AppConfig.receiveTimeout),
                 ),
               );
-              return handler.resolve(retryResponse);
-            } else {
+
+              final refreshResponse = await refreshDio.post(
+                '/auth/refresh',
+                data: {'refresh_token': refreshToken},
+              );
+
+              final responseData = refreshResponse.data;
+              String? newToken;
+              String? newRefreshToken;
+
+              if (responseData is Map<String, dynamic>) {
+                if (responseData['code'] == 0 && responseData['data'] != null) {
+                  final data = responseData['data'] as Map<String, dynamic>;
+                  newToken = (data['access_token'] ??
+                      data['token'] ??
+                      data['accessToken']) as String?;
+                  newRefreshToken = (data['refresh_token'] ??
+                      data['refreshToken']) as String?;
+                } else if (responseData['access_token'] != null ||
+                    responseData['token'] != null) {
+                  newToken = (responseData['access_token'] ??
+                      responseData['token'] ??
+                      responseData['accessToken']) as String?;
+                  newRefreshToken = (responseData['refresh_token'] ??
+                      responseData['refreshToken']) as String?;
+                }
+              }
+
+              if (newToken != null) {
+                await storageService.saveToken(newToken);
+                if (newRefreshToken != null) {
+                  await storageService.saveRefreshToken(newRefreshToken);
+                }
+
+                _tokenRefreshLock = false;
+                _refreshCompleter?.complete(true);
+                _refreshCompleter = null;
+
+                final opts = Options(
+                  method: error.requestOptions.method,
+                  headers: {
+                    ...error.requestOptions.headers,
+                    'Authorization': 'Bearer $newToken',
+                  },
+                );
+
+                final retryResponse = await dio.fetch(
+                  RequestOptions(
+                    path: error.requestOptions.path,
+                    data: error.requestOptions.data,
+                    queryParameters: error.requestOptions.queryParameters,
+                    headers: opts.headers,
+                    method: opts.method,
+                    baseUrl: error.requestOptions.baseUrl,
+                    connectTimeout: error.requestOptions.connectTimeout,
+                    receiveTimeout: error.requestOptions.receiveTimeout,
+                    sendTimeout: error.requestOptions.sendTimeout,
+                  ),
+                );
+                return handler.resolve(retryResponse);
+              } else {
+                _tokenRefreshLock = false;
+                _refreshCompleter?.complete(false);
+                _refreshCompleter = null;
+                getIt<AuthBloc>().add(AuthLogoutRequested());
+                return handler.next(error);
+              }
+            } catch (e) {
               _tokenRefreshLock = false;
               _refreshCompleter?.complete(false);
               _refreshCompleter = null;
               getIt<AuthBloc>().add(AuthLogoutRequested());
               return handler.next(error);
             }
-          } catch (e) {
-            _tokenRefreshLock = false;
-            _refreshCompleter?.complete(false);
-            _refreshCompleter = null;
-            getIt<AuthBloc>().add(AuthLogoutRequested());
-            return handler.next(error);
           }
-        }
-        return handler.next(error);
-      },
-    ),);
+          return handler.next(error);
+        },
+      ),
+    );
 
-    dio.interceptors.add(PrettyDioLogger(
-      requestHeader: true,
-      requestBody: true,
-      responseBody: true,
-      responseHeader: false,
-      error: true,
-      compact: true,
-    ),);
+    if (kDebugMode) {
+      dio.interceptors.add(
+        PrettyDioLogger(
+          requestHeader: true,
+          requestBody: true,
+          responseBody: true,
+          responseHeader: false,
+          error: true,
+          compact: true,
+        ),
+      );
+    }
 
     getIt.registerLazySingleton<Dio>(() => dio);
   }
@@ -215,7 +235,8 @@ class ServiceLocator {
   static bool _tokenRefreshLock = false;
   static Completer<bool>? _refreshCompleter;
 
-  static Future<void> _waitForRefresh(DioException error, ErrorInterceptorHandler handler) async {
+  static Future<void> _waitForRefresh(
+      DioException error, ErrorInterceptorHandler handler) async {
     _refreshCompleter ??= Completer<bool>();
     final success = await _refreshCompleter!.future;
     if (success) {
@@ -417,7 +438,10 @@ class ServiceLocator {
     );
 
     getIt.registerFactory(
-      () => StationBloc(repository: getIt(), storageService: getIt(), dataCacheService: getIt()),
+      () => StationBloc(
+          repository: getIt(),
+          storageService: getIt(),
+          dataCacheService: getIt()),
     );
 
     getIt.registerFactory(
@@ -432,11 +456,15 @@ class ServiceLocator {
     );
 
     getIt.registerFactory(
-      () => AlarmBloc(repository: getIt(), dataCacheService: getIt(), mqttService: getIt()),
+      () => AlarmBloc(
+          repository: getIt(), dataCacheService: getIt(), mqttService: getIt()),
     );
 
     getIt.registerFactory(
-      () => NotificationBloc(deviceRepository: getIt(), mqttService: getIt(), notificationDataSource: getIt()),
+      () => NotificationBloc(
+          deviceRepository: getIt(),
+          mqttService: getIt(),
+          notificationDataSource: getIt()),
     );
 
     getIt.registerFactory(

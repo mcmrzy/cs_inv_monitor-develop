@@ -16,26 +16,90 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMigrationsForward verifies all migration files execute successfully in order.
-func TestMigrationsForward(t *testing.T) {
+// TestFreshDatabaseBaselineAndMigrations mirrors the production migrator:
+// schema.sql is the version-22 baseline and numbered migrations after 22 are
+// applied transactionally in order.
+func TestFreshDatabaseBaselineAndMigrations(t *testing.T) {
 	cfg := LoadConfig()
 	requireService(t, cfg.DBHost, cfg.DBPort, "PostgreSQL")
-	pool := ConnectDB(t, cfg)
-	defer pool.Close()
+
+	// The API test database is already on the latest baseline. Replaying every
+	// historical migration there tests accidental idempotency, not the forward
+	// upgrade path. Use a disposable database so 001..latest execute in order
+	// against an actually empty PostgreSQL/TimescaleDB instance.
+	adminCfg := cfg
+	adminCfg.DBName = "postgres"
+	adminPool := ConnectDB(t, adminCfg)
+	defer adminPool.Close()
+
+	ctx := context.Background()
+	dbName := fmt.Sprintf("inv_migration_test_%d", time.Now().UnixNano())
+	_, err := adminPool.Exec(ctx, "CREATE DATABASE "+dbName)
+	require.NoError(t, err, "create disposable migration database")
+
+	migrationCfg := cfg
+	migrationCfg.DBName = dbName
+	pool := ConnectDB(t, migrationCfg)
+	defer func() {
+		pool.Close()
+		_, _ = adminPool.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1`, dbName)
+		_, dropErr := adminPool.Exec(ctx, "DROP DATABASE IF EXISTS "+dbName)
+		assert.NoError(t, dropErr, "drop disposable migration database")
+	}()
 
 	migrationsDir := findMigrationsDir(t)
 	files := collectUpMigrations(t, migrationsDir)
 	require.NotEmpty(t, files, "no migration files found")
+	schemaPath := filepath.Join(filepath.Dir(migrationsDir), "schema.sql")
+	schemaSQL, err := os.ReadFile(schemaPath)
+	require.NoError(t, err, "read baseline schema")
 
-	ctx := context.Background()
+	_, err = pool.Exec(ctx, `CREATE TABLE schema_migrations (
+		version BIGINT PRIMARY KEY,
+		name VARCHAR(255) NOT NULL,
+		applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`)
+	require.NoError(t, err, "create migration history")
+
+	const baselineVersion = 22
+	baselineTx, err := pool.Begin(ctx)
+	require.NoError(t, err)
+	_, err = baselineTx.Exec(ctx, string(schemaSQL))
+	require.NoError(t, err, "execute baseline schema")
+	_, err = baselineTx.Exec(ctx, `INSERT INTO schema_migrations(version,name) VALUES(0,'baseline_schema')`)
+	require.NoError(t, err)
 	for _, f := range files {
-		t.Run(f.Name, func(t *testing.T) {
+		if f.Number > baselineVersion {
+			continue
+		}
+		_, err = baselineTx.Exec(ctx,
+			`INSERT INTO schema_migrations(version,name) VALUES($1,$2) ON CONFLICT DO NOTHING`,
+			f.Number, f.Name)
+		require.NoError(t, err)
+	}
+	require.NoError(t, baselineTx.Commit(ctx), "commit baseline schema")
+
+	for _, f := range files {
+		if f.Number <= baselineVersion {
+			continue
+		}
+		if ok := t.Run(f.Name, func(t *testing.T) {
 			sql, err := os.ReadFile(filepath.Join(migrationsDir, f.Name))
 			require.NoError(t, err, "read migration file %s", f.Name)
 
-			_, err = pool.Exec(ctx, string(sql))
+			tx, err := pool.Begin(ctx)
+			require.NoError(t, err)
+			defer func() { _ = tx.Rollback(ctx) }()
+			_, err = tx.Exec(ctx, string(sql))
 			require.NoError(t, err, "execute migration %s", f.Name)
-		})
+			_, err = tx.Exec(ctx,
+				`INSERT INTO schema_migrations(version,name) VALUES($1,$2)`,
+				f.Number, f.Name)
+			require.NoError(t, err, "record migration %s", f.Name)
+			require.NoError(t, tx.Commit(ctx), "commit migration %s", f.Name)
+		}); !ok {
+			break
+		}
 	}
 }
 
@@ -1067,8 +1131,8 @@ func TestTelemetryInsertAndQuery(t *testing.T) {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO device_telemetry_3min(device_sn,protocol_version,sequence_no,event_time,received_at,
 				topic,data_hash,raw_envelope,ac_active_power,daily_pv_energy,work_state,inverter_temperature)
-			VALUES($1,1,$2,$3,NOW(),'heartbeat',encode(digest($1 || ':' || $2::text,'sha256'),'hex'),
-				jsonb_build_object('t',(extract(epoch FROM $3)*1000)::bigint,'v',1,'data',jsonb_build_object()),$4,$5,1,$6)
+			VALUES($1::varchar,1,$2::bigint,$3::timestamptz,NOW(),'heartbeat',encode(digest($1::text || ':' || $2::text,'sha256'),'hex'),
+				jsonb_build_object('t',(extract(epoch FROM $3::timestamptz)*1000)::bigint,'v',1,'data',jsonb_build_object()),$4,$5,1,$6)
 		`, testSN, i+1, time.Now().Add(-time.Duration(10-i)*time.Minute),
 			2250.0+float64(i)*10, float64(i)*0.5, 35.5+float64(i)*0.1)
 		require.NoError(t, err)

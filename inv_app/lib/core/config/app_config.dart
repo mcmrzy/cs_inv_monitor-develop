@@ -5,7 +5,7 @@ class AppConfig {
 
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://192.168.8.248:8888/api/v1',
+    defaultValue: 'https://jiuxiaoyw.online/api/v1',
   );
   static const String mqttBrokerHost = String.fromEnvironment(
     'MQTT_BROKER_HOST',

@@ -19,7 +19,8 @@ services:
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - pg-data:/var/lib/postgresql/data
+      # PostgreSQL 18 stores clusters below a version-specific subdirectory.
+      - pg-data:/var/lib/postgresql
       - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ../database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/02-timescaledb.sql:ro
     networks:
@@ -47,7 +48,7 @@ services:
 
   # ---------- Redis ----------
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     container_name: inv-redis
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -78,7 +79,7 @@ services:
 
   # ---------- inv-device-server ----------
   inv-device-server:
-    image: ghcr.io/mcmrzy/inv-device-server:${IMAGE_TAG:-latest}
+    image: ghcr.io/mcmrzy/inv-device-server:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
     container_name: inv-device-server
     expose:
       - "8081"
@@ -118,7 +119,7 @@ services:
 
   # ---------- inv-api-server ----------
   inv-api-server:
-    image: ghcr.io/mcmrzy/inv-api-server:${IMAGE_TAG:-latest}
+    image: ghcr.io/mcmrzy/inv-api-server:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
     container_name: inv-api-server
     expose:
       - "8080"
@@ -158,10 +159,10 @@ services:
 
   # ---------- api-gateway ----------
   api-gateway:
-    image: ghcr.io/mcmrzy/api-gateway:${IMAGE_TAG:-latest}
+    image: ghcr.io/mcmrzy/api-gateway:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
     container_name: inv-api-gateway
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     env_file:
       - .env.prod
     environment:
@@ -193,7 +194,7 @@ services:
 
   # ---------- inv-admin-frontend ----------
   inv-admin-frontend:
-    image: ghcr.io/mcmrzy/inv-admin-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/mcmrzy/inv-admin-frontend:${IMAGE_TAG:?IMAGE_TAG must be an immutable release tag}
     container_name: inv-admin-frontend
     expose:
       - "80"
@@ -218,8 +219,11 @@ services:
     container_name: inv-nginx
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${LETSENCRYPT_DIR:-/etc/letsencrypt}:/etc/letsencrypt:ro
+      - ${CERTBOT_WWW_DIR:-/var/www/certbot}:/var/www/certbot:ro
     networks:
       - inv-prod-network
     restart: unless-stopped
