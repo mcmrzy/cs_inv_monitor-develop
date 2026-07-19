@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.csergy.example/events/audit-event.v1.schema.json",
+  "title": "Audit Event V1",
+  "description": "Immutable security and business audit event emitted through the transactional outbox.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "occurred_at",
+    "root_tenant_id",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "root_tenant_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor_user_id",
+        "active_organization_id",
+        "action",
+        "resource_type",
+        "resource_id",
+        "result",
+        "request_id",
+        "source_ip",
+        "before",
+        "after",
+        "failure_reason"
+      ],
+      "properties": {
+        "actor_user_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "active_organization_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resource_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {
+          "type": "string",
+          "enum": ["success", "denied", "failed"]
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ip": {
+          "type": "string"
+        },
+        "before": {
+          "type": ["object", "null"]
+        },
+        "after": {
+          "type": ["object", "null"]
+        },
+        "failure_reason": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

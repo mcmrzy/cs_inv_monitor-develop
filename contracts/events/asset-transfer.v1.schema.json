@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.csergy.example/events/asset-transfer.v1.schema.json",
+  "title": "Asset Transfer V1",
+  "description": "Published when a device or station ownership transfer changes state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "occurred_at",
+    "root_tenant_id",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "root_tenant_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transfer_id",
+        "asset_type",
+        "asset_id",
+        "from_organization_id",
+        "to_organization_id",
+        "status",
+        "version"
+      ],
+      "properties": {
+        "transfer_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "asset_type": {
+          "type": "string",
+          "enum": ["device", "station"]
+        },
+        "asset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "from_organization_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "to_organization_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "cancelled",
+            "expired",
+            "processing",
+            "completed",
+            "failed"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "approved_by": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128
+        }
+      }
+    }
+  }
+}
