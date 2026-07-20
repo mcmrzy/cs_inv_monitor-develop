@@ -290,21 +290,23 @@ type RolePermission struct {
 }
 
 type Firmware struct {
-	ID          int64     `json:"id"`
-	Model       string    `json:"model"`
-	Version     string    `json:"version"`
-	FileURL     string    `json:"file_url"`
-	FileSize    int64     `json:"file_size"`
-	FileMD5     string    `json:"file_md5"`
-	FileSHA256  string    `json:"file_sha256"`
-	Changelog   string    `json:"changelog"`
-	IsForce     bool      `json:"is_force"`
-	UploadedBy  int64     `json:"uploaded_by"`
-	Status      int       `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	TargetChip  string    `json:"target_chip"`
-	MainVersion string    `json:"main_version"`
+	ID               int64     `json:"id"`
+	Model            string    `json:"model"`
+	Version          string    `json:"version"`
+	FileURL          string    `json:"file_url"`
+	FileSize         int64     `json:"file_size"`
+	FileMD5          string    `json:"file_md5"`
+	FileSHA256       string    `json:"file_sha256"`
+	SecurityVersion  uint32    `json:"security_version"`
+	ReleaseSignature string    `json:"release_signature"`
+	Changelog        string    `json:"changelog"`
+	IsForce          bool      `json:"is_force"`
+	UploadedBy       int64     `json:"uploaded_by"`
+	Status           int       `json:"status"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	TargetChip       string    `json:"target_chip"`
+	MainVersion      string    `json:"main_version"`
 }
 
 type DeviceUpgrade struct {
@@ -397,15 +399,17 @@ type UpgradePackage struct {
 
 // UpgradePackageItem 升级包明细
 type UpgradePackageItem struct {
-	ID              int64  `json:"id"`
-	PackageID       int64  `json:"package_id"`
-	FirmwareID      int64  `json:"firmware_id"`
-	TargetChip      string `json:"target_chip"`
-	FirmwareVersion string `json:"firmware_version"`
-	FileURL         string `json:"file_url,omitempty"`
-	FileSize        int64  `json:"file_size,omitempty"`
-	FileMD5         string `json:"file_md5,omitempty"`
-	FileSHA256      string `json:"file_sha256,omitempty"`
+	ID               int64  `json:"id"`
+	PackageID        int64  `json:"package_id"`
+	FirmwareID       int64  `json:"firmware_id"`
+	TargetChip       string `json:"target_chip"`
+	FirmwareVersion  string `json:"firmware_version"`
+	FileURL          string `json:"file_url,omitempty"`
+	FileSize         int64  `json:"file_size,omitempty"`
+	FileMD5          string `json:"file_md5,omitempty"`
+	FileSHA256       string `json:"file_sha256,omitempty"`
+	SecurityVersion  uint32 `json:"security_version,omitempty"`
+	ReleaseSignature string `json:"release_signature,omitempty"`
 }
 
 type ParallelConfig struct {

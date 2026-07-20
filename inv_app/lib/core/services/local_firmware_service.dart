@@ -14,7 +14,7 @@ class LocalFirmwareService {
   Future<void> uploadFirmware({
     required String deviceIP,
     required String filePath,
-    String target = 'esp',
+    required LocalOtaManifest manifest,
     void Function(int sent, int total)? onProgress,
   }) async {
     final file = File(filePath);
@@ -25,7 +25,7 @@ class LocalFirmwareService {
     try {
       await _localComm.connect(deviceIP);
       await _localComm.uploadFirmware(filePath,
-          target: target, onProgress: onProgress);
+          manifest: manifest, onProgress: onProgress);
     } catch (e) {
       throw LocalFirmwareException('Upload firmware failed: $e');
     }

@@ -33,7 +33,11 @@ class LocalOTAPage extends StatefulWidget {
   final int? firmwareId;
   final String? firmwareUrl;
   final String? firmwareFileName;
-  final String? targetChip; // 'esp' 或 'arm'
+  final String? targetChip;
+  final String? firmwareVersion;
+  final String? fileSha256;
+  final int? securityVersion;
+  final String? releaseSignature;
 
   const LocalOTAPage({
     super.key,
@@ -43,6 +47,10 @@ class LocalOTAPage extends StatefulWidget {
     this.firmwareUrl,
     this.firmwareFileName,
     this.targetChip,
+    this.firmwareVersion,
+    this.fileSha256,
+    this.securityVersion,
+    this.releaseSignature,
   });
 
   @override
@@ -392,14 +400,43 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       _errorMessage = null;
     });
 
-    final isEsp = (widget.targetChip ?? 'esp') == 'esp';
+    final target = (widget.targetChip ?? 'esp').trim().toLowerCase();
+    final version = widget.firmwareVersion?.trim() ?? '';
+    final sha256 = widget.fileSha256?.trim().toLowerCase() ?? '';
+    final signature = widget.releaseSignature?.trim() ?? '';
+    final securityVersion = widget.securityVersion ?? 0;
+
+    if ((target != 'esp' && target != 'arm') ||
+        version.isEmpty ||
+        sha256.isEmpty ||
+        signature.isEmpty ||
+        securityVersion <= 0) {
+      setState(() {
+        _isProcessing = false;
+        _result = LocalOTAResult.failed;
+        _resultMessage = '固件缺少签名、安全版本或 SHA-256，请从升级列表重新下载。';
+        _currentStep = LocalOTAStep.result;
+      });
+      return;
+    }
+
+    final isEsp = target == 'esp';
+    final manifest = LocalOtaManifest(
+      target: target,
+      taskId:
+          'local-${widget.firmwareId ?? 0}-${DateTime.now().millisecondsSinceEpoch}',
+      version: version,
+      sha256: sha256,
+      signature: signature,
+      securityVersion: securityVersion,
+    );
 
     try {
       // 上传固件文件到设备
       await _firmwareService.uploadFirmware(
         deviceIP: widget.deviceIP,
         filePath: _selectedFilePath!,
-        target: widget.targetChip ?? 'esp',
+        manifest: manifest,
         onProgress: (sent, total) {
           if (total > 0 && mounted) {
             setState(() {
@@ -527,7 +564,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   /// ARM: 实时返回 uploading → verifying → done
   Future<void> _pollUpgradeProgress() async {
     final l10n = AppLocalizations.of(context)!;
-    final isEsp = (widget.targetChip ?? 'esp') == 'esp';
+    final isEsp = (widget.targetChip ?? 'esp').toLowerCase() == 'esp';
     final versionKey = isEsp ? 'esp_version' : 'arm_version';
     final firmwareKey = isEsp ? 'firmware_esp' : 'firmware_arm';
 
@@ -583,7 +620,10 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       try {
         final progress = await _firmwareService.getLocalOTAProgress(
             deviceIP: widget.deviceIP);
-        final status = progress['status'] as String? ?? '';
+        final status = (progress['state'] as String? ??
+                progress['status'] as String? ??
+                '')
+            .toLowerCase();
         final percent = (progress['progress'] as num?)?.toDouble() ?? 0.0;
         final message = progress['message'] as String? ?? '';
         // 版本获取优先级：main_version > version > 芯片专属字段
@@ -593,7 +633,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             : (progress[versionKey] as String? ?? '');
 
         // 优先使用 main_version 作为展示版本
-        final displayVersion = mainVer.isNotEmpty ? mainVer : chipVer;
+        final displayVersion = mainVer.isNotEmpty
+            ? mainVer
+            : (chipVer.isNotEmpty ? chipVer : (widget.firmwareVersion ?? ''));
 
         debugPrint(
             'OTA progress: status=$status, main_version=$mainVer, chip_version=$chipVer, raw=$progress');
@@ -605,7 +647,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           });
         }
 
-        if (status == 'done') {
+        if (status == 'done' || status == 'succeeded') {
           // 优先使用 main_version，回退到芯片版本号
           String? newVersion =
               displayVersion.isNotEmpty ? displayVersion : null;
@@ -615,7 +657,9 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                   ? (progress[firmwareKey] as String)
                   : chipVer.isNotEmpty
                       ? chipVer
-                      : (progress[versionKey] as String? ?? '');
+                      : (progress[versionKey] as String? ??
+                          widget.firmwareVersion ??
+                          '');
           if (newVersion == null) {
             try {
               final info = await _firmwareService.getDeviceInfo(
@@ -654,13 +698,16 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
               widget.deviceSN,
               widget.targetChip ?? 'esp',
               chipNewVersion.isNotEmpty ? chipNewVersion : '',
-              mainVer,
+              mainVer.isNotEmpty ? mainVer : null,
             );
           }
           return;
         }
 
-        if (status == 'error') {
+        if (status == 'error' ||
+            status == 'failed' ||
+            status == 'rolled_back' ||
+            status == 'cancelled') {
           if (mounted) {
             setState(() {
               _isProcessing = false;
@@ -711,13 +758,23 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
       case 'downloading':
         return l10n.downloading;
       case 'uploading':
+      case 'receiving':
         return l10n.uploadingStatus;
       case 'verifying':
         return l10n.verifying;
       case 'done':
+      case 'succeeded':
         return l10n.done;
       case 'error':
+      case 'failed':
+      case 'rolled_back':
+      case 'cancelled':
         return l10n.failure;
+      case 'accepted':
+        return l10n.uploadingStatus;
+      case 'installing':
+      case 'rebooting':
+        return l10n.installingFirmware;
       default:
         return status;
     }

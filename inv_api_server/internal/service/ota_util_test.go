@@ -1,6 +1,10 @@
 package service
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,17 +71,25 @@ func TestBuildDownloadURL_ServerURL尾部斜杠处理(t *testing.T) {
 
 func TestValidateFirmwareRequest(t *testing.T) {
 	valid := func() *CreateFirmwareReq {
-		return &CreateFirmwareReq{
-			Model: "CS-48V", TargetChip: "ARM", Version: "V1.2.3",
+		req := &CreateFirmwareReq{
+			Model: "CS-48V", TargetChip: "DSP", Version: "V1.2.3",
 			FileURL: "/firmware/fw.bin", FileSize: 1024,
-			FileMD5:    "0123456789abcdef0123456789abcdef",
-			FileSHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			FileMD5:         "0123456789abcdef0123456789abcdef",
+			FileSHA256:      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+			SecurityVersion: 1,
 		}
+		seed, _ := hex.DecodeString("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+		privateKey := ed25519.NewKeyFromSeed(seed)
+		message := fmt.Sprintf(
+			"CS_INV_OTA_V1\ntarget=arm\nversion=%s\nsize=%d\nsha256=%s\nsecurity_version=%d\n",
+			req.Version, req.FileSize, req.FileSHA256, req.SecurityVersion)
+		req.ReleaseSignature = base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, []byte(message)))
+		return req
 	}
 
 	req := valid()
 	assert.NoError(t, ValidateFirmwareRequest(req))
-	assert.Equal(t, "arm", req.TargetChip)
+	assert.Equal(t, "dsp", req.TargetChip)
 
 	tests := []struct {
 		name string
@@ -88,6 +100,8 @@ func TestValidateFirmwareRequest(t *testing.T) {
 		{"SHA256为空", func(r *CreateFirmwareReq) { r.FileSHA256 = "" }},
 		{"SHA256格式无效", func(r *CreateFirmwareReq) { r.FileSHA256 = "xyz" }},
 		{"文件为空", func(r *CreateFirmwareReq) { r.FileSize = 0 }},
+		{"ESP安全版本为空", func(r *CreateFirmwareReq) { r.TargetChip = "esp"; r.SecurityVersion = 0 }},
+		{"ARM签名被篡改", func(r *CreateFirmwareReq) { r.TargetChip = "arm"; r.Version = "V1.2.4" }},
 		{"不安全HTTP地址", func(r *CreateFirmwareReq) { r.FileURL = "http://example.test/fw.bin" }},
 	}
 	for _, tc := range tests {

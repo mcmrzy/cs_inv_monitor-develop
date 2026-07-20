@@ -247,7 +247,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             children: [
               const Icon(Icons.warning_rounded, color: AppColors.warning),
               SizedBox(width: 8.w),
-              Text(l10n.warningLevel, style: const TextStyle(color: AppColors.warning)),
+              Text(l10n.warningLevel,
+                  style: const TextStyle(color: AppColors.warning)),
             ],
           ),
           content: Text(
@@ -806,14 +807,22 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
     final version = chip['firmware_version'] as String? ?? '';
     final fileName = '${chipName}_$version.bin';
 
-    context.push(
-      '/ota/${widget.sn}/local'
-      '?ip=192.168.4.1'
-      '&firmware_id=$firmwareId'
-      '&firmware_url=${Uri.encodeComponent(downloadUrl)}'
-      '&firmware_file_name=${Uri.encodeComponent(fileName)}'
-      '&target_chip=$chipName',
-    );
+    final route = Uri(
+      path: '/ota/${widget.sn}/local',
+      queryParameters: {
+        'ip': '192.168.4.1',
+        'firmware_id': '$firmwareId',
+        'firmware_url': downloadUrl,
+        'firmware_file_name': fileName,
+        'target_chip': chipName.toLowerCase(),
+        'firmware_version': version,
+        'file_sha256': chip['file_sha256'] as String? ?? '',
+        'security_version':
+            '${(chip['security_version'] as num?)?.toInt() ?? 0}',
+        'release_signature': chip['release_signature'] as String? ?? '',
+      },
+    ).toString();
+    context.push(route);
   }
 
   /// 显示芯片选择对话框
