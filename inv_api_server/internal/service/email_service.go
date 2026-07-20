@@ -198,8 +198,7 @@ func (s *EmailService) sendMail(to, code, codeType string, cfg config.EmailConfi
 	if cfg.UseSSL {
 		d.SSL = true
 		d.TLSConfig = &tls.Config{
-			ServerName:         cfg.Host,
-			InsecureSkipVerify: cfg.TLSInsecure,
+			ServerName: cfg.Host,
 		}
 	}
 

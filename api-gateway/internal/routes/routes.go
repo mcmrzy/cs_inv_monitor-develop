@@ -20,20 +20,26 @@ type Config struct {
 	RouteLimits    []middleware.RouteRateLimitConfig
 	RBAC           *middleware.RBACMiddleware
 	AllowedOrigins []string
+	TrustedProxies []string
 }
 
 func Setup(cfg Config) *gin.Engine {
 	r := gin.New()
 	r.RedirectTrailingSlash = false
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		panic("invalid trusted proxy configuration: " + err.Error())
+	}
 
 	apiProxy := proxy.NewReverseProxy(cfg.APIServer)
 	deviceProxy := proxy.NewReverseProxy(cfg.DeviceServer)
 
 	r.Use(middleware.TrailingSlashHandler())
 	r.Use(gin.Recovery())
+	r.Use(middleware.BodyLimit())
 	r.Use(middleware.GzipMiddleware())
 	r.Use(middleware.CORS(cfg.AllowedOrigins))
 	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.SanitizeIdentityHeaders())
 	r.Use(middleware.RequestLogger())
 	r.Use(middleware.Prometheus())
 	r.Use(middleware.RateLimit(cfg.GlobalRate, cfg.GlobalBurst))

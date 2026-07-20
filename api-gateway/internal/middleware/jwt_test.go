@@ -20,9 +20,39 @@ func init() {
 
 // makeToken 生成测试用 JWT token
 func makeToken(claims jwt.MapClaims, secret string) string {
+	if _, ok := claims["token_type"]; !ok {
+		claims["token_type"] = "access"
+	}
+	if _, ok := claims["jti"]; !ok {
+		claims["jti"] = "test-access-jti"
+	}
+	if _, ok := claims["iat"]; !ok {
+		claims["iat"] = float64(time.Now().Unix())
+	}
+	if _, ok := claims["session_iat_ms"]; !ok {
+		claims["session_iat_ms"] = float64(time.Now().UnixMilli())
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, _ := token.SignedString([]byte(secret))
 	return signed
+}
+
+func TestJWTAuth_RejectsRefreshTokenAsAccessToken(t *testing.T) {
+	router := gin.New()
+	router.Use(JWTAuth(testSecret))
+	router.GET("/api/v1/devices", func(c *gin.Context) { c.Status(http.StatusOK) })
+	token := makeToken(jwt.MapClaims{
+		"user_id":    float64(1),
+		"role":       float64(5),
+		"token_type": "refresh",
+		"jti":        "refresh-jti",
+		"exp":        float64(time.Now().Add(time.Hour).Unix()),
+	}, testSecret)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestJWTAuth_ValidToken(t *testing.T) {
@@ -156,6 +186,7 @@ func TestJWTAuth_PublicPaths(t *testing.T) {
 	}{
 		{"health", "/health"},
 		{"login", "/api/v1/auth/login"},
+		{"refresh", "/api/v1/auth/refresh"},
 		{"metrics", "/metrics"},
 		{"captcha prefix", "/api/v1/captcha/generate"},
 		{"uploads prefix", "/uploads/image.png"},
@@ -208,6 +239,58 @@ func TestJWTAuth_ClaimsPropagation(t *testing.T) {
 	assert.Equal(t, "0", body["x-user-role"])
 	assert.Equal(t, "13900000000", body["x-user-phone"])
 	assert.Equal(t, "user-abc", body["x-user-sub"])
+}
+
+func TestJWTAuth_RejectsMissingUserIdentity(t *testing.T) {
+	router := gin.New()
+	router.Use(JWTAuth(testSecret))
+	router.GET("/api/v1/devices", func(c *gin.Context) { c.Status(http.StatusOK) })
+	token := makeToken(jwt.MapClaims{
+		"role": float64(1),
+		"exp":  float64(time.Now().Add(time.Hour).Unix()),
+	}, testSecret)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestJWTAuth_RemovesClientSuppliedIdentityHeaders(t *testing.T) {
+	router := gin.New()
+	router.Use(JWTAuth(testSecret))
+	router.GET("/health", func(c *gin.Context) {
+		c.String(http.StatusOK, c.GetHeader("X-User-ID"))
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("X-User-ID", "spoofed")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Empty(t, w.Body.String())
+}
+
+func TestJWTAuth_RejectsInvalidIdentityClaims(t *testing.T) {
+	tests := []jwt.MapClaims{
+		{"user_id": float64(0), "role": float64(1), "exp": float64(time.Now().Add(time.Hour).Unix())},
+		{"user_id": float64(1.5), "role": float64(1), "exp": float64(time.Now().Add(time.Hour).Unix())},
+		{"user_id": float64(1), "role": float64(99), "exp": float64(time.Now().Add(time.Hour).Unix())},
+	}
+
+	for _, claims := range tests {
+		router := gin.New()
+		router.Use(JWTAuth(testSecret))
+		router.GET("/api/v1/devices", func(c *gin.Context) { c.Status(http.StatusOK) })
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", nil)
+		req.Header.Set("Authorization", "Bearer "+makeToken(claims, testSecret))
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	}
 }
 
 func TestIsPublicPath(t *testing.T) {

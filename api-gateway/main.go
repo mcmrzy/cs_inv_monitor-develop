@@ -90,20 +90,21 @@ func main() {
 		RouteLimits:    routeLimits,
 		RBAC:           rbac,
 		AllowedOrigins: cfg.CORS.AllowedOrigins,
+		TrustedProxies: cfg.Server.TrustedProxies,
 	})
 
 	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      router,
-		ReadTimeout:  0, // SSE 长连接需要无读取超时
-		WriteTimeout: 0, // SSE 长连接需要无写超时
-		IdleTimeout:  120 * time.Second,
+		Addr:              fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       0, // SSE 长连接需要无读取超时
+		WriteTimeout:      0, // SSE 长连接需要无写超时
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	go func() {
 		log.Printf("[GW] API Gateway v2.0 启动成功，监听端口 %d", cfg.Server.Port)
-		log.Printf("[GW] API 后端: %s", cfg.Backends.APIServer)
-		log.Printf("[GW] Device 后端: %s", cfg.Backends.DeviceServer)
 		log.Printf("[GW] 全局限流: rate=%.0f/s, burst=%d", cfg.RateLimit.Rate, cfg.RateLimit.Burst)
 		if len(routeLimits) > 0 {
 			log.Printf("[GW] 路由级别限流: %d 条规则", len(routeLimits))

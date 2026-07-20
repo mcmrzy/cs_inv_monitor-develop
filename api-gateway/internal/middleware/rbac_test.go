@@ -26,6 +26,9 @@ func TestIsAppAllowedPath(t *testing.T) {
 		{"/api/v1/ota/app/check", true},
 		{"/api/v1/ota/app/packages", true},
 		{"/api/v1/ota/packages/available/1", true},
+		{"/api/v1/ota/app/packages/install", true},
+		{"/api/v1/ota/trigger-admin", false},
+		{"/api/v1/ota/app/packages/admin-delete", false},
 		{"/api/v1/ota/tasks", false},
 		{"/api/v1/devices", false},
 		{"/api/v1/admin/users", false},
@@ -85,6 +88,31 @@ func TestGetActionFromMethod(t *testing.T) {
 			assert.Equal(t, tt.expect, r.getActionFromMethod(tt.method))
 		})
 	}
+}
+
+func TestActionForRequest_CommandPostsUseEdit(t *testing.T) {
+	paths := []string{
+		"/api/v1/devices/SN001/control",
+		"/api/v1/devices/SN001/unbind",
+		"/api/v1/devices/batch/control",
+		"/api/v1/devices/unbind-requests/3/approve",
+		"/api/v1/alarms/9/acknowledge",
+		"/api/v1/alerts/9/ignore",
+		"/api/v1/work-orders/2/attachments",
+		"/api/v1/work-orders/2/escalate",
+	}
+	for _, path := range paths {
+		assert.Equal(t, "edit", actionForRequest(http.MethodPost, path), path)
+	}
+	assert.Equal(t, "create", actionForRequest(http.MethodPost, "/api/v1/devices/bind"))
+}
+
+func TestDirectDeviceSN(t *testing.T) {
+	sn, ok := directDeviceSN("/api/v1/device/SN001/data")
+	assert.True(t, ok)
+	assert.Equal(t, "SN001", sn)
+	_, ok = directDeviceSN("/api/v1/device/SN001/command")
+	assert.False(t, ok)
 }
 
 func TestParseUserID(t *testing.T) {
@@ -158,7 +186,11 @@ func TestRBACGuard_PublicPath(t *testing.T) {
 }
 
 func TestRBACGuard_AppAllowedPath(t *testing.T) {
-	rbac := NewRBACMiddleware(nil, nil, 300)
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	mr.Set("gw:user_roles:42", "5")
+	rbac := NewRBACMiddleware(rdb, nil, 300)
 	router := newTestRouter(rbac)
 
 	w := httptest.NewRecorder()
@@ -169,7 +201,7 @@ func TestRBACGuard_AppAllowedPath(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestRBACGuard_NoUserID_PassThrough(t *testing.T) {
+func TestRBACGuard_NoUserID_FailsClosed(t *testing.T) {
 	rbac := NewRBACMiddleware(nil, nil, 300)
 	router := newTestRouter(rbac)
 
@@ -177,8 +209,7 @@ func TestRBACGuard_NoUserID_PassThrough(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
 	router.ServeHTTP(w, req)
 
-	// 无 X-User-ID 时跳过检查，放行
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestRBACGuard_SuperAdmin_Bypass(t *testing.T) {
@@ -201,14 +232,46 @@ func TestRBACGuard_SuperAdmin_Bypass(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestRBACGuard_StaleHeaderRoleCannotGrantSuperAdmin(t *testing.T) {
+func TestRBACGuard_RejectsBlacklistedToken(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	mr.Set("gw:user_roles:1", "0")
+	mr.Set("token_blacklist:revoked-jti", "1")
+	router := newTestRouter(NewRBACMiddleware(rdb, nil, 300))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	req.Header.Set("X-User-ID", "1")
+	req.Header.Set("X-Token-JTI", "revoked-jti")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestRBACGuard_RejectsSessionIssuedBeforeRevocation(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	mr.Set("gw:user_roles:1", "0")
+	mr.Set("user_token_revoked_at:1", "200")
+	router := newTestRouter(NewRBACMiddleware(rdb, nil, 300))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	req.Header.Set("X-User-ID", "1")
+	req.Header.Set("X-Token-Issued-At", "100")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestRBACGuard_DoesNotTrustHeaderRole(t *testing.T) {
 	rbac := NewRBACMiddleware(nil, nil, 300)
 	router := newTestRouter(rbac)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/v1/admin/users", nil)
 	req.Header.Set("X-User-ID", "1")
-	req.Header.Set("X-User-Role", "0") // super_admin via header
+	req.Header.Set("X-User-Role", "0")
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -277,6 +340,20 @@ func TestRBACGuard_StaleNegativeCacheRefreshesAuthoritativePermissions(t *testin
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, 1, queries)
+}
+
+func TestRBACGuard_InvalidRoleCacheNeverBecomesSuperAdmin(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	mr.Set("gw:user_roles:1", "not-a-role")
+	router := newTestRouter(NewRBACMiddleware(rdb, nil, 300))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	req.Header.Set("X-User-ID", "1")
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
 
 func TestRBACGuard_NoDBConnection_Forbidden(t *testing.T) {
@@ -469,26 +546,30 @@ func TestInvalidateRoleCache(t *testing.T) {
 func TestResourceActionMap(t *testing.T) {
 	// 验证关键资源映射存在
 	expectedMappings := map[string]string{
-		"/api/v1/admin/":         "admin",
-		"/api/v1/users":          "users",
-		"/api/v1/devices":        "devices",
-		"/api/v1/alarms":         "alerts",
-		"/api/v1/stations/":      "stations",
-		"/api/v1/models":         "models",
-		"/api/v1/dashboard":      "dashboard",
-		"/api/v1/ota/tasks":      "ota",
-		"/api/v1/ota/firmwares":  "firmware",
-		"/api/v1/parallel":       "parallel",
-		"/api/v1/notifications/": "notifications",
-		"/api/v1/alert-rules":    "alert_rules",
-		"/api/v1/work-orders":    "work_orders",
-		"/api/v1/firmwares":      "firmware",
+		"/api/v1/admin/users":   "admin",
+		"/api/v1/users":         "users",
+		"/api/v1/devices":       "devices",
+		"/api/v1/alarms":        "alerts",
+		"/api/v1/alerts/1":      "alerts",
+		"/api/v1/stations":      "stations",
+		"/api/v1/models":        "models",
+		"/api/v1/dashboard":     "dashboard",
+		"/api/v1/ota/tasks":     "ota",
+		"/api/v1/ota/firmware":  "firmware",
+		"/api/v1/parallel":      "parallel",
+		"/api/v1/notifications": "notifications",
+		"/api/v1/alert-rules":   "alert_rules",
+		"/api/v1/work-orders":   "work_orders",
+		"/api/v1/firmwares":     "firmware",
 	}
 
-	for prefix, resource := range expectedMappings {
-		assert.Equal(t, resource, resourceActionMap[prefix],
-			"prefix %s should map to resource %s", prefix, resource)
+	for path, resource := range expectedMappings {
+		assert.Equal(t, resource, resourceForPath(path),
+			"path %s should map to resource %s", path, resource)
 	}
+	assert.Empty(t, resourceForPath("/api/v1/users-export"))
+	assert.Empty(t, resourceForPath("/api/v1/ota-admin"))
+	assert.Empty(t, resourceForPath("/api/v1/devices2"))
 }
 
 func TestResourceForPath_UsesMostSpecificPrefix(t *testing.T) {

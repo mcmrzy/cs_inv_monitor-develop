@@ -92,8 +92,6 @@ export default {
     'dash.entryAnalyticsDesc': '深度数据分析与导出',
     'dash.entryAlerts': '通知中心',
     'dash.entryAlertsDesc': '查看所有告警信息',
-    'common.viewAll': '查看全部',
-    'common.model': '型号',
   },
   en: {
     'dash.title': 'Dashboard',
@@ -188,7 +186,5 @@ export default {
     'dash.entryAnalyticsDesc': 'Deep analysis and data export',
     'dash.entryAlerts': 'Notification Center',
     'dash.entryAlertsDesc': 'View all alert messages',
-    'common.viewAll': 'View All',
-    'common.model': 'Model',
   },
 }

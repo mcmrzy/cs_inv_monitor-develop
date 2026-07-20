@@ -82,10 +82,9 @@ func TestAPISecurity_CORS白名单模式(t *testing.T) {
 	}
 }
 
-func TestAPISecurity_CORS空列表允许所有(t *testing.T) {
-	// 空列表 = 允许所有（开发模式），生产环境应显式配置白名单
+func TestAPISecurity_CORS空列表默认拒绝跨域(t *testing.T) {
 	r := gin.New()
-	r.Use(middleware.CORS([]string{})) // 空列表
+	r.Use(middleware.CORS([]string{}))
 	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
 
 	w := httptest.NewRecorder()
@@ -93,8 +92,8 @@ func TestAPISecurity_CORS空列表允许所有(t *testing.T) {
 	req.Header.Set("Origin", "https://any-domain.com")
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"),
-		"空列表时应返回 * （仅适用于开发环境）")
+	assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"),
+		"未配置白名单时不应启用带凭证的通配跨域")
 }
 
 func TestAPISecurity_CORSPreflightOPTIONS(t *testing.T) {
@@ -243,8 +242,8 @@ func TestAPISecurity_伪造BearerToken返回401(t *testing.T) {
 		"Bearer fake.token.here",
 		"Bearer ",
 		"Bearer not-a-jwt",
-		"Basic dXNlcjpwYXNz",           // Basic auth 不被接受
-		"Token abc123",                  // 非 Bearer 方案
+		"Basic dXNlcjpwYXNz",          // Basic auth 不被接受
+		"Token abc123",                // 非 Bearer 方案
 		"Bearer eyJhbGciOiJub25lIn0=", // none 算法
 	}
 

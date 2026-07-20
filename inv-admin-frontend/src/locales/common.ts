@@ -135,6 +135,7 @@ export default {
     'captcha.incorrectPosition': '位置不正确',
     'unauthorized.title': '抱歉，您没有权限访问此页面',
     'unauthorized.backHome': '返回首页',
+    'common.unknownError': '未知错误',
   },
   en: {
     'common.search': 'Search',
@@ -272,5 +273,6 @@ export default {
     'captcha.incorrectPosition': 'Incorrect position',
     'unauthorized.title': 'Sorry, you are not authorized to access this page',
     'unauthorized.backHome': 'Back to Home',
+    'common.unknownError': 'Unknown error',
   },
 }

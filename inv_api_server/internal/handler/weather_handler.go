@@ -52,18 +52,21 @@ func (h *WeatherHandler) GetStationWeather(c *gin.Context) {
 		return
 	}
 
-	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil || station == nil {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
-	// 超级管理员可以访问任意电站的天气
-	if !isAdmin && station.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
-		return
+	if middleware.GetRole(c) != service.RoleSuperAdmin {
+		allowed, accessErr := h.stationService.HasAccess(c.Request.Context(), middleware.GetUserID(c), stationID)
+		if accessErr != nil {
+			response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+			return
+		}
+		if !allowed {
+			response.HandleError(c, apperr.Forbidden("permission denied"))
+			return
+		}
 	}
 
 	var weather WeatherResponse
@@ -153,7 +156,8 @@ func (h *WeatherHandler) fetchWeatherFromAmap(lat, lng float64) (WeatherResponse
 	geoUrl := fmt.Sprintf("https://restapi.amap.com/v3/geocode/regeo?location=%.6f,%.6f&key=%s&radius=1000&extensions=all",
 		lng, lat, h.amapAPIKey)
 
-	logger.Info("Fetching geocode from Amap", zap.String("url", geoUrl))
+	// Do not log geoUrl: it contains the configured Amap API key.
+	logger.Info("Fetching geocode from Amap")
 
 	geoResp, err := h.httpClient.Get(geoUrl)
 	if err != nil {
@@ -192,7 +196,8 @@ func (h *WeatherHandler) fetchWeatherFromAmap(lat, lng float64) (WeatherResponse
 	weatherUrl := fmt.Sprintf("https://restapi.amap.com/v3/weather/weatherInfo?city=%s&key=%s&extensions=all",
 		cityAdcode, h.amapAPIKey)
 
-	logger.Info("Fetching weather from Amap", zap.String("url", weatherUrl))
+	// Do not log weatherUrl: it contains the configured Amap API key.
+	logger.Info("Fetching weather from Amap", zap.String("city_adcode", cityAdcode))
 
 	weatherResp, err := h.httpClient.Get(weatherUrl)
 	if err != nil {

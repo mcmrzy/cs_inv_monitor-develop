@@ -1,9 +1,9 @@
 // k6 API 压力测试脚本
 // 运行方式: k6 run tests/load-test/api-stress.js
-// 环境变量: BASE_URL (默认 http://localhost:8888)
+// 环境变量: BASE_URL、TEST_ACCOUNT、TEST_PASSWORD
 //
 // 前置条件:
-// 1. 数据库中需存在测试账号且密码为 Test@123456
+// 1. 数据库中需存在隔离测试账号，并通过环境变量传入凭据
 // 2. 若登录失败超过 3 次触发验证码限制，需先清除 Redis:
 //    docker exec inv-redis redis-cli -a <password> DEL login_fail:13800138000
 //
@@ -14,7 +14,8 @@
 
 import http from 'k6/http';
 import { check, sleep, group } from 'k6';
-import { Rate, Trend } from 'k6/metrics';
+import exec from 'k6/execution';
+import { Trend } from 'k6/metrics';
 
 // 自定义指标
 const deviceListDuration = new Trend('device_list_duration');
@@ -30,20 +31,24 @@ export const options = {
   ],
   thresholds: {
     http_req_duration: ['p(95)<500'],          // 95% 请求 < 500ms
-    http_req_failed: ['rate<0.10'],            // 错误率 < 10% (高并发下允许少量失败)
+    http_req_failed: ['rate<0.01'],            // 错误率 < 1%
     device_list_duration: ['p(95)<300'],       // 设备列表 p95 < 300ms
   },
 };
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8888';
 
-// 测试账号（需已存在于数据库中，密码 Test@123456）
-const TEST_USER = { account: '13800138000', password: 'Test@123456' };
+// 凭据必须通过环境变量注入，不在仓库或命令行脚本中保留默认密码。
+const TEST_USER = { account: __ENV.TEST_ACCOUNT || '', password: __ENV.TEST_PASSWORD || '' };
 
 // ==================== setup: 一次性登录获取 token ====================
 
 export function setup() {
   console.log(`开始 API 压力测试，目标: ${BASE_URL}`);
+
+  if (!TEST_USER.account || !TEST_USER.password) {
+    exec.test.abort('TEST_ACCOUNT and TEST_PASSWORD are required');
+  }
 
   // 先验证服务可达
   const healthRes = http.get(`${BASE_URL}/health`);
@@ -68,7 +73,7 @@ export function setup() {
       console.log('初始登录解析 token 失败');
     }
   } else {
-    console.log(`初始登录失败: ${res.status} - ${res.body}`);
+    console.log(`初始登录失败: HTTP ${res.status}`);
   }
 
   return { authToken };

@@ -95,7 +95,7 @@ describe('ModelRegistryWorkspace', () => {
   it('renders page title and tab labels in Chinese', async () => {
     renderAsAdmin(<ModelRegistryWorkspace />, { lang: 'zh' })
 
-    expect(await screen.findByText('型号与协议治理')).toBeInTheDocument()
+		expect(await screen.findByText('型号与协议管理')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(screen.getByText(/型号注册/)).toBeInTheDocument()

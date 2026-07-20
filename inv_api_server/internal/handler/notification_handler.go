@@ -25,6 +25,28 @@ func NewNotificationHandler(db *pgxpool.Pool, jpushService *service.JPushService
 	return &NotificationHandler{db: db, jpushService: jpushService}
 }
 
+func notificationDataScope(alias string, role int, userIDArg int) string {
+	if role == service.RoleSuperAdmin {
+		return "1=1"
+	}
+	return fmt.Sprintf(`(%[1]s.user_id = $%[2]d OR (
+		%[1]s.device_sn <> 'system' AND %[1]s.device_sn IN (
+			SELECT device_sn FROM v_user_device_access WHERE user_id = $%[2]d
+		)
+	))`, alias, userIDArg)
+}
+
+// notificationMutationScope is deliberately narrower than the read scope.
+// A user may inspect device notifications within their business data scope, but
+// deleting a notification is a personal mailbox operation and must not erase a
+// notification that belongs to another user who can access the same device.
+func notificationMutationScope(alias string, role int, userIDArg int) string {
+	if role == service.RoleSuperAdmin {
+		return "1=1"
+	}
+	return fmt.Sprintf("%s.user_id = $%d", alias, userIDArg)
+}
+
 func (h *NotificationHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	role := middleware.GetRole(c)
@@ -46,48 +68,46 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	isAdmin := role <= 1
-
 	var baseQuery string
 	var args []interface{}
 	argIdx := 1
 
-	if isAdmin {
-		baseQuery = `FROM notifications WHERE 1=1`
+	if role == service.RoleSuperAdmin {
+		baseQuery = `FROM notifications n WHERE 1=1`
 	} else {
-		baseQuery = `FROM notifications WHERE user_id = $1`
+		baseQuery = `FROM notifications n WHERE ` + notificationDataScope("n", role, 1)
 		args = append(args, userID)
 		argIdx = 2
 	}
 
 	if notifyType != "" {
-		baseQuery += fmt.Sprintf(" AND notify_type = $%d", argIdx)
+		baseQuery += fmt.Sprintf(" AND n.notify_type = $%d", argIdx)
 		args = append(args, notifyType)
 		argIdx++
 	}
 
 	if stationIDStr != "" {
 		if stationID, err := strconv.ParseInt(stationIDStr, 10, 64); err == nil && stationID > 0 {
-			baseQuery += fmt.Sprintf(" AND station_id = $%d", argIdx)
+			baseQuery += fmt.Sprintf(" AND n.station_id = $%d", argIdx)
 			args = append(args, stationID)
 			argIdx++
 		}
 	}
 
 	if keyword != "" {
-		baseQuery += fmt.Sprintf(" AND device_sn ILIKE $%d", argIdx)
+		baseQuery += fmt.Sprintf(" AND n.device_sn ILIKE $%d", argIdx)
 		args = append(args, "%"+keyword+"%")
 		argIdx++
 	}
 
 	if startTime != "" {
-		baseQuery += fmt.Sprintf(" AND created_at >= $%d", argIdx)
+		baseQuery += fmt.Sprintf(" AND n.created_at >= $%d", argIdx)
 		args = append(args, startTime)
 		argIdx++
 	}
 
 	if endTime != "" {
-		baseQuery += fmt.Sprintf(" AND created_at <= $%d", argIdx)
+		baseQuery += fmt.Sprintf(" AND n.created_at <= $%d", argIdx)
 		args = append(args, endTime+" 23:59:59")
 		argIdx++
 	}
@@ -100,8 +120,8 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	}
 
 	offset := (page - 1) * pageSize
-	query := `SELECT id, device_sn, station_id, user_id, notify_type, title, content, status, created_at ` +
-		baseQuery + ` ORDER BY created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+	query := `SELECT n.id, n.device_sn, n.station_id, n.user_id, n.notify_type, n.title, n.content, n.status, n.created_at ` +
+		baseQuery + ` ORDER BY n.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 	args = append(args, pageSize, offset)
 
 	rows, err := h.db.Query(ctx, query, args...)
@@ -134,6 +154,10 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		n.StationID = stationID
 		items = append(items, &n)
 	}
+	if err := rows.Err(); err != nil {
+		response.HandleError(c, apperr.Internal("system error", err))
+		return
+	}
 
 	response.Page(c, items, total, page, pageSize)
 }
@@ -145,25 +169,12 @@ func (h *NotificationHandler) GetStats(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	isAdmin := role <= 1
-
-	var query string
-	if isAdmin {
-		query = `
-			SELECT COUNT(*) as total,
-				   COUNT(CASE WHEN status = 0 THEN 1 END) as unread
-			FROM notifications
-		`
-	} else {
-		query = `
-			SELECT COUNT(*) as total,
-				   COUNT(CASE WHEN status = 0 THEN 1 END) as unread
-			FROM notifications WHERE user_id = $1
-		`
-	}
+	query := `SELECT COUNT(*) AS total,
+		COUNT(CASE WHEN n.status = 0 THEN 1 END) AS unread
+		FROM notifications n WHERE ` + notificationDataScope("n", role, 1)
 
 	var total, unread int
-	if isAdmin {
+	if role == service.RoleSuperAdmin {
 		if err := h.db.QueryRow(ctx, query).Scan(&total, &unread); err != nil {
 			response.HandleError(c, apperr.Internal("system error", err))
 			return
@@ -191,9 +202,20 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	_, err = h.db.Exec(ctx, `DELETE FROM notifications WHERE id = $1`, id)
+	role := middleware.GetRole(c)
+	var tag interface{ RowsAffected() int64 }
+	if role == service.RoleSuperAdmin {
+		tag, err = h.db.Exec(ctx, `DELETE FROM notifications WHERE id = $1`, id)
+	} else {
+		tag, err = h.db.Exec(ctx, `DELETE FROM notifications n WHERE n.id = $1 AND `+
+			notificationMutationScope("n", role, 2), id, middleware.GetUserID(c))
+	}
 	if err != nil {
 		response.HandleError(c, apperr.Internal("delete failed", err))
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		response.HandleError(c, apperr.Forbidden("notification is outside your data scope"))
 		return
 	}
 
@@ -204,7 +226,14 @@ func (h *NotificationHandler) ClearAll(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	_, err := h.db.Exec(ctx, `DELETE FROM notifications`)
+	role := middleware.GetRole(c)
+	var err error
+	if role == service.RoleSuperAdmin {
+		_, err = h.db.Exec(ctx, `DELETE FROM notifications`)
+	} else {
+		_, err = h.db.Exec(ctx, `DELETE FROM notifications n WHERE `+
+			notificationMutationScope("n", role, 1), middleware.GetUserID(c))
+	}
 	if err != nil {
 		response.HandleError(c, apperr.Internal("clear failed", err))
 		return
@@ -228,8 +257,14 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 		return
 	}
 
-	if strings.TrimSpace(req.Title) == "" || strings.TrimSpace(req.Content) == "" {
+	req.Title = strings.TrimSpace(req.Title)
+	req.Content = strings.TrimSpace(req.Content)
+	if req.Title == "" || req.Content == "" {
 		response.HandleError(c, apperr.BadRequest("title and content are required"))
+		return
+	}
+	if len(req.Title) > 200 || len(req.Content) > 10000 {
+		response.HandleError(c, apperr.BadRequest("title or content is too long"))
 		return
 	}
 	if strings.TrimSpace(req.Target) == "" {
@@ -243,16 +278,21 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 	const notifyType = "system_announcement"
 	const deviceSN = "system"
 	adminID := middleware.GetUserID(c)
+	actorRole := middleware.GetRole(c)
 
 	switch {
 	case req.Target == "all":
-		h.jpushService.SendBroadcastAsync(ctx, req.Title, req.Content, map[string]string{
-			"notify_type": "system_announcement",
-		})
-		if err := h.saveAnnouncement(ctx, deviceSN, nil, adminID, notifyType, req.Title, req.Content); err != nil {
+		if actorRole != service.RoleSuperAdmin {
+			response.HandleError(c, apperr.Forbidden("only super administrators can broadcast to all users"))
+			return
+		}
+		if err := h.saveBroadcastAnnouncement(ctx, deviceSN, notifyType, req.Title, req.Content); err != nil {
 			response.HandleError(c, apperr.Internal("failed to save announcement", err))
 			return
 		}
+		h.jpushService.SendBroadcastAsync(ctx, req.Title, req.Content, map[string]string{
+			"notify_type": "system_announcement",
+		})
 
 	case strings.HasPrefix(req.Target, "station_"):
 		stationIDStr := strings.TrimPrefix(req.Target, "station_")
@@ -260,6 +300,28 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 		if err != nil || stationID <= 0 {
 			response.HandleError(c, apperr.BadRequest("invalid station target"))
 			return
+		}
+		if actorRole != service.RoleSuperAdmin {
+			var allowed bool
+			err = h.db.QueryRow(ctx, `
+				SELECT EXISTS(
+					SELECT 1 FROM stations s
+					JOIN users actor ON actor.id = $1 AND actor.deleted_at IS NULL
+					WHERE s.id = $2 AND s.deleted_at IS NULL
+					  AND actor.role BETWEEN 1 AND 3
+					  AND s.user_id IN (
+						SELECT descendant_id FROM v_user_hierarchy WHERE ancestor_id = actor.id
+					  )
+				)
+			`, adminID, stationID).Scan(&allowed)
+			if err != nil {
+				response.HandleError(c, apperr.Internal("failed to check station scope", err))
+				return
+			}
+			if !allowed {
+				response.HandleError(c, apperr.Forbidden("station is outside your management scope"))
+				return
+			}
 		}
 
 		userIDs, err := h.getUserIDsByStation(ctx, stationID)
@@ -272,11 +334,11 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 			return
 		}
 
-		h.jpushService.SendNotificationAsync(ctx, userIDs, notifyType, deviceSN, req.Title, req.Content)
-		if err := h.saveAnnouncement(ctx, deviceSN, &stationID, adminID, notifyType, req.Title, req.Content); err != nil {
+		if err := h.saveAnnouncements(ctx, deviceSN, &stationID, userIDs, notifyType, req.Title, req.Content); err != nil {
 			response.HandleError(c, apperr.Internal("failed to save announcement", err))
 			return
 		}
+		h.jpushService.SendNotificationAsync(ctx, userIDs, notifyType, deviceSN, req.Title, req.Content)
 
 	case strings.HasPrefix(req.Target, "user_"):
 		userIDStr := strings.TrimPrefix(req.Target, "user_")
@@ -285,12 +347,39 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 			response.HandleError(c, apperr.BadRequest("invalid user target"))
 			return
 		}
+		var active bool
+		if err = h.db.QueryRow(ctx, `SELECT EXISTS(
+			SELECT 1 FROM users WHERE id = $1 AND status = 1 AND deleted_at IS NULL
+		)`, userID).Scan(&active); err != nil {
+			response.HandleError(c, apperr.Internal("failed to query target user", err))
+			return
+		}
+		if !active {
+			response.HandleError(c, apperr.BadRequest("target user not found or disabled"))
+			return
+		}
+		if actorRole != service.RoleSuperAdmin {
+			var allowed bool
+			err = h.db.QueryRow(ctx, `SELECT EXISTS(
+				SELECT 1 FROM v_user_hierarchy h
+				JOIN users u ON u.id = h.descendant_id AND u.status = 1 AND u.deleted_at IS NULL
+				WHERE h.ancestor_id = $1 AND h.descendant_id = $2
+			)`, adminID, userID).Scan(&allowed)
+			if err != nil {
+				response.HandleError(c, apperr.Internal("failed to check user scope", err))
+				return
+			}
+			if !allowed {
+				response.HandleError(c, apperr.Forbidden("user is outside your management scope"))
+				return
+			}
+		}
 
-		h.jpushService.SendNotificationAsync(ctx, []int64{userID}, notifyType, deviceSN, req.Title, req.Content)
 		if err := h.saveAnnouncement(ctx, deviceSN, nil, userID, notifyType, req.Title, req.Content); err != nil {
 			response.HandleError(c, apperr.Internal("failed to save announcement", err))
 			return
 		}
+		h.jpushService.SendNotificationAsync(ctx, []int64{userID}, notifyType, deviceSN, req.Title, req.Content)
 
 	default:
 		response.HandleError(c, apperr.BadRequest("invalid target"))
@@ -302,9 +391,13 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 
 func (h *NotificationHandler) getUserIDsByStation(ctx context.Context, stationID int64) ([]int64, error) {
 	rows, err := h.db.Query(ctx, `
-		SELECT DISTINCT user_id
-		FROM devices
-		WHERE station_id = $1 AND deleted_at IS NULL
+		SELECT target.user_id
+		FROM (
+			SELECT s.user_id FROM stations s WHERE s.id = $1 AND s.deleted_at IS NULL
+			UNION
+			SELECT d.user_id FROM devices d WHERE d.station_id = $1 AND d.deleted_at IS NULL
+		) target
+		JOIN users u ON u.id = target.user_id AND u.status = 1 AND u.deleted_at IS NULL
 	`, stationID)
 	if err != nil {
 		return nil, err
@@ -322,6 +415,21 @@ func (h *NotificationHandler) getUserIDsByStation(ctx context.Context, stationID
 	return userIDs, rows.Err()
 }
 
+func (h *NotificationHandler) saveAnnouncements(
+	ctx context.Context,
+	deviceSN string,
+	stationID *int64,
+	userIDs []int64,
+	notifyType, title, content string,
+) error {
+	_, err := h.db.Exec(ctx, `
+		INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
+		SELECT $1, $2, target.user_id, $4, $5, $6, NOW()
+		FROM unnest($3::bigint[]) AS target(user_id)
+	`, deviceSN, stationID, userIDs, notifyType, title, content)
+	return err
+}
+
 func (h *NotificationHandler) saveAnnouncement(
 	ctx context.Context,
 	deviceSN string,
@@ -329,9 +437,17 @@ func (h *NotificationHandler) saveAnnouncement(
 	userID int64,
 	notifyType, title, content string,
 ) error {
+	return h.saveAnnouncements(ctx, deviceSN, stationID, []int64{userID}, notifyType, title, content)
+}
+
+func (h *NotificationHandler) saveBroadcastAnnouncement(
+	ctx context.Context,
+	deviceSN, notifyType, title, content string,
+) error {
 	_, err := h.db.Exec(ctx, `
 		INSERT INTO notifications (device_sn, station_id, user_id, notify_type, title, content, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW())
-	`, deviceSN, stationID, userID, notifyType, title, content)
+		SELECT $1, NULL, u.id, $2, $3, $4, NOW()
+		FROM users u WHERE u.deleted_at IS NULL AND u.status = 1
+	`, deviceSN, notifyType, title, content)
 	return err
 }

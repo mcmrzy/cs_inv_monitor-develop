@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strings"
 
@@ -30,8 +32,9 @@ type DatabaseConfig struct {
 }
 
 type ServerConfig struct {
-	Port int    `yaml:"port"`
-	Mode string `yaml:"mode"`
+	Port           int      `yaml:"port"`
+	Mode           string   `yaml:"mode"`
+	TrustedProxies []string `yaml:"trusted_proxies"`
 }
 
 type JWTConfig struct {
@@ -112,8 +115,12 @@ func (c *Config) DatabaseDSN() string {
 	if sslMode == "" {
 		sslMode = "disable"
 	}
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s&timezone=UTC",
-		c.Database.User, c.Database.Password, c.Database.Host, c.Database.Port, c.Database.Name, sslMode)
+	u := &url.URL{Scheme: "postgres", User: url.UserPassword(c.Database.User, c.Database.Password), Host: net.JoinHostPort(c.Database.Host, fmt.Sprintf("%d", c.Database.Port)), Path: c.Database.Name}
+	query := u.Query()
+	query.Set("sslmode", sslMode)
+	query.Set("timezone", "UTC")
+	u.RawQuery = query.Encode()
+	return u.String()
 }
 
 // Validate 校验关键配置项
@@ -121,24 +128,62 @@ func (c *Config) Validate() error {
 	var missing []string
 	if invalidRequiredSecret(c.JWT.Secret) {
 		missing = append(missing, "jwt.secret (env: JWT_SECRET, must not be empty or a CHANGE_ME* placeholder)")
+	} else if strings.EqualFold(c.Server.Mode, "release") && len(c.JWT.Secret) < 32 {
+		missing = append(missing, "jwt.secret must be at least 32 characters in release mode")
 	}
-	if c.Backends.APIServer == "" {
+	if !validBackendURL(c.Backends.APIServer) {
 		missing = append(missing, "backends.api_server (env: API_SERVER_URL)")
 	}
-	if c.Backends.DeviceServer == "" {
+	if !validBackendURL(c.Backends.DeviceServer) {
 		missing = append(missing, "backends.device_server (env: DEVICE_SERVER_URL)")
 	}
-	if isPlaceholder(c.Database.Password) {
+	if invalidRequiredSecret(c.Database.Password) {
 		missing = append(missing, "database.password must not use a CHANGE_ME* placeholder")
 	}
-	if isPlaceholder(c.Redis.Password) {
+	if invalidRequiredSecret(c.Redis.Password) {
 		missing = append(missing, "redis.password must not use a CHANGE_ME* placeholder")
+	}
+	if c.Server.Port < 1 || c.Server.Port > 65535 {
+		missing = append(missing, "server.port must be between 1 and 65535")
+	}
+	if c.RateLimit.Rate <= 0 || c.RateLimit.Burst <= 0 {
+		missing = append(missing, "rate_limit.rate and rate_limit.burst must be positive")
+	}
+	for _, trustedProxy := range c.Server.TrustedProxies {
+		if !validIPOrCIDR(trustedProxy) {
+			missing = append(missing, fmt.Sprintf("server.trusted_proxies contains invalid IP/CIDR %q", trustedProxy))
+		}
+	}
+	if strings.EqualFold(c.Server.Mode, "release") {
+		for _, origin := range c.CORS.AllowedOrigins {
+			if strings.TrimSpace(origin) == "*" {
+				missing = append(missing, "cors.allowed_origins must not contain '*' in release mode")
+				break
+			}
+		}
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("configuration validation failed:\n  - %s",
 			strings.Join(missing, "\n  - "))
 	}
 	return nil
+}
+
+func validBackendURL(value string) bool {
+	u, err := url.Parse(strings.TrimSpace(value))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil
+}
+
+func validIPOrCIDR(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if net.ParseIP(value) != nil {
+		return true
+	}
+	_, _, err := net.ParseCIDR(value)
+	return err == nil
 }
 
 func invalidRequiredSecret(value string) bool {

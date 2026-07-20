@@ -7,6 +7,13 @@ metadata:
     app: inv-device-server
 spec:
   replicas: 2
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: inv-device-server
@@ -15,15 +22,27 @@ spec:
       labels:
         app: inv-device-server
     spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: inv-device-server
       containers:
         - name: inv-device-server
           image: inv-device-server:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8081
               name: http
           env:
-            - name: CLIENT_ID
+            - name: MQTT_CLIENT_ID
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
@@ -45,6 +64,11 @@ spec:
               value: redis.inv-mqtt.svc.cluster.local
             - name: REDIS_PORT
               value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: inv-redis-secret
+                  key: password
             - name: MQTT_BROKER
               valueFrom:
                 configMapKeyRef:
@@ -57,14 +81,32 @@ spec:
                   key: mqtt_port
             - name: MQTT_USERNAME
               valueFrom:
-                configMapKeyRef:
-                  name: inv-mqtt-config
+                secretKeyRef:
+                  name: inv-mqtt-secret
                   key: mqtt_username
             - name: MQTT_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: inv-mqtt-secret
                   key: mqtt_password
+            - name: API_SERVER_URL
+              value: http://inv-api-server.inv-mqtt.svc.cluster.local:8080
+            - name: INTERNAL_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: inv-internal-secret
+                  key: internal_key
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: 100m
@@ -78,12 +120,34 @@ spec:
               port: 8081
             initialDelaySeconds: 10
             periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
               port: 8081
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
 ---
 apiVersion: v1
 kind: Service
@@ -123,3 +187,54 @@ spec:
         target:
           type: Utilization
           averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: inv-device-server-pdb
+  namespace: inv-mqtt
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: inv-device-server
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inv-device-server-ingress
+  namespace: inv-mqtt
+spec:
+  podSelector:
+    matchLabels:
+      app: inv-device-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: inv-api-server
+      ports:
+        - protocol: TCP
+          port: 8081

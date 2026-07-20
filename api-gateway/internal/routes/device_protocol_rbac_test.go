@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,9 +24,12 @@ const protocolRouteJWTSecret = "protocol-route-test-secret"
 func signedProtocolRouteToken(t *testing.T, userID, role int) string {
 	t.Helper()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": userID,
-		"role":    role,
-		"exp":     time.Now().Add(time.Hour).Unix(),
+		"user_id":        userID,
+		"role":           role,
+		"token_type":     "access",
+		"jti":            fmt.Sprintf("route-%d-%d", userID, role),
+		"session_iat_ms": time.Now().UnixMilli(),
+		"exp":            time.Now().Add(time.Hour).Unix(),
 	})
 	signed, err := token.SignedString([]byte(protocolRouteJWTSecret))
 	require.NoError(t, err)
@@ -81,6 +85,7 @@ func TestDeviceProtocolReadRoutesRequireJWTAndDevicesView(t *testing.T) {
 			defer backend.Close()
 
 			mr := miniredis.RunT(t)
+			mr.Set("gw:user_roles:42", "5")
 			rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 			defer rdb.Close()
 			rbac := middleware.NewRBACMiddleware(rdb, nil, 300)
@@ -128,6 +133,8 @@ func TestDeviceProtocolReadRoute_RoleZeroAndAPIObjectDenial(t *testing.T) {
 	defer backend.Close()
 
 	mr := miniredis.RunT(t)
+	mr.Set("gw:user_roles:1", "0")
+	mr.Set("gw:user_roles:42", "5")
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	defer rdb.Close()
 	engine := Setup(protocolRouteConfig(backend.URL, middleware.NewRBACMiddleware(rdb, nil, 300)))

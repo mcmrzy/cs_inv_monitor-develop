@@ -3,6 +3,10 @@
 server:
   port: 8080
   mode: release
+  trusted_proxies:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
 
 jwt:
   secret: "${JWT_SECRET}"
@@ -34,6 +38,13 @@ redis:
   port: ${REDIS_PORT}
   password: "${REDIS_PASSWORD}"
   db: 0
+
+database:
+  host: "${DB_HOST}"
+  port: ${DB_PORT}
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  name: "${DB_NAME}"
 
 rbac:
   enabled: true

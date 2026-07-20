@@ -17,24 +17,24 @@ import (
 const prefix = "gw:role_perms:"
 
 type permCacheEntry struct {
-	perms     []repository.PermissionEntry
-	loadedAt  time.Time
+	perms    []repository.PermissionEntry
+	loadedAt time.Time
 }
 
 type PermChecker struct {
-	rdb       *redis.Client
-	userRepo  *repository.UserRepository
-	cacheTTL  time.Duration
-	mu        sync.RWMutex
-	memCache  map[string]permCacheEntry
+	rdb      *redis.Client
+	userRepo *repository.UserRepository
+	cacheTTL time.Duration
+	mu       sync.RWMutex
+	memCache map[string]permCacheEntry
 }
 
 func NewPermChecker(rdb *redis.Client, userRepo *repository.UserRepository) *PermChecker {
 	return &PermChecker{
-		rdb:       rdb,
-		userRepo:  userRepo,
-		cacheTTL:  5 * time.Minute,
-		memCache:  make(map[string]permCacheEntry),
+		rdb:      rdb,
+		userRepo: userRepo,
+		cacheTTL: 5 * time.Minute,
+		memCache: make(map[string]permCacheEntry),
 	}
 }
 
@@ -104,7 +104,7 @@ func (c *PermChecker) loadUserRoles(ctx context.Context, userID int64) ([]int64,
 		if err != nil {
 			return nil, err
 		}
-		if user != nil {
+		if user != nil && user.Status == 1 {
 			roleIDs = []int64{int64(user.Role)}
 		}
 	}

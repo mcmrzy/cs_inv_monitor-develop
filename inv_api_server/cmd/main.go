@@ -627,8 +627,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	}
 
 	router := gin.New()
-	router.MaxMultipartMemory = 200 << 20 // 200MB
+	router.MaxMultipartMemory = 8 << 20
 	router.Use(customRecovery())
+	router.Use(requestBodyLimit())
 	router.Use(middleware.CORS(cfg.CORS.AllowedOrigins))
 	router.Use(tracingMiddleware())
 	router.Use(middleware.RateLimit())
@@ -676,14 +677,15 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
 	// 使用 http.ServeContent 替代 Gin Static，优化大文件传输
 	firmwareDir := "/data/firmware"
+	if err := os.MkdirAll(firmwareDir, 0755); err != nil {
+		panic("create firmware directory: " + err.Error())
+	}
+	firmwareRoot, err := os.OpenRoot(firmwareDir)
+	if err != nil {
+		panic("open firmware directory: " + err.Error())
+	}
 	router.GET("/firmware/*filepath", func(c *gin.Context) {
-		filepath := c.Param("filepath")
-		if filepath == "" {
-			c.Status(http.StatusNotFound)
-			return
-		}
-		fullPath := firmwareDir + filepath
-		f, err := os.Open(fullPath)
+		f, err := openFirmwareFile(firmwareRoot, c.Param("filepath"))
 		if err != nil {
 			c.Status(http.StatusNotFound)
 			return
@@ -695,6 +697,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			return
 		}
 		c.Header("Content-Type", "application/octet-stream")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", stat.Name()))
+		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("Accept-Ranges", "bytes")
 		http.ServeContent(c.Writer, c.Request, stat.Name(), stat.ModTime(), f)
 	})
@@ -841,6 +845,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.PATCH("/work-orders/:id/status", deps.WorkOrderHandler.Update)
 			auth.POST("/work-orders/:id/escalate", deps.WorkOrderHandler.Escalate)
 			auth.POST("/work-orders/:id/attachments", deps.WorkOrderHandler.UploadAttachments)
+			auth.GET("/work-orders/:id/attachments/:attachmentId", deps.WorkOrderHandler.DownloadAttachment)
 			auth.DELETE("/work-orders/:id", deps.WorkOrderHandler.Delete)
 		}
 
@@ -962,6 +967,39 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	}
 
 	return router
+}
+
+func openFirmwareFile(root *os.Root, requestPath string) (*os.File, error) {
+	name := strings.TrimPrefix(strings.TrimSpace(requestPath), "/")
+	if name == "" {
+		return nil, os.ErrNotExist
+	}
+	return root.Open(name)
+}
+
+func requestBodyLimit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		const (
+			defaultLimit         = int64(2 << 20)
+			firmwareUploadLimit  = int64(201 << 20)
+			workOrderUploadLimit = int64(51 << 20)
+		)
+		limit := defaultLimit
+		path := c.Request.URL.Path
+		if c.Request.Method == http.MethodPost && path == "/api/v1/ota/firmware" {
+			limit = firmwareUploadLimit
+		} else if c.Request.Method == http.MethodPost && strings.HasPrefix(path, "/api/v1/work-orders/") && strings.HasSuffix(path, "/attachments") {
+			limit = workOrderUploadLimit
+		}
+		if c.Request.ContentLength > limit {
+			c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, gin.H{"code": -1, "message": "request body too large"})
+			return
+		}
+		if c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
+		}
+		c.Next()
+	}
 }
 
 func setTimezone(tz string) error {

@@ -230,7 +230,7 @@ func (r *DeviceRepository) GetTrend(ctx context.Context, userID int64, period, t
 	today := timezone.TodayInTimezone(tz)
 	rows, err := r.db.Query(ctx, `SELECT e.stat_date,COALESCE(SUM(e.pv_energy),0) FROM device_energy_day e
 		JOIN devices d ON d.sn=e.device_sn WHERE d.deleted_at IS NULL
-		AND d.sn IN (SELECT sn FROM devices WHERE user_id=$1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id=$1)
+		AND d.sn IN (SELECT device_sn FROM v_user_device_access WHERE user_id=$1)
 		AND e.stat_date >= $2::date-30 GROUP BY e.stat_date ORDER BY e.stat_date`, userID, today)
 	if err != nil {
 		return nil, err

@@ -22,6 +22,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, type MemoryRouterProps } from 'react-router-dom'
 import { ConfigProvider, App as AntApp } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
+import enUS from 'antd/locale/en_US'
 import type { ReactElement } from 'react'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore, { type Lang } from '@/stores/localeStore'
@@ -44,6 +45,8 @@ export interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper
   withRouter?: boolean
   /** 渲染语言；默认 'zh'。影响 useTranslation 返回的翻译文案 */
   lang?: Lang
+  /** Backward-compatible explicit initial locale. */
+  initialLang?: Lang
 }
 
 /**
@@ -69,7 +72,7 @@ export function createTestQueryClient(): QueryClient {
 
 function setupAuth(options: RenderWithProvidersOptions) {
   // Default to Chinese locale for tests; override via options.lang
-  useLocaleStore.setState({ lang: options.lang ?? 'zh' })
+  useLocaleStore.setState({ lang: options.lang ?? options.initialLang ?? 'zh' })
 
   const { initialUser, initialToken, initialPermissions = [] } = options
   if (initialUser && initialToken) {
@@ -98,15 +101,21 @@ export function renderWithProviders(
     routerProps = { initialEntries: ['/'] },
     queryClient = createTestQueryClient(),
     withRouter = true,
+    lang,
+    initialLang,
+    initialUser: _initialUser,
+    initialToken: _initialToken,
+    initialPermissions: _initialPermissions,
     ...renderOptions
   } = options
 
   setupAuth(options)
+  const resolvedLang = lang ?? initialLang ?? 'zh'
 
   function Wrapper({ children }: { children: React.ReactNode }) {
     const inner = (
       <QueryClientProvider client={queryClient}>
-        <ConfigProvider locale={zhCN}>
+        <ConfigProvider locale={resolvedLang === 'en' ? enUS : zhCN}>
           <AntApp>{children}</AntApp>
         </ConfigProvider>
       </QueryClientProvider>

@@ -273,6 +273,9 @@ func (c *Config) Validate() error {
 	if c.JPush.Enabled && (c.JPush.AppKey == "" || c.JPush.MasterSecret == "") {
 		missing = append(missing, "jpush.app_key and jpush.master_secret are required when jpush.enabled=true")
 	}
+	if c.Email.TLSInsecure {
+		missing = append(missing, "email.tls_insecure must be false; install a trusted SMTP certificate instead")
+	}
 	if c.Database.Host == "" {
 		missing = append(missing, "database.host (env: DB_HOST)")
 	}

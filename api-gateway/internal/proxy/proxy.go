@@ -21,47 +21,35 @@ type ReverseProxy struct {
 func NewReverseProxy(target string) *ReverseProxy {
 	targetURL, err := url.Parse(target)
 	if err != nil {
-		log.Fatalf("[Proxy] 无法解析后端地址 %s: %v", target, err)
+		log.Fatalf("[Proxy] invalid backend URL: %v", err)
 	}
-
 	proxy := &httputil.ReverseProxy{
-		FlushInterval: -1, // 立即刷新，SSE 流式数据不缓冲
+		FlushInterval: -1,
 		Director: func(req *http.Request) {
-			req.URL.Scheme = targetURL.Scheme
-			req.URL.Host = targetURL.Host
-			req.Host = targetURL.Host
+			req.URL.Scheme, req.URL.Host, req.Host = targetURL.Scheme, targetURL.Host, targetURL.Host
 			req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
 			if len(req.URL.Path) > 1 && strings.HasSuffix(req.URL.Path, "/") {
 				req.URL.Path = strings.TrimSuffix(req.URL.Path, "/")
 			}
 		},
 		Transport: &http.Transport{
-			MaxIdleConns:        200,
-			MaxIdleConnsPerHost: 50,
-			MaxConnsPerHost:     100,
-			IdleConnTimeout:     90 * time.Second,
-			TLSHandshakeTimeout: 10 * time.Second,
-			DialContext: (&net.Dialer{
-				Timeout:   10 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
+			MaxIdleConns: 200, MaxIdleConnsPerHost: 50, MaxConnsPerHost: 100,
+			IdleConnTimeout: 90 * time.Second, TLSHandshakeTimeout: 10 * time.Second,
+			DialContext: (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Printf("[Proxy] 后端服务不可达: %s -> %v", target, err)
+			log.Printf("[Proxy] backend unavailable for %s %s: %v", r.Method, r.URL.Path, err)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadGateway)
-			fmt.Fprintf(w, `{"code":502,"message":"后端服务不可达","detail":"%s"}`, target)
+			_, _ = fmt.Fprint(w, `{"code":502,"message":"后端服务不可达"}`)
 		},
 	}
-
-	return &ReverseProxy{
-		targetURL: targetURL,
-		proxy:     proxy,
-	}
+	return &ReverseProxy{targetURL: targetURL, proxy: proxy}
 }
 
 func (rp *ReverseProxy) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		c.Request.Header.Set("X-Forwarded-For", c.ClientIP())
 		rp.proxy.ServeHTTP(c.Writer, c.Request)
 		c.Abort()
 	}
@@ -69,18 +57,14 @@ func (rp *ReverseProxy) Handler() gin.HandlerFunc {
 
 func (rp *ReverseProxy) RewriteHandler(targetPath string) gin.HandlerFunc {
 	rewriteProxy := &httputil.ReverseProxy{
-		FlushInterval: -1, // 立即刷新，SSE 流式数据不缓冲
+		FlushInterval: -1,
 		Director: func(req *http.Request) {
-			req.URL.Scheme = rp.targetURL.Scheme
-			req.URL.Host = rp.targetURL.Host
-			req.Host = rp.targetURL.Host
+			req.URL.Scheme, req.URL.Host, req.Host = rp.targetURL.Scheme, rp.targetURL.Host, rp.targetURL.Host
 			req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-			originalPath := req.URL.Path
-			parts := strings.SplitN(originalPath, "/api/v1/", 2)
+			parts := strings.SplitN(req.URL.Path, "/api/v1/", 2)
 			if len(parts) == 2 {
 				suffix := parts[1]
-				dotIdx := strings.Index(suffix, "/")
-				if dotIdx >= 0 {
+				if dotIdx := strings.Index(suffix, "/"); dotIdx >= 0 {
 					suffix = suffix[dotIdx:]
 				} else {
 					suffix = ""
@@ -91,15 +75,13 @@ func (rp *ReverseProxy) RewriteHandler(targetPath string) gin.HandlerFunc {
 				req.URL.Path = strings.TrimSuffix(req.URL.Path, "/")
 			}
 		},
-		Transport: rp.proxy.Transport,
-		ErrorHandler: rp.proxy.ErrorHandler,
+		Transport: rp.proxy.Transport, ErrorHandler: rp.proxy.ErrorHandler,
 	}
 	return func(c *gin.Context) {
+		c.Request.Header.Set("X-Forwarded-For", c.ClientIP())
 		rewriteProxy.ServeHTTP(c.Writer, c.Request)
 		c.Abort()
 	}
 }
 
-func (rp *ReverseProxy) Target() string {
-	return rp.targetURL.String()
-}
+func (rp *ReverseProxy) Target() string { return rp.targetURL.String() }

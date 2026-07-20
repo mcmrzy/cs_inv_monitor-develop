@@ -77,6 +77,24 @@ func TestRateLimit_Middleware(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }
 
+func TestRateLimit_OneClientDoesNotThrottleAnother(t *testing.T) {
+	router := gin.New()
+	router.Use(RateLimit(0.01, 1))
+	router.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	request := func(remoteAddr string) int {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = remoteAddr
+		router.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	assert.Equal(t, http.StatusOK, request("10.0.0.1:1000"))
+	assert.Equal(t, http.StatusTooManyRequests, request("10.0.0.1:1001"))
+	assert.Equal(t, http.StatusOK, request("10.0.0.2:1000"))
+}
+
 func TestRouteRateLimits_IndependentBuckets(t *testing.T) {
 	rules := []RouteRateLimitConfig{
 		{PathPrefix: "/api/v1/auth/", Rate: 10, Burst: 2},

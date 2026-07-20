@@ -10,12 +10,18 @@ import (
 )
 
 type Claims struct {
-	UserID int64  `json:"user_id"`
-	Phone  string `json:"phone"`
-	Role   int    `json:"role"`
-	JTI    string `json:"jti"`
+	UserID     int64  `json:"user_id"`
+	Phone      string `json:"phone"`
+	Role       int    `json:"role"`
+	TokenType  string `json:"token_type"`
+	SessionIAT int64  `json:"session_iat_ms"`
 	jwt.RegisteredClaims
 }
+
+const (
+	TokenTypeAccess  = "access"
+	TokenTypeRefresh = "refresh"
+)
 
 type JWTConfig struct {
 	Secret            string
@@ -33,19 +39,22 @@ func NewJWT(config *JWTConfig) *JWT {
 }
 
 func (j *JWT) GenerateToken(userID int64, phone string, role int) (string, string, error) {
+	now := time.Now().UTC()
 	jti, err := generateJTI()
 	if err != nil {
 		return "", "", err
 	}
 
 	claims := Claims{
-		UserID: userID,
-		Phone:  phone,
-		Role:   role,
+		UserID:     userID,
+		Phone:      phone,
+		Role:       role,
+		TokenType:  TokenTypeAccess,
+		SessionIAT: now.UnixMilli(),
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(j.config.ExpireTime)),
-			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
-			NotBefore: jwt.NewNumericDate(time.Now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(j.config.ExpireTime)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
 			Issuer:    j.config.Issuer,
 			ID:        jti,
 		},
@@ -57,7 +66,7 @@ func (j *JWT) GenerateToken(userID int64, phone string, role int) (string, strin
 		return "", "", err
 	}
 
-	refreshToken, err := j.generateRefreshToken(userID, phone, role, jti)
+	refreshToken, err := j.generateRefreshToken(userID, phone, role)
 	if err != nil {
 		return "", "", err
 	}
@@ -65,23 +74,25 @@ func (j *JWT) GenerateToken(userID int64, phone string, role int) (string, strin
 	return signed, refreshToken, nil
 }
 
-func (j *JWT) generateRefreshToken(userID int64, phone string, role int, accessJTI string) (string, error) {
+func (j *JWT) generateRefreshToken(userID int64, phone string, role int) (string, error) {
+	now := time.Now().UTC()
 	jti, err := generateJTI()
 	if err != nil {
 		return "", err
 	}
 
 	claims := Claims{
-		UserID: userID,
-		Phone:  phone,
-		Role:   role,
-		JTI:    jti,
+		UserID:     userID,
+		Phone:      phone,
+		Role:       role,
+		TokenType:  TokenTypeRefresh,
+		SessionIAT: now.UnixMilli(),
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(j.config.RefreshExpireTime)),
-			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
-			NotBefore: jwt.NewNumericDate(time.Now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(j.config.RefreshExpireTime)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
 			Issuer:    j.config.Issuer,
-			ID:        accessJTI,
+			ID:        jti,
 		},
 	}
 
@@ -98,17 +109,42 @@ func generateJTI() (string, error) {
 }
 
 func (j *JWT) GenerateRefreshToken(userID int64, phone string, role int) (string, error) {
-	accessJTI, err := generateJTI()
+	return j.generateRefreshToken(userID, phone, role)
+}
+
+func (j *JWT) ParseAccessToken(tokenString string) (*Claims, error) {
+	claims, err := j.ParseToken(tokenString)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return j.generateRefreshToken(userID, phone, role, accessJTI)
+	if claims.TokenType != TokenTypeAccess || claims.ID == "" || claims.SessionIAT <= 0 || claims.UserID <= 0 || claims.Role < 0 || claims.Role > 5 {
+		return nil, errors.New("token is not an access token")
+	}
+	return claims, nil
+}
+
+func (j *JWT) ParseRefreshToken(tokenString string) (*Claims, error) {
+	claims, err := j.ParseToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+	if claims.TokenType != TokenTypeRefresh || claims.ID == "" || claims.SessionIAT <= 0 || claims.UserID <= 0 || claims.Role < 0 || claims.Role > 5 {
+		return nil, errors.New("token is not a refresh token")
+	}
+	return claims, nil
 }
 
 func (j *JWT) ParseToken(tokenString string) (*Claims, error) {
+	options := []jwt.ParserOption{
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+	}
+	if j.config.Issuer != "" {
+		options = append(options, jwt.WithIssuer(j.config.Issuer))
+	}
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(j.config.Secret), nil
-	})
+	}, options...)
 
 	if err != nil {
 		return nil, err
@@ -122,7 +158,7 @@ func (j *JWT) ParseToken(tokenString string) (*Claims, error) {
 }
 
 func (j *JWT) RefreshToken(tokenString string) (string, error) {
-	claims, err := j.ParseToken(tokenString)
+	claims, err := j.ParseRefreshToken(tokenString)
 	if err != nil {
 		return "", err
 	}
@@ -132,5 +168,8 @@ func (j *JWT) RefreshToken(tokenString string) (string, error) {
 }
 
 func (j *JWT) GetJTI(claims *Claims) string {
-	return claims.JTI
+	if claims == nil {
+		return ""
+	}
+	return claims.ID
 }

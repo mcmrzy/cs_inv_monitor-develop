@@ -92,7 +92,9 @@ class _SettingsPageState extends State<SettingsPage> {
               setState(() => _unitType = 'kW');
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.str('unit_changed', {'unit': 'kW'})), duration: const Duration(seconds: 1)),
+                SnackBar(
+                    content: Text(l10n.str('unit_changed', {'unit': 'kW'})),
+                    duration: const Duration(seconds: 1)),
               );
             },
             child: Padding(
@@ -113,7 +115,9 @@ class _SettingsPageState extends State<SettingsPage> {
               setState(() => _unitType = 'W');
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.str('unit_changed', {'unit': 'W'})), duration: const Duration(seconds: 1)),
+                SnackBar(
+                    content: Text(l10n.str('unit_changed', {'unit': 'W'})),
+                    duration: const Duration(seconds: 1)),
               );
             },
             child: Padding(
@@ -144,7 +148,8 @@ class _SettingsPageState extends State<SettingsPage> {
           controller: controller,
           decoration: InputDecoration(
             hintText: l10n.serverHint,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
           ),
           keyboardType: TextInputType.url,
         ),
@@ -197,7 +202,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 setState(() => _currentTimezone = id);
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l10n.str('timezone_changed', {'timezone': label})), duration: const Duration(seconds: 1)),
+                  SnackBar(
+                      content: Text(
+                          l10n.str('timezone_changed', {'timezone': label})),
+                      duration: const Duration(seconds: 1)),
                 );
               }
             },
@@ -235,7 +243,8 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: EdgeInsets.symmetric(vertical: 8.h),
               child: Row(
                 children: [
-                  Text('中文', style: TextStyle(fontSize: 16.sp)),
+                  Text(l10n.str('language_chinese'),
+                      style: TextStyle(fontSize: 16.sp)),
                   if (_currentLocale == 'zh') ...[
                     const Spacer(),
                     const Icon(Icons.check, color: AppColors.primary),
@@ -254,7 +263,8 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: EdgeInsets.symmetric(vertical: 8.h),
               child: Row(
                 children: [
-                  Text('English', style: TextStyle(fontSize: 16.sp)),
+                  Text(l10n.str('language_english'),
+                      style: TextStyle(fontSize: 16.sp)),
                   if (_currentLocale == 'en') ...[
                     const Spacer(),
                     const Icon(Icons.check, color: AppColors.primary),
@@ -318,14 +328,19 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(height: 1),
           ListTile(
             title: Text(l10n.timezone),
-            subtitle: Text(TimezoneUtils.getLabel(_currentTimezone, langCode: _currentLocale)),
+            subtitle: Text(TimezoneUtils.getLabel(_currentTimezone,
+                langCode: _currentLocale)),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showTimezoneDialog,
           ),
           _buildSectionTitle(l10n.generalSettings),
           ListTile(
             title: Text(l10n.languageSwitch),
-            subtitle: Text(_currentLocale == 'zh' ? '中文' : 'English'),
+            subtitle: Text(
+              _currentLocale == 'zh'
+                  ? l10n.str('language_chinese')
+                  : l10n.str('language_english'),
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showLanguageDialog,
           ),
@@ -340,7 +355,10 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 8.h),
       child: Text(
         title,
-        style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textHint),
+        style: TextStyle(
+            fontSize: 13.sp,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textHint),
       ),
     );
   }
@@ -356,10 +374,13 @@ class _SettingsPageState extends State<SettingsPage> {
               title: Text(l10n.resetSettings),
               content: Text(l10n.resetConfirm),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.cancel)),
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text(l10n.cancel)),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                  style:
+                      FilledButton.styleFrom(backgroundColor: AppColors.error),
                   child: Text(l10n.reset),
                 ),
               ],
@@ -379,7 +400,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 _currentTimezone = TimezoneUtils.defaultTimezone;
               });
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.settingsReset), duration: const Duration(seconds: 1)),
+                SnackBar(
+                    content: Text(l10n.settingsReset),
+                    duration: const Duration(seconds: 1)),
               );
             }
           }
@@ -388,7 +411,8 @@ class _SettingsPageState extends State<SettingsPage> {
           foregroundColor: AppColors.error,
           side: BorderSide(color: AppColors.error.withAlpha(40)),
           padding: EdgeInsets.symmetric(vertical: 14.h),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
         ),
         child: Text(l10n.resetAll),
       ),

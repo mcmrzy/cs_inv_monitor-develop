@@ -33,7 +33,7 @@ func Success(c *gin.Context, data interface{}) {
 func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 	c.JSON(http.StatusOK, Response{
 		Code:    0,
-		Message: message,
+		Message: localizeMessage(c, message, "Operation successful"),
 		Data:    data,
 	})
 }
@@ -41,28 +41,28 @@ func SuccessWithMessage(c *gin.Context, message string, data interface{}) {
 func Error(c *gin.Context, code int, message string) {
 	c.JSON(http.StatusOK, Response{
 		Code:    code,
-		Message: message,
+		Message: localizeMessage(c, message, "Request failed"),
 	})
 }
 
 func BadRequest(c *gin.Context, message string) {
 	c.JSON(http.StatusBadRequest, Response{
 		Code:    http.StatusBadRequest,
-		Message: message,
+		Message: localizeMessage(c, message, "Invalid request"),
 	})
 }
 
 func Unauthorized(c *gin.Context, message string) {
 	c.JSON(http.StatusUnauthorized, Response{
 		Code:    http.StatusUnauthorized,
-		Message: message,
+		Message: localizeMessage(c, message, "Authentication required"),
 	})
 }
 
 func Forbidden(c *gin.Context, message string) {
 	c.JSON(http.StatusForbidden, Response{
 		Code:    http.StatusForbidden,
-		Message: message,
+		Message: localizeMessage(c, message, "Permission denied"),
 	})
 }
 
@@ -76,14 +76,14 @@ func TooManyRequests(c *gin.Context, message string) {
 func NotFound(c *gin.Context, message string) {
 	c.JSON(http.StatusNotFound, Response{
 		Code:    http.StatusNotFound,
-		Message: message,
+		Message: localizeMessage(c, message, "Resource not found"),
 	})
 }
 
 func InternalError(c *gin.Context, message string) {
 	c.JSON(http.StatusInternalServerError, Response{
 		Code:    http.StatusInternalServerError,
-		Message: message,
+		Message: localizeMessage(c, message, "Internal server error"),
 	})
 }
 
@@ -112,7 +112,7 @@ func HandleError(c *gin.Context, err error) {
 	if errors.As(err, &appErr) {
 		c.JSON(appErr.HTTPCode, Response{
 			Code:    appErr.BizCode,
-			Message: appErr.Message,
+			Message: localizeMessage(c, appErr.Message, "Request failed"),
 		})
 		return
 	}

@@ -77,13 +77,14 @@ func (r *RBACMiddleware) getUserRole(ctx context.Context, userID string) (int, e
 		if err == nil {
 			// Cache HIT — parse the cached role.
 			var roleIDs []int
-			if json.Unmarshal([]byte(cached), &roleIDs) == nil {
-				if len(roleIDs) > 0 && roleIDs[0] >= 0 {
-					return roleIDs[0], nil
-				}
-			} else if role, parseErr := strconv.Atoi(cached); parseErr == nil && role >= 0 {
+			if json.Unmarshal([]byte(cached), &roleIDs) == nil && len(roleIDs) > 0 && roleIDs[0] >= 0 && roleIDs[0] <= 5 {
+				return roleIDs[0], nil
+			}
+			if role, parseErr := strconv.Atoi(cached); parseErr == nil && role >= 0 && role <= 5 {
 				return role, nil
 			}
+			// Corrupt or out-of-range cache values must never coerce to role 0.
+			_ = r.rdb.Del(ctx, cacheKey).Err()
 		}
 		// Redis miss — fall through to the database when available.
 		if r.pg == nil {
@@ -100,7 +101,7 @@ func (r *RBACMiddleware) getUserRole(ctx context.Context, userID string) (int, e
 	// Redis is absent but pg is available).
 	var role int
 	err := r.pg.QueryRow(ctx,
-		"SELECT COALESCE(role, -1) FROM users WHERE id = $1 AND deleted_at IS NULL",
+		"SELECT COALESCE(role, -1) FROM users WHERE id = $1 AND status = 1 AND deleted_at IS NULL",
 		userID).Scan(&role)
 	if err != nil {
 		return -1, err
@@ -206,7 +207,7 @@ func (r *RBACMiddleware) refreshRolePermissions(ctx context.Context, role int) (
 	return perms, nil
 }
 
-func (r *RBACMiddleware) hasPermission(userID string, resource string, action string, jwtRole int) bool {
+func (r *RBACMiddleware) hasPermission(userID string, resource string, action string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -219,15 +220,7 @@ func (r *RBACMiddleware) hasPermission(userID string, resource string, action st
 	// cannot retain elevated (especially role=0) access.
 	role, err := r.getUserRole(ctx, userID)
 	if err != nil || role < 0 {
-		// When Redis is configured but the user role is not cached (errRoleUnknown),
-		// the JWT role claim is a safe fallback since the role was not explicitly revoked.
-		// But without any role source (errNoRoleSource), never trust the JWT role=0
-		// claim to prevent stale super_admin tokens from bypassing security.
-		if err == errRoleUnknown && jwtRole >= 0 {
-			role = jwtRole
-		} else {
-			return false
-		}
+		return false
 	}
 
 	if role == 0 {
@@ -272,6 +265,7 @@ var resourceActionMap = map[string]string{
 	"/api/v1/users":              "users",
 	"/api/v1/users/":             "users",
 	"/api/v1/ota/tasks":          "ota",
+	"/api/v1/ota/firmware":       "firmware",
 	"/api/v1/ota/firmwares":      "firmware",
 	"/api/v1/ota/":               "ota",
 	"/api/v1/parallel":           "parallel",
@@ -324,13 +318,17 @@ func isAuthenticatedOnlyPath(path string) bool {
 // 这些接口已通过 JWT 认证保护（位于 user 组），对所有登录用户开放，不需要 RBAC 细粒度权限检查。
 // 在路由分组架构下，这些接口属于 user 组，会经过 RBAC 中间件，
 // 因此保留此白名单以确保 APP 端 OTA 等接口不被 RBAC resourceActionMap 误拦截。
-var appAllowedPaths = []string{
+var appAllowedExactPaths = map[string]struct{}{
+	"/api/v1/ota/trigger":              {},
+	"/api/v1/ota/app/check":            {},
+	"/api/v1/ota/app/packages":         {},
+	"/api/v1/ota/app/packages/install": {},
+}
+
+var appAllowedPrefixes = []string{
 	"/api/v1/ota/check/",
-	"/api/v1/ota/trigger",
 	"/api/v1/ota/resend/",
 	"/api/v1/ota/devices/",
-	"/api/v1/ota/app/check",
-	"/api/v1/ota/app/packages",
 	"/api/v1/ota/packages/available/",
 }
 
@@ -345,7 +343,10 @@ var appAllowedMethodPaths = []struct {
 }
 
 func isAppAllowedPath(path string) bool {
-	for _, prefix := range appAllowedPaths {
+	if _, ok := appAllowedExactPaths[path]; ok {
+		return true
+	}
+	for _, prefix := range appAllowedPrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
@@ -367,32 +368,49 @@ func isAppAllowedPathWithMethod(path, method string) bool {
 
 func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if isPublicPath(c.Request.URL.Path) {
-			c.Next()
-			return
-		}
-
-		// APP 端接口已通 JWT 认证保护，对所有登录用户开放，跳过 RBAC
-		if isAppAllowedPathWithMethod(c.Request.URL.Path, c.Request.Method) {
-			c.Next()
-			return
-		}
-
-		if isAuthenticatedOnlyPath(c.Request.URL.Path) {
+		path := c.Request.URL.Path
+		if isPublicPath(path) {
 			c.Next()
 			return
 		}
 
 		userID := c.GetHeader("X-User-ID")
 		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "认证上下文缺失"})
+			c.Abort()
+			return
+		}
+		if r.isTokenBlacklisted(c.Request.Context(), c.GetHeader("X-Token-JTI")) {
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "token 已被撤销"})
+			c.Abort()
+			return
+		}
+		if r.isUserSessionRevoked(c.Request.Context(), userID, c.GetHeader("X-Token-Issued-At")) {
+			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "用户会话已被撤销"})
+			c.Abort()
+			return
+		}
+
+		// Authentication self-service is already protected by JWT and must remain
+		// available for logout even when the role store is degraded.
+		if isAuthenticatedOnlyPath(path) {
 			c.Next()
 			return
 		}
 
-		path := c.Request.URL.Path
-		var resource string
+		// APP endpoints do not require business RBAC, but still require an active
+		// canonical account in addition to a non-revoked session.
+		if isAppAllowedPathWithMethod(path, c.Request.Method) {
+			if _, err := r.getUserRole(c.Request.Context(), userID); err != nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "账号不可用"})
+				c.Abort()
+				return
+			}
+			c.Next()
+			return
+		}
 
-		resource = resourceForPath(path)
+		resource := resourceForPath(path)
 
 		if resource == "" {
 			// Every route in this middleware is already part of an authenticated
@@ -406,16 +424,18 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		}
 
 		action := r.getActionForRequest(path, c.Request.Method)
-		jwtRole := -1
-		if roleStr := c.GetHeader("X-User-Role"); roleStr != "" {
-			if parsed, parseErr := strconv.Atoi(roleStr); parseErr == nil {
-				jwtRole = parsed
-			}
-		}
-		if !r.hasPermission(userID, resource, action, jwtRole) {
+		if !r.hasPermission(userID, resource, action) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    403,
 				"message": "权限不足，无法访问该资源",
+			})
+			c.Abort()
+			return
+		}
+		if sn, ok := directDeviceSN(path); ok && !r.hasDeviceAccess(c.Request.Context(), userID, sn) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"code":    403,
+				"message": "无权访问该设备",
 			})
 			c.Abort()
 			return
@@ -460,24 +480,53 @@ func (r *RBACMiddleware) getActionForRequest(path, method string) string {
 	if pathPrefixMatches(path, "/api/v1/admin/") {
 		return "manage"
 	}
-	// Alarm acknowledgement and ignore mutate an existing alarm even though the
-	// historical API models them as POST commands.
-	if method == http.MethodPost &&
-		(strings.HasSuffix(path, "/acknowledge") || strings.HasSuffix(path, "/ignore")) {
-		return "edit"
-	}
 	// OTA lifecycle commands are operational controls, not resource creation or
 	// ordinary edits.  Keep the Gateway action aligned with the API's explicit
 	// RequirePermission(..., "ota", "control") checks.
 	if isOTAControlRequest(path, method) {
 		return "control"
 	}
-	// Device control commands are operational controls, not resource creation.
-	// Keep the Gateway action aligned with the API's RequirePermission(..., "devices", "control") checks.
-	if method == http.MethodPost && pathPrefixMatches(path, "/api/v1/devices/") && strings.HasSuffix(path, "/control") {
-		return "control"
+	return actionForRequest(method, path)
+}
+
+func actionForRequest(method, path string) string {
+	if method == http.MethodPost {
+		switch path {
+		case "/api/v1/devices/batch/control",
+			"/api/v1/devices/add-to-station",
+			"/api/v1/devices/batch-assign-installer":
+			return "edit"
+		}
+		if strings.HasPrefix(path, "/api/v1/devices/") &&
+			(strings.HasSuffix(path, "/unbind") ||
+				strings.HasSuffix(path, "/control") ||
+				strings.HasSuffix(path, "/remove-from-station") ||
+				strings.HasSuffix(path, "/assign-installer") ||
+				strings.HasSuffix(path, "/approve") ||
+				strings.HasSuffix(path, "/reject")) {
+			return "edit"
+		}
+		if (strings.HasPrefix(path, "/api/v1/alarms/") || strings.HasPrefix(path, "/api/v1/alerts/")) &&
+			(strings.HasSuffix(path, "/acknowledge") || strings.HasSuffix(path, "/ignore")) {
+			return "edit"
+		}
+		if strings.HasPrefix(path, "/api/v1/work-orders/") &&
+			(strings.HasSuffix(path, "/attachments") || strings.HasSuffix(path, "/escalate")) {
+			return "edit"
+		}
 	}
-	return r.getActionFromMethod(method)
+	switch method {
+	case http.MethodGet:
+		return "view"
+	case http.MethodPost:
+		return "create"
+	case http.MethodPut, http.MethodPatch:
+		return "edit"
+	case http.MethodDelete:
+		return "delete"
+	default:
+		return "view"
+	}
 }
 
 func isOTAControlRequest(path, method string) bool {
@@ -500,6 +549,73 @@ func isOTAControlRequest(path, method string) bool {
 		return true
 	}
 	return method == http.MethodPut && strings.HasSuffix(path, "/rollout")
+}
+
+func (r *RBACMiddleware) isTokenBlacklisted(ctx context.Context, jti string) bool {
+	if r.rdb == nil || strings.TrimSpace(jti) == "" {
+		return false
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	exists, err := r.rdb.Exists(checkCtx, "token_blacklist:"+jti).Result()
+	return err != nil || exists > 0
+}
+
+func (r *RBACMiddleware) isUserSessionRevoked(ctx context.Context, userID, issuedAt string) bool {
+	if r.rdb == nil || strings.TrimSpace(issuedAt) == "" {
+		return false
+	}
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil || uid <= 0 {
+		return true
+	}
+	iat, err := strconv.ParseInt(issuedAt, 10, 64)
+	if err != nil || iat <= 0 {
+		return true
+	}
+	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	cutoff, err := r.rdb.Get(checkCtx, fmt.Sprintf("user_token_revoked_at:%d", uid)).Int64()
+	if err == redis.Nil {
+		return false
+	}
+	return err != nil || iat <= cutoff
+}
+
+func directDeviceSN(path string) (string, bool) {
+	const prefix = "/api/v1/device/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", false
+	}
+	remainder := strings.TrimPrefix(path, prefix)
+	parts := strings.Split(remainder, "/")
+	if len(parts) != 2 || parts[0] == "" || (parts[1] != "online" && parts[1] != "data") {
+		return "", false
+	}
+	return parts[0], true
+}
+
+func (r *RBACMiddleware) hasDeviceAccess(ctx context.Context, userID, sn string) bool {
+	if r.pg == nil || sn == "" {
+		return false
+	}
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil || uid <= 0 {
+		return false
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	var allowed bool
+	err = r.pg.QueryRow(queryCtx, `
+		SELECT EXISTS (
+			SELECT 1 FROM users
+			WHERE id = $1 AND role = 0 AND deleted_at IS NULL
+		) OR EXISTS (
+			SELECT 1 FROM v_user_device_access
+			WHERE user_id = $1 AND device_sn = $2
+		)
+	`, uid, sn).Scan(&allowed)
+	return err == nil && allowed
 }
 
 func (r *RBACMiddleware) getActionFromMethod(method string) string {

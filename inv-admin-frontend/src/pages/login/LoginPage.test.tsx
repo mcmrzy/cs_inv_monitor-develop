@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -6,6 +6,7 @@ import { server } from '@/test/mocks/server'
 import { renderWithProviders } from '@/test/test-utils'
 import LoginPage from './index'
 import useAuthStore from '@/stores/authStore'
+import useLocaleStore from '@/stores/localeStore'
 
 // Mock the SliderCaptchaModal to avoid complex rendering
 vi.mock('@/components/SliderCaptcha/SliderCaptchaModal', () => ({
@@ -13,12 +14,25 @@ vi.mock('@/components/SliderCaptcha/SliderCaptchaModal', () => ({
 }))
 
 describe('LoginPage', () => {
+  beforeEach(() => {
+    useLocaleStore.setState({ lang: 'zh' })
+  })
+
   it('should render the login form', () => {
     renderWithProviders(<LoginPage />)
 
     // Should show welcome text
     expect(screen.getByText('欢迎回来')).toBeInTheDocument()
     expect(screen.getByText('登录您的账户以继续')).toBeInTheDocument()
+  })
+
+  it('should render the English login experience when English is selected', () => {
+    renderWithProviders(<LoginPage />, { initialLang: 'en' })
+
+    expect(screen.getByText('Welcome Back')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Phone / Email')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument()
   })
 
   it('should render login tab, register tab, and reset tab', () => {

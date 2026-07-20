@@ -17,6 +17,48 @@ type tokenBucket struct {
 	mu         sync.Mutex
 }
 
+type clientLimiter struct {
+	mu          sync.Mutex
+	limiters    map[string]*tokenBucket
+	rate        float64
+	burst       int
+	lastCleanup time.Time
+}
+
+func newClientLimiter(rate float64, burst int) *clientLimiter {
+	return &clientLimiter{
+		limiters:    make(map[string]*tokenBucket),
+		rate:        rate,
+		burst:       burst,
+		lastCleanup: time.Now(),
+	}
+}
+
+func (l *clientLimiter) get(key string) *tokenBucket {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if limiter, ok := l.limiters[key]; ok {
+		return limiter
+	}
+	limiter := newTokenBucket(l.rate, l.burst)
+	l.limiters[key] = limiter
+
+	if time.Since(l.lastCleanup) > 5*time.Minute {
+		cutoff := time.Now().Add(-10 * time.Minute)
+		for clientKey, bucket := range l.limiters {
+			bucket.mu.Lock()
+			stale := bucket.lastRefill.Before(cutoff)
+			bucket.mu.Unlock()
+			if stale {
+				delete(l.limiters, clientKey)
+			}
+		}
+		l.lastCleanup = time.Now()
+	}
+	return limiter
+}
+
 func newTokenBucket(rate float64, burst int) *tokenBucket {
 	return &tokenBucket{
 		rate:       rate,
@@ -46,10 +88,10 @@ func (tb *tokenBucket) allow() bool {
 }
 
 func RateLimit(ratePerSec float64, burst int) gin.HandlerFunc {
-	limiter := newTokenBucket(ratePerSec, burst)
+	limiter := newClientLimiter(ratePerSec, burst)
 
 	return func(c *gin.Context) {
-		if !limiter.allow() {
+		if !limiter.get(c.ClientIP()).allow() {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"code":    429,
 				"message": "请求过于频繁，请稍后再试",
@@ -68,16 +110,17 @@ type RouteRateLimitConfig struct {
 }
 
 func RouteRateLimits(rules []RouteRateLimitConfig) gin.HandlerFunc {
-	limiters := make(map[string]*tokenBucket, len(rules))
+	limiters := make(map[string]*clientLimiter, len(rules))
 	for _, rule := range rules {
-		limiters[rule.PathPrefix] = newTokenBucket(rule.Rate, rule.Burst)
+		limiters[rule.PathPrefix] = newClientLimiter(rule.Rate, rule.Burst)
 	}
 
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 		for prefix, limiter := range limiters {
 			if strings.HasPrefix(path, prefix) {
-				if !limiter.allow() {
+				key := prefix + "\x00" + c.ClientIP()
+				if !limiter.get(key).allow() {
 					c.JSON(http.StatusTooManyRequests, gin.H{
 						"code":    429,
 						"message": "该接口请求过于频繁，请稍后再试",
