@@ -325,7 +325,7 @@ func (r *ModelRepository) GetDeviceModelInfo(ctx context.Context, sn string) (mo
 
 func (r *ModelRepository) GetUserAllowedSNs(ctx context.Context, userID int64) ([]string, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT device_sn FROM user_device_rel WHERE user_id = $1`, userID)
+		SELECT device_sn FROM v_user_device_access WHERE user_id = $1`, userID)
 	if err != nil {
 		return nil, err
 	}

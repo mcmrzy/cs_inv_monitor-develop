@@ -182,14 +182,14 @@ const ModelsPage: React.FC = () => {
     mutationFn: ({ fieldKey, data }: { fieldKey: string; data: Partial<ModelFieldCapability> }) =>
       modelApi.updateFieldCapability(currentModelId!, fieldKey, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelFieldCapabilities', currentModelId] }),
-    onError: () => messageApi.error('更新字段能力失败'),
+    onError: () => messageApi.error(t('models.capabilityUpdateFailed')),
   })
 
   const updateCommandCapabilityMut = useMutation({
     mutationFn: ({ commandCode, data }: { commandCode: string; data: Partial<ModelCommandCapability> }) =>
       modelApi.updateCommandCapability(currentModelId!, commandCode, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['modelCommandCapabilities', currentModelId] }),
-    onError: () => messageApi.error('更新控制能力失败'),
+    onError: () => messageApi.error(t('models.commandSaveFailed')),
   })
 
   const groupedFields = useMemo(() => {
@@ -567,58 +567,58 @@ const ModelsPage: React.FC = () => {
           items={[
             {
               key: 'fields',
-              label: <span><EyeOutlined /> 监测字段</span>,
+              label: <span><EyeOutlined /> {t('models.monitorFields')}</span>,
               children: <Table<ModelFieldCapability>
                 rowKey="id"
                 size="small"
                 pagination={false}
                 dataSource={fieldCapabilities}
                 columns={[
-                  { title: '标准字段', dataIndex: 'field_key', width: 190 },
-                  { title: '分组', dataIndex: 'group_code', width: 100 },
-                  { title: '类型', dataIndex: 'field_type', width: 90 },
-                  { title: '单位', dataIndex: 'display_unit', width: 80, render: (v, r) => v || r.base_unit || '-' },
-                  { title: '实时', dataIndex: 'show_realtime', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_realtime: checked } })} /> },
-                  { title: '历史', dataIndex: 'show_history', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_history: checked } })} /> },
-                  { title: '对比', dataIndex: 'allow_compare', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_compare: checked } })} /> },
-                  { title: '告警', dataIndex: 'allow_alarm_rule', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_alarm_rule: checked } })} /> },
+                  { title: t('models.standardField'), dataIndex: 'field_key', width: 190 },
+                  { title: t('models.group'), dataIndex: 'group_code', width: 100 },
+                  { title: t('models.type'), dataIndex: 'field_type', width: 90 },
+                  { title: t('models.unit'), dataIndex: 'display_unit', width: 80, render: (v, r) => v || r.base_unit || '-' },
+                  { title: t('models.realtime'), dataIndex: 'show_realtime', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_realtime: checked } })} /> },
+                  { title: t('models.history'), dataIndex: 'show_history', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_history: checked } })} /> },
+                  { title: t('models.compare'), dataIndex: 'allow_compare', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_compare: checked } })} /> },
+                  { title: t('models.alert'), dataIndex: 'allow_alarm_rule', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_alarm_rule: checked } })} /> },
                 ]}
-                locale={{ emptyText: <Empty description="暂无新版字段能力，请先执行数据库迁移" /> }}
+                locale={{ emptyText: <Empty description={t('models.noFieldCapabilities')} /> }}
               />,
             },
             {
               key: 'commands',
-              label: <span><ControlOutlined /> 控制能力</span>,
+              label: <span><ControlOutlined /> {t('models.controlCapabilities')}</span>,
               children: <Table<ModelCommandCapability>
                 rowKey="id" size="small" pagination={false} dataSource={commandCapabilities}
                 columns={[
-                  { title: '命令编码', dataIndex: 'command_code', width: 220 },
-                  { title: '风险', dataIndex: 'risk_level', width: 80, render: v => <Tag color={v === 3 ? 'red' : v === 2 ? 'orange' : 'blue'}>L{v}</Tag> },
-                  { title: '超时', dataIndex: 'timeout_seconds', width: 90, render: v => `${v}s` },
-                  { title: '要求在线', dataIndex: 'requires_online', width: 90, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { requires_online: checked } })} /> },
-                  { title: '启用', dataIndex: 'is_enabled', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { is_enabled: checked } })} /> },
-                  { title: '参数规则', dataIndex: 'parameter_schema', render: v => <Text code>{JSON.stringify(v)}</Text> },
+                  { title: t('models.commandCode'), dataIndex: 'command_code', width: 220 },
+                  { title: t('models.risk'), dataIndex: 'risk_level', width: 80, render: v => <Tag color={v === 3 ? 'red' : v === 2 ? 'orange' : 'blue'}>L{v}</Tag> },
+                  { title: t('models.timeout'), dataIndex: 'timeout_seconds', width: 90, render: v => `${v}s` },
+                  { title: t('models.onlineRequired'), dataIndex: 'requires_online', width: 90, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { requires_online: checked } })} /> },
+                  { title: t('common.enabled'), dataIndex: 'is_enabled', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { is_enabled: checked } })} /> },
+                  { title: t('models.parameterSchema'), dataIndex: 'parameter_schema', render: v => <Text code>{JSON.stringify(v)}</Text> },
                 ]}
               />,
             },
             {
               key: 'protocol',
-              label: <span><ApiOutlined /> 协议版本</span>,
+              label: <span><ApiOutlined /> {t('models.protocolVersions')}</span>,
               children: <>
                 <Descriptions size="small" bordered column={2} style={{ marginBottom: 12 }}>
-                  <Descriptions.Item label="协议">{protocolSchema?.protocol_code ?? '-'}</Descriptions.Item>
-                  <Descriptions.Item label="版本">{protocolSchema?.version ?? '-'}</Descriptions.Item>
-                  <Descriptions.Item label="状态"><Tag color="green">{protocolSchema?.status ?? '-'}</Tag></Descriptions.Item>
+                  <Descriptions.Item label={t('models.protocol')}>{protocolSchema?.protocol_code ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label={t('models.version')}>{protocolSchema?.version ?? '-'}</Descriptions.Item>
+                  <Descriptions.Item label={t('common.status')}><Tag color="green">{protocolSchema?.status ?? '-'}</Tag></Descriptions.Item>
                   <Descriptions.Item label="Schema Hash">{protocolSchema?.schema_hash ?? '-'}</Descriptions.Item>
                 </Descriptions>
                 <Table rowKey={(r: any) => `${r.group_code}-${r.field_index}`} size="small" pagination={false}
                   dataSource={protocolSchema?.fields ?? []}
                   columns={[
-                    { title: '数组', dataIndex: 'group_code', width: 90 },
-                    { title: '下标', dataIndex: 'field_index', width: 70 },
-                    { title: '标准字段', dataIndex: 'field_key', width: 220 },
-                    { title: '线类型', dataIndex: 'wire_type', width: 100 },
-                    { title: '范围', render: (_: any, r: any) => `${r.minimum ?? '-'} ~ ${r.maximum ?? '-'}` },
+                    { title: t('models.arrayGroup'), dataIndex: 'group_code', width: 90 },
+                    { title: t('models.index'), dataIndex: 'field_index', width: 70 },
+                    { title: t('models.standardField'), dataIndex: 'field_key', width: 220 },
+                    { title: t('models.wireType'), dataIndex: 'wire_type', width: 100 },
+                    { title: t('models.range'), render: (_: any, r: any) => `${r.minimum ?? '-'} ~ ${r.maximum ?? '-'}` },
                   ]}
                 />
               </>,

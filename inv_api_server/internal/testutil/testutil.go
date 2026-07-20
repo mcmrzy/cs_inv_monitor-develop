@@ -246,13 +246,13 @@ type AlarmRepo interface {
 
 // AlarmListParams 告警列表查询参数（与 repository.AlarmListParams 对应）
 type AlarmListParams struct {
-	UserID    int64
-	Role      int
-	DeviceSN  string
+	UserID     int64
+	Role       int
+	DeviceSN   string
 	AlarmLevel int
-	Status    int
-	Page      int
-	PageSize  int
+	Status     int
+	Page       int
+	PageSize   int
 }
 
 // ModelRepo 设备型号数据访问接口
@@ -284,8 +284,8 @@ type OTARepo interface {
 	GetActiveUpgradeBySN(ctx context.Context, deviceSN string) (*model.DeviceUpgrade, error)
 	UpdateUpgradeStatusByID(ctx context.Context, upgradeID int64, status string, progress int, errMsg string) error
 	UpdateUpgradeStatus(ctx context.Context, deviceSN string, status string, progress int, errMsg string) (int64, error)
-	ListUpgradesByFirmware(ctx context.Context, page, pageSize int) ([]model.DeviceUpgrade, int, error)
-	ListUpgradesByFirmwareID(ctx context.Context, firmwareID int64) ([]model.DeviceUpgrade, error)
+	ListUpgradesByFirmware(ctx context.Context, userID int64, page, pageSize int) ([]model.DeviceUpgrade, int, error)
+	ListUpgradesByFirmwareID(ctx context.Context, userID, firmwareID int64) ([]model.DeviceUpgrade, error)
 	DeleteUpgradesByFirmwareID(ctx context.Context, firmwareID int64) error
 	GetDeviceUpgradeHistory(ctx context.Context, deviceSN string, page, pageSize int) ([]model.DeviceUpgrade, int, error)
 	RetryFailedUpgrades(ctx context.Context, firmwareID int64, deviceSNs []string) error

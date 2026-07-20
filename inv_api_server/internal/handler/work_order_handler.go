@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/internal/service"
 	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
@@ -27,17 +28,18 @@ type WorkOrderHandler struct {
 }
 
 type workOrderRequest struct {
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	Status        string `json:"status"`
-	Priority      string `json:"priority"`
-	DeviceSN      string `json:"device_sn"`
-	DeviceSNCamel string `json:"deviceSn"`
-	TemplateType  string `json:"template_type"`
-	TemplateCamel string `json:"templateType"`
-	Resolution    string `json:"resolution"`
-	AssignedTo    *int64 `json:"assigned_to"`
-	AssigneeID    *int64 `json:"assigneeId"`
+	Title           string `json:"title"`
+	Description     string `json:"description"`
+	Status          string `json:"status"`
+	Priority        string `json:"priority"`
+	DeviceSN        string `json:"device_sn"`
+	DeviceSNCamel   string `json:"deviceSn"`
+	TemplateType    string `json:"template_type"`
+	TemplateCamel   string `json:"templateType"`
+	Resolution      string `json:"resolution"`
+	AssignedTo      *int64 `json:"assigned_to"`
+	AssigneeID      *int64 `json:"assigneeId"`
+	ExpectedVersion *int64 `json:"expectedVersion"`
 }
 
 func NewWorkOrderHandler(db *pgxpool.Pool) *WorkOrderHandler {
@@ -52,7 +54,24 @@ const workOrderJSON = `jsonb_build_object(
 	'templateType',COALESCE(w.template_type,''),'template_type',COALESCE(w.template_type,''),
 	'resolution',COALESCE(w.resolution,''),'slaDeadline',w.sla_deadline,'sla_deadline',w.sla_deadline,
 	'slaOverdueCount',w.sla_overdue_count,'sla_overdue_count',w.sla_overdue_count,
-	'escalatedCount',w.escalated_count,'createdAt',w.created_at,'updatedAt',w.updated_at)`
+	'escalatedCount',w.escalated_count,'lockVersion',w.lock_version,'createdAt',w.created_at,'updatedAt',w.updated_at)`
+
+func workOrderDataScope(alias string, role, userArg int) string {
+	userParam := "$" + strconv.Itoa(userArg)
+	switch role {
+	case service.RoleSuperAdmin:
+		return userParam + " = " + userParam
+	case service.RoleGeneralAgent, service.RoleAgent, service.RoleDealer:
+		return "(" + alias + ".creator_id IN (SELECT descendant_id FROM v_user_hierarchy WHERE ancestor_id=" + userParam + ")" +
+			" OR " + alias + ".assigned_to IN (SELECT descendant_id FROM v_user_hierarchy WHERE ancestor_id=" + userParam + "))"
+	case service.RoleInstaller:
+		return "(" + alias + ".creator_id=" + userParam + " OR " + alias + ".assigned_to=" + userParam + ")"
+	case service.RoleEndUser:
+		return alias + ".creator_id=" + userParam
+	default:
+		return "FALSE"
+	}
+}
 
 func (h *WorkOrderHandler) List(c *gin.Context) {
 	page := positiveInt(c.DefaultQuery("page", "1"), 1)
@@ -65,20 +84,20 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 	}
 	status, priority := c.Query("status"), c.Query("priority")
 	userID := middleware.GetUserID(c)
-	isAdmin := middleware.GetRole(c) == 0
+	role := middleware.GetRole(c)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	filter := `($1 OR w.creator_id=$2 OR w.assigned_to=$2) AND ($3='' OR w.status=$3) AND ($4='' OR w.priority=$4)`
+	filter := workOrderDataScope("w", role, 1) + ` AND ($2='' OR w.status=$2) AND ($3='' OR w.priority=$3)`
 	var total int64
-	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM work_orders w WHERE `+filter, isAdmin, userID, status, priority).Scan(&total); err != nil {
+	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM work_orders w WHERE `+filter, userID, status, priority).Scan(&total); err != nil {
 		response.HandleError(c, apperr.Internal("list work orders failed", err))
 		return
 	}
 	rows, err := h.db.Query(ctx, `SELECT `+workOrderJSON+`
 		FROM work_orders w LEFT JOIN users c ON c.id=w.creator_id LEFT JOIN users a ON a.id=w.assigned_to
-		WHERE `+filter+` ORDER BY w.created_at DESC LIMIT $5 OFFSET $6`,
-		isAdmin, userID, status, priority, pageSize, (page-1)*pageSize)
+		WHERE `+filter+` ORDER BY w.created_at DESC LIMIT $4 OFFSET $5`,
+		userID, status, priority, pageSize, (page-1)*pageSize)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("list work orders failed", err))
 		return
@@ -102,7 +121,8 @@ func (h *WorkOrderHandler) GetByID(c *gin.Context) {
 	err := h.db.QueryRow(c.Request.Context(), `SELECT `+workOrderJSON+` || jsonb_build_object(
 		'timeline',COALESCE((SELECT jsonb_agg(jsonb_build_object('status',e.status,'operator',COALESCE(u.nickname,u.phone,u.email,''),'timestamp',e.created_at,'remark',e.remark) ORDER BY e.created_at) FROM work_order_events e LEFT JOIN users u ON u.id=e.operator_id WHERE e.work_order_id=w.id),'[]'::jsonb),
 		'attachments',COALESCE((SELECT jsonb_agg(jsonb_build_object('name',x.file_name,'url',x.file_url,'type',x.mime_type,'uploadedAt',x.created_at) ORDER BY x.created_at) FROM work_order_attachments x WHERE x.work_order_id=w.id),'[]'::jsonb))
-		FROM work_orders w LEFT JOIN users c ON c.id=w.creator_id LEFT JOIN users a ON a.id=w.assigned_to WHERE w.id::text=$1`, id).Scan(&raw)
+		FROM work_orders w LEFT JOIN users c ON c.id=w.creator_id LEFT JOIN users a ON a.id=w.assigned_to
+		WHERE w.id::text=$1 AND `+workOrderDataScope("w", middleware.GetRole(c), 2), id, middleware.GetUserID(c)).Scan(&raw)
 	if err == pgx.ErrNoRows {
 		response.HandleError(c, apperr.NotFound("work order not found"))
 		return
@@ -121,12 +141,12 @@ func (h *WorkOrderHandler) GetByID(c *gin.Context) {
 
 func (h *WorkOrderHandler) GetStatistics(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	isAdmin := middleware.GetRole(c) == 0
+	role := middleware.GetRole(c)
 	var open, inProgress, resolved, closed int64
 	err := h.db.QueryRow(c.Request.Context(), `SELECT
 		COUNT(*) FILTER(WHERE status='open'),COUNT(*) FILTER(WHERE status='in_progress'),
 		COUNT(*) FILTER(WHERE status='resolved'),COUNT(*) FILTER(WHERE status='closed')
-		FROM work_orders WHERE $1 OR creator_id=$2 OR assigned_to=$2`, isAdmin, userID).
+		FROM work_orders w WHERE `+workOrderDataScope("w", role, 1), userID).
 		Scan(&open, &inProgress, &resolved, &closed)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("work order statistics failed", err))
@@ -181,8 +201,10 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 		device_sn=COALESCE(NULLIF($6,''),device_sn),assigned_to=COALESCE($7,assigned_to),
 		resolution=COALESCE(NULLIF($8,''),resolution),updated_at=NOW(),
 		resolved_at=CASE WHEN $4='resolved' THEN NOW() ELSE resolved_at END,
-		closed_at=CASE WHEN $4='closed' THEN NOW() ELSE closed_at END WHERE id::text=$1`,
-		c.Param("id"), req.Title, req.Description, req.Status, req.Priority, req.DeviceSN, req.AssignedTo, req.Resolution)
+		closed_at=CASE WHEN $4='closed' THEN NOW() ELSE closed_at END,
+		lock_version=lock_version+1 WHERE id::text=$1 AND `+workOrderDataScope("work_orders", middleware.GetRole(c), 9)+`
+		AND ($10::bigint IS NULL OR lock_version=$10)`,
+		c.Param("id"), req.Title, req.Description, req.Status, req.Priority, req.DeviceSN, req.AssignedTo, req.Resolution, middleware.GetUserID(c), req.ExpectedVersion)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("update work order failed", err))
 		return
@@ -202,7 +224,9 @@ func (h *WorkOrderHandler) Escalate(c *gin.Context) {
 	err := h.db.QueryRow(c.Request.Context(), `UPDATE work_orders SET
 		priority=CASE priority WHEN 'low' THEN 'medium' WHEN 'medium' THEN 'high' ELSE 'urgent' END,
 		escalated_count=escalated_count+1,sla_overdue_count=sla_overdue_count+1,updated_at=NOW()
-		WHERE id::text=$1 AND status NOT IN('resolved','closed') RETURNING status`, c.Param("id")).Scan(&status)
+		escalated_at=NOW(),lock_version=lock_version+1
+		WHERE id::text=$1 AND status NOT IN('resolved','closed') AND `+workOrderDataScope("work_orders", middleware.GetRole(c), 2)+`
+		RETURNING status`, c.Param("id"), middleware.GetUserID(c)).Scan(&status)
 	if err == pgx.ErrNoRows {
 		response.HandleError(c, apperr.BadRequest("work order cannot be escalated"))
 		return
@@ -216,6 +240,15 @@ func (h *WorkOrderHandler) Escalate(c *gin.Context) {
 }
 
 func (h *WorkOrderHandler) UploadAttachments(c *gin.Context) {
+	var allowed bool
+	if err := h.db.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM work_orders w WHERE w.id::text=$1 AND `+workOrderDataScope("w", middleware.GetRole(c), 2)+`)`, c.Param("id"), middleware.GetUserID(c)).Scan(&allowed); err != nil {
+		response.HandleError(c, apperr.Internal("validate work order scope failed", err))
+		return
+	}
+	if !allowed {
+		response.HandleError(c, apperr.NotFound("work order not found"))
+		return
+	}
 	form, err := c.MultipartForm()
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid multipart request"))
@@ -270,6 +303,32 @@ func (h *WorkOrderHandler) UploadAttachments(c *gin.Context) {
 	response.Success(c, gin.H{"urls": urls})
 }
 
+func (h *WorkOrderHandler) DownloadAttachment(c *gin.Context) {
+	var fileURL, mimeType, fileName string
+	err := h.db.QueryRow(c.Request.Context(), `
+		SELECT attachment.file_url, attachment.mime_type, attachment.file_name
+		FROM work_order_attachments attachment
+		JOIN work_orders w ON w.id=attachment.work_order_id
+		WHERE w.id::text=$1 AND attachment.id::text=$2 AND `+workOrderDataScope("w", middleware.GetRole(c), 3),
+		c.Param("id"), c.Param("attachmentId"), middleware.GetUserID(c)).Scan(&fileURL, &mimeType, &fileName)
+	if err == pgx.ErrNoRows {
+		response.HandleError(c, apperr.NotFound("attachment not found"))
+		return
+	}
+	if err != nil {
+		response.HandleError(c, apperr.Internal("load attachment failed", err))
+		return
+	}
+	storedName := filepath.Base(fileURL)
+	if storedName == "." || storedName == "" {
+		response.HandleError(c, apperr.NotFound("attachment not found"))
+		return
+	}
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(fileName)))
+	c.Header("Content-Type", mimeType)
+	c.File(filepath.Join(h.uploadRoot, storedName))
+}
+
 func (h *WorkOrderHandler) Delete(c *gin.Context) {
 	rows, queryErr := h.db.Query(c.Request.Context(), `SELECT file_url FROM work_order_attachments WHERE work_order_id::text=$1`, c.Param("id"))
 	attachmentFiles := make([]string, 0)
@@ -282,7 +341,7 @@ func (h *WorkOrderHandler) Delete(c *gin.Context) {
 		}
 		rows.Close()
 	}
-	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM work_orders WHERE id::text=$1`, c.Param("id"))
+	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM work_orders WHERE id::text=$1 AND `+workOrderDataScope("work_orders", middleware.GetRole(c), 2), c.Param("id"), middleware.GetUserID(c))
 	if err != nil {
 		response.HandleError(c, apperr.Internal("delete work order failed", err))
 		return

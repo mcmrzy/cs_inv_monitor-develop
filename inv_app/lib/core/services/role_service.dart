@@ -18,9 +18,11 @@ class NavItem {
 
 class RoleService {
   static const int roleSuperAdmin = 0;
-  static const int roleAgent = 1;
-  static const int roleInstaller = 2;
-  static const int roleEndUser = 3;
+  static const int roleGeneralAgent = 1;
+  static const int roleAgent = 2;
+  static const int roleDealer = 3;
+  static const int roleInstaller = 4;
+  static const int roleEndUser = 5;
 
   static List<NavItem> getNavItems(int role, {List<String>? labels}) {
     final l = labels ?? const ['Home', 'Overview', 'Device', 'Alarm', 'Profile'];
@@ -34,15 +36,15 @@ class RoleService {
   }
 
   static bool hasOtaAccess(int role) {
-    return role == roleSuperAdmin;
+    return role >= roleSuperAdmin && role <= roleEndUser;
   }
 
   static bool hasStatisticsAccess(int role) {
-    return role == roleSuperAdmin || role == roleAgent || role == roleInstaller;
+    return role >= roleSuperAdmin && role <= roleEndUser;
   }
 
   static bool canManageDevices(int role) {
-    return role == roleSuperAdmin || role == roleAgent || role == roleInstaller;
+    return role >= roleSuperAdmin && role <= roleEndUser;
   }
 
   static bool isInstaller(int role) {
@@ -50,7 +52,7 @@ class RoleService {
   }
 
   static bool isAgent(int role) {
-    return role == roleAgent;
+    return role >= roleGeneralAgent && role <= roleDealer;
   }
 
   static bool isEndUser(int role) {
@@ -61,8 +63,12 @@ class RoleService {
     switch (role) {
       case roleSuperAdmin:
         return 'Admin';
+      case roleGeneralAgent:
+        return 'General Agent';
       case roleAgent:
         return 'Agent';
+      case roleDealer:
+        return 'Dealer';
       case roleInstaller:
         return 'Installer';
       case roleEndUser:

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -37,18 +39,22 @@ void main() async {
   // 提前创建 NotificationBloc 实例，用于接收 JPush 事件
   final notificationBloc = getIt<NotificationBloc>();
   getIt<JPushService>().onNotificationReceived = (notification) {
-    notificationBloc.add(JPushNotificationReceived(
-      notifyType: notification.notifyType,
-      deviceSn: notification.deviceSn,
-      title: notification.title,
-      content: notification.content,
-    ),);
+    notificationBloc.add(
+      JPushNotificationReceived(
+        notifyType: notification.notifyType,
+        deviceSn: notification.deviceSn,
+        title: notification.title,
+        content: notification.content,
+      ),
+    );
   };
   getIt<JPushService>().onNotificationOpened = (notification) {
-    notificationBloc.add(JPushNotificationTapped(
-      notifyType: notification.notifyType,
-      deviceSn: notification.deviceSn,
-    ),);
+    notificationBloc.add(
+      JPushNotificationTapped(
+        notifyType: notification.notifyType,
+        deviceSn: notification.deviceSn,
+      ),
+    );
   };
 
   runApp(InvApp(notificationBloc: notificationBloc));
@@ -65,18 +71,25 @@ class InvApp extends StatefulWidget {
 
 class _InvAppState extends State<InvApp> {
   Locale _currentLocale = const Locale('zh', 'CN');
+  StreamSubscription<Locale>? _localeSubscription;
 
   @override
   void initState() {
     super.initState();
     _currentLocale = getIt<LocaleService>().currentLocale;
-    getIt<LocaleService>().localeStream.listen((locale) {
+    _localeSubscription = getIt<LocaleService>().localeStream.listen((locale) {
       if (mounted) {
         setState(() {
           _currentLocale = locale;
         });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _localeSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -108,7 +121,8 @@ class _InvAppState extends State<InvApp> {
         splitScreenMode: true,
         builder: (context, child) {
           return MaterialApp.router(
-            title: AppConfig.appName,
+            onGenerateTitle: (context) =>
+                AppLocalizations.of(context)?.brandName ?? AppConfig.appName,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.light,
             darkTheme: AppTheme.dark,

@@ -158,6 +158,7 @@ func TestErrorHandler_Returns502(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadGateway, rec.Code)
 	assert.Contains(t, rec.Body.String(), "502")
+	assert.NotContains(t, rec.Body.String(), "127.0.0.1:1")
 }
 
 // ===================== Integration: proxy to test server =====================

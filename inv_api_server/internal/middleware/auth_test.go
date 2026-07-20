@@ -285,7 +285,7 @@ func TestCORS_不匹配的Origin不设置AllowOrigin(t *testing.T) {
 	assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
 }
 
-func TestCORS_空列表允许所有Origin(t *testing.T) {
+func TestCORS_空列表默认拒绝跨域(t *testing.T) {
 	r := gin.New()
 	r.Use(CORS([]string{}))
 	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
@@ -295,7 +295,24 @@ func TestCORS_空列表允许所有Origin(t *testing.T) {
 	req.Header.Set("Origin", "https://anything.com")
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, w.Header().Get("Access-Control-Allow-Origin"))
+}
+
+func TestAuth_RefreshToken不能作为AccessToken(t *testing.T) {
+	jwtSvc, mr := setupJWTService(t)
+	defer mr.Close()
+
+	_, refreshToken, err := jwtSvc.GenerateToken(1, "13800138000", 5)
+	require.NoError(t, err)
+	r := gin.New()
+	r.Use(Auth(jwtSvc))
+	r.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+refreshToken)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestCORS_OPTIONS请求返回204(t *testing.T) {
@@ -414,7 +431,7 @@ func TestGetUserID_类型不匹配返回0(t *testing.T) {
 	assert.Equal(t, int64(0), got)
 }
 
-func TestGetRole_不存在返回0(t *testing.T) {
+func TestGetRole_不存在返回无效角色(t *testing.T) {
 	r := gin.New()
 	var got int
 	r.GET("/test", func(c *gin.Context) {
@@ -425,7 +442,7 @@ func TestGetRole_不存在返回0(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
 	r.ServeHTTP(w, req)
-	assert.Equal(t, 0, got)
+	assert.Equal(t, -1, got)
 }
 
 func TestGetPhone_不存在返回空(t *testing.T) {

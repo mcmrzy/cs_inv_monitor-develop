@@ -14,7 +14,10 @@ void main() {
 
   setUp(() {
     mockStorageService = MockStorageService();
-    localeService = LocaleService(mockStorageService);
+    localeService = LocaleService(
+      mockStorageService,
+      systemLocale: () => const Locale('zh', 'CN'),
+    );
   });
 
   tearDown(() {
@@ -46,6 +49,17 @@ void main() {
       expect(locale, const Locale('zh', 'CN'));
     });
 
+    test('uses a supported system locale when no locale was saved', () {
+      when(() => mockStorageService.getLocaleSync()).thenReturn(null);
+      final service = LocaleService(
+        mockStorageService,
+        systemLocale: () => const Locale('en', 'GB'),
+      );
+
+      expect(service.currentLocale, const Locale('en', 'US'));
+      service.dispose();
+    });
+
     test('returns default locale (zh) for unknown locale code', () {
       when(() => mockStorageService.getLocaleSync()).thenReturn('fr');
 
@@ -59,8 +73,7 @@ void main() {
   // ---------------------------------------------------------------------------
   group('switchLocale', () {
     test('saves locale and emits to stream', () async {
-      when(() => mockStorageService.saveLocale(any()))
-          .thenAnswer((_) async {});
+      when(() => mockStorageService.saveLocale(any())).thenAnswer((_) async {});
 
       final completer = Completer<Locale>();
       final sub = localeService.localeStream.listen((locale) {
@@ -79,8 +92,7 @@ void main() {
     });
 
     test('saves zh locale correctly', () async {
-      when(() => mockStorageService.saveLocale(any()))
-          .thenAnswer((_) async {});
+      when(() => mockStorageService.saveLocale(any())).thenAnswer((_) async {});
 
       final completer = Completer<Locale>();
       final sub = localeService.localeStream.listen((locale) {

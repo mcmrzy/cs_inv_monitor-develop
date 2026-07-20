@@ -39,7 +39,9 @@ class _AlarmPageState extends State<AlarmPage> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(l10n.translateError(state.message)), duration: const Duration(seconds: 2)),
+                  SnackBar(
+                      content: Text(l10n.translateError(state.message)),
+                      duration: const Duration(seconds: 2)),
                 );
               }
             });
@@ -54,9 +56,12 @@ class _AlarmPageState extends State<AlarmPage> {
                   Center(
                     child: Column(
                       children: [
-                        Icon(Icons.notifications_none, size: 64.sp, color: AppColors.textHint),
+                        Icon(Icons.notifications_none,
+                            size: 64.sp, color: AppColors.textHint),
                         SizedBox(height: 16.h),
-                        Text(l10n.noAlarms, style: TextStyle(color: AppColors.textHint, fontSize: 16.sp)),
+                        Text(l10n.noAlarms,
+                            style: TextStyle(
+                                color: AppColors.textHint, fontSize: 16.sp)),
                       ],
                     ),
                   ),
@@ -65,16 +70,22 @@ class _AlarmPageState extends State<AlarmPage> {
             }
             return Column(
               children: [
-                if (ds.isFromCache) OfflineDataBanner(
-                  onRetry: () => context.read<AlarmBloc>().add(const AlarmListRequested()),
-                ),
+                if (ds.isFromCache)
+                  OfflineDataBanner(
+                    onRetry: () => context
+                        .read<AlarmBloc>()
+                        .add(const AlarmListRequested()),
+                  ),
                 Expanded(
                   child: StyledRefreshIndicator(
-                    onRefresh: () async => context.read<AlarmBloc>().add(const AlarmListRequested()),
+                    onRefresh: () async => context
+                        .read<AlarmBloc>()
+                        .add(const AlarmListRequested()),
                     child: ListView.builder(
                       padding: EdgeInsets.all(12.w),
                       itemCount: ds.alarms.length,
-                      itemBuilder: (context, index) => _buildAlarmCard(context, ds.alarms[index], l10n),
+                      itemBuilder: (context, index) =>
+                          _buildAlarmCard(context, ds.alarms[index], l10n),
                     ),
                   ),
                 ),
@@ -87,12 +98,16 @@ class _AlarmPageState extends State<AlarmPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 48.sp, color: AppColors.textHint),
+                  Icon(Icons.error_outline,
+                      size: 48.sp, color: AppColors.textHint),
                   SizedBox(height: 12.h),
-                  Text(l10n.translateError(state.message), style: const TextStyle(color: AppColors.textSecondary)),
+                  Text(l10n.translateError(state.message),
+                      style: const TextStyle(color: AppColors.textSecondary)),
                   SizedBox(height: 12.h),
                   FilledButton.icon(
-                    onPressed: () => context.read<AlarmBloc>().add(const AlarmListRequested()),
+                    onPressed: () => context
+                        .read<AlarmBloc>()
+                        .add(const AlarmListRequested()),
                     icon: const Icon(Icons.refresh),
                     label: Text(l10n.retry),
                   ),
@@ -126,7 +141,8 @@ class _AlarmPageState extends State<AlarmPage> {
     }
   }
 
-  Widget _buildAlarmCard(BuildContext context, dynamic alarm, AppLocalizations l10n) {
+  Widget _buildAlarmCard(
+      BuildContext context, dynamic alarm, AppLocalizations l10n) {
     // 优先使用 fault_code 映射实际严重级别
     final faultCode = alarm['fault_code'];
     int parsedCode = -1;
@@ -140,8 +156,10 @@ class _AlarmPageState extends State<AlarmPage> {
         parsedCode = int.tryParse(str) ?? -1;
       }
     }
-    final alarmEntry = parsedCode >= 0 ? AlarmCodeMapping.getEntry(parsedCode) : null;
-    final severity = alarmEntry?.severity ?? _levelToSeverity(alarm['alarm_level']);
+    final alarmEntry =
+        parsedCode >= 0 ? AlarmCodeMapping.getEntry(parsedCode) : null;
+    final severity =
+        alarmEntry?.severity ?? _levelToSeverity(alarm['alarm_level']);
 
     Color levelColor;
     String levelText;
@@ -186,11 +204,14 @@ class _AlarmPageState extends State<AlarmPage> {
                 width: 32.w,
                 height: 32.w,
                 decoration: BoxDecoration(
-                  color: (isRead ? AppColors.textHint : levelColor).withValues(alpha: 0.1),
+                  color: (isRead ? AppColors.textHint : levelColor)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8.r),
                 ),
                 child: Icon(
-                  isRead ? Icons.notifications_none : Icons.warning_amber_rounded,
+                  isRead
+                      ? Icons.notifications_none
+                      : Icons.warning_amber_rounded,
                   size: 18.sp,
                   color: isRead ? AppColors.textHint : levelColor,
                 ),
@@ -207,7 +228,8 @@ class _AlarmPageState extends State<AlarmPage> {
                             alarm['fault_message'] ?? l10n.alarm,
                             style: TextStyle(
                               fontSize: 14.sp,
-                              fontWeight: isRead ? FontWeight.w500 : FontWeight.w600,
+                              fontWeight:
+                                  isRead ? FontWeight.w500 : FontWeight.w600,
                               color: AppColors.textPrimary,
                             ),
                             maxLines: 1,
@@ -216,19 +238,25 @@ class _AlarmPageState extends State<AlarmPage> {
                         ),
                         SizedBox(width: 8.w),
                         Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 6.w, vertical: 2.h),
                           decoration: BoxDecoration(
                             color: levelColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4.r),
                           ),
-                          child: Text(levelText, style: TextStyle(fontSize: 10.sp, fontWeight: FontWeight.w600, color: levelColor)),
+                          child: Text(levelText,
+                              style: TextStyle(
+                                  fontSize: 10.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: levelColor)),
                         ),
                       ],
                     ),
                     SizedBox(height: 4.h),
                     Text(
                       '${l10n.deviceLabel}: ${alarm['device_sn'] ?? '-'}  ${l10n.faultCodeLabel}: ${alarm['fault_code'] ?? '-'}',
-                      style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                      style:
+                          TextStyle(fontSize: 12.sp, color: AppColors.textHint),
                     ),
                   ],
                 ),

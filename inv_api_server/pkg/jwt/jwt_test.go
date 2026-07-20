@@ -54,6 +54,7 @@ func TestParseToken_正常解析(t *testing.T) {
 	assert.Equal(t, int64(42), claims.UserID)
 	assert.Equal(t, "13800138000", claims.Phone)
 	assert.Equal(t, 5, claims.Role)
+	assert.Equal(t, TokenTypeAccess, claims.TokenType)
 	assert.Equal(t, "inv-api-server-test", claims.Issuer)
 }
 
@@ -111,7 +112,7 @@ func TestParseToken_不同Secret无法解析(t *testing.T) {
 
 // ==================== GetJTI ====================
 
-func TestGetJTI_AccessToken的JTI因字段冲突丢失(t *testing.T) {
+func TestGetJTI_AccessToken包含唯一JTI(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
 	token, _, err := j.GenerateToken(1, "13800138000", 5)
@@ -120,15 +121,12 @@ func TestGetJTI_AccessToken的JTI因字段冲突丢失(t *testing.T) {
 	claims, err := j.ParseToken(token)
 	require.NoError(t, err)
 
-	// BUG: Claims.JTI (json:"jti") 与 RegisteredClaims.ID (也序列化为 "jti")
-	// 存在 JSON 字段名冲突。序列化时 Claims.JTI("") 覆盖了 RegisteredClaims.ID 的值，
-	// 导致 JTI 信息丢失。GetJTI 对 access token 始终返回空。
-	assert.Empty(t, claims.ID, "RegisteredClaims.ID 因字段冲突被覆盖为空")
-	assert.Empty(t, claims.JTI, "Claims.JTI 因序列化时为空字符串")
-	assert.Empty(t, j.GetJTI(claims), "GetJTI 对 access token 返回空（已知问题）")
+	assert.NotEmpty(t, claims.ID)
+	assert.Equal(t, claims.ID, j.GetJTI(claims))
+	assert.Equal(t, TokenTypeAccess, claims.TokenType)
 }
 
-func TestGetJTI_RefreshToken的JTI在自定义字段中(t *testing.T) {
+func TestGetJTI_RefreshToken包含唯一JTI(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
 	refreshToken, err := j.GenerateRefreshToken(1, "13800138000", 5)
@@ -138,7 +136,8 @@ func TestGetJTI_RefreshToken的JTI在自定义字段中(t *testing.T) {
 	require.NoError(t, err)
 
 	jti := j.GetJTI(claims)
-	assert.NotEmpty(t, jti, "RefreshToken 的 Claims.JTI 不应为空")
+	assert.NotEmpty(t, jti)
+	assert.Equal(t, TokenTypeRefresh, claims.TokenType)
 }
 
 // ==================== RefreshToken ====================
@@ -146,7 +145,7 @@ func TestGetJTI_RefreshToken的JTI在自定义字段中(t *testing.T) {
 func TestRefreshToken_正常刷新(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
-	token, _, err := j.GenerateToken(1, "13800138000", 5)
+	_, token, err := j.GenerateToken(1, "13800138000", 5)
 	require.NoError(t, err)
 
 	// 等待 1 秒确保时间戳不同（JWT 使用秒级精度）
@@ -158,11 +157,20 @@ func TestRefreshToken_正常刷新(t *testing.T) {
 	assert.NotEqual(t, token, newToken)
 
 	// 新 token 应能正常解析且保留原始用户信息
-	claims, err := j.ParseToken(newToken)
+	claims, err := j.ParseAccessToken(newToken)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), claims.UserID)
 	assert.Equal(t, "13800138000", claims.Phone)
 	assert.Equal(t, 5, claims.Role)
+}
+
+func TestRefreshToken_拒绝AccessToken(t *testing.T) {
+	j := newTestJWT(15 * time.Minute)
+	accessToken, _, err := j.GenerateToken(1, "13800138000", 5)
+	require.NoError(t, err)
+	newToken, err := j.RefreshToken(accessToken)
+	assert.Error(t, err)
+	assert.Empty(t, newToken)
 }
 
 func TestRefreshToken_无效Token返回错误(t *testing.T) {
@@ -183,7 +191,7 @@ func TestGenerateRefreshToken_独立生成(t *testing.T) {
 	assert.NotEmpty(t, refreshToken)
 
 	// refresh token 应能解析
-	claims, err := j.ParseToken(refreshToken)
+	claims, err := j.ParseRefreshToken(refreshToken)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), claims.UserID)
 }

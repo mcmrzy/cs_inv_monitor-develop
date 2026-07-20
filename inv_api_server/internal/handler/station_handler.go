@@ -36,6 +36,13 @@ func NewStationHandler(stationService *service.StationService, deviceService *se
 	}
 }
 
+func (h *StationHandler) canAccessStation(c *gin.Context, stationID int64) (bool, error) {
+	if middleware.GetRole(c) == service.RoleSuperAdmin {
+		return true, nil
+	}
+	return h.stationService.HasAccess(c.Request.Context(), middleware.GetUserID(c), stationID)
+}
+
 type CreateStationRequest struct {
 	Name        string  `json:"name" binding:"required"`
 	Province    string  `json:"province"`
@@ -135,9 +142,6 @@ type UpdateStationRequest struct {
 }
 
 func (h *StationHandler) Update(c *gin.Context) {
-	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid station id"))
@@ -155,8 +159,12 @@ func (h *StationHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// 超级管理员可以修改任意电站
-	if !isAdmin && station.UserID != userID {
+	allowed, accessErr := h.canAccessStation(c, stationID)
+	if accessErr != nil {
+		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		return
+	}
+	if !allowed {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
@@ -227,9 +235,6 @@ func (h *StationHandler) Update(c *gin.Context) {
 }
 
 func (h *StationHandler) Delete(c *gin.Context) {
-	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid station id"))
@@ -247,8 +252,12 @@ func (h *StationHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	// 超级管理员可以删除任意电站
-	if !isAdmin && station.UserID != userID {
+	allowed, accessErr := h.canAccessStation(c, stationID)
+	if accessErr != nil {
+		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		return
+	}
+	if !allowed {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
@@ -262,13 +271,8 @@ func (h *StationHandler) Delete(c *gin.Context) {
 }
 
 func (h *StationHandler) Assign(c *gin.Context) {
+	actorID := middleware.GetUserID(c)
 	role := middleware.GetRole(c)
-	isAdmin := role == 0
-
-	if !isAdmin {
-		response.HandleError(c, apperr.Forbidden("only admin can assign station"))
-		return
-	}
 
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -300,6 +304,33 @@ func (h *StationHandler) Assign(c *gin.Context) {
 		return
 	}
 
+	allowed, accessErr := h.canAccessStation(c, stationID)
+	if accessErr != nil {
+		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		return
+	}
+	if !allowed {
+		response.HandleError(c, apperr.Forbidden("permission denied"))
+		return
+	}
+
+	targetUser, err := h.userService.GetByID(c.Request.Context(), req.UserID)
+	if err != nil || targetUser == nil || targetUser.Status != 1 {
+		response.HandleError(c, apperr.BadRequest("target user not found or disabled"))
+		return
+	}
+	if role != service.RoleSuperAdmin {
+		inScope, scopeErr := h.userService.IsUserInScope(c.Request.Context(), actorID, req.UserID)
+		if scopeErr != nil {
+			response.HandleError(c, apperr.Internal("check user scope failed", scopeErr))
+			return
+		}
+		if !inScope || !service.CanManageRole(role, targetUser.Role) {
+			response.HandleError(c, apperr.Forbidden("target user is outside your management scope"))
+			return
+		}
+	}
+
 	if err := h.stationService.Assign(c.Request.Context(), stationID, req.UserID); err != nil {
 		response.HandleError(c, apperr.Internal("assign station failed", err))
 		return
@@ -309,9 +340,6 @@ func (h *StationHandler) Assign(c *gin.Context) {
 }
 
 func (h *StationHandler) GetByID(c *gin.Context) {
-	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.HandleError(c, apperr.BadRequest("invalid station id"))
@@ -329,8 +357,12 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	// 超级管理员可以访问任意电站
-	if !isAdmin && station.UserID != userID {
+	allowed, accessErr := h.canAccessStation(c, stationID)
+	if accessErr != nil {
+		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		return
+	}
+	if !allowed {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
@@ -457,26 +489,26 @@ func (h *StationHandler) List(c *gin.Context) {
 		totalEnergy, _ := h.deviceService.GetStationEnergySummary(ctx, st.ID, st.Timezone)
 
 		item := map[string]interface{}{
-			"id":                 st.ID,
-			"user_id":            st.UserID,
-			"name":               st.Name,
-			"province":           st.Province,
-			"city":               st.City,
-			"district":           st.District,
-			"address":            st.Address,
-			"capacity":           st.Capacity,
-			"panel_count":        st.PanelCount,
-			"latitude":           st.Latitude,
-			"longitude":          st.Longitude,
-			"timezone":           st.Timezone,
-			"status":             st.Status,
-			"created_at":         st.CreatedAt,
-			"updated_at":         st.UpdatedAt,
-			"device_count":       deviceCount,
-			"online_count":       onlineCount,
-			"fault_count":        faultCount,
-			"today_generation":   todayEnergy,
-			"total_generation":   totalEnergy,
+			"id":               st.ID,
+			"user_id":          st.UserID,
+			"name":             st.Name,
+			"province":         st.Province,
+			"city":             st.City,
+			"district":         st.District,
+			"address":          st.Address,
+			"capacity":         st.Capacity,
+			"panel_count":      st.PanelCount,
+			"latitude":         st.Latitude,
+			"longitude":        st.Longitude,
+			"timezone":         st.Timezone,
+			"status":           st.Status,
+			"created_at":       st.CreatedAt,
+			"updated_at":       st.UpdatedAt,
+			"device_count":     deviceCount,
+			"online_count":     onlineCount,
+			"fault_count":      faultCount,
+			"today_generation": todayEnergy,
+			"total_generation": totalEnergy,
 		}
 		enrichedStations = append(enrichedStations, item)
 	}
@@ -597,14 +629,14 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 		"stations": summaries,
 		"summary": map[string]interface{}{
 			// 前端期望的 camelCase 字段
-			"totalStations":    total,
-			"totalDevices":     totalDeviceCount,
-			"onlineDevices":    totalOnlineCount,
-			"todayGeneration":  totalEnergy,
-			"totalGeneration":  grandTotalEnergy,
-			"monthGeneration":  grandMonthEnergy,
-			"faultDevices":     totalFaultCount,
-			"totalIncome":      totalIncome,
+			"totalStations":   total,
+			"totalDevices":    totalDeviceCount,
+			"onlineDevices":   totalOnlineCount,
+			"todayGeneration": totalEnergy,
+			"totalGeneration": grandTotalEnergy,
+			"monthGeneration": grandMonthEnergy,
+			"faultDevices":    totalFaultCount,
+			"totalIncome":     totalIncome,
 			// 兼容旧的 snake_case 字段
 			"today_energy": totalEnergy,
 			"total_energy": grandTotalEnergy,
@@ -627,16 +659,17 @@ func (h *StationHandler) GetStatistics(c *gin.Context) {
 		return
 	}
 
-	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil || station == nil {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}
-	// 超级管理员可以访问任意电站的统计数据
-	if !isAdmin && station.UserID != userID {
+	allowed, accessErr := h.canAccessStation(c, stationID)
+	if accessErr != nil {
+		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		return
+	}
+	if !allowed {
 		response.HandleError(c, apperr.Forbidden("permission denied"))
 		return
 	}

@@ -3,10 +3,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/internal/service"
 	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
@@ -37,6 +39,51 @@ func NewAlertRuleHandler(db *pgxpool.Pool) *AlertRuleHandler {
 	return &AlertRuleHandler{db: db}
 }
 
+func alertRuleDataScope(alias string, role, userArg int) string {
+	userParam := "$" + strconv.Itoa(userArg)
+	switch role {
+	case service.RoleSuperAdmin:
+		return userParam + " = " + userParam
+	case service.RoleGeneralAgent, service.RoleAgent, service.RoleDealer:
+		return alias + ".created_by IN (SELECT descendant_id FROM v_user_hierarchy WHERE ancestor_id = " + userParam + ")"
+	case service.RoleInstaller, service.RoleEndUser:
+		return alias + ".created_by = " + userParam
+	default:
+		return "FALSE"
+	}
+}
+
+func validateAlertRuleValues(name string, level int, conditions []map[string]interface{}, deviceSN *string, stationID *int64) error {
+	if name == "" || len(conditions) == 0 {
+		return fmt.Errorf("name and conditions are required")
+	}
+	if level != 0 && (level < 1 || level > 3) {
+		return fmt.Errorf("level must be between 1 and 3")
+	}
+	if deviceSN != nil && stationID != nil {
+		return fmt.Errorf("device_sn and station_id are mutually exclusive")
+	}
+	return nil
+}
+
+func (h *AlertRuleHandler) canTarget(c *gin.Context, deviceSN *string, stationID *int64) (bool, error) {
+	if middleware.GetRole(c) == service.RoleSuperAdmin {
+		return true, nil
+	}
+	userID := middleware.GetUserID(c)
+	var allowed bool
+	switch {
+	case deviceSN != nil:
+		err := h.db.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM v_user_device_access WHERE user_id=$1 AND device_sn=$2)`, userID, *deviceSN).Scan(&allowed)
+		return allowed, err
+	case stationID != nil:
+		err := h.db.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM v_user_station_access WHERE user_id=$1 AND station_id=$2)`, userID, *stationID).Scan(&allowed)
+		return allowed, err
+	default:
+		return true, nil
+	}
+}
+
 func (h *AlertRuleHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize := getPageSize(c, 20)
@@ -50,16 +97,17 @@ func (h *AlertRuleHandler) List(c *gin.Context) {
 	defer cancel()
 
 	userID := middleware.GetUserID(c)
-	isAdmin := middleware.GetRole(c) == 0
+	role := middleware.GetRole(c)
+	scope := alertRuleDataScope("r", role, 1)
 	var total int64
-	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM alert_rules WHERE $1 OR created_by=$2`, isAdmin, userID).Scan(&total); err != nil {
+	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM alert_rules r WHERE `+scope, userID).Scan(&total); err != nil {
 		response.HandleError(c, apperr.Internal("list alert rules failed", err))
 		return
 	}
 	rows, err := h.db.Query(ctx, `
 		SELECT to_jsonb(r) || jsonb_build_object('description', COALESCE(r.conditions->0->>'description',''))
-		FROM alert_rules r WHERE $1 OR r.created_by=$2
-		ORDER BY r.updated_at DESC, r.id DESC LIMIT $3 OFFSET $4`, isAdmin, userID, pageSize, (page-1)*pageSize)
+		FROM alert_rules r WHERE `+scope+`
+		ORDER BY r.updated_at DESC, r.id DESC LIMIT $2 OFFSET $3`, userID, pageSize, (page-1)*pageSize)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("list alert rules failed", err))
 		return
@@ -84,7 +132,7 @@ func (h *AlertRuleHandler) GetByID(c *gin.Context) {
 		return
 	}
 	var raw []byte
-	err := h.db.QueryRow(c.Request.Context(), `SELECT to_jsonb(r) FROM alert_rules r WHERE id=$1`, id).Scan(&raw)
+	err := h.db.QueryRow(c.Request.Context(), `SELECT to_jsonb(r) FROM alert_rules r WHERE id=$1 AND `+alertRuleDataScope("r", middleware.GetRole(c), 2), id, middleware.GetUserID(c)).Scan(&raw)
 	if err == pgx.ErrNoRows {
 		response.HandleError(c, apperr.NotFound("alert rule not found"))
 		return
@@ -103,15 +151,28 @@ func (h *AlertRuleHandler) GetByID(c *gin.Context) {
 
 func (h *AlertRuleHandler) Create(c *gin.Context) {
 	var req alertRuleRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" || len(req.Conditions) == 0 {
+	if err := c.ShouldBindJSON(&req); err != nil {
 		response.HandleError(c, apperr.BadRequest("name and conditions are required"))
+		return
+	}
+	if err := validateAlertRuleValues(req.Name, req.Level, req.Conditions, req.DeviceSN, req.StationID); err != nil {
+		response.HandleError(c, apperr.BadRequest(err.Error()))
+		return
+	}
+	allowed, err := h.canTarget(c, req.DeviceSN, req.StationID)
+	if err != nil {
+		response.HandleError(c, apperr.Internal("validate alert rule scope failed", err))
+		return
+	}
+	if !allowed {
+		response.HandleError(c, apperr.Forbidden("alert rule target is outside your scope"))
 		return
 	}
 	normalizeAlertRule(&req)
 	conditions, _ := json.Marshal(req.Conditions)
 	channels, _ := json.Marshal(req.NotificationChannels)
 	var id int64
-	err := h.db.QueryRow(c.Request.Context(), `
+	err = h.db.QueryRow(c.Request.Context(), `
 		INSERT INTO alert_rules(name,type,station_id,device_sn,conditions,severity,notification_channels,cooldown_minutes,enabled,created_by,created_at,updated_at)
 		VALUES($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8,$9,$10,NOW(),NOW()) RETURNING id`,
 		req.Name, req.Type, req.StationID, req.DeviceSN, conditions, req.Severity, channels,
@@ -133,6 +194,19 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 		response.HandleError(c, apperr.BadRequest("invalid request"))
 		return
 	}
+	if req.DeviceSN != nil && req.StationID != nil {
+		response.HandleError(c, apperr.BadRequest("device_sn and station_id are mutually exclusive"))
+		return
+	}
+	allowed, scopeErr := h.canTarget(c, req.DeviceSN, req.StationID)
+	if scopeErr != nil {
+		response.HandleError(c, apperr.Internal("validate alert rule scope failed", scopeErr))
+		return
+	}
+	if !allowed {
+		response.HandleError(c, apperr.Forbidden("alert rule target is outside your scope"))
+		return
+	}
 	normalizeAlertRule(&req)
 	conditions, _ := json.Marshal(req.Conditions)
 	channels, _ := json.Marshal(req.NotificationChannels)
@@ -145,8 +219,8 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 			notification_channels=CASE WHEN jsonb_array_length($8::jsonb)>0 THEN $8::jsonb ELSE notification_channels END,
 			cooldown_minutes=CASE WHEN $9>0 THEN $9 ELSE cooldown_minutes END,
 			enabled=COALESCE($10,enabled), updated_at=NOW()
-		WHERE id=$1`, id, req.Name, req.Type, req.StationID, req.DeviceSN, conditions,
-		req.Severity, channels, req.CooldownMinutes, req.Enabled)
+		WHERE id=$1 AND `+alertRuleDataScope("alert_rules", middleware.GetRole(c), 11), id, req.Name, req.Type, req.StationID, req.DeviceSN, conditions,
+		req.Severity, channels, req.CooldownMinutes, req.Enabled, middleware.GetUserID(c))
 	if err != nil {
 		response.HandleError(c, apperr.Internal("update alert rule failed", err))
 		return
@@ -163,7 +237,7 @@ func (h *AlertRuleHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM alert_rules WHERE id=$1`, id)
+	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM alert_rules WHERE id=$1 AND `+alertRuleDataScope("alert_rules", middleware.GetRole(c), 2), id, middleware.GetUserID(c))
 	if err != nil {
 		response.HandleError(c, apperr.Internal("delete alert rule failed", err))
 		return

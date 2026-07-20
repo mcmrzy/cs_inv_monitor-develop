@@ -150,6 +150,70 @@ type Alarm struct {
 	CreatedAt    time.Time  `json:"created_at"`
 }
 
+type WorkOrder struct {
+	ID                 int64                   `json:"id"`
+	CreatorID          int64                   `json:"creatorId"`
+	CreatorName        string                  `json:"creatorName"`
+	AssigneeID         *int64                  `json:"assigneeId"`
+	AssigneeName       string                  `json:"assigneeName"`
+	DeviceSN           string                  `json:"deviceSn"`
+	StationID          *int64                  `json:"stationId,omitempty"`
+	Title              string                  `json:"title"`
+	Description        string                  `json:"description"`
+	Priority           string                  `json:"priority"`
+	Status             string                  `json:"status"`
+	TemplateType       string                  `json:"templateType,omitempty"`
+	TemplateTypeLegacy string                  `json:"template_type,omitempty"`
+	Resolution         string                  `json:"resolution,omitempty"`
+	SLADeadline        *time.Time              `json:"slaDeadline,omitempty"`
+	SLADeadlineLegacy  *time.Time              `json:"sla_deadline,omitempty"`
+	SLAOverdueCount    int                     `json:"slaOverdueCount"`
+	SLAOverdueLegacy   int                     `json:"sla_overdue_count"`
+	EscalationCount    int                     `json:"escalationCount"`
+	LockVersion        int                     `json:"lockVersion"`
+	CreatedAt          time.Time               `json:"createdAt"`
+	UpdatedAt          time.Time               `json:"updatedAt"`
+	Timeline           []WorkOrderTimelineItem `json:"timeline,omitempty"`
+	Attachments        []WorkOrderAttachment   `json:"attachments,omitempty"`
+}
+
+func (w *WorkOrder) PopulateCompatibilityFields() {
+	w.TemplateTypeLegacy = w.TemplateType
+	w.SLADeadlineLegacy = w.SLADeadline
+	w.SLAOverdueLegacy = w.SLAOverdueCount
+}
+
+type WorkOrderTimelineItem struct {
+	ID         int64          `json:"id"`
+	Action     string         `json:"action"`
+	Status     string         `json:"status"`
+	OperatorID int64          `json:"operatorId"`
+	Operator   string         `json:"operator"`
+	Timestamp  time.Time      `json:"timestamp"`
+	Remark     string         `json:"remark,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
+}
+
+type WorkOrderAttachment struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	URL         string    `json:"url"`
+	Type        string    `json:"type"`
+	Size        int64     `json:"size"`
+	SHA256      string    `json:"sha256,omitempty"`
+	StoragePath string    `json:"-"`
+	UploadedAt  time.Time `json:"uploadedAt"`
+}
+
+type WorkOrderTemplate struct {
+	TemplateID     string   `json:"templateId"`
+	Title          string   `json:"title"`
+	Description    string   `json:"description"`
+	Priority       string   `json:"priority"`
+	DefaultFields  []string `json:"defaultFields"`
+	EstimatedHours int      `json:"estimatedHours"`
+}
+
 type DeviceShare struct {
 	ID            int64     `json:"id"`
 	DeviceSN      string    `json:"device_sn"`

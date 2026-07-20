@@ -290,8 +290,8 @@ func (m *DeviceStateManager) postInternal(path string, payload interface{}) erro
 // 行：当前状态，列：事件，值：目标状态（-1表示不允许）
 var stateTransitionMatrix = [3][6]DeviceState{
 	// EventOnlineReport, EventOfflineReport, EventFaultDetected, EventFaultRecovered, EventHeartbeatTimeout, EventLWTOffline
-	{StateOnline, -1, StateFault, -1, -1, -1},                                       // 当前: Offline
-	{-1, StateOffline, StateFault, -1, StateOffline, StateOffline},                  // 当前: Online
+	{StateOnline, -1, StateFault, -1, -1, -1},                                        // 当前: Offline
+	{-1, StateOffline, StateFault, -1, StateOffline, StateOffline},                   // 当前: Online
 	{StateOnline, StateOffline, StateFault, StateOnline, StateOffline, StateOffline}, // 当前: Fault (允许 Fault→Online)
 }
 
@@ -300,6 +300,11 @@ var stateTransitionMatrix = [3][6]DeviceState{
 func CanTransition(current DeviceState, event StateTransition) (DeviceState, bool) {
 	if current < 0 || current > 2 || event < 0 || event > 5 {
 		return current, false
+	}
+	// A heartbeat proves connectivity, not fault recovery. Only an explicit
+	// FaultRecovered event may clear the fault state.
+	if current == StateFault && event == EventOnlineReport {
+		return StateFault, true
 	}
 	target := stateTransitionMatrix[current][event]
 	if target == -1 {

@@ -27,6 +27,17 @@ func NewUserRepository(db *pgxpool.Pool, cache *redis.Client) *UserRepository {
 	return &UserRepository{db: db, roleDB: db, cache: cache}
 }
 
+func (r *UserRepository) IsUserInScope(ctx context.Context, actorID, targetID int64) (bool, error) {
+	var allowed bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM v_user_hierarchy
+			WHERE ancestor_id = $1 AND descendant_id = $2
+		)
+	`, actorID, targetID).Scan(&allowed)
+	return allowed, err
+}
+
 type rolePermissionQuerier interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
@@ -548,6 +559,17 @@ const stationListSelectColumns = `id, user_id, name,
 
 func NewStationRepository(db *pgxpool.Pool) *StationRepository {
 	return &StationRepository{db: db}
+}
+
+func (r *StationRepository) HasAccess(ctx context.Context, userID, stationID int64) (bool, error) {
+	var allowed bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM v_user_station_access
+			WHERE user_id = $1 AND station_id = $2
+		)
+	`, userID, stationID).Scan(&allowed)
+	return allowed, err
 }
 
 func (r *StationRepository) Create(ctx context.Context, station *model.Station) error {

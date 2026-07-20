@@ -172,7 +172,7 @@ services:
     build: ../inv-admin-frontend
     container_name: inv-admin-frontend
     ports:
-      - "3000:80"
+      - "3000:8080"
     networks:
       - inv-network
     restart: unless-stopped

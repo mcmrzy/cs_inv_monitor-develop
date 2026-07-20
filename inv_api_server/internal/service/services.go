@@ -98,6 +98,10 @@ func (s *UserService) Delete(ctx context.Context, userID int64) error {
 	return s.repo.Delete(ctx, userID)
 }
 
+func (s *UserService) IsUserInScope(ctx context.Context, actorID, targetID int64) (bool, error) {
+	return s.repo.IsUserInScope(ctx, actorID, targetID)
+}
+
 type JWTService struct {
 	jwt   *jwt.JWT
 	cache *redis.Client
@@ -113,6 +117,14 @@ func (s *JWTService) GenerateToken(userID int64, phone string, role int) (string
 
 func (s *JWTService) ParseToken(token string) (*jwt.Claims, error) {
 	return s.jwt.ParseToken(token)
+}
+
+func (s *JWTService) ParseAccessToken(token string) (*jwt.Claims, error) {
+	return s.jwt.ParseAccessToken(token)
+}
+
+func (s *JWTService) ParseRefreshToken(token string) (*jwt.Claims, error) {
+	return s.jwt.ParseRefreshToken(token)
 }
 
 func (s *JWTService) StoreRefreshToken(ctx context.Context, userID int64, refreshToken string, expireTime time.Duration) error {
@@ -155,23 +167,55 @@ func (s *JWTService) SwapRefreshToken(ctx context.Context, userID int64, oldToke
 }
 
 func (s *JWTService) RevokeAllUserTokens(ctx context.Context, userID int64) error {
-	pattern := fmt.Sprintf("refresh_token:%d:*", userID)
-	keys, err := s.cache.Keys(ctx, pattern).Result()
-	if err != nil {
+	if err := s.cache.Set(ctx, fmt.Sprintf("user_token_revoked_at:%d", userID), time.Now().UTC().UnixMilli(), 0).Err(); err != nil {
 		return err
 	}
-	if len(keys) > 0 {
-		return s.cache.Del(ctx, keys...).Err()
+	pattern := fmt.Sprintf("refresh_token:%d:*", userID)
+	var cursor uint64
+	for {
+		keys, nextCursor, err := s.cache.Scan(ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return err
+		}
+		if len(keys) > 0 {
+			if err := s.cache.Del(ctx, keys...).Err(); err != nil {
+				return err
+			}
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
 	}
 	return nil
 }
 
+func (s *JWTService) IsUserSessionRevoked(ctx context.Context, userID, sessionIAT int64) (bool, error) {
+	if userID <= 0 || sessionIAT <= 0 {
+		return true, nil
+	}
+	cutoff, err := s.cache.Get(ctx, fmt.Sprintf("user_token_revoked_at:%d", userID)).Int64()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return sessionIAT <= cutoff, nil
+}
+
 func (s *JWTService) AddToBlacklist(ctx context.Context, jti string, expireTime time.Duration) error {
+	if strings.TrimSpace(jti) == "" {
+		return fmt.Errorf("token jti is required")
+	}
 	key := fmt.Sprintf("token_blacklist:%s", jti)
 	return s.cache.Set(ctx, key, "1", expireTime).Err()
 }
 
 func (s *JWTService) IsBlacklisted(ctx context.Context, jti string) bool {
+	if strings.TrimSpace(jti) == "" {
+		return true
+	}
 	key := fmt.Sprintf("token_blacklist:%s", jti)
 	exists, err := s.cache.Exists(ctx, key).Result()
 	return err == nil && exists > 0
@@ -306,6 +350,10 @@ func (s *StationService) Assign(ctx context.Context, id int64, userID int64) err
 
 func (s *StationService) GetByID(ctx context.Context, id int64) (*model.Station, error) {
 	return s.repo.GetByID(ctx, id)
+}
+
+func (s *StationService) HasAccess(ctx context.Context, userID, stationID int64) (bool, error) {
+	return s.repo.HasAccess(ctx, userID, stationID)
 }
 
 func (s *StationService) GetByUserID(ctx context.Context, userID int64, page, pageSize int) ([]*model.Station, int64, error) {
