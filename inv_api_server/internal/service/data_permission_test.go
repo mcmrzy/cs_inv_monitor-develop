@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"inv-api-server/internal/model"
 )
 
 type permissionTestRow struct {
@@ -170,9 +171,7 @@ func TestDataPermissionHasDeviceAccessReturnsDatabaseError(t *testing.T) {
 	}
 }
 
-func TestDataPermissionBuildSNFilterDoesNotBypassRoleOneWithoutDevices(t *testing.T) {
-	// User ID 1 represents a role=1 account. DataPermission deliberately does
-	// not treat it as a superuser; only role=0 may bypass at the handler layer.
+func TestDataPermissionBuildSNFilterUsesFixedDatabaseSetPredicate(t *testing.T) {
 	db := &permissionTestDB{owners: map[int64]map[string]bool{}, grants: map[int64]map[string]bool{}, deleted: map[string]bool{}}
 	permission := &DataPermission{pool: db}
 
@@ -180,12 +179,15 @@ func TestDataPermissionBuildSNFilterDoesNotBypassRoleOneWithoutDevices(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filter != "1=0" || len(args) != 0 {
-		t.Fatalf("filter=%q args=%#v, want deny-all", filter, args)
+	if !strings.Contains(filter, "FROM v_user_device_access") || strings.Contains(filter, " IN (") {
+		t.Fatalf("filter must use a database EXISTS relation without expanded SNs: %q", filter)
+	}
+	if len(args) != 1 || args[0] != int64(1) {
+		t.Fatalf("unexpected fixed scalar args: %#v", args)
 	}
 }
 
-func TestDataPermissionBuildSNFilterRoleOneOnlyIncludesBoundDevices(t *testing.T) {
+func TestDataPermissionBuildSNFilterArgumentCountDoesNotGrowWithDevices(t *testing.T) {
 	db := &permissionTestDB{
 		owners:  map[int64]map[string]bool{},
 		grants:  map[int64]map[string]bool{1: {"BOUND-2": true, "BOUND-1": true}},
@@ -197,10 +199,81 @@ func TestDataPermissionBuildSNFilterRoleOneOnlyIncludesBoundDevices(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filter != "sn IN ($1,$2)" {
-		t.Fatalf("filter=%q", filter)
+	if !strings.Contains(filter, "EXISTS") || len(args) != 1 || args[0] != int64(1) {
+		t.Fatalf("filter=%q args=%#v, want a fixed set predicate", filter, args)
 	}
-	if len(args) != 2 || args[0] != "BOUND-1" || args[1] != "BOUND-2" {
-		t.Fatalf("args=%#v, want only bound devices", args)
+}
+
+type fakeChannelDeviceAuthorizer struct {
+	allowed bool
+	err     error
+}
+
+func (a fakeChannelDeviceAuthorizer) Authorize(context.Context, model.ActorContext, model.AuthorizationRequest) (model.AuthorizationDecision, error) {
+	return model.AuthorizationDecision{Allowed: a.allowed}, a.err
+}
+
+type recordedDeviceShadow struct {
+	calls   int
+	legacy  bool
+	channel bool
+	err     error
+}
+
+func (r *recordedDeviceShadow) RecordDeviceDecision(_ context.Context, _ model.ActorContext, _, _ string, legacyAllowed, channelAllowed bool, channelErr error) {
+	r.calls++
+	r.legacy, r.channel, r.err = legacyAllowed, channelAllowed, channelErr
+}
+
+func TestDataPermissionV2ShadowNeverUnionsDecisions(t *testing.T) {
+	actor := model.ActorContext{UserID: 7, RootTenantID: 100, OrganizationID: 101, MembershipID: 1001, MembershipVersion: 1}
+	tests := []struct {
+		name           string
+		legacyAllowed  bool
+		channelAllowed bool
+		want           bool
+	}{
+		{name: "legacy only remains legacy authority", legacyAllowed: true, channelAllowed: false, want: true},
+		{name: "channel only is not unioned", legacyAllowed: false, channelAllowed: true, want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db := &permissionTestDB{
+				owners: map[int64]map[string]bool{7: {"SN-1": tc.legacyAllowed}},
+				grants: map[int64]map[string]bool{}, deleted: map[string]bool{},
+			}
+			recorder := &recordedDeviceShadow{}
+			permission := &DataPermission{pool: db, authorizer: fakeChannelDeviceAuthorizer{allowed: tc.channelAllowed}, mode: DataPermissionShadow, recorder: recorder}
+			allowed, err := permission.HasDeviceAccessV2(context.Background(), actor, "device:view", "SN-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if allowed != tc.want || recorder.calls != 1 {
+				t.Fatalf("allowed=%v recorder=%+v", allowed, recorder)
+			}
+		})
+	}
+}
+
+func TestDataPermissionV2EnforceUsesOnlyChannelDecisionAndFailsClosed(t *testing.T) {
+	actor := model.ActorContext{UserID: 7, RootTenantID: 100, OrganizationID: 101, MembershipID: 1001, MembershipVersion: 1}
+	db := &permissionTestDB{owners: map[int64]map[string]bool{7: {"SN-1": true}}, grants: map[int64]map[string]bool{}, deleted: map[string]bool{}}
+	permission := &DataPermission{pool: db, authorizer: fakeChannelDeviceAuthorizer{allowed: false}, mode: DataPermissionEnforce}
+	allowed, err := permission.HasDeviceAccessV2(context.Background(), actor, "device:view", "SN-1")
+	if err != nil || allowed {
+		t.Fatalf("allowed=%v err=%v, enforce must use channel deny", allowed, err)
+	}
+
+	wantErr := errors.New("channel unavailable")
+	permission.authorizer = fakeChannelDeviceAuthorizer{allowed: true, err: wantErr}
+	allowed, err = permission.HasDeviceAccessV2(context.Background(), actor, "device:view", "SN-1")
+	if allowed || !errors.Is(err, wantErr) {
+		t.Fatalf("allowed=%v err=%v, enforce error must fail closed", allowed, err)
+	}
+
+	permission.authorizer = nil
+	allowed, err = permission.HasDeviceAccessV2(context.Background(), actor, "device:view", "SN-1")
+	if allowed || !errors.Is(err, ErrChannelAuthorizerUnavailable) {
+		t.Fatalf("allowed=%v err=%v, missing enforce authorizer must fail closed", allowed, err)
 	}
 }
