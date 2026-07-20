@@ -636,6 +636,64 @@ func TestMigration060AuditOutboxContracts(t *testing.T) {
 	})
 }
 
+func TestMigration061ChannelBackfillControlContracts(t *testing.T) {
+	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
+		migration059 := readMigrationFile(t, migrationsDir, "059_create_channel_authorization.up.sql")
+		migration061 := readMigrationFile(t, migrationsDir, "061_create_channel_backfill_control.up.sql")
+		migration061Down := readMigrationFile(t, migrationsDir, "061_create_channel_backfill_control.down.sql")
+		_, err := pool.Exec(ctx, migration059)
+		require.NoError(t, err)
+		for attempt := 1; attempt <= 2; attempt++ {
+			_, err = pool.Exec(ctx, migration061)
+			require.NoError(t, err, "migration 061 execution %d must be idempotent", attempt)
+		}
+
+		for _, table := range []string{
+			"channel_migration_runs", "channel_migration_checkpoints", "channel_migration_items",
+			"channel_migration_entity_map", "channel_migration_shadow_diffs",
+		} {
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, table).Scan(&exists))
+			assert.True(t, exists, "migration 061 must create %s", table)
+		}
+
+		runID := "00000000-0000-4000-8000-000000000061"
+		digest := strings.Repeat("a", 64)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO channel_migration_runs(id,job_name,mapping_digest,source_digest,source_watermark)
+			VALUES($1,'backfill-organizations-v1',$2,$2,10)
+		`, runID, digest)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO channel_migration_checkpoints(run_id,job_name,mapping_digest,next_ordinal)
+			VALUES($1,'backfill-organizations-v1',$2,0)
+		`, runID, digest)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO channel_migration_items(
+				run_id,source_table,source_key,source_user_id,ordinal,source_fingerprint,expected
+			) VALUES($1,'users','1',1,0,$2,'{}'::jsonb)
+		`, runID, digest)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO channel_migration_items(
+				run_id,source_table,source_key,source_user_id,ordinal,source_fingerprint,expected
+			) VALUES($1,'users','2',2,0,$2,'{}'::jsonb)
+		`, runID, digest)
+		require.Error(t, err, "a run must not contain duplicate work ordinals")
+		_, err = pool.Exec(ctx, `UPDATE channel_migration_items SET status='processing' WHERE run_id=$1 AND source_key='1'`, runID)
+		require.Error(t, err, "processing items must always carry a lease owner and expiry")
+
+		_, err = pool.Exec(ctx, migration061Down)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, migration061Down)
+		require.NoError(t, err, "migration 061 down must be idempotent")
+		var runsExist bool
+		require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.channel_migration_runs') IS NOT NULL`).Scan(&runsExist))
+		assert.False(t, runsExist)
+	})
+}
+
 // TestMigration011ModelFieldCompatibility covers both historical table names.
 // The singular table receives its two legacy columns; the canonical plural
 // table already has normalized equivalents and must not be polluted with them.

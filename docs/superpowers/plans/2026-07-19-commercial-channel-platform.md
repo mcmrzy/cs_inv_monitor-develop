@@ -81,6 +81,8 @@
 - Create: `inv_api_server/internal/migration/channel_backfill.go`
 - Create: `inv_api_server/internal/migration/channel_backfill_test.go`
 - Create: `inv_api_server/cmd/channel_migrate/main.go`
+- Create: `database/migrations/061_create_channel_backfill_control.up.sql`
+- Create: `database/migrations/061_create_channel_backfill_control.down.sql`
 - Modify: `inv_api_server/internal/migration/migrator.go`
 
 **Steps:**
@@ -210,12 +212,12 @@
 
 **Files:**
 
-- Create: `database/migrations/061_create_asset_lifecycle.up.sql`
-- Create: `database/migrations/061_create_asset_lifecycle.down.sql`
-- Create: `database/migrations/062_add_tenant_ownership_columns.up.sql`
-- Create: `database/migrations/062_add_tenant_ownership_columns.down.sql`
-- Create: `database/migrations/063_prepare_channel_constraints.up.sql`
-- Create: `database/migrations/063_prepare_channel_constraints.down.sql`
+- Create: `database/migrations/062_create_asset_lifecycle.up.sql`
+- Create: `database/migrations/062_create_asset_lifecycle.down.sql`
+- Create: `database/migrations/063_add_tenant_ownership_columns.up.sql`
+- Create: `database/migrations/063_add_tenant_ownership_columns.down.sql`
+- Create: `database/migrations/064_prepare_channel_constraints.up.sql`
+- Create: `database/migrations/064_prepare_channel_constraints.down.sql`
 - Create: `database/channel-migrate/validate_channel_constraints.sql`
 - Create: `inv_api_server/internal/migration/channel_asset_backfill.go`
 - Create: `inv_api_server/internal/migration/channel_asset_backfill_test.go`
@@ -227,7 +229,7 @@
 - [ ] 先扩展迁移测试，要求 inventory、claim credential、device binding、asset grant、transfer、idempotency response、outbox、审计 TEXT resource ID 和 station/device tenant 列存在。
 - [ ] 增加约束失败断言：双 owner、双 claim credential、双 pending transfer、跨租户 station/device、级联删除和重复幂等键。
 - [ ] 运行 fresh DB 测试观察失败。
-- [ ] 实现 061–063；自动启动迁移只增加资产结构、tenant ownership 列和 `NOT VALID` 约束，绝不在旧数据回填前自动 validate。
+- [ ] 实现 062–064；自动启动迁移只增加资产结构、tenant ownership 列和 `NOT VALID` 约束，绝不在旧数据回填前自动 validate。
 - [ ] 实现可恢复 `backfill-assets`，补 station/device root tenant、organization、owner/binding；只有隔离业务数据为 0 和 shadow diff 为 0 时，显式 `channel_migrate validate-constraints` 才执行 `database/channel-migrate/validate_channel_constraints.sql`。
 - [ ] 运行 fresh DB、历史快照、重复迁移、回填重启和显式 validate SQL 约束测试。
 - [ ] 提交：`feat(db): 建立设备资产生命周期与事务事件模型`。
