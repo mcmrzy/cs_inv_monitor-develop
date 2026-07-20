@@ -3,6 +3,9 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,16 +58,18 @@ func NewOTAService(repo *repository.OTARepository, rdb *redis.Client, deviceServ
 }
 
 type CreateFirmwareReq struct {
-	Model      string
-	TargetChip string
-	Version    string
-	FileURL    string
-	FileSize   int64
-	FileMD5    string
-	FileSHA256 string
-	Changelog  string
-	IsForce    bool
-	UploadedBy int64
+	Model            string
+	TargetChip       string
+	Version          string
+	FileURL          string
+	FileSize         int64
+	FileMD5          string
+	FileSHA256       string
+	SecurityVersion  uint32
+	ReleaseSignature string
+	Changelog        string
+	IsForce          bool
+	UploadedBy       int64
 }
 
 func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq) error {
@@ -99,26 +104,46 @@ func (s *OTAService) CreateFirmware(ctx context.Context, req *CreateFirmwareReq)
 	}
 
 	fw := &model.Firmware{
-		Model:       req.Model,
-		TargetChip:  req.TargetChip,
-		MainVersion: nextMainVersion,
-		Version:     req.Version,
-		FileURL:     req.FileURL,
-		FileSize:    req.FileSize,
-		FileMD5:     req.FileMD5,
-		FileSHA256:  req.FileSHA256,
-		Changelog:   req.Changelog,
-		IsForce:     req.IsForce,
-		UploadedBy:  req.UploadedBy,
+		Model:            req.Model,
+		TargetChip:       req.TargetChip,
+		MainVersion:      nextMainVersion,
+		Version:          req.Version,
+		FileURL:          req.FileURL,
+		FileSize:         req.FileSize,
+		FileMD5:          req.FileMD5,
+		FileSHA256:       req.FileSHA256,
+		SecurityVersion:  req.SecurityVersion,
+		ReleaseSignature: req.ReleaseSignature,
+		Changelog:        req.Changelog,
+		IsForce:          req.IsForce,
+		UploadedBy:       req.UploadedBy,
 	}
 	return s.repo.CreateFirmware(ctx, fw)
 }
 
 var (
-	firmwareTokenPattern  = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
-	firmwareSHA256Pattern = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
-	firmwareMD5Pattern    = regexp.MustCompile(`^[a-fA-F0-9]{32}$`)
+	firmwareTokenPattern   = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	firmwareVersionPattern = regexp.MustCompile(`^[A-Za-z0-9._+\-]{1,31}$`)
+	firmwareSHA256Pattern  = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
+	firmwareMD5Pattern     = regexp.MustCompile(`^[a-fA-F0-9]{32}$`)
 )
+
+const otaReleasePublicKeyHex = "c600cb6b8909f23101306578bd3e27ce8955e18e14dc4849cea5da14e5c787fc"
+
+func verifyFirmwareReleaseSignature(req *CreateFirmwareReq) bool {
+	publicKey, err := hex.DecodeString(otaReleasePublicKeyHex)
+	if err != nil || len(publicKey) != ed25519.PublicKeySize {
+		return false
+	}
+	signature, err := base64.StdEncoding.Strict().DecodeString(req.ReleaseSignature)
+	if err != nil || len(signature) != ed25519.SignatureSize {
+		return false
+	}
+	message := fmt.Sprintf(
+		"CS_INV_OTA_V1\ntarget=%s\nversion=%s\nsize=%d\nsha256=%s\nsecurity_version=%d\n",
+		req.TargetChip, req.Version, req.FileSize, req.FileSHA256, req.SecurityVersion)
+	return ed25519.Verify(ed25519.PublicKey(publicKey), []byte(message), signature)
+}
 
 // ValidateFirmwareRequest applies the same integrity and addressing rules to
 // multipart uploads and JSON-created external firmware records.
@@ -132,7 +157,8 @@ func ValidateFirmwareRequest(req *CreateFirmwareReq) error {
 	req.FileURL = strings.TrimSpace(req.FileURL)
 	req.FileSHA256 = strings.ToLower(strings.TrimSpace(req.FileSHA256))
 	req.FileMD5 = strings.ToLower(strings.TrimSpace(req.FileMD5))
-	if !firmwareTokenPattern.MatchString(req.Model) || !firmwareTokenPattern.MatchString(req.Version) {
+	req.ReleaseSignature = strings.TrimSpace(req.ReleaseSignature)
+	if !firmwareTokenPattern.MatchString(req.Model) || !firmwareVersionPattern.MatchString(req.Version) {
 		return fmt.Errorf("型号或版本号格式无效")
 	}
 	validChip := req.TargetChip == "arm" || req.TargetChip == "esp" || req.TargetChip == "dsp" || req.TargetChip == "bms"
@@ -142,6 +168,9 @@ func ValidateFirmwareRequest(req *CreateFirmwareReq) error {
 	if req.FileSize <= 0 {
 		return fmt.Errorf("固件文件大小必须大于 0")
 	}
+	if req.FileSize > int64(^uint32(0)) {
+		return fmt.Errorf("固件文件大小超出签名协议范围")
+	}
 	if !firmwareSHA256Pattern.MatchString(req.FileSHA256) {
 		return fmt.Errorf("固件 SHA-256 必须是 64 位十六进制字符串")
 	}
@@ -150,6 +179,11 @@ func ValidateFirmwareRequest(req *CreateFirmwareReq) error {
 	}
 	if !(strings.HasPrefix(req.FileURL, "/firmware/") || strings.HasPrefix(req.FileURL, "https://")) {
 		return fmt.Errorf("固件地址必须是 /firmware/ 路径或 HTTPS URL")
+	}
+	if req.TargetChip == "esp" || req.TargetChip == "arm" {
+		if req.SecurityVersion == 0 || !verifyFirmwareReleaseSignature(req) {
+			return fmt.Errorf("ESP/ARM 固件缺少有效的 Ed25519 发布签名或安全版本")
+		}
 	}
 	return nil
 }
@@ -280,18 +314,23 @@ func (s *OTAService) PushUpgrade(ctx context.Context, req *PushUpgradeReq) error
 // SendUpgradeCommand 发送MQTT升级命令到设备
 func (s *OTAService) SendUpgradeCommand(ctx context.Context, du *model.DeviceUpgrade, fw *model.Firmware, downloadURL string) {
 	cmdBody := map[string]interface{}{
+		"v":       1,
+		"t":       time.Now().Unix(),
 		"command": "start",
 		"action":  "start",
 		// task_id is the stable device_upgrades record identifier. Devices must
 		// echo it in cmd_ack/status so concurrent chip upgrades cannot cross-update.
-		"task_id":     strconv.FormatInt(du.ID, 10),
-		"target":      fw.TargetChip,
-		"url":         downloadURL,
-		"version":     fw.Version,
-		"file_md5":    fw.FileMD5,
-		"file_sha256": fw.FileSHA256,
-		"file_size":   fw.FileSize,
-		"upgrade_id":  du.ID,
+		"task_id":          strconv.FormatInt(du.ID, 10),
+		"target":           fw.TargetChip,
+		"url":              downloadURL,
+		"version":          fw.Version,
+		"file_md5":         fw.FileMD5,
+		"sha256":           fw.FileSHA256,
+		"size":             fw.FileSize,
+		"security_version": fw.SecurityVersion,
+		"signature":        fw.ReleaseSignature,
+		"timeout":          300,
+		"upgrade_id":       du.ID,
 	}
 	body, err := json.Marshal(cmdBody)
 	if err != nil {

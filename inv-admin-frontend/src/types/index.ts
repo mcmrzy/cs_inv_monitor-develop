@@ -48,6 +48,8 @@ export interface Firmware {
   fileSize: number
   fileMd5: string
   fileSha256: string
+  security_version: number
+  release_signature: string
   changelog: string
   forceUpdate: boolean
   createdAt: string

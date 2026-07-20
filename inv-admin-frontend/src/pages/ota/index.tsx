@@ -94,6 +94,8 @@ interface FirmwareFormValues {
   targetChip: string
   version: string
   changelog: string
+  securityVersion: number
+  releaseSignature: string
 }
 
 // =================== 任务状态映射 ===================
@@ -914,6 +916,8 @@ const FirmwareTab: React.FC = () => {
       formData.append('model', modelValue)
       formData.append('target_chip', values.targetChip)
       formData.append('version', values.version)
+      formData.append('security_version', String(values.securityVersion))
+      formData.append('release_signature', values.releaseSignature.trim())
       formData.append('changelog', values.changelog || '')
       uploadMutation.mutate(formData)
     } catch { setUploading(false) }
@@ -968,6 +972,7 @@ const FirmwareTab: React.FC = () => {
       },
     },
     { title: t('ota.subVersion'), dataIndex: 'version', key: 'version', width: 100 },
+    { title: '安全版本', dataIndex: 'security_version', key: 'security_version', width: 90 },
     { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (size: number) => formatFileSize(size) },
     { title: 'MD5', dataIndex: 'file_md5', key: 'file_md5', width: 180, ellipsis: true, render: (val: string) => <Tooltip title={val}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span></Tooltip> },
     { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (val: string) => <Tooltip title={val}><span>{val || '-'}</span></Tooltip> },
@@ -1036,6 +1041,15 @@ const FirmwareTab: React.FC = () => {
           </Form.Item>
           <Form.Item name="version" label={t('ota.subVersion')} rules={[{ required: true, message: t('ota.inputSubVersion') }]}>
             <Input placeholder={t('ota.autoFillVersion')} />
+          </Form.Item>
+          <Form.Item name="securityVersion" label="安全版本" rules={[{ required: true, message: '请输入单调递增的安全版本' }]}>
+            <InputNumber min={1} max={4294967295} precision={0} style={{ width: '100%' }} placeholder="例如 6；同一芯片必须递增" />
+          </Form.Item>
+          <Form.Item name="releaseSignature" label="Ed25519 发布签名" rules={[
+            { required: true, message: '请粘贴离线签名工具生成的发布签名' },
+            { pattern: /^[A-Za-z0-9+/]{86}==$/, message: '签名必须是 88 字符标准 Base64' },
+          ]}>
+            <TextArea rows={3} placeholder="离线签名工具输出的 signature 字段；不要在管理端存放私钥" />
           </Form.Item>
           <Form.Item name="changelog" label={t('ota.changelog')}><TextArea rows={3} placeholder={t('ota.inputChangelog')} /></Form.Item>
           <Form.Item label={t('ota.firmwareFile')}>

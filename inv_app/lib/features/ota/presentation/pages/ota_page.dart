@@ -249,6 +249,8 @@ class _OTAPageState extends State<OTAPage> {
     final fileName = info['file_name'] as String? ?? 'firmware_$firmwareId.bin';
     final fileSize = (info['file_size'] as num?)?.toInt();
     final fileSha256 = info['file_sha256'] as String?;
+    final securityVersion = (info['security_version'] as num?)?.toInt();
+    final releaseSignature = info['release_signature'] as String?;
 
     return Padding(
       padding: EdgeInsets.all(16.w),
@@ -410,7 +412,16 @@ class _OTAPageState extends State<OTAPage> {
           ),
           SizedBox(height: 12.h),
           _buildPreDownloadButton(
-              firmwareId, downloadUrl, fileName, fileSize, fileSha256),
+            firmwareId,
+            downloadUrl,
+            fileName,
+            fileSize,
+            fileSha256,
+            targetChip,
+            latestVersion,
+            securityVersion,
+            releaseSignature,
+          ),
           // 查看可用升级包入口
           Padding(
             padding: EdgeInsets.only(top: 12.h),
@@ -462,6 +473,10 @@ class _OTAPageState extends State<OTAPage> {
     String fileName = 'firmware_$firmwareId.bin';
     int? fileSize;
     String? fileSha256;
+    String targetChip = '';
+    String firmwareVersion = '';
+    int? securityVersion;
+    String? releaseSignature;
 
     if (chipsToUpgrade.isNotEmpty) {
       final firstChip = chipsToUpgrade[0] as Map<String, dynamic>;
@@ -471,6 +486,13 @@ class _OTAPageState extends State<OTAPage> {
       fileName = '${chipName}_$target.bin';
       fileSize = (firstChip['file_size'] as num?)?.toInt();
       fileSha256 = firstChip['file_sha256'] as String?;
+      targetChip =
+          (firstChip['target_chip'] ?? firstChip['chip'] ?? '') as String;
+      firmwareVersion = (firstChip['firmware_version'] ??
+          firstChip['target'] ??
+          '') as String;
+      securityVersion = (firstChip['security_version'] as num?)?.toInt();
+      releaseSignature = firstChip['release_signature'] as String?;
     }
 
     return Padding(
@@ -701,7 +723,16 @@ class _OTAPageState extends State<OTAPage> {
           ),
           SizedBox(height: 12.h),
           _buildPreDownloadButton(
-              firmwareId, downloadUrl, fileName, fileSize, fileSha256),
+            firmwareId,
+            downloadUrl,
+            fileName,
+            fileSize,
+            fileSha256,
+            targetChip,
+            firmwareVersion,
+            securityVersion,
+            releaseSignature,
+          ),
           // 查看可用升级包入口
           Padding(
             padding: EdgeInsets.only(top: 12.h),
@@ -782,6 +813,10 @@ class _OTAPageState extends State<OTAPage> {
     String fileName,
     int? expectedSize,
     String? expectedSha256,
+    String targetChip,
+    String firmwareVersion,
+    int? securityVersion,
+    String? releaseSignature,
   ) {
     final l10n = AppLocalizations.of(context)!;
     final isDownloaded = _downloadedCache[firmwareId] ?? false;
@@ -812,9 +847,21 @@ class _OTAPageState extends State<OTAPage> {
                 const Spacer(),
                 GestureDetector(
                   onTap: () {
-                    context.push(
-                      '/ota/${widget.deviceSN}/local?ip=192.168.4.1&firmware_id=$firmwareId&firmware_url=${Uri.encodeComponent(downloadUrl)}&firmware_file_name=${Uri.encodeComponent(fileName)}',
-                    );
+                    final route = Uri(
+                      path: '/ota/${widget.deviceSN}/local',
+                      queryParameters: {
+                        'ip': '192.168.4.1',
+                        'firmware_id': '$firmwareId',
+                        'firmware_url': downloadUrl,
+                        'firmware_file_name': fileName,
+                        'target_chip': targetChip.toLowerCase(),
+                        'firmware_version': firmwareVersion,
+                        'file_sha256': expectedSha256 ?? '',
+                        'security_version': '${securityVersion ?? 0}',
+                        'release_signature': releaseSignature ?? '',
+                      },
+                    ).toString();
+                    context.push(route);
                   },
                   child: Container(
                     padding:

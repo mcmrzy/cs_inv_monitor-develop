@@ -356,6 +356,12 @@ class AppRouter {
               state.uri.queryParameters['firmware_file_name'];
 
           final targetChip = state.uri.queryParameters['target_chip'];
+          final firmwareVersion = state.uri.queryParameters['firmware_version'];
+          final fileSha256 = state.uri.queryParameters['file_sha256'];
+          final securityVersion =
+              int.tryParse(state.uri.queryParameters['security_version'] ?? '');
+          final releaseSignature =
+              state.uri.queryParameters['release_signature'];
 
           return _slidePage(
             state,
@@ -366,6 +372,10 @@ class AppRouter {
               firmwareUrl: firmwareUrl,
               firmwareFileName: firmwareFileName,
               targetChip: targetChip,
+              firmwareVersion: firmwareVersion,
+              fileSha256: fileSha256,
+              securityVersion: securityVersion,
+              releaseSignature: releaseSignature,
             ),
           );
         },

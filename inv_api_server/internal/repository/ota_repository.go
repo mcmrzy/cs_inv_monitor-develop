@@ -22,17 +22,17 @@ func NewOTARepository(db *pgxpool.Pool) *OTARepository {
 
 func (r *OTARepository) CreateFirmware(ctx context.Context, f *model.Firmware) error {
 	return r.db.QueryRow(ctx, `
-		INSERT INTO firmware_versions (model, target_chip, main_version, version, file_url, file_size, file_md5, file_sha256, changelog, is_force, uploaded_by, status, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,1,NOW())
+		INSERT INTO firmware_versions (model, target_chip, main_version, version, file_url, file_size, file_md5, file_sha256, security_version, release_signature, changelog, is_force, uploaded_by, status, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,1,NOW())
 		RETURNING id, created_at
-	`, f.Model, f.TargetChip, f.MainVersion, f.Version, f.FileURL, f.FileSize, f.FileMD5, f.FileSHA256, f.Changelog, f.IsForce, f.UploadedBy).
+	`, f.Model, f.TargetChip, f.MainVersion, f.Version, f.FileURL, f.FileSize, f.FileMD5, f.FileSHA256, f.SecurityVersion, f.ReleaseSignature, f.Changelog, f.IsForce, f.UploadedBy).
 		Scan(&f.ID, &f.CreatedAt)
 }
 
 func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([]model.Firmware, error) {
 	query := `
 		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-		       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
+		       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
 		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,'')
 		FROM firmware_versions WHERE status = 1
 	`
@@ -53,7 +53,7 @@ func (r *OTARepository) ListFirmware(ctx context.Context, modelFilter string) ([
 	for rows.Next() {
 		var f model.Firmware
 		if err := rows.Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-			&f.FileMD5, &f.FileSHA256, &f.Changelog, &f.IsForce, &f.UploadedBy,
+			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
 			&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion); err != nil {
 			continue
 		}
@@ -66,11 +66,11 @@ func (r *OTARepository) GetFirmware(ctx context.Context, id int64) (*model.Firmw
 	var f model.Firmware
 	err := r.db.QueryRow(ctx, `
 		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-		       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
+		       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
 		       COALESCE(updated_at, created_at), COALESCE(target_chip,''), COALESCE(main_version,'')
 		FROM firmware_versions WHERE id = $1
 	`, id).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-		&f.FileMD5, &f.FileSHA256, &f.Changelog, &f.IsForce, &f.UploadedBy,
+		&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
 		&f.Status, &f.CreatedAt, &f.UpdatedAt, &f.TargetChip, &f.MainVersion)
 	return &f, err
 }
@@ -118,7 +118,7 @@ func (r *OTARepository) GetPendingUpgradeForDevice(ctx context.Context, sn strin
 		       COALESCE(du.old_version,''), du.status, COALESCE(du.progress,0), COALESCE(du.error_message,''),
 		       COALESCE(du.retry_count,0), du.pushed_by, du.started_at, du.completed_at, du.created_at, du.updated_at,
 		       f.id, f.model, f.version, f.file_url, COALESCE(f.file_size,0), COALESCE(f.file_md5,''),
-		       COALESCE(f.file_sha256,''), COALESCE(f.changelog,''), f.is_force, COALESCE(f.target_chip,''), COALESCE(f.main_version,'')
+		       COALESCE(f.file_sha256,''), COALESCE(f.security_version,0), COALESCE(f.release_signature,''), COALESCE(f.changelog,''), f.is_force, COALESCE(f.target_chip,''), COALESCE(f.main_version,'')
 		FROM device_upgrades du
 		JOIN firmware_versions f ON du.firmware_id = f.id
 		WHERE du.device_sn = $1 AND du.status = 'pending'
@@ -129,7 +129,7 @@ func (r *OTARepository) GetPendingUpgradeForDevice(ctx context.Context, sn strin
 		&du.OldVersion, &du.Status, &du.Progress, &du.ErrorMessage,
 		&du.RetryCount, &du.PushedBy, &du.StartedAt, &du.CompletedAt, &du.CreatedAt, &du.UpdatedAt,
 		&fw.ID, &fw.Model, &fw.Version, &fw.FileURL, &fw.FileSize, &fw.FileMD5,
-		&fw.FileSHA256, &fw.Changelog, &fw.IsForce, &fw.TargetChip, &fw.MainVersion,
+		&fw.FileSHA256, &fw.SecurityVersion, &fw.ReleaseSignature, &fw.Changelog, &fw.IsForce, &fw.TargetChip, &fw.MainVersion,
 	)
 	if err != nil {
 		return nil, nil, err
@@ -383,13 +383,13 @@ func (r *OTARepository) GetDeviceOTAHistory(ctx context.Context, sn string, page
 
 // DeviceInfo 设备基本信息
 type DeviceInfo struct {
-	SN            string `json:"sn"`
-	Model         string `json:"model"`
-	FirmwareArm   string `json:"firmware_arm"`
-	FirmwareEsp   string `json:"firmware_esp"`
-	FirmwareDSP   string `json:"firmware_dsp"`
-	FirmwareBMS   string `json:"firmware_bms"`
-	MainVersion   string `json:"main_version"`
+	SN          string `json:"sn"`
+	Model       string `json:"model"`
+	FirmwareArm string `json:"firmware_arm"`
+	FirmwareEsp string `json:"firmware_esp"`
+	FirmwareDSP string `json:"firmware_dsp"`
+	FirmwareBMS string `json:"firmware_bms"`
+	MainVersion string `json:"main_version"`
 }
 
 // VersionSummary 生成合并主版本号，如 "V1.2.3.20240510-V1.2.0.20260629"
@@ -471,26 +471,26 @@ func (r *OTARepository) GetLatestFirmware(ctx context.Context, deviceModel strin
 	if targetChip != "" {
 		err = r.db.QueryRow(ctx, `
 			SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-			       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
+			       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
 			       COALESCE(target_chip,''), COALESCE(main_version,'')
 			FROM firmware_versions
 			WHERE target_chip = $1 AND model = $2 AND status = 1
 			ORDER BY created_at DESC
 			LIMIT 1
 		`, targetChip, deviceModel).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-			&f.FileMD5, &f.FileSHA256, &f.Changelog, &f.IsForce, &f.UploadedBy,
+			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
 			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion)
 	} else {
 		err = r.db.QueryRow(ctx, `
 			SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-			       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
+			       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
 			       COALESCE(target_chip,''), COALESCE(main_version,'')
 			FROM firmware_versions
 			WHERE model = $1 AND status = 1
 			ORDER BY created_at DESC
 			LIMIT 1
 		`, deviceModel).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-			&f.FileMD5, &f.FileSHA256, &f.Changelog, &f.IsForce, &f.UploadedBy,
+			&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
 			&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion)
 	}
 	if err != nil {
@@ -512,7 +512,6 @@ func (r *OTARepository) GetLatestMainVersion(ctx context.Context, targetChip str
 	}
 	return mainVersion, nil
 }
-
 
 // ========== App版本管理 ==========
 
@@ -669,7 +668,8 @@ func (r *OTARepository) GetUpgradePackage(ctx context.Context, id int64) (*model
 
 	rows, err := r.db.Query(ctx, `
 		SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
-		       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,'')
+		       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,''),
+		       COALESCE(f.security_version,0), COALESCE(f.release_signature,'')
 		FROM upgrade_package_items upi
 		JOIN firmware_versions f ON upi.firmware_id = f.id
 		WHERE upi.package_id = $1
@@ -683,7 +683,8 @@ func (r *OTARepository) GetUpgradePackage(ctx context.Context, id int64) (*model
 	for rows.Next() {
 		var item model.UpgradePackageItem
 		if err := rows.Scan(&item.ID, &item.PackageID, &item.FirmwareID, &item.TargetChip,
-			&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256); err != nil {
+			&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256,
+			&item.SecurityVersion, &item.ReleaseSignature); err != nil {
 			continue
 		}
 		pkg.Items = append(pkg.Items, item)
@@ -728,7 +729,8 @@ func (r *OTARepository) ListUpgradePackages(ctx context.Context, modelFilter str
 	for i := range result {
 		pkgRows, err := r.db.Query(ctx, `
 			SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
-			       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,'')
+			       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,''),
+			       COALESCE(f.security_version,0), COALESCE(f.release_signature,'')
 			FROM upgrade_package_items upi
 			JOIN firmware_versions f ON upi.firmware_id = f.id
 			WHERE upi.package_id = $1 ORDER BY upi.target_chip
@@ -737,7 +739,8 @@ func (r *OTARepository) ListUpgradePackages(ctx context.Context, modelFilter str
 			for pkgRows.Next() {
 				var item model.UpgradePackageItem
 				if err := pkgRows.Scan(&item.ID, &item.PackageID, &item.FirmwareID, &item.TargetChip,
-					&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256); err == nil {
+					&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256,
+					&item.SecurityVersion, &item.ReleaseSignature); err == nil {
 					result[i].Items = append(result[i].Items, item)
 				}
 			}
@@ -795,7 +798,8 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 	for i := range candidates {
 		pkgRows, err := r.db.Query(ctx, `
 			SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
-			       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,'')
+			       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,''),
+			       COALESCE(f.security_version,0), COALESCE(f.release_signature,'')
 			FROM upgrade_package_items upi
 			JOIN firmware_versions f ON upi.firmware_id = f.id
 			WHERE upi.package_id = $1 ORDER BY upi.target_chip
@@ -808,7 +812,8 @@ func (r *OTARepository) GetPublishedPackagesForDevice(ctx context.Context, sn st
 		for pkgRows.Next() {
 			var item model.UpgradePackageItem
 			if err := pkgRows.Scan(&item.ID, &item.PackageID, &item.FirmwareID, &item.TargetChip,
-				&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256); err != nil {
+				&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256,
+				&item.SecurityVersion, &item.ReleaseSignature); err != nil {
 				continue
 			}
 			candidates[i].Items = append(candidates[i].Items, item)
@@ -853,7 +858,8 @@ func (r *OTARepository) RollbackToPackage(ctx context.Context, sn string, packag
 
 	pkgItemRows, err := tx.Query(ctx, `
 		SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
-		       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,'')
+		       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,''),
+		       COALESCE(f.security_version,0), COALESCE(f.release_signature,'')
 		FROM upgrade_package_items upi
 		JOIN firmware_versions f ON upi.firmware_id = f.id
 		WHERE upi.package_id = $1
@@ -863,7 +869,8 @@ func (r *OTARepository) RollbackToPackage(ctx context.Context, sn string, packag
 		for pkgItemRows.Next() {
 			var item model.UpgradePackageItem
 			if err := pkgItemRows.Scan(&item.ID, &item.PackageID, &item.FirmwareID, &item.TargetChip,
-				&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256); err == nil {
+				&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256,
+				&item.SecurityVersion, &item.ReleaseSignature); err == nil {
 				pkg.Items = append(pkg.Items, item)
 			}
 		}
@@ -1080,13 +1087,13 @@ func (r *OTARepository) FindFirmwareByVersion(ctx context.Context, deviceModel, 
 	var f model.Firmware
 	err := r.db.QueryRow(ctx, `
 		SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-		       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
+		       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
 		       COALESCE(target_chip,''), COALESCE(main_version,'')
 		FROM firmware_versions
 		WHERE model = $1 AND version = $2 AND target_chip = $3 AND status = 1
 		LIMIT 1
 	`, deviceModel, version, targetChip).Scan(&f.ID, &f.Model, &f.Version, &f.FileURL, &f.FileSize,
-		&f.FileMD5, &f.FileSHA256, &f.Changelog, &f.IsForce, &f.UploadedBy,
+		&f.FileMD5, &f.FileSHA256, &f.SecurityVersion, &f.ReleaseSignature, &f.Changelog, &f.IsForce, &f.UploadedBy,
 		&f.Status, &f.CreatedAt, &f.TargetChip, &f.MainVersion)
 	if err != nil {
 		return nil, err
@@ -1269,7 +1276,8 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 		}
 		pkgItemRows, pkgErr := tx.Query(ctx, `
 			SELECT upi.id, upi.package_id, upi.firmware_id, upi.target_chip, upi.firmware_version,
-			       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,'')
+			       COALESCE(f.file_url,''), COALESCE(f.file_size,0), COALESCE(f.file_md5,''), COALESCE(f.file_sha256,''),
+			       COALESCE(f.security_version,0), COALESCE(f.release_signature,'')
 			FROM upgrade_package_items upi
 			JOIN firmware_versions f ON upi.firmware_id = f.id
 			WHERE upi.package_id = $1
@@ -1279,7 +1287,8 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 			for pkgItemRows.Next() {
 				var item model.UpgradePackageItem
 				if scanErr := pkgItemRows.Scan(&item.ID, &item.PackageID, &item.FirmwareID, &item.TargetChip,
-					&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256); scanErr == nil {
+					&item.FirmwareVersion, &item.FileURL, &item.FileSize, &item.FileMD5, &item.FileSHA256,
+					&item.SecurityVersion, &item.ReleaseSignature); scanErr == nil {
 					pkg.Items = append(pkg.Items, item)
 				}
 			}
@@ -1296,11 +1305,11 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 		var fw model.Firmware
 		err = tx.QueryRow(ctx, `
 			SELECT id, model, version, file_url, COALESCE(file_size,0), COALESCE(file_md5,''),
-			       COALESCE(file_sha256,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
+			       COALESCE(file_sha256,''), COALESCE(security_version,0), COALESCE(release_signature,''), COALESCE(changelog,''), is_force, COALESCE(uploaded_by,0), status, created_at,
 			       COALESCE(target_chip,''), COALESCE(main_version,'')
 			FROM firmware_versions WHERE id = $1
 		`, firmwareID).Scan(&fw.ID, &fw.Model, &fw.Version, &fw.FileURL, &fw.FileSize,
-			&fw.FileMD5, &fw.FileSHA256, &fw.Changelog, &fw.IsForce, &fw.UploadedBy,
+			&fw.FileMD5, &fw.FileSHA256, &fw.SecurityVersion, &fw.ReleaseSignature, &fw.Changelog, &fw.IsForce, &fw.UploadedBy,
 			&fw.Status, &fw.CreatedAt, &fw.TargetChip, &fw.MainVersion)
 		if err != nil {
 			return 0, fmt.Errorf("firmware not found")
@@ -1311,9 +1320,11 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 		fwID = &fw.ID
 		targetVersion = fw.Version
 		items = []model.UpgradePackageItem{{
-			FirmwareID:      fw.ID,
-			TargetChip:      fw.TargetChip,
-			FirmwareVersion: fw.Version,
+			FirmwareID:       fw.ID,
+			TargetChip:       fw.TargetChip,
+			FirmwareVersion:  fw.Version,
+			SecurityVersion:  fw.SecurityVersion,
+			ReleaseSignature: fw.ReleaseSignature,
 		}}
 	} else {
 		return 0, fmt.Errorf("firmware_id or package_id required")
@@ -1322,17 +1333,17 @@ func (r *OTARepository) CreateTaskFromAppTrigger(ctx context.Context, userID int
 	triggeredBy := userID
 	totalDevices := 1
 	task := &model.UpgradeTask{
-		Name:           taskName,
-		TaskType:       taskType,
-		FirmwareID:     fwID,
-		PackageID:      pkgID,
-		Model:          deviceModel,
-		TargetVersion:  targetVersion,
-		Status:         model.TaskStatusRunning,
-		ExecuteMode:    model.ExecuteModeImmediate,
-		TotalDevices:   totalDevices,
-		Source:         model.OTASourceApp,
-		TriggeredBy:    &triggeredBy,
+		Name:          taskName,
+		TaskType:      taskType,
+		FirmwareID:    fwID,
+		PackageID:     pkgID,
+		Model:         deviceModel,
+		TargetVersion: targetVersion,
+		Status:        model.TaskStatusRunning,
+		ExecuteMode:   model.ExecuteModeImmediate,
+		TotalDevices:  totalDevices,
+		Source:        model.OTASourceApp,
+		TriggeredBy:   &triggeredBy,
 	}
 
 	err = tx.QueryRow(ctx, `

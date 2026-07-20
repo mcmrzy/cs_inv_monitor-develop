@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,15 +44,17 @@ func NewOTAHandler(otaService *service.OTAService, db *pgxpool.Pool, jpushServic
 }
 
 type CreateFirmwareRequest struct {
-	Model      string `json:"model" binding:"required"`
-	TargetChip string `json:"target_chip" binding:"required"`
-	Version    string `json:"version"`
-	FileURL    string `json:"file_url" binding:"required"`
-	FileSize   int64  `json:"file_size"`
-	FileMD5    string `json:"file_md5"`
-	FileSHA256 string `json:"file_sha256"`
-	Changelog  string `json:"changelog"`
-	IsForce    bool   `json:"is_force"`
+	Model            string `json:"model" binding:"required"`
+	TargetChip       string `json:"target_chip" binding:"required"`
+	Version          string `json:"version"`
+	FileURL          string `json:"file_url" binding:"required"`
+	FileSize         int64  `json:"file_size"`
+	FileMD5          string `json:"file_md5"`
+	FileSHA256       string `json:"file_sha256"`
+	SecurityVersion  uint32 `json:"security_version"`
+	ReleaseSignature string `json:"release_signature"`
+	Changelog        string `json:"changelog"`
+	IsForce          bool   `json:"is_force"`
 }
 
 func (h *OTAHandler) CreateFirmware(c *gin.Context) {
@@ -66,6 +69,17 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		version := strings.TrimSpace(c.PostForm("version"))
 		changelog := c.PostForm("changelog")
 		isForce := c.PostForm("is_force") == "true"
+		securityVersionText := strings.TrimSpace(c.PostForm("security_version"))
+		var securityVersion64 uint64
+		var securityVersionErr error
+		if securityVersionText != "" {
+			securityVersion64, securityVersionErr = strconv.ParseUint(securityVersionText, 10, 32)
+		}
+		if securityVersionErr != nil {
+			response.HandleError(c, apperr.BadRequest("安全版本必须是正 uint32 整数"))
+			return
+		}
+		releaseSignature := strings.TrimSpace(c.PostForm("release_signature"))
 
 		if model == "" || targetChip == "" || version == "" {
 			response.HandleError(c, apperr.BadRequest("型号、目标芯片和版本号必填"))
@@ -134,16 +148,18 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 		fileURL := fmt.Sprintf("/firmware/%s", filename)
 
 		fw := &service.CreateFirmwareReq{
-			Model:      model,
-			TargetChip: targetChip,
-			Version:    version,
-			FileURL:    fileURL,
-			FileSize:   file.Size,
-			FileMD5:    fmt.Sprintf("%x", md5Hash.Sum(nil)),
-			FileSHA256: fmt.Sprintf("%x", sha256Hash.Sum(nil)),
-			Changelog:  changelog,
-			IsForce:    isForce,
-			UploadedBy: c.GetInt64("user_id"),
+			Model:            model,
+			TargetChip:       targetChip,
+			Version:          version,
+			FileURL:          fileURL,
+			FileSize:         file.Size,
+			FileMD5:          fmt.Sprintf("%x", md5Hash.Sum(nil)),
+			FileSHA256:       fmt.Sprintf("%x", sha256Hash.Sum(nil)),
+			SecurityVersion:  uint32(securityVersion64),
+			ReleaseSignature: releaseSignature,
+			Changelog:        changelog,
+			IsForce:          isForce,
+			UploadedBy:       c.GetInt64("user_id"),
 		}
 		if err := service.ValidateFirmwareRequest(fw); err != nil {
 			response.HandleError(c, apperr.BadRequest(err.Error()))
@@ -166,16 +182,18 @@ func (h *OTAHandler) CreateFirmware(c *gin.Context) {
 	}
 
 	fw := &service.CreateFirmwareReq{
-		Model:      req.Model,
-		TargetChip: req.TargetChip,
-		Version:    req.Version,
-		FileURL:    req.FileURL,
-		FileSize:   req.FileSize,
-		FileMD5:    req.FileMD5,
-		FileSHA256: req.FileSHA256,
-		Changelog:  req.Changelog,
-		IsForce:    req.IsForce,
-		UploadedBy: c.GetInt64("user_id"),
+		Model:            req.Model,
+		TargetChip:       req.TargetChip,
+		Version:          req.Version,
+		FileURL:          req.FileURL,
+		FileSize:         req.FileSize,
+		FileMD5:          req.FileMD5,
+		FileSHA256:       req.FileSHA256,
+		SecurityVersion:  req.SecurityVersion,
+		ReleaseSignature: req.ReleaseSignature,
+		Changelog:        req.Changelog,
+		IsForce:          req.IsForce,
+		UploadedBy:       c.GetInt64("user_id"),
 	}
 	if err := service.ValidateFirmwareRequest(fw); err != nil {
 		response.HandleError(c, apperr.BadRequest(err.Error()))
@@ -357,15 +375,17 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 				continue
 			}
 			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
-				"chip":         du.TargetChip,
-				"current":      du.OldVersion,
-				"target":       du.FirmwareVersion,
-				"firmware_id":  fw.ID,
-				"download_url": h.otaService.BuildDownloadURL(fw.FileURL),
-				"file_size":    fw.FileSize,
-				"file_md5":     fw.FileMD5,
-				"file_sha256":  fw.FileSHA256,
-				"upgrade_id":   du.ID,
+				"chip":              du.TargetChip,
+				"current":           du.OldVersion,
+				"target":            du.FirmwareVersion,
+				"firmware_id":       fw.ID,
+				"download_url":      h.otaService.BuildDownloadURL(fw.FileURL),
+				"file_size":         fw.FileSize,
+				"file_md5":          fw.FileMD5,
+				"file_sha256":       fw.FileSHA256,
+				"security_version":  fw.SecurityVersion,
+				"release_signature": fw.ReleaseSignature,
+				"upgrade_id":        du.ID,
 			})
 		}
 
@@ -423,6 +443,8 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			"file_size":            fw.FileSize,
 			"file_md5":             fw.FileMD5,
 			"file_sha256":          fw.FileSHA256,
+			"security_version":     fw.SecurityVersion,
+			"release_signature":    fw.ReleaseSignature,
 			"changelog":            fw.Changelog,
 			"is_force":             fw.IsForce,
 			"upgrade_id":           du.ID,
@@ -455,20 +477,26 @@ func (h *OTAHandler) CheckUpdate(c *gin.Context) {
 			downloadURL := ""
 			fileSize := int64(0)
 			fileSHA256 := ""
+			var securityVersion uint32
+			releaseSignature := ""
 			if fw != nil {
 				downloadURL = h.otaService.BuildDownloadURL(fw.FileURL)
 				fileSize = fw.FileSize
 				fileSHA256 = fw.FileSHA256
+				securityVersion = fw.SecurityVersion
+				releaseSignature = fw.ReleaseSignature
 			}
 			chipsToUpgrade = append(chipsToUpgrade, map[string]interface{}{
-				"chip":             item.TargetChip,
-				"current":          chipVersions[item.TargetChip],
-				"target":           item.FirmwareVersion,
-				"firmware_id":      item.FirmwareID,
-				"firmware_version": item.FirmwareVersion,
-				"download_url":     downloadURL,
-				"file_size":        fileSize,
-				"file_sha256":      fileSHA256,
+				"chip":              item.TargetChip,
+				"current":           chipVersions[item.TargetChip],
+				"target":            item.FirmwareVersion,
+				"firmware_id":       item.FirmwareID,
+				"firmware_version":  item.FirmwareVersion,
+				"download_url":      downloadURL,
+				"file_size":         fileSize,
+				"file_sha256":       fileSHA256,
+				"security_version":  securityVersion,
+				"release_signature": releaseSignature,
 			})
 		}
 
@@ -1489,13 +1517,15 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 
 	// 过滤敏感字段，只返回 App 端需要的信息
 	type chipInfo struct {
-		TargetChip      string `json:"target_chip"`
-		FirmwareVersion string `json:"firmware_version"`
-		FirmwareID      int64  `json:"firmware_id"`
-		DownloadURL     string `json:"download_url"`
-		FileSize        int64  `json:"file_size"`
-		FileMD5         string `json:"file_md5"`
-		FileSHA256      string `json:"file_sha256"`
+		TargetChip       string `json:"target_chip"`
+		FirmwareVersion  string `json:"firmware_version"`
+		FirmwareID       int64  `json:"firmware_id"`
+		DownloadURL      string `json:"download_url"`
+		FileSize         int64  `json:"file_size"`
+		FileMD5          string `json:"file_md5"`
+		FileSHA256       string `json:"file_sha256"`
+		SecurityVersion  uint32 `json:"security_version"`
+		ReleaseSignature string `json:"release_signature"`
 	}
 	type availablePackage struct {
 		ID            int64      `json:"id"`
@@ -1512,13 +1542,15 @@ func (h *OTAHandler) GetAvailablePackages(c *gin.Context) {
 		chips := make([]chipInfo, 0, len(pkg.Items))
 		for _, item := range pkg.Items {
 			chips = append(chips, chipInfo{
-				TargetChip:      item.TargetChip,
-				FirmwareVersion: item.FirmwareVersion,
-				FirmwareID:      item.FirmwareID,
-				DownloadURL:     h.otaService.BuildDownloadURL(item.FileURL),
-				FileSize:        item.FileSize,
-				FileMD5:         item.FileMD5,
-				FileSHA256:      item.FileSHA256,
+				TargetChip:       item.TargetChip,
+				FirmwareVersion:  item.FirmwareVersion,
+				FirmwareID:       item.FirmwareID,
+				DownloadURL:      h.otaService.BuildDownloadURL(item.FileURL),
+				FileSize:         item.FileSize,
+				FileMD5:          item.FileMD5,
+				FileSHA256:       item.FileSHA256,
+				SecurityVersion:  item.SecurityVersion,
+				ReleaseSignature: item.ReleaseSignature,
 			})
 		}
 		result = append(result, availablePackage{
