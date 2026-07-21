@@ -89,7 +89,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return exitDatabase
 	}
-	if err := migration.RequireAppliedVersions(ctx, db, 59, 60, 61); err != nil {
+	if err := migration.RequireAppliedVersions(ctx, db, 64, 65, 66); err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitDatabase
 	}

@@ -34,7 +34,7 @@ The remaining blockers require operational, legal, or store-account actions:
 
 - Fixed device binding failures caused by `timezone` becoming `NULL` when a
   device was bound without a valid station row.
-- Added migration `058_repair_device_timezone_trigger` and updated the baseline
+- Added migration `063_repair_device_timezone_trigger` and updated the baseline
   schema.
 - Tightened gateway RBAC so bind/unbind exceptions do not grant broad device
   create/delete authority.

@@ -1,12 +1,15 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/jwt"
 	"inv-api-server/pkg/response"
@@ -17,6 +20,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type fakeAccessContextValidator struct {
+	valid bool
+	err   error
+}
+
+func (f fakeAccessContextValidator) ValidateAuthorizationSessionContext(context.Context, model.AuthorizationSessionContext) (bool, error) {
+	return f.valid, f.err
+}
 
 // ==================== test helpers ====================
 
@@ -40,6 +52,18 @@ func setupJWTService(t *testing.T) (*service.JWTService, *miniredis.Miniredis) {
 	return service.NewJWTService(jwtInstance, rdb), mr
 }
 
+func generateContextToken(t *testing.T, jwtSvc *service.JWTService, userID int64, phone string, role int) string {
+	t.Helper()
+	refreshToken, err := jwtSvc.GenerateRefreshTokenWithVersion(userID, 1)
+	require.NoError(t, err)
+	refreshClaims, err := jwtSvc.ParseRefreshToken(refreshToken)
+	require.NoError(t, err)
+	require.NoError(t, jwtSvc.StoreRefreshToken(context.Background(), userID, refreshToken, time.Hour))
+	token, err := jwtSvc.GenerateContextAccessTokenForSession(userID, 100, 101, 102, 1, 1, 1, refreshClaims.SessionID, phone, role)
+	require.NoError(t, err)
+	return token
+}
+
 func parseResponseBody(t *testing.T, w *httptest.ResponseRecorder) response.Response {
 	t.Helper()
 	var resp response.Response
@@ -54,8 +78,7 @@ func TestAuth_合法Token通过(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	accessToken, _, err := jwtSvc.GenerateToken(42, "13800138000", 5)
-	require.NoError(t, err)
+	accessToken := generateContextToken(t, jwtSvc, 42, "13800138000", 5)
 
 	r := gin.New()
 	r.Use(Auth(jwtSvc))
@@ -117,8 +140,7 @@ func TestAuth_被拉黑的Token返回401(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	accessToken, _, err := jwtSvc.GenerateToken(1, "13800138000", 5)
-	require.NoError(t, err)
+	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", 5)
 
 	// 解析 token 获取 JTI 并拉黑
 	claims, _ := jwtSvc.ParseToken(accessToken)
@@ -143,8 +165,7 @@ func TestAuth_从Cookie读取Token(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	accessToken, _, err := jwtSvc.GenerateToken(1, "13800138000", 5)
-	require.NoError(t, err)
+	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", 5)
 
 	r := gin.New()
 	r.Use(Auth(jwtSvc))
@@ -158,6 +179,32 @@ func TestAuth_从Cookie读取Token(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, 200, w.Code)
+}
+
+func TestAuthRejectsRevokedAndUnavailableAuthorizationContext(t *testing.T) {
+	jwtSvc, mr := setupJWTService(t)
+	defer mr.Close()
+	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", 5)
+
+	for _, test := range []struct {
+		name      string
+		validator fakeAccessContextValidator
+		status    int
+	}{
+		{name: "version changed", validator: fakeAccessContextValidator{valid: false}, status: http.StatusUnauthorized},
+		{name: "state store unavailable", validator: fakeAccessContextValidator{err: errors.New("db unavailable")}, status: http.StatusServiceUnavailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			router := gin.New()
+			router.Use(Auth(jwtSvc, test.validator))
+			router.GET("/test", func(c *gin.Context) { c.Status(http.StatusOK) })
+			request := httptest.NewRequest(http.MethodGet, "/test", nil)
+			request.Header.Set("Authorization", "Bearer "+accessToken)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+			assert.Equal(t, test.status, recorder.Code)
+		})
+	}
 }
 
 // ==================== OptionalAuth 中间件 ====================
@@ -187,8 +234,7 @@ func TestOptionalAuth_合法Token注入用户信息(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	accessToken, _, err := jwtSvc.GenerateToken(7, "13900139000", 1)
-	require.NoError(t, err)
+	accessToken := generateContextToken(t, jwtSvc, 7, "13900139000", 1)
 
 	r := gin.New()
 	r.Use(OptionalAuth(jwtSvc))

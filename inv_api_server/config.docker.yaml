@@ -24,7 +24,8 @@ redis:
 
 jwt:
   secret: ""
-  expire_time: 168h
+  expire_time: 15m
+  refresh_expire_time: 168h
   issuer: inv-api-server
 
 sms:

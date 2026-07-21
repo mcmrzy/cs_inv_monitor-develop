@@ -1,4 +1,4 @@
--- Contract checks for migration 059. Run after applying migration 059.
+-- Contract checks for migration 064. Run after applying migration 064.
 -- All fixtures are rolled back.
 
 BEGIN;
@@ -22,8 +22,8 @@ END;
 $$;
 
 INSERT INTO users(id, phone, password_hash, role) VALUES
-    (959001, 'migration059-sql-1', 'hash', 1),
-    (959002, 'migration059-sql-2', 'hash', 5);
+    (959001, 'migration064-sql-1', 'hash', 1),
+    (959002, 'migration064-sql-2', 'hash', 5);
 
 INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, code, name) VALUES
     (959100, 959100, NULL, 'manufacturer', 'SQL-ROOT-A', 'SQL Manufacturer A'),

@@ -1,4 +1,4 @@
--- 059: Multi-level channel organizations, memberships, scoped permissions,
+-- 064: Multi-level channel organizations, memberships, scoped permissions,
 -- resource grants, quotas, invitations, and migration quarantine.
 
 CREATE TABLE IF NOT EXISTS organizations (

@@ -84,6 +84,8 @@ func TestRouteRegistration_PublicAuthRoutes(t *testing.T) {
 		"/api/v1/auth/email-register",
 		"/api/v1/auth/email-login",
 		"/api/v1/auth/send-email-code",
+		"/api/v1/auth/refresh",
+		"/api/v1/auth/context",
 	}
 	for _, path := range expectedPaths {
 		assertRouteExists(t, engine, path, "public auth route missing")
@@ -97,7 +99,6 @@ func TestRouteRegistration_UserAuthRoutes(t *testing.T) {
 		"/api/v1/auth/logout",
 		"/api/v1/auth/change-password",
 		"/api/v1/auth/profile",
-		"/api/v1/auth/refresh",
 	}
 	for _, path := range expectedPaths {
 		assertRouteExists(t, engine, path, "user auth route missing")

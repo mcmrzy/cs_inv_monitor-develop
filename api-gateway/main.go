@@ -85,6 +85,8 @@ func main() {
 		APIServer:      cfg.Backends.APIServer,
 		DeviceServer:   cfg.Backends.DeviceServer,
 		JWTSecret:      cfg.JWT.Secret,
+		JWTIssuer:      cfg.JWT.Issuer,
+		JWTAudience:    cfg.JWT.Audience,
 		GlobalRate:     cfg.RateLimit.Rate,
 		GlobalBurst:    cfg.RateLimit.Burst,
 		RouteLimits:    routeLimits,

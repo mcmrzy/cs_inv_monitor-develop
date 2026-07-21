@@ -1,4 +1,4 @@
--- 061: Durable, resumable control plane for explicit channel backfill jobs.
+-- 066: Durable, resumable control plane for explicit channel backfill jobs.
 
 CREATE TABLE IF NOT EXISTS channel_migration_runs (
     id UUID PRIMARY KEY,

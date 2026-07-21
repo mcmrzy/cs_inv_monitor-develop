@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,6 +15,11 @@ import (
 
 const testSecret = "test-secret-key-for-unit-tests"
 
+const (
+	testIssuer   = "inv-api-server-test"
+	testAudience = "inv-channel-access-test"
+)
+
 func init() {
 	gin.SetMode(gin.TestMode)
 }
@@ -23,6 +29,192 @@ func makeToken(claims jwt.MapClaims, secret string) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, _ := token.SignedString([]byte(secret))
 	return signed
+}
+
+func validAccessClaims() jwt.MapClaims {
+	now := time.Now().UTC()
+	return jwt.MapClaims{
+		"token_version":         float64(2),
+		"token_type":            "access",
+		"user_id":               float64(42),
+		"root_tenant_id":        float64(100),
+		"organization_id":       float64(101),
+		"membership_id":         float64(102),
+		"membership_version":    float64(3),
+		"session_version":       float64(4),
+		"session_id":            "session-42",
+		"authorization_version": float64(5),
+		"phone":                 "13800001111",
+		"role":                  float64(1),
+		"sub":                   "42",
+		"iss":                   testIssuer,
+		"aud":                   testAudience,
+		"jti":                   "access-jti-42",
+		"iat":                   float64(now.Add(-time.Minute).Unix()),
+		"nbf":                   float64(now.Add(-time.Minute).Unix()),
+		"exp":                   float64(now.Add(time.Hour).Unix()),
+	}
+}
+
+func defaultAccessClaims() jwt.MapClaims {
+	claims := validAccessClaims()
+	claims["iss"] = DefaultJWTIssuer
+	claims["aud"] = DefaultAccessAudience
+	return claims
+}
+
+func strictJWTAuth() gin.HandlerFunc {
+	return JWTAuthWithConfig(JWTAuthConfig{
+		Secret:   testSecret,
+		Issuer:   testIssuer,
+		Audience: testAudience,
+	})
+}
+
+func serveProtectedRequest(t *testing.T, claims jwt.MapClaims, headers http.Header) *httptest.ResponseRecorder {
+	t.Helper()
+	router := gin.New()
+	router.Use(strictJWTAuth())
+	router.GET("/api/v1/devices", func(c *gin.Context) {
+		values := make(map[string][]string)
+		for key, value := range c.Request.Header {
+			values[key] = append([]string(nil), value...)
+		}
+		c.JSON(http.StatusOK, values)
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/devices", nil)
+	request.Header = headers.Clone()
+	request.Header.Set("Authorization", "Bearer "+makeToken(claims, testSecret))
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func TestStripUntrustedIdentityHeaders_RemovesSpoofedHeadersFromPublicRequests(t *testing.T) {
+	router := gin.New()
+	router.Use(StripUntrustedIdentityHeaders())
+	router.GET("/public", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"user_id": c.GetHeader("X-User-ID"),
+			"evil":    c.GetHeader("X-User-Evil"),
+			"org_id":  c.GetHeader("X-Organization-ID"),
+			"tenant":  c.GetHeader("X-Tenant-ID"),
+		})
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/public", nil)
+	request.Header.Add("X-User-ID", "attacker-1")
+	request.Header.Add("x-user-id", "attacker-2")
+	request.Header.Set("X-User-Evil", "admin")
+	request.Header.Set("X-Organization-ID", "999")
+	request.Header.Set("X-Tenant-ID", "999")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.JSONEq(t, `{"user_id":"","evil":"","org_id":"","tenant":""}`, recorder.Body.String())
+}
+
+func TestJWTAuthWithConfig_OverwritesSpoofedIdentityHeadersWithSingleTrustedValues(t *testing.T) {
+	headers := make(http.Header)
+	for _, value := range []string{"attacker-1", "attacker-2"} {
+		headers.Add("X-User-ID", value)
+		headers.Add("X-Organization-ID", value)
+	}
+	headers.Set("X-User-Evil", "admin")
+	headers.Set("X-Tenant-ID", "999")
+	headers.Set("X-Membership-Version", "999")
+
+	recorder := serveProtectedRequest(t, validAccessClaims(), headers)
+	assert.Equal(t, http.StatusOK, recorder.Code)
+
+	var forwarded map[string][]string
+	assert.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &forwarded))
+	assert.Equal(t, []string{"42"}, forwarded[http.CanonicalHeaderKey("X-User-ID")])
+	assert.Equal(t, []string{"42"}, forwarded[http.CanonicalHeaderKey("X-User-Sub")])
+	assert.Equal(t, []string{"100"}, forwarded[http.CanonicalHeaderKey("X-Tenant-ID")])
+	assert.Equal(t, []string{"101"}, forwarded[http.CanonicalHeaderKey("X-Organization-ID")])
+	assert.Equal(t, []string{"102"}, forwarded[http.CanonicalHeaderKey("X-Membership-ID")])
+	assert.Equal(t, []string{"3"}, forwarded[http.CanonicalHeaderKey("X-Membership-Version")])
+	assert.Equal(t, []string{"4"}, forwarded[http.CanonicalHeaderKey("X-Session-Version")])
+	assert.Equal(t, []string{"session-42"}, forwarded[http.CanonicalHeaderKey("X-Session-ID")])
+	assert.Equal(t, []string{"5"}, forwarded[http.CanonicalHeaderKey("X-Authorization-Version")])
+	assert.Empty(t, forwarded[http.CanonicalHeaderKey("X-User-Evil")])
+}
+
+func TestJWTAuthWithConfig_RejectsMissingRequiredClaims(t *testing.T) {
+	required := []string{
+		"token_version", "token_type", "user_id", "root_tenant_id", "organization_id",
+		"membership_id", "membership_version", "session_version", "session_id", "authorization_version",
+		"sub", "iss", "aud", "jti", "iat", "nbf", "exp",
+	}
+	for _, claim := range required {
+		t.Run(claim, func(t *testing.T) {
+			claims := validAccessClaims()
+			delete(claims, claim)
+			recorder := serveProtectedRequest(t, claims, make(http.Header))
+			assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+		})
+	}
+}
+
+func TestJWTAuthWithConfig_RejectsInvalidClaimValuesAndTokenKinds(t *testing.T) {
+	tests := []struct {
+		name  string
+		claim string
+		value any
+	}{
+		{name: "refresh token", claim: "token_type", value: "refresh"},
+		{name: "break glass token", claim: "token_type", value: "break_glass"},
+		{name: "wrong token version", claim: "token_version", value: float64(1)},
+		{name: "wrong issuer", claim: "iss", value: "attacker"},
+		{name: "wrong audience", claim: "aud", value: "inv-channel-refresh-test"},
+		{name: "subject mismatch", claim: "sub", value: "7"},
+		{name: "empty token id", claim: "jti", value: ""},
+		{name: "zero user", claim: "user_id", value: float64(0)},
+		{name: "zero tenant", claim: "root_tenant_id", value: float64(0)},
+		{name: "zero organization", claim: "organization_id", value: float64(0)},
+		{name: "zero membership", claim: "membership_id", value: float64(0)},
+		{name: "zero membership version", claim: "membership_version", value: float64(0)},
+		{name: "zero session version", claim: "session_version", value: float64(0)},
+		{name: "zero authorization version", claim: "authorization_version", value: float64(0)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			claims := validAccessClaims()
+			claims[test.claim] = test.value
+			recorder := serveProtectedRequest(t, claims, make(http.Header))
+			assert.Equal(t, http.StatusUnauthorized, recorder.Code, "claim %s=%v", test.claim, test.value)
+		})
+	}
+}
+
+func TestJWTAuthWithConfig_RejectsNonHS256Algorithms(t *testing.T) {
+	for _, method := range []jwt.SigningMethod{jwt.SigningMethodHS384, jwt.SigningMethodHS512} {
+		t.Run(method.Alg(), func(t *testing.T) {
+			router := gin.New()
+			router.Use(strictJWTAuth())
+			router.GET("/api/v1/devices", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+			token := jwt.NewWithClaims(method, validAccessClaims())
+			signed, err := token.SignedString([]byte(testSecret))
+			assert.NoError(t, err)
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/devices", nil)
+			request.Header.Set("Authorization", "Bearer "+signed)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+			assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+		})
+	}
+}
+
+func TestJWTAuthWithConfig_InjectsIntegerClaimsWithoutFloatFormatting(t *testing.T) {
+	claims := validAccessClaims()
+	claims["user_id"] = float64(9007199254740990)
+	claims["sub"] = strconv.FormatInt(9007199254740990, 10)
+	recorder := serveProtectedRequest(t, claims, make(http.Header))
+	assert.Equal(t, http.StatusOK, recorder.Code)
 }
 
 func TestJWTAuth_ValidToken(t *testing.T) {
@@ -36,12 +228,8 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 		})
 	})
 
-	token := makeToken(jwt.MapClaims{
-		"user_id": float64(42),
-		"role":    float64(1),
-		"phone":   "13800001111",
-		"exp":     float64(time.Now().Add(time.Hour).Unix()),
-	}, testSecret)
+	claims := defaultAccessClaims()
+	token := makeToken(claims, testSecret)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
@@ -187,13 +375,12 @@ func TestJWTAuth_ClaimsPropagation(t *testing.T) {
 		})
 	})
 
-	token := makeToken(jwt.MapClaims{
-		"user_id": float64(99),
-		"role":    float64(0),
-		"phone":   "13900000000",
-		"sub":     "user-abc",
-		"exp":     float64(time.Now().Add(time.Hour).Unix()),
-	}, testSecret)
+	claims := defaultAccessClaims()
+	claims["user_id"] = float64(99)
+	claims["role"] = float64(0)
+	claims["phone"] = "13900000000"
+	claims["sub"] = "99"
+	token := makeToken(claims, testSecret)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/v1/stations", nil)
@@ -207,7 +394,7 @@ func TestJWTAuth_ClaimsPropagation(t *testing.T) {
 	assert.Equal(t, "99", body["x-user-id"])
 	assert.Equal(t, "0", body["x-user-role"])
 	assert.Equal(t, "13900000000", body["x-user-phone"])
-	assert.Equal(t, "user-abc", body["x-user-sub"])
+	assert.Equal(t, "99", body["x-user-sub"])
 }
 
 func TestIsPublicPath(t *testing.T) {

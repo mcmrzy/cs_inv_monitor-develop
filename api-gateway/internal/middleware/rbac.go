@@ -54,17 +54,12 @@ func NewRBACMiddleware(rdb *redis.Client, pg *pgxpool.Pool, cacheTTLSec int) *RB
 	return r
 }
 
-// Sentinel errors returned by getUserRole. hasPermission uses them to decide
-// whether falling back to the JWT role claim is safe.
+// Sentinel errors returned by getUserRole. Every unresolved state fails closed;
+// callers must not substitute a potentially stale JWT role claim.
 var (
 	// errRoleUnknown: Redis is reachable but has not cached this user yet and
-	// no database is available to confirm the role. The role is genuinely
-	// unknown (not revoked), so a JWT fallback is acceptable.
+	// no database is available to confirm the role.
 	errRoleUnknown = errors.New("user role not cached and no database to resolve it")
-	// errRoleExplicitlyEmpty: the cache holds an entry for the user but it
-	// contains no valid role (e.g. "[]"). This is an authoritative negative
-	// answer — the role was stripped — so the JWT claim must NOT override it.
-	errRoleExplicitlyEmpty = errors.New("user role cache entry is empty or invalid")
 	// errNoRoleSource: neither Redis nor a database is configured. The gateway
 	// is fully degraded and cannot authoritatively resolve any role.
 	errNoRoleSource = errors.New("no role resolution source available")
@@ -206,7 +201,7 @@ func (r *RBACMiddleware) refreshRolePermissions(ctx context.Context, role int) (
 	return perms, nil
 }
 
-func (r *RBACMiddleware) hasPermission(userID string, resource string, action string, jwtRole int) bool {
+func (r *RBACMiddleware) hasPermission(userID string, resource string, action string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -219,15 +214,10 @@ func (r *RBACMiddleware) hasPermission(userID string, resource string, action st
 	// cannot retain elevated (especially role=0) access.
 	role, err := r.getUserRole(ctx, userID)
 	if err != nil || role < 0 {
-		// When Redis is configured but the user role is not cached (errRoleUnknown),
-		// the JWT role claim is a safe fallback since the role was not explicitly revoked.
-		// But without any role source (errNoRoleSource), never trust the JWT role=0
-		// claim to prevent stale super_admin tokens from bypassing security.
-		if err == errRoleUnknown && jwtRole >= 0 {
-			role = jwtRole
-		} else {
-			return false
-		}
+		// Unknown, malformed, unavailable, or explicitly revoked role state is
+		// authoritative for denial. A signed token may be stale and must never
+		// promote an unresolved user (especially to role=0).
+		return false
 	}
 
 	if role == 0 {
@@ -386,6 +376,16 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 			return
 		}
 
+		userID := c.GetHeader("X-User-ID")
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    http.StatusUnauthorized,
+				"message": "missing authenticated user identity",
+			})
+			c.Abort()
+			return
+		}
+
 		// APP 端接口已通 JWT 认证保护，对所有登录用户开放，跳过 RBAC
 		if isAppAllowedPathWithMethod(c.Request.URL.Path, c.Request.Method) {
 			c.Next()
@@ -393,12 +393,6 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		}
 
 		if isAuthenticatedOnlyPath(c.Request.URL.Path) {
-			c.Next()
-			return
-		}
-
-		userID := c.GetHeader("X-User-ID")
-		if userID == "" {
 			c.Next()
 			return
 		}
@@ -420,13 +414,7 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		}
 
 		action := r.getActionForRequest(path, c.Request.Method)
-		jwtRole := -1
-		if roleStr := c.GetHeader("X-User-Role"); roleStr != "" {
-			if parsed, parseErr := strconv.Atoi(roleStr); parseErr == nil {
-				jwtRole = parsed
-			}
-		}
-		if !r.hasPermission(userID, resource, action, jwtRole) {
+		if !r.hasPermission(userID, resource, action) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    403,
 				"message": "权限不足，无法访问该资源",

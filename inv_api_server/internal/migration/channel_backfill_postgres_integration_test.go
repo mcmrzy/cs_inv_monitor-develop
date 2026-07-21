@@ -43,9 +43,9 @@ func TestPostgresOrganizationBackfillIsDurableAndIdempotent(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
 	for _, path := range []string{
 		filepath.Join(repoRoot, "database", "schema.sql"),
-		filepath.Join(repoRoot, "database", "migrations", "059_create_channel_authorization.up.sql"),
-		filepath.Join(repoRoot, "database", "migrations", "060_extend_audit_outbox.up.sql"),
-		filepath.Join(repoRoot, "database", "migrations", "061_create_channel_backfill_control.up.sql"),
+		filepath.Join(repoRoot, "database", "migrations", "064_create_channel_authorization.up.sql"),
+		filepath.Join(repoRoot, "database", "migrations", "065_extend_audit_outbox.up.sql"),
+		filepath.Join(repoRoot, "database", "migrations", "066_create_channel_backfill_control.up.sql"),
 	} {
 		contents, readErr := os.ReadFile(path)
 		require.NoError(t, readErr)

@@ -100,7 +100,7 @@ func RequireChannelBackfillSchema(ctx context.Context, db *pgxpool.Pool) error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("channel backfill schema is incomplete; missing %v (apply migrations through 061)", missing)
+		return fmt.Errorf("channel backfill schema is incomplete; missing %v (apply migrations through 066)", missing)
 	}
 	return nil
 }

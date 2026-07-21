@@ -285,7 +285,7 @@ func (r *UserRepository) GetByNickname(ctx context.Context, nickname string) (*m
 }
 
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID int64, passwordHash string) error {
-	query := `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
+	query := `UPDATE users SET password_hash = $1, session_version = session_version + 1, updated_at = NOW() WHERE id = $2`
 	_, err := r.db.Exec(ctx, query, passwordHash, userID)
 	return err
 }
@@ -422,7 +422,7 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID int64, role int)
 }
 
 func (r *UserRepository) UpdateStatus(ctx context.Context, userID int64, status int) error {
-	_, err := r.db.Exec(ctx, "UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2", status, userID)
+	_, err := r.db.Exec(ctx, "UPDATE users SET status = $1, session_version = session_version + 1, updated_at = NOW() WHERE id = $2", status, userID)
 	if err == nil {
 		r.invalidateUserPermissionCache(ctx, userID)
 	}

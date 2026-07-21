@@ -4,6 +4,8 @@ server:
 
 jwt:
   secret: "${JWT_SECRET}"
+  issuer: "inv-api-server"
+  audience: "inv-platform-api"
 
 rate_limit:
   rate: 100

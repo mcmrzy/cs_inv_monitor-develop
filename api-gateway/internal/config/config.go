@@ -35,7 +35,9 @@ type ServerConfig struct {
 }
 
 type JWTConfig struct {
-	Secret string `yaml:"secret"`
+	Secret   string `yaml:"secret"`
+	Issuer   string `yaml:"issuer"`
+	Audience string `yaml:"audience"`
 }
 
 type RateLimitConfig struct {
@@ -96,6 +98,8 @@ func Load(path string) (*Config, error) {
 	cfg.Database.Name = "inv_mqtt"
 	cfg.Database.SSLMode = "disable"
 	cfg.CORS.AllowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
+	cfg.JWT.Issuer = "inv-api-server"
+	cfg.JWT.Audience = "inv-platform-api"
 
 	if err := yaml.Unmarshal([]byte(expanded), cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
@@ -121,6 +125,12 @@ func (c *Config) Validate() error {
 	var missing []string
 	if invalidRequiredSecret(c.JWT.Secret) {
 		missing = append(missing, "jwt.secret (env: JWT_SECRET, must not be empty or a CHANGE_ME* placeholder)")
+	}
+	if strings.TrimSpace(c.JWT.Issuer) == "" {
+		missing = append(missing, "jwt.issuer")
+	}
+	if strings.TrimSpace(c.JWT.Audience) == "" {
+		missing = append(missing, "jwt.audience")
 	}
 	if c.Backends.APIServer == "" {
 		missing = append(missing, "backends.api_server (env: API_SERVER_URL)")

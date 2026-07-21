@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -111,7 +112,7 @@ func TestParseToken_不同Secret无法解析(t *testing.T) {
 
 // ==================== GetJTI ====================
 
-func TestGetJTI_AccessToken的JTI因字段冲突丢失(t *testing.T) {
+func TestGetJTI_AccessToken使用RegisteredClaimsID(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
 	token, _, err := j.GenerateToken(1, "13800138000", 5)
@@ -120,25 +121,19 @@ func TestGetJTI_AccessToken的JTI因字段冲突丢失(t *testing.T) {
 	claims, err := j.ParseToken(token)
 	require.NoError(t, err)
 
-	// BUG: Claims.JTI (json:"jti") 与 RegisteredClaims.ID (也序列化为 "jti")
-	// 存在 JSON 字段名冲突。序列化时 Claims.JTI("") 覆盖了 RegisteredClaims.ID 的值，
-	// 导致 JTI 信息丢失。GetJTI 对 access token 始终返回空。
-	assert.Empty(t, claims.ID, "RegisteredClaims.ID 因字段冲突被覆盖为空")
-	assert.Empty(t, claims.JTI, "Claims.JTI 因序列化时为空字符串")
-	assert.Empty(t, j.GetJTI(claims), "GetJTI 对 access token 返回空（已知问题）")
+	assert.NotEmpty(t, claims.ID)
+	assert.Equal(t, claims.ID, j.GetJTI(claims))
 }
 
-func TestGetJTI_RefreshToken的JTI在自定义字段中(t *testing.T) {
+func TestRefreshToken使用RegisteredClaimsID(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
 	refreshToken, err := j.GenerateRefreshToken(1, "13800138000", 5)
 	require.NoError(t, err)
 
-	claims, err := j.ParseToken(refreshToken)
+	claims, err := j.ParseRefreshToken(refreshToken)
 	require.NoError(t, err)
-
-	jti := j.GetJTI(claims)
-	assert.NotEmpty(t, jti, "RefreshToken 的 Claims.JTI 不应为空")
+	assert.NotEmpty(t, claims.ID)
 }
 
 // ==================== RefreshToken ====================
@@ -182,8 +177,7 @@ func TestGenerateRefreshToken_独立生成(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, refreshToken)
 
-	// refresh token 应能解析
-	claims, err := j.ParseToken(refreshToken)
+	claims, err := j.ParseRefreshToken(refreshToken)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), claims.UserID)
 }
@@ -208,4 +202,120 @@ func TestClaims_包含正确的时间声明(t *testing.T) {
 	// ExpiresAt 应约为 IssuedAt + 15分钟
 	expectedExpiry := claims.IssuedAt.Time.Add(15 * time.Minute)
 	assert.WithinDuration(t, expectedExpiry, claims.ExpiresAt.Time, 1*time.Second)
+}
+
+func TestStrictAccessTokenContainsBoundAuthorizationContext(t *testing.T) {
+	j := newTestJWT(15 * time.Minute)
+
+	token, err := j.GenerateContextAccessToken(42, 100, 101, 1001, 3, 7, 11)
+	require.NoError(t, err)
+
+	claims, err := j.ParseAccessToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, int64(42), claims.UserID)
+	assert.Equal(t, int64(100), claims.RootTenantID)
+	assert.Equal(t, int64(101), claims.OrganizationID)
+	assert.Equal(t, int64(1001), claims.MembershipID)
+	assert.Equal(t, int64(3), claims.MembershipVersion)
+	assert.Equal(t, int64(7), claims.AuthorizationVersion)
+	assert.Equal(t, int64(11), claims.SessionVersion)
+	assert.Equal(t, TokenTypeAccess, claims.TokenType)
+	assert.Equal(t, DefaultAccessAudience, claims.Audience[0])
+	assert.NotEmpty(t, claims.ID)
+	assert.Equal(t, claims.ID, j.GetJTI(claims))
+}
+
+func TestAccessAndRefreshTokensAreNotInterchangeable(t *testing.T) {
+	j := newTestJWT(15 * time.Minute)
+	accessToken, err := j.GenerateContextAccessToken(42, 100, 101, 1001, 3, 7, 11)
+	require.NoError(t, err)
+	refreshToken, err := j.GenerateRefreshToken(42, "13800138000", 5)
+	require.NoError(t, err)
+
+	_, err = j.ParseAccessToken(refreshToken)
+	assert.Error(t, err)
+	_, err = j.ParseRefreshToken(accessToken)
+	assert.Error(t, err)
+	_, err = j.ParseToken(refreshToken)
+	assert.Error(t, err, "legacy ParseToken must remain access-only")
+
+	refreshClaims, err := j.ParseRefreshToken(refreshToken)
+	require.NoError(t, err)
+	assert.Equal(t, TokenTypeRefresh, refreshClaims.TokenType)
+	assert.Equal(t, int64(2), refreshClaims.TokenVersion)
+	assert.Equal(t, DefaultRefreshAudience, refreshClaims.Audience[0])
+	assert.NotEmpty(t, refreshClaims.ID)
+}
+
+func TestParseAccessTokenRejectsWrongAlgorithmIssuerAndAudience(t *testing.T) {
+	j := newTestJWT(15 * time.Minute)
+	now := time.Now().UTC()
+	base := AccessClaims{
+		UserID: 42, RootTenantID: 100, OrganizationID: 101, MembershipID: 1001,
+		MembershipVersion: 3, AuthorizationVersion: 7, SessionVersion: 11,
+		TokenType: TokenTypeAccess,
+		RegisteredClaims: jwtlib.RegisteredClaims{
+			Issuer: "inv-api-server-test", Audience: jwtlib.ClaimStrings{DefaultAccessAudience},
+			ID: "strict-jti", IssuedAt: jwtlib.NewNumericDate(now), NotBefore: jwtlib.NewNumericDate(now),
+			ExpiresAt: jwtlib.NewNumericDate(now.Add(15 * time.Minute)),
+		},
+	}
+
+	wrongAlgorithm, err := jwtlib.NewWithClaims(jwtlib.SigningMethodHS384, base).SignedString([]byte("test-secret-key-for-unit-tests"))
+	require.NoError(t, err)
+	_, err = j.ParseAccessToken(wrongAlgorithm)
+	assert.Error(t, err)
+
+	wrongIssuer := base
+	wrongIssuer.Issuer = "attacker"
+	wrongIssuerToken, err := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, wrongIssuer).SignedString([]byte("test-secret-key-for-unit-tests"))
+	require.NoError(t, err)
+	_, err = j.ParseAccessToken(wrongIssuerToken)
+	assert.Error(t, err)
+
+	wrongAudience := base
+	wrongAudience.Audience = jwtlib.ClaimStrings{"break-glass"}
+	wrongAudienceToken, err := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, wrongAudience).SignedString([]byte("test-secret-key-for-unit-tests"))
+	require.NoError(t, err)
+	_, err = j.ParseAccessToken(wrongAudienceToken)
+	assert.Error(t, err)
+}
+
+func TestParseAccessTokenRejectsMissingRequiredAuthorizationClaims(t *testing.T) {
+	j := newTestJWT(15 * time.Minute)
+	valid := AccessClaims{
+		UserID: 42, RootTenantID: 100, OrganizationID: 101, MembershipID: 1001,
+		MembershipVersion: 3, AuthorizationVersion: 7, SessionVersion: 11,
+		TokenType: TokenTypeAccess,
+	}
+	tests := []struct {
+		name   string
+		mutate func(*AccessClaims)
+	}{
+		{"user", func(c *AccessClaims) { c.UserID = 0 }},
+		{"root tenant", func(c *AccessClaims) { c.RootTenantID = 0 }},
+		{"organization", func(c *AccessClaims) { c.OrganizationID = 0 }},
+		{"membership", func(c *AccessClaims) { c.MembershipID = 0 }},
+		{"membership version", func(c *AccessClaims) { c.MembershipVersion = 0 }},
+		{"authorization version", func(c *AccessClaims) { c.AuthorizationVersion = 0 }},
+		{"session version", func(c *AccessClaims) { c.SessionVersion = 0 }},
+		{"token type", func(c *AccessClaims) { c.TokenType = "" }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			claims := valid
+			tc.mutate(&claims)
+			now := time.Now().UTC()
+			claims.RegisteredClaims = jwtlib.RegisteredClaims{
+				Issuer: "inv-api-server-test", Audience: jwtlib.ClaimStrings{DefaultAccessAudience}, ID: "jti-" + tc.name,
+				IssuedAt: jwtlib.NewNumericDate(now), NotBefore: jwtlib.NewNumericDate(now),
+				ExpiresAt: jwtlib.NewNumericDate(now.Add(15 * time.Minute)),
+			}
+			token, err := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims).SignedString([]byte("test-secret-key-for-unit-tests"))
+			require.NoError(t, err)
+			_, err = j.ParseAccessToken(token)
+			assert.Error(t, err)
+		})
+	}
 }
