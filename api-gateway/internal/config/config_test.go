@@ -103,8 +103,10 @@ func TestLoad_MissingFile(t *testing.T) {
 
 func validConfig() *Config {
 	return &Config{
-		Server:    ServerConfig{Port: 8080, Mode: "release"},
-		JWT:       JWTConfig{Secret: strings.Repeat("s", 32)},
+		Server: ServerConfig{Port: 8080, Mode: "release"},
+		JWT: JWTConfig{
+			Secret: strings.Repeat("s", 32), Issuer: "inv-api-server", Audience: "inv-platform-api",
+		},
 		RateLimit: RateLimitConfig{Rate: 100, Burst: 200},
 		Backends: BackendsConfig{
 			APIServer:    "http://inv-api-server:8080",

@@ -1,0 +1,1459 @@
+openapi: 3.1.0
+info:
+  title: CSERGY Commercial Channel Platform API
+  version: 1.0.0
+  description: |
+    Versioned contract for organization authorization context, channel hierarchy,
+    invitations, device claims, object grants, and asset ownership transfers.
+    Application authorization remains authoritative; allowed_actions is a
+    presentation projection and must be rechecked for every write.
+servers:
+  - url: /api/v1
+tags:
+  - name: Authorization
+  - name: Organizations
+  - name: Invitations
+  - name: Device lifecycle
+  - name: Transfers
+security:
+  - bearerAuth: []
+paths:
+  /auth/context:
+    post:
+      tags: [Authorization]
+      operationId: exchangeAuthorizationContext
+      summary: Select an active organization and issue an organization-bound access token
+      security:
+        - refreshSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationContextRequest'
+      responses:
+        '200':
+          description: Active organization selected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextTokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /authorization/me:
+    get:
+      tags: [Authorization]
+      operationId: getAuthorizationContext
+      summary: Return the effective context for the current organization-bound token
+      responses:
+        '200':
+          description: Effective authorization context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationContextResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /organizations:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizations
+      summary: List organizations in the effective data scope
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Organization page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPageResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Organizations]
+      operationId: createOrganization
+      summary: Create an allowed direct child organization
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /organizations/{id}/children:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizationChildren
+      summary: List direct child organizations
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Direct child page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationPageResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /organizations/{id}/members:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizationMembers
+      summary: List memberships visible to the active organization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Membership page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPageResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /invitations:
+    get:
+      tags: [Invitations]
+      operationId: listInvitations
+      summary: List invitations in the effective organization scope
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Invitation page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPageResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Invitations]
+      operationId: createInvitation
+      summary: Create a single-use membership invitation
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '201':
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /devices/claims:
+    post:
+      tags: [Device lifecycle]
+      operationId: claimDevice
+      summary: Claim a pre-provisioned inventory device into an authorized station
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceClaimRequest'
+      responses:
+        '200':
+          description: Device claimed or an idempotent response replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResourceResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /devices/{sn}/grants:
+    get:
+      tags: [Device lifecycle]
+      operationId: listDeviceGrants
+      summary: List effective and historical device grants
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+      responses:
+        '200':
+          description: Device grants
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Device lifecycle]
+      operationId: createDeviceGrant
+      summary: Share device view or control capability
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGrantRequest'
+      responses:
+        '201':
+          description: Grant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /devices/{sn}/transfers:
+    get:
+      tags: [Transfers]
+      operationId: listDeviceTransfers
+      summary: List device ownership transfer requests
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+      responses:
+        '200':
+          description: Transfer requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTransferListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Transfers]
+      operationId: createDeviceTransfer
+      summary: Request a device ownership transfer
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransferRequest'
+      responses:
+        '202':
+          description: Transfer request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceTransferResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /stations/{id}/transfers:
+    get:
+      tags: [Transfers]
+      operationId: listStationTransfers
+      summary: List station ownership transfer requests
+      parameters:
+        - $ref: '#/components/parameters/StationID'
+      responses:
+        '200':
+          description: Transfer requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StationTransferListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Transfers]
+      operationId: createStationTransfer
+      summary: Request a station and contained-device ownership transfer
+      parameters:
+        - $ref: '#/components/parameters/StationID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransferRequest'
+      responses:
+        '202':
+          description: Transfer request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StationTransferResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /devices/{sn}/unbind-requests:
+    get:
+      tags: [Device lifecycle]
+      operationId: listDeviceUnbindRequests
+      summary: List unbind requests for a device in the effective organization scope
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+      responses:
+        '200':
+          description: Device unbind requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnbindRequestListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Device lifecycle]
+      operationId: createDeviceUnbindRequest
+      summary: Request approval to remove a device binding
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUnbindRequest'
+      responses:
+        '202':
+          description: Unbind request accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnbindRequestResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /device-unbind-requests/{id}/approve:
+    post:
+      tags: [Device lifecycle]
+      operationId: approveDeviceUnbindRequest
+      summary: Approve a pending device unbind request
+      parameters:
+        - $ref: '#/components/parameters/UnbindRequestID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnbindDecisionRequest'
+      responses:
+        '200':
+          description: Unbind request approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnbindRequestResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /device-unbind-requests/{id}/reject:
+    post:
+      tags: [Device lifecycle]
+      operationId: rejectDeviceUnbindRequest
+      summary: Reject a pending device unbind request
+      parameters:
+        - $ref: '#/components/parameters/UnbindRequestID'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnbindDecisionRequest'
+      responses:
+        '200':
+          description: Unbind request rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnbindRequestResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /devices/bind:
+    post:
+      tags: [Device lifecycle]
+      operationId: legacyBindDevice
+      summary: Legacy device binding endpoint
+      deprecated: true
+      x-replacement: 'POST /devices/claims'
+      responses:
+        '200':
+          description: Legacy binding result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResourceResponse'
+  /devices/{sn}/unbind:
+    post:
+      tags: [Device lifecycle]
+      operationId: legacyUnbindDevice
+      summary: Legacy immediate device unbinding endpoint
+      deprecated: true
+      x-replacement: 'POST /devices/{sn}/unbind-requests'
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+      responses:
+        '202':
+          description: Legacy unbinding request accepted
+    delete:
+      tags: [Device lifecycle]
+      operationId: legacyDeleteDeviceBinding
+      summary: Legacy device unbinding endpoint used by mobile clients
+      deprecated: true
+      x-replacement: 'POST /devices/{sn}/unbind-requests'
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+      responses:
+        '202':
+          description: Legacy unbinding request accepted
+  /devices/{sn}/request-unbind:
+    post:
+      tags: [Device lifecycle]
+      operationId: legacyRequestDeviceUnbind
+      summary: Legacy approval-based device unbinding endpoint
+      deprecated: true
+      x-replacement: 'POST /devices/{sn}/unbind-requests'
+      parameters:
+        - $ref: '#/components/parameters/DeviceSN'
+      responses:
+        '202':
+          description: Legacy unbinding request accepted
+  /users:
+    get:
+      tags: [Organizations]
+      operationId: legacyListUsers
+      summary: Legacy hierarchy user listing
+      deprecated: true
+      x-replacement: 'GET /organizations/{id}/members'
+      responses:
+        '200':
+          description: Legacy user page
+    post:
+      tags: [Invitations]
+      operationId: legacyCreateUser
+      summary: Legacy direct user creation
+      deprecated: true
+      x-replacement: 'POST /invitations'
+      responses:
+        '201':
+          description: Legacy user created
+  /users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UserID'
+    get:
+      tags: [Organizations]
+      operationId: legacyGetUser
+      summary: Legacy user detail
+      deprecated: true
+      x-replacement: 'GET /organizations/{id}/members'
+      responses:
+        '200':
+          description: Legacy user detail
+    patch:
+      tags: [Organizations]
+      operationId: legacyUpdateUser
+      summary: Legacy user update
+      deprecated: true
+      x-replacement: 'POST /invitations'
+      responses:
+        '200':
+          description: Legacy user updated
+    delete:
+      tags: [Organizations]
+      operationId: legacyDeleteUser
+      summary: Legacy user deletion
+      deprecated: true
+      x-replacement: 'membership lifecycle endpoint (planned)'
+      responses:
+        '204':
+          description: Legacy user deleted
+  /users/{id}/password:
+    put:
+      tags: [Organizations]
+      operationId: legacyResetUserPassword
+      summary: Legacy administrator password reset
+      deprecated: true
+      x-replacement: 'invitation or self-service credential recovery'
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      responses:
+        '204':
+          description: Legacy password reset
+  /users/{id}/toggle:
+    put:
+      tags: [Organizations]
+      operationId: legacyToggleUser
+      summary: Legacy user status toggle
+      deprecated: true
+      x-replacement: 'membership lifecycle endpoint (planned)'
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      responses:
+        '200':
+          description: Legacy user status updated
+  /users/{id}/children:
+    get:
+      tags: [Organizations]
+      operationId: legacyListUserChildren
+      summary: Legacy user-tree child listing
+      deprecated: true
+      x-replacement: 'GET /organizations/{id}/children'
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      responses:
+        '200':
+          description: Legacy child user page
+  /users/{id}/parent:
+    put:
+      tags: [Organizations]
+      operationId: legacyUpdateUserParent
+      summary: Legacy user-tree reparenting
+      deprecated: true
+      x-replacement: 'organization membership migration workflow (planned)'
+      parameters:
+        - $ref: '#/components/parameters/UserID'
+      responses:
+        '200':
+          description: Legacy user parent updated
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshSession:
+      type: apiKey
+      in: cookie
+      name: refresh_session
+  parameters:
+    OrganizationID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    DeviceSN:
+      name: sn
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 6
+        maxLength: 64
+    StationID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    UserID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    UnbindRequestID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: page_size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+  responses:
+    Unauthorized:
+      description: Authentication or session is invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Permission, organization scope, or object relationship denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Current state or optimistic version conflicts with this operation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Gone:
+      description: One-time credential or invitation has expired or was consumed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unprocessable:
+      description: Request violates a business invariant
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    BusinessErrorCode:
+      type: string
+      enum:
+        - AUTH_CONTEXT_REQUIRED
+        - MEMBERSHIP_INACTIVE
+        - ORG_SCOPE_DENIED
+        - CLAIM_INVALID
+        - CLAIM_REPLAYED
+        - ASSET_CONFLICT
+        - TRANSFER_PENDING
+        - VERSION_CONFLICT
+        - APPROVAL_REQUIRED
+        - INVITATION_EXPIRED
+        - INVITATION_REVOKED
+        - RESOURCE_NOT_FOUND
+        - VALIDATION_FAILED
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message, request_id, retryable]
+      properties:
+        code:
+          $ref: '#/components/schemas/BusinessErrorCode'
+        message:
+          type: string
+        request_id:
+          type: string
+        retryable:
+          type: boolean
+        details:
+          type: object
+          additionalProperties: true
+    Actor:
+      type: object
+      additionalProperties: false
+      required: [id, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          type: string
+          enum: [active, disabled, locked, pending_claim]
+        display_name:
+          type: string
+    OrganizationType:
+      type: string
+      enum: [manufacturer, agent, distributor, customer, service_partner]
+    OrganizationSummary:
+      type: object
+      additionalProperties: false
+      required: [id, root_tenant_id, type, name, status, version]
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        root_tenant_id:
+          type: integer
+          format: int64
+          minimum: 1
+        parent_id:
+          type: [integer, 'null']
+          format: int64
+        type:
+          $ref: '#/components/schemas/OrganizationType'
+        name:
+          type: string
+          minLength: 1
+        code:
+          type: string
+        status:
+          type: string
+          enum: [active, disabled, suspended]
+        path:
+          type: array
+          items:
+            type: integer
+            format: int64
+        version:
+          type: integer
+          minimum: 1
+        allowed_actions:
+          $ref: '#/components/schemas/AllowedActions'
+    MembershipSummary:
+      type: object
+      additionalProperties: false
+      required: [id, organization, role_assignments, permission_grants, status, version]
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        organization:
+          $ref: '#/components/schemas/OrganizationSummary'
+        role_assignments:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/RoleAssignment'
+        permission_grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionScopeGrant'
+        status:
+          type: string
+          enum: [invited, active, disabled, expired]
+        version:
+          type: integer
+          minimum: 1
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+    DataScope:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [self, organization, organization_and_descendants, assigned_resources, explicit_resources]
+        organization_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+        station_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+        device_sns:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    PermissionScopeGrant:
+      type: object
+      additionalProperties: false
+      required: [permission_code, data_scope, source]
+      properties:
+        permission_code:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$'
+        data_scope:
+          $ref: '#/components/schemas/DataScope'
+        source:
+          type: string
+          enum: [role, direct, delegated, asset_grant]
+        role_code:
+          type: [string, 'null']
+        grant_id:
+          type: [string, 'null']
+    RoleAssignment:
+      type: object
+      additionalProperties: false
+      required: [role_code, permission_grants]
+      properties:
+        role_code:
+          type: string
+          enum: [org_admin, channel_manager, operator, installer, after_sales, viewer, finance, api_client]
+        permission_grants:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PermissionScopeGrant'
+    AllowedActions:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        enum: [view, control, share, unbind, transfer, ota, edit, delete, approve, reject, cancel]
+    AuthorizationContextV2:
+      type: object
+      additionalProperties: false
+      required:
+        - schema_version
+        - actor
+        - active_organization
+        - memberships
+        - permission_grants
+        - authorization_version
+        - session_version
+      properties:
+        schema_version:
+          type: integer
+          const: 2
+        actor:
+          $ref: '#/components/schemas/Actor'
+        active_organization:
+          $ref: '#/components/schemas/OrganizationSummary'
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/MembershipSummary'
+        permissions:
+          description: Non-authoritative display compatibility projection; authorization decisions must use permission_grants.
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            pattern: '^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$'
+        permission_grants:
+          description: Authoritative permission-and-scope pairs for the active organization context.
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionScopeGrant'
+        authorization_version:
+          type: integer
+          format: int64
+          minimum: 1
+        session_version:
+          type: integer
+          format: int64
+          minimum: 1
+        expires_at:
+          type: string
+          format: date-time
+    AuthorizationContextRequest:
+      type: object
+      additionalProperties: false
+      required: [organization_id]
+      properties:
+        organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+    ContextToken:
+      type: object
+      additionalProperties: false
+      required: [access_token, token_type, expires_in, authorization_context]
+      properties:
+        access_token:
+          type: string
+          minLength: 32
+        token_type:
+          const: Bearer
+        expires_in:
+          type: integer
+          minimum: 1
+        authorization_context:
+          $ref: '#/components/schemas/AuthorizationContextV2'
+    ContextTokenResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/ContextToken'
+    AuthorizationContextResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/AuthorizationContextV2'
+    CreateOrganizationRequest:
+      type: object
+      additionalProperties: false
+      required: [parent_id, type, name]
+      properties:
+        parent_id:
+          type: integer
+          format: int64
+          minimum: 1
+        type:
+          $ref: '#/components/schemas/OrganizationType'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        code:
+          type: string
+          maxLength: 64
+    OrganizationResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/OrganizationSummary'
+    PageMetadata:
+      type: object
+      additionalProperties: false
+      required: [page, page_size, total]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+    OrganizationPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMetadata'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrganizationSummary'
+    OrganizationPageResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/OrganizationPage'
+    MembershipPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMetadata'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/MembershipSummary'
+    MembershipPageResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/MembershipPage'
+    Invitation:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, recipient, role_assignments, permission_grants, status, expires_at, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        recipient:
+          type: string
+          minLength: 3
+        role_assignments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RoleAssignment'
+        permission_grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionScopeGrant'
+        status:
+          type: string
+          enum: [pending, accepted, rejected, expired, revoked]
+        expires_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+    CreateInvitationRequest:
+      type: object
+      additionalProperties: false
+      required: [organization_id, recipient, role_assignments]
+      properties:
+        organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        recipient:
+          type: string
+          minLength: 3
+          maxLength: 254
+        role_assignments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RoleAssignment'
+        expires_in_seconds:
+          type: integer
+          minimum: 300
+          maximum: 604800
+    InvitationResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/Invitation'
+    InvitationPage:
+      allOf:
+        - $ref: '#/components/schemas/PageMetadata'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Invitation'
+    InvitationPageResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/InvitationPage'
+    DeviceClaimRequest:
+      type: object
+      additionalProperties: false
+      required: [sn, claim_code, station_id]
+      properties:
+        sn:
+          type: string
+          minLength: 6
+          maxLength: 64
+        claim_code:
+          type: string
+          minLength: 4
+          maxLength: 128
+          writeOnly: true
+        station_id:
+          type: integer
+          format: int64
+          minimum: 1
+        expected_version:
+          type: integer
+          minimum: 1
+    DeviceResource:
+      type: object
+      additionalProperties: false
+      required: [sn, organization_id, station_id, version, allowed_actions]
+      properties:
+        sn:
+          type: string
+        organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        station_id:
+          type: integer
+          format: int64
+          minimum: 1
+        version:
+          type: integer
+          minimum: 1
+        allowed_actions:
+          $ref: '#/components/schemas/AllowedActions'
+    StationResource:
+      type: object
+      additionalProperties: false
+      required: [id, organization_id, version, allowed_actions]
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+        organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        version:
+          type: integer
+          minimum: 1
+        allowed_actions:
+          $ref: '#/components/schemas/AllowedActions'
+    DeviceResourceResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/DeviceResource'
+    StationResourceResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/StationResource'
+    AssetGrant:
+      type: object
+      additionalProperties: false
+      required: [id, device_sn, subject_type, subject_id, permissions, status, version, allowed_actions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_sn:
+          type: string
+        subject_type:
+          type: string
+          enum: [user, organization]
+        subject_id:
+          type: string
+        permissions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [view, control]
+        status:
+          type: string
+          enum: [pending, active, expired, revoked]
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+        allowed_actions:
+          $ref: '#/components/schemas/AllowedActions'
+    CreateGrantRequest:
+      type: object
+      additionalProperties: false
+      required: [recipient, permissions]
+      properties:
+        recipient:
+          type: string
+          minLength: 3
+          maxLength: 254
+        permissions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum: [view, control]
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+        expected_version:
+          type: integer
+          minimum: 1
+    GrantResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/AssetGrant'
+    GrantListResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetGrant'
+    UnbindRequest:
+      type: object
+      additionalProperties: false
+      required: [id, device_sn, requester_user_id, requester_organization_id, reason, status, version, allowed_actions, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_sn:
+          type: string
+          minLength: 6
+          maxLength: 64
+        requester_user_id:
+          type: integer
+          format: int64
+          minimum: 1
+        requester_organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        status:
+          type: string
+          enum: [pending, approved, rejected, cancelled, expired, processing, completed, failed]
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        reviewed_by:
+          type: [integer, 'null']
+          format: int64
+        review_comment:
+          type: [string, 'null']
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        allowed_actions:
+          $ref: '#/components/schemas/AllowedActions'
+    CreateUnbindRequest:
+      type: object
+      additionalProperties: false
+      required: [reason, expected_version]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+    UnbindDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        expected_version:
+          type: integer
+          format: int64
+          minimum: 1
+        comment:
+          type: string
+          maxLength: 500
+    UnbindRequestResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/UnbindRequest'
+    UnbindRequestListResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnbindRequest'
+    DeviceTransfer:
+      type: object
+      additionalProperties: false
+      required: [id, device_sn, source_organization_id, target_organization_id, status, version, allowed_actions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_sn:
+          type: string
+        source_organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        target_organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          type: string
+          enum: [pending, approved, rejected, cancelled, expired, processing, completed, failed]
+        version:
+          type: integer
+          minimum: 1
+        allowed_actions:
+          $ref: '#/components/schemas/AllowedActions'
+    StationTransfer:
+      type: object
+      additionalProperties: false
+      required: [id, station_id, source_organization_id, target_organization_id, status, version, allowed_actions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        station_id:
+          type: integer
+          format: int64
+          minimum: 1
+        source_organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        target_organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        status:
+          type: string
+          enum: [pending, approved, rejected, cancelled, expired, processing, completed, failed]
+        version:
+          type: integer
+          minimum: 1
+        allowed_actions:
+          $ref: '#/components/schemas/AllowedActions'
+    CreateTransferRequest:
+      type: object
+      additionalProperties: false
+      required: [target_organization_id, expected_version]
+      properties:
+        target_organization_id:
+          type: integer
+          format: int64
+          minimum: 1
+        expected_version:
+          type: integer
+          minimum: 1
+        reason:
+          type: string
+          maxLength: 500
+    DeviceTransferResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/DeviceTransfer'
+    DeviceTransferListResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceTransfer'
+    StationTransferResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          $ref: '#/components/schemas/StationTransfer'
+    StationTransferListResponse:
+      type: object
+      additionalProperties: false
+      required: [code, data]
+      properties:
+        code:
+          const: 0
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StationTransfer'

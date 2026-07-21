@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -48,9 +49,9 @@ func LoadConfig() EnvConfig {
 		RedisPassword: getEnvOrDefault("TEST_REDIS_PASSWORD", "testredispass"),
 
 		MQTTBroker: getEnvOrDefault("TEST_MQTT_BROKER", "localhost"),
-		MQTTPort:   getEnvOrDefault("TEST_MQTT_PORT", "1883"),
+		MQTTPort:   getEnvOrDefault("TEST_MQTT_PORT", "11883"),
 
-		APIBaseURL: getEnvOrDefault("TEST_API_BASE_URL", "http://localhost:8888"),
+		APIBaseURL: getEnvOrDefault("TEST_API_BASE_URL", "http://localhost:18888"),
 	}
 }
 
@@ -113,7 +114,9 @@ func CleanupTable(t *testing.T, pool *pgxpool.Pool, table string) {
 	}
 }
 
-// requireService checks if a TCP service is reachable, skips the test if not.
+// requireService checks if a TCP service is reachable. CI sets
+// TEST_REQUIRE_SERVICES=true so missing dependencies fail instead of producing
+// a false-green result through skipped tests.
 // host can be a plain hostname (e.g. "localhost") or a full URL (e.g. "http://localhost:8888").
 // When host is a URL, the port parameter is ignored and the URL's own port is used.
 func requireService(t *testing.T, host, port, name string) {
@@ -127,6 +130,9 @@ func requireService(t *testing.T, host, port, name string) {
 	}
 	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 	if err != nil {
+		if strings.EqualFold(os.Getenv("TEST_REQUIRE_SERVICES"), "true") {
+			t.Fatalf("required service %s not available at %s: %v", name, addr, err)
+		}
 		t.Skipf("service %s not available at %s, skipping: %v", name, addr, err)
 	}
 	conn.Close()

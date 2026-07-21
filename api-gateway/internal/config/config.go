@@ -38,7 +38,9 @@ type ServerConfig struct {
 }
 
 type JWTConfig struct {
-	Secret string `yaml:"secret"`
+	Secret   string `yaml:"secret"`
+	Issuer   string `yaml:"issuer"`
+	Audience string `yaml:"audience"`
 }
 
 type RateLimitConfig struct {
@@ -99,6 +101,8 @@ func Load(path string) (*Config, error) {
 	cfg.Database.Name = "inv_mqtt"
 	cfg.Database.SSLMode = "disable"
 	cfg.CORS.AllowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
+	cfg.JWT.Issuer = "inv-api-server"
+	cfg.JWT.Audience = "inv-platform-api"
 
 	if err := yaml.Unmarshal([]byte(expanded), cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
@@ -130,6 +134,12 @@ func (c *Config) Validate() error {
 		missing = append(missing, "jwt.secret (env: JWT_SECRET, must not be empty or a CHANGE_ME* placeholder)")
 	} else if strings.EqualFold(c.Server.Mode, "release") && len(c.JWT.Secret) < 32 {
 		missing = append(missing, "jwt.secret must be at least 32 characters in release mode")
+	}
+	if strings.TrimSpace(c.JWT.Issuer) == "" {
+		missing = append(missing, "jwt.issuer")
+	}
+	if strings.TrimSpace(c.JWT.Audience) == "" {
+		missing = append(missing, "jwt.audience")
 	}
 	if !validBackendURL(c.Backends.APIServer) {
 		missing = append(missing, "backends.api_server (env: API_SERVER_URL)")

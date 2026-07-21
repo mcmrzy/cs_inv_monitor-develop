@@ -129,7 +129,7 @@ func Load(configPath string) (*Config, error) {
 
 	viper.SetDefault("timezone", "Asia/Shanghai")
 	viper.SetDefault("backends.device_server", "http://inv-device-server:8081")
-	viper.SetDefault("backends.weather_api", "http://api.open-meteo.com/v1/forecast")
+	viper.SetDefault("backends.weather_api", "https://api.open-meteo.com/v1/forecast")
 	viper.SetDefault("backends.amap_api_key", "")
 	viper.SetDefault("backends.weather_source", "open-meteo")
 	viper.SetDefault("backends.upload_dir", "/data/firmware")
@@ -151,7 +151,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("redis.db", 0)
 
 	viper.SetDefault("jwt.secret", "")
-	viper.SetDefault("jwt.expire_time", 2*time.Hour)
+	viper.SetDefault("jwt.expire_time", 15*time.Minute)
 	viper.SetDefault("jwt.refresh_expire_time", 7*24*time.Hour)
 	viper.SetDefault("jwt.issuer", "inv-api-server")
 
@@ -251,6 +251,15 @@ func (c *Config) Validate() error {
 	var missing []string
 	if invalidRequiredSecret(c.JWT.Secret) {
 		missing = append(missing, "jwt.secret (env: JWT_SECRET, must not be empty or a CHANGE_ME* placeholder)")
+	}
+	if strings.TrimSpace(c.JWT.Issuer) == "" {
+		missing = append(missing, "jwt.issuer")
+	}
+	if c.JWT.ExpireTime <= 0 || c.JWT.ExpireTime > 15*time.Minute {
+		missing = append(missing, "jwt.expire_time (must be > 0 and <= 15m)")
+	}
+	if c.JWT.RefreshExpireTime <= c.JWT.ExpireTime || c.JWT.RefreshExpireTime > 30*24*time.Hour {
+		missing = append(missing, "jwt.refresh_expire_time (must be greater than access TTL and <= 720h)")
 	}
 	if invalidRequiredSecret(c.Database.Password) {
 		missing = append(missing, "database.password (env: DB_PASSWORD, must not be empty or a CHANGE_ME* placeholder)")

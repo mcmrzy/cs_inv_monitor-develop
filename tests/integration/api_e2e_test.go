@@ -4,12 +4,11 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os/exec"
-	"strings"
 	"testing"
 	"time"
 
@@ -62,16 +61,17 @@ func doJSON(t *testing.T, client *http.Client, method, url string, body interfac
 	return &apiResp, resp.StatusCode
 }
 
-// setEmailCode stores a verification code in Redis via docker exec for the given email and code type.
+// setEmailCode stores a verification code through the isolated test Redis
+// endpoint. It must never depend on a named developer/production container.
 func setEmailCode(t *testing.T, email, codeType, code string) {
 	t.Helper()
+	cfg := LoadConfig()
+	rdb := ConnectRedis(t, cfg)
+	defer rdb.Close()
+
 	redisKey := fmt.Sprintf("email:%s:%s", email, codeType)
-	cmd := exec.Command("docker", "exec", "inv-redis", "redis-cli",
-		"-a", "RCq/G7b4T00dt5bprW7o34c/OOgPHPKe55Iwz3GvQYQ=",
-		"SET", redisKey, code, "EX", "300")
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "docker exec redis SET failed: %s", string(out))
-	require.True(t, strings.Contains(string(out), "OK"), "redis SET should return OK, got: %s", string(out))
+	err := rdb.Set(context.Background(), redisKey, code, 5*time.Minute).Err()
+	require.NoError(t, err, "test Redis SET failed")
 }
 
 func registerUser(t *testing.T, baseURL, phone, password string) {
@@ -131,9 +131,7 @@ func TestHealthCheck(t *testing.T) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	// Use raw base URL which may contain port already; just call /health
 	resp, err := client.Get(cfg.APIBaseURL + "/health")
-	if err != nil {
-		t.Skipf("API gateway not reachable at %s, skipping: %v", cfg.APIBaseURL, err)
-	}
+	require.NoError(t, err, "API gateway health request failed")
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -236,6 +234,8 @@ func TestDeviceManagementFlow(t *testing.T) {
 	}
 	resp, status := doJSON(t, client, "POST", cfg.APIBaseURL+"/api/v1/devices/bind", bindPayload, token)
 	t.Logf("bind: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
+	require.Equal(t, http.StatusOK, status, "bind HTTP status")
+	require.Equal(t, 0, resp.Code, "bind should succeed")
 
 	// Step 2: List devices
 	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices", nil, token)
@@ -246,6 +246,13 @@ func TestDeviceManagementFlow(t *testing.T) {
 	// Step 3: Get device detail
 	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices/"+testSN, nil, token)
 	t.Logf("get device: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
+	require.Equal(t, http.StatusOK, status, "get device HTTP status")
+	require.Equal(t, 0, resp.Code, "get device should succeed")
+
+	// Step 4: Unbind the owned device through the same self-service path used by the app.
+	resp, status = doJSON(t, client, "POST", cfg.APIBaseURL+"/api/v1/devices/"+testSN+"/unbind", nil, token)
+	require.Equal(t, http.StatusOK, status, "unbind HTTP status")
+	require.Equal(t, 0, resp.Code, "unbind should succeed")
 }
 
 // TestUnauthorizedAccess verifies that accessing protected endpoints without token fails.
@@ -297,14 +304,15 @@ func TestDataIsolation(t *testing.T) {
 	bindPayload := map[string]interface{}{"sn": snA, "station_id": 0}
 	resp, status := doJSON(t, client, "POST", cfg.APIBaseURL+"/api/v1/devices/bind", bindPayload, tokenA)
 	t.Logf("userA bind: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
+	require.Equal(t, http.StatusOK, status, "user A bind HTTP status")
+	require.Equal(t, 0, resp.Code, "user A bind should succeed")
 
 	// User B should NOT see user A's device
 	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices/"+snA, nil, tokenB)
 	t.Logf("userB get userA device: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
 	// Expect: 404 or 403 or business error code indicating no access
-	if resp.Code == 0 {
-		t.Log("WARNING: user B can see user A's device - isolation may need review")
-	}
+	assert.NotEqual(t, 0, resp.Code, "user B must not see user A's device")
+	assert.Contains(t, []int{http.StatusForbidden, http.StatusNotFound}, status)
 }
 
 // TestRateLimiting verifies the gateway rate limiting is active.

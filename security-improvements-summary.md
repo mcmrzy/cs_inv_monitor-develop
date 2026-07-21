@@ -48,7 +48,7 @@ cors:
 - `deploy/docker-compose.yml`
 
 **改进**:
-- 为Redis设置了强密码: `RCq/G7b4T00dt5bprW7o34c/OOgPHPKe55Iwz3GvQYQ=`
+- 为Redis设置了强密码: `CHANGE_ME_REDIS_PASSWORD`
 - 移除了Redis端口到宿主机的暴露
 - Redis命令添加了 `--requirepass` 参数
 - 所有服务现在通过环境变量传递Redis密码
@@ -112,7 +112,7 @@ cors:
 JWT_SECRET=fq2T9il2RpZpSmUH1pLbV4cIwaEWypg3wjT629+GPeassiiW6A+wXdC+4jennVyN
 
 # Redis密码
-REDIS_PASSWORD=RCq/G7b4T00dt5bprW7o34c/OOgPHPKe55Iwz3GvQYQ=
+REDIS_PASSWORD=CHANGE_ME_REDIS_PASSWORD
 ```
 
 ### Docker Compose
@@ -178,7 +178,7 @@ curl -H "Origin: http://malicious-site.com" -I http://localhost:8888/api/v1/auth
 curl -I http://localhost:8888/health
 
 # 检查Redis连接
-docker exec -it inv-redis redis-cli -a "RCq/G7b4T00dt5bprW7o34c/OOgPHPKe55Iwz3GvQYQ=" ping
+docker exec -it inv-redis redis-cli -a "CHANGE_ME_REDIS_PASSWORD" ping
 ```
 
 ## 后续建议

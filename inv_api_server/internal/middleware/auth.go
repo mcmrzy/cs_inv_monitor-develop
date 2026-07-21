@@ -6,68 +6,122 @@ import (
 	"sync"
 	"time"
 
+	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
 
-func Auth(jwtService *service.JWTService) gin.HandlerFunc {
+func Auth(jwtService *service.JWTService, validators ...AuthorizationContextValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token := ""
-		if parts := strings.SplitN(c.GetHeader("Authorization"), " ", 2); len(parts) == 2 && parts[0] == "Bearer" {
-			token = parts[1]
+		// 从 Authorization header 或 httpOnly cookie 获取 token
+		tokenStr := ""
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenStr = parts[1]
+			}
 		}
-		if token == "" {
-			token, _ = c.Cookie("access_token")
+		if tokenStr == "" {
+			tokenStr, _ = c.Cookie("access_token")
 		}
-		if token == "" {
+
+		if tokenStr == "" {
 			response.Unauthorized(c, "missing authorization")
 			c.Abort()
 			return
 		}
-		claims, err := jwtService.ParseAccessToken(token)
+
+		claims, err := jwtService.ParseAccessToken(tokenStr)
 		if err != nil {
 			response.Unauthorized(c, "invalid token")
 			c.Abort()
 			return
 		}
+
 		jti := jwtService.GetJTI(claims)
 		if jwtService.IsBlacklisted(c.Request.Context(), jti) {
 			response.Unauthorized(c, "token has been revoked")
 			c.Abort()
 			return
 		}
-		revoked, err := jwtService.IsUserSessionRevoked(c.Request.Context(), claims.UserID, claims.SessionIAT)
-		if err != nil {
+		revoked, sessionErr := jwtService.IsUserSessionRevoked(c.Request.Context(), claims.UserID, claims.IssuedAt.Time.UnixMilli())
+		if sessionErr != nil {
 			response.InternalError(c, "session validation unavailable")
 			c.Abort()
 			return
 		}
-		if revoked {
-			response.Unauthorized(c, "user session has been revoked")
+		if revoked || !jwtService.ValidateAccessSession(c.Request.Context(), claims.UserID, claims.SessionID) {
+			response.Unauthorized(c, "access session revoked")
 			c.Abort()
 			return
 		}
+		if len(validators) > 0 && validators[0] != nil {
+			valid, validateErr := validators[0].ValidateAuthorizationSessionContext(c.Request.Context(), sessionContextFromClaims(claims))
+			if validateErr != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"code": 503, "message": "authorization state unavailable"})
+				c.Abort()
+				return
+			}
+			if !valid {
+				response.Unauthorized(c, "authorization context revoked")
+				c.Abort()
+				return
+			}
+		}
+
 		c.Set("user_id", claims.UserID)
 		c.Set("phone", claims.Phone)
 		c.Set("role", claims.Role)
+		c.Set("actor_context", model.ActorContext{
+			UserID: claims.UserID, RootTenantID: claims.RootTenantID,
+			OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,
+			MembershipVersion: claims.MembershipVersion,
+		})
+		c.Set("authorization_version", claims.AuthorizationVersion)
+		c.Set("session_version", claims.SessionVersion)
 		c.Set("token_jti", jti)
 		c.Next()
 	}
 }
 
-func OptionalAuth(jwtService *service.JWTService) gin.HandlerFunc {
+func OptionalAuth(jwtService *service.JWTService, validators ...AuthorizationContextValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		parts := strings.SplitN(c.GetHeader("Authorization"), " ", 2)
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) == 2 && parts[0] == "Bearer" {
-			if claims, err := jwtService.ParseAccessToken(parts[1]); err == nil {
+			claims, err := jwtService.ParseAccessToken(parts[1])
+			if err == nil {
 				jti := jwtService.GetJTI(claims)
-				revoked, sessionErr := jwtService.IsUserSessionRevoked(c.Request.Context(), claims.UserID, claims.SessionIAT)
-				if sessionErr == nil && !revoked && !jwtService.IsBlacklisted(c.Request.Context(), jti) {
+				contextValid := jwtService.ValidateAccessSession(c.Request.Context(), claims.UserID, claims.SessionID)
+				if contextValid {
+					var revoked bool
+					revoked, err = jwtService.IsUserSessionRevoked(c.Request.Context(), claims.UserID, claims.IssuedAt.Time.UnixMilli())
+					contextValid = err == nil && !revoked
+				}
+				if len(validators) > 0 && validators[0] != nil {
+					if contextValid {
+						contextValid, err = validators[0].ValidateAuthorizationSessionContext(c.Request.Context(), sessionContextFromClaims(claims))
+					}
+				}
+				if err == nil && contextValid && !jwtService.IsBlacklisted(c.Request.Context(), jti) {
 					c.Set("user_id", claims.UserID)
 					c.Set("phone", claims.Phone)
 					c.Set("role", claims.Role)
+					c.Set("actor_context", model.ActorContext{
+						UserID: claims.UserID, RootTenantID: claims.RootTenantID,
+						OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,
+						MembershipVersion: claims.MembershipVersion,
+					})
+					c.Set("authorization_version", claims.AuthorizationVersion)
+					c.Set("session_version", claims.SessionVersion)
 					c.Set("token_jti", jti)
 				}
 			}
@@ -84,22 +138,29 @@ func RequireRole(minRole int) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
 		userRole, ok := role.(int)
-		if !ok || userRole > minRole {
+		if !ok {
+			response.Forbidden(c, "invalid role type")
+			c.Abort()
+			return
+		}
+		if userRole > minRole {
 			response.Forbidden(c, "permission denied")
 			c.Abort()
 			return
 		}
+
 		c.Next()
 	}
 }
 
 func GetUserID(c *gin.Context) int64 {
-	value, exists := c.Get("user_id")
+	v, exists := c.Get("user_id")
 	if !exists {
 		return 0
 	}
-	id, ok := value.(int64)
+	id, ok := v.(int64)
 	if !ok {
 		return 0
 	}
@@ -107,27 +168,28 @@ func GetUserID(c *gin.Context) int64 {
 }
 
 func GetRole(c *gin.Context) int {
-	value, exists := c.Get("role")
+	v, exists := c.Get("role")
 	if !exists {
 		return -1
 	}
-	role, ok := value.(int)
+	r, ok := v.(int)
 	if !ok {
 		return -1
 	}
-	return role
+	return r
 }
 
+// GetPhone 从上下文获取用户手机号
 func GetPhone(c *gin.Context) string {
-	value, exists := c.Get("phone")
+	v, exists := c.Get("phone")
 	if !exists {
 		return ""
 	}
-	phone, ok := value.(string)
+	p, ok := v.(string)
 	if !ok {
 		return ""
 	}
-	return phone
+	return p
 }
 
 func CORS(allowedOrigins []string) gin.HandlerFunc {
@@ -161,8 +223,13 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 	}
 }
 
-func RateLimit() gin.HandlerFunc { return RateLimitWith(10, 20) }
+func RateLimit() gin.HandlerFunc {
+	return RateLimitWith(10, 20)
+}
 
+// RateLimitWith creates an IP-based token bucket with a custom refill rate and burst.
+// It is useful for public endpoints whose work is significantly more expensive than
+// an ordinary API request, such as image challenge generation.
 func RateLimitWith(rate float64, burst int) gin.HandlerFunc {
 	if rate <= 0 {
 		rate = 1
@@ -170,7 +237,12 @@ func RateLimitWith(rate float64, burst int) gin.HandlerFunc {
 	if burst <= 0 {
 		burst = 1
 	}
-	return (&ipRateLimiter{limiters: make(map[string]*tokenBucket), rate: rate, burst: burst}).Handle()
+	limiter := &ipRateLimiter{
+		limiters: make(map[string]*tokenBucket),
+		rate:     rate,
+		burst:    burst,
+	}
+	return limiter.Handle()
 }
 
 type tokenBucket struct {
@@ -185,11 +257,13 @@ func (b *tokenBucket) allow() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	now := time.Now()
-	b.tokens += now.Sub(b.lastRefill).Seconds() * b.rate
+	elapsed := now.Sub(b.lastRefill).Seconds()
+	b.tokens += elapsed * b.rate
 	if b.tokens > float64(b.burst) {
 		b.tokens = float64(b.burst)
 	}
 	b.lastRefill = now
+
 	if b.tokens < 1 {
 		return false
 	}
@@ -209,21 +283,32 @@ func (l *ipRateLimiter) getLimiter(ip string) *tokenBucket {
 	l.mu.RLock()
 	limiter, exists := l.limiters[ip]
 	l.mu.RUnlock()
+
 	if exists {
 		return limiter
 	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if limiter, exists = l.limiters[ip]; exists {
+
+	limiter, exists = l.limiters[ip]
+	if exists {
 		return limiter
 	}
-	limiter = &tokenBucket{rate: l.rate, burst: l.burst, tokens: float64(l.burst), lastRefill: time.Now()}
-	l.limiters[ip] = limiter
+
+	l.limiters[ip] = &tokenBucket{
+		rate:       l.rate,
+		burst:      l.burst,
+		tokens:     float64(l.burst),
+		lastRefill: time.Now(),
+	}
+
 	if time.Since(l.cleanup) > 5*time.Minute {
 		l.cleanup = time.Now()
 		l.cleanupStaleLimiters()
 	}
-	return limiter
+
+	return l.limiters[ip]
 }
 
 func (l *ipRateLimiter) cleanupStaleLimiters() {
@@ -238,7 +323,9 @@ func (l *ipRateLimiter) cleanupStaleLimiters() {
 
 func (l *ipRateLimiter) Handle() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !l.getLimiter(c.ClientIP()).allow() {
+		ip := c.ClientIP()
+		limiter := l.getLimiter(ip)
+		if !limiter.allow() {
 			response.TooManyRequests(c, "请求过于频繁，请稍后再试")
 			c.Abort()
 			return

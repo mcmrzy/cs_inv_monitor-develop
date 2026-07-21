@@ -1,45 +1,31 @@
-# ============================================================
-# cs_inv_monitor - Integration Test Environment
-# Usage:
-#   docker compose -f docker-compose.test.yml up -d
-#   cd ../tests/integration && go test -v -tags=integration -count=1 ./...
-#   docker compose -f docker-compose.test.yml down -v
-# ============================================================
-
 name: inv-monitor-test
 
 services:
-  # ---------- PostgreSQL + TimescaleDB ----------
   postgres:
     image: timescale/timescaledb:latest-pg18
-    container_name: inv-test-postgres
     environment:
       POSTGRES_USER: testuser
       POSTGRES_PASSWORD: testpass
       POSTGRES_DB: inv_test
       TZ: UTC
     ports:
-      - "15432:5432"
+      - "127.0.0.1:15432:5432"
     volumes:
-      - test-pg-data:/var/lib/postgresql/data
-      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ../database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/02-timescaledb.sql:ro
+      - test-pg-data:/var/lib/postgresql
     networks:
       - inv-test-net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U testuser -d inv_test"]
       interval: 3s
       timeout: 5s
-      retries: 10
+      retries: 20
       start_period: 15s
 
-  # ---------- Redis ----------
   redis:
-    image: redis:7-alpine
-    container_name: inv-test-redis
-    ports:
-      - "16379:6379"
+    image: redis:7.2-alpine
     command: redis-server --requirepass testredispass --appendonly yes
+    ports:
+      - "127.0.0.1:16379:6379"
     volumes:
       - test-redis-data:/data
     networks:
@@ -47,27 +33,126 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "testredispass", "ping"]
       interval: 3s
-      retries: 5
+      timeout: 5s
+      retries: 10
 
-  # ---------- EMQX (MQTT Broker) ----------
   emqx:
     image: emqx/emqx:5.3
-    container_name: inv-test-emqx
     environment:
       EMQX_NAME: emqx-test
       EMQX_HOST: 127.0.0.1
       EMQX_LISTENERS__TCP__DEFAULT__ENABLE: "true"
-      EMQX_LOADED_PLUGINS: "emqx_management,emqx_auth_mnesia,emqx_retainer"
     ports:
-      - "1883:1883"    # MQTT TCP
-      - "18083:18083"  # EMQX Dashboard
+      - "127.0.0.1:11883:1883"
     networks:
       - inv-test-net
     healthcheck:
       test: ["CMD", "emqx", "ping"]
       interval: 5s
-      retries: 10
+      timeout: 5s
+      retries: 20
       start_period: 20s
+
+  inv-api-server:
+    build:
+      context: ..
+      dockerfile: inv_api_server/Dockerfile
+      args:
+        GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: testuser
+      DB_PASSWORD: testpass
+      DB_NAME: inv_test
+      DB_SSL_MODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: testredispass
+      JWT_SECRET: test-jwt-secret-with-more-than-32-characters
+      DEVICE_SERVER_URL: http://inv-device-server:8081
+      INTERNAL_KEY: test-internal-key-with-more-than-32-characters
+      SERVER_URL: http://api-gateway:8080
+      WEATHER_SOURCE: open-meteo
+      EMAIL_HOST: smtp.example.com
+      JPUSH_ENABLED: "false"
+    networks:
+      - inv-test-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  inv-device-server:
+    build:
+      context: ../inv_device_server
+      dockerfile: Dockerfile
+      args:
+        GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: testuser
+      DB_PASSWORD: testpass
+      DB_NAME: inv_test
+      DB_SSL_MODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: testredispass
+      MQTT_BROKER: emqx
+      MQTT_PORT: "1883"
+      MQTT_CLIENT_ID: CSKJ-INV-SERVER-DEVICE-TEST
+      KAFKA_ENABLED: "false"
+      API_SERVER_URL: http://inv-api-server:8080
+      INTERNAL_KEY: test-internal-key-with-more-than-32-characters
+    networks:
+      - inv-test-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
+      inv-api-server:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: ../api-gateway
+      dockerfile: Dockerfile
+      args:
+        GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
+    environment:
+      JWT_SECRET: test-jwt-secret-with-more-than-32-characters
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: testredispass
+      API_SERVER_URL: http://inv-api-server:8080
+      DEVICE_SERVER_URL: http://inv-device-server:8081
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: testuser
+      DB_PASSWORD: testpass
+      DB_NAME: inv_test
+      DB_SSL_MODE: disable
+    ports:
+      - "127.0.0.1:18888:8080"
+    networks:
+      - inv-test-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      inv-api-server:
+        condition: service_healthy
+      inv-device-server:
+        condition: service_healthy
 
 networks:
   inv-test-net:
