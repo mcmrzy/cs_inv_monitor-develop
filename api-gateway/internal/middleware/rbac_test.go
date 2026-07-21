@@ -174,7 +174,7 @@ func TestRBACGuard_AppAllowedPath(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestRBACGuard_NoUserID_PassThrough(t *testing.T) {
+func TestRBACGuard_NoUserID_Unauthorized(t *testing.T) {
 	rbac := NewRBACMiddleware(nil, nil, 300)
 	router := newTestRouter(rbac)
 
@@ -182,8 +182,7 @@ func TestRBACGuard_NoUserID_PassThrough(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
 	router.ServeHTTP(w, req)
 
-	// 无 X-User-ID 时跳过检查，放行
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestRBACGuard_SuperAdmin_Bypass(t *testing.T) {
@@ -214,6 +213,25 @@ func TestRBACGuard_StaleHeaderRoleCannotGrantSuperAdmin(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/api/v1/admin/users", nil)
 	req.Header.Set("X-User-ID", "1")
 	req.Header.Set("X-User-Role", "0") // super_admin via header
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestRBACGuard_UnknownUserRoleCannotUseJWTHeaderAsSuperAdmin(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+
+	// Redis is reachable but has no authoritative role record for this user.
+	// A token role claim must not turn that unknown state into a role=0 bypass.
+	rbac := NewRBACMiddleware(rdb, nil, 300)
+	router := newTestRouter(rbac)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/v1/admin/users", nil)
+	req.Header.Set("X-User-ID", "404")
+	req.Header.Set("X-User-Role", "0")
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)

@@ -57,11 +57,11 @@
 
 **Files:**
 
-- Create: `database/migrations/059_create_channel_authorization.up.sql`
-- Create: `database/migrations/059_create_channel_authorization.down.sql`
-- Create: `database/migrations/060_extend_audit_outbox.up.sql`
-- Create: `database/migrations/060_extend_audit_outbox.down.sql`
-- Create: `database/tests/059_channel_authorization_test.sql`
+- Create: `database/migrations/064_create_channel_authorization.up.sql`
+- Create: `database/migrations/064_create_channel_authorization.down.sql`
+- Create: `database/migrations/065_extend_audit_outbox.up.sql`
+- Create: `database/migrations/065_extend_audit_outbox.down.sql`
+- Create: `database/tests/064_channel_authorization_test.sql`
 - Modify: `database/schema.sql`
 - Modify: `tests/integration/db_migration_test.go`
 
@@ -81,8 +81,8 @@
 - Create: `inv_api_server/internal/migration/channel_backfill.go`
 - Create: `inv_api_server/internal/migration/channel_backfill_test.go`
 - Create: `inv_api_server/cmd/channel_migrate/main.go`
-- Create: `database/migrations/061_create_channel_backfill_control.up.sql`
-- Create: `database/migrations/061_create_channel_backfill_control.down.sql`
+- Create: `database/migrations/066_create_channel_backfill_control.up.sql`
+- Create: `database/migrations/066_create_channel_backfill_control.down.sql`
 - Modify: `inv_api_server/internal/migration/migrator.go`
 
 **Steps:**
@@ -212,12 +212,12 @@
 
 **Files:**
 
-- Create: `database/migrations/062_create_asset_lifecycle.up.sql`
-- Create: `database/migrations/062_create_asset_lifecycle.down.sql`
-- Create: `database/migrations/063_add_tenant_ownership_columns.up.sql`
-- Create: `database/migrations/063_add_tenant_ownership_columns.down.sql`
-- Create: `database/migrations/064_prepare_channel_constraints.up.sql`
-- Create: `database/migrations/064_prepare_channel_constraints.down.sql`
+- Create: `database/migrations/068_create_asset_lifecycle.up.sql`
+- Create: `database/migrations/068_create_asset_lifecycle.down.sql`
+- Create: `database/migrations/069_add_tenant_ownership_columns.up.sql`
+- Create: `database/migrations/069_add_tenant_ownership_columns.down.sql`
+- Create: `database/migrations/070_prepare_channel_constraints.up.sql`
+- Create: `database/migrations/070_prepare_channel_constraints.down.sql`
 - Create: `database/channel-migrate/validate_channel_constraints.sql`
 - Create: `inv_api_server/internal/migration/channel_asset_backfill.go`
 - Create: `inv_api_server/internal/migration/channel_asset_backfill_test.go`

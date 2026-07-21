@@ -41,6 +41,20 @@ type ActorContext struct {
 	MembershipVersion int64 `json:"membership_version"`
 }
 
+// AuthorizationSessionContext is the authoritative database projection used
+// when issuing and validating an organization-bound access token.
+type AuthorizationSessionContext struct {
+	Actor                ActorContext `json:"actor"`
+	AuthorizationVersion int64        `json:"authorization_version"`
+	SessionVersion       int64        `json:"session_version"`
+	Phone                string       `json:"-"`
+	LegacyRole           int          `json:"-"`
+}
+
+func (c AuthorizationSessionContext) Valid() bool {
+	return c.Actor.Valid() && c.AuthorizationVersion > 0 && c.SessionVersion > 0
+}
+
 func (a ActorContext) Valid() bool {
 	return a.UserID > 0 && a.RootTenantID > 0 && a.OrganizationID > 0 && a.MembershipID > 0 && a.MembershipVersion > 0
 }

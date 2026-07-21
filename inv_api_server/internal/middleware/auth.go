@@ -6,13 +6,14 @@ import (
 	"sync"
 	"time"
 
+	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 )
 
-func Auth(jwtService *service.JWTService) gin.HandlerFunc {
+func Auth(jwtService *service.JWTService, validators ...AuthorizationContextValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 从 Authorization header 或 httpOnly cookie 获取 token
 		tokenStr := ""
@@ -33,7 +34,7 @@ func Auth(jwtService *service.JWTService) gin.HandlerFunc {
 			return
 		}
 
-		claims, err := jwtService.ParseToken(tokenStr)
+		claims, err := jwtService.ParseAccessToken(tokenStr)
 		if err != nil {
 			response.Unauthorized(c, "invalid token")
 			c.Abort()
@@ -46,16 +47,41 @@ func Auth(jwtService *service.JWTService) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+		if len(validators) > 0 && validators[0] != nil {
+			if !jwtService.ValidateAccessSession(c.Request.Context(), claims.UserID, claims.SessionID) {
+				response.Unauthorized(c, "access session revoked")
+				c.Abort()
+				return
+			}
+			valid, validateErr := validators[0].ValidateAuthorizationSessionContext(c.Request.Context(), sessionContextFromClaims(claims))
+			if validateErr != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{"code": 503, "message": "authorization state unavailable"})
+				c.Abort()
+				return
+			}
+			if !valid {
+				response.Unauthorized(c, "authorization context revoked")
+				c.Abort()
+				return
+			}
+		}
 
 		c.Set("user_id", claims.UserID)
 		c.Set("phone", claims.Phone)
 		c.Set("role", claims.Role)
+		c.Set("actor_context", model.ActorContext{
+			UserID: claims.UserID, RootTenantID: claims.RootTenantID,
+			OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,
+			MembershipVersion: claims.MembershipVersion,
+		})
+		c.Set("authorization_version", claims.AuthorizationVersion)
+		c.Set("session_version", claims.SessionVersion)
 		c.Set("token_jti", jti)
 		c.Next()
 	}
 }
 
-func OptionalAuth(jwtService *service.JWTService) gin.HandlerFunc {
+func OptionalAuth(jwtService *service.JWTService, validators ...AuthorizationContextValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -65,13 +91,27 @@ func OptionalAuth(jwtService *service.JWTService) gin.HandlerFunc {
 
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) == 2 && parts[0] == "Bearer" {
-			claims, err := jwtService.ParseToken(parts[1])
+			claims, err := jwtService.ParseAccessToken(parts[1])
 			if err == nil {
 				jti := jwtService.GetJTI(claims)
-				if !jwtService.IsBlacklisted(c.Request.Context(), jti) {
+				contextValid := true
+				if len(validators) > 0 && validators[0] != nil {
+					contextValid = jwtService.ValidateAccessSession(c.Request.Context(), claims.UserID, claims.SessionID)
+					if contextValid {
+						contextValid, err = validators[0].ValidateAuthorizationSessionContext(c.Request.Context(), sessionContextFromClaims(claims))
+					}
+				}
+				if err == nil && contextValid && !jwtService.IsBlacklisted(c.Request.Context(), jti) {
 					c.Set("user_id", claims.UserID)
 					c.Set("phone", claims.Phone)
 					c.Set("role", claims.Role)
+					c.Set("actor_context", model.ActorContext{
+						UserID: claims.UserID, RootTenantID: claims.RootTenantID,
+						OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,
+						MembershipVersion: claims.MembershipVersion,
+					})
+					c.Set("authorization_version", claims.AuthorizationVersion)
+					c.Set("session_version", claims.SessionVersion)
 					c.Set("token_jti", jti)
 				}
 			}

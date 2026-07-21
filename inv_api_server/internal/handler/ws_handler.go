@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/logger"
 
@@ -18,25 +19,49 @@ import (
 	"go.uber.org/zap"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
 type WSHandler struct {
-	rdb        *redis.Client
-	jwtService *service.JWTService
-	conns      map[string]int
-	connsMux   sync.Mutex
+	rdb              *redis.Client
+	jwtService       *service.JWTService
+	contextValidator wsAuthorizationContextValidator
+	deviceAccess     deviceAccessChecker
+	allowedOrigins   map[string]struct{}
+	conns            map[string]int
+	connsMux         sync.Mutex
 }
 
-func NewWSHandler(rdb *redis.Client, jwtService *service.JWTService) *WSHandler {
-	return &WSHandler{
-		rdb:        rdb,
-		jwtService: jwtService,
-		conns:      make(map[string]int),
+type wsAuthorizationContextValidator interface {
+	ValidateAuthorizationSessionContext(context.Context, model.AuthorizationSessionContext) (bool, error)
+}
+
+type deviceAccessChecker interface {
+	HasDeviceAccessV2(context.Context, model.ActorContext, string, string) (bool, error)
+}
+
+func NewWSHandler(rdb *redis.Client, jwtService *service.JWTService, contextValidator wsAuthorizationContextValidator, deviceAccess deviceAccessChecker, allowedOrigins []string) *WSHandler {
+	origins := make(map[string]struct{}, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		origins[origin] = struct{}{}
 	}
+	return &WSHandler{
+		rdb:              rdb,
+		jwtService:       jwtService,
+		contextValidator: contextValidator,
+		deviceAccess:     deviceAccess,
+		allowedOrigins:   origins,
+		conns:            make(map[string]int),
+	}
+}
+
+func (h *WSHandler) checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	if _, allowAll := h.allowedOrigins["*"]; allowAll {
+		return true
+	}
+	_, allowed := h.allowedOrigins[origin]
+	return allowed
 }
 
 func (h *WSHandler) DeviceRealtime(c *gin.Context) {
@@ -48,14 +73,37 @@ func (h *WSHandler) DeviceRealtime(c *gin.Context) {
 		return
 	}
 
-	claims, err := h.jwtService.ParseToken(token)
+	claims, err := h.jwtService.ParseAccessToken(token)
 	if err != nil {
 		logger.Warn("WS auth failed", zap.String("sn", sn), zap.Error(err))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
+	if h.contextValidator == nil || h.deviceAccess == nil || h.jwtService.IsBlacklisted(c.Request.Context(), claims.ID) ||
+		!h.jwtService.ValidateAccessSession(c.Request.Context(), claims.UserID, claims.SessionID) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization context unavailable"})
+		return
+	}
+	sessionContext := model.AuthorizationSessionContext{
+		Actor: model.ActorContext{
+			UserID: claims.UserID, RootTenantID: claims.RootTenantID,
+			OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,
+			MembershipVersion: claims.MembershipVersion,
+		},
+		AuthorizationVersion: claims.AuthorizationVersion,
+		SessionVersion:       claims.SessionVersion,
+	}
+	validContext, err := h.contextValidator.ValidateAuthorizationSessionContext(c.Request.Context(), sessionContext)
+	if err != nil || !validContext {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization context revoked"})
+		return
+	}
+	allowed, err := h.deviceAccess.HasDeviceAccessV2(c.Request.Context(), sessionContext.Actor, "device:view", sn)
+	if err != nil || !allowed {
+		c.JSON(http.StatusForbidden, gin.H{"error": "device access denied"})
+		return
+	}
 
-	_ = claims.UserID
 	jti := h.jwtService.GetJTI(claims)
 	h.connsMux.Lock()
 	if h.conns[jti] >= 5 {
@@ -75,6 +123,7 @@ func (h *WSHandler) DeviceRealtime(c *gin.Context) {
 		h.connsMux.Unlock()
 	}()
 
+	upgrader := websocket.Upgrader{CheckOrigin: h.checkOrigin}
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		logger.Error("WS upgrade failed", zap.String("sn", sn), zap.Error(err))
@@ -143,11 +192,25 @@ func (h *WSHandler) DeviceRealtime(c *gin.Context) {
 		case <-ctx.Done():
 			return
 		case <-heartbeatTicker.C:
+			if claims.ExpiresAt == nil || time.Now().After(claims.ExpiresAt.Time) || h.jwtService.IsBlacklisted(ctx, claims.ID) ||
+				!h.jwtService.ValidateAccessSession(ctx, claims.UserID, claims.SessionID) {
+				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "session expired"), time.Now().Add(time.Second))
+				return
+			}
+			validContext, validateErr := h.contextValidator.ValidateAuthorizationSessionContext(ctx, sessionContext)
+			allowed, accessErr := h.deviceAccess.HasDeviceAccessV2(ctx, sessionContext.Actor, "device:view", sn)
+			if validateErr != nil || accessErr != nil || !validContext || !allowed {
+				_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "authorization revoked"), time.Now().Add(time.Second))
+				return
+			}
 			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
-		case msg := <-ch:
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
 			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload)); err != nil {
 				logger.Warn("WS write failed", zap.String("sn", sn), zap.Error(err))

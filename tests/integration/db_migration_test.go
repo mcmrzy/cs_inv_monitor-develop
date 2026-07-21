@@ -104,12 +104,12 @@ func TestFreshDatabaseBaselineAndMigrations(t *testing.T) {
 	}
 }
 
-func TestMigration059ChannelAuthorizationConstraints(t *testing.T) {
+func TestMigration064ChannelAuthorizationConstraints(t *testing.T) {
 	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
-		migration059 := readMigrationFile(t, migrationsDir, "059_create_channel_authorization.up.sql")
+		migration064 := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.up.sql")
 		for attempt := 1; attempt <= 2; attempt++ {
-			_, err := pool.Exec(ctx, migration059)
-			require.NoError(t, err, "migration 059 execution %d must be idempotent", attempt)
+			_, err := pool.Exec(ctx, migration064)
+			require.NoError(t, err, "migration 064 execution %d must be idempotent", attempt)
 		}
 
 		requiredTables := []string{
@@ -129,13 +129,13 @@ func TestMigration059ChannelAuthorizationConstraints(t *testing.T) {
 		for _, table := range requiredTables {
 			var exists bool
 			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, table).Scan(&exists))
-			assert.True(t, exists, "migration 059 must create %s", table)
+			assert.True(t, exists, "migration 064 must create %s", table)
 		}
 
 		_, err := pool.Exec(ctx, `
 			INSERT INTO users(id, phone, password_hash, role) VALUES
-				(59001, 'migration059-user-1', 'hash', 1),
-				(59002, 'migration059-user-2', 'hash', 5)
+				(59001, 'migration064-user-1', 'hash', 1),
+				(59002, 'migration064-user-2', 'hash', 5)
 		`)
 		require.NoError(t, err)
 		_, err = pool.Exec(ctx, `
@@ -380,10 +380,10 @@ func TestMigration059ChannelAuthorizationConstraints(t *testing.T) {
 		_, err = pool.Exec(ctx, `DELETE FROM organizations WHERE id=59101`)
 		require.Error(t, err, "channel authorization references must use ON DELETE RESTRICT")
 
-		contractSQL, readErr := os.ReadFile(filepath.Join(filepath.Dir(migrationsDir), "tests", "059_channel_authorization_test.sql"))
-		require.NoError(t, readErr, "read migration 059 SQL contract test")
+		contractSQL, readErr := os.ReadFile(filepath.Join(filepath.Dir(migrationsDir), "tests", "064_channel_authorization_test.sql"))
+		require.NoError(t, readErr, "read migration 064 SQL contract test")
 		_, err = pool.Exec(ctx, string(contractSQL))
-		require.NoError(t, err, "execute migration 059 SQL contract test")
+		require.NoError(t, err, "execute migration 064 SQL contract test")
 
 		for _, functionName := range []string{
 			"validate_organization_hierarchy",
@@ -413,21 +413,21 @@ func TestMigration059ChannelAuthorizationConstraints(t *testing.T) {
 		} {
 			var exists bool
 			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, indexName).Scan(&exists))
-			assert.True(t, exists, "migration 059 must create child-side FK index %s", indexName)
+			assert.True(t, exists, "migration 064 must create child-side FK index %s", indexName)
 		}
 	})
 }
 
-func TestMigration060AuditOutboxContracts(t *testing.T) {
+func TestMigration065AuditOutboxContracts(t *testing.T) {
 	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
-		migration059 := readMigrationFile(t, migrationsDir, "059_create_channel_authorization.up.sql")
-		migration060 := readMigrationFile(t, migrationsDir, "060_extend_audit_outbox.up.sql")
-		migration060Down := readMigrationFile(t, migrationsDir, "060_extend_audit_outbox.down.sql")
-		_, err := pool.Exec(ctx, migration059)
+		migration064 := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.up.sql")
+		migration065 := readMigrationFile(t, migrationsDir, "065_extend_audit_outbox.up.sql")
+		migration065Down := readMigrationFile(t, migrationsDir, "065_extend_audit_outbox.down.sql")
+		_, err := pool.Exec(ctx, migration064)
 		require.NoError(t, err)
 		for attempt := 1; attempt <= 2; attempt++ {
-			_, err = pool.Exec(ctx, migration060)
-			require.NoError(t, err, "migration 060 execution %d must be idempotent", attempt)
+			_, err = pool.Exec(ctx, migration065)
+			require.NoError(t, err, "migration 065 execution %d must be idempotent", attempt)
 		}
 
 		var resourceIDType string
@@ -454,7 +454,7 @@ func TestMigration060AuditOutboxContracts(t *testing.T) {
 
 		_, err = pool.Exec(ctx, `
 			INSERT INTO users(id, phone, password_hash, role)
-			VALUES (60001, 'migration060-actor', 'hash', 1);
+			VALUES (60001, 'migration065-actor', 'hash', 1);
 			INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, name, status) VALUES
 				(60100, 60100, NULL, 'manufacturer', 'Audit Manufacturer', 'active'),
 				(60101, 60100, 60100, 'agent', 'Audit Agent', 'active'),
@@ -588,10 +588,10 @@ func TestMigration060AuditOutboxContracts(t *testing.T) {
 		for _, indexName := range []string{"idx_audit_logs_active_org_fk", "idx_audit_logs_operator_fk", "idx_idempotency_responses_actor_fk"} {
 			var exists bool
 			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, indexName).Scan(&exists))
-			assert.True(t, exists, "migration 060 must create child-side FK index %s", indexName)
+			assert.True(t, exists, "migration 065 must create child-side FK index %s", indexName)
 		}
 
-		_, err = pool.Exec(ctx, migration060Down)
+		_, err = pool.Exec(ctx, migration065Down)
 		require.Error(t, err, "down migration must block lossy TEXT-to-BIGINT conversion")
 		var preservedResourceID string
 		require.NoError(t, pool.QueryRow(ctx, `SELECT resource_id FROM audit_logs WHERE request_id='request-060'`).Scan(&preservedResourceID))
@@ -599,15 +599,15 @@ func TestMigration060AuditOutboxContracts(t *testing.T) {
 	})
 
 	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
-		migration059 := readMigrationFile(t, migrationsDir, "059_create_channel_authorization.up.sql")
-		migration059Down := readMigrationFile(t, migrationsDir, "059_create_channel_authorization.down.sql")
-		migration060 := readMigrationFile(t, migrationsDir, "060_extend_audit_outbox.up.sql")
-		migration060Down := readMigrationFile(t, migrationsDir, "060_extend_audit_outbox.down.sql")
-		_, err := pool.Exec(ctx, migration059)
+		migration064 := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.up.sql")
+		migration064Down := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.down.sql")
+		migration065 := readMigrationFile(t, migrationsDir, "065_extend_audit_outbox.up.sql")
+		migration065Down := readMigrationFile(t, migrationsDir, "065_extend_audit_outbox.down.sql")
+		_, err := pool.Exec(ctx, migration064)
 		require.NoError(t, err)
-		_, err = pool.Exec(ctx, migration060)
+		_, err = pool.Exec(ctx, migration065)
 		require.NoError(t, err)
-		_, err = pool.Exec(ctx, migration060Down)
+		_, err = pool.Exec(ctx, migration065Down)
 		require.NoError(t, err, "down migration must succeed when every audit resource_id is numeric or null")
 
 		var resourceIDType string
@@ -622,30 +622,30 @@ func TestMigration060AuditOutboxContracts(t *testing.T) {
 			assert.False(t, exists, "down migration must remove %s", table)
 		}
 
-		_, err = pool.Exec(ctx, migration059Down)
-		require.NoError(t, err, "migration 059 down must succeed after migration 060 down")
-		_, err = pool.Exec(ctx, migration059Down)
-		require.NoError(t, err, "migration 059 down must be idempotent after a partial rollback")
+		_, err = pool.Exec(ctx, migration064Down)
+		require.NoError(t, err, "migration 064 down must succeed after migration 065 down")
+		_, err = pool.Exec(ctx, migration064Down)
+		require.NoError(t, err, "migration 064 down must be idempotent after a partial rollback")
 		var organizationsExist bool
 		require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.organizations') IS NOT NULL`).Scan(&organizationsExist))
 		assert.False(t, organizationsExist)
-		_, err = pool.Exec(ctx, migration059)
-		require.NoError(t, err, "migration 059 must be re-applicable after down")
-		_, err = pool.Exec(ctx, migration060)
-		require.NoError(t, err, "migration 060 must be re-applicable after a safe down")
+		_, err = pool.Exec(ctx, migration064)
+		require.NoError(t, err, "migration 064 must be re-applicable after down")
+		_, err = pool.Exec(ctx, migration065)
+		require.NoError(t, err, "migration 065 must be re-applicable after a safe down")
 	})
 }
 
-func TestMigration061ChannelBackfillControlContracts(t *testing.T) {
+func TestMigration066ChannelBackfillControlContracts(t *testing.T) {
 	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
-		migration059 := readMigrationFile(t, migrationsDir, "059_create_channel_authorization.up.sql")
-		migration061 := readMigrationFile(t, migrationsDir, "061_create_channel_backfill_control.up.sql")
-		migration061Down := readMigrationFile(t, migrationsDir, "061_create_channel_backfill_control.down.sql")
-		_, err := pool.Exec(ctx, migration059)
+		migration064 := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.up.sql")
+		migration066 := readMigrationFile(t, migrationsDir, "066_create_channel_backfill_control.up.sql")
+		migration066Down := readMigrationFile(t, migrationsDir, "066_create_channel_backfill_control.down.sql")
+		_, err := pool.Exec(ctx, migration064)
 		require.NoError(t, err)
 		for attempt := 1; attempt <= 2; attempt++ {
-			_, err = pool.Exec(ctx, migration061)
-			require.NoError(t, err, "migration 061 execution %d must be idempotent", attempt)
+			_, err = pool.Exec(ctx, migration066)
+			require.NoError(t, err, "migration 066 execution %d must be idempotent", attempt)
 		}
 
 		for _, table := range []string{
@@ -654,7 +654,7 @@ func TestMigration061ChannelBackfillControlContracts(t *testing.T) {
 		} {
 			var exists bool
 			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, table).Scan(&exists))
-			assert.True(t, exists, "migration 061 must create %s", table)
+			assert.True(t, exists, "migration 066 must create %s", table)
 		}
 
 		runID := "00000000-0000-4000-8000-000000000061"
@@ -684,10 +684,10 @@ func TestMigration061ChannelBackfillControlContracts(t *testing.T) {
 		_, err = pool.Exec(ctx, `UPDATE channel_migration_items SET status='processing' WHERE run_id=$1 AND source_key='1'`, runID)
 		require.Error(t, err, "processing items must always carry a lease owner and expiry")
 
-		_, err = pool.Exec(ctx, migration061Down)
+		_, err = pool.Exec(ctx, migration066Down)
 		require.NoError(t, err)
-		_, err = pool.Exec(ctx, migration061Down)
-		require.NoError(t, err, "migration 061 down must be idempotent")
+		_, err = pool.Exec(ctx, migration066Down)
+		require.NoError(t, err, "migration 066 down must be idempotent")
 		var runsExist bool
 		require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.channel_migration_runs') IS NOT NULL`).Scan(&runsExist))
 		assert.False(t, runsExist)

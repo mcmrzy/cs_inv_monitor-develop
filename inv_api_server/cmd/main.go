@@ -113,6 +113,12 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	})
 
 	userRepo := repository.NewUserRepository(db, rdb)
+	authorizationRepo := repository.NewAuthorizationRepository(db)
+	authorizationService := service.NewAuthorizationService(
+		authorizationRepo,
+		service.NewResourceObjectResolver("device", authorizationRepo),
+	)
+	dataPermission := service.NewDataPermissionAdapter(db, authorizationService, service.DataPermissionEnforce, nil)
 	stationRepo := repository.NewStationRepository(db)
 	deviceRepo := repository.NewDeviceRepository(db, rdb)
 	alarmRepo := repository.NewAlarmRepository(db)
@@ -145,12 +151,13 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	captchaHandler := handler.NewCaptchaHandler(rdb)
 	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache, captchaHandler)
+	authHandler.SetAuthorizationContextResolver(authorizationRepo)
 	stationHandler := handler.NewStationHandler(stationService, deviceService, userService, db, cfg.Backends.AmapAPIKey)
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService, stationService, db)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
 	notificationHandler := handler.NewNotificationHandler(db, jpushService)
-	wsHandler := handler.NewWSHandler(rdb, jwtService)
+	wsHandler := handler.NewWSHandler(rdb, jwtService, authorizationRepo, dataPermission, cfg.CORS.AllowedOrigins)
 	modelHandler := handler.NewModelHandler(modelService)
 	batteryHandler := handler.NewBatteryHandler(batteryService)
 	energyScheduleHandler := handler.NewEnergyScheduleHandler(energyScheduleService)
@@ -176,29 +183,30 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	go runOTAScheduler(db, otaService, heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
-		DB:                    db,
-		RDB:                   rdb,
-		JWTInstance:           jwtInstance,
-		JWTService:            jwtService,
-		AuthHandler:           authHandler,
-		CaptchaHandler:        captchaHandler,
-		StationHandler:        stationHandler,
-		DeviceHandler:         deviceHandler,
-		AlarmHandler:          alarmHandler,
-		NotificationHandler:   notificationHandler,
-		WeatherHandler:        weatherHandler,
-		ModelHandler:          modelHandler,
-		BatteryHandler:        batteryHandler,
-		EnergyScheduleHandler: energyScheduleHandler,
-		PermChecker:           permChecker,
-		AdminHandler:          adminHandler,
-		OTAHandler:            otaHandler,
-		OTAService:            otaService,
-		JPushService:          jpushService,
-		DashboardHandler:      dashboardHandler,
-		AlertRuleHandler:      alertRuleHandler,
-		WorkOrderHandler:      workOrderHandler,
-		ParallelHandler:       parallelHandler,
+		DB:                            db,
+		RDB:                           rdb,
+		JWTInstance:                   jwtInstance,
+		JWTService:                    jwtService,
+		AuthHandler:                   authHandler,
+		CaptchaHandler:                captchaHandler,
+		StationHandler:                stationHandler,
+		DeviceHandler:                 deviceHandler,
+		AlarmHandler:                  alarmHandler,
+		NotificationHandler:           notificationHandler,
+		WeatherHandler:                weatherHandler,
+		ModelHandler:                  modelHandler,
+		BatteryHandler:                batteryHandler,
+		EnergyScheduleHandler:         energyScheduleHandler,
+		PermChecker:                   permChecker,
+		AdminHandler:                  adminHandler,
+		OTAHandler:                    otaHandler,
+		OTAService:                    otaService,
+		JPushService:                  jpushService,
+		DashboardHandler:              dashboardHandler,
+		AlertRuleHandler:              alertRuleHandler,
+		WorkOrderHandler:              workOrderHandler,
+		ParallelHandler:               parallelHandler,
+		AuthorizationContextValidator: authorizationRepo,
 	})
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
 	serve(cfg, router)
@@ -596,29 +604,30 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 }
 
 type RouterDeps struct {
-	DB                    *pgxpool.Pool
-	RDB                   *redis.Client
-	JWTInstance           *jwt.JWT
-	JWTService            *service.JWTService
-	AuthHandler           *handler.AuthHandler
-	CaptchaHandler        *handler.CaptchaHandler
-	StationHandler        *handler.StationHandler
-	DeviceHandler         *handler.DeviceHandler
-	AlarmHandler          *handler.AlarmHandler
-	NotificationHandler   *handler.NotificationHandler
-	WeatherHandler        *handler.WeatherHandler
-	ModelHandler          *handler.ModelHandler
-	BatteryHandler        *handler.BatteryHandler
-	EnergyScheduleHandler *handler.EnergyScheduleHandler
-	PermChecker           *service.PermChecker
-	AdminHandler          *handler.AdminHandler
-	OTAHandler            *handler.OTAHandler
-	OTAService            *service.OTAService
-	JPushService          *service.JPushService
-	DashboardHandler      *handler.DashboardHandler
-	AlertRuleHandler      *handler.AlertRuleHandler
-	WorkOrderHandler      *handler.WorkOrderHandler
-	ParallelHandler       *handler.ParallelHandler
+	DB                            *pgxpool.Pool
+	RDB                           *redis.Client
+	JWTInstance                   *jwt.JWT
+	JWTService                    *service.JWTService
+	AuthHandler                   *handler.AuthHandler
+	CaptchaHandler                *handler.CaptchaHandler
+	StationHandler                *handler.StationHandler
+	DeviceHandler                 *handler.DeviceHandler
+	AlarmHandler                  *handler.AlarmHandler
+	NotificationHandler           *handler.NotificationHandler
+	WeatherHandler                *handler.WeatherHandler
+	ModelHandler                  *handler.ModelHandler
+	BatteryHandler                *handler.BatteryHandler
+	EnergyScheduleHandler         *handler.EnergyScheduleHandler
+	PermChecker                   *service.PermChecker
+	AdminHandler                  *handler.AdminHandler
+	OTAHandler                    *handler.OTAHandler
+	OTAService                    *service.OTAService
+	JPushService                  *service.JPushService
+	DashboardHandler              *handler.DashboardHandler
+	AlertRuleHandler              *handler.AlertRuleHandler
+	WorkOrderHandler              *handler.WorkOrderHandler
+	ParallelHandler               *handler.ParallelHandler
+	AuthorizationContextValidator middleware.AuthorizationContextValidator
 }
 
 func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
@@ -716,6 +725,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.POST("/auth/email-login", deps.AuthHandler.EmailLogin)
 		api.POST("/auth/send-email-code", deps.AuthHandler.SendEmailCode)
 		api.POST("/auth/refresh", deps.AuthHandler.RefreshToken)
+		api.POST("/auth/context", deps.AuthHandler.AuthorizationContext)
 		api.POST("/auth/phone-code-login", deps.AuthHandler.PhoneCodeLogin)
 		api.POST("/auth/email-code-login", deps.AuthHandler.EmailCodeLogin)
 
@@ -729,7 +739,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.GET("/captcha/generate", captchaLimit, deps.CaptchaHandler.GenerateCaptcha)
 		api.POST("/captcha/verify", captchaLimit, deps.CaptchaHandler.VerifyCaptcha)
 
-		auth := api.Group("").Use(middleware.Auth(deps.JWTService))
+		auth := api.Group("").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
 			auth.POST("/auth/logout", deps.AuthHandler.Logout)
 			auth.POST("/auth/change-password", deps.AuthHandler.ChangePassword)
@@ -851,7 +861,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		}
 
 		requireAdmin := middleware.RequirePermission(deps.PermChecker, "admin", "manage")
-		adminGroup := api.Group("/admin").Use(middleware.Auth(deps.JWTService), requireAdmin)
+		adminGroup := api.Group("/admin").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator), requireAdmin)
 		{
 			adminGroup.GET("/users", deps.AdminHandler.ListUsers)
 			adminGroup.GET("/users/:id", deps.AdminHandler.GetUser)
@@ -879,7 +889,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			adminGroup.GET("/metrics", deps.AdminHandler.GetMetrics)
 		}
 
-		usersGroup := api.Group("/users").Use(middleware.Auth(deps.JWTService))
+		usersGroup := api.Group("/users").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
 			usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
 			usersGroup.GET("/:id", deps.AdminHandler.GetUser)
@@ -891,7 +901,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			usersGroup.PUT("/:id/password", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ResetUserPassword)
 		}
 
-		parallelGroup := api.Group("/parallel-groups").Use(middleware.Auth(deps.JWTService))
+		parallelGroup := api.Group("/parallel-groups").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
 			parallelGroup.GET("", deps.ParallelHandler.List)
 			parallelGroup.GET("/:id", deps.ParallelHandler.Get)
@@ -901,7 +911,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			parallelGroup.DELETE("/:id", deps.ParallelHandler.Delete)
 		}
 
-		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService))
+		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
 			// 需要权限的管理接口
 			otaGroup.GET("/firmware", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListFirmware)

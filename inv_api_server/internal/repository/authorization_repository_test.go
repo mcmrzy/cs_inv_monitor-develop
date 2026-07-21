@@ -73,6 +73,45 @@ func TestAuthorizationRepositoryGrantQueryKeepsPermissionAndScopeCoupled(t *test
 	assert.Equal(t, []any{int64(100), int64(7), int64(101), int64(1001), int64(3), "organization:view"}, db.args)
 }
 
+func TestResolveAuthorizationSessionContextChecksEveryRevocationBoundary(t *testing.T) {
+	wantErr := errors.New("stop after recording")
+	db := &recordingAuthorizationDB{err: wantErr}
+	repo := newAuthorizationRepository(db)
+	_, err := repo.ResolveAuthorizationSessionContext(context.Background(), 7, 101)
+	require.ErrorIs(t, err, wantErr)
+
+	query := normalizedSQL(db.query)
+	for _, fragment := range []string{
+		"m.authorization_version", "u.session_version", "m.user_id=$1",
+		"m.organization_id=$2", "m.status='active'", "o.status='active'",
+		"u.status=1", "organization_closure c", "ancestor.status<>'active'",
+	} {
+		assert.Contains(t, query, fragment)
+	}
+	assert.Equal(t, []any{int64(7), int64(101)}, db.args)
+}
+
+func TestResourceCoverageKeepsActorGrantAndOrganizationScopeCoupled(t *testing.T) {
+	wantErr := errors.New("stop after recording")
+	db := &recordingAuthorizationDB{err: wantErr}
+	repo := newAuthorizationRepository(db)
+	actor := repositoryActor()
+	grant := model.PermissionGrant{ID: 55, RoleAssignmentID: 44, PermissionCode: "device:view", Scope: model.ScopeOrganizationAndDescendants}
+	_, err := repo.ResourceCoveredByGrant(context.Background(), actor, grant, model.ObjectRef{ResourceType: "device", ResourceID: "SN-1"})
+	require.ErrorIs(t, err, wantErr)
+
+	query := normalizedSQL(db.query)
+	for _, fragment := range []string{
+		"from authorization_resources target", "target.root_tenant_id=$1",
+		"target.resource_type=$6", "target.resource_id=$7", "ra.id=$8",
+		"pg.id=$9", "pg.permission_code=$10", "organization_closure c",
+		"resource_grants rg", "subject_membership_id=m.id", "scope_definition",
+	} {
+		assert.Contains(t, query, fragment)
+	}
+	assert.Equal(t, []any{int64(100), int64(7), int64(101), int64(1001), int64(3), "device", "SN-1", int64(44), int64(55), "device:view"}, db.args)
+}
+
 func TestOrganizationRepositoryUsesDatabaseSetPredicatesWithoutExpandedIDs(t *testing.T) {
 	wantErr := errors.New("stop after recording")
 	db := &recordingAuthorizationDB{err: wantErr}

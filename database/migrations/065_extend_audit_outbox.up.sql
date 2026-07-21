@@ -1,4 +1,4 @@
--- 060: Extend immutable audit records and add durable idempotency/outbox stores.
+-- 065: Extend immutable audit records and add durable idempotency/outbox stores.
 
 DO $$
 BEGIN
