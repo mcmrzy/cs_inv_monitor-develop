@@ -296,7 +296,7 @@ func (r *UserRepository) GetByNickname(ctx context.Context, nickname string) (*m
 }
 
 func (r *UserRepository) UpdatePassword(ctx context.Context, userID int64, passwordHash string) error {
-	query := `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`
+	query := `UPDATE users SET password_hash = $1, session_version = session_version + 1, updated_at = NOW() WHERE id = $2`
 	_, err := r.db.Exec(ctx, query, passwordHash, userID)
 	return err
 }
@@ -433,7 +433,7 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID int64, role int)
 }
 
 func (r *UserRepository) UpdateStatus(ctx context.Context, userID int64, status int) error {
-	_, err := r.db.Exec(ctx, "UPDATE users SET status = $1, updated_at = NOW() WHERE id = $2", status, userID)
+	_, err := r.db.Exec(ctx, "UPDATE users SET status = $1, session_version = session_version + 1, updated_at = NOW() WHERE id = $2", status, userID)
 	if err == nil {
 		r.invalidateUserPermissionCache(ctx, userID)
 	}
@@ -1517,7 +1517,12 @@ func (r *DeviceRepository) Create(ctx context.Context, sn, model string, ratedPo
 }
 
 func (r *DeviceRepository) Bind(ctx context.Context, sn string, userID, stationID int64) error {
-	query := `UPDATE devices SET user_id = $1, station_id = $2, timezone = COALESCE((SELECT timezone FROM stations WHERE id = $2), 'Asia/Shanghai'), updated_at = NOW() WHERE sn = $3 AND user_id = 0`
+	query := `UPDATE devices
+		SET user_id = $1,
+			station_id = NULLIF($2::bigint, 0),
+			timezone = COALESCE((SELECT timezone FROM stations WHERE id = NULLIF($2::bigint, 0)), 'Asia/Shanghai'),
+			updated_at = NOW()
+		WHERE sn = $3 AND user_id = 0`
 	tag, err := r.db.Exec(ctx, query, userID, stationID, sn)
 	if err != nil {
 		return err

@@ -385,7 +385,7 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if r.isUserSessionRevoked(c.Request.Context(), userID, c.GetHeader("X-Token-Issued-At")) {
+		if r.isUserSessionRevoked(c.Request.Context(), userID, c.GetHeader("X-Session-ID"), c.GetHeader("X-Token-Issued-At")) {
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "用户会话已被撤销"})
 			c.Abort()
 			return
@@ -561,9 +561,17 @@ func (r *RBACMiddleware) isTokenBlacklisted(ctx context.Context, jti string) boo
 	return err != nil || exists > 0
 }
 
-func (r *RBACMiddleware) isUserSessionRevoked(ctx context.Context, userID, issuedAt string) bool {
-	if r.rdb == nil || strings.TrimSpace(issuedAt) == "" {
+func (r *RBACMiddleware) isUserSessionRevoked(ctx context.Context, userID, sessionID, issuedAt string) bool {
+	if r.rdb == nil {
 		return false
+	}
+	if strings.TrimSpace(sessionID) == "" && strings.TrimSpace(issuedAt) == "" {
+		// RBAC unit tests and trusted internal calls may execute without the JWT
+		// middleware. Production JWT requests always carry both verified headers.
+		return false
+	}
+	if strings.TrimSpace(sessionID) == "" || strings.TrimSpace(issuedAt) == "" {
+		return true
 	}
 	uid, err := strconv.ParseInt(userID, 10, 64)
 	if err != nil || uid <= 0 {
@@ -575,6 +583,10 @@ func (r *RBACMiddleware) isUserSessionRevoked(ctx context.Context, userID, issue
 	}
 	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
+	exists, err := r.rdb.Exists(checkCtx, fmt.Sprintf("refresh_session:%d:%s", uid, sessionID)).Result()
+	if err != nil || exists == 0 {
+		return true
+	}
 	cutoff, err := r.rdb.Get(checkCtx, fmt.Sprintf("user_token_revoked_at:%d", uid)).Int64()
 	if err == redis.Nil {
 		return false

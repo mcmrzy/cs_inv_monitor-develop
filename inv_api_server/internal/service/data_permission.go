@@ -2,18 +2,39 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"strings"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"inv-api-server/internal/model"
 	"inv-api-server/pkg/logger"
 
 	"go.uber.org/zap"
 )
 
 type DataPermission struct {
-	pool dataPermissionDB
+	pool       dataPermissionDB
+	authorizer channelDeviceAuthorizer
+	mode       DataPermissionMode
+	recorder   DataPermissionShadowRecorder
+}
+
+type DataPermissionMode string
+
+var ErrChannelAuthorizerUnavailable = errors.New("channel authorizer is unavailable")
+
+const (
+	DataPermissionLegacy  DataPermissionMode = "legacy"
+	DataPermissionShadow  DataPermissionMode = "shadow"
+	DataPermissionEnforce DataPermissionMode = "enforce"
+)
+
+type channelDeviceAuthorizer interface {
+	Authorize(ctx context.Context, actor model.ActorContext, request model.AuthorizationRequest) (model.AuthorizationDecision, error)
+}
+
+type DataPermissionShadowRecorder interface {
+	RecordDeviceDecision(ctx context.Context, actor model.ActorContext, permissionCode, deviceSN string, legacyAllowed, channelAllowed bool, channelErr error)
 }
 
 type dataPermissionDB interface {
@@ -22,7 +43,11 @@ type dataPermissionDB interface {
 }
 
 func NewDataPermission(pool *pgxpool.Pool) *DataPermission {
-	return &DataPermission{pool: pool}
+	return &DataPermission{pool: pool, mode: DataPermissionLegacy}
+}
+
+func NewDataPermissionAdapter(pool *pgxpool.Pool, authorizer channelDeviceAuthorizer, mode DataPermissionMode, recorder DataPermissionShadowRecorder) *DataPermission {
+	return &DataPermission{pool: pool, authorizer: authorizer, mode: mode, recorder: recorder}
 }
 
 func (d *DataPermission) GetAllowedDeviceSNs(ctx context.Context, userID int64) ([]string, error) {
@@ -86,21 +111,40 @@ func (d *DataPermission) HasDeviceAccess(ctx context.Context, userID int64, devi
 }
 
 func (d *DataPermission) BuildSNFilter(ctx context.Context, userID int64) (string, []interface{}, error) {
-	sns, err := d.GetAllowedDeviceSNs(ctx, userID)
-	if err != nil {
-		return "", nil, err
-	}
+	return `EXISTS (
+		SELECT 1 FROM v_user_device_access permission_access
+		WHERE permission_access.user_id=$1 AND permission_access.device_sn=sn
+	)`, []interface{}{userID}, nil
+}
 
-	if len(sns) == 0 {
-		return "1=0", nil, nil
+// HasDeviceAccessV2 requires an already validated organization context. It
+// never guesses a membership from userID and never ORs legacy/new decisions.
+func (d *DataPermission) HasDeviceAccessV2(ctx context.Context, actor model.ActorContext, permissionCode, deviceSN string) (bool, error) {
+	legacyAllowed, legacyErr := d.HasDeviceAccess(ctx, actor.UserID, deviceSN)
+	if d.mode == DataPermissionLegacy {
+		return legacyAllowed, legacyErr
 	}
-
-	placeholders := make([]string, len(sns))
-	args := make([]interface{}, len(sns))
-	for i, sn := range sns {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = sn
+	if d.authorizer == nil {
+		if d.recorder != nil {
+			d.recorder.RecordDeviceDecision(ctx, actor, permissionCode, deviceSN, legacyAllowed, false, ErrChannelAuthorizerUnavailable)
+		}
+		if d.mode == DataPermissionShadow {
+			return legacyAllowed, legacyErr
+		}
+		return false, ErrChannelAuthorizerUnavailable
 	}
-
-	return fmt.Sprintf("sn IN (%s)", strings.Join(placeholders, ",")), args, nil
+	decision, channelErr := d.authorizer.Authorize(ctx, actor, model.AuthorizationRequest{
+		PermissionCode: permissionCode,
+		Object:         &model.ObjectRef{ResourceType: "device", ResourceID: deviceSN},
+	})
+	if d.recorder != nil && (legacyAllowed != decision.Allowed || channelErr != nil) {
+		d.recorder.RecordDeviceDecision(ctx, actor, permissionCode, deviceSN, legacyAllowed, decision.Allowed, channelErr)
+	}
+	if d.mode == DataPermissionShadow {
+		return legacyAllowed, legacyErr
+	}
+	if channelErr != nil {
+		return false, channelErr
+	}
+	return decision.Allowed, nil
 }

@@ -15,6 +15,8 @@ type Config struct {
 	APIServer      string
 	DeviceServer   string
 	JWTSecret      string
+	JWTIssuer      string
+	JWTAudience    string
 	GlobalRate     float64
 	GlobalBurst    int
 	RouteLimits    []middleware.RouteRateLimitConfig
@@ -34,6 +36,10 @@ func Setup(cfg Config) *gin.Engine {
 	deviceProxy := proxy.NewReverseProxy(cfg.DeviceServer)
 
 	r.Use(middleware.TrailingSlashHandler())
+	// Strip identity assertions before public routing and proxying as well as
+	// before the authenticated groups. No client-controlled X-User/X-Tenant
+	// header may reach an internal service.
+	r.Use(middleware.StripUntrustedIdentityHeaders())
 	r.Use(gin.Recovery())
 	r.Use(middleware.BodyLimit())
 	r.Use(middleware.GzipMiddleware())
@@ -53,14 +59,14 @@ func Setup(cfg Config) *gin.Engine {
 
 	// 用户组 — 需登录（JWT + RBAC）
 	userGroup := r.Group("/")
-	userGroup.Use(middleware.JWTAuth(cfg.JWTSecret))
+	userGroup.Use(jwtMiddleware(cfg))
 	if cfg.RBAC != nil {
 		userGroup.Use(cfg.RBAC.RBACGuard())
 	}
 
 	// 管理员组 — 需管理员角色（JWT + RBAC + RequireRole）
 	adminGroup := r.Group("/")
-	adminGroup.Use(middleware.JWTAuth(cfg.JWTSecret))
+	adminGroup.Use(jwtMiddleware(cfg))
 	if cfg.RBAC != nil {
 		adminGroup.Use(cfg.RBAC.RBACGuard())
 	}
@@ -72,6 +78,20 @@ func Setup(cfg Config) *gin.Engine {
 	registerFallback(r)
 
 	return r
+}
+
+func jwtMiddleware(cfg Config) gin.HandlerFunc {
+	issuer := cfg.JWTIssuer
+	if issuer == "" {
+		issuer = middleware.DefaultJWTIssuer
+	}
+	audience := cfg.JWTAudience
+	if audience == "" {
+		audience = middleware.DefaultAccessAudience
+	}
+	return middleware.JWTAuthWithConfig(middleware.JWTAuthConfig{
+		Secret: cfg.JWTSecret, Issuer: issuer, Audience: audience,
+	})
 }
 
 func registerGatewayEndpoints(r *gin.Engine) {
@@ -102,7 +122,8 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	publicGroup.Any("/api/v1/auth/email-reset-password", p.Handler())
 	publicGroup.Any("/api/v1/auth/phone-code-login", p.Handler())
 	publicGroup.Any("/api/v1/auth/email-code-login", p.Handler())
-	publicGroup.Any("/api/v1/auth/refresh", p.Handler())
+	publicGroup.POST("/api/v1/auth/refresh", p.Handler())
+	publicGroup.POST("/api/v1/auth/context", p.Handler())
 	publicGroup.GET("/api/v1/timezones", p.Handler())
 	publicGroup.Any("/api/v1/captcha/*action", p.Handler())
 	publicGroup.Any("/uploads/*action", p.Handler())
@@ -224,6 +245,7 @@ func buildAPIDoc() APIDoc {
 			{Path: "/api/v1/auth/phone-code-login", Method: "POST", Description: "手机验证码登录", Auth: false, Role: "public", Backend: "api-server"},
 			{Path: "/api/v1/auth/email-code-login", Method: "POST", Description: "邮箱验证码登录", Auth: false, Role: "public", Backend: "api-server"},
 			{Path: "/api/v1/auth/refresh", Method: "POST", Description: "刷新令牌", Auth: false, Role: "public", Backend: "api-server"},
+			{Path: "/api/v1/auth/context", Method: "POST", Description: "切换活动组织并签发访问令牌", Auth: false, Role: "public", Backend: "api-server"},
 			{Path: "/api/v1/auth/logout", Method: "POST", Description: "用户登出", Auth: true, Role: "user", Backend: "api-server"},
 
 			{Path: "/api/v1/captcha/generate", Method: "GET", Description: "生成验证码图片", Auth: false, Role: "public", Backend: "api-server"},
@@ -298,6 +320,7 @@ func buildRouteGroups() map[string][]RouteGroup {
 					{Path: "/api/v1/auth/phone-code-login", Method: "ALL", Description: "手机验证码登录", Backend: "api-server"},
 					{Path: "/api/v1/auth/email-code-login", Method: "ALL", Description: "邮箱验证码登录", Backend: "api-server"},
 					{Path: "/api/v1/auth/refresh", Method: "ALL", Description: "刷新令牌", Backend: "api-server"},
+					{Path: "/api/v1/auth/context", Method: "POST", Description: "切换活动组织", Backend: "api-server"},
 					{Path: "/api/v1/captcha/*", Method: "ALL", Description: "验证码", Backend: "api-server"},
 					{Path: "/api/v1/timezones", Method: "GET", Description: "时区列表", Backend: "api-server"},
 					{Path: "/uploads/*", Method: "ALL", Description: "上传文件目录", Backend: "api-server"},

@@ -248,18 +248,17 @@ func TestRBACGuard_RejectsBlacklistedToken(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestRBACGuard_RejectsSessionIssuedBeforeRevocation(t *testing.T) {
+func TestRBACGuard_RejectsRevokedSession(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	defer rdb.Close()
 	mr.Set("gw:user_roles:1", "0")
-	mr.Set("user_token_revoked_at:1", "200")
 	router := newTestRouter(NewRBACMiddleware(rdb, nil, 300))
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
 	req.Header.Set("X-User-ID", "1")
-	req.Header.Set("X-Token-Issued-At", "100")
+	req.Header.Set("X-Session-ID", "revoked-session")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

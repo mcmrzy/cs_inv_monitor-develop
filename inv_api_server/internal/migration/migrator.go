@@ -173,6 +173,21 @@ func isApplied(ctx context.Context, db *pgxpool.Pool, version int64) (bool, erro
 	return exists, err
 }
 
+// RequireAppliedVersions guards explicit offline data migrations. It does not
+// apply schema or execute any backfill; API startup remains structural-only.
+func RequireAppliedVersions(ctx context.Context, db *pgxpool.Pool, versions ...int64) error {
+	for _, version := range versions {
+		applied, err := isApplied(ctx, db, version)
+		if err != nil {
+			return fmt.Errorf("check required migration %d: %w", version, err)
+		}
+		if !applied {
+			return fmt.Errorf("required structural migration %d is not applied", version)
+		}
+	}
+	return nil
+}
+
 // applyFile executes one migration and records it atomically. A failed SQL
 // statement or record insert rolls the entire migration back.
 func applyFile(ctx context.Context, db *pgxpool.Pool, path string, version int64, name string) error {
@@ -216,6 +231,9 @@ func listMigrations(dir string) ([]string, error) {
 			continue
 		}
 		if strings.HasSuffix(name, ".down.sql") {
+			continue
+		}
+		if _, ok := extractVersion(name); !ok {
 			continue
 		}
 		files = append(files, filepath.Join(dir, name))

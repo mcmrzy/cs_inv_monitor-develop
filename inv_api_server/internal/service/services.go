@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -115,51 +117,113 @@ func (s *JWTService) GenerateToken(userID int64, phone string, role int) (string
 	return s.jwt.GenerateToken(userID, phone, role)
 }
 
+func (s *JWTService) GenerateTokenWithSessionVersion(userID int64, phone string, role int, sessionVersion int64) (string, string, error) {
+	return s.jwt.GenerateTokenWithSessionVersion(userID, phone, role, sessionVersion)
+}
+
 func (s *JWTService) ParseToken(token string) (*jwt.Claims, error) {
 	return s.jwt.ParseToken(token)
 }
 
-func (s *JWTService) ParseAccessToken(token string) (*jwt.Claims, error) {
+func (s *JWTService) ParseAccessToken(token string) (*jwt.AccessClaims, error) {
 	return s.jwt.ParseAccessToken(token)
 }
 
-func (s *JWTService) ParseRefreshToken(token string) (*jwt.Claims, error) {
+func (s *JWTService) ParseRefreshToken(token string) (*jwt.RefreshClaims, error) {
 	return s.jwt.ParseRefreshToken(token)
 }
 
+func (s *JWTService) GenerateContextAccessToken(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64) (string, error) {
+	return s.jwt.GenerateContextAccessToken(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion)
+}
+
+func (s *JWTService) GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, phone string, role int) (string, error) {
+	return s.jwt.GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, phone, role)
+}
+
+func (s *JWTService) GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, sessionID, phone string, role int) (string, error) {
+	return s.jwt.GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, sessionID, phone, role)
+}
+
+func (s *JWTService) GenerateRefreshTokenWithVersion(userID, sessionVersion int64) (string, error) {
+	return s.jwt.GenerateRefreshTokenWithVersion(userID, sessionVersion)
+}
+
+func (s *JWTService) GenerateRefreshTokenForSession(userID, sessionVersion int64, sessionID string) (string, error) {
+	return s.jwt.GenerateRefreshTokenForSession(userID, sessionVersion, sessionID)
+}
+
+func refreshTokenDigest(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func refreshSessionKey(userID int64, sessionID string) string {
+	return fmt.Sprintf("refresh_session:%d:%s", userID, sessionID)
+}
+
+func (s *JWTService) refreshSession(token string, expectedUserID int64) (*jwt.RefreshClaims, string, error) {
+	claims, err := s.jwt.ParseRefreshToken(token)
+	if err != nil || claims.UserID != expectedUserID {
+		return nil, "", fmt.Errorf("invalid refresh session")
+	}
+	return claims, refreshSessionKey(expectedUserID, claims.SessionID), nil
+}
+
 func (s *JWTService) StoreRefreshToken(ctx context.Context, userID int64, refreshToken string, expireTime time.Duration) error {
-	key := fmt.Sprintf("refresh_token:%d:%s", userID, refreshToken)
-	return s.cache.Set(ctx, key, "1", expireTime).Err()
+	_, key, err := s.refreshSession(refreshToken, userID)
+	if err != nil {
+		return err
+	}
+	return s.cache.Set(ctx, key, refreshTokenDigest(refreshToken), expireTime).Err()
 }
 
 func (s *JWTService) ValidateRefreshToken(ctx context.Context, userID int64, refreshToken string) bool {
-	key := fmt.Sprintf("refresh_token:%d:%s", userID, refreshToken)
-	exists, err := s.cache.Exists(ctx, key).Result()
-	return err == nil && exists > 0
+	_, key, err := s.refreshSession(refreshToken, userID)
+	if err != nil {
+		return false
+	}
+	current, err := s.cache.Get(ctx, key).Result()
+	return err == nil && current == refreshTokenDigest(refreshToken)
 }
 
 func (s *JWTService) RevokeRefreshToken(ctx context.Context, userID int64, refreshToken string) error {
-	key := fmt.Sprintf("refresh_token:%d:%s", userID, refreshToken)
+	_, key, err := s.refreshSession(refreshToken, userID)
+	if err != nil {
+		return err
+	}
 	return s.cache.Del(ctx, key).Err()
 }
 
 // SwapRefreshToken atomically validates the old refresh token and stores the new one using a Lua script.
 // Returns true if the swap succeeded, false if the old token was already used/revoked.
 func (s *JWTService) SwapRefreshToken(ctx context.Context, userID int64, oldToken, newToken string, expireTime time.Duration) (bool, error) {
-	oldKey := fmt.Sprintf("refresh_token:%d:%s", userID, oldToken)
-	newKey := fmt.Sprintf("refresh_token:%d:%s", userID, newToken)
+	oldClaims, key, err := s.refreshSession(oldToken, userID)
+	if err != nil {
+		return false, err
+	}
+	newClaims, newKey, err := s.refreshSession(newToken, userID)
+	if err != nil {
+		return false, err
+	}
+	if oldClaims.SessionID != newClaims.SessionID || key != newKey {
+		return false, fmt.Errorf("refresh session family mismatch")
+	}
 
 	script := redis.NewScript(`
-		if redis.call("EXISTS", KEYS[1]) == 1 then
-			redis.call("DEL", KEYS[1])
-			redis.call("SET", KEYS[2], "1", "PX", ARGV[1])
+		local current = redis.call("GET", KEYS[1])
+		if current == ARGV[1] then
+			redis.call("SET", KEYS[1], ARGV[2], "PX", ARGV[3])
 			return 1
+		elseif current then
+			redis.call("DEL", KEYS[1])
+			return -1
 		else
 			return 0
 		end
 	`)
 
-	result, err := script.Run(ctx, s.cache, []string{oldKey, newKey}, expireTime.Milliseconds()).Int()
+	result, err := script.Run(ctx, s.cache, []string{key}, refreshTokenDigest(oldToken), refreshTokenDigest(newToken), expireTime.Milliseconds()).Int()
 	if err != nil {
 		return false, err
 	}
@@ -170,10 +234,10 @@ func (s *JWTService) RevokeAllUserTokens(ctx context.Context, userID int64) erro
 	if err := s.cache.Set(ctx, fmt.Sprintf("user_token_revoked_at:%d", userID), time.Now().UTC().UnixMilli(), 0).Err(); err != nil {
 		return err
 	}
-	pattern := fmt.Sprintf("refresh_token:%d:*", userID)
+	pattern := fmt.Sprintf("refresh_session:%d:*", userID)
 	var cursor uint64
 	for {
-		keys, nextCursor, err := s.cache.Scan(ctx, cursor, pattern, 100).Result()
+		keys, next, err := s.cache.Scan(ctx, cursor, pattern, 256).Result()
 		if err != nil {
 			return err
 		}
@@ -182,7 +246,7 @@ func (s *JWTService) RevokeAllUserTokens(ctx context.Context, userID int64) erro
 				return err
 			}
 		}
-		cursor = nextCursor
+		cursor = next
 		if cursor == 0 {
 			break
 		}
@@ -204,6 +268,14 @@ func (s *JWTService) IsUserSessionRevoked(ctx context.Context, userID, sessionIA
 	return sessionIAT <= cutoff, nil
 }
 
+func (s *JWTService) ValidateAccessSession(ctx context.Context, userID int64, sessionID string) bool {
+	if userID <= 0 || sessionID == "" {
+		return false
+	}
+	exists, err := s.cache.Exists(ctx, refreshSessionKey(userID, sessionID)).Result()
+	return err == nil && exists > 0
+}
+
 func (s *JWTService) AddToBlacklist(ctx context.Context, jti string, expireTime time.Duration) error {
 	if strings.TrimSpace(jti) == "" {
 		return fmt.Errorf("token jti is required")
@@ -218,7 +290,9 @@ func (s *JWTService) IsBlacklisted(ctx context.Context, jti string) bool {
 	}
 	key := fmt.Sprintf("token_blacklist:%s", jti)
 	exists, err := s.cache.Exists(ctx, key).Result()
-	return err == nil && exists > 0
+	// A Redis error is fail-closed: a revoked token must never be treated as
+	// valid merely because the revocation store is unavailable.
+	return err != nil || exists > 0
 }
 
 func (s *JWTService) GetJTI(claims *jwt.Claims) string {

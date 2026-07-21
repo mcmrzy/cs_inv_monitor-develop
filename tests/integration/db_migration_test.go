@@ -12,31 +12,686 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestMigrationsForward verifies all migration files execute successfully in order.
-func TestMigrationsForward(t *testing.T) {
+// TestFreshDatabaseBaselineAndMigrations mirrors the production migrator:
+// schema.sql is the version-22 baseline and numbered migrations after 22 are
+// applied transactionally in order.
+func TestFreshDatabaseBaselineAndMigrations(t *testing.T) {
 	cfg := LoadConfig()
 	requireService(t, cfg.DBHost, cfg.DBPort, "PostgreSQL")
-	pool := ConnectDB(t, cfg)
-	defer pool.Close()
+
+	// The API test database is already on the latest baseline. Replaying every
+	// historical migration there tests accidental idempotency, not the forward
+	// upgrade path. Use a disposable database so 001..latest execute in order
+	// against an actually empty PostgreSQL/TimescaleDB instance.
+	adminCfg := cfg
+	adminCfg.DBName = "postgres"
+	adminPool := ConnectDB(t, adminCfg)
+	defer adminPool.Close()
+
+	ctx := context.Background()
+	dbName := fmt.Sprintf("inv_migration_test_%d", time.Now().UnixNano())
+	_, err := adminPool.Exec(ctx, "CREATE DATABASE "+dbName)
+	require.NoError(t, err, "create disposable migration database")
+
+	migrationCfg := cfg
+	migrationCfg.DBName = dbName
+	pool := ConnectDB(t, migrationCfg)
+	defer func() {
+		pool.Close()
+		_, _ = adminPool.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1`, dbName)
+		_, dropErr := adminPool.Exec(ctx, "DROP DATABASE IF EXISTS "+dbName)
+		assert.NoError(t, dropErr, "drop disposable migration database")
+	}()
 
 	migrationsDir := findMigrationsDir(t)
 	files := collectUpMigrations(t, migrationsDir)
 	require.NotEmpty(t, files, "no migration files found")
+	schemaPath := filepath.Join(filepath.Dir(migrationsDir), "schema.sql")
+	schemaSQL, err := os.ReadFile(schemaPath)
+	require.NoError(t, err, "read baseline schema")
 
-	ctx := context.Background()
+	_, err = pool.Exec(ctx, `CREATE TABLE schema_migrations (
+		version BIGINT PRIMARY KEY,
+		name VARCHAR(255) NOT NULL,
+		applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`)
+	require.NoError(t, err, "create migration history")
+
+	const baselineVersion = 22
+	baselineTx, err := pool.Begin(ctx)
+	require.NoError(t, err)
+	_, err = baselineTx.Exec(ctx, string(schemaSQL))
+	require.NoError(t, err, "execute baseline schema")
+	_, err = baselineTx.Exec(ctx, `INSERT INTO schema_migrations(version,name) VALUES(0,'baseline_schema')`)
+	require.NoError(t, err)
 	for _, f := range files {
-		t.Run(f.Name, func(t *testing.T) {
+		if f.Number > baselineVersion {
+			continue
+		}
+		_, err = baselineTx.Exec(ctx,
+			`INSERT INTO schema_migrations(version,name) VALUES($1,$2) ON CONFLICT DO NOTHING`,
+			f.Number, f.Name)
+		require.NoError(t, err)
+	}
+	require.NoError(t, baselineTx.Commit(ctx), "commit baseline schema")
+
+	for _, f := range files {
+		if f.Number <= baselineVersion {
+			continue
+		}
+		if ok := t.Run(f.Name, func(t *testing.T) {
 			sql, err := os.ReadFile(filepath.Join(migrationsDir, f.Name))
 			require.NoError(t, err, "read migration file %s", f.Name)
 
-			_, err = pool.Exec(ctx, string(sql))
+			tx, err := pool.Begin(ctx)
+			require.NoError(t, err)
+			defer func() { _ = tx.Rollback(ctx) }()
+			_, err = tx.Exec(ctx, string(sql))
 			require.NoError(t, err, "execute migration %s", f.Name)
-		})
+			_, err = tx.Exec(ctx,
+				`INSERT INTO schema_migrations(version,name) VALUES($1,$2)`,
+				f.Number, f.Name)
+			require.NoError(t, err, "record migration %s", f.Name)
+			require.NoError(t, tx.Commit(ctx), "commit migration %s", f.Name)
+		}); !ok {
+			break
+		}
 	}
+}
+
+func TestMigration064ChannelAuthorizationConstraints(t *testing.T) {
+	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
+		migration064 := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.up.sql")
+		for attempt := 1; attempt <= 2; attempt++ {
+			_, err := pool.Exec(ctx, migration064)
+			require.NoError(t, err, "migration 064 execution %d must be idempotent", attempt)
+		}
+
+		requiredTables := []string{
+			"tenant_roots",
+			"organizations",
+			"organization_closure",
+			"organization_memberships",
+			"membership_role_assignments",
+			"role_permission_grants",
+			"authorization_resources",
+			"resource_grants",
+			"organization_quotas",
+			"organization_quota_usage",
+			"invitations",
+			"channel_migration_quarantine",
+		}
+		for _, table := range requiredTables {
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, table).Scan(&exists))
+			assert.True(t, exists, "migration 064 must create %s", table)
+		}
+
+		_, err := pool.Exec(ctx, `
+			INSERT INTO users(id, phone, password_hash, role) VALUES
+				(59001, 'migration064-user-1', 'hash', 1),
+				(59002, 'migration064-user-2', 'hash', 5)
+		`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, code, name, status) VALUES
+				(59100, 59100, NULL, 'manufacturer', 'ROOT-A', 'Manufacturer A', 'active'),
+				(59101, 59100, 59100, 'agent', 'AGENT-A', 'Agent A', 'active'),
+				(59102, 59100, 59101, 'distributor', 'DIST-A', 'Distributor A', 'active'),
+				(59103, 59100, 59102, 'customer', 'CUSTOMER-A', 'Customer A', 'active'),
+				(59200, 59200, NULL, 'manufacturer', 'ROOT-B', 'Manufacturer B', 'active'),
+				(59201, 59200, 59200, 'agent', 'AGENT-B', 'Agent B', 'active')
+		`)
+		require.NoError(t, err)
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, name)
+			VALUES (59300, 59300, NULL, 'agent', 'Invalid non-manufacturer root')
+		`)
+		require.Error(t, err, "every root tenant must be a manufacturer organization")
+		var selfClosureCount int
+		require.NoError(t, pool.QueryRow(ctx, `
+			SELECT COUNT(*) FROM organization_closure
+			WHERE ancestor_id=descendant_id AND depth=0
+			  AND descendant_id IN (59100,59101,59102,59103,59200,59201)
+		`).Scan(&selfClosureCount))
+		assert.Equal(t, 6, selfClosureCount, "every organization must receive a depth-zero self closure")
+		var customerAncestors int
+		require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM organization_closure WHERE root_tenant_id=59100 AND descendant_id=59103`).Scan(&customerAncestors))
+		assert.Equal(t, 4, customerAncestors, "insert must copy every parent ancestor plus self")
+		for ancestorID, expectedDepth := range map[int64]int{59100: 3, 59101: 2, 59102: 1, 59103: 0} {
+			var depth int
+			require.NoError(t, pool.QueryRow(ctx, `
+				SELECT depth FROM organization_closure
+				WHERE root_tenant_id=59100 AND ancestor_id=$1 AND descendant_id=59103
+			`, ancestorID).Scan(&depth))
+			assert.Equal(t, expectedDepth, depth, "customer closure depth from ancestor %d", ancestorID)
+		}
+		_, err = pool.Exec(ctx, `UPDATE organization_closure SET depth=1 WHERE root_tenant_id=59100 AND ancestor_id=59101 AND descendant_id=59101`)
+		require.Error(t, err, "self closure depth other than zero must be rejected")
+		_, err = pool.Exec(ctx, `INSERT INTO organization_closure(root_tenant_id,ancestor_id,descendant_id,depth) VALUES(59100,59103,59101,1)`)
+		require.Error(t, err, "applications must not forge same-tenant closure ancestors")
+		_, err = pool.Exec(ctx, `DELETE FROM organization_closure WHERE root_tenant_id=59100 AND ancestor_id=59100 AND descendant_id=59103`)
+		require.Error(t, err, "applications must not remove real closure ancestors")
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, name)
+			VALUES (59104, 59100, 59200, 'distributor', 'Cross tenant child')
+		`)
+		require.Error(t, err, "an organization parent from another root tenant must be rejected")
+		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,name) VALUES (59104,59100,59100,'customer','Skipped distributor')`)
+		require.Error(t, err, "customer must not skip the agent/distributor hierarchy")
+		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,code,name) VALUES (59104,59100,59101,'service_partner','SERVICE-A','Service partner')`)
+		require.NoError(t, err, "service partner may attach to an agent")
+		_, err = pool.Exec(ctx, `UPDATE organizations SET parent_id=59102 WHERE id=59104`)
+		require.Error(t, err, "direct parent changes must be rejected until the governed move flow exists")
+		_, err = pool.Exec(ctx, `UPDATE organizations SET root_tenant_id=59200 WHERE id=59104`)
+		require.Error(t, err, "direct root changes must always be rejected")
+		_, err = pool.Exec(ctx, `UPDATE organizations SET org_type='service_partner' WHERE id=59101`)
+		require.Error(t, err, "organization type changes must not invalidate existing child hierarchy")
+		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,name) VALUES (59105,59100,59105,'agent','Self parent')`)
+		require.Error(t, err, "an organization must not parent itself")
+
+		_, err = pool.Exec(ctx, `UPDATE organizations SET deleted_at=NOW() WHERE id=59104`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,code,name) VALUES (59106,59100,59100,'service_partner','service-a','Replacement service partner')`)
+		require.NoError(t, err, "soft-deleted organization codes may be reused")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_closure(root_tenant_id, ancestor_id, descendant_id, depth)
+			VALUES (59100, 59100, 59201, 1)
+		`)
+		require.Error(t, err, "a closure edge across root tenants must be rejected")
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_memberships(id, root_tenant_id, organization_id, user_id, status)
+			VALUES (59300, 59100, 59101, 59001, 'active')
+		`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_memberships(root_tenant_id, organization_id, user_id, status)
+			VALUES (59100, 59101, 59001, 'active')
+		`)
+		require.Error(t, err, "only one active membership is allowed for an organization/user pair")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_memberships(root_tenant_id, organization_id, user_id, status)
+			VALUES (59200, 59101, 59002, 'active')
+		`)
+		require.Error(t, err, "membership organization and root tenant must match")
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO membership_role_assignments(id, root_tenant_id, organization_id, membership_id, role_code, status)
+			VALUES
+				(59400, 59100, 59101, 59300, 'channel_manager', 'active'),
+				(59401, 59100, 59101, 59300, 'viewer', 'active')
+		`)
+		require.NoError(t, err, "one membership must support multiple role assignments")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO role_permission_grants(
+				root_tenant_id, organization_id, role_assignment_id,
+				permission_code, data_scope, scope_definition
+			) VALUES (
+				59100, 59101, 59400,
+				'device:unbind', 'organization_and_descendants', '{"organization_ids":[59101]}'::jsonb
+			)
+		`)
+		require.NoError(t, err)
+		var permissionCode, dataScope string
+		var scopeDefinition string
+		require.NoError(t, pool.QueryRow(ctx, `
+			SELECT permission_code, data_scope, scope_definition::text
+			FROM role_permission_grants WHERE role_assignment_id=59400
+		`).Scan(&permissionCode, &dataScope, &scopeDefinition))
+		assert.Equal(t, "device:unbind", permissionCode)
+		assert.Equal(t, "organization_and_descendants", dataScope)
+		assert.JSONEq(t, `{"organization_ids":[59101]}`, scopeDefinition,
+			"permission and data scope must be persisted on the same grant row")
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO invitations(
+				root_tenant_id, organization_id, recipient, token_key_id, token_digest, status, expires_at
+			) VALUES (
+				59100, 59101, ' Alice@Example.COM ', 'invite-key-1', decode(repeat('ab',32),'hex'), 'pending', NOW()+INTERVAL '1 day'
+			)
+		`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO invitations(
+				root_tenant_id, organization_id, recipient, token_key_id, token_digest, status, expires_at
+			) VALUES (
+				59100, 59101, 'alice@example.com', 'invite-key-2', decode(repeat('cd',32),'hex'), 'pending', NOW()+INTERVAL '1 day'
+			)
+		`)
+		require.Error(t, err, "normalized recipient may have only one pending invitation per organization")
+
+		rows, err := pool.Query(ctx, `
+			SELECT column_name FROM information_schema.columns
+			WHERE table_schema='public' AND table_name='invitations' AND column_name LIKE '%token%'
+			ORDER BY column_name
+		`)
+		require.NoError(t, err)
+		var tokenColumns []string
+		for rows.Next() {
+			var column string
+			require.NoError(t, rows.Scan(&column))
+			tokenColumns = append(tokenColumns, column)
+		}
+		rows.Close()
+		require.NoError(t, rows.Err())
+		assert.Equal(t, []string{"token_digest", "token_key_id"}, tokenColumns,
+			"invitations must never persist a plaintext token")
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_quotas(root_tenant_id, organization_id, resource_type, quota_limit)
+			VALUES (59100, 59101, 'not_a_quota', 1)
+		`)
+		require.Error(t, err, "quota resource codes must come from the fixed contract")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_quotas(root_tenant_id, organization_id, resource_type, quota_limit)
+			VALUES (59100, 59101, 'inventory_devices', -1)
+		`)
+		require.Error(t, err, "quota limits must be non-negative")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_quotas(root_tenant_id, organization_id, resource_type, quota_limit, inherited_from_organization_id) VALUES
+				(59100, 59100, 'inventory_devices', 10, NULL),
+				(59100, 59101, 'inventory_devices', 10, 59100)
+		`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_quota_usage(root_tenant_id, organization_id, resource_type, used_count)
+			VALUES (59100, 59101, 'inventory_devices', -1)
+		`)
+		require.Error(t, err, "quota usage must be non-negative")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO organization_quota_usage(root_tenant_id, organization_id, resource_type, used_count, reserved_count)
+			VALUES (59100, 59101, 'inventory_devices', 9, 2)
+		`)
+		require.Error(t, err, "direct writes must enforce used plus reserved against the quota")
+		_, err = pool.Exec(ctx, `SELECT consume_organization_quota(59100,59101,'inventory_devices',7,2)`)
+		require.NoError(t, err, "the atomic quota entry point must reserve within the limit")
+		_, err = pool.Exec(ctx, `SELECT consume_organization_quota(59100,59101,'inventory_devices',0,2)`)
+		require.Error(t, err, "the atomic quota entry point must reject overflow")
+		_, err = pool.Exec(ctx, `UPDATE organization_quotas SET quota_limit=8 WHERE root_tenant_id=59100 AND organization_id=59101 AND resource_type='inventory_devices'`)
+		require.Error(t, err, "quota limits must not be lowered below current usage plus reservations")
+		_, err = pool.Exec(ctx, `INSERT INTO organization_quotas(root_tenant_id,organization_id,resource_type,quota_limit,inherited_from_organization_id) VALUES(59100,59100,'stations',1,NULL),(59100,59101,'stations',1,59100)`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `INSERT INTO organization_quotas(root_tenant_id,organization_id,resource_type,quota_limit,inherited_from_organization_id) VALUES(59100,59103,'stations',2,59101)`)
+		require.Error(t, err, "a descendant quota must not exceed its inherited ancestor limit")
+		_, err = pool.Exec(ctx, `INSERT INTO organization_quotas(root_tenant_id,organization_id,resource_type,quota_limit,inherited_from_organization_id) VALUES(59100,59103,'stations',1,59104)`)
+		require.Error(t, err, "quota inheritance must reference a real ancestor, not a sibling")
+		_, err = pool.Exec(ctx, `INSERT INTO organization_quotas(root_tenant_id,organization_id,resource_type,quota_limit,inherited_from_organization_id) VALUES(59100,59100,'members',10,NULL),(59100,59101,'members',5,59100)`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `INSERT INTO organization_quotas(root_tenant_id,organization_id,resource_type,quota_limit,inherited_from_organization_id) VALUES(59100,59103,'members',10,59100)`)
+		require.Error(t, err, "a descendant must not bypass a stricter intermediate ancestor quota")
+		_, err = pool.Exec(ctx, `INSERT INTO organization_quotas(root_tenant_id,organization_id,resource_type,quota_limit,inherited_from_organization_id) VALUES(59100,59100,'claimed_devices',10,NULL),(59100,59103,'claimed_devices',10,59100)`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `INSERT INTO organization_quotas(root_tenant_id,organization_id,resource_type,quota_limit,inherited_from_organization_id) VALUES(59100,59101,'claimed_devices',5,59100)`)
+		require.Error(t, err, "a stricter intermediate quota must not be added below an existing looser descendant quota")
+		_, err = pool.Exec(ctx, `DELETE FROM organization_quotas WHERE root_tenant_id=59100 AND organization_id=59100 AND resource_type='stations'`)
+		require.Error(t, err, "an inherited parent quota must not be deleted while descendants reference it")
+		_, err = pool.Exec(ctx, `UPDATE organization_quota_usage SET resource_type='stations' WHERE root_tenant_id=59100 AND organization_id=59101 AND resource_type='inventory_devices'`)
+		require.Error(t, err, "quota usage re-keying must revalidate against the destination limit")
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO authorization_resources(root_tenant_id, organization_id, resource_type, resource_id) VALUES
+				(59100,59101,'device','SN-USER-GRANT'),
+				(59100,59101,'device','SN-WRONG-USER-GRANT'),
+				(59200,59201,'device','SN-CROSS-TENANT')
+		`)
+		require.NoError(t, err)
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO resource_grants(
+				root_tenant_id, organization_id, resource_type, resource_id,
+				subject_type, subject_organization_id, permissions
+			) VALUES (
+				59100, 59101, 'device', 'SN-CROSS-TENANT',
+				'organization', 59101, ARRAY['view']::text[]
+			)
+		`)
+		require.Error(t, err, "a same-tenant subject must not grant a resource registered in another tenant")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO resource_grants(
+				root_tenant_id, organization_id, resource_type, resource_id,
+				subject_type, subject_organization_id, subject_user_id,
+				subject_membership_id, permissions
+			) VALUES (
+				59100, 59101, 'device', 'SN-USER-GRANT',
+				'user', 59101, 59001, 59300, ARRAY['view']::text[]
+			)
+		`)
+		require.NoError(t, err, "a user resource grant must be backed by a same-tenant membership")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO resource_grants(
+				root_tenant_id, organization_id, resource_type, resource_id,
+				subject_type, subject_organization_id, subject_user_id,
+				subject_membership_id, permissions
+			) VALUES (
+				59100, 59101, 'device', 'SN-WRONG-USER-GRANT',
+				'user', 59101, 59002, 59300, ARRAY['view']::text[]
+			)
+		`)
+		require.Error(t, err, "a user grant must not borrow another user's membership")
+
+		_, err = pool.Exec(ctx, `DELETE FROM organizations WHERE id=59101`)
+		require.Error(t, err, "channel authorization references must use ON DELETE RESTRICT")
+
+		contractSQL, readErr := os.ReadFile(filepath.Join(filepath.Dir(migrationsDir), "tests", "064_channel_authorization_test.sql"))
+		require.NoError(t, readErr, "read migration 064 SQL contract test")
+		_, err = pool.Exec(ctx, string(contractSQL))
+		require.NoError(t, err, "execute migration 064 SQL contract test")
+
+		for _, functionName := range []string{
+			"validate_organization_hierarchy",
+			"maintain_organization_insert_relations",
+			"validate_organization_quota_usage",
+			"consume_organization_quota",
+		} {
+			var definition string
+			var config []string
+			require.NoError(t, pool.QueryRow(ctx, `
+				SELECT pg_get_functiondef(p.oid), COALESCE(p.proconfig, ARRAY[]::TEXT[])
+				FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+				WHERE n.nspname='public' AND p.proname=$1
+				ORDER BY p.oid LIMIT 1
+			`, functionName).Scan(&definition, &config))
+			assert.Contains(t, strings.ToLower(strings.Join(config, ",")), "search_path=pg_catalog, public, pg_temp",
+				"security-sensitive function %s must pin a trusted search_path", functionName)
+			assert.Contains(t, definition, "public.", "security-sensitive function %s must schema-qualify business relations", functionName)
+		}
+
+		for _, indexName := range []string{
+			"idx_role_assignments_membership_fk",
+			"idx_resource_grants_resource_owner_fk",
+			"idx_resource_grants_subject_membership_fk",
+			"idx_organization_quotas_inherited_fk",
+			"idx_invitations_organization_fk",
+		} {
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, indexName).Scan(&exists))
+			assert.True(t, exists, "migration 064 must create child-side FK index %s", indexName)
+		}
+	})
+}
+
+func TestMigration065AuditOutboxContracts(t *testing.T) {
+	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
+		migration064 := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.up.sql")
+		migration065 := readMigrationFile(t, migrationsDir, "065_extend_audit_outbox.up.sql")
+		migration065Down := readMigrationFile(t, migrationsDir, "065_extend_audit_outbox.down.sql")
+		_, err := pool.Exec(ctx, migration064)
+		require.NoError(t, err)
+		for attempt := 1; attempt <= 2; attempt++ {
+			_, err = pool.Exec(ctx, migration065)
+			require.NoError(t, err, "migration 065 execution %d must be idempotent", attempt)
+		}
+
+		var resourceIDType string
+		require.NoError(t, pool.QueryRow(ctx, `
+			SELECT data_type FROM information_schema.columns
+			WHERE table_schema='public' AND table_name='audit_logs' AND column_name='resource_id'
+		`).Scan(&resourceIDType))
+		assert.Equal(t, "text", resourceIDType)
+
+		requiredAuditColumns := []string{
+			"root_tenant_id", "active_organization_id", "request_id", "result",
+			"failure_reason", "before_data", "after_data", "event_schema_version",
+		}
+		for _, column := range requiredAuditColumns {
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_schema='public' AND table_name='audit_logs' AND column_name=$1
+				)
+			`, column).Scan(&exists))
+			assert.True(t, exists, "audit_logs must contain %s", column)
+		}
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO users(id, phone, password_hash, role)
+			VALUES (60001, 'migration065-actor', 'hash', 1);
+			INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, name, status) VALUES
+				(60100, 60100, NULL, 'manufacturer', 'Audit Manufacturer', 'active'),
+				(60101, 60100, 60100, 'agent', 'Audit Agent', 'active'),
+				(60200, 60200, NULL, 'manufacturer', 'Other Manufacturer', 'active')
+		`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO audit_logs(
+				operator_id, action, resource_type, resource_id,
+				root_tenant_id, active_organization_id, request_id, result
+			) VALUES (60001, 'view', 'device', 'SN-CROSS', 60100, 60200, 'request-cross', 'denied')
+		`)
+		require.Error(t, err, "audit active organization must belong to the declared root tenant")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO audit_logs(
+				operator_id, action, resource_type, resource_id,
+				root_tenant_id, active_organization_id, request_id, result
+			) VALUES (60001, 'view', 'device', 'SN-NULL-ROOT', NULL, 60101, 'request-null-root', 'denied')
+		`)
+		require.Error(t, err, "an audit active organization requires a verifiable root tenant")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO audit_logs(
+				operator_id, action, resource_type, resource_id,
+				root_tenant_id, active_organization_id, request_id, result,
+				before_data, after_data, event_schema_version
+			) VALUES (
+				60001, 'claim', 'device', 'SN-TEXT-RESOURCE',
+				60100, 60100, 'request-060', 'success',
+				NULL, '{"status":"claimed"}'::jsonb, 1
+			)
+		`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `UPDATE audit_logs SET result='failed' WHERE request_id='request-060'`)
+		require.Error(t, err, "audit records must reject UPDATE")
+		_, err = pool.Exec(ctx, `DELETE FROM audit_logs WHERE request_id='request-060'`)
+		require.Error(t, err, "audit records must reject DELETE")
+		var publicAuditMutationGrants int
+		require.NoError(t, pool.QueryRow(ctx, `
+			SELECT COUNT(*) FROM information_schema.table_privileges
+			WHERE table_schema='public' AND table_name='audit_logs'
+			  AND grantee='PUBLIC' AND privilege_type IN ('UPDATE','DELETE')
+		`).Scan(&publicAuditMutationGrants))
+		assert.Zero(t, publicAuditMutationGrants, "PUBLIC must never receive audit mutation privileges")
+
+		_, err = pool.Exec(ctx, `
+			INSERT INTO idempotency_responses(
+				root_tenant_id, actor_id, endpoint, idempotency_key,
+				request_fingerprint, response_status, response_body
+			) VALUES (
+				60101, 60001, 'POST /devices/claims', 'idem-child-root',
+				decode(repeat('55',32),'hex'), 200, '{"code":0}'::jsonb
+			)
+		`)
+		require.Error(t, err, "a child organization cannot masquerade as root_tenant_id")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO idempotency_responses(
+				root_tenant_id, actor_id, endpoint, idempotency_key,
+				request_fingerprint, response_status, response_body
+			) VALUES (
+				60100, 60001, 'POST /devices/claims', 'idem-060-0001',
+				decode(repeat('11',32),'hex'), 200, '{"code":0}'::jsonb
+			)
+		`)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO idempotency_responses(
+				root_tenant_id, actor_id, endpoint, idempotency_key,
+				request_fingerprint, response_status, response_body
+			) VALUES (
+				60100, 60001, 'POST /devices/claims', 'idem-060-failed',
+				decode(repeat('33',32),'hex'), 409, '{"code":"conflict"}'::jsonb
+			)
+		`)
+		require.Error(t, err, "failed responses must not be stored in the success idempotency table")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO idempotency_responses(
+				root_tenant_id, actor_id, endpoint, idempotency_key,
+				request_fingerprint, response_status, response_body
+			) VALUES (
+				60100, 60001, 'POST /devices/claims', 'idem-060-failed',
+				decode(repeat('44',32),'hex'), 201, '{"code":0}'::jsonb
+			)
+		`)
+		require.NoError(t, err, "a rejected response must not consume the idempotency key")
+		_, err = pool.Exec(ctx, `
+			INSERT INTO idempotency_responses(
+				root_tenant_id, actor_id, endpoint, idempotency_key,
+				request_fingerprint, response_status, response_body
+			) VALUES (
+				60100, 60001, 'POST /devices/claims', 'idem-060-0001',
+				decode(repeat('22',32),'hex'), 201, '{"code":0}'::jsonb
+			)
+		`)
+		require.Error(t, err, "idempotency response identity must be unique within actor and endpoint")
+
+		eventID := "00000000-0000-4000-8000-000000000060"
+		_, err = pool.Exec(ctx, `
+			INSERT INTO transactional_outbox(
+				event_id, root_tenant_id, aggregate_type, aggregate_id,
+				event_type, event_schema_version, envelope, status,
+				attempt_count, max_attempts, next_attempt_at
+			) VALUES (
+				$1, 60100, 'device', 'SN-TEXT-RESOURCE',
+				'asset-transfer', '1.0', '{"schema_version":"1.0"}'::jsonb, 'pending',
+				0, 10, NOW()
+			)
+		`, eventID)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO transactional_outbox(
+				event_id, root_tenant_id, aggregate_type, aggregate_id,
+				event_type, event_schema_version, envelope
+			) VALUES ($1, 60100, 'device', 'another', 'asset-transfer', '1.0', '{}'::jsonb)
+		`, eventID)
+		require.Error(t, err, "transactional outbox event_id must be globally unique")
+
+		requiredOutboxColumns := []string{
+			"event_id", "event_schema_version", "envelope", "status", "attempt_count",
+			"max_attempts", "next_attempt_at", "locked_at", "locked_by", "last_error", "published_at",
+		}
+		for _, column := range requiredOutboxColumns {
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx, `
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.columns
+					WHERE table_schema='public' AND table_name='transactional_outbox' AND column_name=$1
+				)
+			`, column).Scan(&exists))
+			assert.True(t, exists, "transactional_outbox must contain %s", column)
+		}
+		for _, indexName := range []string{"idx_audit_logs_active_org_fk", "idx_audit_logs_operator_fk", "idx_idempotency_responses_actor_fk"} {
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, indexName).Scan(&exists))
+			assert.True(t, exists, "migration 065 must create child-side FK index %s", indexName)
+		}
+
+		_, err = pool.Exec(ctx, migration065Down)
+		require.Error(t, err, "down migration must block lossy TEXT-to-BIGINT conversion")
+		var preservedResourceID string
+		require.NoError(t, pool.QueryRow(ctx, `SELECT resource_id FROM audit_logs WHERE request_id='request-060'`).Scan(&preservedResourceID))
+		assert.Equal(t, "SN-TEXT-RESOURCE", preservedResourceID, "failed down migration must preserve audit data")
+	})
+
+	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
+		migration064 := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.up.sql")
+		migration064Down := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.down.sql")
+		migration065 := readMigrationFile(t, migrationsDir, "065_extend_audit_outbox.up.sql")
+		migration065Down := readMigrationFile(t, migrationsDir, "065_extend_audit_outbox.down.sql")
+		_, err := pool.Exec(ctx, migration064)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, migration065)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, migration065Down)
+		require.NoError(t, err, "down migration must succeed when every audit resource_id is numeric or null")
+
+		var resourceIDType string
+		require.NoError(t, pool.QueryRow(ctx, `
+			SELECT data_type FROM information_schema.columns
+			WHERE table_schema='public' AND table_name='audit_logs' AND column_name='resource_id'
+		`).Scan(&resourceIDType))
+		assert.Equal(t, "bigint", resourceIDType)
+		for _, table := range []string{"idempotency_responses", "transactional_outbox"} {
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, table).Scan(&exists))
+			assert.False(t, exists, "down migration must remove %s", table)
+		}
+
+		_, err = pool.Exec(ctx, migration064Down)
+		require.NoError(t, err, "migration 064 down must succeed after migration 065 down")
+		_, err = pool.Exec(ctx, migration064Down)
+		require.NoError(t, err, "migration 064 down must be idempotent after a partial rollback")
+		var organizationsExist bool
+		require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.organizations') IS NOT NULL`).Scan(&organizationsExist))
+		assert.False(t, organizationsExist)
+		_, err = pool.Exec(ctx, migration064)
+		require.NoError(t, err, "migration 064 must be re-applicable after down")
+		_, err = pool.Exec(ctx, migration065)
+		require.NoError(t, err, "migration 065 must be re-applicable after a safe down")
+	})
+}
+
+func TestMigration066ChannelBackfillControlContracts(t *testing.T) {
+	withDisposableChannelMigrationDatabase(t, func(ctx context.Context, pool *pgxpool.Pool, migrationsDir string) {
+		migration064 := readMigrationFile(t, migrationsDir, "064_create_channel_authorization.up.sql")
+		migration066 := readMigrationFile(t, migrationsDir, "066_create_channel_backfill_control.up.sql")
+		migration066Down := readMigrationFile(t, migrationsDir, "066_create_channel_backfill_control.down.sql")
+		_, err := pool.Exec(ctx, migration064)
+		require.NoError(t, err)
+		for attempt := 1; attempt <= 2; attempt++ {
+			_, err = pool.Exec(ctx, migration066)
+			require.NoError(t, err, "migration 066 execution %d must be idempotent", attempt)
+		}
+
+		for _, table := range []string{
+			"channel_migration_runs", "channel_migration_checkpoints", "channel_migration_items",
+			"channel_migration_entity_map", "channel_migration_shadow_diffs",
+		} {
+			var exists bool
+			require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, table).Scan(&exists))
+			assert.True(t, exists, "migration 066 must create %s", table)
+		}
+
+		runID := "00000000-0000-4000-8000-000000000061"
+		digest := strings.Repeat("a", 64)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO channel_migration_runs(id,job_name,mapping_digest,source_digest,source_watermark)
+			VALUES($1,'backfill-organizations-v1',$2,$2,10)
+		`, runID, digest)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO channel_migration_checkpoints(run_id,job_name,mapping_digest,next_ordinal)
+			VALUES($1,'backfill-organizations-v1',$2,0)
+		`, runID, digest)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO channel_migration_items(
+				run_id,source_table,source_key,source_user_id,ordinal,source_fingerprint,expected
+			) VALUES($1,'users','1',1,0,$2,'{}'::jsonb)
+		`, runID, digest)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, `
+			INSERT INTO channel_migration_items(
+				run_id,source_table,source_key,source_user_id,ordinal,source_fingerprint,expected
+			) VALUES($1,'users','2',2,0,$2,'{}'::jsonb)
+		`, runID, digest)
+		require.Error(t, err, "a run must not contain duplicate work ordinals")
+		_, err = pool.Exec(ctx, `UPDATE channel_migration_items SET status='processing' WHERE run_id=$1 AND source_key='1'`, runID)
+		require.Error(t, err, "processing items must always carry a lease owner and expiry")
+
+		_, err = pool.Exec(ctx, migration066Down)
+		require.NoError(t, err)
+		_, err = pool.Exec(ctx, migration066Down)
+		require.NoError(t, err, "migration 066 down must be idempotent")
+		var runsExist bool
+		require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.channel_migration_runs') IS NOT NULL`).Scan(&runsExist))
+		assert.False(t, runsExist)
+	})
 }
 
 // TestMigration011ModelFieldCompatibility covers both historical table names.
@@ -1067,8 +1722,8 @@ func TestTelemetryInsertAndQuery(t *testing.T) {
 		_, err := pool.Exec(ctx, `
 			INSERT INTO device_telemetry_3min(device_sn,protocol_version,sequence_no,event_time,received_at,
 				topic,data_hash,raw_envelope,ac_active_power,daily_pv_energy,work_state,inverter_temperature)
-			VALUES($1,1,$2,$3,NOW(),'heartbeat',encode(digest($1 || ':' || $2::text,'sha256'),'hex'),
-				jsonb_build_object('t',(extract(epoch FROM $3)*1000)::bigint,'v',1,'data',jsonb_build_object()),$4,$5,1,$6)
+			VALUES($1::varchar,1,$2::bigint,$3::timestamptz,NOW(),'heartbeat',encode(digest($1::text || ':' || $2::text,'sha256'),'hex'),
+				jsonb_build_object('t',(extract(epoch FROM $3::timestamptz)*1000)::bigint,'v',1,'data',jsonb_build_object()),$4,$5,1,$6)
 		`, testSN, i+1, time.Now().Add(-time.Duration(10-i)*time.Minute),
 			2250.0+float64(i)*10, float64(i)*0.5, 35.5+float64(i)*0.1)
 		require.NoError(t, err)
@@ -1354,6 +2009,66 @@ func TestTriggersAndFunctions(t *testing.T) {
 }
 
 // ---------- helpers ----------
+
+func withDisposableChannelMigrationDatabase(
+	t *testing.T,
+	run func(context.Context, *pgxpool.Pool, string),
+) {
+	t.Helper()
+	cfg := LoadConfig()
+	requireService(t, cfg.DBHost, cfg.DBPort, "PostgreSQL")
+
+	adminCfg := cfg
+	adminCfg.DBName = "postgres"
+	adminPool := ConnectDB(t, adminCfg)
+	defer adminPool.Close()
+
+	ctx := context.Background()
+	dbName := fmt.Sprintf("inv_channel_migration_test_%d", time.Now().UnixNano())
+	_, err := adminPool.Exec(ctx, "CREATE DATABASE "+dbName)
+	require.NoError(t, err, "create disposable channel migration database")
+
+	migrationCfg := cfg
+	migrationCfg.DBName = dbName
+	pool := ConnectDB(t, migrationCfg)
+	defer func() {
+		pool.Close()
+		_, _ = adminPool.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1`, dbName)
+		_, dropErr := adminPool.Exec(ctx, "DROP DATABASE IF EXISTS "+dbName)
+		assert.NoError(t, dropErr, "drop disposable channel migration database")
+	}()
+
+	migrationsDir := findMigrationsDir(t)
+	baselineSQL, err := os.ReadFile(filepath.Join(filepath.Dir(migrationsDir), "schema.sql"))
+	require.NoError(t, err, "read baseline schema")
+	const channelSchemaMarker = "-- 15. Channel authorization model"
+	legacySchema := string(baselineSQL)
+	require.NotContains(t, legacySchema, channelSchemaMarker,
+		"immutable v22 baseline must not embed the channel authorization model")
+	_, err = pool.Exec(ctx, legacySchema)
+	require.NoError(t, err, "execute baseline schema")
+
+	for _, table := range []string{"organizations", "tenant_roots", "authorization_resources", "idempotency_responses", "transactional_outbox"} {
+		var exists bool
+		require.NoError(t, pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1) IS NOT NULL`, table).Scan(&exists))
+		require.False(t, exists, "legacy schema must not already contain %s", table)
+	}
+	var legacyResourceIDType string
+	require.NoError(t, pool.QueryRow(ctx, `
+		SELECT data_type FROM information_schema.columns
+		WHERE table_schema='public' AND table_name='audit_logs' AND column_name='resource_id'
+	`).Scan(&legacyResourceIDType))
+	require.Equal(t, "bigint", legacyResourceIDType, "migration fixture must start from the legacy audit contract")
+
+	run(ctx, pool, migrationsDir)
+}
+
+func readMigrationFile(t *testing.T, migrationsDir, name string) string {
+	t.Helper()
+	contents, err := os.ReadFile(filepath.Join(migrationsDir, name))
+	require.NoError(t, err, "read migration %s", name)
+	return string(contents)
+}
 
 type migrationFile struct {
 	Name   string

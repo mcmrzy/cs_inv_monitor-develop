@@ -1,27 +1,32 @@
-FROM docker.m.daocloud.io/library/golang:1.25-alpine AS builder
+FROM golang:1.26.5-alpine AS builder
 
-ENV GOPROXY=https://goproxy.cn,direct
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 ENV GO111MODULE=on
 
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
+RUN sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories && \
     apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /build
 
 COPY go.mod go.sum* ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w" \
     -o /build/api-gateway \
     ./main.go
 
-FROM docker.m.daocloud.io/library/alpine:3.19
+FROM alpine:3.23
 
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
-    apk --no-cache add ca-certificates tzdata
+ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org
+RUN sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories && \
+    apk --no-cache add ca-certificates tzdata wget
 
 ENV TZ=UTC
 
