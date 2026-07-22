@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -252,7 +251,7 @@ func (m *DeviceStateManager) executeStateChange(ctx context.Context, sn string, 
 	return m.postInternal("/api/v1/internal/device-status", payload)
 }
 
-// postInternal 调用内部API
+// postInternal 调用内部 API
 func (m *DeviceStateManager) postInternal(path string, payload interface{}) error {
 	if m.apiEndpoint == "" {
 		logger.Warn("API endpoint is empty, skipping internal API call")
@@ -264,24 +263,14 @@ func (m *DeviceStateManager) postInternal(path string, payload interface{}) erro
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, m.apiEndpoint+path, bytes.NewReader(body))
+	resp, err := retryHTTPPost(context.Background(), m.httpClient, m.apiEndpoint+path, body, m.internalKey, DefaultRetryConfig())
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if m.internalKey != "" {
-		req.Header.Set("X-Internal-Key", m.internalKey)
-	}
-
-	// 简化实现：单次请求，无重试
-	resp, err := m.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("http request: %w", err)
+		return err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("internal api returned status %d", resp.StatusCode)
+	if resp.StatusCode >= http.StatusBadRequest {
+		return &downstreamHTTPError{status: resp.StatusCode}
 	}
 	return nil
 }

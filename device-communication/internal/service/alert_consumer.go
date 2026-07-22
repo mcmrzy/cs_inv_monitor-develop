@@ -466,16 +466,7 @@ func (a *AlertConsumer) postInternalAlarmRequest(payload internalAlarmEnvelopeRe
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, a.apiServer+"/api/v1/internal/device-alarm", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if a.internalKey != "" {
-		req.Header.Set("X-Internal-Key", a.internalKey)
-	}
-
-	resp, err := a.httpClient.Do(req)
+	resp, err := retryHTTPPost(context.Background(), a.httpClient, a.apiServer+"/api/v1/internal/device-alarm", body, a.internalKey, DefaultRetryConfig())
 	if err != nil {
 		return err
 	}
