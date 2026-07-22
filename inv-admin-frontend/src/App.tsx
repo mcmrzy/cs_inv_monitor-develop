@@ -32,6 +32,7 @@ const RemoteSettingsPage = lazyWithRetry(() => import('@/pages/remote-settings')
 const BatchSettingsPage = lazyWithRetry(() => import('@/pages/batch-settings'))
 const OperationLogsPage = lazyWithRetry(() => import('@/pages/operation-logs'))
 const DeviceDetailPage = lazyWithRetry(() => import('@/pages/device-detail'))
+const PipelineHealthPage = lazyWithRetry(() => import('@/pages/system/PipelineHealth'))
 
 const RoleRedirect: React.FC = () => {
   const user = useAuthStore((s) => s.user)
@@ -88,6 +89,7 @@ const AppRoutes: React.FC = () => (
       <Route path="/batch-settings" element={<BatchSettingsPage />} />
       <Route path="/operation-logs" element={<OperationLogsPage />} />
       <Route path="/devices/:sn/detail" element={<DeviceDetailPage />} />
+      <Route path="/system/pipeline-health" element={<PipelineHealthPage />} />
     </Route>
   </Routes>
 )
