@@ -15,6 +15,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -242,9 +243,17 @@ func (b *KafkaBridge) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Limit request body size to 1 MB to prevent abuse.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	var msg EMQXWebhookMessage
 	if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 		b.stats.incErr()
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
