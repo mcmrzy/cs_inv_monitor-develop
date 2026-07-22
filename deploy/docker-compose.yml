@@ -168,6 +168,36 @@ services:
     networks:
       - inv-net
 
+  mqtt-kafka-bridge:
+    build:
+      context: ../mqtt-kafka-bridge
+      dockerfile: Dockerfile
+    image: mqtt-kafka-bridge:latest
+    container_name: inv-mqtt-bridge
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERS: jiuxiaoyw.online:9092
+      KAFKA_TELEMETRY_TOPIC: inv-telemetry
+      KAFKA_ALARM_TOPIC: inv-alerts
+      EMQX_TOKEN: ${EMQX_WEBHOOK_TOKEN:-}
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "8082:18088"
+    expose:
+      - "18088"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:18088/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - inv-net
+
   inv-admin-frontend:
     build:
       context: ../inv-admin-frontend
