@@ -172,7 +172,7 @@ func TestJWTSecurity_不同密钥无法解析(t *testing.T) {
 		Issuer:            "service-2",
 	})
 
-	token, _, err := service1.GenerateToken(1, "13800138000", ptrInt(5))
+	token, _, err := service1.GenerateToken(1, "13800138000", j.PtrInt(5))
 	require.NoError(t, err)
 
 	_, err = service2.ParseToken(token)

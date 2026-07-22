@@ -52,6 +52,10 @@ func setupJWTService(t *testing.T) (*service.JWTService, *miniredis.Miniredis) {
 	return service.NewJWTService(jwtInstance, rdb), mr
 }
 
+func ptrInt(i int) *int {
+	return &i
+}
+
 func generateContextToken(t *testing.T, jwtSvc *service.JWTService, userID int64, phone string, role int) string {
 	t.Helper()
 	refreshToken, err := jwtSvc.GenerateRefreshTokenWithVersion(userID, 1)
@@ -59,7 +63,7 @@ func generateContextToken(t *testing.T, jwtSvc *service.JWTService, userID int64
 	refreshClaims, err := jwtSvc.ParseRefreshToken(refreshToken)
 	require.NoError(t, err)
 	require.NoError(t, jwtSvc.StoreRefreshToken(context.Background(), userID, refreshToken, time.Hour))
-	token, err := jwtSvc.GenerateContextAccessTokenForSession(userID, 100, 101, 102, 1, 1, 1, refreshClaims.SessionID, phone, role)
+	token, err := jwtSvc.GenerateContextAccessTokenForSession(userID, 100, 101, 102, 1, 1, 1, refreshClaims.SessionID, phone, &role)
 	require.NoError(t, err)
 	return token
 }
@@ -348,7 +352,7 @@ func TestAuth_RefreshToken不能作为AccessToken(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	_, refreshToken, err := jwtSvc.GenerateToken(1, "13800138000", 5)
+	_, refreshToken, err := jwtSvc.GenerateToken(1, "13800138000", ptrInt(5))
 	require.NoError(t, err)
 	r := gin.New()
 	r.Use(Auth(jwtSvc))

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,6 +31,12 @@ func (d *recordingAuthorizationDB) QueryRow(_ context.Context, query string, arg
 	d.query = query
 	d.args = append([]any(nil), args...)
 	return errorRow{err: d.err}
+}
+
+func (d *recordingAuthorizationDB) Exec(_ context.Context, query string, args ...any) (pgconn.CommandTag, error) {
+	d.query = query
+	d.args = append([]any(nil), args...)
+	return pgconn.NewCommandTag(""), d.err
 }
 
 type errorRow struct{ err error }
