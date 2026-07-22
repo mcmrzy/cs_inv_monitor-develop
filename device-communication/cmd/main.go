@@ -22,6 +22,8 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -112,6 +114,14 @@ func main() {
 
 	hub := mqtt.NewHub(rdb)
 
+	// Initialize Redis health monitor for degradation mode and auto-recovery
+	redisHealthMonitor := service.NewRedisHealthMonitor(rdb, func() {
+		logger.Info("Redis recovered, triggering heartbeat rebuild...")
+		go hub.RebuildOnlineSet(ctx)
+	})
+	redisHealthMonitor.Start()
+	defer redisHealthMonitor.Stop()
+
 	// Rebuild online device set from existing heartbeat keys (startup reconciliation)
 	if err := hub.RebuildOnlineSet(ctx); err != nil {
 		logger.Warn("Failed to rebuild online set on startup", zap.Error(err))
@@ -142,6 +152,9 @@ func main() {
 
 	// 创建共享的设备状态管理器：MQTT 层和 Kafka 消费层使用同一实例
 	stateManager := service.NewDeviceStateManager(rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
+
+	// 启动健康心跳 ping（每 30s 发布一次）
+	go stateManager.PublishHealthPing(ctx)
 
 	// 创建告警消费者（MQTT 直连告警也需要此实例，即使 Kafka 未启用）
 	var alertConsumer *service.AlertConsumer
@@ -181,16 +194,24 @@ func main() {
 	go hub.StartOnlineSetReconciler(ctx)
 
 	if cfg.Kafka.Enabled {
+		// 共享的 WaitGroup 用于 Kafka 消费者优雅关闭
+		var kafkaWG sync.WaitGroup
+
 		protocolParser := service.NewProtocolParser(
 			cfg.Kafka.Brokers, cfg.Kafka.TelemetryTopic, "inv-device-server-parser",
 			deviceRepo, metaRepo, rdb, hub, cfg.Backends.APIServer, cfg.Backends.InternalKey)
 		// 注入共享的状态管理器实例，确保 MQTT 层和 Kafka 消费层使用同一状态机
 		protocolParser.SetStateManager(stateManager)
+		protocolParser.SetWaitGroup(&kafkaWG)
 		protocolParser.Start(ctx)
 
 		if alertConsumer != nil {
+			alertConsumer.SetWaitGroup(&kafkaWG)
 			alertConsumer.Start(ctx)
 		}
+
+		// 将 kafkaWG 通过闭包传递给 shutdown 逻辑（下面使用）
+		kafkaWaitGroupRef = &kafkaWG
 
 		logger.Info("Kafka consumers started (protocol parser + alert consumer)",
 			zap.Strings("brokers", cfg.Kafka.Brokers),
@@ -208,7 +229,7 @@ func main() {
 		}
 	}
 
-	router := setupRouter(cfg, dataService, rdb)
+	router := setupRouter(cfg, dataService, stateManager, rdb)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
@@ -238,6 +259,22 @@ func main() {
 	}
 
 	cancel()
+
+	// 等待 Kafka 消费者完成当前消息处理（最多等待 15s）
+	if kafkaWaitGroupRef != nil {
+		logger.Info("Waiting for Kafka consumers to finish (max 15s)...")
+		done := make(chan struct{})
+		go func() {
+			kafkaWaitGroupRef.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+			logger.Info("Kafka consumers stopped gracefully")
+		case <-time.After(15 * time.Second):
+			logger.Warn("Kafka consumer shutdown timed out after 15s, proceeding with server stop")
+		}
+	}
 
 	logger.Info("Server stopped")
 }
@@ -320,7 +357,7 @@ func initRedis(cfg *config.Config) (*redis.Client, error) {
 	return rdb, nil
 }
 
-func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redis.Client) *gin.Engine {
+func setupRouter(cfg *config.Config, dataService *service.DataService, stateManager *service.DeviceStateManager, rdb *redis.Client) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -354,20 +391,51 @@ func setupRouter(cfg *config.Config, dataService *service.DataService, rdb *redi
 		stats := dataService.GetMQTTStats()
 		status["mqtt_clients"] = stats.OnlineClients
 
+		// Add extended health metrics
+		healthMetrics := stateManager.GetHealthMetrics(ctx)
+		status["kafka_lag"] = healthMetrics.KafkaLag
+		status["dlq_pending"] = healthMetrics.DLQPending
+		status["uptime_seconds"] = int64(healthMetrics.UptimeSecs)
+
 		c.JSON(httpStatus, status)
 	})
 
 	router.GET("/metrics", func(c *gin.Context) {
 		stats := dataService.GetMQTTStats()
 		c.Header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-		c.String(http.StatusOK,
-			"# HELP inv_device_mqtt_online_clients Number of online MQTT device clients\n"+
-				"# TYPE inv_device_mqtt_online_clients gauge\n"+
-				"inv_device_mqtt_online_clients %d\n"+
-				"# HELP inv_device_mqtt_cmd_sent Total MQTT commands sent\n"+
-				"# TYPE inv_device_mqtt_cmd_sent counter\n"+
-				"inv_device_mqtt_cmd_sent %d\n",
-			stats.OnlineClients, stats.CmdSent)
+		
+		var builder strings.Builder
+		
+		// Write MQTT stats
+		builder.WriteString("# HELP inv_device_mqtt_online_clients Number of online MQTT device clients\n")
+		builder.WriteString("# TYPE inv_device_mqtt_online_clients gauge\n")
+		builder.WriteString(fmt.Sprintf("inv_device_mqtt_online_clients %d\n", stats.OnlineClients))
+		
+		builder.WriteString("# HELP inv_device_mqtt_cmd_sent Total MQTT commands sent\n")
+		builder.WriteString("# TYPE inv_device_mqtt_cmd_sent counter\n")
+		builder.WriteString(fmt.Sprintf("inv_device_mqtt_cmd_sent %d\n", stats.CmdSent))
+		
+		// Write IngestMetrics in Prometheus format
+		ingestMetrics := stateManager.GetIngestMetrics()
+		if ingestMetrics != nil {
+			builder.WriteString(ingestMetrics.PrometheusFormat())
+		}
+		
+		// Write Kafka consumer lag and DLQ metrics
+		healthMetrics := stateManager.GetHealthMetrics(c.Request.Context())
+		builder.WriteString("# HELP inv_kafka_consumer_lag_total Total Kafka consumer lag across all partitions\n")
+		builder.WriteString("# TYPE inv_kafka_consumer_lag_total gauge\n")
+		builder.WriteString(fmt.Sprintf("inv_kafka_consumer_lag_total %d\n", healthMetrics.KafkaLag))
+		
+		builder.WriteString("# HELP inv_dlq_pending_messages_total Pending messages in dead letter queue\n")
+		builder.WriteString("# TYPE inv_dlq_pending_messages_total gauge\n")
+		builder.WriteString(fmt.Sprintf("inv_dlq_pending_messages_total %d\n", healthMetrics.DLQPending))
+		
+		builder.WriteString("# HELP inv_service_uptime_seconds Service uptime in seconds\n")
+		builder.WriteString("# TYPE inv_service_uptime_seconds counter\n")
+		builder.WriteString(fmt.Sprintf("inv_service_uptime_seconds %.0f\n", healthMetrics.UptimeSecs))
+		
+		c.String(http.StatusOK, builder.String())
 	})
 
 	// 内部认证中间件：校验 X-Internal-Key
