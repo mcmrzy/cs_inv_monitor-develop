@@ -41,6 +41,7 @@ type ProtocolParser struct {
 	snCacheMu    sync.RWMutex
 	parseEngine  *ParseRuleEngine
 	stateManager *DeviceStateManager // 集中式状态管理器
+	wg           *sync.WaitGroup     // graceful shutdown WaitGroup
 
 }
 
@@ -103,8 +104,14 @@ func (p *ProtocolParser) SetStateManager(sm *DeviceStateManager) {
 	}
 }
 
+// SetWaitGroup 注入共享的 WaitGroup 用于优雅关闭。
+// 在 Start 调用前设置，Start 内部会传递给 Kafka 消费者 goroutine。
+func (p *ProtocolParser) SetWaitGroup(wg *sync.WaitGroup) {
+	p.wg = wg
+}
+
 func (p *ProtocolParser) Start(ctx context.Context) {
-	go runOrderedKafkaConsumerWithRetry(ctx, "protocol-parser", p.consumer, p.processKafkaMessage, DefaultMaxRetries, DefaultBaseBackoff, nil, nil)
+	go runOrderedKafkaConsumerWithRetry(ctx, "protocol-parser", p.consumer, p.processKafkaMessage, DefaultMaxRetries, DefaultBaseBackoff, nil, nil, p.wg)
 	go p.refreshModelCache(ctx)
 }
 

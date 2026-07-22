@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"inv-device-server/internal/model"
@@ -31,6 +32,7 @@ type AlertConsumer struct {
 	metrics      *IngestMetrics
 	maxRetries   int
 	baseBackoff  time.Duration
+	wg           *sync.WaitGroup
 }
 
 type RawAlertMessage struct {
@@ -103,8 +105,13 @@ func (a *AlertConsumer) WithBaseBackoff(d time.Duration) *AlertConsumer {
 	return a
 }
 
+// SetWaitGroup 注入共享的 WaitGroup 用于优雅关闭。
+func (a *AlertConsumer) SetWaitGroup(wg *sync.WaitGroup) {
+	a.wg = wg
+}
+
 func (a *AlertConsumer) Start(ctx context.Context) {
-	go runOrderedKafkaConsumer(ctx, "alert-consumer", a.consumer, a.processAlert, 250*time.Millisecond)
+	go runOrderedKafkaConsumer(ctx, "alert-consumer", a.consumer, a.processAlert, 250*time.Millisecond, a.wg)
 }
 
 func (a *AlertConsumer) processAlert(ctx context.Context, m kafka.Message) error {

@@ -106,7 +106,7 @@ func TestOrderedConsumer_FailureRetainsOffsetAndBlocksLaterMessage(t *testing.T)
 			default:
 			}
 			return errors.New("downstream unavailable")
-		}, time.Second)
+		}, time.Second, nil)
 	}()
 
 	select {
@@ -153,7 +153,7 @@ func TestOrderedConsumer_RetriesSameMessageThenCommitsBeforeNextFetch(t *testing
 				return errors.New("temporary failure")
 			}
 			return nil
-		}, time.Millisecond)
+		}, time.Millisecond, nil)
 	}()
 
 	select {
@@ -183,7 +183,7 @@ func TestOrderedConsumer_CommitFailureBlocksNextFetchAndDoesNotReprocess(t *test
 		runOrderedKafkaConsumer(ctx, "test", reader, func(context.Context, kafka.Message) error {
 			processCount++
 			return nil
-		}, time.Millisecond)
+		}, time.Millisecond, nil)
 	}()
 
 	select {
@@ -213,7 +213,7 @@ func TestProtocolParser_PermanentErrorIsAuditedBeforeCommitAndNextFetch(t *testi
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runOrderedKafkaConsumer(ctx, "protocol-test", reader, parser.processKafkaMessage, time.Millisecond)
+		runOrderedKafkaConsumer(ctx, "protocol-test", reader, parser.processKafkaMessage, time.Millisecond, nil)
 	}()
 	select {
 	case <-done:
@@ -241,7 +241,7 @@ func TestProtocolParser_AuditFailureRetainsOffset(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runOrderedKafkaConsumer(ctx, "protocol-test", reader, parser.processKafkaMessage, time.Second)
+		runOrderedKafkaConsumer(ctx, "protocol-test", reader, parser.processKafkaMessage, time.Second, nil)
 	}()
 	select {
 	case <-store.called:

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
 	"time"
 
 	"inv-device-server/pkg/logger"
@@ -63,7 +64,12 @@ func runOrderedKafkaConsumerWithRetry(
 	baseBackoff time.Duration,
 	dlq DeadLetterQueue,
 	metrics *IngestMetrics,
+	wg *sync.WaitGroup,
 ) {
+	if wg != nil {
+		wg.Add(1)
+		defer wg.Done()
+	}
 	if maxRetries < 1 {
 		maxRetries = DefaultMaxRetries
 	}

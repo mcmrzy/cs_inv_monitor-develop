@@ -100,6 +100,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Kafka consumer graceful shutdown WaitGroup (assigned when Kafka is enabled)
+	var kafkaWaitGroupRef *sync.WaitGroup
+
 	db, err := initDatabase(cfg)
 	if err != nil {
 		logger.Fatal("Failed to init database", zap.Error(err))
@@ -114,16 +117,24 @@ func main() {
 
 	hub := mqtt.NewHub(rdb)
 
+	// 创建共享的设备状态管理器：MQTT 层和 Kafka 消费层使用同一实例
+	// 必须在 Hub 初始化之前创建，以便注入到 Hub 中作为状态查询的唯一数据源
+	stateManager := service.NewDeviceStateManager(rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
+
+	// 将状态管理器注入到 Hub：统一状态写入路径（MQTT 层通过 stateManager 而非直接操作 Redis）
+	hub.SetStateManager(stateManager)
+	hub.SetOnlineSNsFunc(stateManager.GetOnlineDeviceSNs)
+
 	// Initialize Redis health monitor for degradation mode and auto-recovery
 	redisHealthMonitor := service.NewRedisHealthMonitor(rdb, func() {
 		logger.Info("Redis recovered, triggering heartbeat rebuild...")
-		go hub.RebuildOnlineSet(ctx)
+		go stateManager.RebuildOnlineSet(ctx)
 	})
 	redisHealthMonitor.Start()
 	defer redisHealthMonitor.Stop()
 
 	// Rebuild online device set from existing heartbeat keys (startup reconciliation)
-	if err := hub.RebuildOnlineSet(ctx); err != nil {
+	if err := stateManager.RebuildOnlineSet(ctx); err != nil {
 		logger.Warn("Failed to rebuild online set on startup", zap.Error(err))
 	}
 
@@ -149,9 +160,6 @@ func main() {
 	}
 	metaRepo := repository.NewMetadataRepository(deviceRepo)
 	dataService := service.NewDataService(deviceRepo, metaRepo, hub, rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
-
-	// 创建共享的设备状态管理器：MQTT 层和 Kafka 消费层使用同一实例
-	stateManager := service.NewDeviceStateManager(rdb, cfg.Backends.APIServer, cfg.Backends.InternalKey)
 
 	// 启动健康心跳 ping（每 30s 发布一次）
 	go stateManager.PublishHealthPing(ctx)
@@ -191,7 +199,7 @@ func main() {
 	dataService.StartMetadataRefresh(ctx)
 
 	// Start periodic online set reconciler (every 5 min, cleans stale entries)
-	go hub.StartOnlineSetReconciler(ctx)
+	go stateManager.StartOnlineSetReconciler(ctx)
 
 	if cfg.Kafka.Enabled {
 		// 共享的 WaitGroup 用于 Kafka 消费者优雅关闭
