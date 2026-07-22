@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -112,7 +113,7 @@ func (s *DataService) FlushPendingCommands(ctx context.Context, sn string) {
 		result, err := s.rdb.LPop(ctx, queueKey).Result()
 		if err != nil {
 			// 队列为空或出错
-			if err.Error() != "redis: nil" {
+			if !errors.Is(err, redis.Nil) {
 				logger.Warn("Failed to pop pending command", zap.String("sn", sn), zap.Error(err))
 			}
 			return

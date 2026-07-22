@@ -2,8 +2,11 @@ package mqtt
 
 import (
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -202,4 +205,89 @@ func TestHubCommandChannel(t *testing.T) {
 	default:
 		t.Fatal("expected command in channel")
 	}
+}
+
+func TestMQTTStats_ConcurrentSafety(t *testing.T) {
+	// Create new MQTT client with mock config
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	defer rdb.Close()
+
+	hub := NewHub(rdb)
+	initialStats := hub.GetStats()
+	var wg sync.WaitGroup
+	numGoroutines := 1000
+
+	// Launch 1000 goroutines each incrementing stats concurrently
+	wg.Add(numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			hub.stats.DataReceived.Add(1)
+			hub.stats.InfoReceived.Add(1)
+			hub.stats.AlarmReceived.Add(1)
+			hub.stats.CmdSent.Add(1)
+			hub.stats.LastDataAt.Store(time.Now())
+		}()
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+
+	// Verify all counters end up at exactly 1000 using atomic operations
+	finalStats := hub.GetStats()
+	expectedValue := initialStats.DataReceived + int64(numGoroutines)
+
+	assert.Equal(t, expectedValue, finalStats.DataReceived,
+		"DataReceived should be %d but got %d", expectedValue, finalStats.DataReceived)
+	assert.Equal(t, initialStats.InfoReceived+int64(numGoroutines), finalStats.InfoReceived,
+		"InfoReceived should be %d but got %d", initialStats.InfoReceived+int64(numGoroutines), finalStats.InfoReceived)
+	assert.Equal(t, initialStats.AlarmReceived+int64(numGoroutines), finalStats.AlarmReceived,
+		"AlarmReceived should be %d but got %d", initialStats.AlarmReceived+int64(numGoroutines), finalStats.AlarmReceived)
+	assert.Equal(t, initialStats.CmdSent+int64(numGoroutines), finalStats.CmdSent,
+		"CmdSent should be %d but got %d", initialStats.CmdSent+int64(numGoroutines), finalStats.CmdSent)
+}
+
+func TestHubStatsWithConcurrentAccess(t *testing.T) {
+	// Create a hub without Redis to avoid connection attempts
+	hub := NewHub(nil)
+	var wg sync.WaitGroup
+
+	// Simulate concurrent writes only
+	numWriters := 50
+	writesPerWriter := 100
+
+	wg.Add(numWriters)
+
+	// Start writers
+	for i := 0; i < numWriters; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < writesPerWriter; j++ {
+				hub.stats.DataReceived.Add(1)
+				hub.stats.InfoReceived.Add(1)
+				hub.stats.AlarmReceived.Add(1)
+				hub.stats.CmdSent.Add(1)
+				hub.stats.LastDataAt.Store(time.Now())
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// If no panic occurred, the test passes
+	stats := MQTTStats{
+		DataReceived:  hub.stats.DataReceived.Load(),
+		InfoReceived:  hub.stats.InfoReceived.Load(),
+		AlarmReceived: hub.stats.AlarmReceived.Load(),
+		CmdSent:       hub.stats.CmdSent.Load(),
+		LastDataAt:    getAtomicTime(hub.stats.LastDataAt),
+	}
+	
+	expectedValue := int64(numWriters * writesPerWriter)
+	assert.Equal(t, expectedValue, stats.DataReceived)
+	assert.Equal(t, expectedValue, stats.InfoReceived)
+	assert.Equal(t, expectedValue, stats.AlarmReceived)
+	assert.Equal(t, expectedValue, stats.CmdSent)
 }
