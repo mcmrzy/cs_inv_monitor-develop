@@ -490,6 +490,23 @@ func (h *AdminHandler) GetSystemHealth(c *gin.Context) {
 		mqttOK = err == nil && val == "ok"
 	}
 
+	// Enhanced: Redis ping status
+	redisPing := "error"
+	if h.rdb != nil {
+		pingResult := h.rdb.Ping(ctx)
+		if pingResult.Err() == nil {
+			redisPing = pingResult.Val()
+		}
+	}
+
+	// Enhanced: Database pool stats
+	var dbPoolActive, dbPoolIdle, dbPoolMax int
+	if h.db != nil {
+		dbPoolActive = int(h.db.Stat().AcquiredConns())
+		dbPoolIdle = int(h.db.Stat().IdleConns())
+		dbPoolMax = int(h.db.Stat().MaxConns())
+	}
+
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 	memUsage := float64(memStats.Alloc) / float64(memStats.Sys) * 100
@@ -506,6 +523,10 @@ func (h *AdminHandler) GetSystemHealth(c *gin.Context) {
 		"mqtt":        mqttOK,
 		"version":     applicationVersion(),
 		"lastCheckAt": time.Now().UTC().Format(time.RFC3339),
+		"redis_ping":  redisPing,
+		"db_pool_active": dbPoolActive,
+		"db_pool_idle":   dbPoolIdle,
+		"db_pool_max":    dbPoolMax,
 	})
 }
 

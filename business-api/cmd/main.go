@@ -27,6 +27,7 @@ import (
 
 	"inv-api-server/internal/config"
 	"inv-api-server/internal/handler"
+	"inv-api-server/internal/job"
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/migration"
 	"inv-api-server/internal/repository"
@@ -174,7 +175,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	batteryHandler := handler.NewBatteryHandler(batteryService)
 	energyScheduleHandler := handler.NewEnergyScheduleHandler(energyScheduleService)
 	adminHandler := handler.NewAdminHandler(userRepo, modelRepo, permChecker, db, rdb, configService)
-	ootaHandler := handler.NewOTAHandler(otaService, db, jpushService)
+	otaHandler := handler.NewOTAHandler(otaService, db, jpushService)
 	dashboardHandler := handler.NewDashboardHandler(db, rdb)
 	alertRuleHandler := handler.NewAlertRuleHandler(db)
 	workOrderHandler := handler.NewWorkOrderHandler(db)
@@ -183,6 +184,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	parallelHandler := handler.NewParallelHandler(parallelService)
 
 	// Initialize invitation handler with email service
+	organizationRepo := repository.NewOrganizationRepository(db)
 	invitationRepo := repository.NewInvitationRepository()
 	invitationHandler := handler.NewInvitationHandler(
 		db,
@@ -197,8 +199,13 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	)
 
 	organizationHandler := handler.NewOrganizationHandler(db)
-	memberLifecycleHandler := handler.NewMemberLifecycleHandler(db, rdb)
+	jobStore := job.NewJobStore(rdb)
+	memberLifecycleHandler := handler.NewMemberLifecycleHandler(db, rdb, jobStore)
 	deviceClaimTransferHandler := handler.NewDeviceClaimTransferHandler(db, permChecker, jwtService, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
+	
+	// Task 11 & 12: Pipeline health and DLQ handlers
+	pipelineHealthHandler := handler.NewPipelineHealthHandler(rdb)
+	dlqHandler := handler.NewDLQHandler(rdb)
 
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
@@ -240,6 +247,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		OrganizationHandler:           organizationHandler,
 		MemberLifecycleHandler:        memberLifecycleHandler,
 		InvitationHandler:             invitationHandler,
+		PipelineHealthHandler:         pipelineHealthHandler,
+		DLQHandler:                    dlqHandler,
 		AuthorizationContextValidator: authorizationRepo,
 	})
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
@@ -665,6 +674,8 @@ type RouterDeps struct {
 	OrganizationHandler           *handler.OrganizationHandler
 	MemberLifecycleHandler        *handler.MemberLifecycleHandler
 	InvitationHandler             *handler.InvitationHandler
+	PipelineHealthHandler         *handler.PipelineHealthHandler
+	DLQHandler                    *handler.DLQHandler
 	AuthorizationContextValidator middleware.AuthorizationContextValidator
 }
 
@@ -782,9 +793,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.POST("/captcha/verify", captchaLimit, deps.CaptchaHandler.VerifyCaptcha)
 
 		// Invitation endpoints (accept is public, others require auth)
-		api.POST("/invitations/accept", deps.InvitationHandler.Accept)
+		api.POST("/invite/accept", deps.InvitationHandler.Accept)
 
-		auth := api.Group("").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
+		auth := api.Group("")
+		auth.Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
 			authInv := auth.Group("/invitations")
 			{
@@ -1071,6 +1083,22 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.PUT("/app/versions/:id/rollout", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.UpdateAppVersionRollout)
 			otaGroup.POST("/app/versions/:id/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackAppVersion)
 			otaGroup.POST("/app/versions/:id/restore", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RestoreAppVersion)
+		}
+
+		// Pipeline Health & DLQ Management APIs (Task 11, 12, 13)
+		pipelineHealthGroup := api.Group("/system").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
+		{
+			// Task 11: Pipeline health aggregation endpoints
+			pipelineHealthGroup.GET("/pipeline-health", deps.PipelineHealthHandler.GetPipelineHealth)
+			pipelineHealthGroup.GET("/pipeline-metrics", deps.PipelineHealthHandler.GetPipelineMetrics)
+			
+			// Task 12: DLQ management endpoints
+			pipelineHealthGroup.GET("/dlq", deps.DLQHandler.List)
+			pipelineHealthGroup.POST("/dlq/:id/retry", deps.DLQHandler.Retry)
+			pipelineHealthGroup.DELETE("/dlq/:id", deps.DLQHandler.Delete)
+			
+			// Task 13: SSE pipeline health stream (implemented in ws_handler.go)
+			pipelineHealthGroup.GET("/pipeline-health/stream", handler.PipelineHealthSSE(deps.RDB))
 		}
 	}
 
