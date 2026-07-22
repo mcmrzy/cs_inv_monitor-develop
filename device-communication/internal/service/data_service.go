@@ -20,13 +20,16 @@ import (
 )
 
 type DataService struct {
-	repo        *repository.DeviceRepository
-	metaRepo    *repository.MetadataRepository
-	hub         *mqtt.Hub
-	rdb         *redis.Client
-	apiServer   string
-	internalKey string
-	httpClient  *http.Client
+	repo            *repository.DeviceRepository
+	metaRepo        *repository.MetadataRepository
+	hub             *mqtt.Hub
+	rdb             *redis.Client
+	apiServer       string
+	internalKey     string
+	httpClient      *http.Client
+	mqttStats       mqtt.MQTTStats
+	dlqPrefixes     []string
+	ingestMetrics   *IngestMetrics
 }
 
 func NewDataService(repo *repository.DeviceRepository, metaRepo *repository.MetadataRepository, hub *mqtt.Hub, rdb *redis.Client, apiServer string, internalKey string) *DataService {

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,6 +28,44 @@ type IngestMetrics struct {
 	consumerProcessed sync.Map // map[string]*atomic.Int64
 }
 
+// PrometheusFormat returns IngestMetrics in Prometheus exposition format.
+func (m *IngestMetrics) PrometheusFormat() string {
+	var sb strings.Builder
+	snapshot := m.Snapshot()
+	
+	sb.WriteString("# HELP ingest_processed_total Total messages processed by ingestion pipeline\n")
+	sb.WriteString("# TYPE ingest_processed_total counter\n")
+	sb.WriteString(fmt.Sprintf("ingest_processed_total %d\n", snapshot.Processed))
+	
+	sb.WriteString("# HELP ingest_retries_total Total retry attempts across all consumers\n")
+	sb.WriteString("# TYPE ingest_retries_total counter\n")
+	sb.WriteString(fmt.Sprintf("ingest_retries_total %d\n", snapshot.Retries))
+	
+	sb.WriteString("# HELP ingest_dlq_total Total messages sent to DLQ\n")
+	sb.WriteString("# TYPE ingest_dlq_total counter\n")
+	sb.WriteString(fmt.Sprintf("ingest_dlq_total %d\n", snapshot.DLQSent))
+	
+	sb.WriteString("# HELP ingest_permanent_errors_total Total permanent errors isolated\n")
+	sb.WriteString("# TYPE ingest_permanent_errors_total counter\n")
+	sb.WriteString(fmt.Sprintf("ingest_permanent_errors_total %d\n", snapshot.PermanentErrors))
+	
+	// Per-consumer counters (using consumer label)
+	for name, counters := range snapshot.PerConsumer {
+		sb.WriteString(fmt.Sprintf("# HELP ingest_processed_total_by_consumer Total messages processed per consumer\n"))
+		sb.WriteString("# TYPE ingest_processed_total_by_consumer counter\n")
+		sb.WriteString(fmt.Sprintf("ingest_processed_total{consumer=\"%s\"} %d\n", name, counters.Processed))
+		
+		sb.WriteString(fmt.Sprintf("# HELP ingest_retries_total_by_consumer Total retries per consumer\n"))
+		sb.WriteString("# TYPE ingest_retries_total_by_consumer counter\n")
+		sb.WriteString(fmt.Sprintf("ingest_retries_total{consumer=\"%s\"} %d\n", name, counters.Retries))
+		
+		sb.WriteString(fmt.Sprintf("# HELP ingest_dlq_total_by_consumer Total DLQ messages per consumer\n"))
+		sb.WriteString("# TYPE ingest_dlq_total_by_consumer counter\n")
+		sb.WriteString(fmt.Sprintf("ingest_dlq_total{consumer=\"%s\"} %d\n", name, counters.DLQSent))
+	}
+	
+	return sb.String()
+}
 // NewIngestMetrics creates a zero-value metrics tracker.
 func NewIngestMetrics() *IngestMetrics {
 	return &IngestMetrics{}
