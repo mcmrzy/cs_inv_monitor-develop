@@ -36,6 +36,12 @@ type Client struct {
 	onAlarm        func(sn string, payload []byte)
 }
 
+// DeviceStateUpdater abstracts the device state manager for the MQTT layer.
+// Implemented by service.DeviceStateManager; injected here to avoid a circular import.
+type DeviceStateUpdater interface {
+	UpdateHeartbeat(ctx context.Context, sn string) error
+}
+
 func (c *Client) SetOtaStatusHandler(handler func(sn string, payload []byte)) {
 	c.onOtaStatus = handler
 }
@@ -61,6 +67,23 @@ type Hub struct {
 
 	cmdChan chan *DeviceCommand
 	stats   statsStorage
+
+	// stateManager is the single source of truth for device state.
+	// When set, GetOnlineDeviceSNs delegates to it instead of scanning Redis directly.
+	stateManager DeviceStateUpdater
+	// onlineSNsFunc returns the current set of online device SNs.
+	// Injected from service.DeviceStateManager.GetOnlineDeviceSNs.
+	onlineSNsFunc func(ctx context.Context) []string
+}
+
+// SetStateManager injects the DeviceStateUpdater into the Hub.
+func (h *Hub) SetStateManager(sm DeviceStateUpdater) {
+	h.stateManager = sm
+}
+
+// SetOnlineSNsFunc injects the function used to retrieve online device SNs.
+func (h *Hub) SetOnlineSNsFunc(f func(ctx context.Context) []string) {
+	h.onlineSNsFunc = f
 }
 
 type DeviceCommand struct {
@@ -137,6 +160,12 @@ func (h *Hub) IsDeviceOnline(sn string) bool {
 }
 
 func (h *Hub) GetOnlineDeviceSNs() []string {
+	// Prefer the injected DeviceStateManager-backed function (single source of truth)
+	if h.onlineSNsFunc != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return h.onlineSNsFunc(ctx)
+	}
 	if h.rdb == nil {
 		return nil
 	}
@@ -384,8 +413,10 @@ func (c *Client) Connect(ctx context.Context) error {
 					if isDeviceStatusTopic(topic) {
 						online := parseStatusOnline(pr.Packet.Payload)
 						if online {
-							// 设备主动上报在线，更新心跳
-							c.hub.MarkDeviceOnline(sn)
+							// 设备主动上报在线，通过状态管理器统一更新心跳
+							if c.hub.stateManager != nil {
+								_ = c.hub.stateManager.UpdateHeartbeat(context.Background(), sn)
+							}
 							c.hub.stats.DataReceived.Add(1)
 							c.hub.stats.LastDataAt.Store(time.Now())
 						}
@@ -397,8 +428,10 @@ func (c *Client) Connect(ctx context.Context) error {
 						return true, nil
 					}
 
-					// 非状态主题（数据/OTA 等）：设备发了真实数据，标记在线
-					c.hub.MarkDeviceOnline(sn)
+					// 非状态主题（数据/OTA 等）：设备发了真实数据，通过状态管理器标记在线
+					if c.hub.stateManager != nil {
+						_ = c.hub.stateManager.UpdateHeartbeat(context.Background(), sn)
+					}
 					c.hub.stats.DataReceived.Add(1)
 					c.hub.stats.LastDataAt.Store(time.Now())
 

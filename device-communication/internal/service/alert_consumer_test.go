@@ -234,7 +234,7 @@ func TestAlertConsumer_SuccessfulDeliveryCommitsThenFetchesNext(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Millisecond)
+		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Millisecond, nil)
 	}()
 	select {
 	case <-done:
@@ -264,7 +264,7 @@ func TestAlertConsumer_HTTP4xxAuditedBeforeCommit(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Millisecond)
+		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Millisecond, nil)
 	}()
 	select {
 	case <-done:
@@ -294,7 +294,7 @@ func TestAlertConsumer_AuditFailureRetainsOffset(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Second)
+		runOrderedKafkaConsumer(ctx, "alert-test", reader, consumer.processAlert, time.Second, nil)
 	}()
 	select {
 	case <-store.called:

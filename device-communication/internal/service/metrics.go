@@ -124,16 +124,19 @@ func (m *IngestMetrics) Snapshot() MetricsSnapshot {
 	if processed > 0 {
 		avgMs = float64(totalLatency) / float64(processed) / float64(time.Millisecond)
 	}
+	// Collect all consumer names from all three maps
+	consumerNames := make(map[string]struct{})
+	m.consumerProcessed.Range(func(k, _ any) bool { consumerNames[k.(string)] = struct{}{}; return true })
+	m.consumerRetries.Range(func(k, _ any) bool { consumerNames[k.(string)] = struct{}{}; return true })
+	m.consumerDLQSent.Range(func(k, _ any) bool { consumerNames[k.(string)] = struct{}{}; return true })
 	perConsumer := make(map[string]ConsumerCounters)
-	m.consumerProcessed.Range(func(k, v any) bool {
-		name := k.(string)
+	for name := range consumerNames {
 		perConsumer[name] = ConsumerCounters{
-			Processed: v.(*atomic.Int64).Load(),
+			Processed: m.loadCounter(&m.consumerProcessed, name),
 			Retries:   m.loadCounter(&m.consumerRetries, name),
 			DLQSent:   m.loadCounter(&m.consumerDLQSent, name),
 		}
-		return true
-	})
+	}
 	return MetricsSnapshot{
 		Processed:       processed,
 		Retries:         m.retries.Load(),

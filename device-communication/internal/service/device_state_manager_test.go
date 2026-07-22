@@ -799,3 +799,171 @@ func TestDetectAndHandleFault_NestedData(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StateFault, manager.GetDeviceState(ctx, sn))
 }
+
+// ==================== Task 10: hasActiveSevereAlarms Tests ====================
+
+func TestHasActiveSevereAlarms_NoAlarms(t *testing.T) {
+	manager, _ := newTestStateManager(t)
+	sn := "SN-ALARM-001"
+	ctx := context.Background()
+
+	// No alarm entries in Redis set
+	has, err := manager.hasActiveSevereAlarms(ctx, sn)
+	assert.NoError(t, err)
+	assert.False(t, has, "should return false when no alarms exist")
+}
+
+func TestHasActiveSevereAlarms_InfoLevelOnly(t *testing.T) {
+	manager, mr := newTestStateManager(t)
+	sn := "SN-ALARM-002"
+	ctx := context.Background()
+
+	// Only info-level alarms (level=1)
+	mr.SAdd(fmt.Sprintf("device:alarm:active:%s", sn), "1:100", "1:101")
+
+	has, err := manager.hasActiveSevereAlarms(ctx, sn)
+	assert.NoError(t, err)
+	assert.False(t, has, "info-level alarms should not be severe")
+}
+
+func TestHasActiveSevereAlarms_WarningLevel(t *testing.T) {
+	manager, mr := newTestStateManager(t)
+	sn := "SN-ALARM-003"
+	ctx := context.Background()
+
+	mr.SAdd(fmt.Sprintf("device:alarm:active:%s", sn), "2:200")
+
+	has, err := manager.hasActiveSevereAlarms(ctx, sn)
+	assert.NoError(t, err)
+	assert.True(t, has, "warning-level alarm should be severe")
+}
+
+func TestHasActiveSevereAlarms_CriticalLevel(t *testing.T) {
+	manager, mr := newTestStateManager(t)
+	sn := "SN-ALARM-004"
+	ctx := context.Background()
+
+	mr.SAdd(fmt.Sprintf("device:alarm:active:%s", sn), "3:300")
+
+	has, err := manager.hasActiveSevereAlarms(ctx, sn)
+	assert.NoError(t, err)
+	assert.True(t, has, "critical-level alarm should be severe")
+}
+
+func TestHasActiveSevereAlarms_MixedLevels(t *testing.T) {
+	manager, mr := newTestStateManager(t)
+	sn := "SN-ALARM-005"
+	ctx := context.Background()
+
+	mr.SAdd(fmt.Sprintf("device:alarm:active:%s", sn), "1:100", "2:200", "3:300")
+
+	has, err := manager.hasActiveSevereAlarms(ctx, sn)
+	assert.NoError(t, err)
+	assert.True(t, has, "mixed alarms with warning/critical should be severe")
+}
+
+func TestHasActiveSevereAlarms_InvalidFormat(t *testing.T) {
+	manager, mr := newTestStateManager(t)
+	sn := "SN-ALARM-006"
+	ctx := context.Background()
+
+	// Invalid entries that should be skipped
+	mr.SAdd(fmt.Sprintf("device:alarm:active:%s", sn), "invalid", "abc:def")
+
+	has, err := manager.hasActiveSevereAlarms(ctx, sn)
+	assert.NoError(t, err)
+	assert.False(t, has, "invalid format entries should be ignored")
+}
+
+func TestHasActiveSevereAlarms_NilRedis(t *testing.T) {
+	manager := &DeviceStateManager{rdb: nil}
+	has, err := manager.hasActiveSevereAlarms(context.Background(), "SN-ALARM-007")
+	assert.NoError(t, err)
+	assert.False(t, has, "nil redis should return false")
+}
+
+// ==================== Task 10: writeStateAudit Tests ====================
+
+func TestWriteStateAudit_Success(t *testing.T) {
+	manager, _ := newTestStateManager(t)
+	sn := "SN-AUDIT-001"
+	ctx := context.Background()
+
+	req := &StateChangeRequest{
+		SN:        sn,
+		Event:     EventOnlineReport,
+		Timestamp: time.Now().UTC(),
+	}
+
+	manager.writeStateAudit(ctx, req, StateOffline, StateOnline)
+
+	auditKey := fmt.Sprintf("pipeline:state_audit:%s", sn)
+	length, err := manager.rdb.LLen(ctx, auditKey).Result()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), length, "should have 1 audit entry")
+
+	// Verify TTL is set (7 days)
+	ttl := manager.rdb.TTL(ctx, auditKey).Val()
+	assert.True(t, ttl > 0, "audit key should have TTL set")
+}
+
+func TestWriteStateAudit_LimitsTo100Entries(t *testing.T) {
+	manager, mr := newTestStateManager(t)
+	sn := "SN-AUDIT-002"
+	ctx := context.Background()
+
+	auditKey := fmt.Sprintf("pipeline:state_audit:%s", sn)
+
+	// Pre-fill with 110 entries
+	for i := 0; i < 110; i++ {
+		_, _ = mr.Lpush(auditKey, fmt.Sprintf(`{"sn":"%s","seq":%d}`, sn, i))
+	}
+
+	req := &StateChangeRequest{
+		SN:        sn,
+		Event:     EventFaultDetected,
+		Timestamp: time.Now().UTC(),
+	}
+	manager.writeStateAudit(ctx, req, StateOnline, StateFault)
+
+	length, err := manager.rdb.LLen(ctx, auditKey).Result()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(100), length, "audit list should be trimmed to 100 entries")
+}
+
+func TestWriteStateAudit_NilRedis(t *testing.T) {
+	manager := &DeviceStateManager{rdb: nil}
+	req := &StateChangeRequest{
+		SN:        "SN-AUDIT-003",
+		Event:     EventOnlineReport,
+		Timestamp: time.Now().UTC(),
+	}
+	// Should not panic
+	manager.writeStateAudit(context.Background(), req, StateOffline, StateOnline)
+}
+
+func TestAlarmLevelConstants(t *testing.T) {
+	assert.Equal(t, 1, AlarmLevelInfo)
+	assert.Equal(t, 2, AlarmLevelWarning)
+	assert.Equal(t, 3, AlarmLevelCritical)
+}
+
+func TestHandleStateChange_WritesAuditLog(t *testing.T) {
+	manager, _ := newTestStateManager(t)
+	sn := "SN-AUDIT-004"
+	ctx := context.Background()
+
+	manager.stateCache.Store(sn, StateOffline)
+
+	err := manager.HandleStateChange(ctx, &StateChangeRequest{
+		SN:        sn,
+		Event:     EventOnlineReport,
+		Timestamp: time.Now().UTC(),
+	})
+	assert.NoError(t, err)
+
+	auditKey := fmt.Sprintf("pipeline:state_audit:%s", sn)
+	length, err := manager.rdb.LLen(ctx, auditKey).Result()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), length, "HandleStateChange should write audit entry")
+}

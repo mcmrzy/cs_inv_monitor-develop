@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,16 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+)
+
+// Service startup timestamp for uptime calculation
+var serviceStartTime = time.Now()
+
+// Alarm level constants
+const (
+	AlarmLevelInfo     = 1 // Informational alarm (low priority)
+	AlarmLevelWarning  = 2 // Warning alarm (medium priority)
+	AlarmLevelCritical = 3 // Critical alarm (high priority)
 )
 
 // DeviceState 设备状态枚举
@@ -53,6 +64,12 @@ type DeviceStateManager struct {
 
 	// 状态缓存（内存缓存，减少Redis查询）
 	stateCache sync.Map // map[string]DeviceState
+
+	// IngestMetrics for Prometheus-format export
+	ingestMetrics *IngestMetrics
+
+	// DLQ key prefixes for pending message counting
+	dlqPrefixes []string
 }
 
 // NewDeviceStateManager 创建设备状态管理器
@@ -69,6 +86,76 @@ func NewDeviceStateManager(rdb *redis.Client, apiEndpoint string, internalKey st
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
+		ingestMetrics: NewIngestMetrics(),
+		dlqPrefixes:   []string{"pipeline:dlq:telemetry", "pipeline:dlq:alarm"},
+	}
+}
+
+// HealthMetrics holds the /health endpoint response fields.
+type HealthMetrics struct {
+	KafkaLag   int64   `json:"kafka_lag"`
+	DLQPending int64   `json:"dlq_pending"`
+	UptimeSecs float64 `json:"uptime_seconds"`
+}
+
+// GetHealthMetrics returns the current health metrics for the /health endpoint.
+func (m *DeviceStateManager) GetHealthMetrics(ctx context.Context) HealthMetrics {
+	// Calculate Kafka consumer lag (total across all partitions)
+	var kafkaLag int64
+	if m.rdb != nil {
+		// Read lag from Redis keys written by consumers (optional)
+		if lag, err := m.rdb.Get(ctx, "pipeline:kafka:lag:total").Int64(); err == nil {
+			kafkaLag = lag
+		}
+	}
+
+	// Count DLQ pending messages
+	var dlqPending int64
+	if m.rdb != nil {
+		for _, prefix := range m.dlqPrefixes {
+			key := prefix + ":pending"
+			if count, err := m.rdb.Get(ctx, key).Int64(); err == nil {
+				dlqPending += count
+			}
+		}
+	}
+
+	// Uptime calculation
+	uptimeSecs := time.Since(serviceStartTime).Seconds()
+
+	return HealthMetrics{
+		KafkaLag:   kafkaLag,
+		DLQPending: dlqPending,
+		UptimeSecs: uptimeSecs,
+	}
+}
+
+// GetIngestMetrics returns the IngestMetrics tracker for Prometheus format export.
+func (m *DeviceStateManager) GetIngestMetrics() *IngestMetrics {
+	return m.ingestMetrics
+}
+
+// PublishHealthPing writes a periodic health ping to Redis pub/sub channel.
+// Runs every 30s with 90s TTL to signal service liveness.
+func (m *DeviceStateManager) PublishHealthPing(ctx context.Context) {
+	if m.rdb == nil {
+		return
+	}
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			payload := map[string]interface{}{
+				"status": "alive",
+				"ts":     time.Now().UTC().Unix(),
+			}
+			payloadBytes, _ := json.Marshal(payload)
+			_ = m.rdb.Publish(ctx, "pipeline:health:device-server", payloadBytes).Err()
+		}
 	}
 }
 
@@ -126,6 +213,9 @@ func (m *DeviceStateManager) HandleStateChange(ctx context.Context, req *StateCh
 		zap.Int("from", int(currentState)),
 		zap.Int("to", int(targetState)),
 		zap.Int("event", int(req.Event)))
+
+	// 8. 写审计日志到 Redis pipeline:state_audit:{sn}
+	m.writeStateAudit(ctx, req, currentState, targetState)
 
 	return nil
 }
@@ -218,10 +308,64 @@ func getDebounceTTL(event StateTransition) time.Duration {
 }
 
 // hasActiveSevereAlarms 检查设备是否有未处理的严重告警
+// 查询 Redis Set device:alarm:active:{sn}，其中条目格式为 "level:code"，
+// level >= AlarmLevelWarning (2) 表示严重告警。
 func (m *DeviceStateManager) hasActiveSevereAlarms(ctx context.Context, sn string) (bool, error) {
-	// 通过内部API查询，或者直接查询数据库
-	// 这里简化实现，实际应该调用API Server的接口
+	if m.rdb == nil {
+		return false, nil
+	}
+	key := fmt.Sprintf("device:alarm:active:%s", sn)
+	members, err := m.rdb.SMembers(ctx, key).Result()
+	if err != nil {
+		// redis.Nil or other errors: treat as no alarms to avoid blocking recovery
+		return false, nil
+	}
+	for _, entry := range members {
+		// entry format: "level:code" e.g. "2:101" or "3:202"
+		parts := strings.SplitN(entry, ":", 2)
+		if len(parts) < 1 {
+			continue
+		}
+		var level int
+		if _, err := fmt.Sscanf(parts[0], "%d", &level); err == nil && level >= AlarmLevelWarning {
+			return true, nil
+		}
+	}
 	return false, nil
+}
+
+// writeStateAudit writes a state change audit log entry to Redis.
+// Entries are stored in a List at pipeline:state_audit:{sn} with:
+//   - Max 100 entries (LTRIM)
+//   - 7 day TTL
+func (m *DeviceStateManager) writeStateAudit(ctx context.Context, req *StateChangeRequest, from, to DeviceState) {
+	if m.rdb == nil {
+		return
+	}
+	entry := map[string]interface{}{
+		"sn":        req.SN,
+		"event":     EventToString(req.Event),
+		"from":      StateToString(from),
+		"to":        StateToString(to),
+		"timestamp": req.Timestamp.UTC().Format(time.RFC3339),
+		"metadata":  req.Metadata,
+	}
+	entryJSON, err := json.Marshal(entry)
+	if err != nil {
+		logger.Warn("Failed to marshal state audit entry",
+			zap.String("sn", req.SN), zap.Error(err))
+		return
+	}
+
+	auditKey := fmt.Sprintf("pipeline:state_audit:%s", req.SN)
+	pipe := m.rdb.Pipeline()
+	pipe.LPush(ctx, auditKey, string(entryJSON))
+	pipe.LTrim(ctx, auditKey, 0, 99) // keep last 100 entries
+	pipe.Expire(ctx, auditKey, 7*24*time.Hour)
+	if _, err := pipe.Exec(ctx); err != nil {
+		logger.Warn("Failed to write state audit",
+			zap.String("sn", req.SN), zap.Error(err))
+	}
 }
 
 // executeStateChange 执行状态变更
@@ -488,6 +632,117 @@ func (m *DeviceStateManager) MarkDeviceOffline(ctx context.Context, sn string) e
 		Event:     EventHeartbeatTimeout,
 		Timestamp: time.Now().UTC(),
 	})
+}
+
+// GetOnlineDeviceSNs returns all online device SNs from Redis.
+// Primary: O(1) retrieval from device:online_set (secondary index).
+// Fallback: scan device:heartbeat:* keys when set is empty.
+func (m *DeviceStateManager) GetOnlineDeviceSNs(ctx context.Context) []string {
+	if m.rdb == nil {
+		return nil
+	}
+	// Primary: O(1) retrieval from Redis Set (secondary index)
+	sns, err := m.rdb.SMembers(ctx, "device:online_set").Result()
+	if err == nil && len(sns) > 0 {
+		return sns
+	}
+	// Fallback: scan heartbeat keys
+	return m.scanHeartbeatKeys(ctx)
+}
+
+// scanHeartbeatKeys scans all device:heartbeat:* keys.
+func (m *DeviceStateManager) scanHeartbeatKeys(ctx context.Context) []string {
+	if m.rdb == nil {
+		return nil
+	}
+	var sns []string
+	var cursor uint64
+	for {
+		keys, nextCursor, err := m.rdb.Scan(ctx, cursor, "device:heartbeat:*", 1000).Result()
+		if err != nil {
+			break
+		}
+		for _, key := range keys {
+			sns = append(sns, strings.TrimPrefix(key, "device:heartbeat:"))
+		}
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	return sns
+}
+
+// RebuildOnlineSet scans all existing heartbeat keys and rebuilds the online set.
+// Should be called on service startup to ensure the set is in sync with heartbeat keys.
+func (m *DeviceStateManager) RebuildOnlineSet(ctx context.Context) error {
+	if m.rdb == nil {
+		return nil
+	}
+
+	sns := m.scanHeartbeatKeys(ctx)
+
+	// Replace the set atomically: delete old set, then add all current SNs
+	pipe := m.rdb.Pipeline()
+	pipe.Del(ctx, "device:online_set")
+	if len(sns) > 0 {
+		members := make([]interface{}, len(sns))
+		for i, sn := range sns {
+			members[i] = sn
+		}
+		pipe.SAdd(ctx, "device:online_set", members...)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		logger.Error("Failed to rebuild online set", zap.Int("count", len(sns)), zap.Error(err))
+		return err
+	}
+	logger.Info("Online set rebuilt via DeviceStateManager", zap.Int("device_count", len(sns)))
+	return nil
+}
+
+// StartOnlineSetReconciler periodically reconciles the online set with heartbeat keys.
+// Runs every 5 minutes to clean up stale entries (devices whose heartbeat keys have expired
+// but whose SNs were not removed from the set).
+func (m *DeviceStateManager) StartOnlineSetReconciler(ctx context.Context) {
+	if m.rdb == nil {
+		return
+	}
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.reconcileOnlineSet(ctx)
+		}
+	}
+}
+
+// reconcileOnlineSet removes stale SNs from the online set whose heartbeat keys no longer exist.
+func (m *DeviceStateManager) reconcileOnlineSet(ctx context.Context) {
+	setSNs, err := m.rdb.SMembers(ctx, "device:online_set").Result()
+	if err != nil {
+		logger.Warn("Failed to get online set for reconciliation", zap.Error(err))
+		return
+	}
+	if len(setSNs) == 0 {
+		return
+	}
+
+	// Check which SNs in the set no longer have a heartbeat key
+	var stale []interface{}
+	for _, sn := range setSNs {
+		if m.rdb.Exists(ctx, "device:heartbeat:"+sn).Val() == 0 {
+			stale = append(stale, sn)
+		}
+	}
+	if len(stale) > 0 {
+		m.rdb.SRem(ctx, "device:online_set", stale...)
+		logger.Info("Reconciled online set via DeviceStateManager",
+			zap.Int("stale_removed", len(stale)),
+			zap.Int("remaining", len(setSNs)-len(stale)))
+	}
 }
 
 // HandleFaultRecovery 处理故障恢复事件。

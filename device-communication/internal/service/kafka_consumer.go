@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"time"
 
 	"inv-device-server/pkg/logger"
@@ -38,7 +39,12 @@ func runOrderedKafkaConsumer(
 	reader kafkaMessageReader,
 	handler func(context.Context, kafka.Message) error,
 	retryDelay time.Duration,
+	wg *sync.WaitGroup,
 ) {
+	if wg != nil {
+		wg.Add(1)
+		defer wg.Done()
+	}
 	defer reader.Close()
 
 	for ctx.Err() == nil {
