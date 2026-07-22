@@ -219,3 +219,129 @@ func (h *WSHandler) DeviceRealtime(c *gin.Context) {
 		}
 	}
 }
+
+// PipelineHealthSSE provides Server-Sent Events stream for pipeline health updates
+// @Summary SSE pipeline health stream
+// @Description Real-time pipeline health status updates via SSE
+// @Tags System Health
+// @Router /api/v1/system/pipeline-health/stream [get]
+func PipelineHealthSSE(rdb *redis.Client) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Set SSE headers
+		c.Header("Content-Type", "text/event-stream")
+		c.Header("Cache-Control", "no-cache")
+		c.Header("Connection", "keep-alive")
+		c.Header("Access-Control-Allow-Origin", "*")
+
+		ctx := c.Request.Context()
+		flusher, ok := c.Writer.(http.Flusher)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "streaming not supported"})
+			return
+		}
+
+		logger.Info("SSE pipeline_health stream started")
+		defer logger.Info("SSE pipeline_health stream closed")
+
+		// Send initial connection event
+		c.Writer.WriteString("event: connected\n")
+		c.Writer.WriteString("data: {\"message\": \"SSE pipeline health stream connected\"}\n\n")
+		flusher.Flush()
+
+		// Create ticker for periodic updates
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				// Fetch aggregated health data
+				healthData := fetchPipelineHealthData(ctx, rdb)
+				
+				// Convert to JSON
+				dataJSON, err := json.Marshal(healthData)
+				if err != nil {
+					logger.Error("Failed to marshal health data", zap.Error(err))
+					continue
+				}
+
+				// Send SSE event
+				c.Writer.WriteString("event: pipeline_health\n")
+				c.Writer.WriteString(fmt.Sprintf("data: %s\n\n", dataJSON))
+				flusher.Flush()
+			}
+		}
+	}
+}
+
+// fetchPipelineHealthData aggregates health data from Redis
+func fetchPipelineHealthData(ctx context.Context, rdb *redis.Client) map[string]interface{} {
+	data := map[string]interface{}{
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	// Get health status from all services
+	services := []string{"bridge", "device-server", "api"}
+	healthStatus := make(map[string]string)
+	overallStatus := "ok"
+
+	for _, service := range services {
+		key := fmt.Sprintf("pipeline:health:%s", service)
+		status, err := rdb.Get(ctx, key).Result()
+		if err != nil {
+			if err == redis.Nil {
+				healthStatus[service] = "unknown"
+				if overallStatus == "ok" {
+					overallStatus = "degraded"
+				}
+			} else {
+				healthStatus[service] = "error"
+				overallStatus = "down"
+			}
+		} else {
+			healthStatus[service] = status
+			if status == "down" {
+				overallStatus = "down"
+			} else if status == "degraded" && overallStatus == "ok" {
+				overallStatus = "degraded"
+			}
+		}
+	}
+
+	data["service_status"] = healthStatus
+	data["overall_status"] = overallStatus
+
+	// Get DLQ counts
+	dlqCounts := make(map[string]int64)
+	totalDLQ := int64(0)
+	for _, service := range services {
+		key := fmt.Sprintf("kafka:dlq:%s", service)
+		count, err := rdb.LLen(ctx, key).Result()
+		if err == nil {
+			dlqCounts[service] = count
+			totalDLQ += count
+		}
+	}
+	data["dlq_pending"] = dlqCounts
+	data["dlq_total"] = totalDLQ
+
+	// Get online device count (from heartbeat keys)
+	onlineCount := 0
+	cursor := uint64(0)
+	for {
+		keys, nextCursor, err := rdb.Scan(ctx, cursor, "device:heartbeat:*", 100).Result()
+		if err != nil {
+			break
+		}
+		onlineCount += len(keys)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	data["online_device_count"] = onlineCount
+
+	return data
+}
