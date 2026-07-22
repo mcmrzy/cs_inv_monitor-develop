@@ -21,7 +21,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -73,30 +73,23 @@ func (c *Config) Validate() error {
 }
 
 type stats struct {
-	mu            sync.Mutex
-	messagesIn    int64
-	messagesOut   int64
-	errors        int64
-	lastMessageAt time.Time
+	messagesIn    atomic.Int64
+	messagesOut   atomic.Int64
+	errors        atomic.Int64
+	lastMessageAt atomic.Value // stores time.Time
 }
 
 func (s *stats) incIn() {
-	s.mu.Lock()
-	s.messagesIn++
-	s.lastMessageAt = time.Now()
-	s.mu.Unlock()
+	s.messagesIn.Add(1)
+	s.lastMessageAt.Store(time.Now())
 }
 
 func (s *stats) incOut(n int) {
-	s.mu.Lock()
-	s.messagesOut += int64(n)
-	s.mu.Unlock()
+	s.messagesOut.Add(int64(n))
 }
 
 func (s *stats) incErr() {
-	s.mu.Lock()
-	s.errors++
-	s.mu.Unlock()
+	s.errors.Add(1)
 }
 
 type KafkaBridge struct {
@@ -312,14 +305,16 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
-		bridge.stats.mu.Lock()
-		data := map[string]interface{}{
-			"messages_in":     bridge.stats.messagesIn,
-			"messages_out":    bridge.stats.messagesOut,
-			"errors":          bridge.stats.errors,
-			"last_message_at": bridge.stats.lastMessageAt.Format(time.RFC3339),
+		var lastMsgAt string
+		if v := bridge.stats.lastMessageAt.Load(); v != nil {
+			lastMsgAt = v.(time.Time).Format(time.RFC3339)
 		}
-		bridge.stats.mu.Unlock()
+		data := map[string]interface{}{
+			"messages_in":     bridge.stats.messagesIn.Load(),
+			"messages_out":    bridge.stats.messagesOut.Load(),
+			"errors":          bridge.stats.errors.Load(),
+			"last_message_at": lastMsgAt,
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(data)
 	})
@@ -357,11 +352,13 @@ func printStats(st *stats) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		st.mu.Lock()
+		var lastMsgAt string
+		if v := st.lastMessageAt.Load(); v != nil {
+			lastMsgAt = v.(time.Time).Format("15:04:05")
+		}
 		log.Printf("Stats: in=%d, out=%d, errors=%d, last_msg=%s",
-			st.messagesIn, st.messagesOut, st.errors,
-			st.lastMessageAt.Format("15:04:05"))
-		st.mu.Unlock()
+			st.messagesIn.Load(), st.messagesOut.Load(), st.errors.Load(),
+			lastMsgAt)
 	}
 }
 
