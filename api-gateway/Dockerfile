@@ -1,6 +1,6 @@
 FROM golang:1.26.5-alpine AS builder
 
-ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOPROXY=https://goproxy.cn,https://goproxy.io,direct
 ENV GOPROXY=${GOPROXY}
 ENV GO111MODULE=on
 
@@ -18,6 +18,7 @@ COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -p=1 \
     -ldflags="-s -w" \
     -o /build/api-gateway \
     ./main.go

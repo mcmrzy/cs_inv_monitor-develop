@@ -1,16 +1,18 @@
 **
-!inv_api_server/
-!inv_api_server/**
+!business-api/
+!business-api/**
+!device-communication/
+!device-communication/**
 !database/
 !database/**
 !deploy/
 !deploy/postgres/
 !deploy/postgres/**
 
-inv_api_server/.gocache/
-inv_api_server/.gocache*/
-inv_api_server/logs/
-inv_api_server/bin/
+business-api/.gocache/
+business-api/.gocache*/
+business-api/logs/
+business-api/bin/
 **/*.exe
 **/*.log
 **/*.test
