@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"inv-device-server/internal/config"
@@ -59,7 +60,7 @@ type Hub struct {
 	rdb *redis.Client
 
 	cmdChan chan *DeviceCommand
-	stats   MQTTStats
+	stats   statsStorage
 }
 
 type DeviceCommand struct {
@@ -76,6 +77,16 @@ type MQTTStats struct {
 	CmdSent       int64     `json:"cmd_sent"`
 	LastDataAt    time.Time `json:"last_data_at"`
 	OnlineClients int       `json:"online_clients"`
+}
+
+// statsStorage is an internal type for concurrent-safe access.
+type statsStorage struct {
+	DataReceived  atomic.Int64
+	InfoReceived  atomic.Int64
+	AlarmReceived atomic.Int64
+	CmdSent       atomic.Int64
+	LastDataAt    atomic.Value // stores time.Time
+	OnlineClients int
 }
 
 const onlineTimeoutSeconds = 600
@@ -253,7 +264,24 @@ func (h *Hub) GetCmdChan() chan *DeviceCommand {
 
 func (h *Hub) GetStats() MQTTStats {
 	h.stats.OnlineClients = len(h.GetOnlineDeviceSNs())
-	return h.stats
+	
+	// Create a copy with loaded atomic values for safe JSON serialization
+	return MQTTStats{
+		DataReceived:  h.stats.DataReceived.Load(),
+		InfoReceived:  h.stats.InfoReceived.Load(),
+		AlarmReceived: h.stats.AlarmReceived.Load(),
+		CmdSent:       h.stats.CmdSent.Load(),
+		LastDataAt:    getAtomicTime(h.stats.LastDataAt),
+		OnlineClients: h.stats.OnlineClients,
+	}
+}
+
+// getAtomicTime safely extracts time.Time from atomic.Value
+func getAtomicTime(v atomic.Value) time.Time {
+	if t := v.Load(); t != nil {
+		return t.(time.Time)
+	}
+	return time.Time{}
 }
 
 func NewClient(cfg *config.MQTTConfig, hub *Hub) *Client {
@@ -358,8 +386,8 @@ func (c *Client) Connect(ctx context.Context) error {
 						if online {
 							// 设备主动上报在线，更新心跳
 							c.hub.MarkDeviceOnline(sn)
-							c.hub.stats.DataReceived++
-							c.hub.stats.LastDataAt = time.Now()
+							c.hub.stats.DataReceived.Add(1)
+							c.hub.stats.LastDataAt.Store(time.Now())
 						}
 						// LWT 离线消息：不刷新心跳 key，让 600s TTL 自然过期
 						// 不主动删除 key，避免设备短暂断连后重连导致状态抖动
@@ -371,8 +399,8 @@ func (c *Client) Connect(ctx context.Context) error {
 
 					// 非状态主题（数据/OTA 等）：设备发了真实数据，标记在线
 					c.hub.MarkDeviceOnline(sn)
-					c.hub.stats.DataReceived++
-					c.hub.stats.LastDataAt = time.Now()
+					c.hub.stats.DataReceived.Add(1)
+					c.hub.stats.LastDataAt.Store(time.Now())
 
 					// 处理 OTA 状态上报
 					if isOtaStatusTopic(topic) && c.onOtaStatus != nil {
@@ -477,7 +505,7 @@ func isOtaCommand(cmdType string) bool {
 }
 
 func (c *Client) sendCommand(ctx context.Context, cmd *DeviceCommand) {
-	c.hub.stats.CmdSent++
+	c.hub.stats.CmdSent.Add(1)
 
 	// OTA命令使用专用主题 cs_inv/{sn}/ota/cmd，其他命令使用通用主题 cs_inv/{sn}/cmd
 	var topic string
