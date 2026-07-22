@@ -61,17 +61,15 @@ export function BulkOperationProgress({
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // React Query for initial job status fetch
-  const { data: initialStatus, isLoading, error: queryError } = useQuery(
-    ['jobStatus', jobId],
-    () => fetchJobStatus(jobId),
-    {
-      refetchInterval: jobStatus?.status === 'processing' ? 5000 : false,
-      refetchOnWindowFocus: false,
-    }
-  );
+  const { data: initialStatus, isLoading, error: queryError } = useQuery({
+    queryKey: ['jobStatus', jobId],
+    queryFn: () => fetchJobStatus(jobId),
+    refetchInterval: jobStatus?.status === 'processing' ? 5000 : false,
+    refetchOnWindowFocus: false,
+  });
 
   // WebSocket connection for real-time updates
   const { lastMessage, readyState } = useWebSocket(`/ws/jobs/${jobId}/progress?user_id=${getCurrentUserId()}`);

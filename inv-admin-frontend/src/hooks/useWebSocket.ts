@@ -15,7 +15,7 @@ export function useWebSocket(jobId: string): UseWebSocketReturn {
   const [readyState, setReadyState] = useState<number>(1); // Default to OPEN
   
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
   const token = useAuthStore((s) => s.token);
