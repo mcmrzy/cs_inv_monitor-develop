@@ -10,7 +10,7 @@ import {
   MenuFoldOutlined, MenuUnfoldOutlined, ClusterOutlined,
   FundViewOutlined, ThunderboltOutlined,
   EnvironmentOutlined, LockOutlined, FileTextOutlined,
-  RadarChartOutlined, ControlOutlined, UnorderedListOutlined,
+  RadarChartOutlined, ControlOutlined, UnorderedListOutlined, HeartOutlined,
   EditOutlined, ExperimentOutlined, GlobalOutlined, ClockCircleOutlined,
 } from '@ant-design/icons'
 import useAuthStore from '@/stores/authStore'
@@ -49,6 +49,7 @@ const getAdminMenuItems = (t: (key: string) => string): MenuItem[] => [
   { key: '/admin', icon: <SettingOutlined />, label: t('menu.systemConfig'), permission: 'admin:view' },
   { key: '/users', icon: <TeamOutlined />, label: t('menu.userManage'), permission: 'users:view' },
   { key: '/operation-logs', icon: <UnorderedListOutlined />, label: t('menu.operationLogs'), permission: 'admin:view' },
+  { key: '/system/pipeline-health', icon: <HeartOutlined />, label: t('menu.pipelineHealth'), permission: 'admin:view' },
 ]
 
 const getUserMenuItems = (t: (key: string) => string): MenuItem[] => [
@@ -105,7 +106,12 @@ const MainLayout: React.FC = () => {
     return filterMenuItems(source)
   }, [isAdminRole, hasPermission, lang])
 
-  const selectedKey = '/' + (location.pathname.split('/')[1] || 'dashboard')
+  const selectedKey = (() => {
+    const path = location.pathname
+    // For multi-segment routes like /system/pipeline-health, use full path
+    if (path.match(/^\/[^/]+\/[^/]+/)) return path
+    return '/' + (path.split('/')[1] || 'dashboard')
+  })()
 
   const handleMenuClick = (info: { key: string }) => {
     navigate(info.key)
