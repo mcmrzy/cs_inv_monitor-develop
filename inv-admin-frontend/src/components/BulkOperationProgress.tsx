@@ -20,7 +20,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 
 const { Title, Text } = Typography;
 
