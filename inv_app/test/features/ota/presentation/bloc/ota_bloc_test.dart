@@ -242,9 +242,11 @@ void main() {
     blocTest<OtaBloc, OtaState>(
       'emits [OTAFirmwareListLoading, OTAFirmwareListLoaded] on success',
       build: () {
-        when(() => mockOtaRepository.listUpgradePackages(
-              model: any(named: 'model'),
-            ),).thenAnswer(
+        when(
+          () => mockOtaRepository.listUpgradePackages(
+            model: any(named: 'model'),
+          ),
+        ).thenAnswer(
           (_) async => right<Failure, List<dynamic>>([
             {'id': 1, 'version': '2.0.0'},
           ]),
@@ -252,7 +254,10 @@ void main() {
         return otaBloc;
       },
       act: (bloc) => bloc.add(
-        const OTAFirmwareListRequested(deviceModel: 'INV-5000', sn: 'TEST_SN_1'),
+        const OTAFirmwareListRequested(
+          deviceModel: 'INV-5000',
+          sn: 'TEST_SN_1',
+        ),
       ),
       expect: () => [
         isA<OTAFirmwareListLoading>(),
@@ -263,16 +268,20 @@ void main() {
     blocTest<OtaBloc, OtaState>(
       'emits [OTAFirmwareListLoading, OTAFirmwareListError] on failure',
       build: () {
-        when(() => mockOtaRepository.listUpgradePackages(
-              model: any(named: 'model'),
-            ),).thenAnswer(
-          (_) async =>
-              left<Failure, List<dynamic>>(createTestServerFailure()),
+        when(
+          () => mockOtaRepository.listUpgradePackages(
+            model: any(named: 'model'),
+          ),
+        ).thenAnswer(
+          (_) async => left<Failure, List<dynamic>>(createTestServerFailure()),
         );
         return otaBloc;
       },
       act: (bloc) => bloc.add(
-        const OTAFirmwareListRequested(deviceModel: 'INV-5000', sn: 'TEST_SN_1'),
+        const OTAFirmwareListRequested(
+          deviceModel: 'INV-5000',
+          sn: 'TEST_SN_1',
+        ),
       ),
       expect: () => [
         isA<OTAFirmwareListLoading>(),
@@ -359,8 +368,7 @@ void main() {
       'emits [OTAAvailablePackagesLoading, OTAAvailablePackagesError] on failure',
       build: () {
         when(() => mockOtaRepository.getAvailablePackages(any())).thenAnswer(
-          (_) async =>
-              left<Failure, List<dynamic>>(createTestServerFailure()),
+          (_) async => left<Failure, List<dynamic>>(createTestServerFailure()),
         );
         return otaBloc;
       },

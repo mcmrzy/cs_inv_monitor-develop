@@ -52,7 +52,7 @@ services:
   inv-api-server:
     build:
       context: ..
-      dockerfile: inv_api_server/Dockerfile
+      dockerfile: business-api/Dockerfile
     image: inv-api-server:latest
     container_name: inv-api-server
     restart: unless-stopped
@@ -99,7 +99,7 @@ services:
 
   inv-device-server:
     build:
-      context: ../inv_device_server
+      context: ../device-communication
       dockerfile: Dockerfile
     image: inv-device-server:latest
     container_name: inv-device-server

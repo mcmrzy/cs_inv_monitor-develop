@@ -115,16 +115,19 @@ class JPushService {
         final regId = await _jpush.getRegistrationID();
         if (regId.isNotEmpty) {
           debugPrint(
-              '[JPushService] SDK ready, regId=$regId, setting alias=$alias');
+            '[JPushService] SDK ready, regId=$regId, setting alias=$alias',
+          );
           await _jpush.setAlias(alias);
           debugPrint('[JPushService] Alias set successfully: $alias');
           return;
         }
         debugPrint(
-            '[JPushService] SDK not ready yet, retry ${attempt + 1}/3...');
+          '[JPushService] SDK not ready yet, retry ${attempt + 1}/3...',
+        );
       } catch (e) {
         debugPrint(
-            '[JPushService] setAlias failed (attempt ${attempt + 1}/3): $e');
+          '[JPushService] setAlias failed (attempt ${attempt + 1}/3): $e',
+        );
       }
       await Future.delayed(const Duration(seconds: 2));
     }
@@ -200,7 +203,8 @@ class JPushService {
           AppRouter.router.go('/device/$deviceSn');
         } else {
           debugPrint(
-              '[JPushService] Missing device_sn for notify_type=$notifyType');
+            '[JPushService] Missing device_sn for notify_type=$notifyType',
+          );
         }
         break;
       case 'system_announcement':
@@ -214,7 +218,8 @@ class JPushService {
         break;
       default:
         debugPrint(
-            '[JPushService] Unknown notify_type: $notifyType, skip navigation');
+          '[JPushService] Unknown notify_type: $notifyType, skip navigation',
+        );
     }
   }
 
@@ -235,7 +240,8 @@ class JPushService {
     }
     if (status.isPermanentlyDenied) {
       debugPrint(
-          '[JPushService] Notification permission permanently denied, please enable in settings');
+        '[JPushService] Notification permission permanently denied, please enable in settings',
+      );
     }
   }
 }

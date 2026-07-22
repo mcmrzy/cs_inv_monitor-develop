@@ -116,5 +116,3 @@ class OTAAvailablePackagesError extends OtaState {
   @override
   List<Object?> get props => [message];
 }
-
-

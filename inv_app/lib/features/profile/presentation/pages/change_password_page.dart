@@ -31,10 +31,12 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
-      context.read<AuthBloc>().add(AuthChangePasswordRequested(
-        oldPassword: _oldPasswordController.text,
-        newPassword: _newPasswordController.text,
-      ),);
+      context.read<AuthBloc>().add(
+            AuthChangePasswordRequested(
+              oldPassword: _oldPasswordController.text,
+              newPassword: _newPasswordController.text,
+            ),
+          );
     }
   }
 
@@ -47,12 +49,18 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         listener: (context, state) {
           if (state is AuthPasswordResetSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(l10n.passwordChanged), backgroundColor: Colors.green),
+              SnackBar(
+                content: Text(l10n.passwordChanged),
+                backgroundColor: Colors.green,
+              ),
             );
             context.pop();
           } else if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(l10n.translateError(state.message)), backgroundColor: Colors.red),
+              SnackBar(
+                content: Text(l10n.translateError(state.message)),
+                backgroundColor: Colors.red,
+              ),
             );
           }
         },
@@ -68,14 +76,21 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     obscureText: _obscureOld,
                     decoration: InputDecoration(
                       labelText: l10n.currentPassword,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.r),
+                      ),
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscureOld ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _obscureOld = !_obscureOld),
+                        icon: Icon(
+                          _obscureOld ? Icons.visibility_off : Icons.visibility,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscureOld = !_obscureOld),
                       ),
                     ),
-                    validator: (value) => value == null || value.isEmpty ? l10n.pleaseInputCurrentPassword : null,
+                    validator: (value) => value == null || value.isEmpty
+                        ? l10n.pleaseInputCurrentPassword
+                        : null,
                   ),
                   SizedBox(height: 16.h),
                   TextFormField(
@@ -83,16 +98,25 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     obscureText: _obscureNew,
                     decoration: InputDecoration(
                       labelText: l10n.newPasswordLabel,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.r),
+                      ),
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscureNew ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                        icon: Icon(
+                          _obscureNew ? Icons.visibility_off : Icons.visibility,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscureNew = !_obscureNew),
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return l10n.pleaseInputNewPassword;
-                      if (value.length < 6 || value.length > 20) return l10n.passwordLengthHint;
+                      if (value == null || value.isEmpty) {
+                        return l10n.pleaseInputNewPassword;
+                      }
+                      if (value.length < 6 || value.length > 20) {
+                        return l10n.passwordLengthHint;
+                      }
                       return null;
                     },
                   ),
@@ -102,16 +126,27 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     obscureText: _obscureConfirm,
                     decoration: InputDecoration(
                       labelText: l10n.confirmPasswordLabel,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.r),
+                      ),
                       prefixIcon: const Icon(Icons.lock_outlined),
                       suffixIcon: IconButton(
-                        icon: Icon(_obscureConfirm ? Icons.visibility_off : Icons.visibility),
-                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                        icon: Icon(
+                          _obscureConfirm
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscureConfirm = !_obscureConfirm),
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return l10n.pleaseConfirmPassword;
-                      if (value != _newPasswordController.text) return l10n.passwordNotConsistent;
+                      if (value == null || value.isEmpty) {
+                        return l10n.pleaseConfirmPassword;
+                      }
+                      if (value != _newPasswordController.text) {
+                        return l10n.passwordNotConsistent;
+                      }
                       return null;
                     },
                   ),
@@ -122,7 +157,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     child: ElevatedButton(
                       onPressed: state is AuthLoading ? null : _submit,
                       child: state is AuthLoading
-                          ? const CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
+                          ? const CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            )
                           : Text(l10n.confirmChange),
                     ),
                   ),

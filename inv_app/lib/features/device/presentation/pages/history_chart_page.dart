@@ -22,11 +22,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
   DateTime _selectedDate = DateTime.now();
 
   List<(String, String, Color)> _getMetrics(AppLocalizations l10n) => [
-    (l10n.powerGeneration, 'pv', Colors.orange),
-    (l10n.chargeAmount, 'charge', AppColors.success),
-    (l10n.dischargeAmount, 'discharge', Colors.blue),
-    (l10n.load, 'load', Colors.purple),
-  ];
+        (l10n.powerGeneration, 'pv', Colors.orange),
+        (l10n.chargeAmount, 'charge', AppColors.success),
+        (l10n.dischargeAmount, 'discharge', Colors.blue),
+        (l10n.load, 'load', Colors.purple),
+      ];
 
   static const _periods = ['day', 'month', 'year', 'total'];
 
@@ -54,7 +54,12 @@ class _HistoryChartPageState extends State<HistoryChartPage>
   String get _currentPeriod => _periods[_tabController.index];
 
   static const _metricKeys = ['pv', 'charge', 'discharge', 'load'];
-  static const _metricColors = [Colors.orange, AppColors.success, Colors.blue, Colors.purple];
+  static const _metricColors = [
+    Colors.orange,
+    AppColors.success,
+    Colors.blue,
+    Colors.purple,
+  ];
 
   String get _currentMetric => _metricKeys[_selectedMetricIndex];
 
@@ -65,12 +70,14 @@ class _HistoryChartPageState extends State<HistoryChartPage>
 
     switch (_currentPeriod) {
       case 'day':
-        startDate = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        startDate =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
         endDate = startDate;
         break;
       case 'month':
         startDate = '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
-        endDate = '${now.year}-${now.month.toString().padLeft(2, '0')}-${DateUtils.getDaysInMonth(now.year, now.month).toString().padLeft(2, '0')}';
+        endDate =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${DateUtils.getDaysInMonth(now.year, now.month).toString().padLeft(2, '0')}';
         break;
       case 'year':
         startDate = '${now.year}-01-01';
@@ -81,13 +88,15 @@ class _HistoryChartPageState extends State<HistoryChartPage>
         endDate = '${DateTime.now().year}-12-31';
     }
 
-    context.read<DeviceBloc>().add(DeviceHistoryRequested(
-          sn: widget.deviceSN,
-          period: _currentPeriod,
-          startDate: startDate,
-          endDate: endDate,
-          metric: _currentMetric,
-        ),);
+    context.read<DeviceBloc>().add(
+          DeviceHistoryRequested(
+            sn: widget.deviceSN,
+            period: _currentPeriod,
+            startDate: startDate,
+            endDate: endDate,
+            metric: _currentMetric,
+          ),
+        );
   }
 
   Future<void> _pickDate() async {
@@ -192,20 +201,31 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                 GestureDetector(
                   onTap: _pickDate,
                   child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(8.r),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.calendar_today, size: 16.sp, color: AppColors.primary),
+                        Icon(
+                          Icons.calendar_today,
+                          size: 16.sp,
+                          color: AppColors.primary,
+                        ),
                         SizedBox(width: 6.w),
                         Text(
                           _getDateLabel(l10n),
-                          style: TextStyle(fontSize: 13.sp, color: AppColors.primary, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 13.sp,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -233,7 +253,9 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                     fontSize: 12.sp,
                   ),
                   side: BorderSide(
-                    color: selected ? metric.$3.withValues(alpha: 0.4) : AppColors.divider,
+                    color: selected
+                        ? metric.$3.withValues(alpha: 0.4)
+                        : AppColors.divider,
                   ),
                   onSelected: (_) {
                     setState(() {
@@ -257,9 +279,20 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.error_outline, size: 40.sp, color: AppColors.error),
+                        Icon(
+                          Icons.error_outline,
+                          size: 40.sp,
+                          color: AppColors.error,
+                        ),
                         SizedBox(height: 8.h),
-                        Text(AppLocalizations.of(context)!.translateError(state.message), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+                        Text(
+                          AppLocalizations.of(context)!
+                              .translateError(state.message),
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -270,7 +303,13 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                   return _buildChart(spots, metricColor);
                 }
                 return Center(
-                  child: Text(l10n.noData, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+                  child: Text(
+                    l10n.noData,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColors.textHint,
+                    ),
+                  ),
                 );
               },
             ),
@@ -315,14 +354,17 @@ class _HistoryChartPageState extends State<HistoryChartPage>
             ),
           ),
           titlesData: FlTitlesData(
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 30,
                 interval: _calculateBottomInterval(spots),
-                getTitlesWidget: (value, meta) => _buildBottomTitle(value, meta, spots),
+                getTitlesWidget: (value, meta) =>
+                    _buildBottomTitle(value, meta, spots),
               ),
             ),
             leftTitles: AxisTitles(
@@ -356,7 +398,8 @@ class _HistoryChartPageState extends State<HistoryChartPage>
               barWidth: 2.5,
               dotData: FlDotData(
                 show: spots.length <= 30,
-                getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                getDotPainter: (spot, percent, barData, index) =>
+                    FlDotCirclePainter(
                   radius: 3,
                   color: color,
                   strokeWidth: 1,
@@ -377,7 +420,11 @@ class _HistoryChartPageState extends State<HistoryChartPage>
                 return touchedSpots.map((spot) {
                   return LineTooltipItem(
                     '${spot.y.toStringAsFixed(2)} kWh',
-                    TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.w600),
+                    TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
                   );
                 }).toList();
               },

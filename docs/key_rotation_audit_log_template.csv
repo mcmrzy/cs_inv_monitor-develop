@@ -1,0 +1,3 @@
+Date,Rotated By,Key Type,Reason,Procedure ID,Verification Status,Rollback Required,Incident ID,Duration Minutes,Issues Encountered,Approved By
+20__,-__,-__,-__,-__,-__,-__,-__,-__,-__,-__
+YYYY-MM-DD,user@company.com,JWT_SECRET|REFRESH_TOKEN_KEY|SMTP_CREDENTIALS|REDIS_PASSWORD|DB_ENCRYPTION_KEY,"Quarterly rotation|Emergency leak|Employee termination|Security audit|Compliance mandate",PROC-JWT-001|PROC-REFRESH-001|PROC-SMTP-001|PROC-REDIS-001|PROC-EMERGENCY-001,Success|Failed|Partial,Yes|No,INC-YYYY-NNN or N/A,<number>,None/Minor/Major,manager@company.com

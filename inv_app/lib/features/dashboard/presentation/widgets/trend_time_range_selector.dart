@@ -38,7 +38,7 @@ class TrendTimeRangeSelector extends StatelessWidget {
 
   Widget _buildRangeButton(BuildContext context, String label, String range) {
     final isSelected = selectedRange == range;
-    
+
     return GestureDetector(
       onTap: () => onRangeChanged(range),
       child: Container(

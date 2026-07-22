@@ -101,10 +101,12 @@ void main() {
       'emits [SystemNotificationsLoaded] with backend notifications',
       build: () {
         // Mock backend notification response
-        when(() => mockNotificationDataSource.getList(
-              page: any(named: 'page'),
-              pageSize: any(named: 'pageSize'),
-            ),).thenAnswer(
+        when(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
           (_) async => _fakeResponse({
             'data': {
               'items': [
@@ -141,10 +143,12 @@ void main() {
     blocTest<NotificationBloc, NotificationState>(
       'emits [SystemNotificationsLoaded] with empty list when no data',
       build: () {
-        when(() => mockNotificationDataSource.getList(
-              page: any(named: 'page'),
-              pageSize: any(named: 'pageSize'),
-            ),).thenThrow(Exception('Network error'));
+        when(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenThrow(Exception('Network error'));
         when(() => mockStorageService.getString(any()))
             .thenAnswer((_) async => null);
         when(() => mockAppUpdateService.checkUpdate(any()))
@@ -164,10 +168,12 @@ void main() {
     blocTest<NotificationBloc, NotificationState>(
       'includes local OTA notifications from storage',
       build: () {
-        when(() => mockNotificationDataSource.getList(
-              page: any(named: 'page'),
-              pageSize: any(named: 'pageSize'),
-            ),).thenThrow(Exception('Network error'));
+        when(
+          () => mockNotificationDataSource.getList(
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenThrow(Exception('Network error'));
         when(() => mockStorageService.getString(any())).thenAnswer(
           (_) async =>
               '[{"type":4,"title":"设备固件更新","subtitle":"TEST_SN_1 有新固件可用","timestamp":"2024-01-01T00:00:00.000"}]',

@@ -14,9 +14,11 @@ class StationBloc extends Bloc<StationEvent, StationState> {
   final StorageService? storageService;
   final DataCacheService? dataCacheService;
 
-  StationBloc(
-      {required this.repository, this.storageService, this.dataCacheService})
-      : super(StationInitial()) {
+  StationBloc({
+    required this.repository,
+    this.storageService,
+    this.dataCacheService,
+  }) : super(StationInitial()) {
     on<StationSummaryRequested>(_onSummaryRequested);
     on<StationListRequested>(_onListRequested);
     on<StationDetailRequested>(_onDetailRequested);
@@ -46,8 +48,13 @@ class StationBloc extends Bloc<StationEvent, StationState> {
         if (cached != null && cached is Map<String, dynamic>) {
           final stations = (cached['stations'] as List?) ?? [];
           final summary = (cached['summary'] as Map<String, dynamic>?) ?? {};
-          emit(StationSummaryLoaded(
-              stations: stations, summary: summary, isFromCache: true));
+          emit(
+            StationSummaryLoaded(
+              stations: stations,
+              summary: summary,
+              isFromCache: true,
+            ),
+          );
           return;
         }
       }
@@ -64,8 +71,13 @@ class StationBloc extends Bloc<StationEvent, StationState> {
             final stations = (cached['stations'] as List?) ?? [];
             final summary = (cached['summary'] as Map<String, dynamic>?) ?? {};
             // 只有网络连接失败时才标记为缓存数据，其他错误（服务器错误等）静默使用缓存
-            emit(StationSummaryLoaded(
-                stations: stations, summary: summary, isFromCache: true));
+            emit(
+              StationSummaryLoaded(
+                stations: stations,
+                summary: summary,
+                isFromCache: true,
+              ),
+            );
             return;
           }
         }
@@ -119,11 +131,14 @@ class StationBloc extends Bloc<StationEvent, StationState> {
         if (cached != null && cached is Map<String, dynamic>) {
           final station = cached['station'];
           final devices = (cached['devices'] as List?) ?? [];
-          emit(StationDetailLoaded(
+          emit(
+            StationDetailLoaded(
               stationId: event.stationId,
               station: station,
               devices: devices,
-              isFromCache: true));
+              isFromCache: true,
+            ),
+          );
           return;
         }
       }
@@ -139,11 +154,14 @@ class StationBloc extends Bloc<StationEvent, StationState> {
           if (cached != null && cached is Map<String, dynamic>) {
             final station = cached['station'];
             final devices = (cached['devices'] as List?) ?? [];
-            emit(StationDetailLoaded(
+            emit(
+              StationDetailLoaded(
                 stationId: event.stationId,
                 station: station,
                 devices: devices,
-                isFromCache: true));
+                isFromCache: true,
+              ),
+            );
             return;
           }
         }
@@ -153,9 +171,16 @@ class StationBloc extends Bloc<StationEvent, StationState> {
         final station = data['station'];
         final devices = (data['devices'] as List?) ?? [];
         dataCacheService?.save(
-            DataCacheService.stationDetail(event.stationId), data);
-        emit(StationDetailLoaded(
-            stationId: event.stationId, station: station, devices: devices));
+          DataCacheService.stationDetail(event.stationId),
+          data,
+        );
+        emit(
+          StationDetailLoaded(
+            stationId: event.stationId,
+            station: station,
+            devices: devices,
+          ),
+        );
       },
     );
   }

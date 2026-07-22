@@ -62,28 +62,33 @@ class EnergyDataPoint {
   factory EnergyDataPoint.fromStationStats(Map<String, dynamic> json) {
     // 原始功率值 (W) - 来自 hour 模式
     final rawPvPower = (json['energy_produce'] ?? 0).toDouble();
-    final rawAcPower = (json['energy_consume'] ?? json['ac_power'] ?? 0).toDouble();
+    final rawAcPower =
+        (json['energy_consume'] ?? json['ac_power'] ?? 0).toDouble();
     final rawBattCharge = (json['battery_charge'] ?? 0).toDouble();
     final rawBattDischarge = (json['battery_discharge'] ?? 0).toDouble();
 
     final rawGridImport = (json['grid_import'] ?? 0).toDouble();
-    final rawGridExport = (json['grid_export'] ?? json['feed_energy'] ?? 0).toDouble();
+    final rawGridExport =
+        (json['grid_export'] ?? json['feed_energy'] ?? 0).toDouble();
 
     // 日累计电量 (kWh) - 来自 hour 模式的 daily_* 或 day/month 模式的顶层字段
     final dailyPvKwh = (json['daily_pv'] as num?)?.toDouble() ?? 0;
     final dailyChargeKwh = (json['daily_charge'] as num?)?.toDouble() ?? 0;
-    final dailyDischargeKwh = (json['daily_discharge'] as num?)?.toDouble() ?? 0;
+    final dailyDischargeKwh =
+        (json['daily_discharge'] as num?)?.toDouble() ?? 0;
     final dailyLoadKwh = (json['daily_load'] as num?)?.toDouble() ?? 0;
 
     // 判断是否有 daily_* 字段（区分 hour 模式 vs day/month 模式）
     // 用 key 是否存在来判断，而不是值是否 > 0（避免凌晨全为 0 时误判）
     final hasDailyFields = json.containsKey('daily_charge') ||
-        json.containsKey('daily_discharge') || json.containsKey('daily_pv');
+        json.containsKey('daily_discharge') ||
+        json.containsKey('daily_pv');
 
     // 电量 (kWh)：hour 模式用 daily_* 累计值；day/month 模式直接用顶层字段
     final pvEnergyKwh = hasDailyFields ? dailyPvKwh : rawPvPower;
     final battChargeKwh = hasDailyFields ? dailyChargeKwh : rawBattCharge;
-    final battDischargeKwh = hasDailyFields ? dailyDischargeKwh : rawBattDischarge;
+    final battDischargeKwh =
+        hasDailyFields ? dailyDischargeKwh : rawBattDischarge;
     final invOutputKwh = hasDailyFields ? dailyLoadKwh : rawAcPower;
 
     return EnergyDataPoint(
@@ -146,7 +151,8 @@ class EnergySummary {
     return EnergySummary(
       pvTotal: points.fold(0, (sum, p) => sum + p.pvEnergy),
       batteryChargeTotal: points.fold(0, (sum, p) => sum + p.batteryCharge),
-      batteryDischargeTotal: points.fold(0, (sum, p) => sum + p.batteryDischarge),
+      batteryDischargeTotal:
+          points.fold(0, (sum, p) => sum + p.batteryDischarge),
       inverterOutputTotal: points.fold(0, (sum, p) => sum + p.inverterOutput),
       gridImportTotal: points.fold(0, (sum, p) => sum + p.gridImport),
       gridExportTotal: points.fold(0, (sum, p) => sum + p.gridExport),
@@ -154,7 +160,10 @@ class EnergySummary {
   }
 
   /// 根据周期计算汇总（日模式用最后点的累计值，月/年模式求和）
-  factory EnergySummary.fromDataPointsWithPeriod(List<EnergyDataPoint> points, String period) {
+  factory EnergySummary.fromDataPointsWithPeriod(
+    List<EnergyDataPoint> points,
+    String period,
+  ) {
     if (points.isEmpty) return const EnergySummary();
     if (period == 'day') {
       // 日模式（hour 数据）：每个数据点的 pvEnergy/batteryCharge 等已是日累计 kWh，
@@ -173,7 +182,8 @@ class EnergySummary {
     return EnergySummary(
       pvTotal: points.fold(0.0, (sum, p) => sum + p.pvEnergy),
       batteryChargeTotal: points.fold(0.0, (sum, p) => sum + p.batteryCharge),
-      batteryDischargeTotal: points.fold(0.0, (sum, p) => sum + p.batteryDischarge),
+      batteryDischargeTotal:
+          points.fold(0.0, (sum, p) => sum + p.batteryDischarge),
       inverterOutputTotal: points.fold(0.0, (sum, p) => sum + p.inverterOutput),
       gridImportTotal: points.fold(0.0, (sum, p) => sum + p.gridImport),
       gridExportTotal: points.fold(0.0, (sum, p) => sum + p.gridExport),

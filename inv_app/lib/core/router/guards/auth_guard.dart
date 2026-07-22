@@ -12,7 +12,9 @@ class AuthGuard {
   ];
 
   static Future<String?> redirect(
-      BuildContext context, GoRouterState state) async {
+    BuildContext context,
+    GoRouterState state,
+  ) async {
     final currentPath = state.matchedLocation;
 
     if (_publicRoutes.contains(currentPath)) {

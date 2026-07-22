@@ -28,10 +28,14 @@ void main() {
   test('rejects metadata the device would reject', () {
     expect(() => manifest(target: 'dsp').validate(), throwsArgumentError);
     expect(() => manifest(sha256: 'A' * 64).validate(), throwsArgumentError);
-    expect(() => manifest(signature: 'not-base64').validate(),
-        throwsArgumentError);
+    expect(
+      () => manifest(signature: 'not-base64').validate(),
+      throwsArgumentError,
+    );
     expect(() => manifest(securityVersion: 0).validate(), throwsArgumentError);
-    expect(() => manifest(securityVersion: 0x100000000).validate(),
-        throwsArgumentError);
+    expect(
+      () => manifest(securityVersion: 0x100000000).validate(),
+      throwsArgumentError,
+    );
   });
 }

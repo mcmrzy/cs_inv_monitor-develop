@@ -5,7 +5,12 @@ class AlarmRemoteDataSource {
 
   AlarmRemoteDataSource(this.dio);
 
-  Future<Response> getList({int? stationId, int? status, int page = 1, int pageSize = 20}) async {
+  Future<Response> getList({
+    int? stationId,
+    int? status,
+    int page = 1,
+    int pageSize = 20,
+  }) async {
     final params = <String, dynamic>{
       'page': page,
       'page_size': pageSize,
@@ -24,9 +29,12 @@ class AlarmRemoteDataSource {
   }
 
   Future<Response> markRead(List<int> alarmIds) async {
-    return await dio.put('/alarms/read', data: {
-      'ids': alarmIds,
-    },);
+    return await dio.put(
+      '/alarms/read',
+      data: {
+        'ids': alarmIds,
+      },
+    );
   }
 }
 

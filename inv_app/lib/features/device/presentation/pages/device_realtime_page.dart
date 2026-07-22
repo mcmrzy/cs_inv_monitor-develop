@@ -26,7 +26,7 @@ class DeviceRealtimePage extends StatefulWidget {
 }
 
 class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
-  Map<String, dynamic> _realtimeData = {};
+  final Map<String, dynamic> _realtimeData = {};
   List<DeviceModelField> _modelFields = [];
   bool _online = false;
   bool _loading = true;
@@ -44,19 +44,19 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     'pv_params': {'icon': Icons.wb_sunny_outlined, 'color': Color(0xFFF59E0B)},
     'battery_params': {
       'icon': Icons.battery_charging_full,
-      'color': Color(0xFF10B981)
+      'color': Color(0xFF10B981),
     },
     'system_status': {
       'icon': Icons.info_outline_rounded,
-      'color': Color(0xFF06B6D4)
+      'color': Color(0xFF06B6D4),
     },
     'energy_stats': {
       'icon': Icons.show_chart_rounded,
-      'color': Color(0xFF3B82F6)
+      'color': Color(0xFF3B82F6),
     },
     'device_info': {
       'icon': Icons.device_hub_rounded,
-      'color': Color(0xFF6B7280)
+      'color': Color(0xFF6B7280),
     },
     'control_cmd': {'icon': Icons.tune_rounded, 'color': Color(0xFFEF4444)},
   };
@@ -100,7 +100,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       'system_status',
       'energy_stats',
       'device_info',
-      'control_cmd'
+      'control_cmd',
     };
     if (internalKeys.contains(raw)) return raw;
     // Admin 前端格式 models.xxx → 内部 key
@@ -153,8 +153,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         setState(() => _isLocalMode = true);
         // 启动 bloc 本地轮询：每 3 秒拉取逆变器实时数据并喂给连接监控
         context.read<DeviceBloc>().add(
-          const DeviceStartLocalPoll(deviceIP: '192.168.4.1'),
-        );
+              const DeviceStartLocalPoll(deviceIP: '192.168.4.1'),
+            );
       }
     } catch (_) {
       // ConnectionModeService 不可用时忽略
@@ -184,9 +184,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     if (_isLocalMode) {
       try {
         // 使用全局 bloc 访问，避免 context 已失效
-        final bloc = getIt.isRegistered<DeviceBloc>()
-            ? getIt<DeviceBloc>()
-            : null;
+        final bloc =
+            getIt.isRegistered<DeviceBloc>() ? getIt<DeviceBloc>() : null;
         bloc?.add(const DeviceStopLocalPoll());
       } catch (_) {}
     }
@@ -546,17 +545,22 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   String _inferGroupFromFieldKey(String fieldKey) {
     if (fieldKey.startsWith('ac_')) return 'ac_params';
     if (fieldKey.startsWith('pv_')) return 'pv_params';
-    if (fieldKey.startsWith('batt_') || fieldKey.startsWith('battery_'))
+    if (fieldKey.startsWith('batt_') || fieldKey.startsWith('battery_')) {
       return 'battery_params';
+    }
     if (fieldKey.startsWith('energy_') ||
         fieldKey.startsWith('daily_') ||
-        fieldKey.startsWith('total_')) return 'energy_stats';
+        fieldKey.startsWith('total_')) {
+      return 'energy_stats';
+    }
     if (fieldKey.startsWith('sys_') ||
         fieldKey.startsWith('state') ||
         fieldKey.startsWith('work_') ||
         fieldKey.startsWith('fault_') ||
         fieldKey.startsWith('internal_') ||
-        fieldKey.startsWith('temp_')) return 'system_status';
+        fieldKey.startsWith('temp_')) {
+      return 'system_status';
+    }
     if (fieldKey.startsWith('load_')) return 'ac_params';
     if (fieldKey.startsWith('meter_')) return 'ac_params';
     return 'device_info';
@@ -599,36 +603,36 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         }
       },
       child: Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(50.h),
-        child: AppBar(
-          title: Text(
-            l10n.deviceDetail,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
-          ),
-          centerTitle: true,
-          elevation: 0,
-          scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textPrimary,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: () {
-                setState(() => _loading = true);
-                _fetchDeviceDetail();
-              },
+        backgroundColor: AppColors.background,
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(50.h),
+          child: AppBar(
+            title: Text(
+              l10n.deviceDetail,
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
             ),
-          ],
+            centerTitle: true,
+            elevation: 0,
+            scrolledUnderElevation: 0.5,
+            backgroundColor: Colors.white,
+            foregroundColor: AppColors.textPrimary,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: () {
+                  setState(() => _loading = true);
+                  _fetchDeviceDetail();
+                },
+              ),
+            ],
+          ),
         ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _buildError()
+                : _buildContent(),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? _buildError()
-              : _buildContent(),
-    ),
     );
   }
 
@@ -640,9 +644,10 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         children: [
           Icon(Icons.cloud_off_rounded, size: 44.sp, color: AppColors.textHint),
           SizedBox(height: 12.h),
-          Text(_error!,
-              style:
-                  TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
+          Text(
+            _error!,
+            style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+          ),
           SizedBox(height: 16.h),
           OutlinedButton(
             onPressed: () {
@@ -732,22 +737,30 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
               color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12.r),
             ),
-            child: Icon(Icons.solar_power_rounded,
-                size: 28.w, color: Colors.white),
+            child: Icon(
+              Icons.solar_power_rounded,
+              size: 28.w,
+              color: Colors.white,
+            ),
           ),
           SizedBox(width: 14.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(sn,
-                    style: TextStyle(
-                        fontSize: 15.sp,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white)),
+                Text(
+                  sn,
+                  style: TextStyle(
+                    fontSize: 15.sp,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
                 if (model.isNotEmpty)
-                  Text(model,
-                      style: TextStyle(fontSize: 12.sp, color: Colors.white70)),
+                  Text(
+                    model,
+                    style: TextStyle(fontSize: 12.sp, color: Colors.white70),
+                  ),
               ],
             ),
           ),
@@ -760,9 +773,10 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             child: Text(
               _online ? l10n.online : l10n.offline,
               style: TextStyle(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white),
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -785,8 +799,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10.r),
               ),
-              child: Icon(Icons.tune_rounded,
-                  size: 20.sp, color: AppColors.primary),
+              child: Icon(
+                Icons.tune_rounded,
+                size: 20.sp,
+                color: AppColors.primary,
+              ),
             ),
             SizedBox(width: 12.w),
             Expanded(
@@ -796,9 +813,10 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                   Text(
                     l10n.paramSettings,
                     style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary),
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   SizedBox(height: 2.h),
                   Text(
@@ -809,8 +827,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded,
-                size: 20.sp, color: AppColors.textHint),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20.sp,
+              color: AppColors.textHint,
+            ),
           ],
         ),
       ),
@@ -836,7 +857,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       final parts = quality.flags.map((flag) => flag.label).toList();
       if (quality.unknownMask != 0) {
         parts.add(
-            '${l10n.str('telemetry_unknown_quality')} 0x${quality.unknownMask.toRadixString(16).toUpperCase()}');
+          '${l10n.str('telemetry_unknown_quality')} 0x${quality.unknownMask.toRadixString(16).toUpperCase()}',
+        );
       }
       qualityText = parts.join(' · ');
     }
@@ -850,15 +872,19 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         children: [
           Row(
             children: [
-              Icon(Icons.verified_outlined,
-                  size: 18.sp, color: AppColors.primary),
+              Icon(
+                Icons.verified_outlined,
+                size: 18.sp,
+                color: AppColors.primary,
+              ),
               SizedBox(width: 8.w),
               Text(
                 l10n.str('telemetry_metadata'),
                 style: TextStyle(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary),
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ],
           ),
@@ -875,20 +901,25 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
               ),
               Expanded(
                 child: _metadataValue(
-                    l10n.str('telemetry_sampling_interval'), '3 min'),
+                  l10n.str('telemetry_sampling_interval'),
+                  '3 min',
+                ),
               ),
             ],
           ),
           SizedBox(height: 12.h),
-          Text(l10n.str('telemetry_data_quality'),
-              style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+          Text(
+            l10n.str('telemetry_data_quality'),
+            style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+          ),
           SizedBox(height: 4.h),
           Text(
             qualityText,
             style: TextStyle(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w500,
-                color: qualityColor),
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w500,
+              color: qualityColor,
+            ),
           ),
         ],
       ),
@@ -899,14 +930,19 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+        ),
         SizedBox(height: 3.h),
-        Text(value,
-            style: TextStyle(
-                fontSize: 14.sp,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14.sp,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
       ],
     );
   }
@@ -925,8 +961,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 color: AppColors.blue.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10.r),
               ),
-              child: Icon(Icons.monitor_heart_outlined,
-                  size: 20.sp, color: AppColors.blue),
+              child: Icon(
+                Icons.monitor_heart_outlined,
+                size: 20.sp,
+                color: AppColors.blue,
+              ),
             ),
             SizedBox(width: 12.w),
             Expanded(
@@ -936,9 +975,10 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                   Text(
                     AppLocalizations.of(context)!.protocolTelemetryTitle,
                     style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary),
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                   SizedBox(height: 2.h),
                   Text(
@@ -949,8 +989,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded,
-                size: 20.sp, color: AppColors.textHint),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20.sp,
+              color: AppColors.textHint,
+            ),
           ],
         ),
       ),
@@ -984,11 +1027,14 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
                   child: Icon(icon, size: 16.sp, color: color),
                 ),
                 SizedBox(width: 10.w),
-                Text(displayName,
-                    style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary)),
+                Text(
+                  displayName,
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1009,24 +1055,27 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(_displayName(field),
-              style:
-                  TextStyle(fontSize: 13.sp, color: AppColors.textSecondary)),
+          Text(
+            _displayName(field),
+            style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+          ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 displayValue,
                 style: TextStyle(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary),
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
               ),
               if (field.unit.isNotEmpty) ...[
                 SizedBox(width: 4.w),
-                Text(field.unit,
-                    style:
-                        TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+                Text(
+                  field.unit,
+                  style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+                ),
               ],
             ],
           ),

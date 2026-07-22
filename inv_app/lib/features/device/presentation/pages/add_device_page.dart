@@ -24,7 +24,8 @@ class AddDevicePage extends StatefulWidget {
   State<AddDevicePage> createState() => _AddDevicePageState();
 }
 
-class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProviderStateMixin {
+class _AddDevicePageState extends State<AddDevicePage>
+    with SingleTickerProviderStateMixin {
   final _snController = TextEditingController();
 
   late TabController _tabController;
@@ -68,7 +69,8 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
         if (station is! Map) {
           throw const FormatException('station detail must contain station');
         }
-        final name = (station['station_name'] ?? station['name'] ?? '').toString();
+        final name =
+            (station['station_name'] ?? station['name'] ?? '').toString();
         if (name.isNotEmpty) {
           setState(() => _selectedStationName = name);
         }
@@ -99,11 +101,14 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
       _scannedPin = '';
       _scanning = false;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${AppLocalizations.of(context)!.qrNotRecognized}:\n$raw'),
-          backgroundColor: AppColors.errorLight,
-          duration: const Duration(seconds: 3),
-        ),);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('${AppLocalizations.of(context)!.qrNotRecognized}:\n$raw'),
+            backgroundColor: AppColors.errorLight,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
       return;
     }
@@ -116,11 +121,15 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
       _scannedPin = '';
       _scanning = false;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}'),
-          backgroundColor: AppColors.errorLight,
-          duration: const Duration(seconds: 3),
-        ),);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}',
+            ),
+            backgroundColor: AppColors.errorLight,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
       return;
     }
@@ -132,10 +141,18 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text(AppLocalizations.of(context)!.checksumMismatch),
-            content: Text('SN: ${formatSNForDisplay(sn)}\n${AppLocalizations.of(context)!.checksumMismatch}\n${AppLocalizations.of(context)!.snConfirmAdd}'),
+            content: Text(
+              'SN: ${formatSNForDisplay(sn)}\n${AppLocalizations.of(context)!.checksumMismatch}\n${AppLocalizations.of(context)!.snConfirmAdd}',
+            ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancel)),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.continueAdd)),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(AppLocalizations.of(context)!.cancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(AppLocalizations.of(context)!.continueAdd),
+              ),
             ],
           ),
         );
@@ -161,7 +178,9 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
       _selectedStationName = result.$2;
       setState(() {});
     }
-    context.read<DeviceBloc>().add(DeviceBindRequested(sn: sn, stationId: _selectedStationId));
+    context
+        .read<DeviceBloc>()
+        .add(DeviceBindRequested(sn: sn, stationId: _selectedStationId));
   }
 
   Future<(int, String)?> _showStationSelector() async {
@@ -199,7 +218,9 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
   Future<void> _manualBind() async {
     final raw = _snController.text.trim();
     if (raw.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.pleaseInputSn)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.pleaseInputSn)),
+      );
       return;
     }
 
@@ -207,11 +228,15 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
     final sn = qr != null ? qr.sn.toUpperCase() : raw.toUpperCase();
 
     if (!validateSNFormat(sn)) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}'),
-        backgroundColor: AppColors.errorLight,
-        duration: const Duration(seconds: 3),
-      ),);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${AppLocalizations.of(context)!.snFormatError}:\n${formatSNForDisplay(sn)}',
+          ),
+          backgroundColor: AppColors.errorLight,
+          duration: const Duration(seconds: 3),
+        ),
+      );
       return;
     }
 
@@ -221,10 +246,18 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
           context: context,
           builder: (ctx) => AlertDialog(
             title: Text(AppLocalizations.of(context)!.checksumMismatch),
-            content: Text('SN: ${formatSNForDisplay(sn)}\n${AppLocalizations.of(context)!.checksumMismatch}\n${AppLocalizations.of(context)!.snConfirmAdd}'),
+            content: Text(
+              'SN: ${formatSNForDisplay(sn)}\n${AppLocalizations.of(context)!.checksumMismatch}\n${AppLocalizations.of(context)!.snConfirmAdd}',
+            ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppLocalizations.of(context)!.cancel)),
-              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppLocalizations.of(context)!.continueAdd)),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(AppLocalizations.of(context)!.cancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(AppLocalizations.of(context)!.continueAdd),
+              ),
             ],
           ),
         );
@@ -248,7 +281,8 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
               padding: EdgeInsets.only(right: 12.w),
               child: Center(
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12.r),
@@ -256,9 +290,20 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.solar_power, size: 16, color: AppColors.primary),
+                      const Icon(
+                        Icons.solar_power,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
                       SizedBox(width: 4.w),
-                      Text(_selectedStationName!, style: TextStyle(fontSize: 12.sp, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                      Text(
+                        _selectedStationName!,
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -275,7 +320,10 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                 }
               },
               icon: const Icon(Icons.home_work, size: 18),
-              label: Text(AppLocalizations.of(context)!.selectStation, style: TextStyle(fontSize: 13.sp)),
+              label: Text(
+                AppLocalizations.of(context)!.selectStation,
+                style: TextStyle(fontSize: 13.sp),
+              ),
             ),
         ],
         bottom: TabBar(
@@ -284,8 +332,14 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
           unselectedLabelColor: AppColors.textHint,
           indicatorColor: AppColors.primary,
           tabs: [
-            Tab(text: AppLocalizations.of(context)!.scanCode, icon: const Icon(Icons.qr_code_scanner, size: 20)),
-            Tab(text: AppLocalizations.of(context)!.manualInput, icon: const Icon(Icons.edit, size: 20)),
+            Tab(
+              text: AppLocalizations.of(context)!.scanCode,
+              icon: const Icon(Icons.qr_code_scanner, size: 20),
+            ),
+            Tab(
+              text: AppLocalizations.of(context)!.manualInput,
+              icon: const Icon(Icons.edit, size: 20),
+            ),
           ],
         ),
       ),
@@ -293,7 +347,9 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
         listener: (context, state) {
           if (state is DeviceBindSuccess) {
             if (_selectedStationId != null) {
-              context.read<StationBloc>().add(StationDetailRequested(stationId: _selectedStationId!));
+              context
+                  .read<StationBloc>()
+                  .add(StationDetailRequested(stationId: _selectedStationId!));
             }
             setState(() {
               _sessionBoundCount++;
@@ -301,19 +357,27 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
               _scanning = false;
             });
             _addToScanHistory(_lastScanned, true);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('✅ ${AppLocalizations.of(context)!.alreadyBoundNDevices('$_sessionBoundCount')}'),
-              backgroundColor: AppColors.successLight,
-            ),);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  '✅ ${AppLocalizations.of(context)!.alreadyBoundNDevices('$_sessionBoundCount')}',
+                ),
+                backgroundColor: AppColors.successLight,
+              ),
+            );
           } else if (state is DeviceError) {
             _scanning = false;
             _lastScanned = '';
             _scannedPin = '';
             _addToScanHistory(_lastScanned, false);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(AppLocalizations.of(context)!.translateError(state.message)),
-              backgroundColor: AppColors.errorLight,
-            ),);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
+                backgroundColor: AppColors.errorLight,
+              ),
+            );
           }
         },
         builder: (context, state) {
@@ -339,10 +403,21 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
             color: const Color(0xFFECFDF5),
             child: Row(
               children: [
-                const Icon(Icons.check_circle, color: AppColors.successLight, size: 18),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.successLight,
+                  size: 18,
+                ),
                 SizedBox(width: 6.w),
-                Text(AppLocalizations.of(context)!.alreadyBoundNDevices('$_sessionBoundCount'),
-                  style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: const Color(0xFF065F46)),),
+                Text(
+                  AppLocalizations.of(context)!
+                      .alreadyBoundNDevices('$_sessionBoundCount'),
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF065F46),
+                  ),
+                ),
               ],
             ),
           ),
@@ -354,7 +429,8 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
               MobileScanner(controller: _cameraController, onDetect: _onDetect),
               Center(
                 child: Container(
-                  width: 220.w, height: 220.w,
+                  width: 220.w,
+                  height: 220.w,
                   decoration: BoxDecoration(
                     border: Border.all(color: AppColors.primary, width: 2),
                     borderRadius: BorderRadius.circular(16.r),
@@ -362,12 +438,25 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                 ),
               ),
               if (_scanning || state is DeviceLoading)
-                Container(color: Colors.black54,
-                  child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const CircularProgressIndicator(color: Colors.white),
-                    const SizedBox(height: 16),
-                    Text(AppLocalizations.of(context)!.addingDevice, style: const TextStyle(color: Colors.white, fontSize: 16)),
-                  ],),),),
+                Container(
+                  color: Colors.black54,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(color: Colors.white),
+                        const SizedBox(height: 16),
+                        Text(
+                          AppLocalizations.of(context)!.addingDevice,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -377,70 +466,139 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
           child: Column(
             children: [
               if (_bindSuccess) ...[
-                Row(children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _continueScanning,
-                      icon: const Icon(Icons.qr_code_scanner, size: 20),
-                      label: Text(AppLocalizations.of(context)!.continueScan, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                        padding: EdgeInsets.symmetric(vertical: 12.h),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _continueScanning,
+                        icon: const Icon(Icons.qr_code_scanner, size: 20),
+                        label: Text(
+                          AppLocalizations.of(context)!.continueScan,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          padding: EdgeInsets.symmetric(vertical: 12.h),
+                        ),
                       ),
                     ),
-                  ),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => context.pop(),
-                      icon: const Icon(Icons.check_circle_outline, size: 20),
-                      label: Text(AppLocalizations.of(context)!.finish, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.successLight,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                        padding: EdgeInsets.symmetric(vertical: 12.h),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.check_circle_outline, size: 20),
+                        label: Text(
+                          AppLocalizations.of(context)!.finish,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.successLight,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          padding: EdgeInsets.symmetric(vertical: 12.h),
+                        ),
                       ),
                     ),
-                  ),
-                ],),
+                  ],
+                ),
                 SizedBox(height: 12.h),
               ] else ...[
                 if (_lastScanned.isNotEmpty) ...[
-                  Text('SN: ${formatSNForDisplay(_lastScanned)}',
-                    style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),),
+                  Text(
+                    'SN: ${formatSNForDisplay(_lastScanned)}',
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                   if (_scannedPin.isNotEmpty)
-                    Padding(padding: EdgeInsets.only(top: 4.h),
-                      child: Text('PIN: $_scannedPin',
-                        style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.successLight),),),
+                    Padding(
+                      padding: EdgeInsets.only(top: 4.h),
+                      child: Text(
+                        'PIN: $_scannedPin',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.successLight,
+                        ),
+                      ),
+                    ),
                 ] else
-                  Text(AppLocalizations.of(context)!.pointSnAtScan,
-                    style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),),
+                  Text(
+                    AppLocalizations.of(context)!.pointSnAtScan,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
               ],
               SizedBox(height: 8.h),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _actionChip(Icons.flash_on, AppLocalizations.of(context)!.flashLight, () => _cameraController?.toggleTorch()),
+                  _actionChip(
+                    Icons.flash_on,
+                    AppLocalizations.of(context)!.flashLight,
+                    () => _cameraController?.toggleTorch(),
+                  ),
                   SizedBox(width: 12.w),
-                  _actionChip(Icons.flip_camera_android, AppLocalizations.of(context)!.flipCamera, () => _cameraController?.switchCamera()),
+                  _actionChip(
+                    Icons.flip_camera_android,
+                    AppLocalizations.of(context)!.flipCamera,
+                    () => _cameraController?.switchCamera(),
+                  ),
                   SizedBox(width: 12.w),
                   GestureDetector(
                     onTap: () => setState(() => _autoFlash = !_autoFlash),
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
                       decoration: BoxDecoration(
-                        color: _autoFlash ? AppColors.primary.withValues(alpha: 0.1) : AppColors.surfaceHover,
+                        color: _autoFlash
+                            ? AppColors.primary.withValues(alpha: 0.1)
+                            : AppColors.surfaceHover,
                         borderRadius: BorderRadius.circular(20.r),
-                        border: _autoFlash ? Border.all(color: AppColors.primary.withValues(alpha: 0.3)) : null,
+                        border: _autoFlash
+                            ? Border.all(
+                                color: AppColors.primary.withValues(alpha: 0.3),
+                              )
+                            : null,
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.auto_fix_high, size: 16.sp, color: _autoFlash ? AppColors.primary : AppColors.textSecondary),
-                        SizedBox(width: 4.w),
-                        Text(AppLocalizations.of(context)!.autoFlash, style: TextStyle(fontSize: 12.sp, color: _autoFlash ? AppColors.primary : AppColors.textSecondary)),
-                      ],),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.auto_fix_high,
+                            size: 16.sp,
+                            color: _autoFlash
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                          ),
+                          SizedBox(width: 4.w),
+                          Text(
+                            AppLocalizations.of(context)!.autoFlash,
+                            style: TextStyle(
+                              fontSize: 12.sp,
+                              color: _autoFlash
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -457,7 +615,14 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
               children: [
                 Padding(
                   padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 4.h),
-                  child: Text(AppLocalizations.of(context)!.scanRecords, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                  child: Text(
+                    AppLocalizations.of(context)!.scanRecords,
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ),
                 Expanded(
                   child: ListView.separated(
@@ -473,12 +638,29 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
                         leading: Icon(
                           entry.success ? Icons.check_circle : Icons.error,
                           size: 18,
-                          color: entry.success ? AppColors.successLight : AppColors.errorLight,
+                          color: entry.success
+                              ? AppColors.successLight
+                              : AppColors.errorLight,
                         ),
-                        title: Text(formatSNForDisplay(entry.sn),
-                          style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w500, color: AppColors.textPrimary),),
-                        trailing: Text(entry.success ? AppLocalizations.of(context)!.bindSuccess : AppLocalizations.of(context)!.bindFailed,
-                          style: TextStyle(fontSize: 11.sp, color: entry.success ? AppColors.successLight : AppColors.errorLight),),
+                        title: Text(
+                          formatSNForDisplay(entry.sn),
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        trailing: Text(
+                          entry.success
+                              ? AppLocalizations.of(context)!.bindSuccess
+                              : AppLocalizations.of(context)!.bindFailed,
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            color: entry.success
+                                ? AppColors.successLight
+                                : AppColors.errorLight,
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -495,48 +677,92 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
       onTap: onTap,
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-        decoration: BoxDecoration(color: AppColors.surfaceHover, borderRadius: BorderRadius.circular(20.r)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 16.sp, color: AppColors.textSecondary),
-          SizedBox(width: 4.w),
-          Text(label, style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary)),
-        ],),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceHover,
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16.sp, color: AppColors.textSecondary),
+            SizedBox(width: 4.w),
+            Text(
+              label,
+              style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildManualTab(DeviceState state) {
-    return ListView(padding: EdgeInsets.all(20.w), children: [
-      Text(AppLocalizations.of(context)!.manualInputSn, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
-      SizedBox(height: 8.h),
-      Text(AppLocalizations.of(context)!.snFormatDesc, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
-      SizedBox(height: 4.h),
-      Text(AppLocalizations.of(context)!.snFormatHint, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
-      SizedBox(height: 16.h),
-      TextField(
-        controller: _snController,
-        decoration: InputDecoration(
-          labelText: AppLocalizations.of(context)!.deviceSnLabel, hintText: AppLocalizations.of(context)!.input16DigitSn,
-          prefixIcon: const Icon(Icons.devices, color: AppColors.textHint),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12.r),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),),
+    return ListView(
+      padding: EdgeInsets.all(20.w),
+      children: [
+        Text(
+          AppLocalizations.of(context)!.manualInputSn,
+          style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
         ),
-      ),
-      SizedBox(height: 20.h),
-      SizedBox(width: double.infinity, height: 48.h,
-        child: ElevatedButton(
-          onPressed: state is DeviceLoading ? null : _manualBind,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary, foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+        SizedBox(height: 8.h),
+        Text(
+          AppLocalizations.of(context)!.snFormatDesc,
+          style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+        ),
+        SizedBox(height: 4.h),
+        Text(
+          AppLocalizations.of(context)!.snFormatHint,
+          style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+        ),
+        SizedBox(height: 16.h),
+        TextField(
+          controller: _snController,
+          decoration: InputDecoration(
+            labelText: AppLocalizations.of(context)!.deviceSnLabel,
+            hintText: AppLocalizations.of(context)!.input16DigitSn,
+            prefixIcon: const Icon(Icons.devices, color: AppColors.textHint),
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(12.r)),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
           ),
-          child: state is DeviceLoading
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text(AppLocalizations.of(context)!.bindDevice, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         ),
-      ),
-    ],);
+        SizedBox(height: 20.h),
+        SizedBox(
+          width: double.infinity,
+          height: 48.h,
+          child: ElevatedButton(
+            onPressed: state is DeviceLoading ? null : _manualBind,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+            ),
+            child: state is DeviceLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    AppLocalizations.of(context)!.bindDevice,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
   }
 
   void _continueScanning() {
@@ -558,7 +784,9 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
         final list = jsonDecode(jsonStr) as List;
         if (!mounted) return;
         setState(() {
-          _scanHistory = list.map((e) => _ScanHistoryEntry.fromJson(e as Map<String, dynamic>)).toList();
+          _scanHistory = list
+              .map((e) => _ScanHistoryEntry.fromJson(e as Map<String, dynamic>))
+              .toList();
         });
       }
     } catch (_) {}
@@ -567,7 +795,9 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
   Future<void> _saveScanHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final trimmed = _scanHistory.length > 10 ? _scanHistory.sublist(_scanHistory.length - 10) : _scanHistory;
+      final trimmed = _scanHistory.length > 10
+          ? _scanHistory.sublist(_scanHistory.length - 10)
+          : _scanHistory;
       final jsonStr = jsonEncode(trimmed.map((e) => e.toJson()).toList());
       await prefs.setString(_scanHistoryKey, jsonStr);
     } catch (_) {}
@@ -576,7 +806,9 @@ class _AddDevicePageState extends State<AddDevicePage> with SingleTickerProvider
   void _addToScanHistory(String sn, bool success) {
     if (sn.isEmpty) return;
     setState(() {
-      _scanHistory.add(_ScanHistoryEntry(sn: sn, success: success, time: DateTime.now()));
+      _scanHistory.add(
+        _ScanHistoryEntry(sn: sn, success: success, time: DateTime.now()),
+      );
       if (_scanHistory.length > 10) {
         _scanHistory = _scanHistory.sublist(_scanHistory.length - 10);
       }
@@ -590,26 +822,34 @@ class _ScanHistoryEntry {
   final bool success;
   final DateTime time;
 
-  _ScanHistoryEntry({required this.sn, required this.success, required this.time});
+  _ScanHistoryEntry({
+    required this.sn,
+    required this.success,
+    required this.time,
+  });
 
   Map<String, dynamic> toJson() => {
-    'sn': sn,
-    'success': success,
-    'time': time.toIso8601String(),
-  };
+        'sn': sn,
+        'success': success,
+        'time': time.toIso8601String(),
+      };
 
-  factory _ScanHistoryEntry.fromJson(Map<String, dynamic> json) => _ScanHistoryEntry(
-    sn: json['sn'] as String,
-    success: json['success'] as bool,
-    time: DateTime.parse(json['time'] as String),
-  );
+  factory _ScanHistoryEntry.fromJson(Map<String, dynamic> json) =>
+      _ScanHistoryEntry(
+        sn: json['sn'] as String,
+        success: json['success'] as bool,
+        time: DateTime.parse(json['time'] as String),
+      );
 }
 
 class _StationSelectorSheet extends StatefulWidget {
   final void Function(int stationId, String stationName) onSelected;
   final VoidCallback onCancel;
 
-  const _StationSelectorSheet({required this.onSelected, required this.onCancel});
+  const _StationSelectorSheet({
+    required this.onSelected,
+    required this.onCancel,
+  });
 
   @override
   State<_StationSelectorSheet> createState() => _StationSelectorSheetState();
@@ -651,18 +891,32 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
               padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
               child: Row(
                 children: [
-                  Text(AppLocalizations.of(context)!.selectStation, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  Text(
+                    AppLocalizations.of(context)!.selectStation,
+                    style: TextStyle(
+                      fontSize: 18.sp,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                   const Spacer(),
                   GestureDetector(
                     onTap: widget.onCancel,
-                    child: const Icon(Icons.close, size: 24, color: AppColors.textSecondary),
+                    child: const Icon(
+                      Icons.close,
+                      size: 24,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
             ),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.w),
-              child: Text(AppLocalizations.of(context)!.selectStationForDevice, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+              child: Text(
+                AppLocalizations.of(context)!.selectStationForDevice,
+                style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+              ),
             ),
             SizedBox(height: 12.h),
             Expanded(
@@ -676,10 +930,19 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(AppLocalizations.of(context)!.translateError(state.message), style: TextStyle(fontSize: 14.sp, color: AppColors.errorLight)),
+                          Text(
+                            AppLocalizations.of(context)!
+                                .translateError(state.message),
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              color: AppColors.errorLight,
+                            ),
+                          ),
                           SizedBox(height: 12.h),
                           ElevatedButton(
-                            onPressed: () => context.read<StationBloc>().add(StationSummaryRequested()),
+                            onPressed: () => context
+                                .read<StationBloc>()
+                                .add(StationSummaryRequested()),
                             child: Text(AppLocalizations.of(context)!.retry),
                           ),
                         ],
@@ -695,11 +958,27 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.home_work_outlined, size: 48, color: AppColors.textHint),
+                          const Icon(
+                            Icons.home_work_outlined,
+                            size: 48,
+                            color: AppColors.textHint,
+                          ),
                           SizedBox(height: 12.h),
-                          Text(AppLocalizations.of(context)!.noStationsYet, style: TextStyle(fontSize: 15.sp, color: AppColors.textSecondary)),
+                          Text(
+                            AppLocalizations.of(context)!.noStationsYet,
+                            style: TextStyle(
+                              fontSize: 15.sp,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
                           SizedBox(height: 8.h),
-                          Text(AppLocalizations.of(context)!.createStationFirst, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+                          Text(
+                            AppLocalizations.of(context)!.createStationFirst,
+                            style: TextStyle(
+                              fontSize: 13.sp,
+                              color: AppColors.textHint,
+                            ),
+                          ),
                           SizedBox(height: 16.h),
                           ElevatedButton.icon(
                             onPressed: () {
@@ -707,7 +986,9 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                               context.push('/station/create');
                             },
                             icon: const Icon(Icons.add),
-                            label: Text(AppLocalizations.of(context)!.createStation),
+                            label: Text(
+                              AppLocalizations.of(context)!.createStation,
+                            ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
@@ -719,14 +1000,17 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                   }
                   return ListView.separated(
                     controller: scrollCtl,
-                    padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 20.w, vertical: 8.h),
                     itemCount: stations.length,
                     separatorBuilder: (_, __) => SizedBox(height: 8.h),
                     itemBuilder: (_, i) {
                       final s = stations[i];
                       final id = (s['station_id'] ?? s['id']) as int;
-                      final name = (s['station_name'] ?? s['name'] ?? '').toString();
-                      final deviceCount = (s['device_count'] as num?)?.toInt() ?? 0;
+                      final name =
+                          (s['station_name'] ?? s['name'] ?? '').toString();
+                      final deviceCount =
+                          (s['device_count'] as num?)?.toInt() ?? 0;
                       return Material(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12.r),
@@ -741,23 +1025,47 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                                   width: 44.w,
                                   height: 44.w,
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.1),
+                                    color: AppColors.primary
+                                        .withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(10.r),
                                   ),
-                                  child: const Icon(Icons.solar_power, color: AppColors.primary, size: 22),
+                                  child: const Icon(
+                                    Icons.solar_power,
+                                    color: AppColors.primary,
+                                    size: 22,
+                                  ),
                                 ),
                                 SizedBox(width: 14.w),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(name, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                      Text(
+                                        name,
+                                        style: TextStyle(
+                                          fontSize: 15.sp,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
                                       SizedBox(height: 2.h),
-                                      Text(AppLocalizations.of(context)!.nDevices('$deviceCount'), style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+                                      Text(
+                                        AppLocalizations.of(context)!
+                                            .nDevices('$deviceCount'),
+                                        style: TextStyle(
+                                          fontSize: 12.sp,
+                                          color: AppColors.textHint,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                                const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textHint),
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 16,
+                                  color: AppColors.textHint,
+                                ),
                               ],
                             ),
                           ),

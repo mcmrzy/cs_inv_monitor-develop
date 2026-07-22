@@ -39,7 +39,8 @@ class LocalOtaManifest {
     }
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sha256)) {
       throw ArgumentError(
-          'OTA SHA-256 must be 64 lowercase hexadecimal characters');
+        'OTA SHA-256 must be 64 lowercase hexadecimal characters',
+      );
     }
     var canonicalSignature = false;
     try {
@@ -137,7 +138,10 @@ class LocalCommunicationService {
   }
 
   Future<void> sendControl(
-      String deviceIP, String cmdType, Map<String, dynamic> params) async {
+    String deviceIP,
+    String cmdType,
+    Map<String, dynamic> params,
+  ) async {
     final dio = _createDio(deviceIP);
     await dio.post(
       '/api/v1/control',
@@ -152,10 +156,13 @@ class LocalCommunicationService {
     await _ensureWifiUsage();
 
     try {
-      final socket = await Socket.connect(_deviceIP, 80,
-          timeout: const Duration(seconds: 5));
+      final socket = await Socket.connect(
+        _deviceIP,
+        80,
+        timeout: const Duration(seconds: 5),
+      );
 
-      final request = 'GET /ota/info HTTP/1.0\r\n\r\n';
+      const request = 'GET /ota/info HTTP/1.0\r\n\r\n';
       socket.write(request);
       await socket.flush();
 
@@ -221,7 +228,8 @@ class LocalCommunicationService {
     await _ensureWifiUsage();
     manifest.validate();
     debugPrint(
-        'Uploading firmware to: http://${_deviceIP}/ota/upload (target=${manifest.target})');
+      'Uploading firmware to: http://$_deviceIP/ota/upload (target=${manifest.target})',
+    );
 
     final file = File(filePath);
     final bytes = await file.readAsBytes();
@@ -236,12 +244,15 @@ class LocalCommunicationService {
     LocalOtaManifest manifest, {
     void Function(int sent, int total)? onProgress,
   }) async {
-    final socket = await Socket.connect(_deviceIP, 80,
-        timeout: const Duration(seconds: 10));
+    final socket = await Socket.connect(
+      _deviceIP,
+      80,
+      timeout: const Duration(seconds: 10),
+    );
     debugPrint('Socket connected for upload (octet-stream)');
 
     final requestHeader = 'POST /ota/upload HTTP/1.1\r\n'
-        'Host: ${_deviceIP}\r\n'
+        'Host: $_deviceIP\r\n'
         'Connection: close\r\n'
         'Content-Type: application/octet-stream\r\n'
         'Content-Length: ${bytes.length}\r\n'
@@ -340,7 +351,8 @@ class LocalCommunicationService {
       final responseBody =
           bodyStart >= 0 ? response.substring(bodyStart + 4) : response;
       throw Exception(
-          'Upload rejected (${statusCode ?? 'invalid response'}): $responseBody');
+        'Upload rejected (${statusCode ?? 'invalid response'}): $responseBody',
+      );
     }
   }
 
@@ -349,10 +361,13 @@ class LocalCommunicationService {
     debugPrint('Getting OTA progress from: http://$_deviceIP/ota/progress');
 
     try {
-      final socket = await Socket.connect(_deviceIP, 80,
-          timeout: const Duration(seconds: 5));
+      final socket = await Socket.connect(
+        _deviceIP,
+        80,
+        timeout: const Duration(seconds: 5),
+      );
 
-      final request = 'GET /ota/progress HTTP/1.0\r\n\r\n';
+      const request = 'GET /ota/progress HTTP/1.0\r\n\r\n';
       socket.write(request);
       await socket.flush();
 
@@ -477,11 +492,14 @@ class LocalCommunicationService {
       final url = 'http://$_deviceIP/ota/info';
       debugPrint('Testing connection to: $url');
 
-      final socket = await Socket.connect(_deviceIP, 80,
-          timeout: const Duration(seconds: 5));
+      final socket = await Socket.connect(
+        _deviceIP,
+        80,
+        timeout: const Duration(seconds: 5),
+      );
       debugPrint('Socket connected');
 
-      final request = 'GET /ota/info HTTP/1.0\r\n\r\n';
+      const request = 'GET /ota/info HTTP/1.0\r\n\r\n';
       socket.write(request);
       await socket.flush();
       debugPrint('Request sent');

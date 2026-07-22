@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [inv_api_server, inv_device_server, api-gateway, mqtt-kafka-bridge]
+        module: [business-api, device-communication, api-gateway, mqtt-kafka-bridge]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -30,7 +30,7 @@ jobs:
         run: go test -race -cover -coverprofile=coverage.out -count=1 ./...
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
-        if: matrix.module == 'inv_api_server'
+        if: matrix.module == 'business-api'
         with:
           name: go-coverage
           path: ${{ matrix.module }}/coverage.out
@@ -116,13 +116,13 @@ jobs:
         with:
           go-version: '1.26.5'
       - name: Run security tests
-        run: cd inv_api_server && go test -v -count=1 ./tests/security/...
+        run: cd business-api && go test -v -count=1 ./tests/security/...
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: Scan Go modules for reachable vulnerabilities
         shell: bash
         run: |
           set -euo pipefail
-          for module in inv_api_server inv_device_server api-gateway mqtt-kafka-bridge; do
+          for module in business-api device-communication api-gateway mqtt-kafka-bridge; do
             (cd "$module" && govulncheck ./...)
           done

@@ -63,7 +63,11 @@ class ResetPasswordUseCase {
     required String code,
     required String newPassword,
   }) {
-    return repository.resetPassword(phone: phone, code: code, newPassword: newPassword);
+    return repository.resetPassword(
+      phone: phone,
+      code: code,
+      newPassword: newPassword,
+    );
   }
 }
 
@@ -76,7 +80,10 @@ class ChangePasswordUseCase {
     required String oldPassword,
     required String newPassword,
   }) {
-    return repository.changePassword(oldPassword: oldPassword, newPassword: newPassword);
+    return repository.changePassword(
+      oldPassword: oldPassword,
+      newPassword: newPassword,
+    );
   }
 }
 
@@ -100,7 +107,11 @@ class UpdateProfileUseCase {
     String? avatar,
     String? timezone,
   }) {
-    return repository.updateProfile(nickname: nickname, avatar: avatar, timezone: timezone);
+    return repository.updateProfile(
+      nickname: nickname,
+      avatar: avatar,
+      timezone: timezone,
+    );
   }
 }
 
@@ -129,7 +140,13 @@ class EmailRegisterUseCase {
     required String phone,
     required String nickname,
   }) {
-    return repository.emailRegister(email: email, password: password, code: code, phone: phone, nickname: nickname);
+    return repository.emailRegister(
+      email: email,
+      password: password,
+      code: code,
+      phone: phone,
+      nickname: nickname,
+    );
   }
 }
 

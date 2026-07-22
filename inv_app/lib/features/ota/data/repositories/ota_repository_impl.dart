@@ -58,7 +58,8 @@ class OtaRepositoryImpl implements OtaRepository {
           return Right(inner);
         }
         return const Left(
-            ServerFailure('Response format error: expected package list data'));
+          ServerFailure('Response format error: expected package list data'),
+        );
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -66,7 +67,8 @@ class OtaRepositoryImpl implements OtaRepository {
   }
 
   Either<Failure, Map<String, dynamic>> _parseStatusOkResponse(
-      Response response) {
+    Response response,
+  ) {
     final data = response.data;
     if (data is Map<String, dynamic>) {
       if (data['status'] == 'ok' || data['code'] == 0) {
@@ -95,7 +97,9 @@ class OtaRepositoryImpl implements OtaRepository {
 
   @override
   Future<Either<Failure, Map<String, dynamic>>> triggerOTA(
-      String sn, int packageId) async {
+    String sn,
+    int packageId,
+  ) async {
     try {
       final response = await remoteDataSource.triggerOTA(sn, packageId);
       return _parseData(response);
@@ -142,7 +146,8 @@ class OtaRepositoryImpl implements OtaRepository {
 
   @override
   Future<Either<Failure, Map<String, dynamic>>> getDeviceOTAStatus(
-      String sn) async {
+    String sn,
+  ) async {
     try {
       final response = await remoteDataSource.getDeviceOTAStatus(sn);
       return _parseData(response);
@@ -155,7 +160,8 @@ class OtaRepositoryImpl implements OtaRepository {
 
   @override
   Future<Either<Failure, Map<String, dynamic>>> resendUpgradeCommand(
-      String sn) async {
+    String sn,
+  ) async {
     try {
       final response = await remoteDataSource.resendUpgradeCommand(sn);
       return _parseData(response);
@@ -167,8 +173,9 @@ class OtaRepositoryImpl implements OtaRepository {
   }
 
   @override
-  Future<Either<Failure, List<dynamic>>> listUpgradePackages(
-      {String? model}) async {
+  Future<Either<Failure, List<dynamic>>> listUpgradePackages({
+    String? model,
+  }) async {
     try {
       final response = await remoteDataSource.listUpgradePackages(model: model);
       return _parsePackageListResponse(response);
@@ -181,7 +188,9 @@ class OtaRepositoryImpl implements OtaRepository {
 
   @override
   Future<Either<Failure, Map<String, dynamic>>> installPackage(
-      String sn, int packageId) async {
+    String sn,
+    int packageId,
+  ) async {
     try {
       final response = await remoteDataSource.installPackage(sn, packageId);
       return _parseStatusOkResponse(response);

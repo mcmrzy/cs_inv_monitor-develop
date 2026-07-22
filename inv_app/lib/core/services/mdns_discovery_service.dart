@@ -36,7 +36,8 @@ class MDNSDiscoveryService {
       int queryCount = 0;
 
       try {
-        socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, _mdnsPort);
+        socket =
+            await RawDatagramSocket.bind(InternetAddress.anyIPv4, _mdnsPort);
         socket.multicastLoopback = false;
         socket.joinMulticast(InternetAddress(_mdnsAddress));
       } catch (_) {
@@ -168,7 +169,9 @@ class MDNSDiscoveryService {
 
       final records = <_DNSRecord>[];
 
-      for (var i = 0; i < answerCount + additionalCount && offset < data.length; i++) {
+      for (var i = 0;
+          i < answerCount + additionalCount && offset < data.length;
+          i++) {
         final record = _parseRecord(data, offset);
         if (record == null) break;
         records.add(record);
@@ -193,12 +196,14 @@ class MDNSDiscoveryService {
       }
 
       if (serviceName != null || hostName != null) {
-        devices.add(MDNSDevice(
-          name: serviceName ?? hostName ?? 'unknown',
-          host: hostName ?? '',
-          port: port,
-          sn: sn,
-        ),);
+        devices.add(
+          MDNSDevice(
+            name: serviceName ?? hostName ?? 'unknown',
+            host: hostName ?? '',
+            port: port,
+            sn: sn,
+          ),
+        );
       }
     } catch (_) {}
 
@@ -253,7 +258,8 @@ class MDNSDiscoveryService {
       final type = _readUint16(data, offset);
       offset += 2;
       offset += 2;
-      final ttl = _readUint16(data, offset) << 16 | _readUint16(data, offset + 2);
+      final ttl =
+          _readUint16(data, offset) << 16 | _readUint16(data, offset + 2);
       offset += 4;
       final rdLength = _readUint16(data, offset);
       offset += 2;
@@ -266,7 +272,8 @@ class MDNSDiscoveryService {
 
       if (type == 1) {
         if (rdLength == 4) {
-          recordData = '${data[offset]}.${data[offset + 1]}.${data[offset + 2]}.${data[offset + 3]}';
+          recordData =
+              '${data[offset]}.${data[offset + 1]}.${data[offset + 2]}.${data[offset + 3]}';
         }
       } else if (type == 33) {
         if (rdLength >= 6) {

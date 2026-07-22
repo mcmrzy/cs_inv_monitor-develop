@@ -33,7 +33,9 @@ class _EditStationPageState extends State<EditStationPage> {
   @override
   void initState() {
     super.initState();
-    context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+    context
+        .read<StationBloc>()
+        .add(StationDetailRequested(stationId: widget.stationId));
   }
 
   @override
@@ -71,22 +73,25 @@ class _EditStationPageState extends State<EditStationPage> {
   void _submit() {
     if (_formKey.currentState!.validate()) {
       setState(() => _isSubmitting = true);
-      context.read<StationBloc>().add(StationUpdateRequested(
-        stationId: widget.stationId,
-        data: {
-          'name': _nameController.text.trim(),
-          'province': _provinceController.text.trim(),
-          'city': _cityController.text.trim(),
-          'district': _districtController.text.trim(),
-          'address': _addressController.text.trim(),
-          'capacity': double.tryParse(_capacityController.text) ?? 0,
-          'panel_count': int.tryParse(_panelCountController.text) ?? 0,
-          'peak_price': double.tryParse(_peakPriceController.text) ?? 0,
-          'valley_price': double.tryParse(_valleyPriceController.text) ?? 0,
-          'latitude': double.tryParse(_latitudeController.text) ?? 0,
-          'longitude': double.tryParse(_longitudeController.text) ?? 0,
-        },
-      ),);
+      context.read<StationBloc>().add(
+            StationUpdateRequested(
+              stationId: widget.stationId,
+              data: {
+                'name': _nameController.text.trim(),
+                'province': _provinceController.text.trim(),
+                'city': _cityController.text.trim(),
+                'district': _districtController.text.trim(),
+                'address': _addressController.text.trim(),
+                'capacity': double.tryParse(_capacityController.text) ?? 0,
+                'panel_count': int.tryParse(_panelCountController.text) ?? 0,
+                'peak_price': double.tryParse(_peakPriceController.text) ?? 0,
+                'valley_price':
+                    double.tryParse(_valleyPriceController.text) ?? 0,
+                'latitude': double.tryParse(_latitudeController.text) ?? 0,
+                'longitude': double.tryParse(_longitudeController.text) ?? 0,
+              },
+            ),
+          );
     }
   }
 
@@ -97,12 +102,19 @@ class _EditStationPageState extends State<EditStationPage> {
       body: BlocConsumer<StationBloc, StationState>(
         listener: (context, state) {
           if (state is StationUpdateSuccess) {
-            context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+            context
+                .read<StationBloc>()
+                .add(StationDetailRequested(stationId: widget.stationId));
             context.pop();
           } else if (state is StationError) {
             setState(() => _isSubmitting = false);
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context)!.translateError(state.message)), backgroundColor: Colors.red),
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
+                backgroundColor: Colors.red,
+              ),
             );
           }
         },
@@ -117,27 +129,66 @@ class _EditStationPageState extends State<EditStationPage> {
               key: _formKey,
               child: Column(
                 children: [
-                  _buildField(_nameController, AppLocalizations.of(context)!.stationName),
+                  _buildField(
+                    _nameController,
+                    AppLocalizations.of(context)!.stationName,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_provinceController, AppLocalizations.of(context)!.provinceLabel),
+                  _buildField(
+                    _provinceController,
+                    AppLocalizations.of(context)!.provinceLabel,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_cityController, AppLocalizations.of(context)!.cityLabel),
+                  _buildField(
+                    _cityController,
+                    AppLocalizations.of(context)!.cityLabel,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_districtController, AppLocalizations.of(context)!.districtLabel),
+                  _buildField(
+                    _districtController,
+                    AppLocalizations.of(context)!.districtLabel,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_addressController, AppLocalizations.of(context)!.detailAddress),
+                  _buildField(
+                    _addressController,
+                    AppLocalizations.of(context)!.detailAddress,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_capacityController, AppLocalizations.of(context)!.installedCapacity, inputType: TextInputType.number),
+                  _buildField(
+                    _capacityController,
+                    AppLocalizations.of(context)!.installedCapacity,
+                    inputType: TextInputType.number,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_panelCountController, AppLocalizations.of(context)!.panelCount, inputType: TextInputType.number),
+                  _buildField(
+                    _panelCountController,
+                    AppLocalizations.of(context)!.panelCount,
+                    inputType: TextInputType.number,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_peakPriceController, AppLocalizations.of(context)!.peakPrice, inputType: TextInputType.number),
+                  _buildField(
+                    _peakPriceController,
+                    AppLocalizations.of(context)!.peakPrice,
+                    inputType: TextInputType.number,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_valleyPriceController, AppLocalizations.of(context)!.valleyPrice, inputType: TextInputType.number),
+                  _buildField(
+                    _valleyPriceController,
+                    AppLocalizations.of(context)!.valleyPrice,
+                    inputType: TextInputType.number,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_latitudeController, AppLocalizations.of(context)!.latitude, inputType: TextInputType.number),
+                  _buildField(
+                    _latitudeController,
+                    AppLocalizations.of(context)!.latitude,
+                    inputType: TextInputType.number,
+                  ),
                   SizedBox(height: 12.h),
-                  _buildField(_longitudeController, AppLocalizations.of(context)!.longitude, inputType: TextInputType.number),
+                  _buildField(
+                    _longitudeController,
+                    AppLocalizations.of(context)!.longitude,
+                    inputType: TextInputType.number,
+                  ),
                   SizedBox(height: 24.h),
                   SizedBox(
                     width: double.infinity,
@@ -148,7 +199,10 @@ class _EditStationPageState extends State<EditStationPage> {
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : Text(AppLocalizations.of(context)!.saveChanges),
                     ),
@@ -162,7 +216,11 @@ class _EditStationPageState extends State<EditStationPage> {
     );
   }
 
-  Widget _buildField(TextEditingController controller, String label, {TextInputType inputType = TextInputType.text}) {
+  Widget _buildField(
+    TextEditingController controller,
+    String label, {
+    TextInputType inputType = TextInputType.text,
+  }) {
     return TextFormField(
       controller: controller,
       keyboardType: inputType,

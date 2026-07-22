@@ -154,7 +154,12 @@ const StationsPage: React.FC = () => {
 
   /* ---------- 视图模式 ---------- */
   const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
-    try { return (localStorage.getItem('stations_view_mode') as any) || 'card' } catch { return 'card' }
+    try {
+      const stored = localStorage.getItem('stations_view_mode')
+      // 清除旧的 card 默认值，统一回退到 table
+      if (stored === 'card') { localStorage.removeItem('stations_view_mode'); return 'table' }
+      return (stored as any) || 'table'
+    } catch { return 'table' }
   })
 
   /* ---------- 状态筛选和搜索 ---------- */

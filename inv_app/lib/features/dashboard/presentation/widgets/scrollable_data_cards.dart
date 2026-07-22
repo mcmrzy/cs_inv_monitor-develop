@@ -128,7 +128,8 @@ class _DataCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 20.sp,
                     fontWeight: FontWeight.w800,
-                    color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                    color:
+                        isSelected ? AppColors.primary : AppColors.textPrimary,
                   ),
                 ),
                 Text(

@@ -30,7 +30,10 @@ class _AboutPageState extends State<AboutPage> {
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.cannotOpenLink(url)), duration: const Duration(seconds: 2)),
+          SnackBar(
+            content: Text(l10n.cannotOpenLink(url)),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     }
@@ -49,9 +52,18 @@ class _AboutPageState extends State<AboutPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.userAgreementTitle, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.sp)),
+                Text(
+                  l10n.userAgreementTitle,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14.sp,
+                  ),
+                ),
                 SizedBox(height: 8.h),
-                Text(l10n.userAgreementContent, style: TextStyle(fontSize: 12.sp, height: 1.5)),
+                Text(
+                  l10n.userAgreementContent,
+                  style: TextStyle(fontSize: 12.sp, height: 1.5),
+                ),
               ],
             ),
           ),
@@ -79,9 +91,18 @@ class _AboutPageState extends State<AboutPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.privacyPolicyTitle, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.sp)),
+                Text(
+                  l10n.privacyPolicyTitle,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14.sp,
+                  ),
+                ),
                 SizedBox(height: 8.h),
-                Text(l10n.privacyPolicyContent, style: TextStyle(fontSize: 12.sp, height: 1.5)),
+                Text(
+                  l10n.privacyPolicyContent,
+                  style: TextStyle(fontSize: 12.sp, height: 1.5),
+                ),
               ],
             ),
           ),
@@ -113,7 +134,9 @@ class _AboutPageState extends State<AboutPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.checkUpdateFailed)),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.checkUpdateFailed),
+          ),
         );
       }
     } finally {
@@ -130,7 +153,11 @@ class _AboutPageState extends State<AboutPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle_outline, size: 48.sp, color: AppColors.success),
+            Icon(
+              Icons.check_circle_outline,
+              size: 48.sp,
+              color: AppColors.success,
+            ),
             SizedBox(height: 12.h),
             Text(
               l10n.alreadyLatestVersion,
@@ -161,64 +188,100 @@ class _AboutPageState extends State<AboutPage> {
       builder: (context) {
         final l10n = AppLocalizations.of(context)!;
         return PopScope(
-        canPop: !info.shouldForceUpdate,
-        child: StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: Row(
-              children: [
-                const Icon(Icons.system_update, color: AppColors.primary),
-                SizedBox(width: 8.w),
-                Text(l10n.newVersionFound),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+          canPop: !info.shouldForceUpdate,
+          child: StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: Row(
                 children: [
-                  Text(
-                    l10n.str('latest_version_label', {'version': info.latestVersionName}),
-                    style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    l10n.str('current_version_label', {'version': AppConfig.version}),
-                    style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),
-                  ),
-                  if (info.changelog.isNotEmpty) ...[
-                    SizedBox(height: 12.h),
-                    Text(l10n.updateContent, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w500)),
-                    SizedBox(height: 4.h),
-                    Text(info.changelog, style: TextStyle(fontSize: 12.sp, height: 1.5, color: AppColors.textSecondary)),
-                  ],
-                  if (_downloading) ...[
-                    SizedBox(height: 16.h),
-                    LinearProgressIndicator(value: _downloadProgress),
-                    SizedBox(height: 4.h),
-                    Text(
-                      '${l10n.downloadProgress} ${(_downloadProgress * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
-                    ),
-                  ],
+                  const Icon(Icons.system_update, color: AppColors.primary),
+                  SizedBox(width: 8.w),
+                  Text(l10n.newVersionFound),
                 ],
               ),
-            ),
-            actions: [
-              if (!info.shouldForceUpdate)
-                TextButton(
-                  onPressed: _downloading ? null : () {
-                    _cancelToken?.cancel();
-                    Navigator.pop(context);
-                  },
-                  child: Text(l10n.updateLater),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.str(
+                        'latest_version_label',
+                        {'version': info.latestVersionName},
+                      ),
+                      style: TextStyle(
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+                    Text(
+                      l10n.str(
+                        'current_version_label',
+                        {'version': AppConfig.version},
+                      ),
+                      style:
+                          TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+                    ),
+                    if (info.changelog.isNotEmpty) ...[
+                      SizedBox(height: 12.h),
+                      Text(
+                        l10n.updateContent,
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(height: 4.h),
+                      Text(
+                        info.changelog,
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          height: 1.5,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    if (_downloading) ...[
+                      SizedBox(height: 16.h),
+                      LinearProgressIndicator(value: _downloadProgress),
+                      SizedBox(height: 4.h),
+                      Text(
+                        '${l10n.downloadProgress} ${(_downloadProgress * 100).toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              FilledButton(
-                onPressed: _downloading ? null : () => _handleUpdate(info, setDialogState),
-                child: Text(Platform.isIOS ? l10n.goToUpdate : (_downloading ? l10n.downloadProgress : l10n.updateNow)),
               ),
-            ],
+              actions: [
+                if (!info.shouldForceUpdate)
+                  TextButton(
+                    onPressed: _downloading
+                        ? null
+                        : () {
+                            _cancelToken?.cancel();
+                            Navigator.pop(context);
+                          },
+                    child: Text(l10n.updateLater),
+                  ),
+                FilledButton(
+                  onPressed: _downloading
+                      ? null
+                      : () => _handleUpdate(info, setDialogState),
+                  child: Text(
+                    Platform.isIOS
+                        ? l10n.goToUpdate
+                        : (_downloading
+                            ? l10n.downloadProgress
+                            : l10n.updateNow),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
         );
       },
     );
@@ -241,7 +304,10 @@ class _AboutPageState extends State<AboutPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              l10n.str('browser_download_desc', {'version': info.latestVersionName}),
+              l10n.str(
+                'browser_download_desc',
+                {'version': info.latestVersionName},
+              ),
               style: TextStyle(fontSize: 14.sp, height: 1.5),
             ),
             SizedBox(height: 8.h),
@@ -270,7 +336,10 @@ class _AboutPageState extends State<AboutPage> {
     );
   }
 
-  Future<void> _handleUpdate(AppUpdateInfo info, void Function(void Function()) setDialogState) async {
+  Future<void> _handleUpdate(
+    AppUpdateInfo info,
+    void Function(void Function()) setDialogState,
+  ) async {
     if (Platform.isIOS) {
       // iOS: 跳转到 App Store
       if (info.downloadUrl.isNotEmpty) {
@@ -309,7 +378,12 @@ class _AboutPageState extends State<AboutPage> {
           _showBrowserDownloadDialog(info);
         } else if (e is! DioException) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.of(context)!.str('download_failed', {'error': e.toString()}))),
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context)!
+                    .str('download_failed', {'error': e.toString()}),
+              ),
+            ),
           );
         }
       }
@@ -340,12 +414,15 @@ class _AboutPageState extends State<AboutPage> {
           Container(
             width: 80.w,
             height: 80.w,
-            margin: EdgeInsets.symmetric(horizontal: (MediaQuery.of(context).size.width - 80.w) / 2),
+            margin: EdgeInsets.symmetric(
+              horizontal: (MediaQuery.of(context).size.width - 80.w) / 2,
+            ),
             decoration: BoxDecoration(
               color: AppColors.primary.withAlpha(25),
               borderRadius: BorderRadius.circular(20.r),
             ),
-            child: Icon(Icons.solar_power, size: 44.sp, color: AppColors.primary),
+            child:
+                Icon(Icons.solar_power, size: 44.sp, color: AppColors.primary),
           ),
           SizedBox(height: 16.h),
           Center(
@@ -369,9 +446,17 @@ class _AboutPageState extends State<AboutPage> {
             ),
           ),
           SizedBox(height: 40.h),
-          _buildMenuItem(Icons.description_outlined, l10n.userAgreement, _showUserAgreement),
+          _buildMenuItem(
+            Icons.description_outlined,
+            l10n.userAgreement,
+            _showUserAgreement,
+          ),
           const Divider(height: 1, indent: 50),
-          _buildMenuItem(Icons.privacy_tip_outlined, l10n.privacyPolicy, _showPrivacyPolicy),
+          _buildMenuItem(
+            Icons.privacy_tip_outlined,
+            l10n.privacyPolicy,
+            _showPrivacyPolicy,
+          ),
           const Divider(height: 1, indent: 50),
           _buildMenuItem(
             Icons.system_update_outlined,
@@ -397,11 +482,20 @@ class _AboutPageState extends State<AboutPage> {
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title, VoidCallback? onTap, {Widget? trailing}) {
+  Widget _buildMenuItem(
+    IconData icon,
+    String title,
+    VoidCallback? onTap, {
+    Widget? trailing,
+  }) {
     return ListTile(
       leading: Icon(icon, color: AppColors.textSecondary),
-      title: Text(title, style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary)),
-      trailing: trailing ?? const Icon(Icons.chevron_right, color: AppColors.textHint),
+      title: Text(
+        title,
+        style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary),
+      ),
+      trailing: trailing ??
+          const Icon(Icons.chevron_right, color: AppColors.textHint),
       onTap: onTap,
     );
   }

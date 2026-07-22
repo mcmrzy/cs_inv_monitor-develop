@@ -27,7 +27,10 @@ const telemetryQualityFlags = <TelemetryQualityFlag>[
   TelemetryQualityFlag(0x02, 'out_of_range', '数值越界 (out_of_range)'),
   TelemetryQualityFlag(0x04, 'time_drift', '设备时钟异常 (time_drift)'),
   TelemetryQualityFlag(
-      0x08, 'out_of_order/backfill', '乱序/回填 (out_of_order/backfill)'),
+    0x08,
+    'out_of_order/backfill',
+    '乱序/回填 (out_of_order/backfill)',
+  ),
   TelemetryQualityFlag(0x10, 'counter_reset', '累计量复位 (counter_reset)'),
   TelemetryQualityFlag(0x20, 'comm_fault', '通信异常 (comm_fault)'),
 ];
@@ -50,7 +53,10 @@ DecodedTelemetryQuality decodeTelemetryQuality(Object? input) {
   final value = parseTelemetryQualityFlags(input);
   if (value == null) {
     return const DecodedTelemetryQuality(
-        value: null, flags: [], unknownMask: 0);
+      value: null,
+      flags: [],
+      unknownMask: 0,
+    );
   }
   final knownMask =
       telemetryQualityFlags.fold<int>(0, (mask, flag) => mask | flag.mask);

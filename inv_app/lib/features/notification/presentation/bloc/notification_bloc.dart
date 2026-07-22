@@ -135,7 +135,12 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   void _subscribeToMqtt() {
     // 监听设备实时数据流，触发刷新（后端已自动插入通知）
     _realtimeSub = mqttService?.realtimeDataStream.listen((rt) {
-      add(_MqttStatusUpdate(deviceSn: rt.deviceSN, isOnline: rt.onlineStatus?.online ?? false));
+      add(
+        _MqttStatusUpdate(
+          deviceSn: rt.deviceSN,
+          isOnline: rt.onlineStatus?.online ?? false,
+        ),
+      );
     });
 
     // 监听告警，触发通知列表刷新
@@ -184,7 +189,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     JPushNotificationReceived event,
     Emitter<NotificationState> emit,
   ) async {
-    debugPrint('[NotificationBloc] JPush received: ${event.notifyType}, deviceSn=${event.deviceSn}');
+    debugPrint(
+      '[NotificationBloc] JPush received: ${event.notifyType}, deviceSn=${event.deviceSn}',
+    );
     _debouncedRefresh();
   }
 
@@ -193,11 +200,16 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     JPushNotificationTapped event,
     Emitter<NotificationState> emit,
   ) async {
-    debugPrint('[NotificationBloc] JPush tapped: ${event.notifyType}, deviceSn=${event.deviceSn}');
+    debugPrint(
+      '[NotificationBloc] JPush tapped: ${event.notifyType}, deviceSn=${event.deviceSn}',
+    );
     _debouncedRefresh();
   }
 
-  Future<void> _prependLocalNotification(StorageService storage, SystemNotification notification) async {
+  Future<void> _prependLocalNotification(
+    StorageService storage,
+    SystemNotification notification,
+  ) async {
     final storedJson = await storage.getString(_localNotifKey);
     List<SystemNotification> stored = [];
     if (storedJson != null && storedJson.isNotEmpty) {
@@ -227,11 +239,14 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     // 1. 从后端获取设备通知（上线/离线等）
     if (notificationDataSource != null) {
       try {
-        final response = await notificationDataSource!.getList(page: 1, pageSize: 50);
+        final response =
+            await notificationDataSource!.getList(page: 1, pageSize: 50);
         final data = response.data;
         if (data != null) {
           final responseData = data['data'] ?? data;
-          final items = responseData is Map ? (responseData['items'] ?? []) : (responseData is List ? responseData : []);
+          final items = responseData is Map
+              ? (responseData['items'] ?? [])
+              : (responseData is List ? responseData : []);
           if (items is List) {
             for (final item in items) {
               if (item is Map<String, dynamic>) {
@@ -271,12 +286,15 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
             timestamp: DateTime.now(),
             version: info.latestVersionName,
           );
-          final exists = localStored.any((n) =>
-              n.type == SystemNotificationType.appUpdate &&
-              n.version == appUpdateNotif.version);
+          final exists = localStored.any(
+            (n) =>
+                n.type == SystemNotificationType.appUpdate &&
+                n.version == appUpdateNotif.version,
+          );
           if (!exists) {
             localStored = [appUpdateNotif, ...localStored];
-            final saveJson = json.encode(localStored.map((e) => e.toJson()).toList());
+            final saveJson =
+                json.encode(localStored.map((e) => e.toJson()).toList());
             await storage.saveString(_localNotifKey, saveJson);
           }
         }

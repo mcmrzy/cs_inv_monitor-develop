@@ -256,7 +256,8 @@ class BleProvisioningService {
 
   /// 连接到BLE设备
   Future<BleProvisioningResult> connectToDevice(
-      BleDeviceInfo deviceInfo) async {
+    BleDeviceInfo deviceInfo,
+  ) async {
     // 先停止扫描
     stopScan();
 
@@ -340,11 +341,12 @@ class BleProvisioningService {
     final existingDevice = _discoveredDevices.firstWhere(
       (d) => d.macAddress == (_connectedDevice?.remoteId.toString() ?? ''),
       orElse: () => BleDeviceInfo(
-          sn: '',
-          firmwareVersion: '',
-          macAddress: '',
-          deviceName: 'CS_INV Device',
-          rssi: 0),
+        sn: '',
+        firmwareVersion: '',
+        macAddress: '',
+        deviceName: 'CS_INV Device',
+        rssi: 0,
+      ),
     );
 
     // 使用读取到的SN更新设备名
@@ -374,7 +376,8 @@ class BleProvisioningService {
         // 先启用通知（必须在监听之前）
         await characteristic.setNotifyValue(true);
         debugPrint(
-            '[BLE] Subscribed to status notifications, characteristic UUID: ${characteristic.uuid}');
+          '[BLE] Subscribed to status notifications, characteristic UUID: ${characteristic.uuid}',
+        );
 
         // 监听状态变化
         characteristic.lastValueStream.listen((value) {
@@ -406,7 +409,8 @@ class BleProvisioningService {
   /// Processing status update
   void _handleStatusUpdate(String status) {
     debugPrint(
-        '[BLE] Processing status update: $status (length: ${status.length})');
+      '[BLE] Processing status update: $status (length: ${status.length})',
+    );
     // 去除空白字符和空字符
     final cleanStatus = status.replaceAll(RegExp(r'[\s\x00]+'), '');
     debugPrint('[BLE] Cleaned status: $cleanStatus');
@@ -427,9 +431,11 @@ class BleProvisioningService {
         case 'failed':
         case 'not_found':
           // 配网失败后，回到bleConnected状态，允许重新输入凭据
-          _resultController.add(cleanStatus == 'not_found'
-              ? 'ble_wifi_not_found'
-              : 'ble_wifi_password_failed');
+          _resultController.add(
+            cleanStatus == 'not_found'
+                ? 'ble_wifi_not_found'
+                : 'ble_wifi_password_failed',
+          );
           _emitStatus(BleProvisioningStatus.bleConnected);
           break;
         default:
@@ -484,8 +490,10 @@ class BleProvisioningService {
       debugPrint('[BLE] Written SSID: $ssid');
 
       // 写入密码（触发配网）
-      await passwordCharacteristic.write(password.codeUnits,
-          withoutResponse: false);
+      await passwordCharacteristic.write(
+        password.codeUnits,
+        withoutResponse: false,
+      );
       debugPrint('[BLE] Written password, waiting for device response...');
 
       _emitStatus(BleProvisioningStatus.waitingForResult);

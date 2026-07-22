@@ -93,8 +93,9 @@ class _SettingsPageState extends State<SettingsPage> {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                    content: Text(l10n.str('unit_changed', {'unit': 'kW'})),
-                    duration: const Duration(seconds: 1)),
+                  content: Text(l10n.str('unit_changed', {'unit': 'kW'})),
+                  duration: const Duration(seconds: 1),
+                ),
               );
             },
             child: Padding(
@@ -116,8 +117,9 @@ class _SettingsPageState extends State<SettingsPage> {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                    content: Text(l10n.str('unit_changed', {'unit': 'W'})),
-                    duration: const Duration(seconds: 1)),
+                  content: Text(l10n.str('unit_changed', {'unit': 'W'})),
+                  duration: const Duration(seconds: 1),
+                ),
               );
             },
             child: Padding(
@@ -163,16 +165,16 @@ class _SettingsPageState extends State<SettingsPage> {
               final url = controller.text.trim();
               if (url.isNotEmpty) {
                 await _storage.saveServerUrl(url);
-                if (mounted) {
-                  setState(() => _serverUrl = url);
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(l10n.serverSaved),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                }
+                await Future.microtask(() {});
+                if (!mounted) return;
+                setState(() => _serverUrl = url); // ignore: use_build_context_synchronously
+                Navigator.pop(context); // ignore: use_build_context_synchronously
+                ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
+                  SnackBar(
+                    content: Text(l10n.serverSaved),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
               }
             },
             child: Text(l10n.save),
@@ -198,16 +200,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 final dio = getIt<Dio>();
                 await dio.put('/auth/profile', data: {'timezone': id});
               } catch (_) {}
-              if (mounted) {
-                setState(() => _currentTimezone = id);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text(
-                          l10n.str('timezone_changed', {'timezone': label})),
-                      duration: const Duration(seconds: 1)),
-                );
-              }
+              await Future.microtask(() {});
+              if (!mounted) return;
+              setState(() => _currentTimezone = id); // ignore: use_build_context_synchronously
+              Navigator.pop(context); // ignore: use_build_context_synchronously
+              ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
+                SnackBar(
+                  content: Text(
+                    l10n.str('timezone_changed', {'timezone': label}),
+                  ),
+                  duration: const Duration(seconds: 1),
+                ),
+              );
             },
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 8.h),
@@ -243,8 +247,10 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: EdgeInsets.symmetric(vertical: 8.h),
               child: Row(
                 children: [
-                  Text(l10n.str('language_chinese'),
-                      style: TextStyle(fontSize: 16.sp)),
+                  Text(
+                    l10n.str('language_chinese'),
+                    style: TextStyle(fontSize: 16.sp),
+                  ),
                   if (_currentLocale == 'zh') ...[
                     const Spacer(),
                     const Icon(Icons.check, color: AppColors.primary),
@@ -263,8 +269,10 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: EdgeInsets.symmetric(vertical: 8.h),
               child: Row(
                 children: [
-                  Text(l10n.str('language_english'),
-                      style: TextStyle(fontSize: 16.sp)),
+                  Text(
+                    l10n.str('language_english'),
+                    style: TextStyle(fontSize: 16.sp),
+                  ),
                   if (_currentLocale == 'en') ...[
                     const Spacer(),
                     const Icon(Icons.check, color: AppColors.primary),
@@ -297,7 +305,7 @@ class _SettingsPageState extends State<SettingsPage> {
             subtitle: Text(l10n.localModeDesc),
             value: _isLocalMode,
             onChanged: _toggleLocalMode,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
           const Divider(height: 1),
           ListTile(
@@ -316,7 +324,7 @@ class _SettingsPageState extends State<SettingsPage> {
             title: Text(l10n.darkMode),
             value: _isDarkMode,
             onChanged: _toggleDarkMode,
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
           const Divider(height: 1),
           ListTile(
@@ -328,8 +336,12 @@ class _SettingsPageState extends State<SettingsPage> {
           const Divider(height: 1),
           ListTile(
             title: Text(l10n.timezone),
-            subtitle: Text(TimezoneUtils.getLabel(_currentTimezone,
-                langCode: _currentLocale)),
+            subtitle: Text(
+              TimezoneUtils.getLabel(
+                _currentTimezone,
+                langCode: _currentLocale,
+              ),
+            ),
             trailing: const Icon(Icons.chevron_right),
             onTap: _showTimezoneDialog,
           ),
@@ -356,9 +368,10 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Text(
         title,
         style: TextStyle(
-            fontSize: 13.sp,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textHint),
+          fontSize: 13.sp,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textHint,
+        ),
       ),
     );
   }
@@ -375,8 +388,9 @@ class _SettingsPageState extends State<SettingsPage> {
               content: Text(l10n.resetConfirm),
               actions: [
                 TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text(l10n.cancel)),
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(l10n.cancel),
+                ),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
                   style:
@@ -401,8 +415,9 @@ class _SettingsPageState extends State<SettingsPage> {
               });
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                    content: Text(l10n.settingsReset),
-                    duration: const Duration(seconds: 1)),
+                  content: Text(l10n.settingsReset),
+                  duration: const Duration(seconds: 1),
+                ),
               );
             }
           }

@@ -57,11 +57,13 @@ class PhaseBar extends StatelessWidget {
             ),
           ),
           SizedBox(height: 10.h),
-          ...phases.map((phase) => _PhaseRow(
-                phase: phase,
-                maxValue: maxValue,
-                theme: theme,
-              ),),
+          ...phases.map(
+            (phase) => _PhaseRow(
+              phase: phase,
+              maxValue: maxValue,
+              theme: theme,
+            ),
+          ),
         ],
       ),
     );

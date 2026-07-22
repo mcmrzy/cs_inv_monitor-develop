@@ -7,16 +7,19 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-    const settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    const settings =
+        InitializationSettings(android: androidSettings, iOS: iosSettings);
 
     await _plugin.initialize(
       settings,
@@ -24,13 +27,16 @@ class NotificationService {
     );
 
     if (Platform.isAndroid) {
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.createNotificationChannel(const AndroidNotificationChannel(
-        'ota_updates',
-        'OTA Upgrade',
-        description: 'Firmware upgrade notifications',
-        importance: Importance.high,
-      ),);
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'ota_updates',
+          'OTA Upgrade',
+          description: 'Firmware upgrade notifications',
+          importance: Importance.high,
+        ),
+      );
     }
   }
 
@@ -40,7 +46,11 @@ class NotificationService {
     }
   }
 
-  Future<void> showOTAUpdateNotification(String title, String body, {String? payload}) async {
+  Future<void> showOTAUpdateNotification(
+    String title,
+    String body, {
+    String? payload,
+  }) async {
     const androidDetails = AndroidNotificationDetails(
       'ota_updates',
       'OTA Upgrade',
@@ -54,7 +64,8 @@ class NotificationService {
       presentBadge: true,
       presentSound: true,
     );
-    const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+    const details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
 
     await _plugin.show(
       0,

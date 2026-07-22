@@ -11,7 +11,10 @@ class CommandResult {
     required this.deviceSn,
   });
 
-  factory CommandResult.fromJson(Map<String, dynamic> json, {String deviceSn = ''}) {
+  factory CommandResult.fromJson(
+    Map<String, dynamic> json, {
+    String deviceSn = '',
+  }) {
     return CommandResult(
       status: json['status'] as String? ?? '',
       message: json['message'] as String? ?? '',

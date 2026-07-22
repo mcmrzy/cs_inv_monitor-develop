@@ -10,8 +10,18 @@ void main() {
   final duplicate = Map<String, dynamic>.from(first);
 
   test('validates and normalizes schedule payloads', () {
-    expect(isEnergySchedulePayload({'periods': [first]}), isTrue);
-    expect(isEnergySchedulePayload({'periods': ['bad']}), isFalse);
+    expect(
+      isEnergySchedulePayload({
+        'periods': [first],
+      }),
+      isTrue,
+    );
+    expect(
+      isEnergySchedulePayload({
+        'periods': ['bad'],
+      }),
+      isFalse,
+    );
     expect(
       normalizeSchedulePeriods([first]),
       equals([first]),
@@ -38,7 +48,11 @@ void main() {
   });
 
   test('rejects edits and deletes for a missing period', () {
-    final missing = {'start_time': '12:00', 'end_time': '13:00', 'mode': 'idle'};
+    final missing = {
+      'start_time': '12:00',
+      'end_time': '13:00',
+      'mode': 'idle',
+    };
     expect(
       () => replaceSchedulePeriod([first], missing, missing),
       throwsFormatException,

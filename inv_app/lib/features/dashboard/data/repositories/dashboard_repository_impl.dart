@@ -39,7 +39,8 @@ class DashboardRepositoryImpl implements DashboardRepository {
           return inner;
         }
         throw const ServerFailure(
-            'Response format error: expected object data');
+          'Response format error: expected object data',
+        );
       }
       throw ServerFailure(data['message'] ?? 'Request failed');
     }
@@ -82,8 +83,9 @@ class DashboardRepositoryImpl implements DashboardRepository {
   }
 
   @override
-  Future<Either<Failure, List<TrendDataPoint>>> getTrendData(
-      {String type = 'day'}) async {
+  Future<Either<Failure, List<TrendDataPoint>>> getTrendData({
+    String type = 'day',
+  }) async {
     try {
       final response = await remoteDataSource.getTrendData(type: type);
       final list = _parseList(response);

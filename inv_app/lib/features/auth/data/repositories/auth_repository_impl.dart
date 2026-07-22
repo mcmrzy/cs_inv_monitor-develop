@@ -131,7 +131,13 @@ class AuthRepositoryImpl implements AuthRepository {
   }) async {
     return apiService.post(
       '/auth/email-register',
-      data: {'email': email, 'password': password, 'code': code, 'phone': phone, 'nickname': nickname},
+      data: {
+        'email': email,
+        'password': password,
+        'code': code,
+        'phone': phone,
+        'nickname': nickname,
+      },
       fromJson: (json) => LoginResponse.fromJson(json),
     );
   }

@@ -123,12 +123,12 @@ services:
   inv-api-server:
     build:
       context: ..
-      dockerfile: inv_api_server/Dockerfile
+      dockerfile: business-api/Dockerfile
     container_name: inv-api-server
     expose:
       - "8080"
     volumes:
-      - ../inv_api_server/config.docker.yaml:/app/config.yaml:ro
+      - ../business-api/config.docker.yaml:/app/config.yaml:ro
       - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     networks:
       - inv-network
@@ -145,12 +145,12 @@ services:
         max-file: "3"
 
   inv-device-server:
-    build: ../inv_device_server
+    build: ../device-communication
     container_name: inv-device-server
     expose:
       - "8081"
     volumes:
-      - ../inv_device_server/config.docker.yaml:/app/config.yaml:ro
+      - ../device-communication/config.docker.yaml:/app/config.yaml:ro
       - device-logs:/app/logs
     networks:
       - inv-network

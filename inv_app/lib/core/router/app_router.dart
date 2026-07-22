@@ -269,9 +269,11 @@ class AppRouter {
           final stationId = state.uri.queryParameters['station_id'];
 
           return _slidePage(
-              state,
-              AddDevicePage(
-                  stationId: stationId != null ? int.parse(stationId) : null));
+            state,
+            AddDevicePage(
+              stationId: stationId != null ? int.parse(stationId) : null,
+            ),
+          );
         },
       ),
       GoRoute(
@@ -384,7 +386,8 @@ class AppRouter {
     errorBuilder: (context, state) => Scaffold(
       body: Center(
         child: Text(
-            '${AppLocalizations.of(context)!.pageNotFound}: ${state.error}'),
+          '${AppLocalizations.of(context)!.pageNotFound}: ${state.error}',
+        ),
       ),
     ),
     redirect: (context, state) async {
@@ -467,29 +470,42 @@ class _MainShellState extends State<MainShell> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      l10n.str('latest_version_label',
-                          {'version': info.latestVersionName}),
+                      l10n.str(
+                        'latest_version_label',
+                        {'version': info.latestVersionName},
+                      ),
                       style: TextStyle(
-                          fontSize: 15.sp, fontWeight: FontWeight.w500),
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     SizedBox(height: 4.h),
                     Text(
-                      l10n.str('current_version_label',
-                          {'version': AppConfig.version}),
+                      l10n.str(
+                        'current_version_label',
+                        {'version': AppConfig.version},
+                      ),
                       style:
                           TextStyle(fontSize: 13.sp, color: AppColors.textHint),
                     ),
                     if (info.changelog.isNotEmpty) ...[
                       SizedBox(height: 12.h),
-                      Text(l10n.updateContent,
-                          style: TextStyle(
-                              fontSize: 13.sp, fontWeight: FontWeight.w500)),
+                      Text(
+                        l10n.updateContent,
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       SizedBox(height: 4.h),
-                      Text(info.changelog,
-                          style: TextStyle(
-                              fontSize: 12.sp,
-                              height: 1.5,
-                              color: AppColors.textSecondary)),
+                      Text(
+                        info.changelog,
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          height: 1.5,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ],
                     if (_downloading) ...[
                       SizedBox(height: 16.h),
@@ -498,7 +514,9 @@ class _MainShellState extends State<MainShell> {
                       Text(
                         '${l10n.downloadProgress} ${(_downloadProgress * 100).toStringAsFixed(0)}%',
                         style: TextStyle(
-                            fontSize: 12.sp, color: AppColors.textHint),
+                          fontSize: 12.sp,
+                          color: AppColors.textHint,
+                        ),
                       ),
                     ],
                   ],
@@ -520,11 +538,13 @@ class _MainShellState extends State<MainShell> {
                   onPressed: _downloading
                       ? null
                       : () => _handleUpdate(info, ctx, setDialogState),
-                  child: Text(Platform.isIOS
-                      ? l10n.goToUpdate
-                      : (_downloading
-                          ? l10n.downloadProgress
-                          : l10n.updateNow)),
+                  child: Text(
+                    Platform.isIOS
+                        ? l10n.goToUpdate
+                        : (_downloading
+                            ? l10n.downloadProgress
+                            : l10n.updateNow),
+                  ),
                 ),
               ],
             ),
@@ -534,8 +554,11 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Future<void> _handleUpdate(AppUpdateInfo info, BuildContext ctx,
-      void Function(void Function()) setDialogState) async {
+  Future<void> _handleUpdate(
+    AppUpdateInfo info,
+    BuildContext ctx,
+    void Function(void Function()) setDialogState,
+  ) async {
     if (Platform.isIOS) {
       if (info.downloadUrl.isNotEmpty) {
         final uri = Uri.parse(info.downloadUrl);
@@ -582,8 +605,11 @@ class _MainShellState extends State<MainShell> {
         } else if (e is! DioException) {
           ScaffoldMessenger.of(ctx).showSnackBar(
             SnackBar(
-                content: Text(AppLocalizations.of(ctx)!
-                    .str('download_failed', {'error': e.toString()}))),
+              content: Text(
+                AppLocalizations.of(ctx)!
+                    .str('download_failed', {'error': e.toString()}),
+              ),
+            ),
           );
         }
       }
@@ -617,7 +643,9 @@ class _MainShellState extends State<MainShell> {
           children: [
             Text(
               l10n.str(
-                  'browser_download_desc', {'version': info.latestVersionName}),
+                'browser_download_desc',
+                {'version': info.latestVersionName},
+              ),
               style: TextStyle(fontSize: 14.sp, height: 1.5),
             ),
             SizedBox(height: 8.h),
@@ -805,9 +833,10 @@ class _DeviceListPageState extends State<DeviceListPage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: Text(AppLocalizations.of(context)!.deviceManagement,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(
+            AppLocalizations.of(context)!.deviceManagement,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+          ),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -819,7 +848,8 @@ class _DeviceListPageState extends State<DeviceListPage> {
         builder: (context, state) {
           if (state is DeviceLoading) {
             return const Center(
-                child: CircularProgressIndicator(strokeWidth: 3));
+              child: CircularProgressIndicator(strokeWidth: 3),
+            );
           }
 
           if (state is DeviceError) {
@@ -828,24 +858,32 @@ class _DeviceListPageState extends State<DeviceListPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                      padding: EdgeInsets.all(20.w),
-                      decoration: BoxDecoration(
-                          color: AppColors.error.withValues(alpha: 0.08),
-                          shape: BoxShape.circle),
-                      child: Icon(Icons.error_outline_rounded,
-                          size: 40.sp, color: AppColors.error)),
+                    padding: EdgeInsets.all(20.w),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.error_outline_rounded,
+                      size: 40.sp,
+                      color: AppColors.error,
+                    ),
+                  ),
                   SizedBox(height: 12.h),
                   Text(
-                      AppLocalizations.of(context)!
-                          .translateError(state.message),
-                      style: TextStyle(
-                          fontSize: 14.sp, color: AppColors.textSecondary)),
+                    AppLocalizations.of(context)!.translateError(state.message),
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                   SizedBox(height: 16.h),
                   OutlinedButton(
-                      onPressed: () => context
-                          .read<DeviceBloc>()
-                          .add(const DeviceListRequested()),
-                      child: Text(AppLocalizations.of(context)!.retry)),
+                    onPressed: () => context
+                        .read<DeviceBloc>()
+                        .add(const DeviceListRequested()),
+                    child: Text(AppLocalizations.of(context)!.retry),
+                  ),
                 ],
               ),
             );

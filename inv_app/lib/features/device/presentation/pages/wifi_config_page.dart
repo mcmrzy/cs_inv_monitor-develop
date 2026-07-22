@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -226,9 +225,13 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
       });
     } catch (e) {
       setState(() => _wifiScanning = false);
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${AppLocalizations.of(context)!.scanFailed}: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${AppLocalizations.of(context)!.scanFailed}: $e'),
+          ),
+        );
+      }
     }
   }
 
@@ -277,15 +280,19 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         );
         if (connected) break;
         if (attempt < 2) {
-          setState(() => _provisionStatus =
-              '${AppLocalizations.of(context)!.connectingSsid(ssid)} (${attempt + 2}/3)');
+          setState(
+            () => _provisionStatus =
+                '${AppLocalizations.of(context)!.connectingSsid(ssid)} (${attempt + 2}/3)',
+          );
           await Future.delayed(const Duration(seconds: 1));
         }
       }
 
       if (connected) {
-        setState(() => _provisionStatus =
-            AppLocalizations.of(context)!.waitingStableConnection);
+        setState(
+          () => _provisionStatus =
+              AppLocalizations.of(context)!.waitingStableConnection,
+        );
 
         // 关键：强制HTTP请求走WiFi而不是移动数据
         await WiFiForIoTPlugin.forceWifiUsage(true);
@@ -298,14 +305,18 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         for (int i = 0; i < 3; i++) {
           currentSsid = await WiFiForIoTPlugin.getSSID();
           if (currentSsid != null &&
-              currentSsid.toUpperCase().contains('CS_INV')) break;
+              currentSsid.toUpperCase().contains('CS_INV')) {
+            break;
+          }
           await Future.delayed(const Duration(seconds: 1));
         }
 
         if (currentSsid == null ||
             !currentSsid.toUpperCase().contains('CS_INV')) {
-          setState(() => _provisionStatus =
-              AppLocalizations.of(context)!.noDeviceHotspotRetry);
+          setState(
+            () => _provisionStatus =
+                AppLocalizations.of(context)!.noDeviceHotspotRetry,
+          );
           return;
         }
 
@@ -317,12 +328,16 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         // 使用手机端已缓存的WiFi列表，不再通过设备扫描
         _usePhoneScannedWifi();
       } else {
-        setState(() => _provisionStatus =
-            AppLocalizations.of(context)!.connectionSsidFailed(ssid));
+        setState(
+          () => _provisionStatus =
+              AppLocalizations.of(context)!.connectionSsidFailed(ssid),
+        );
       }
     } catch (e) {
-      setState(() => _provisionStatus =
-          '${AppLocalizations.of(context)!.connectionFailed}: $e');
+      setState(
+        () => _provisionStatus =
+            '${AppLocalizations.of(context)!.connectionFailed}: $e',
+      );
     }
   }
 
@@ -418,16 +433,21 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     _workingSsidController.text = wifi.ssid;
     _workingPasswordController.clear();
     _showPassword = false;
-    setState(() => _provisionStatus =
-        AppLocalizations.of(context)!.selectedWifiInputPassword(wifi.ssid));
+    setState(
+      () => _provisionStatus =
+          AppLocalizations.of(context)!.selectedWifiInputPassword(wifi.ssid),
+    );
   }
 
   Future<void> _sendProvisionConfig() async {
     final ssid = _workingSsidController.text.trim();
     final password = _workingPasswordController.text.trim();
     if (ssid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppLocalizations.of(context)!.pleaseInputWifiName)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.pleaseInputWifiName),
+        ),
+      );
       return;
     }
     setState(() {
@@ -461,9 +481,12 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           _onSoftApProvisionSuccess();
           return;
         }
-        if (mounted)
-          setState(() => _provisionStatus = AppLocalizations.of(context)!
-              .waitingDeviceConnectionN('${i + 1}'));
+        if (mounted) {
+          setState(
+            () => _provisionStatus = AppLocalizations.of(context)!
+                .waitingDeviceConnectionN('${i + 1}'),
+          );
+        }
         await Future.delayed(const Duration(seconds: 2));
       }
       setState(() {
@@ -538,7 +561,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
   Future<void> _startBleScan() async {
     debugPrint('[BLE] _startBleScan called');
     debugPrint(
-        '[BLE] Current state: _bleScanning=$_bleScanning, _provisionSuccess=$_provisionSuccess, _bleStatus=$_bleStatus');
+      '[BLE] Current state: _bleScanning=$_bleScanning, _provisionSuccess=$_provisionSuccess, _bleStatus=$_bleStatus',
+    );
     setState(() {
       _bleDevices = [];
       _selectedBleDevice = null;
@@ -594,8 +618,11 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     final password = _workingPasswordController.text.trim();
 
     if (ssid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppLocalizations.of(context)!.pleaseInputWifiName)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.pleaseInputWifiName),
+        ),
+      );
       return;
     }
 
@@ -872,27 +899,33 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.wifi_find, size: 22),
               label: Text(
-                  _wifiScanning
-                      ? AppLocalizations.of(context)!.scanning
-                      : ' ${AppLocalizations.of(context)!.scanNearInverters}',
-                  style: const TextStyle(fontSize: 15)),
+                _wifiScanning
+                    ? AppLocalizations.of(context)!.scanning
+                    : ' ${AppLocalizations.of(context)!.scanNearInverters}',
+                style: const TextStyle(fontSize: 15),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r)),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
               ),
             ),
           ),
           if (_csInvNetworks.isNotEmpty) ...[
             SizedBox(height: 10.h),
             Text(
-                AppLocalizations.of(context)!
-                    .foundNInverters('${_csInvNetworks.length}'),
-                style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+              AppLocalizations.of(context)!
+                  .foundNInverters('${_csInvNetworks.length}'),
+              style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+            ),
             SizedBox(height: 8.h),
             ..._csInvNetworks.map((net) {
               final ssid = net.ssid ?? '';
@@ -901,7 +934,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               return Card(
                 margin: EdgeInsets.only(bottom: 8.h),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r)),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
                 child: ListTile(
                   leading: Container(
                     width: 44.w,
@@ -910,17 +944,31 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(10.r),
                     ),
-                    child: const Icon(Icons.solar_power,
-                        color: AppColors.primary, size: 22),
+                    child: const Icon(
+                      Icons.solar_power,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
                   ),
-                  title: Text(ssid,
-                      style: TextStyle(
-                          fontSize: 15.sp, fontWeight: FontWeight.w600)),
-                  subtitle: Text('$sig $rssi dBm',
-                      style: TextStyle(
-                          fontSize: 11.sp, color: AppColors.textHint)),
-                  trailing: const Icon(Icons.arrow_forward_ios,
-                      size: 14, color: AppColors.textHint),
+                  title: Text(
+                    ssid,
+                    style: TextStyle(
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '$sig $rssi dBm',
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: AppColors.textHint,
+                  ),
                   onTap: () => _connectToAp(net),
                 ),
               );
@@ -933,21 +981,33 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 child: Container(
                   padding: EdgeInsets.all(24.w),
                   decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(12.r)),
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.wifi_off,
-                          size: 40.sp, color: AppColors.textHint),
+                      Icon(
+                        Icons.wifi_off,
+                        size: 40.sp,
+                        color: AppColors.textHint,
+                      ),
                       SizedBox(height: 10.h),
-                      Text(AppLocalizations.of(context)!.noInverterFound,
-                          style: TextStyle(
-                              fontSize: 14.sp, color: AppColors.textHint)),
+                      Text(
+                        AppLocalizations.of(context)!.noInverterFound,
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
                       SizedBox(height: 4.h),
-                      Text(AppLocalizations.of(context)!.ensureDevicePowered,
-                          style: TextStyle(
-                              fontSize: 11.sp, color: AppColors.textHint)),
+                      Text(
+                        AppLocalizations.of(context)!.ensureDevicePowered,
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -964,14 +1024,20 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             child: Row(
               children: [
                 const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
                 SizedBox(width: 12.w),
                 Expanded(
-                    child: Text(_provisionStatus,
-                        style: TextStyle(
-                            fontSize: 13.sp, color: AppColors.textPrimary))),
+                  child: Text(
+                    _provisionStatus,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -981,24 +1047,37 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             padding: EdgeInsets.all(12.w),
             margin: EdgeInsets.only(bottom: 16.h),
             decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
-                borderRadius: BorderRadius.circular(10.r)),
+              color: const Color(0xFFECFDF5),
+              borderRadius: BorderRadius.circular(10.r),
+            ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle,
-                    color: AppColors.successLight, size: 20),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.successLight,
+                  size: 20,
+                ),
                 SizedBox(width: 8.w),
                 Expanded(
-                    child: Text(
-                        AppLocalizations.of(context)!
-                            .connectedTo(_selectedDeviceAp?.ssid ?? ''),
-                        style: TextStyle(
-                            fontSize: 13.sp, color: const Color(0xFF065F46)))),
+                  child: Text(
+                    AppLocalizations.of(context)!
+                        .connectedTo(_selectedDeviceAp?.ssid ?? ''),
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: const Color(0xFF065F46),
+                    ),
+                  ),
+                ),
                 GestureDetector(
-                    onTap: _resetProvision,
-                    child: Text(AppLocalizations.of(context)!.disconnect,
-                        style: TextStyle(
-                            fontSize: 12.sp, color: AppColors.errorLight))),
+                  onTap: _resetProvision,
+                  child: Text(
+                    AppLocalizations.of(context)!.disconnect,
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: AppColors.errorLight,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1014,30 +1093,36 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Icon(Icons.wifi, size: 20),
               label: Text(
-                  _scanningNearbyWifi
-                      ? AppLocalizations.of(context)!.scanning
-                      : AppLocalizations.of(context)!.scanNearbyWifi,
-                  style: const TextStyle(fontSize: 14)),
+                _scanningNearbyWifi
+                    ? AppLocalizations.of(context)!.scanning
+                    : AppLocalizations.of(context)!.scanNearbyWifi,
+                style: const TextStyle(fontSize: 14),
+              ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r)),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
                 side: const BorderSide(color: AppColors.primary),
               ),
             ),
           ),
           SizedBox(height: 8.h),
           if (_nearbyWifiList.isNotEmpty) ...[
-            Text(AppLocalizations.of(context)!.clickWifiToFill,
-                style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+            Text(
+              AppLocalizations.of(context)!.clickWifiToFill,
+              style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+            ),
             SizedBox(height: 6.h),
             Container(
               decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12.r),
-                  border: Border.all(color: const Color(0xFFE5E7EB))),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
               constraints: BoxConstraints(maxHeight: 200.h),
               child: ListView.separated(
                 shrinkWrap: true,
@@ -1051,19 +1136,27 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       w.rssi > -50 ? '📶📶📶' : (w.rssi > -70 ? '📶📶' : '📶');
                   final selected = _workingSsidController.text == w.ssid;
                   return ListTile(
-                    leading: Icon(w.encrypted ? Icons.lock_outline : Icons.wifi,
-                        size: 20,
-                        color:
-                            selected ? AppColors.primary : AppColors.textHint),
-                    title: Text(w.ssid,
-                        style: TextStyle(
-                            fontSize: 13.sp,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500,
-                            color: AppColors.textPrimary)),
-                    trailing: Text('$sig ${w.rssi}dBm',
-                        style: TextStyle(
-                            fontSize: 10.sp, color: AppColors.textHint)),
+                    leading: Icon(
+                      w.encrypted ? Icons.lock_outline : Icons.wifi,
+                      size: 20,
+                      color: selected ? AppColors.primary : AppColors.textHint,
+                    ),
+                    title: Text(
+                      w.ssid,
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    trailing: Text(
+                      '$sig ${w.rssi}dBm',
+                      style: TextStyle(
+                        fontSize: 10.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
                     tileColor: selected ? const Color(0xFFEFF6FF) : null,
                     dense: true,
                     onTap: () => _pickWiFi(w),
@@ -1099,8 +1192,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                   const Icon(Icons.lock_outline, color: AppColors.textHint),
               suffixIcon: IconButton(
                 icon: Icon(
-                    _showPassword ? Icons.visibility_off : Icons.visibility,
-                    color: AppColors.textHint),
+                  _showPassword ? Icons.visibility_off : Icons.visibility,
+                  color: AppColors.textHint,
+                ),
                 onPressed: () => setState(() => _showPassword = !_showPassword),
               ),
               border:
@@ -1123,19 +1217,26 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       width: 22,
                       height: 22,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2.5, color: Colors.white))
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.router, size: 22),
               label: Text(
-                  _provisioning
-                      ? AppLocalizations.of(context)!.configuring
-                      : AppLocalizations.of(context)!.sendingProvisionInfo,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600)),
+                _provisioning
+                    ? AppLocalizations.of(context)!.configuring
+                    : AppLocalizations.of(context)!.sendingProvisionInfo,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.successLight,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r)),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
               ),
             ),
           ),
@@ -1170,9 +1271,14 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 ),
                 SizedBox(width: 10.w),
                 Expanded(
-                    child: Text(_provisionStatus,
-                        style: TextStyle(
-                            fontSize: 13.sp, color: AppColors.textPrimary))),
+                  child: Text(
+                    _provisionStatus,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1245,21 +1351,27 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             ),
             child: Column(
               children: [
-                const Icon(Icons.check_circle,
-                    color: AppColors.successLight, size: 40),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.successLight,
+                  size: 40,
+                ),
                 SizedBox(height: 12.h),
                 Text(
                   l10n.bleSuccessExclaim,
                   style: TextStyle(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.successLight),
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.successLight,
+                  ),
                 ),
                 SizedBox(height: 8.h),
                 Text(
                   l10n.deviceConnectingWifi,
                   style: TextStyle(
-                      fontSize: 13.sp, color: AppColors.textSecondary),
+                    fontSize: 13.sp,
+                    color: AppColors.textSecondary,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 16.h),
@@ -1284,7 +1396,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r)),
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
                     ),
                   ),
                 ),
@@ -1303,8 +1416,11 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             ),
             child: Column(
               children: [
-                const Icon(Icons.error_outline,
-                    color: AppColors.errorLight, size: 40),
+                const Icon(
+                  Icons.error_outline,
+                  color: AppColors.errorLight,
+                  size: 40,
+                ),
                 SizedBox(height: 12.h),
                 Text(
                   _bleStatus == BleProvisioningStatus.timeout
@@ -1313,15 +1429,18 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                           ? l10n.bleFailed
                           : l10n.bleError,
                   style: TextStyle(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.errorLight),
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.errorLight,
+                  ),
                 ),
                 SizedBox(height: 8.h),
                 Text(
                   l10n.checkDeviceWorking,
                   style: TextStyle(
-                      fontSize: 13.sp, color: AppColors.textSecondary),
+                    fontSize: 13.sp,
+                    color: AppColors.textSecondary,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 16.h),
@@ -1337,7 +1456,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r)),
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
                     ),
                   ),
                 ),
@@ -1356,15 +1476,19 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             ),
             child: Column(
               children: [
-                const Icon(Icons.bluetooth_disabled,
-                    color: AppColors.textHint, size: 40),
+                const Icon(
+                  Icons.bluetooth_disabled,
+                  color: AppColors.textHint,
+                  size: 40,
+                ),
                 SizedBox(height: 12.h),
                 Text(
                   l10n.noDeviceFound,
                   style: TextStyle(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary),
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 SizedBox(height: 8.h),
                 Text(
@@ -1385,7 +1509,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12.r)),
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
                     ),
                   ),
                 ),
@@ -1405,14 +1530,19 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline,
-                    color: AppColors.primary, size: 20),
+                const Icon(
+                  Icons.info_outline,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
                 SizedBox(width: 10.w),
                 Expanded(
                   child: Text(
                     l10n.bleModeDescription,
                     style: TextStyle(
-                        fontSize: 12.sp, color: AppColors.textPrimary),
+                      fontSize: 12.sp,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -1428,7 +1558,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             child: ElevatedButton.icon(
               onPressed: () {
                 debugPrint(
-                    '[BLE] Scan button clicked, _bleScanning=$_bleScanning');
+                  '[BLE] Scan button clicked, _bleScanning=$_bleScanning',
+                );
                 if (!_bleScanning) {
                   _startBleScan();
                 }
@@ -1438,18 +1569,23 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.bluetooth_searching, size: 22),
               label: Text(
-                  _bleScanning
-                      ? AppLocalizations.of(context)!.scanning
-                      : AppLocalizations.of(context)!.scanNearInverters,
-                  style: const TextStyle(fontSize: 15)),
+                _bleScanning
+                    ? AppLocalizations.of(context)!.scanning
+                    : AppLocalizations.of(context)!.scanNearInverters,
+                style: const TextStyle(fontSize: 15),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r)),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
               ),
             ),
           ),
@@ -1459,9 +1595,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           // 设备列表
           if (_bleDevices.isNotEmpty) ...[
             Text(
-                AppLocalizations.of(context)!
-                    .foundNInverters('${_bleDevices.length}'),
-                style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+              AppLocalizations.of(context)!
+                  .foundNInverters('${_bleDevices.length}'),
+              style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+            ),
             SizedBox(height: 8.h),
             ..._bleDevices.map((device) {
               final rssi = device.rssi;
@@ -1469,7 +1606,8 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
               return Card(
                 margin: EdgeInsets.only(bottom: 8.h),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r)),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
                 child: ListTile(
                   leading: Container(
                     width: 44.w,
@@ -1478,24 +1616,38 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       color: const Color(0xFFEFF6FF),
                       borderRadius: BorderRadius.circular(10.r),
                     ),
-                    child: const Icon(Icons.bluetooth,
-                        color: AppColors.primary, size: 22),
+                    child: const Icon(
+                      Icons.bluetooth,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
                   ),
                   title: Text(
-                      device.sn.isNotEmpty ? device.sn : device.deviceName,
-                      style: TextStyle(
-                          fontSize: 15.sp, fontWeight: FontWeight.w600)),
-                  subtitle: Text('$sig $rssi dBm',
-                      style: TextStyle(
-                          fontSize: 11.sp, color: AppColors.textHint)),
+                    device.sn.isNotEmpty ? device.sn : device.deviceName,
+                    style: TextStyle(
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '$sig $rssi dBm',
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      color: AppColors.textHint,
+                    ),
+                  ),
                   trailing: _bleConnecting &&
                           _selectedBleDevice?.macAddress == device.macAddress
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.arrow_forward_ios,
-                          size: 14, color: AppColors.textHint),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 14,
+                          color: AppColors.textHint,
+                        ),
                   onTap:
                       _bleConnecting ? null : () => _connectToBleDevice(device),
                 ),
@@ -1511,21 +1663,33 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 child: Container(
                   padding: EdgeInsets.all(24.w),
                   decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      borderRadius: BorderRadius.circular(12.r)),
+                    color: const Color(0xFFF9FAFB),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.bluetooth_disabled,
-                          size: 40.sp, color: AppColors.textHint),
+                      Icon(
+                        Icons.bluetooth_disabled,
+                        size: 40.sp,
+                        color: AppColors.textHint,
+                      ),
                       SizedBox(height: 10.h),
-                      Text(AppLocalizations.of(context)!.noInverterFound,
-                          style: TextStyle(
-                              fontSize: 14.sp, color: AppColors.textHint)),
+                      Text(
+                        AppLocalizations.of(context)!.noInverterFound,
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
                       SizedBox(height: 4.h),
-                      Text(AppLocalizations.of(context)!.ensureDevicePowered,
-                          style: TextStyle(
-                              fontSize: 11.sp, color: AppColors.textHint)),
+                      Text(
+                        AppLocalizations.of(context)!.ensureDevicePowered,
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1545,14 +1709,20 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             child: Row(
               children: [
                 const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
                 SizedBox(width: 12.w),
                 Expanded(
-                    child: Text(_getBleStatusText(),
-                        style: TextStyle(
-                            fontSize: 13.sp, color: AppColors.textPrimary))),
+                  child: Text(
+                    _getBleStatusText(),
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1566,31 +1736,45 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             padding: EdgeInsets.all(12.w),
             margin: EdgeInsets.only(bottom: 16.h),
             decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
-                borderRadius: BorderRadius.circular(10.r)),
+              color: const Color(0xFFECFDF5),
+              borderRadius: BorderRadius.circular(10.r),
+            ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle,
-                    color: AppColors.successLight, size: 20),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.successLight,
+                  size: 20,
+                ),
                 SizedBox(width: 8.w),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                          l10n.connectedTo(_selectedBleDevice!.sn.isNotEmpty
+                        l10n.connectedTo(
+                          _selectedBleDevice!.sn.isNotEmpty
                               ? _selectedBleDevice!.sn
-                              : _selectedBleDevice!.deviceName),
-                          style: TextStyle(
-                              fontSize: 13.sp, color: const Color(0xFF065F46))),
+                              : _selectedBleDevice!.deviceName,
+                        ),
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          color: const Color(0xFF065F46),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 GestureDetector(
-                    onTap: _disconnectBleDevice,
-                    child: Text(AppLocalizations.of(context)!.disconnect,
-                        style: TextStyle(
-                            fontSize: 12.sp, color: AppColors.errorLight))),
+                  onTap: _disconnectBleDevice,
+                  child: Text(
+                    AppLocalizations.of(context)!.disconnect,
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: AppColors.errorLight,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1607,17 +1791,28 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline,
-                    color: AppColors.errorLight, size: 20),
+                const Icon(
+                  Icons.error_outline,
+                  color: AppColors.errorLight,
+                  size: 20,
+                ),
                 SizedBox(width: 8.w),
                 Expanded(
-                    child: Text(_bleErrorMessage!,
-                        style: TextStyle(
-                            fontSize: 13.sp, color: const Color(0xFF991B1B)))),
+                  child: Text(
+                    _bleErrorMessage!,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: const Color(0xFF991B1B),
+                    ),
+                  ),
+                ),
                 GestureDetector(
                   onTap: () => setState(() => _bleErrorMessage = null),
-                  child: const Icon(Icons.close,
-                      size: 16, color: AppColors.textHint),
+                  child: const Icon(
+                    Icons.close,
+                    size: 16,
+                    color: AppColors.textHint,
+                  ),
                 ),
               ],
             ),
@@ -1636,30 +1831,36 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Icon(Icons.wifi, size: 20),
               label: Text(
-                  _scanningNearbyWifi
-                      ? AppLocalizations.of(context)!.scanning
-                      : AppLocalizations.of(context)!.scanNearbyWifi,
-                  style: const TextStyle(fontSize: 14)),
+                _scanningNearbyWifi
+                    ? AppLocalizations.of(context)!.scanning
+                    : AppLocalizations.of(context)!.scanNearbyWifi,
+                style: const TextStyle(fontSize: 14),
+              ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r)),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
                 side: const BorderSide(color: AppColors.primary),
               ),
             ),
           ),
           SizedBox(height: 8.h),
           if (_nearbyWifiList.isNotEmpty) ...[
-            Text(AppLocalizations.of(context)!.clickWifiToFill,
-                style: TextStyle(fontSize: 11.sp, color: AppColors.textHint)),
+            Text(
+              AppLocalizations.of(context)!.clickWifiToFill,
+              style: TextStyle(fontSize: 11.sp, color: AppColors.textHint),
+            ),
             SizedBox(height: 6.h),
             Container(
               decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12.r),
-                  border: Border.all(color: const Color(0xFFE5E7EB))),
+                borderRadius: BorderRadius.circular(12.r),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
               constraints: BoxConstraints(maxHeight: 200.h),
               child: ListView.separated(
                 shrinkWrap: true,
@@ -1673,19 +1874,27 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       w.rssi > -50 ? '📶📶📶' : (w.rssi > -70 ? '📶📶' : '📶');
                   final selected = _workingSsidController.text == w.ssid;
                   return ListTile(
-                    leading: Icon(w.encrypted ? Icons.lock_outline : Icons.wifi,
-                        size: 20,
-                        color:
-                            selected ? AppColors.primary : AppColors.textHint),
-                    title: Text(w.ssid,
-                        style: TextStyle(
-                            fontSize: 13.sp,
-                            fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500,
-                            color: AppColors.textPrimary)),
-                    trailing: Text('$sig ${w.rssi}dBm',
-                        style: TextStyle(
-                            fontSize: 10.sp, color: AppColors.textHint)),
+                    leading: Icon(
+                      w.encrypted ? Icons.lock_outline : Icons.wifi,
+                      size: 20,
+                      color: selected ? AppColors.primary : AppColors.textHint,
+                    ),
+                    title: Text(
+                      w.ssid,
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    trailing: Text(
+                      '$sig ${w.rssi}dBm',
+                      style: TextStyle(
+                        fontSize: 10.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
                     tileColor: selected ? const Color(0xFFEFF6FF) : null,
                     dense: true,
                     onTap: () => _pickWiFi(w),
@@ -1721,8 +1930,9 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                   const Icon(Icons.lock_outline, color: AppColors.textHint),
               suffixIcon: IconButton(
                 icon: Icon(
-                    _showPassword ? Icons.visibility_off : Icons.visibility,
-                    color: AppColors.textHint),
+                  _showPassword ? Icons.visibility_off : Icons.visibility,
+                  color: AppColors.textHint,
+                ),
                 onPressed: () => setState(() => _showPassword = !_showPassword),
               ),
               border:
@@ -1745,17 +1955,24 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                       width: 22,
                       height: 22,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2.5, color: Colors.white))
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.bluetooth, size: 22),
               label: Text(
-                  _provisioning ? l10n.provisioningNow : l10n.sendWifiConfig,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w600)),
+                _provisioning ? l10n.provisioningNow : l10n.sendWifiConfig,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.successLight,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.r)),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
               ),
             ),
           ),
@@ -1773,14 +1990,20 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             child: Row(
               children: [
                 const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
                 SizedBox(width: 12.w),
                 Expanded(
-                    child: Text(_getBleStatusText(),
-                        style: TextStyle(
-                            fontSize: 13.sp, color: AppColors.textPrimary))),
+                  child: Text(
+                    _getBleStatusText(),
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1798,13 +2021,21 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle,
-                    color: AppColors.successLight, size: 20),
+                const Icon(
+                  Icons.check_circle,
+                  color: AppColors.successLight,
+                  size: 20,
+                ),
                 SizedBox(width: 10.w),
                 Expanded(
-                    child: Text(_getBleStatusText(),
-                        style: TextStyle(
-                            fontSize: 13.sp, color: AppColors.textPrimary))),
+                  child: Text(
+                    _getBleStatusText(),
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1823,9 +2054,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Row(
@@ -1862,9 +2094,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                                 child: Text(
                                   '${index + 1}',
                                   style: TextStyle(
-                                      fontSize: 12.sp,
-                                      fontWeight: FontWeight.w600,
-                                      color: stepColor),
+                                    fontSize: 12.sp,
+                                    fontWeight: FontWeight.w600,
+                                    color: stepColor,
+                                  ),
                                 ),
                               ),
                       ),
@@ -1908,8 +2141,9 @@ class _StepData {
   final String label;
   final bool isCompleted;
   final bool isCurrent;
-  const _StepData(
-      {required this.label,
-      required this.isCompleted,
-      required this.isCurrent});
+  const _StepData({
+    required this.label,
+    required this.isCompleted,
+    required this.isCurrent,
+  });
 }

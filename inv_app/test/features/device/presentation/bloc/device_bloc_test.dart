@@ -30,9 +30,9 @@ void main() {
         .thenAnswer((_) => const Stream<InverterRealtime>.empty());
     when(() => mockMQTTService.unsubscribeDeviceTopics(any())).thenReturn(null);
     when(() => mockMQTTService.subscribeDeviceTopics(any())).thenReturn(null);
-    when(() =>
-            mockMQTTService.waitForConnection(timeout: any(named: 'timeout')))
-        .thenAnswer((_) async {});
+    when(
+      () => mockMQTTService.waitForConnection(timeout: any(named: 'timeout')),
+    ).thenAnswer((_) async {});
 
     deviceBloc = DeviceBloc(
       repository: mockDeviceRepository,
@@ -65,7 +65,8 @@ void main() {
           ),
         ).thenAnswer(
           (_) async => right<Failure, Map<String, dynamic>>(
-              createTestDeviceListResponse()),
+            createTestDeviceListResponse(),
+          ),
         );
         when(() => mockDataCacheService.save(any(), any()))
             .thenAnswer((_) async {});

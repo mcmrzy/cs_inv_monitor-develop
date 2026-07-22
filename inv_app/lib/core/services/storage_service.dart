@@ -5,47 +5,56 @@ abstract class StorageService {
   Future<String?> getToken();
   Future<void> saveToken(String token);
   Future<void> deleteToken();
-  
+
   Future<String?> getRefreshToken();
   Future<void> saveRefreshToken(String token);
   Future<void> deleteRefreshToken();
-  
+
   Future<int?> getUserId();
   Future<void> saveUserId(int userId);
   Future<void> deleteUserId();
-  
+
   Future<String?> getUserPhone();
   Future<void> saveUserPhone(String phone);
   Future<void> deleteUserPhone();
-  
+
   Future<int?> getUserRole();
   Future<void> saveUserRole(int role);
   Future<void> deleteUserRole();
-  
+
   Future<bool> getRememberPassword();
   Future<void> saveRememberPassword(bool value);
-  
+
   Future<String?> getSavedPhone();
   Future<void> saveSavedPhone(String phone);
-  
+
   Future<String?> getSavedPassword();
   Future<void> saveSavedPassword(String password);
-  
+
   Future<bool> getIsDarkMode();
   Future<void> saveIsDarkMode(bool value);
-  
+
   Future<String?> getServerUrl();
   Future<void> saveServerUrl(String url);
-  
+
   Future<bool> getIsLocalMode();
   Future<void> saveIsLocalMode(bool value);
-  
+
   Future<String?> getLocale();
   Future<void> saveLocale(String locale);
   String? getLocaleSync();
 
   Future<String?> getTimezone();
   Future<void> saveTimezone(String timezone);
+
+  // Organization context storage
+  Future<int?> getActiveOrgId();
+  Future<void> saveActiveOrgId(int orgId);
+  Future<void> deleteActiveOrgId();
+
+  Future<String?> getActiveOrgName();
+  Future<void> saveActiveOrgName(String orgName);
+  Future<void> deleteActiveOrgName();
 
   Future<String?> getStationCache();
   Future<void> saveStationCache(String json);
@@ -99,6 +108,8 @@ class StorageServiceImpl implements StorageService {
   static const String _keyNotifyDndStart = 'notify_dnd_start';
   static const String _keyNotifyDndEnd = 'notify_dnd_end';
   static const String _keyNotifyDndEnabled = 'notify_dnd_enabled';
+  static const String _keyActiveOrgId = 'active_org_id';
+  static const String _keyActiveOrgName = 'active_org_name';
 
   @override
   Future<String?> getToken() async {
@@ -360,5 +371,37 @@ class StorageServiceImpl implements StorageService {
   @override
   Future<void> saveString(String key, String value) async {
     await _sharedPreferences.setString(key, value);
+  }
+
+  // Organization context storage implementations
+
+  @override
+  Future<int?> getActiveOrgId() async {
+    return _sharedPreferences.getInt(_keyActiveOrgId);
+  }
+
+  @override
+  Future<void> saveActiveOrgId(int orgId) async {
+    await _sharedPreferences.setInt(_keyActiveOrgId, orgId);
+  }
+
+  @override
+  Future<void> deleteActiveOrgId() async {
+    await _sharedPreferences.remove(_keyActiveOrgId);
+  }
+
+  @override
+  Future<String?> getActiveOrgName() async {
+    return _sharedPreferences.getString(_keyActiveOrgName);
+  }
+
+  @override
+  Future<void> saveActiveOrgName(String orgName) async {
+    await _sharedPreferences.setString(_keyActiveOrgName, orgName);
+  }
+
+  @override
+  Future<void> deleteActiveOrgName() async {
+    await _sharedPreferences.remove(_keyActiveOrgName);
   }
 }

@@ -41,7 +41,9 @@ class InverterConnectionMonitor {
         (_) => _performCheck(),
       );
     });
-    debugPrint('[InverterMonitor] Started, will check after ${_gracePeriodSeconds}s');
+    debugPrint(
+      '[InverterMonitor] Started, will check after ${_gracePeriodSeconds}s',
+    );
   }
 
   /// 停止监控。断开连接或切换模式时调用。
@@ -76,7 +78,9 @@ class InverterConnectionMonitor {
     }
 
     if (_zeroACCount >= _confirmCount) {
-      debugPrint('[InverterMonitor] Inverter not responding (AC=0 x$_zeroACCount), auto-disconnecting');
+      debugPrint(
+        '[InverterMonitor] Inverter not responding (AC=0 x$_zeroACCount), auto-disconnecting',
+      );
       stop();
       _autoDisconnect();
     }
@@ -90,7 +94,9 @@ class InverterConnectionMonitor {
 
       // 2. 取消强制 WiFi 使用，让系统自动切回家用 WiFi
       await WiFiForIoTPlugin.forceWifiUsage(false);
-      debugPrint('[InverterMonitor] forceWifiUsage(false) - OS will reconnect to home WiFi');
+      debugPrint(
+        '[InverterMonitor] forceWifiUsage(false) - OS will reconnect to home WiFi',
+      );
     } catch (e) {
       debugPrint('[InverterMonitor] Auto-disconnect error: $e');
     }

@@ -69,8 +69,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       } else if (state is DashboardLoaded) {
         // 保留旧数据
       } else {
-        emit(const DashboardError(
-            message: 'Failed to load, please check network'));
+        emit(
+          const DashboardError(
+            message: 'Failed to load, please check network',
+          ),
+        );
       }
       return;
     }
@@ -126,7 +129,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         (failure) {
           failedSections.add('distribution');
           dev.log(
-              'Dashboard: getDeviceDistribution failed: ${failure.message}');
+            'Dashboard: getDeviceDistribution failed: ${failure.message}',
+          );
         },
         (data) {
           dist = data;
@@ -164,8 +168,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       } else if (state is DashboardLoaded) {
         // 保留旧数据
       } else {
-        emit(const DashboardError(
-            message: 'Failed to load, please check network'));
+        emit(
+          const DashboardError(
+            message: 'Failed to load, please check network',
+          ),
+        );
       }
       return;
     }
@@ -198,11 +205,16 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
     final currentState = state;
     if (currentState is DashboardLoaded) {
-      emit(currentState.copyWith(
-          data: dashboardData, failedSections: failedSections));
+      emit(
+        currentState.copyWith(
+          data: dashboardData,
+          failedSections: failedSections,
+        ),
+      );
     } else {
       emit(
-          DashboardLoaded(data: dashboardData, failedSections: failedSections));
+        DashboardLoaded(data: dashboardData, failedSections: failedSections),
+      );
     }
   }
 
@@ -302,8 +314,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     Emitter<DashboardState> emit,
   ) async {
     if (state is DashboardLoaded) {
-      emit((state as DashboardLoaded)
-          .copyWith(isSSEConnected: event.isConnected));
+      emit(
+        (state as DashboardLoaded).copyWith(isSSEConnected: event.isConnected),
+      );
     }
   }
 
@@ -355,12 +368,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         'offlineCount': data.offlineCount,
         'faultCount': data.faultCount,
         'trendData': data.trendData
-            .map((e) => {
-                  'date': e.date,
-                  'energy': e.energy,
-                  'load': e.load,
-                  'cumulative': e.cumulative
-                })
+            .map(
+              (e) => {
+                'date': e.date,
+                'energy': e.energy,
+                'load': e.load,
+                'cumulative': e.cumulative,
+              },
+            )
             .toList(),
         'stationRanking': data.stationRanking
             .map(

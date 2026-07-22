@@ -26,12 +26,14 @@ void main() {
     blocTest<AlarmBloc, AlarmState>(
       'does not hide a server failure with cached alarms',
       build: () {
-        when(() => repository.getList(
-              stationId: any(named: 'stationId'),
-              status: any(named: 'status'),
-              page: any(named: 'page'),
-              pageSize: any(named: 'pageSize'),
-            )).thenAnswer(
+        when(
+          () => repository.getList(
+            stationId: any(named: 'stationId'),
+            status: any(named: 'status'),
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
           (_) async => const Left<Failure, Map<String, dynamic>>(
             ServerFailure('Server error: 500'),
           ),
@@ -51,12 +53,14 @@ void main() {
     blocTest<AlarmBloc, AlarmState>(
       'uses explicitly marked cache on network failure',
       build: () {
-        when(() => repository.getList(
-              stationId: any(named: 'stationId'),
-              status: any(named: 'status'),
-              page: any(named: 'page'),
-              pageSize: any(named: 'pageSize'),
-            )).thenAnswer(
+        when(
+          () => repository.getList(
+            stationId: any(named: 'stationId'),
+            status: any(named: 'status'),
+            page: any(named: 'page'),
+            pageSize: any(named: 'pageSize'),
+          ),
+        ).thenAnswer(
           (_) async => const Left<Failure, Map<String, dynamic>>(
             NetworkFailure('Network error'),
           ),

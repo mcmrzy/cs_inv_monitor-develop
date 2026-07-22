@@ -207,27 +207,39 @@ class _DashboardPageState extends State<DashboardPage> {
     return Row(
       children: [
         _quickStatChip(
-            context,
-            l10n.loadRate,
-            '${loadPercent.toStringAsFixed(1)}%',
-            Icons.speed,
-            AppColors.success),
+          context,
+          l10n.loadRate,
+          '${loadPercent.toStringAsFixed(1)}%',
+          Icons.speed,
+          AppColors.success,
+        ),
         SizedBox(width: 8.w),
         _quickStatChip(
-            context,
-            l10n.frequency,
-            '${frequency.toStringAsFixed(1)}Hz',
-            Icons.electrical_services,
-            AppColors.warning),
+          context,
+          l10n.frequency,
+          '${frequency.toStringAsFixed(1)}Hz',
+          Icons.electrical_services,
+          AppColors.warning,
+        ),
         SizedBox(width: 8.w),
         _quickStatChip(
-            context, 'PF', pf.toStringAsFixed(2), Icons.tune, AppColors.blue),
+          context,
+          'PF',
+          pf.toStringAsFixed(2),
+          Icons.tune,
+          AppColors.blue,
+        ),
       ],
     );
   }
 
-  Widget _quickStatChip(BuildContext context, String label, String value,
-      IconData icon, Color color) {
+  Widget _quickStatChip(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Container(
         padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 10.w),
@@ -269,43 +281,43 @@ class _DashboardPageState extends State<DashboardPage> {
           'title': l10n.acOutput,
           'icon': Icons.power,
           'color': AppColors.success,
-          'prefix': 'ac_'
+          'prefix': 'ac_',
         },
         {
           'title': l10n.batteryBms,
           'icon': Icons.battery_charging_full,
           'color': AppColors.success,
-          'prefix': 'batt_'
+          'prefix': 'batt_',
         },
         {
           'title': l10n.pvMppt,
           'icon': Icons.wb_sunny,
           'color': AppColors.orange,
-          'prefix': 'pv_'
+          'prefix': 'pv_',
         },
         {
           'title': l10n.loadLabel,
           'icon': Icons.home,
           'color': AppColors.blue,
-          'prefix': 'load_'
+          'prefix': 'load_',
         },
         {
           'title': l10n.electricMeter,
           'icon': Icons.electric_meter,
           'color': AppColors.warning,
-          'prefix': 'meter_'
+          'prefix': 'meter_',
         },
         {
           'title': l10n.energyStatsLabel,
           'icon': Icons.battery_charging_full,
           'color': AppColors.primary,
-          'prefix': 'energy_'
+          'prefix': 'energy_',
         },
         {
           'title': l10n.systemStatusLabel,
           'icon': Icons.info_outline,
           'color': AppColors.primary,
-          'prefix': 'sys_'
+          'prefix': 'sys_',
         },
       ];
 
@@ -335,8 +347,11 @@ class _DashboardPageState extends State<DashboardPage> {
         );
         final items = sectionFields.map((f) {
           final val = realtimeMap[f.fieldKey];
-          return _dataItem(f.fieldName, _fmtValue(val, f.fieldType, f.unit),
-              def['color'] as Color);
+          return _dataItem(
+            f.fieldName,
+            _fmtValue(val, f.fieldType, f.unit),
+            def['color'] as Color,
+          );
         }).toList();
         widgets.add(_dataGrid(context, items));
       }
@@ -361,7 +376,7 @@ class _DashboardPageState extends State<DashboardPage> {
         'ac_power': data.ac!.power,
         'ac_frequency': data.ac!.frequency,
         'ac_load_percent': data.ac!.loadPercent,
-        'ac_pf': data.ac!.pf
+        'ac_pf': data.ac!.pf,
       });
     }
     if (data.battery != null) {
@@ -370,7 +385,7 @@ class _DashboardPageState extends State<DashboardPage> {
         'batt_soh': data.battery!.soh,
         'batt_voltage': data.battery!.voltage,
         'batt_current': data.battery!.current,
-        'batt_charge_state': data.battery!.chargeState
+        'batt_charge_state': data.battery!.chargeState,
       });
     }
     if (data.pv != null) {
@@ -378,7 +393,7 @@ class _DashboardPageState extends State<DashboardPage> {
         'pv_voltage': data.pv!.pvVoltage,
         'pv_current': data.pv!.pvCurrent,
         'pv_power': data.pv!.pvPower,
-        'mppt_state': data.pv!.mpptState
+        'mppt_state': data.pv!.mpptState,
       });
     }
     if (data.sysStatus != null) {
@@ -388,7 +403,7 @@ class _DashboardPageState extends State<DashboardPage> {
         'alarm_code': data.sysStatus!.alarmCode,
         'temp_inv': data.sysStatus!.tempInv,
         'temp_mos': data.sysStatus!.tempMos,
-        'efficiency': data.sysStatus!.efficiency
+        'efficiency': data.sysStatus!.efficiency,
       });
     }
     if (data.energy != null) {
@@ -399,7 +414,7 @@ class _DashboardPageState extends State<DashboardPage> {
         'daily_feed_energy': data.energy!.dailyFeedEnergy,
         'total_feed_energy': data.energy!.totalFeedEnergy,
         'daily_grid_import': data.energy!.dailyGridImport,
-        'total_grid_import': data.energy!.totalGridImport
+        'total_grid_import': data.energy!.totalGridImport,
       });
     }
     if (data.meter != null) {
@@ -407,7 +422,7 @@ class _DashboardPageState extends State<DashboardPage> {
         'meter_total_power': data.meter!.totalPower,
         'meter_phase_a_power': data.meter!.phaseAPower,
         'meter_phase_b_power': data.meter!.phaseBPower,
-        'meter_phase_c_power': data.meter!.phaseCPower
+        'meter_phase_c_power': data.meter!.phaseCPower,
       });
     }
     return map;
@@ -441,19 +456,38 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           // Battery BMS
           if (batt != null) ...[
-            _sectionHeader(context, l10n.batteryBms,
-                Icons.battery_charging_full, AppColors.success),
+            _sectionHeader(
+              context,
+              l10n.batteryBms,
+              Icons.battery_charging_full,
+              AppColors.success,
+            ),
             _dataGrid(context, [
               _dataItem(
-                  'SOC', '${batt.soc.toStringAsFixed(1)}%', AppColors.success),
-              _dataItem(l10n.voltage, '${batt.voltage.toStringAsFixed(1)}V',
-                  AppColors.blue),
-              _dataItem(l10n.current, '${batt.current.toStringAsFixed(2)}A',
-                  AppColors.warning),
+                'SOC',
+                '${batt.soc.toStringAsFixed(1)}%',
+                AppColors.success,
+              ),
               _dataItem(
-                  'SOH', '${batt.soh.toStringAsFixed(1)}%', AppColors.teal),
+                l10n.voltage,
+                '${batt.voltage.toStringAsFixed(1)}V',
+                AppColors.blue,
+              ),
               _dataItem(
-                  l10n.chargeDischargeStatus, batt.chargeState, AppColors.teal),
+                l10n.current,
+                '${batt.current.toStringAsFixed(2)}A',
+                AppColors.warning,
+              ),
+              _dataItem(
+                'SOH',
+                '${batt.soh.toStringAsFixed(1)}%',
+                AppColors.teal,
+              ),
+              _dataItem(
+                l10n.chargeDischargeStatus,
+                batt.chargeState,
+                AppColors.teal,
+              ),
             ]),
           ],
 
@@ -461,17 +495,28 @@ class _DashboardPageState extends State<DashboardPage> {
           if (pv != null) ...[
             _divider(context),
             _sectionHeader(
-                context, l10n.pvMppt, Icons.wb_sunny, AppColors.orange,
-                trailing: pv.mpptState),
+              context,
+              l10n.pvMppt,
+              Icons.wb_sunny,
+              AppColors.orange,
+              trailing: pv.mpptState,
+            ),
             _dataGrid(context, [
-              _dataItem(l10n.pvVoltage, '${pv.pvVoltage.toStringAsFixed(1)}V',
-                  AppColors.orange),
-              _dataItem(l10n.pvCurrent, '${pv.pvCurrent.toStringAsFixed(2)}A',
-                  AppColors.warning),
               _dataItem(
-                  l10n.pvPower,
-                  '${(pv.pvPower / 1000).toStringAsFixed(2)}kW',
-                  AppColors.success),
+                l10n.pvVoltage,
+                '${pv.pvVoltage.toStringAsFixed(1)}V',
+                AppColors.orange,
+              ),
+              _dataItem(
+                l10n.pvCurrent,
+                '${pv.pvCurrent.toStringAsFixed(2)}A',
+                AppColors.warning,
+              ),
+              _dataItem(
+                l10n.pvPower,
+                '${(pv.pvPower / 1000).toStringAsFixed(2)}kW',
+                AppColors.success,
+              ),
             ]),
           ],
 
@@ -479,41 +524,77 @@ class _DashboardPageState extends State<DashboardPage> {
           if (ac != null) ...[
             _divider(context),
             _sectionHeader(
-                context, l10n.acOutput, Icons.power, AppColors.success),
+              context,
+              l10n.acOutput,
+              Icons.power,
+              AppColors.success,
+            ),
             _dataGrid(context, [
-              _dataItem(l10n.voltage, '${ac.voltage.toStringAsFixed(1)}V',
-                  AppColors.success),
-              _dataItem(l10n.current, '${ac.current.toStringAsFixed(2)}A',
-                  AppColors.warning),
-              _dataItem(l10n.activePower, '${ac.power.toStringAsFixed(0)}W',
-                  AppColors.success),
-              _dataItem(l10n.frequency, '${ac.frequency.toStringAsFixed(2)}Hz',
-                  AppColors.orange),
-              _dataItem(l10n.loadRate, '${ac.loadPercent.toStringAsFixed(1)}%',
-                  AppColors.blue),
+              _dataItem(
+                l10n.voltage,
+                '${ac.voltage.toStringAsFixed(1)}V',
+                AppColors.success,
+              ),
+              _dataItem(
+                l10n.current,
+                '${ac.current.toStringAsFixed(2)}A',
+                AppColors.warning,
+              ),
+              _dataItem(
+                l10n.activePower,
+                '${ac.power.toStringAsFixed(0)}W',
+                AppColors.success,
+              ),
+              _dataItem(
+                l10n.frequency,
+                '${ac.frequency.toStringAsFixed(2)}Hz',
+                AppColors.orange,
+              ),
+              _dataItem(
+                l10n.loadRate,
+                '${ac.loadPercent.toStringAsFixed(1)}%',
+                AppColors.blue,
+              ),
             ]),
           ],
 
           // Energy
           if (energy != null) ...[
             _divider(context),
-            _sectionHeader(context, l10n.energyStatsLabel,
-                Icons.battery_charging_full, AppColors.primary),
+            _sectionHeader(
+              context,
+              l10n.energyStatsLabel,
+              Icons.battery_charging_full,
+              AppColors.primary,
+            ),
             _dataGrid(context, [
-              _dataItem(l10n.dailyPvGeneration,
-                  '${energy.dailyPV.toStringAsFixed(2)}kWh', AppColors.success),
-              _dataItem(l10n.totalPvGeneration,
-                  '${energy.totalPV.toStringAsFixed(1)}kWh', AppColors.blue),
               _dataItem(
-                  l10n.runningTime, '${energy.runtimeHours}h', AppColors.teal),
+                l10n.dailyPvGeneration,
+                '${energy.dailyPV.toStringAsFixed(2)}kWh',
+                AppColors.success,
+              ),
+              _dataItem(
+                l10n.totalPvGeneration,
+                '${energy.totalPV.toStringAsFixed(1)}kWh',
+                AppColors.blue,
+              ),
+              _dataItem(
+                l10n.runningTime,
+                '${energy.runtimeHours}h',
+                AppColors.teal,
+              ),
             ]),
           ],
 
           // System Status
           if (sysStatus != null) ...[
             _divider(context),
-            _sectionHeader(context, l10n.systemStatusLabel, Icons.info_outline,
-                AppColors.primary),
+            _sectionHeader(
+              context,
+              l10n.systemStatusLabel,
+              Icons.info_outline,
+              AppColors.primary,
+            ),
             _statusGrid(context, sysStatus),
           ],
 
@@ -524,8 +605,12 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _sectionHeader(
-      BuildContext context, String title, IconData icon, Color color,
-      {String? trailing}) {
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color, {
+    String? trailing,
+  }) {
     return Padding(
       padding: EdgeInsets.fromLTRB(16.w, 14.h, 16.w, 8.h),
       child: Row(
@@ -540,16 +625,23 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Icon(icon, size: 16.sp, color: color),
           ),
           SizedBox(width: 10.w),
-          Text(title,
-              style: TextStyle(
-                  fontSize: 14.sp,
-                  fontWeight: FontWeight.w600,
-                  color: AppColor.onSurface(context))),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColor.onSurface(context),
+            ),
+          ),
           if (trailing != null) ...[
             const Spacer(),
-            Text(trailing,
-                style: TextStyle(
-                    fontSize: 12.sp, color: AppColor.outline(context))),
+            Text(
+              trailing,
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: AppColor.outline(context),
+              ),
+            ),
           ],
         ],
       ),
@@ -560,7 +652,9 @@ class _DashboardPageState extends State<DashboardPage> {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Divider(
-          height: 1, color: AppColor.outline(context).withValues(alpha: 0.15)),
+        height: 1,
+        color: AppColor.outline(context).withValues(alpha: 0.15),
+      ),
     );
   }
 
@@ -637,47 +731,62 @@ class _DashboardPageState extends State<DashboardPage> {
           Row(
             children: [
               Expanded(
-                  child: _statusCell(context, l10n.workStatus, sysStatus.state,
-                      isRunning ? AppColors.success : AppColors.warning)),
+                child: _statusCell(
+                  context,
+                  l10n.workStatus,
+                  sysStatus.state,
+                  isRunning ? AppColors.success : AppColors.warning,
+                ),
+              ),
               SizedBox(width: 8.w),
               Expanded(
-                  child: _statusCell(
-                      context,
-                      l10n.faultCode,
-                      '${sysStatus.faultCode}',
-                      hasFault ? AppColors.error : AppColors.success)),
+                child: _statusCell(
+                  context,
+                  l10n.faultCode,
+                  '${sysStatus.faultCode}',
+                  hasFault ? AppColors.error : AppColors.success,
+                ),
+              ),
               SizedBox(width: 8.w),
               Expanded(
-                  child: _statusCell(
-                      context,
-                      l10n.alarmCodeLabel,
-                      '${sysStatus.alarmCode}',
-                      hasAlarm ? AppColors.warning : AppColors.success)),
+                child: _statusCell(
+                  context,
+                  l10n.alarmCodeLabel,
+                  '${sysStatus.alarmCode}',
+                  hasAlarm ? AppColors.warning : AppColors.success,
+                ),
+              ),
             ],
           ),
           SizedBox(height: 8.h),
           Row(
             children: [
               Expanded(
-                  child: _statusCell(
-                      context,
-                      l10n.efficiency,
-                      '${sysStatus.efficiency.toStringAsFixed(1)}%',
-                      AppColors.blue)),
+                child: _statusCell(
+                  context,
+                  l10n.efficiency,
+                  '${sysStatus.efficiency.toStringAsFixed(1)}%',
+                  AppColors.blue,
+                ),
+              ),
               SizedBox(width: 8.w),
               Expanded(
-                  child: _statusCell(
-                      context,
-                      l10n.inverterTemp,
-                      '${sysStatus.tempInv.toStringAsFixed(1)}°C',
-                      AppColors.warning)),
+                child: _statusCell(
+                  context,
+                  l10n.inverterTemp,
+                  '${sysStatus.tempInv.toStringAsFixed(1)}°C',
+                  AppColors.warning,
+                ),
+              ),
               SizedBox(width: 8.w),
               Expanded(
-                  child: _statusCell(
-                      context,
-                      l10n.mosTemp,
-                      '${sysStatus.tempMos.toStringAsFixed(1)}°C',
-                      AppColors.errorLight)),
+                child: _statusCell(
+                  context,
+                  l10n.mosTemp,
+                  '${sysStatus.tempMos.toStringAsFixed(1)}°C',
+                  AppColors.errorLight,
+                ),
+              ),
             ],
           ),
         ],
@@ -686,7 +795,11 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _statusCell(
-      BuildContext context, String label, String value, Color color) {
+    BuildContext context,
+    String label,
+    String value,
+    Color color,
+  ) {
     return Container(
       padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 8.w),
       decoration: BoxDecoration(
@@ -698,12 +811,16 @@ class _DashboardPageState extends State<DashboardPage> {
           AnimatedValue(
             value: value,
             style: TextStyle(
-                fontSize: 13.sp, fontWeight: FontWeight.w700, color: color),
+              fontSize: 13.sp,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
           SizedBox(height: 2.h),
-          Text(label,
-              style:
-                  TextStyle(fontSize: 10.sp, color: AppColor.outline(context))),
+          Text(
+            label,
+            style: TextStyle(fontSize: 10.sp, color: AppColor.outline(context)),
+          ),
         ],
       ),
     );

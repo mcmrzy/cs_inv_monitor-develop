@@ -43,7 +43,8 @@ class StationRepositoryImpl implements StationRepository {
           return const Right(<String, dynamic>{});
         }
         return const Left(
-            ServerFailure('Response format error: expected object data'));
+          ServerFailure('Response format error: expected object data'),
+        );
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -59,7 +60,8 @@ class StationRepositoryImpl implements StationRepository {
           return Right(inner);
         }
         return const Left(
-            ServerFailure('Response format error: expected list data'));
+          ServerFailure('Response format error: expected list data'),
+        );
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -79,8 +81,10 @@ class StationRepositoryImpl implements StationRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> getList(
-      {int page = 1, int pageSize = 20}) async {
+  Future<Either<Failure, Map<String, dynamic>>> getList({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
     try {
       final response =
           await remoteDataSource.getList(page: page, pageSize: pageSize);
@@ -122,7 +126,9 @@ class StationRepositoryImpl implements StationRepository {
 
   @override
   Future<Either<Failure, void>> update(
-      int stationId, Map<String, dynamic> data) async {
+    int stationId,
+    Map<String, dynamic> data,
+  ) async {
     try {
       final response = await remoteDataSource.update(stationId, data);
       final parsed = _parseData(response, allowEmpty: true);
@@ -155,10 +161,18 @@ class StationRepositoryImpl implements StationRepository {
 
   @override
   Future<Either<Failure, List<dynamic>>> getStatistics(
-      int stationId, String startDate, String endDate, String period) async {
+    int stationId,
+    String startDate,
+    String endDate,
+    String period,
+  ) async {
     try {
       final response = await remoteDataSource.getStatistics(
-          stationId, startDate, endDate, period);
+        stationId,
+        startDate,
+        endDate,
+        period,
+      );
       return _parseList(response);
     } on DioException catch (e) {
       return Left(_mapError(e));

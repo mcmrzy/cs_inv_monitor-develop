@@ -40,8 +40,9 @@ class _AlarmPageState extends State<AlarmPage> {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                      content: Text(l10n.translateError(state.message)),
-                      duration: const Duration(seconds: 2)),
+                    content: Text(l10n.translateError(state.message)),
+                    duration: const Duration(seconds: 2),
+                  ),
                 );
               }
             });
@@ -56,12 +57,19 @@ class _AlarmPageState extends State<AlarmPage> {
                   Center(
                     child: Column(
                       children: [
-                        Icon(Icons.notifications_none,
-                            size: 64.sp, color: AppColors.textHint),
+                        Icon(
+                          Icons.notifications_none,
+                          size: 64.sp,
+                          color: AppColors.textHint,
+                        ),
                         SizedBox(height: 16.h),
-                        Text(l10n.noAlarms,
-                            style: TextStyle(
-                                color: AppColors.textHint, fontSize: 16.sp)),
+                        Text(
+                          l10n.noAlarms,
+                          style: TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 16.sp,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -98,11 +106,16 @@ class _AlarmPageState extends State<AlarmPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline,
-                      size: 48.sp, color: AppColors.textHint),
+                  Icon(
+                    Icons.error_outline,
+                    size: 48.sp,
+                    color: AppColors.textHint,
+                  ),
                   SizedBox(height: 12.h),
-                  Text(l10n.translateError(state.message),
-                      style: const TextStyle(color: AppColors.textSecondary)),
+                  Text(
+                    l10n.translateError(state.message),
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
                   SizedBox(height: 12.h),
                   FilledButton.icon(
                     onPressed: () => context
@@ -142,7 +155,10 @@ class _AlarmPageState extends State<AlarmPage> {
   }
 
   Widget _buildAlarmCard(
-      BuildContext context, dynamic alarm, AppLocalizations l10n) {
+    BuildContext context,
+    dynamic alarm,
+    AppLocalizations l10n,
+  ) {
     // 优先使用 fault_code 映射实际严重级别
     final faultCode = alarm['fault_code'];
     int parsedCode = -1;
@@ -239,16 +255,21 @@ class _AlarmPageState extends State<AlarmPage> {
                         SizedBox(width: 8.w),
                         Container(
                           padding: EdgeInsets.symmetric(
-                              horizontal: 6.w, vertical: 2.h),
+                            horizontal: 6.w,
+                            vertical: 2.h,
+                          ),
                           decoration: BoxDecoration(
                             color: levelColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4.r),
                           ),
-                          child: Text(levelText,
-                              style: TextStyle(
-                                  fontSize: 10.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: levelColor)),
+                          child: Text(
+                            levelText,
+                            style: TextStyle(
+                              fontSize: 10.sp,
+                              fontWeight: FontWeight.w600,
+                              color: levelColor,
+                            ),
+                          ),
                         ),
                       ],
                     ),

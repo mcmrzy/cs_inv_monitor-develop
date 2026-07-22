@@ -1,0 +1,64 @@
+version: '3.8'
+
+# Docker Compose configuration for email service testing
+# Use this to test email functionality with MailHog or other test SMTP servers
+
+services:
+  # MailHog - Test SMTP server
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: mailhog
+    ports:
+      - "1025:1025"   # SMTP port (for sending emails)
+      - "8025:8025"   # Web UI port (for viewing received emails)
+    networks:
+      - inv-network
+    restart: unless-stopped
+
+  # Optional: Use another test SMTP server like EtherealSMTP or SimpleEmailService
+  ethereal-smtp:
+    image: ghcr.io/bretfisher/etherealsmtp:latest
+    container_name: ethereal-smtp
+    ports:
+      - "1026:1025"   # SMTP port
+      - "8026:80"     # Web UI port
+    environment:
+      - ETHEREAL_USER=test_user
+      - ETHEREAL_PASS=test_pass
+    networks:
+      - inv-network
+    restart: unless-stopped
+
+networks:
+  inv-network:
+    driver: bridge
+    name: inv-network
+
+# Usage:
+# 1. Start MailHog:
+#    docker-compose -f docker-compose.email-test.yml up -d mailhog
+#
+# 2. Update api-server config to use MailHog:
+#    email:
+#      host: localhost  # or mailhog (inside docker network)
+#      port: 1025
+#      username: ""
+#      password: ""
+#      from: "noreply@example.com"
+#      use_ssl: false
+#
+# 3. Send test invitation:
+#    curl -X POST http://localhost:8080/api/v1/invitations/create \
+#      -H "Content-Type: application/json" \
+#      -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+#      -d '{
+#        "email": "test@example.com",
+#        "role_id": 2,
+#        "organization_id": 1,
+#        "expires_hours": 24
+#      }'
+#
+# 4. View received email at: http://localhost:8025
+#
+# Alternative: Testing with real SMTP
+# Replace the above services with your actual SMTP credentials in business-api/config.docker.yaml

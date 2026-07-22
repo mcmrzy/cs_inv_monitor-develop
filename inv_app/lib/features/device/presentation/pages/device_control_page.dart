@@ -1653,9 +1653,11 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isEdit
-                ? l10n.str('control_schedule_updated')
-                : l10n.str('control_schedule_added')),
+            content: Text(
+              isEdit
+                  ? l10n.str('control_schedule_updated')
+                  : l10n.str('control_schedule_added'),
+            ),
             backgroundColor: AppColors.success,
           ),
         );

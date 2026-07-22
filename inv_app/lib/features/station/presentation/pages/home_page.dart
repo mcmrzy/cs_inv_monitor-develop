@@ -44,10 +44,14 @@ class _HomePageState extends State<HomePage> {
     context.read<StationBloc>().add(StationSummaryRequested());
     final mqtt = getIt<MQTTService>();
     _statusSub = mqtt.statusStream.listen((_) {
-      context.read<StationBloc>().add(StationSummaryRequested());
+      if (mounted) {
+        context.read<StationBloc>().add(StationSummaryRequested());
+      }
     });
     _alarmSub = mqtt.alarmStream.listen((_) {
-      context.read<StationBloc>().add(StationSummaryRequested());
+      if (mounted) {
+        context.read<StationBloc>().add(StationSummaryRequested());
+      }
     });
   }
 
@@ -87,7 +91,8 @@ class _HomePageState extends State<HomePage> {
       case 3:
         list = list
             .where(
-                (s) => (s['status'] ?? 1) != 1 || (s['online_count'] ?? 0) == 0)
+              (s) => (s['status'] ?? 1) != 1 || (s['online_count'] ?? 0) == 0,
+            )
             .toList();
     }
     return list;
@@ -145,21 +150,27 @@ class _HomePageState extends State<HomePage> {
                           child: Row(
                             children: [
                               Text(
-                                l10n.str('station_count',
-                                    {'count': '${filtered.length}'}),
+                                l10n.str(
+                                  'station_count',
+                                  {'count': '${filtered.length}'},
+                                ),
                                 style: TextStyle(
-                                    fontSize: 13.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textSecondary),
+                                  fontSize: 13.sp,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                               const Spacer(),
                               if (_filterIndex > 0)
                                 GestureDetector(
                                   onTap: () => setState(() => _filterIndex = 0),
-                                  child: Text(l10n.clearFilter,
-                                      style: TextStyle(
-                                          fontSize: 12.sp,
-                                          color: AppColors.primary)),
+                                  child: Text(
+                                    l10n.clearFilter,
+                                    style: TextStyle(
+                                      fontSize: 12.sp,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
                                 ),
                             ],
                           ),
@@ -287,12 +298,18 @@ class _HomePageState extends State<HomePage> {
           decoration: InputDecoration(
             hintText: l10n.searchStation,
             hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
-            prefixIcon: const Icon(Icons.search_rounded,
-                size: 20, color: AppColors.textHint),
+            prefixIcon: const Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: AppColors.textHint,
+            ),
             suffixIcon: _searchCtl.text.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.close_rounded,
-                        size: 18, color: AppColors.textHint),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: AppColors.textHint,
+                    ),
                     onPressed: () {
                       _searchCtl.clear();
                       setState(() {});
@@ -325,10 +342,12 @@ class _HomePageState extends State<HomePage> {
     final stations = state.stations as List<dynamic>;
     final totalCount = stations.length;
     final normalCount = stations
-        .where((s) =>
-            (s['status'] ?? 1) == 1 &&
-            (s['fault_count'] ?? 0) == 0 &&
-            (s['online_count'] ?? 0) > 0)
+        .where(
+          (s) =>
+              (s['status'] ?? 1) == 1 &&
+              (s['fault_count'] ?? 0) == 0 &&
+              (s['online_count'] ?? 0) > 0,
+        )
         .length;
     final faultCount =
         stations.where((s) => (s['fault_count'] ?? 0) > 0).length;
@@ -483,7 +502,9 @@ class _HomePageState extends State<HomePage> {
                           ),
                           Container(
                             padding: EdgeInsets.symmetric(
-                                horizontal: 8.w, vertical: 3.h),
+                              horizontal: 8.w,
+                              vertical: 3.h,
+                            ),
                             decoration: BoxDecoration(
                               color: badgeBg,
                               borderRadius: BorderRadius.circular(6.r),
@@ -491,9 +512,10 @@ class _HomePageState extends State<HomePage> {
                             child: Text(
                               badgeText,
                               style: TextStyle(
-                                  fontSize: 11.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: badgeColor),
+                                fontSize: 11.sp,
+                                fontWeight: FontWeight.w600,
+                                color: badgeColor,
+                              ),
                             ),
                           ),
                         ],
@@ -502,18 +524,26 @@ class _HomePageState extends State<HomePage> {
                       Text(
                         addressText,
                         style: TextStyle(
-                            fontSize: 11.sp, color: AppColors.textHint),
+                          fontSize: 11.sp,
+                          color: AppColors.textHint,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       SizedBox(height: 10.h),
                       Row(
                         children: [
-                          _energyItem(todayEnergy.toStringAsFixed(1), 'kWh',
-                              l10n.todayGeneration),
+                          _energyItem(
+                            todayEnergy.toStringAsFixed(1),
+                            'kWh',
+                            l10n.todayGeneration,
+                          ),
                           SizedBox(width: 24.w),
-                          _energyItem(totalEnergy.toStringAsFixed(0), 'kWh',
-                              l10n.totalGeneration),
+                          _energyItem(
+                            totalEnergy.toStringAsFixed(0),
+                            'kWh',
+                            l10n.totalGeneration,
+                          ),
                         ],
                       ),
                     ],
@@ -555,8 +585,10 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
         SizedBox(height: 2.h),
-        Text(label,
-            style: TextStyle(fontSize: 10.sp, color: AppColors.textHint)),
+        Text(
+          label,
+          style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+        ),
       ],
     );
   }
@@ -574,16 +606,20 @@ class _HomePageState extends State<HomePage> {
               color: AppColors.surfaceHover,
               borderRadius: BorderRadius.circular(20.r),
             ),
-            child: Icon(Icons.add_home_work_outlined,
-                size: 36.sp, color: AppColors.textHint),
+            child: Icon(
+              Icons.add_home_work_outlined,
+              size: 36.sp,
+              color: AppColors.textHint,
+            ),
           ),
           SizedBox(height: 18.h),
           Text(
             l10n.noStations,
             style: TextStyle(
-                fontSize: 16.sp,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary),
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
           ),
           SizedBox(height: 6.h),
           Text(
@@ -603,8 +639,11 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_rounded,
-                size: 44.sp, color: AppColors.textHint),
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 44.sp,
+              color: AppColors.textHint,
+            ),
             SizedBox(height: 14.h),
             Text(
               l10n.translateError(msg),

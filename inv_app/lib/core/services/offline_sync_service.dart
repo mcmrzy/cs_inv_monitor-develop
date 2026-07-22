@@ -54,7 +54,10 @@ class OfflineSyncService {
       case 'control':
         await _apiService.post(
           '/devices/${action.sn}/control',
-          data: {'command': action.data['cmd_type'], 'params': action.data['params']},
+          data: {
+            'command': action.data['cmd_type'],
+            'params': action.data['params'],
+          },
           fromJson: (json) => json,
         );
         break;

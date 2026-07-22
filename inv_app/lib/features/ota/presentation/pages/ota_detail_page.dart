@@ -9,7 +9,11 @@ class OTADetailPage extends StatefulWidget {
   final String deviceSN;
   final int taskId;
 
-  const OTADetailPage({super.key, required this.deviceSN, required this.taskId});
+  const OTADetailPage({
+    super.key,
+    required this.deviceSN,
+    required this.taskId,
+  });
 
   @override
   State<OTADetailPage> createState() => _OTADetailPageState();
@@ -19,7 +23,9 @@ class _OTADetailPageState extends State<OTADetailPage> {
   @override
   void initState() {
     super.initState();
-    context.read<OtaBloc>().add(OTAProgressPollRequested(deviceSn: widget.deviceSN));
+    context
+        .read<OtaBloc>()
+        .add(OTAProgressPollRequested(deviceSn: widget.deviceSN));
   }
 
   String _statusText(String status, AppLocalizations l10n) {
@@ -88,7 +94,10 @@ class _OTADetailPageState extends State<OTADetailPage> {
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
-          title: Text(l10n.upgradeDetail, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
+          title: Text(
+            l10n.upgradeDetail,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+          ),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
@@ -137,8 +146,8 @@ class _OTADetailPageState extends State<OTADetailPage> {
               child: Column(
                 children: [
                   _buildDeviceInfoCard(l10n),
-                SizedBox(height: 16.h),
-                _buildFailedCard(state, l10n),
+                  SizedBox(height: 16.h),
+                  _buildFailedCard(state, l10n),
                 ],
               ),
             );
@@ -177,16 +186,30 @@ class _OTADetailPageState extends State<OTADetailPage> {
               color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(10.r),
             ),
-            child: Icon(Icons.devices_rounded, size: 18.sp, color: AppColors.primary),
+            child: Icon(
+              Icons.devices_rounded,
+              size: 18.sp,
+              color: AppColors.primary,
+            ),
           ),
           SizedBox(width: 10.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.deviceLabel, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                Text(
+                  l10n.deviceLabel,
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 SizedBox(height: 2.h),
-                Text(widget.deviceSN, style: TextStyle(fontSize: 12.sp, color: AppColors.textHint)),
+                Text(
+                  widget.deviceSN,
+                  style: TextStyle(fontSize: 12.sp, color: AppColors.textHint),
+                ),
               ],
             ),
           ),
@@ -195,7 +218,11 @@ class _OTADetailPageState extends State<OTADetailPage> {
     );
   }
 
-  Widget _buildProgressCard(OTAProgress state, Color color, AppLocalizations l10n) {
+  Widget _buildProgressCard(
+    OTAProgress state,
+    Color color,
+    AppLocalizations l10n,
+  ) {
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
@@ -215,7 +242,11 @@ class _OTADetailPageState extends State<OTADetailPage> {
           SizedBox(height: 12.h),
           Text(
             _statusText(state.status, l10n),
-            style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: color),
+            style: TextStyle(
+              fontSize: 18.sp,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
           ),
           SizedBox(height: 20.h),
           ClipRRect(
@@ -230,7 +261,11 @@ class _OTADetailPageState extends State<OTADetailPage> {
           SizedBox(height: 10.h),
           Text(
             '${state.progress.toStringAsFixed(1)}%',
-            style: TextStyle(fontSize: 24.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+            style: TextStyle(
+              fontSize: 24.sp,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
           ),
         ],
       ),
@@ -286,7 +321,11 @@ class _OTADetailPageState extends State<OTADetailPage> {
                     : Center(
                         child: Text(
                           '${index + 1}',
-                          style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: stepColor),
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            fontWeight: FontWeight.w600,
+                            color: stepColor,
+                          ),
                         ),
                       ),
               ),
@@ -297,7 +336,8 @@ class _OTADetailPageState extends State<OTADetailPage> {
                   style: TextStyle(
                     fontSize: 13.sp,
                     fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
-                    color: isPending ? AppColors.textHint : AppColors.textPrimary,
+                    color:
+                        isPending ? AppColors.textHint : AppColors.textPrimary,
                   ),
                 ),
               ),
@@ -305,7 +345,10 @@ class _OTADetailPageState extends State<OTADetailPage> {
                 SizedBox(
                   width: 14.w,
                   height: 14.w,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: stepColor),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: stepColor,
+                  ),
                 ),
             ],
           );
@@ -326,9 +369,13 @@ class _OTADetailPageState extends State<OTADetailPage> {
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.error,
           side: const BorderSide(color: AppColors.error),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
         ),
-        child: Text(l10n.cancelUpgrade, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+        child: Text(
+          l10n.cancelUpgrade,
+          style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
@@ -349,11 +396,25 @@ class _OTADetailPageState extends State<OTADetailPage> {
       ),
       child: Column(
         children: [
-          Icon(Icons.check_circle_rounded, size: 64.sp, color: AppColors.successLight),
+          Icon(
+            Icons.check_circle_rounded,
+            size: 64.sp,
+            color: AppColors.successLight,
+          ),
           SizedBox(height: 16.h),
-          Text(l10n.upgradeCompleted, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          Text(
+            l10n.upgradeCompleted,
+            style: TextStyle(
+              fontSize: 20.sp,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
           SizedBox(height: 8.h),
-          Text(l10n.firmwareUpdatedSuccess, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+          Text(
+            l10n.firmwareUpdatedSuccess,
+            style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+          ),
           SizedBox(height: 24.h),
           SizedBox(
             width: double.infinity,
@@ -363,10 +424,15 @@ class _OTADetailPageState extends State<OTADetailPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.successLight,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
                 elevation: 0,
               ),
-              child: Text(l10n.done, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              child: Text(
+                l10n.done,
+                style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ],
@@ -392,9 +458,20 @@ class _OTADetailPageState extends State<OTADetailPage> {
         children: [
           Icon(Icons.error_rounded, size: 64.sp, color: AppColors.error),
           SizedBox(height: 16.h),
-          Text(l10n.upgradeFailedTitle, style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          Text(
+            l10n.upgradeFailedTitle,
+            style: TextStyle(
+              fontSize: 20.sp,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
           SizedBox(height: 8.h),
-          Text(l10n.translateError(state.message), style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary), textAlign: TextAlign.center),
+          Text(
+            l10n.translateError(state.message),
+            style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
           SizedBox(height: 24.h),
           SizedBox(
             width: double.infinity,
@@ -404,10 +481,15 @@ class _OTADetailPageState extends State<OTADetailPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.error,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
                 elevation: 0,
               ),
-              child: Text(l10n.back, style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600)),
+              child: Text(
+                l10n.back,
+                style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
+              ),
             ),
           ),
         ],

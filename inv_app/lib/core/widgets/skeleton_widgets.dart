@@ -19,8 +19,10 @@ class ShimmerSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Shimmer.fromColors(
-      baseColor: baseColor ?? (isDark ? const Color(0xFF2A2D35) : const Color(0xFFE5E7EB)),
-      highlightColor: highlightColor ?? (isDark ? const Color(0xFF3A3D45) : const Color(0xFFF3F4F6)),
+      baseColor: baseColor ??
+          (isDark ? const Color(0xFF2A2D35) : const Color(0xFFE5E7EB)),
+      highlightColor: highlightColor ??
+          (isDark ? const Color(0xFF3A3D45) : const Color(0xFFF3F4F6)),
       child: child,
     );
   }
@@ -223,9 +225,17 @@ class SkeletonHomePage extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            SkeletonBox(width: 30.w, height: 16.h, borderRadius: 4),
+                            SkeletonBox(
+                              width: 30.w,
+                              height: 16.h,
+                              borderRadius: 4,
+                            ),
                             SizedBox(height: 3.h),
-                            SkeletonBox(width: 28.w, height: 11.h, borderRadius: 4),
+                            SkeletonBox(
+                              width: 28.w,
+                              height: 11.h,
+                              borderRadius: 4,
+                            ),
                           ],
                         ),
                       ),
@@ -251,7 +261,11 @@ class SkeletonHomePage extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SkeletonBox(width: 72.w, height: 72.w, borderRadius: 14),
+                        SkeletonBox(
+                          width: 72.w,
+                          height: 72.w,
+                          borderRadius: 14,
+                        ),
                         SizedBox(width: 14.w),
                         Expanded(
                           child: Column(
@@ -261,7 +275,11 @@ class SkeletonHomePage extends StatelessWidget {
                                 children: [
                                   SkeletonBox(width: 120.w, height: 16.h),
                                   const Spacer(),
-                                  SkeletonBox(width: 40.w, height: 18.h, borderRadius: 6),
+                                  SkeletonBox(
+                                    width: 40.w,
+                                    height: 18.h,
+                                    borderRadius: 6,
+                                  ),
                                 ],
                               ),
                               SizedBox(height: 6.h),
@@ -270,7 +288,8 @@ class SkeletonHomePage extends StatelessWidget {
                               Row(
                                 children: [
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       SkeletonBox(width: 60.w, height: 18.h),
                                       SizedBox(height: 2.h),
@@ -279,7 +298,8 @@ class SkeletonHomePage extends StatelessWidget {
                                   ),
                                   SizedBox(width: 24.w),
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       SkeletonBox(width: 60.w, height: 18.h),
                                       SizedBox(height: 2.h),
@@ -398,7 +418,8 @@ class SkeletonDeviceRealtime extends StatelessWidget {
                 padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(14.r)),
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(14.r)),
                 ),
                 child: Row(
                   children: [
@@ -455,11 +476,16 @@ class OfflineDataBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.cloud_off_rounded, size: 16.sp, color: const Color(0xFFD97706)),
+          Icon(
+            Icons.cloud_off_rounded,
+            size: 16.sp,
+            color: const Color(0xFFD97706),
+          ),
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
-              AppLocalizations.of(context)?.noNetworkCached ?? 'No network, showing cached data',
+              AppLocalizations.of(context)?.noNetworkCached ??
+                  'No network, showing cached data',
               style: TextStyle(fontSize: 12.sp, color: const Color(0xFF92400E)),
             ),
           ),
@@ -474,7 +500,11 @@ class OfflineDataBanner extends StatelessWidget {
                 ),
                 child: Text(
                   AppLocalizations.of(context)?.retry ?? 'Retry',
-                  style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: const Color(0xFF92400E)),
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF92400E),
+                  ),
                 ),
               ),
             ),

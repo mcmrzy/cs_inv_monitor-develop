@@ -37,7 +37,9 @@ class User {
     final statusRaw = json['status'];
     final int statusVal;
     if (statusRaw is Map<String, dynamic>) {
-      statusVal = (statusRaw['status_id'] as num?)?.toInt() ?? (statusRaw['id'] as num?)?.toInt() ?? 1;
+      statusVal = (statusRaw['status_id'] as num?)?.toInt() ??
+          (statusRaw['id'] as num?)?.toInt() ??
+          1;
     } else {
       statusVal = (statusRaw as num?)?.toInt() ?? 1;
     }
@@ -107,11 +109,14 @@ class LoginResponse {
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
     final expiresIn = (json['expires_in'] as num?)?.toInt();
     return LoginResponse(
-      token: (json['access_token'] ?? json['token'] ?? json['accessToken']) as String? ?? '',
+      token: (json['access_token'] ?? json['token'] ?? json['accessToken'])
+              as String? ??
+          '',
       refreshToken: (json['refresh_token'] ?? json['refreshToken']) as String?,
       user: User.fromJson(json['user'] as Map<String, dynamic>? ?? {}),
       expireAt: json['expire_at'] != null
-          ? DateTime.tryParse(json['expire_at'].toString()) ?? DateTime.now().add(Duration(seconds: expiresIn ?? 7200))
+          ? DateTime.tryParse(json['expire_at'].toString()) ??
+              DateTime.now().add(Duration(seconds: expiresIn ?? 7200))
           : DateTime.now().add(Duration(seconds: expiresIn ?? 7200)),
     );
   }

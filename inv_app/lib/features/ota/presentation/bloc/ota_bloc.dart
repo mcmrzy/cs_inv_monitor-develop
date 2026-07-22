@@ -50,7 +50,11 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     final result = await repository.triggerOTA(event.sn, event.packageId);
     result.fold(
       (failure) {
-        if (state is OTAUpdateAvailable || state is OTAUpToDate || state is OTATriggered) return;
+        if (state is OTAUpdateAvailable ||
+            state is OTAUpToDate ||
+            state is OTATriggered) {
+          return;
+        }
         emit(OTAError(message: failure.message));
       },
       (data) {
@@ -95,12 +99,18 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
         final status = data['status'] as String? ?? '';
         final progress = (data['progress'] as num?)?.toDouble() ?? 0.0;
         emit(OTAProgress(progress: progress, status: status, detail: data));
-        if (status == 'completed' || status == 'success' || status == 'failed') {
+        if (status == 'completed' ||
+            status == 'success' ||
+            status == 'failed') {
           _progressTimer?.cancel();
           if (status == 'completed' || status == 'success') {
             emit(OTAComplete());
           } else {
-            emit(OTAError(message: data['error_message'] as String? ?? 'Upgrade failed'));
+            emit(
+              OTAError(
+                message: data['error_message'] as String? ?? 'Upgrade failed',
+              ),
+            );
           }
         }
       },
@@ -120,7 +130,8 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
     Emitter<OtaState> emit,
   ) async {
     emit(OTAFirmwareListLoading());
-    final result = await repository.listUpgradePackages(model: event.deviceModel);
+    final result =
+        await repository.listUpgradePackages(model: event.deviceModel);
     result.fold(
       (failure) => emit(OTAFirmwareListError(message: failure.message)),
       (packages) => emit(OTAFirmwareListLoaded(packages: packages)),

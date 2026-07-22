@@ -31,8 +31,7 @@ void main() {
       expect(loaded, isNull);
     });
 
-    test(
-      'returns null for expired data', () async {
+    test('returns null for expired data', () async {
       // Pre-populate cache with an old timestamp (1 hour ago)
       final oldTs = DateTime.now().millisecondsSinceEpoch - 3600000;
       SharedPreferences.setMockInitialValues({

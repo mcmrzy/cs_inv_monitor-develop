@@ -43,7 +43,11 @@ class StationRankingList extends StatelessWidget {
                   color: AppColors.warning.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8.r),
                 ),
-                child: Icon(Icons.leaderboard_rounded, size: 18.w, color: AppColors.warning),
+                child: Icon(
+                  Icons.leaderboard_rounded,
+                  size: 18.w,
+                  color: AppColors.warning,
+                ),
               ),
               SizedBox(width: 10.w),
               Text(

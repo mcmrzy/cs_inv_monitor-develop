@@ -39,17 +39,18 @@ class OfflineAction {
       type: json['type'] as String,
       sn: json['sn'] as String,
       data: (json['data'] as Map<String, dynamic>?) ?? {},
-      timestamp: DateTime.tryParse(json['timestamp'] as String? ?? '') ?? DateTime.now(),
+      timestamp: DateTime.tryParse(json['timestamp'] as String? ?? '') ??
+          DateTime.now(),
       synced: json['synced'] as bool? ?? false,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'type': type,
-    'sn': sn,
-    'data': data,
-    'timestamp': timestamp.toIso8601String(),
-    'synced': synced,
-  };
+        'id': id,
+        'type': type,
+        'sn': sn,
+        'data': data,
+        'timestamp': timestamp.toIso8601String(),
+        'synced': synced,
+      };
 }

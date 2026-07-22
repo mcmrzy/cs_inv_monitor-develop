@@ -17,7 +17,10 @@ class DataCacheService {
   Future<void> save(String key, dynamic data) async {
     final jsonStr = jsonEncode(data);
     await _prefs.setString('$_prefix$key', jsonStr);
-    await _prefs.setInt('$_tsPrefix$key', DateTime.now().millisecondsSinceEpoch);
+    await _prefs.setInt(
+      '$_tsPrefix$key',
+      DateTime.now().millisecondsSinceEpoch,
+    );
   }
 
   /// 读取缓存数据，超过 [ttl] 返回 null
@@ -66,7 +69,8 @@ class DataCacheService {
     for (final key in keys) {
       await _prefs.remove(key);
     }
-    final tsKeys = _prefs.getKeys().where((k) => k.startsWith(_tsPrefix)).toList();
+    final tsKeys =
+        _prefs.getKeys().where((k) => k.startsWith(_tsPrefix)).toList();
     for (final key in tsKeys) {
       await _prefs.remove(key);
     }

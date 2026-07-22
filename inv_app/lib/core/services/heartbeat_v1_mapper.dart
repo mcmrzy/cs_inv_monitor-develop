@@ -21,7 +21,8 @@ class HeartbeatV1Mapper {
         cells[0] is! List ||
         cells[1] is! List) {
       throw const FormatException(
-          'cells must contain voltage and temperature arrays');
+        'cells must contain voltage and temperature arrays',
+      );
     }
     final voltages = _numberList(cells[0] as List);
     final temperatures = _numberList(cells[1] as List);
@@ -102,9 +103,10 @@ class HeartbeatV1Mapper {
         runtimeHours: _integer(sys[7]),
       ),
       cells: CellsData(
-          cellCount: voltages.length,
-          voltages: voltages,
-          temps: temperatures),
+        cellCount: voltages.length,
+        voltages: voltages,
+        temps: temperatures,
+      ),
       onlineStatus: const OnlineStatus(online: true),
       loadPower: _number(ac[2]),
       updatedAt: updatedAt,
@@ -112,7 +114,10 @@ class HeartbeatV1Mapper {
   }
 
   static List<dynamic> _group(
-      Map<String, dynamic> payload, String key, int length) {
+    Map<String, dynamic> payload,
+    String key,
+    int length,
+  ) {
     final value = payload[key];
     if (value is! List || value.length != length) {
       throw FormatException('$key must contain $length values');
@@ -122,8 +127,9 @@ class HeartbeatV1Mapper {
 
   static double _number(dynamic value) {
     if (value == null) return 0;
-    if (value is! num)
+    if (value is! num) {
       throw const FormatException('heartbeat value must be numeric or null');
+    }
     return value.toDouble();
   }
 
@@ -137,14 +143,14 @@ class HeartbeatV1Mapper {
         'inverting',
         'bypass',
         'shutdown',
-        'fault'
+        'fault',
       ].elementAt(value >= 0 && value <= 4 ? value : 0);
 
   static String _batteryState(int value) => const [
         'idle',
         'charging',
         'discharging',
-        'fault'
+        'fault',
       ].elementAt(value >= 0 && value <= 3 ? value : 0);
 
   static String _mpptState(int value) => const ['tracking', 'standby', 'fault']

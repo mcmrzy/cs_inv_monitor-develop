@@ -48,12 +48,14 @@ void main() {
   group('read response contracts', () {
     test('device list rejects a successful envelope with list data', () async {
       final remote = _DeviceRemote();
-      when(() => remote.getList(
-            stationId: any(named: 'stationId'),
-            status: any(named: 'status'),
-            page: any(named: 'page'),
-            pageSize: any(named: 'pageSize'),
-          )).thenAnswer((_) async => responseWith({'code': 0, 'data': []}));
+      when(
+        () => remote.getList(
+          stationId: any(named: 'stationId'),
+          status: any(named: 'status'),
+          page: any(named: 'page'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async => responseWith({'code': 0, 'data': []}));
 
       final result = await DeviceRepositoryImpl(remote, _Mqtt()).getList();
       expectFormatFailure(result);
@@ -62,10 +64,12 @@ void main() {
     test('station list rejects null data instead of returning an empty page',
         () async {
       final remote = _StationRemote();
-      when(() => remote.getList(
-            page: any(named: 'page'),
-            pageSize: any(named: 'pageSize'),
-          )).thenAnswer((_) async => responseWith({'code': 0, 'data': null}));
+      when(
+        () => remote.getList(
+          page: any(named: 'page'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async => responseWith({'code': 0, 'data': null}));
 
       final result = await StationRepositoryImpl(remote).getList();
       expectFormatFailure(result);
@@ -74,12 +78,14 @@ void main() {
     test('alarm list rejects list data when a page object is required',
         () async {
       final remote = _AlarmRemote();
-      when(() => remote.getList(
-            stationId: any(named: 'stationId'),
-            status: any(named: 'status'),
-            page: any(named: 'page'),
-            pageSize: any(named: 'pageSize'),
-          )).thenAnswer((_) async => responseWith({'code': 0, 'data': []}));
+      when(
+        () => remote.getList(
+          stationId: any(named: 'stationId'),
+          status: any(named: 'status'),
+          page: any(named: 'page'),
+          pageSize: any(named: 'pageSize'),
+        ),
+      ).thenAnswer((_) async => responseWith({'code': 0, 'data': []}));
 
       final result = await AlarmRepositoryImpl(remote).getList();
       expectFormatFailure(result);

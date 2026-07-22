@@ -40,10 +40,12 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
     _animation = Tween<double>(
       begin: 0,
       end: widget.currentPower,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    ),);
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOut,
+      ),
+    );
     _controller.forward();
     _previousPower = widget.currentPower;
   }
@@ -56,10 +58,12 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
       _animation = Tween<double>(
         begin: _previousPower,
         end: widget.currentPower,
-      ).animate(CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeOut,
-      ),);
+      ).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: Curves.easeOut,
+        ),
+      );
       _controller.reset();
       _controller.forward();
     }
@@ -163,7 +167,8 @@ class _PowerGaugeWidgetState extends State<PowerGaugeWidget>
                         value: progress,
                         strokeWidth: 12.w,
                         backgroundColor: Colors.transparent,
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor:
+                            const AlwaysStoppedAnimation<Color>(Colors.white),
                         strokeCap: StrokeCap.round,
                       ),
                     );

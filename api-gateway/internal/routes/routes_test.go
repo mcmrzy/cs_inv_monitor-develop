@@ -1,11 +1,9 @@
 package routes
 
 import (
-	"api-gateway/internal/middleware"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -13,13 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var initOnce sync.Once
-
 func init() {
 	gin.SetMode(gin.TestMode)
-	initOnce.Do(func() {
-		middleware.InitMetrics()
-	})
 }
 
 func newTestConfig() Config {

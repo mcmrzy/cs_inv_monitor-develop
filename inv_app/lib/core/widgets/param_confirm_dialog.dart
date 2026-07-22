@@ -38,7 +38,10 @@ class ParamConfirmDialog extends StatelessWidget {
         children: [
           Icon(Icons.edit_note, size: 24.sp, color: theme.colorScheme.primary),
           SizedBox(width: 8.w),
-          Text(AppLocalizations.of(context)?.confirmParamModify ?? 'Confirm Parameter Change'),
+          Text(
+            AppLocalizations.of(context)?.confirmParamModify ??
+                'Confirm Parameter Change',
+          ),
         ],
       ),
       content: SingleChildScrollView(
@@ -52,15 +55,21 @@ class ParamConfirmDialog extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.error.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8.r),
-                  border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                  border:
+                      Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20.sp),
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: AppColors.error,
+                      size: 20.sp,
+                    ),
                     SizedBox(width: 8.w),
                     Expanded(
                       child: Text(
-                        AppLocalizations.of(context)?.dangerousParamWarning ?? 'Contains dangerous parameters',
+                        AppLocalizations.of(context)?.dangerousParamWarning ??
+                            'Contains dangerous parameters',
                         style: TextStyle(
                           fontSize: 13.sp,
                           color: AppColors.error,
@@ -96,7 +105,12 @@ class ParamConfirmDialog extends StatelessWidget {
           style: hasDangerous
               ? FilledButton.styleFrom(backgroundColor: AppColors.error)
               : null,
-          child: Text(hasDangerous ? (AppLocalizations.of(context)?.confirmChangeDangerous ?? 'Confirm (Dangerous)') : (AppLocalizations.of(context)?.confirm ?? 'Confirm')),
+          child: Text(
+            hasDangerous
+                ? (AppLocalizations.of(context)?.confirmChangeDangerous ??
+                    'Confirm (Dangerous)')
+                : (AppLocalizations.of(context)?.confirm ?? 'Confirm'),
+          ),
         ),
       ],
     );
@@ -127,7 +141,11 @@ class ParamConfirmDialog extends StatelessWidget {
           if (isDangerous)
             Padding(
               padding: EdgeInsets.only(right: 6.w),
-              child: Icon(Icons.warning_amber, color: AppColors.error, size: 16.sp),
+              child: Icon(
+                Icons.warning_amber,
+                color: AppColors.error,
+                size: 16.sp,
+              ),
             ),
           Expanded(
             child: Column(
@@ -138,7 +156,9 @@ class ParamConfirmDialog extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13.sp,
                     fontWeight: FontWeight.w600,
-                    color: isDangerous ? AppColors.error : theme.colorScheme.onSurface,
+                    color: isDangerous
+                        ? AppColors.error
+                        : theme.colorScheme.onSurface,
                   ),
                 ),
                 SizedBox(height: 4.h),
@@ -153,14 +173,20 @@ class ParamConfirmDialog extends StatelessWidget {
                     ),
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 6.w),
-                      child: Icon(Icons.arrow_forward, size: 14.sp, color: theme.colorScheme.primary),
+                      child: Icon(
+                        Icons.arrow_forward,
+                        size: 14.sp,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                     Text(
                       '${newValue ?? '-'}',
                       style: TextStyle(
                         fontSize: 12.sp,
                         fontWeight: FontWeight.w600,
-                        color: isDangerous ? AppColors.error : theme.colorScheme.primary,
+                        color: isDangerous
+                            ? AppColors.error
+                            : theme.colorScheme.primary,
                       ),
                     ),
                   ],
