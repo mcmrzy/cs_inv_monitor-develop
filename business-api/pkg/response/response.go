@@ -5,8 +5,10 @@ import (
 	"net/http"
 
 	"inv-api-server/pkg/apperr"
+	"inv-api-server/pkg/logger"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type Response struct {
@@ -116,7 +118,8 @@ func HandleError(c *gin.Context, err error) {
 		})
 		return
 	}
-	// 未知错误返回 500
+	// 未知错误返回 500，记录日志便于排查
+	logger.Error("HandleError", zap.Error(err), zap.String("status", "500"))
 	c.JSON(http.StatusInternalServerError, Response{
 		Code:    http.StatusInternalServerError,
 		Message: "system error",

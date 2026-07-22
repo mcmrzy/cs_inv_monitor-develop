@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"inv-api-server/internal/model"
@@ -12,6 +13,7 @@ import (
 type authorizationDB interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
 type AuthorizationRepository struct{ db authorizationDB }
@@ -87,6 +89,43 @@ func (r *AuthorizationRepository) ResolveUserSessionVersion(ctx context.Context,
 		WHERE id=$1 AND status=1 AND deleted_at IS NULL
 	`, userID).Scan(&version)
 	return version, err
+}
+
+// ResolveDefaultSessionContext finds the user's first active organization
+// membership and returns the full authorization session context.  When the
+// user has no active membership (e.g. a freshly-registered or super-admin
+// account) it returns pgx.ErrNoRows so the caller can fall back to a
+// system-level context.
+func (r *AuthorizationRepository) ResolveDefaultSessionContext(ctx context.Context, userID int64) (model.AuthorizationSessionContext, error) {
+	var result model.AuthorizationSessionContext
+	result.Actor.UserID = userID
+	err := r.db.QueryRow(ctx, `
+		SELECT m.root_tenant_id, m.organization_id, m.id, m.version, m.authorization_version,
+		       u.session_version, u.phone, u.role
+		FROM organization_memberships m
+		JOIN organizations o
+		  ON o.root_tenant_id=m.root_tenant_id AND o.id=m.organization_id
+		JOIN users u ON u.id=m.user_id
+		WHERE m.user_id=$1
+		  AND m.status='active' AND (m.expires_at IS NULL OR m.expires_at>NOW())
+		  AND o.status='active' AND o.deleted_at IS NULL
+		  AND u.status=1 AND u.deleted_at IS NULL
+		  AND NOT EXISTS (
+			SELECT 1 FROM organization_closure c
+			JOIN organizations ancestor
+			  ON ancestor.root_tenant_id=c.root_tenant_id AND ancestor.id=c.ancestor_id
+			WHERE c.root_tenant_id=m.root_tenant_id AND c.descendant_id=m.organization_id
+			  AND (ancestor.status<>'active' OR ancestor.deleted_at IS NOT NULL)
+		  )
+		ORDER BY m.id
+		LIMIT 1
+	`, userID).Scan(
+		&result.Actor.RootTenantID, &result.Actor.OrganizationID,
+		&result.Actor.MembershipID, &result.Actor.MembershipVersion,
+		&result.AuthorizationVersion,
+		&result.SessionVersion, &result.Phone, &result.LegacyRole,
+	)
+	return result, err
 }
 
 func (r *AuthorizationRepository) ValidateAuthorizationSessionContext(ctx context.Context, expected model.AuthorizationSessionContext) (bool, error) {

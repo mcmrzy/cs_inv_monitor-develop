@@ -10,7 +10,6 @@ import (
 	"inv-api-server/internal/job"
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
-	"inv-api-server/internal/service"
 	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
@@ -127,11 +126,11 @@ func NewMemberLifecycleHandler(db *pgxpool.Pool, rdb *redis.Client, jobStore *jo
 func (h *MemberLifecycleHandler) getUserByID(ctx context.Context, userID int64) (*model.User, error) {
 	var user model.User
 	err := h.db.QueryRow(ctx, `
-		SELECT id, phone, email, password, role, root_tenant_id, status, created_at, updated_at
+		SELECT id, phone, email, password_hash, role, status, created_at, updated_at
 		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`, userID).Scan(
-		&user.ID, &user.Phone, &user.Email, &user.Password,
-		&user.Role, &user.RootTenantID, &user.Status,
+		&user.ID, &user.Phone, &user.Email, &user.PasswordHash,
+		&user.Role, &user.Status,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -368,19 +367,18 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 		return
 	}
 
-	// Tenant isolation check: user and org must belong to same root tenant
-	if targetOrg.RootTenantID != targetUser.RootTenantID {
-		response.HandleError(c, apperr.Forbidden("跨租户操作需要管理员权限"))
+	// Tenant isolation check: user must be active
+	if targetUser == nil {
+		response.HandleError(c, apperr.NotFound("用户不存在"))
 		return
 	}
 
-	// Get root_tenant_id from context claim
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	// Get root_tenant_id from actor context
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// Check quota before adding
 	usage, err := h.checkQuota(ctx, tenantID)
@@ -421,7 +419,7 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 			WHERE id = $1 AND deleted_at IS NULL
 		`, existing.ID, req.RoleIDs, req.MembershipType, req.ExpiresAt)
 		if err != nil {
-			response.HandleError(c, apperr.Conflict("更新成员关系失败", err))
+			response.HandleError(c, apperr.Conflict("更新成员关系失败"))
 			return
 		}
 		if result.RowsAffected() == 0 {
@@ -436,7 +434,7 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 			VALUES ($1, $2, $3, $4, $5, 'active', $6)
 		`, tenantID, req.OrganizationID, req.UserID, req.MembershipType, req.RoleIDs, req.ExpiresAt)
 		if err != nil {
-			response.HandleError(c, apperr.Conflict("添加成员失败：约束冲突", err))
+			response.HandleError(c, apperr.Conflict("添加成员失败：约束冲突"))
 			return
 		}
 	}
@@ -490,12 +488,12 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 	}
 
 	// Verify ownership/access
-	orgRootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	orgTenantID := middleware.GetRootTenantID(c)
+	if orgTenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	if membership.RootTenantID != orgRootTenantID.(int64) {
+	if membership.RootTenantID != orgTenantID {
 		response.HandleError(c, apperr.Forbidden("无权访问此组织成员关系"))
 		return
 	}
@@ -825,7 +823,7 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 
-	now := time.Now()
+	_ = time.Now()
 
 	// Transfer each membership
 	transferredCount := 0
@@ -884,7 +882,7 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 // TransferAccept handles POST /api/v1/members/transfer/accept - Accept transfer request
 // Note: In current implementation, transfers are immediate, not delayed approval-based
 func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
-	userID := middleware.GetUserID(c)
+	_ = middleware.GetUserID(c)
 	
 	var req TransferApprovalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -897,7 +895,7 @@ func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
+	_ = c.Request.Context()
 
 	// TODO: If implementing delayed transfers:
 	// 1. Find pending transfer(s) for this user
@@ -910,7 +908,7 @@ func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
 
 // TransferReject handles POST /api/v1/members/transfer/reject - Reject transfer request
 func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
-	userID := middleware.GetUserID(c)
+	_ = middleware.GetUserID(c)
 
 	var req TransferApprovalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -928,7 +926,7 @@ func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
+	_ = c.Request.Context()
 
 	// TODO: If implementing delayed transfers:
 	// 1. Find pending transfer(s) for this user
@@ -999,13 +997,12 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 		return
 	}
 
-	// Get root_tenant_id from context
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	// Get root_tenant_id from actor context
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	if targetOrg.RootTenantID != tenantID {
 		response.HandleError(c, apperr.Forbidden("组织不属于当前租户范围"))
@@ -1013,7 +1010,7 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 	}
 
 	// Check quota
-	usage, err := h.checkQuota(ctx, tenantID)
+	_, err = h.checkQuota(ctx, tenantID)
 	if err != nil {
 		log.Printf("[BulkAdd] quota check failed: %v", err)
 		response.HandleError(c, apperr.Internal("检查配额失败", err))

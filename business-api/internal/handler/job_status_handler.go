@@ -38,7 +38,7 @@ func (h *JobStatusHandler) GetJobStatus(c *gin.Context) {
 	}
 
 	// Get current progress from Redis hash
-	processed, total, status, _ := h.jobStore.GetProgress(ctx, jobID)
+	processed, total, _, _ := h.jobStore.GetProgress(ctx, jobID)
 
 	response.Success(c, map[string]interface{}{
 		"job_id":        job.JobID,

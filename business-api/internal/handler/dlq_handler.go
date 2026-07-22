@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"inv-api-server/pkg/response"
@@ -251,19 +252,17 @@ func (h *DLQHandler) Delete(c *gin.Context) {
 // parseMessageID extracts consumer type and index from message ID
 // Format: {consumer_type}-{index}
 func parseMessageID(id string) (consumerType string, index int64, err error) {
-	// Split by hyphen
-	for i, c := range id {
-		if c == '-' && i > 0 && i < len(id)-1 {
-			consumerType = id[:i]
-			indexStr := id[i+1:]
-			index, err = strconv.ParseInt(indexStr, 10, 64)
-			if err != nil {
-				return "", 0, fmt.Errorf("invalid index in message ID: %w", err)
-			}
-			return consumerType, index, nil
-		}
+	lastDash := strings.LastIndex(id, "-")
+	if lastDash < 0 {
+		return "", 0, fmt.Errorf("invalid message ID format: %s", id)
 	}
-	return "", 0, fmt.Errorf("invalid message ID format: %s", id)
+	consumerType = id[:lastDash]
+	indexStr := id[lastDash+1:]
+	index, err = strconv.ParseInt(indexStr, 10, 64)
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid index in message ID: %s", id)
+	}
+	return consumerType, index, nil
 }
 
 // RetryAll re-enqueues all messages in a specific consumer's DLQ

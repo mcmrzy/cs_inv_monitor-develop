@@ -212,6 +212,12 @@ func generateJTI() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
+// GenerateSessionID returns a cryptographically random hex string suitable for
+// use as a session identifier shared between access and refresh tokens.
+func GenerateSessionID() (string, error) {
+	return generateJTI()
+}
+
 // ParseToken is the legacy compatibility parser. It accepts only access tokens
 // issued for the API audience, but does not require an organization context.
 func (j *JWT) ParseToken(tokenString string) (*Claims, error) {

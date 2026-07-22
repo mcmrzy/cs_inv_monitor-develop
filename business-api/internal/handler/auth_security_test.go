@@ -34,6 +34,10 @@ func (f fakeAuthorizationContextResolver) ResolveUserSessionVersion(context.Cont
 	return f.context.SessionVersion, f.err
 }
 
+func (f fakeAuthorizationContextResolver) ResolveDefaultSessionContext(context.Context, int64) (model.AuthorizationSessionContext, error) {
+	return f.context, f.err
+}
+
 func TestRequireRefreshSwapRejectsReplay(t *testing.T) {
 	err := requireRefreshSwap(false, nil)
 	var appErr *apperr.AppError

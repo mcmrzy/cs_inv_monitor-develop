@@ -1,5 +1,5 @@
 FROM golang:1.26.5-alpine AS builder
-ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOPROXY=https://goproxy.cn,https://goproxy.io,direct
 ENV GOPROXY=${GOPROXY}
 WORKDIR /app
 COPY business-api/go.mod business-api/go.sum ./
@@ -7,7 +7,7 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY business-api/ .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o inv-api-server ./cmd
+    CGO_ENABLED=0 GOOS=linux go build -p=1 -ldflags="-s -w" -o inv-api-server ./cmd
 
 FROM alpine:3.23
 ARG ALPINE_MIRROR=dl-cdn.alpinelinux.org

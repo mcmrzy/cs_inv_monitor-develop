@@ -2,12 +2,13 @@ package handler
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"inv-api-server/internal/model"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -163,8 +164,8 @@ type Invitation struct {
 	CreatedBy string    `json:"created_by"`
 }
 
-// OrganizationMembership represents the organization_memberships table structure for tests
-type OrganizationMembership struct {
+// MockOrganizationMembership represents the organization_memberships table structure for tests
+type MockOrganizationMembership struct {
 	ID             int64      `json:"id"`
 	RootTenantID   int64      `json:"root_tenant_id"`
 	OrganizationID int64      `json:"organization_id"`
@@ -191,8 +192,8 @@ func GenerateMockInvitation(id int64, email, role string, expiresHours int) *Inv
 }
 
 // GenerateMockMembership creates a mock membership for testing
-func GenerateMockMembership(id, userID, orgID int64, membershipType string) *OrganizationMembership {
-	return &OrganizationMembership{
+func GenerateMockMembership(id, userID, orgID int64, membershipType string) *MockOrganizationMembership {
+	return &MockOrganizationMembership{
 		ID:             id,
 		RootTenantID:   1,
 		OrganizationID: orgID,

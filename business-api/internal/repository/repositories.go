@@ -141,6 +141,24 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 }
 
+// CreateWithTx creates a user within a transaction
+func (r *UserRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, user *model.User) error {
+	query := `
+		INSERT INTO users (phone, email, password_hash, nickname, avatar, role, parent_id, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+		RETURNING id, created_at, updated_at
+	`
+
+	var email interface{}
+	if user.Email != "" {
+		email = user.Email
+	}
+
+	return tx.QueryRow(ctx, query,
+		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.Role, user.ParentID, user.Status,
+	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
+}
+
 // ListByParentID 查询指定上级用户的下级用户列表
 func (r *UserRepository) ListByParentID(ctx context.Context, parentID int64, page, pageSize int) ([]*model.User, int64, error) {
 	if page < 1 {
@@ -429,6 +447,12 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID int64, role int)
 	if err == nil {
 		r.invalidateUserPermissionCache(ctx, userID)
 	}
+	return err
+}
+
+// UpdateRoleWithTx updates a user's role within a transaction
+func (r *UserRepository) UpdateRoleWithTx(ctx context.Context, tx pgx.Tx, userID int64, role int) error {
+	_, err := tx.Exec(ctx, "UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2", role, userID)
 	return err
 }
 
