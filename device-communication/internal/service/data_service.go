@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -88,34 +87,17 @@ func (s *DataService) HandleCmdResult(sn string, payload []byte) {
 	// 直接转发原始 JSON 给 API Server，由 API Server 更新 command_logs 和插入通知
 	url := s.apiServer + "/api/v1/internal/device-cmd-result"
 
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(1<<uint(attempt-1)*100) * time.Millisecond)
-		}
-		req, err := http.NewRequest("POST", url, bytes.NewReader(payload))
-		if err != nil {
-			logger.Error("Failed to create cmd result request", zap.String("sn", sn), zap.Error(err))
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
-		if s.internalKey != "" {
-			req.Header.Set("X-Internal-Key", s.internalKey)
-		}
-		// 附加 sn 到请求体（设备上报的 payload 可能不包含 sn）
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			logger.Warn("notify cmd result failed, retrying",
-				zap.String("sn", sn), zap.Int("attempt", attempt+1), zap.Error(err))
-			continue
-		}
-		_, _ = io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		logger.Info("Command result forwarded",
-			zap.String("sn", sn), zap.String("payload_size", fmt.Sprintf("%d", len(payload))))
+	resp, err := retryHTTPPost(context.Background(), s.httpClient, url, payload, s.internalKey, DefaultRetryConfig())
+	if err != nil {
+		logger.Error("notify cmd result failed after retries", zap.String("sn", sn), zap.Error(err))
 		return
 	}
-	logger.Error("notify cmd result failed after retries", zap.String("sn", sn))
+	defer resp.Body.Close()
+
+	_, _ = io.ReadAll(resp.Body)
+
+	logger.Info("Command result forwarded",
+		zap.String("sn", sn), zap.String("payload_size", fmt.Sprintf("%d", len(payload))))
 }
 
 // FlushPendingCommands 设备上线时，检查并下发离线命令队列中的积压命令
@@ -269,26 +251,14 @@ func (s *DataService) notifyAPIServerStatus(sn string, status int) {
 	}
 	url := s.apiServer + "/api/v1/internal/device-status"
 
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(1<<uint(attempt-1)*100) * time.Millisecond)
-		}
-		req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		if s.internalKey != "" {
-			req.Header.Set("X-Internal-Key", s.internalKey)
-		}
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			logger.Warn("notify device status failed, retrying",
-				zap.String("sn", sn), zap.Int("attempt", attempt+1), zap.Error(err))
-			continue
-		}
-		_, _ = io.ReadAll(resp.Body)
-		resp.Body.Close()
+	resp, err := retryHTTPPost(context.Background(), s.httpClient, url, body, s.internalKey, DefaultRetryConfig())
+	if err != nil {
+		logger.Error("notify device status failed after retries", zap.String("sn", sn), zap.Error(err))
 		return
 	}
-	logger.Error("notify device status failed after retries", zap.String("sn", sn))
+	defer resp.Body.Close()
+
+	_, _ = io.ReadAll(resp.Body)
 }
 
 func (s *DataService) notifyAPIServerInfo(info *model.DeviceInfo) {
@@ -312,26 +282,14 @@ func (s *DataService) notifyAPIServerInfo(info *model.DeviceInfo) {
 	}
 	url := s.apiServer + "/api/v1/internal/device-info"
 
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(1<<uint(attempt-1)*100) * time.Millisecond)
-		}
-		req, _ := http.NewRequest("POST", url, bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		if s.internalKey != "" {
-			req.Header.Set("X-Internal-Key", s.internalKey)
-		}
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			logger.Warn("notify device info failed, retrying",
-				zap.String("sn", info.SN), zap.Int("attempt", attempt+1), zap.Error(err))
-			continue
-		}
-		_, _ = io.ReadAll(resp.Body)
-		resp.Body.Close()
+	resp, err := retryHTTPPost(context.Background(), s.httpClient, url, body, s.internalKey, DefaultRetryConfig())
+	if err != nil {
+		logger.Error("notify device info failed after retries", zap.String("sn", info.SN), zap.Error(err))
 		return
 	}
-	logger.Error("notify device info failed after retries", zap.String("sn", info.SN))
+	defer resp.Body.Close()
+
+	_, _ = io.ReadAll(resp.Body)
 }
 
 func (s *DataService) GetOnlineDeviceSNs() []string {
@@ -352,7 +310,7 @@ func (s *DataService) HandleOTACmdAck(sn string, payload []byte) {
 	}
 
 	// 解析设备上报的 ACK 消息
-	// 设备格式: {"ack": true, "task_id": "xxx", "message": "开始升级", "timestamp": 1782703114}
+	// 设备格式：{"ack": true, "task_id": "xxx", "message": "开始升级", "timestamp": 1782703114}
 	var devicePayload struct {
 		Ack       bool   `json:"ack"`
 		TaskID    string `json:"task_id"`
@@ -383,34 +341,19 @@ func (s *DataService) HandleOTACmdAck(sn string, payload []byte) {
 	// 转发给 API Server
 	url := s.apiServer + "/api/v1/internal/ota-cmd-ack"
 
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(1<<uint(attempt-1)*100) * time.Millisecond)
-		}
-		req, err := http.NewRequest("POST", url, bytes.NewReader(transformed))
-		if err != nil {
-			logger.Error("Failed to create OTA cmd_ack request", zap.String("sn", sn), zap.Error(err))
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-		if s.internalKey != "" {
-			req.Header.Set("X-Internal-Key", s.internalKey)
-		}
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			logger.Warn("notify OTA cmd_ack failed, retrying",
-				zap.String("sn", sn), zap.Int("attempt", attempt+1), zap.Error(err))
-			continue
-		}
-		_, _ = io.ReadAll(resp.Body)
-		resp.Body.Close()
-		logger.Info("OTA cmd_ack forwarded",
-			zap.String("sn", sn),
-			zap.Bool("ack", devicePayload.Ack),
-			zap.String("task_id", devicePayload.TaskID))
+	resp, err := retryHTTPPost(context.Background(), s.httpClient, url, transformed, s.internalKey, DefaultRetryConfig())
+	if err != nil {
+		logger.Error("notify OTA cmd_ack failed after retries", zap.String("sn", sn), zap.Error(err))
 		return
 	}
-	logger.Error("notify OTA cmd_ack failed after retries", zap.String("sn", sn))
+	defer resp.Body.Close()
+
+	_, _ = io.ReadAll(resp.Body)
+
+	logger.Info("OTA cmd_ack forwarded",
+		zap.String("sn", sn),
+		zap.Bool("ack", devicePayload.Ack),
+		zap.String("task_id", devicePayload.TaskID))
 }
 
 func (s *DataService) HandleOTAStatus(sn string, payload []byte) {
@@ -505,34 +448,19 @@ func (s *DataService) HandleOTAStatus(sn string, payload []byte) {
 	// 转发给 API Server
 	url := s.apiServer + "/api/v1/internal/ota-status"
 
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(1<<uint(attempt-1)*100) * time.Millisecond)
-		}
-		req, err := http.NewRequest("POST", url, bytes.NewReader(transformed))
-		if err != nil {
-			logger.Error("Failed to create OTA status request", zap.String("sn", sn), zap.Error(err))
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-		if s.internalKey != "" {
-			req.Header.Set("X-Internal-Key", s.internalKey)
-		}
-		resp, err := s.httpClient.Do(req)
-		if err != nil {
-			logger.Warn("notify OTA status failed, retrying",
-				zap.String("sn", sn), zap.Int("attempt", attempt+1), zap.Error(err))
-			continue
-		}
-		_, _ = io.ReadAll(resp.Body)
-		resp.Body.Close()
-		logger.Info("OTA status forwarded",
-			zap.String("sn", sn),
-			zap.String("state", devicePayload.State),
-			zap.Int("progress", devicePayload.Progress))
+	resp, err := retryHTTPPost(context.Background(), s.httpClient, url, transformed, s.internalKey, DefaultRetryConfig())
+	if err != nil {
+		logger.Error("notify OTA status failed after retries", zap.String("sn", sn), zap.Error(err))
 		return
 	}
-	logger.Error("notify OTA status failed after retries", zap.String("sn", sn))
+	defer resp.Body.Close()
+
+	_, _ = io.ReadAll(resp.Body)
+
+	logger.Info("OTA status forwarded",
+		zap.String("sn", sn),
+		zap.String("state", devicePayload.State),
+		zap.Int("progress", devicePayload.Progress))
 }
 
 func (s *DataService) GetOnlineSNsFromRedis(ctx context.Context) []string {

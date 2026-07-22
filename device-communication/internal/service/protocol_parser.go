@@ -518,53 +518,17 @@ func (p *ProtocolParser) postInternal(path string, payload interface{}) error {
 		return err
 	}
 
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<uint(attempt-1)*100) * time.Millisecond
-			time.Sleep(backoff)
-		}
-
-		req, err := http.NewRequest(http.MethodPost, p.apiServer+path, bytes.NewReader(body))
-		if err != nil {
-			return err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		if p.internalKey != "" {
-			req.Header.Set("X-Internal-Key", p.internalKey)
-		}
-
-		resp, err := p.httpClient.Do(req)
-		if err != nil {
-			lastErr = err
-			logger.Warn("internal API call failed, retrying",
-				zap.String("path", path),
-				zap.Int("attempt", attempt+1),
-				zap.Error(err))
-			continue
-		}
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode >= http.StatusInternalServerError {
-			lastErr = fmt.Errorf("internal api status %d", resp.StatusCode)
-			logger.Warn("internal API returned 5xx, retrying",
-				zap.String("path", path),
-				zap.Int("attempt", attempt+1),
-				zap.Int("status", resp.StatusCode),
-				zap.String("response", string(bodyBytes)))
-			continue
-		}
-		if resp.StatusCode >= http.StatusBadRequest {
-			logger.Error("internal API returned 4xx error",
-				zap.String("path", path),
-				zap.Int("status", resp.StatusCode),
-				zap.String("response", string(bodyBytes)))
-			return &downstreamHTTPError{status: resp.StatusCode, body: string(bodyBytes)}
-		}
-		return nil
+	resp, err := retryHTTPPost(context.Background(), p.httpClient, p.apiServer+path, body, p.internalKey, DefaultRetryConfig())
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("internal API call failed after 3 attempts: %w", lastErr)
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return &downstreamHTTPError{status: resp.StatusCode, body: string(bodyBytes)}
+	}
+	return nil
 }
 
 func (p *ProtocolParser) handleTelemetry(ctx context.Context, raw *RawMessage) error {
