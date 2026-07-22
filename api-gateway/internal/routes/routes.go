@@ -170,7 +170,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/organizations", p.Handler())
 	userGroup.Any("/api/v1/invitations/*action", p.Handler())
 	userGroup.Any("/api/v1/members/*action", p.Handler())
-	publicGroup.Any("/api/v1/invitations/accept", p.Handler())
+	publicGroup.Any("/api/v1/invite/accept", p.Handler())
 
 	// Admin — 需管理员（route-groups 单独注册，其余通过 admin/*action 通配符代理）
 	adminGroup.GET("/api/v1/admin/route-groups", func(c *gin.Context) {

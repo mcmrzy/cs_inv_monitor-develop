@@ -17,10 +17,10 @@ CREATE TABLE IF NOT EXISTS device_claim_tokens (
     assigned_organization_id BIGINT REFERENCES organizations(id) ON DELETE SET NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'unclaimed' 
         CHECK (status IN ('unclaimed', 'reserved', 'claimed')),
-    created_by_user_id BIGINT REFERENCES admin_users(id) ON DELETE SET NULL,
+    created_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     expires_at TIMESTAMP NOT NULL,
     claimed_at TIMESTAMP,
-    claimed_by_user_id BIGINT REFERENCES admin_users(id) ON DELETE SET NULL,
+    claimed_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(sn, root_tenant_id)
@@ -42,11 +42,11 @@ CREATE TABLE IF NOT EXISTS device_transfer_requests (
     device_sn VARCHAR(100) NOT NULL,
     from_root_tenant_id BIGINT NOT NULL,
     to_root_tenant_id BIGINT NOT NULL,
-    requester_user_id BIGINT NOT NULL REFERENCES admin_users(id) ON DELETE RESTRICT,
+    requester_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     reason TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'pending' 
         CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
-    approved_by_user_id BIGINT REFERENCES admin_users(id) ON DELETE SET NULL,
+    approved_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     approved_at TIMESTAMP,
     rejected_reason TEXT,
     requested_at TIMESTAMP DEFAULT NOW(),
@@ -84,7 +84,7 @@ CREATE TRIGGER trigger_device_claim_tokens_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION trigger_updated_at_timestamp();
 
-CREATE TRIGGER IF NOT EXISTS trigger_device_transfer_requests_updated_at
+CREATE TRIGGER trigger_device_transfer_requests_updated_at
     BEFORE UPDATE ON device_transfer_requests
     FOR EACH ROW
     EXECUTE FUNCTION trigger_updated_at_timestamp();

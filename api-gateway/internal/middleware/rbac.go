@@ -298,6 +298,14 @@ var resourceActionMap = map[string]string{
 	"/api/v1/work-orders":        "work_orders",
 	"/api/v1/work-orders/":       "work_orders",
 	"/api/v1/firmwares":          "firmware",
+	"/api/v1/organizations":      "organizations",
+	"/api/v1/organizations/":     "organizations",
+	"/api/v1/invitations":        "organizations",
+	"/api/v1/invitations/":       "organizations",
+	"/api/v1/members":            "organizations",
+	"/api/v1/members/":           "organizations",
+	"/api/v1/invite":             "organizations",
+	"/api/v1/invite/":            "organizations",
 }
 
 // These endpoints are intentionally available to every authenticated user.
