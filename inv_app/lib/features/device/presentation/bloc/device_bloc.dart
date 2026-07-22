@@ -26,7 +26,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   String? _activeSN;
   Timer? _localPollTimer;
   String? _localPollIP;
-  final InverterConnectionMonitor _connectionMonitor = InverterConnectionMonitor();
+  final InverterConnectionMonitor _connectionMonitor =
+      InverterConnectionMonitor();
 
   DeviceBloc({
     required this.repository,
@@ -93,8 +94,13 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
                   (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
               final total = (cached['total'] as int?) ?? 0;
               // 只有网络连接失败时才标记为缓存数据
-              emit(DeviceListLoaded(
-                  devices: devices, total: total, isFromCache: true));
+              emit(
+                DeviceListLoaded(
+                  devices: devices,
+                  total: total,
+                  isFromCache: true,
+                ),
+              );
               return;
             }
           }
@@ -151,7 +157,8 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     if (!mqttService.isConnected) {
       try {
         await mqttService.waitForConnection(
-            timeout: const Duration(seconds: 10));
+          timeout: const Duration(seconds: 10),
+        );
       } catch (e) {
         return;
       }
@@ -166,8 +173,12 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   ) {
     final currentState = state;
     if (currentState is DeviceDetailLoaded) {
-      emit(DeviceDetailLoaded(
-          device: currentState.device, realtimeData: event.data));
+      emit(
+        DeviceDetailLoaded(
+          device: currentState.device,
+          realtimeData: event.data,
+        ),
+      );
     }
   }
 
@@ -375,8 +386,12 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   ) {
     final currentState = state;
     if (currentState is DeviceDetailLoaded) {
-      emit(DeviceDetailLoaded(
-          device: currentState.device, realtimeData: event.data));
+      emit(
+        DeviceDetailLoaded(
+          device: currentState.device,
+          realtimeData: event.data,
+        ),
+      );
     }
   }
 
@@ -394,9 +409,11 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     connectionModeService?.switchToRemote();
     localCommunicationService?.disconnect();
 
-    emit(const DeviceLocalDisconnected(
-      reason: 'inverter_no_response',
-    ));
+    emit(
+      const DeviceLocalDisconnected(
+        reason: 'inverter_no_response',
+      ),
+    );
   }
 
   Future<void> _onLocalParamsRequested(

@@ -236,7 +236,9 @@ class ServiceLocator {
   static Completer<bool>? _refreshCompleter;
 
   static Future<void> _waitForRefresh(
-      DioException error, ErrorInterceptorHandler handler) async {
+    DioException error,
+    ErrorInterceptorHandler handler,
+  ) async {
     _refreshCompleter ??= Completer<bool>();
     final success = await _refreshCompleter!.future;
     if (success) {
@@ -278,7 +280,7 @@ class ServiceLocator {
     );
 
     getIt.registerLazySingleton<ApiService>(
-      () => ApiServiceImpl(getIt()),
+      () => ApiService(getIt()),
     );
 
     getIt.registerLazySingleton<MQTTService>(
@@ -439,9 +441,10 @@ class ServiceLocator {
 
     getIt.registerFactory(
       () => StationBloc(
-          repository: getIt(),
-          storageService: getIt(),
-          dataCacheService: getIt()),
+        repository: getIt(),
+        storageService: getIt(),
+        dataCacheService: getIt(),
+      ),
     );
 
     getIt.registerFactory(
@@ -457,14 +460,18 @@ class ServiceLocator {
 
     getIt.registerFactory(
       () => AlarmBloc(
-          repository: getIt(), dataCacheService: getIt(), mqttService: getIt()),
+        repository: getIt(),
+        dataCacheService: getIt(),
+        mqttService: getIt(),
+      ),
     );
 
     getIt.registerFactory(
       () => NotificationBloc(
-          deviceRepository: getIt(),
-          mqttService: getIt(),
-          notificationDataSource: getIt()),
+        deviceRepository: getIt(),
+        mqttService: getIt(),
+        notificationDataSource: getIt(),
+      ),
     );
 
     getIt.registerFactory(

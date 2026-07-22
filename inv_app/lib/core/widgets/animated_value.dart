@@ -26,7 +26,9 @@ class AnimatedValue extends StatelessWidget {
         final offsetAnimation = Tween<Offset>(
           begin: isForward ? const Offset(0, 0.3) : const Offset(0, -0.3),
           end: Offset.zero,
-        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+        ).animate(
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+        );
 
         return FadeTransition(
           opacity: animation,

@@ -51,11 +51,13 @@ class _LoginPageState extends State<LoginPage> {
   void _handleLogin() {
     if (!_formKey.currentState!.validate()) return;
 
-    context.read<AuthBloc>().add(AuthLoginRequested(
-      account: _accountController.text.trim(),
-      password: _passwordController.text,
-      rememberPassword: _rememberPassword,
-    ),);
+    context.read<AuthBloc>().add(
+          AuthLoginRequested(
+            account: _accountController.text.trim(),
+            password: _passwordController.text,
+            rememberPassword: _rememberPassword,
+          ),
+        );
   }
 
   @override
@@ -67,7 +69,9 @@ class _LoginPageState extends State<LoginPage> {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(AppLocalizations.of(context)!.translateError(state.message)),
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
                 backgroundColor: AppColors.error,
               ),
             );
@@ -163,7 +167,9 @@ class _LoginPageState extends State<LoginPage> {
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
           icon: Icon(
-            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+            _obscurePassword
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
           ),
           onPressed: () {
             setState(() {
@@ -239,7 +245,10 @@ class _LoginPageState extends State<LoginPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(l10n.notHaveAccount, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+        Text(
+          l10n.notHaveAccount,
+          style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+        ),
         TextButton(
           onPressed: () => context.push('/register'),
           child: Text(l10n.registerNow, style: TextStyle(fontSize: 14.sp)),
@@ -252,12 +261,19 @@ class _LoginPageState extends State<LoginPage> {
     final l10n = AppLocalizations.of(context)!;
     return Row(
       children: [
-        Expanded(child: Divider(color: const Color(0xFFE5E7EB), thickness: 1.h)),
+        Expanded(
+          child: Divider(color: const Color(0xFFE5E7EB), thickness: 1.h),
+        ),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 16.w),
-          child: Text(l10n.otherLogin, style: TextStyle(fontSize: 12.sp, color: const Color(0xFF9CA3AF))),
+          child: Text(
+            l10n.otherLogin,
+            style: TextStyle(fontSize: 12.sp, color: const Color(0xFF9CA3AF)),
+          ),
         ),
-        Expanded(child: Divider(color: const Color(0xFFE5E7EB), thickness: 1.h)),
+        Expanded(
+          child: Divider(color: const Color(0xFFE5E7EB), thickness: 1.h),
+        ),
       ],
     );
   }
@@ -271,7 +287,9 @@ class _LoginPageState extends State<LoginPage> {
           iconPath: 'assets/icons/wechat.svg',
           label: l10n.wechat,
           onTap: () {
-            context.read<AuthBloc>().add(const AuthWechatLoginRequested(code: ''));
+            context
+                .read<AuthBloc>()
+                .add(const AuthWechatLoginRequested(code: ''));
           },
         ),
         SizedBox(width: 40.w),
@@ -279,7 +297,9 @@ class _LoginPageState extends State<LoginPage> {
           iconPath: 'assets/icons/google.svg',
           label: 'Google',
           onTap: () {
-            context.read<AuthBloc>().add(const AuthGoogleLoginRequested(idToken: ''));
+            context
+                .read<AuthBloc>()
+                .add(const AuthGoogleLoginRequested(idToken: ''));
           },
         ),
       ],
@@ -312,7 +332,10 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
           SizedBox(height: 8.h),
-          Text(label, style: TextStyle(fontSize: 12.sp, color: const Color(0xFF6B7280))),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12.sp, color: const Color(0xFF6B7280)),
+          ),
         ],
       ),
     );

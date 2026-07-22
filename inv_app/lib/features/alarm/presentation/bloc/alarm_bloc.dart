@@ -73,7 +73,8 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
               (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
           final total = (cached['total'] as int?) ?? 0;
           emit(
-              AlarmListLoaded(alarms: alarms, total: total, isFromCache: true));
+            AlarmListLoaded(alarms: alarms, total: total, isFromCache: true),
+          );
           return;
         }
       }
@@ -97,8 +98,13 @@ class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
                 (cached['items'] as List?) ?? (cached['list'] as List?) ?? [];
             final total = (cached['total'] as int?) ?? 0;
             // 只有网络连接失败时才标记为缓存数据
-            emit(AlarmListLoaded(
-                alarms: alarms, total: total, isFromCache: true));
+            emit(
+              AlarmListLoaded(
+                alarms: alarms,
+                total: total,
+                isFromCache: true,
+              ),
+            );
             return;
           }
         }

@@ -74,9 +74,11 @@ class OTAFirmwareInstallRequested extends OtaEvent {
   final String sn;
   final int packageId;
 
-  const OTAFirmwareInstallRequested({required this.sn, required this.packageId});
+  const OTAFirmwareInstallRequested({
+    required this.sn,
+    required this.packageId,
+  });
 
   @override
   List<Object?> get props => [sn, packageId];
 }
-

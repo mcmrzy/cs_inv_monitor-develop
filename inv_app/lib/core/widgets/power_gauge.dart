@@ -112,8 +112,7 @@ class _PowerGaugeState extends State<PowerGauge>
                 child: CustomPaint(
                   painter: _GaugePainter(
                     ratio: ratio * _animation.value,
-                    backgroundColor:
-                        theme.colorScheme.surfaceContainerHighest,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
                     foregroundColor: gaugeColor,
                     strokeWidth: 14.w,
                     startAngle: 135 * math.pi / 180,
@@ -138,7 +137,8 @@ class _PowerGaugeState extends State<PowerGauge>
                     'kW',
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: widget.subtextColor ?? theme.colorScheme.onSurfaceVariant,
+                      color: widget.subtextColor ??
+                          theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -149,7 +149,8 @@ class _PowerGaugeState extends State<PowerGauge>
                   'Rated ${widget.maxPower.toStringAsFixed(0)}kW',
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: widget.subtextColor ?? theme.colorScheme.onSurfaceVariant,
+                    color: widget.subtextColor ??
+                        theme.colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w500,
                   ),
                 ),

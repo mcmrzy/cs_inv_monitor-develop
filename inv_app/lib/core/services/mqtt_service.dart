@@ -26,8 +26,11 @@ abstract class MQTTService {
 
   InverterRealtime? getLatestData(String deviceSN);
 
-  Future<void> sendCommand(String deviceSN, String cmdType,
-      {Map<String, dynamic>? value});
+  Future<void> sendCommand(
+    String deviceSN,
+    String cmdType, {
+    Map<String, dynamic>? value,
+  });
 }
 
 class MQTTServiceImpl implements MQTTService {
@@ -57,8 +60,11 @@ class MQTTServiceImpl implements MQTTService {
       _client?.connectionStatus?.state == MqttConnectionState.connected;
 
   @override
-  Future<void> connect(String clientId,
-      {String? username, String? password}) async {
+  Future<void> connect(
+    String clientId, {
+    String? username,
+    String? password,
+  }) async {
     if (_isConnecting) {
       await waitForConnection(timeout: const Duration(seconds: 15));
       return;
@@ -82,7 +88,10 @@ class MQTTServiceImpl implements MQTTService {
     }
 
     _client = MqttServerClient.withPort(
-        AppConfig.mqttBrokerHost, clientId, AppConfig.mqttBrokerPort);
+      AppConfig.mqttBrokerHost,
+      clientId,
+      AppConfig.mqttBrokerPort,
+    );
     _client!.secure = true;
     _client!.onBadCertificate = (Object certificate) {
       if (certificate is! X509Certificate) return false;
@@ -149,8 +158,11 @@ class MQTTServiceImpl implements MQTTService {
     if (_lastClientId == null) {
       throw Exception('No previous connection to reconnect to.');
     }
-    await connect(_lastClientId!,
-        username: _lastUsername, password: _lastPassword);
+    await connect(
+      _lastClientId!,
+      username: _lastUsername,
+      password: _lastPassword,
+    );
   }
 
   @override
@@ -502,8 +514,11 @@ class MQTTServiceImpl implements MQTTService {
       _otaNotificationController.stream;
 
   @override
-  Future<void> sendCommand(String deviceSN, String cmdType,
-      {Map<String, dynamic>? value}) async {
+  Future<void> sendCommand(
+    String deviceSN,
+    String cmdType, {
+    Map<String, dynamic>? value,
+  }) async {
     final topic = 'cs_inv/$deviceSN/cmd';
 
     // 构造符合控制命令文档规范的 MQTT payload: {cmd, params, task_id}
@@ -523,6 +538,7 @@ class MQTTServiceImpl implements MQTTService {
     _client?.publishMessage(topic, MqttQos.atLeastOnce, builder.payload!);
   }
 
+  @override
   InverterRealtime? getLatestData(String sn) => _latestData[sn];
 
   void dispose() {

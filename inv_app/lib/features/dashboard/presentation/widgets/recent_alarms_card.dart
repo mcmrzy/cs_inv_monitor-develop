@@ -40,7 +40,11 @@ class RecentAlarmsCard extends StatelessWidget {
                   color: AppColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8.r),
                 ),
-                child: Icon(Icons.notifications_active_rounded, size: 18.w, color: AppColors.error),
+                child: Icon(
+                  Icons.notifications_active_rounded,
+                  size: 18.w,
+                  color: AppColors.error,
+                ),
               ),
               SizedBox(width: 10.w),
               Text(
@@ -55,7 +59,8 @@ class RecentAlarmsCard extends StatelessWidget {
               GestureDetector(
                 onTap: () => context.go('/alarms'),
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12.r),
@@ -87,7 +92,9 @@ class RecentAlarmsCard extends StatelessWidget {
           if (alarms.isEmpty)
             _buildEmpty(l10n)
           else
-            ...alarms.take(5).map((alarm) => _buildAlarmItem(context, alarm, l10n)),
+            ...alarms
+                .take(5)
+                .map((alarm) => _buildAlarmItem(context, alarm, l10n)),
         ],
       ),
     );
@@ -122,7 +129,11 @@ class RecentAlarmsCard extends StatelessWidget {
     );
   }
 
-  Widget _buildAlarmItem(BuildContext context, Map<String, dynamic> alarm, AppLocalizations l10n) {
+  Widget _buildAlarmItem(
+    BuildContext context,
+    Map<String, dynamic> alarm,
+    AppLocalizations l10n,
+  ) {
     final level = (alarm['alarm_level'] as num?)?.toInt() ?? 0;
     final faultMessage = alarm['fault_message'] as String? ?? l10n.unknownAlarm;
     final deviceSn = alarm['device_sn'] as String? ?? '';
@@ -142,7 +153,8 @@ class RecentAlarmsCard extends StatelessWidget {
         parsedCode = int.tryParse(str) ?? -1;
       }
     }
-    final alarmEntry = parsedCode >= 0 ? AlarmCodeMapping.getEntry(parsedCode) : null;
+    final alarmEntry =
+        parsedCode >= 0 ? AlarmCodeMapping.getEntry(parsedCode) : null;
     final severity = alarmEntry?.severity ?? _levelToSeverity(level);
 
     final levelColor = _getSeverityColor(severity);
@@ -222,7 +234,11 @@ class RecentAlarmsCard extends StatelessWidget {
                   Row(
                     children: [
                       if (deviceSn.isNotEmpty) ...[
-                        Icon(Icons.device_hub_rounded, size: 12.w, color: AppColors.textHint),
+                        Icon(
+                          Icons.device_hub_rounded,
+                          size: 12.w,
+                          color: AppColors.textHint,
+                        ),
                         SizedBox(width: 4.w),
                         Text(
                           deviceSn,
@@ -233,7 +249,11 @@ class RecentAlarmsCard extends StatelessWidget {
                         ),
                         SizedBox(width: 12.w),
                       ],
-                      Icon(Icons.access_time_rounded, size: 12.w, color: AppColors.textHint),
+                      Icon(
+                        Icons.access_time_rounded,
+                        size: 12.w,
+                        color: AppColors.textHint,
+                      ),
                       SizedBox(width: 4.w),
                       Text(
                         timeAgo,

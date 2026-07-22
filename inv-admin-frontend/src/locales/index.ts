@@ -18,6 +18,7 @@ import models from './models'
 import bigScreen from './bigScreen'
 import protocol from './protocol'
 import deviceDetail from './deviceDetail'
+import channels from './channels'
 
 const merge = (...objs: Record<string, string>[]) => Object.assign({}, ...objs)
 
@@ -42,6 +43,7 @@ const locales: Record<Lang, Record<string, string>> = {
     bigScreen.zh,
     protocol.zh,
     deviceDetail.zh,
+    channels.zh,
   ),
   en: merge(
     common.en,
@@ -63,6 +65,7 @@ const locales: Record<Lang, Record<string, string>> = {
     bigScreen.en,
     protocol.en,
     deviceDetail.en,
+    channels.en,
   ),
 }
 

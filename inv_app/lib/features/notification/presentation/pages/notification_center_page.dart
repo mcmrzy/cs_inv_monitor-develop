@@ -43,7 +43,8 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
   void _onSseNotification(Map<String, dynamic> notificationData) {
     debugPrint(
-        '[NotificationCenter] Received real-time notification: $notificationData');
+      '[NotificationCenter] Received real-time notification: $notificationData',
+    );
     if (!mounted) return;
     // 同时刷新 BLoC 数据
     _refreshAll();
@@ -90,8 +91,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
               if (state is AlarmError && _cachedAlarmState == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                      content: Text(l10n.translateError(state.message)),
-                      duration: const Duration(seconds: 2)),
+                    content: Text(l10n.translateError(state.message)),
+                    duration: const Duration(seconds: 2),
+                  ),
                 );
               }
             },
@@ -125,7 +127,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
 
                 if (items.isEmpty) {
                   return _buildEmptyState(
-                      Icons.notifications_none, l10n.noNotifications);
+                    Icons.notifications_none,
+                    l10n.noNotifications,
+                  );
                 }
 
                 return Column(
@@ -157,7 +161,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   // ==================== 数据合并 ====================
 
   List<_NotificationItem> _mergeItems(
-      AlarmState alarmState, NotificationState notifState) {
+    AlarmState alarmState,
+    NotificationState notifState,
+  ) {
     final items = <_NotificationItem>[];
 
     // 添加告警
@@ -218,8 +224,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
             children: [
               Icon(icon, size: 64.sp, color: AppColors.textHint),
               SizedBox(height: 16.h),
-              Text(message,
-                  style: TextStyle(color: AppColors.textHint, fontSize: 16.sp)),
+              Text(
+                message,
+                style: TextStyle(color: AppColors.textHint, fontSize: 16.sp),
+              ),
             ],
           ),
         ),
@@ -228,7 +236,10 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   }
 
   Widget _buildErrorState(
-      String message, VoidCallback onRetry, AppLocalizations l10n) {
+    String message,
+    VoidCallback onRetry,
+    AppLocalizations l10n,
+  ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -271,18 +282,33 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
   }
 
   Widget _buildItemCard(
-      BuildContext context, _NotificationItem item, AppLocalizations l10n) {
+    BuildContext context,
+    _NotificationItem item,
+    AppLocalizations l10n,
+  ) {
     if (item.type == _ItemType.alarm) {
       return _buildAlarmCard(
-          context, item.data as Map<String, dynamic>, l10n, item.timestamp);
+        context,
+        item.data as Map<String, dynamic>,
+        l10n,
+        item.timestamp,
+      );
     } else {
       return _buildSystemCard(
-          context, item.data as SystemNotification, l10n, item.timestamp);
+        context,
+        item.data as SystemNotification,
+        l10n,
+        item.timestamp,
+      );
     }
   }
 
-  Widget _buildAlarmCard(BuildContext context, dynamic alarm,
-      AppLocalizations l10n, DateTime timestamp) {
+  Widget _buildAlarmCard(
+    BuildContext context,
+    dynamic alarm,
+    AppLocalizations l10n,
+    DateTime timestamp,
+  ) {
     final faultCode = alarm['fault_code'];
     int parsedCode = -1;
     if (faultCode is int) {
@@ -382,16 +408,21 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                         SizedBox(width: 8.w),
                         Container(
                           padding: EdgeInsets.symmetric(
-                              horizontal: 6.w, vertical: 2.h),
+                            horizontal: 6.w,
+                            vertical: 2.h,
+                          ),
                           decoration: BoxDecoration(
                             color: levelColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4.r),
                           ),
-                          child: Text(levelText,
-                              style: TextStyle(
-                                  fontSize: 10.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: levelColor)),
+                          child: Text(
+                            levelText,
+                            style: TextStyle(
+                              fontSize: 10.sp,
+                              fontWeight: FontWeight.w600,
+                              color: levelColor,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -402,13 +433,17 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                           child: Text(
                             '${l10n.deviceLabel}: ${alarm['device_sn'] ?? '-'}  ${l10n.faultCodeLabel}: ${alarm['fault_code'] ?? '-'}',
                             style: TextStyle(
-                                fontSize: 12.sp, color: AppColors.textHint),
+                              fontSize: 12.sp,
+                              color: AppColors.textHint,
+                            ),
                           ),
                         ),
                         Text(
                           _formatTime(timestamp, l10n),
                           style: TextStyle(
-                              fontSize: 11.sp, color: AppColors.textHint),
+                            fontSize: 11.sp,
+                            color: AppColors.textHint,
+                          ),
                         ),
                       ],
                     ),
@@ -423,8 +458,12 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     );
   }
 
-  Widget _buildSystemCard(BuildContext context, SystemNotification notification,
-      AppLocalizations l10n, DateTime timestamp) {
+  Widget _buildSystemCard(
+    BuildContext context,
+    SystemNotification notification,
+    AppLocalizations l10n,
+    DateTime timestamp,
+  ) {
     final IconData icon;
     final Color iconColor;
 
@@ -496,13 +535,17 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
                         child: Text(
                           _notificationSubtitle(notification, l10n),
                           style: TextStyle(
-                              fontSize: 12.sp, color: AppColors.textHint),
+                            fontSize: 12.sp,
+                            color: AppColors.textHint,
+                          ),
                         ),
                       ),
                       Text(
                         _formatTime(timestamp, l10n),
                         style: TextStyle(
-                            fontSize: 11.sp, color: AppColors.textHint),
+                          fontSize: 11.sp,
+                          color: AppColors.textHint,
+                        ),
                       ),
                     ],
                   ),
@@ -533,7 +576,9 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
       final version = notification.version ??
           RegExp(r'v([^\s]+)').firstMatch(notification.title)?.group(1) ??
           '';
-      return version.isEmpty ? l10n.newVersionFound : l10n.notifyAppUpdate(version);
+      return version.isEmpty
+          ? l10n.newVersionFound
+          : l10n.notifyAppUpdate(version);
     }
     return notification.title;
   }

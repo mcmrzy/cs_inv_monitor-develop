@@ -25,13 +25,39 @@ class RoleService {
   static const int roleEndUser = 5;
 
   static List<NavItem> getNavItems(int role, {List<String>? labels}) {
-    final l = labels ?? const ['Home', 'Overview', 'Device', 'Alarm', 'Profile'];
+    final l =
+        labels ?? const ['Home', 'Overview', 'Device', 'Alarm', 'Profile'];
     return [
-      NavItem(path: '/home', label: l[0], icon: Icons.home_outlined, activeIcon: Icons.home),
-      NavItem(path: '/statistics', label: l[1], icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard),
-      NavItem(path: '/devices', label: l[2], icon: Icons.devices_outlined, activeIcon: Icons.devices),
-      NavItem(path: '/alarms', label: l[3], icon: Icons.notifications_outlined, activeIcon: Icons.notifications),
-      NavItem(path: '/profile', label: l[4], icon: Icons.person_outline, activeIcon: Icons.person),
+      NavItem(
+        path: '/home',
+        label: l[0],
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home,
+      ),
+      NavItem(
+        path: '/statistics',
+        label: l[1],
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard,
+      ),
+      NavItem(
+        path: '/devices',
+        label: l[2],
+        icon: Icons.devices_outlined,
+        activeIcon: Icons.devices,
+      ),
+      NavItem(
+        path: '/alarms',
+        label: l[3],
+        icon: Icons.notifications_outlined,
+        activeIcon: Icons.notifications,
+      ),
+      NavItem(
+        path: '/profile',
+        label: l[4],
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
+      ),
     ];
   }
 

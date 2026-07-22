@@ -66,19 +66,23 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       );
       return;
     }
-    context.read<AuthBloc>().add(AuthSendCodeRequested(
-      phone: phone,
-      type: 'reset',
-    ),);
+    context.read<AuthBloc>().add(
+          AuthSendCodeRequested(
+            phone: phone,
+            type: 'reset',
+          ),
+        );
   }
 
   void _handleResetPassword() {
     if (_formKey.currentState!.validate()) {
-      context.read<AuthBloc>().add(AuthResetPasswordRequested(
-        phone: _phoneController.text.trim(),
-        code: _codeController.text.trim(),
-        newPassword: _passwordController.text,
-      ),);
+      context.read<AuthBloc>().add(
+            AuthResetPasswordRequested(
+              phone: _phoneController.text.trim(),
+              code: _codeController.text.trim(),
+              newPassword: _passwordController.text,
+            ),
+          );
     }
   }
 
@@ -90,14 +94,17 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(AppLocalizations.of(context)!.translateError(state.message)),
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
                 backgroundColor: AppColors.error,
               ),
             );
           } else if (state is AuthCodeSent) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(AppLocalizations.of(context)!.verificationCodeSent),
+                content:
+                    Text(AppLocalizations.of(context)!.verificationCodeSent),
                 backgroundColor: AppColors.success,
               ),
             );
@@ -105,7 +112,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
           } else if (state is AuthPasswordResetSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(AppLocalizations.of(context)!.passwordResetSuccess),
+                content:
+                    Text(AppLocalizations.of(context)!.passwordResetSuccess),
                 backgroundColor: AppColors.success,
               ),
             );
@@ -278,7 +286,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
           icon: Icon(
-            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+            _obscurePassword
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
           ),
           onPressed: () {
             setState(() {
@@ -313,7 +323,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
           icon: Icon(
-            _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+            _obscureConfirmPassword
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
           ),
           onPressed: () {
             setState(() {

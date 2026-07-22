@@ -1,0 +1,2418 @@
+openapi: 3.0.3
+info:
+  title: Inv-MQTT Multi-Level Channel Platform API
+  description: |
+    光伏逆变器监控系统 - 多级渠道平台 API 参考文档
+    
+    ## 核心功能
+    
+    - **组织管理**: 制造商、代理商、分销商、客户、服务商的多级组织架构
+    - **邀请系统**: 用户邀请与自动注册
+    - **设备认领**: 设备唯一性验证与所有权转移
+    - **成员生命周期**: 成员添加、移除、转移的完整流程
+    
+    ## 认证方式
+    
+    所有端点 (除特别标注) 需要使用 JWT Bearer Token 认证。Token 通过登录接口获取。
+    
+    ## 错误响应
+    
+    所有错误响应遵循统一格式:
+    ```json
+    {
+      "code": "ERROR_CODE",
+      "message": "错误描述",
+      "details": {} // 可选的详细信息
+    }
+    ```
+  
+  version: 1.0.0
+  contact:
+    name: CSERGY Smart Energy Platform Support
+    email: support@csergy.com
+  license:
+    name: Proprietary
+    url: https://csergy.com/terms
+
+servers:
+  - url: https://api.inv-mqtt.com/api/v1
+    description: 生产环境
+  - url: http://localhost:8080/api/v1
+    description: 本地开发环境
+  - url: https://dev-api.inv-mqtt.com/api/v1
+    description: 测试环境
+
+tags:
+  - name: Organizations
+    description: 组织单元管理 - 支持五级渠道层级结构
+  - name: Invitations
+    description: 用户邀请与自动注册系统
+  - name: Devices
+    description: 设备认领与所有权转移管理
+  - name: Members
+    description: 成员生命周期管理
+  - name: Bulk Operations
+    description: 批量操作接口
+
+paths:
+  # ============================================================================
+  # ORGANIZATIONS (8 endpoints)
+  # ============================================================================
+  
+  /organizations:
+    post:
+      summary: 创建组织单元
+      tags: [Organizations]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+            example:
+              name: "华南分公司"
+              type: "distributor"
+              parent_id: null
+      responses:
+        '201':
+          description: 组织创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationWithChildren'
+        '400':
+          description: 请求参数无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 禁止创建 (最终用户权限不足)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 冲突 (重复名称或层级限制)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        
+    get:
+      summary: 列出组织单元
+      tags: [Organizations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码 (从 1 开始)
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: page_size
+          in: query
+          description: 每页数量 (最大 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: type
+          in: query
+          description: 按类型筛选
+          required: false
+          schema:
+            type: string
+            enum:
+              - manufacturer
+              - agent
+              - distributor
+              - customer
+              - service_partner
+        - name: status
+          in: query
+          description: 按状态筛选
+          required: false
+          schema:
+            type: string
+            enum:
+              - active
+              - disabled
+              - quarantined
+      responses:
+        '200':
+          description: 组织列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrganizationList'
+        '403':
+          description: 禁止访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /organizations/{id}:
+    get:
+      summary: 获取组织详情
+      tags: [Organizations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 组织 ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 组织详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationWithChildren'
+        '404':
+          description: 组织不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 无权限访问
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    put:
+      summary: 更新组织信息
+      tags: [Organizations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 组织 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 组织不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 无权限修改
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    delete:
+      summary: 删除组织 (软删除)
+      tags: [Organizations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 组织 ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '400':
+          description: 有子节点无法删除
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 组织不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /organizations/{id}/move:
+    post:
+      summary: 移动组织到新父级
+      tags: [Organizations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 组织 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveOrganizationRequest'
+      responses:
+        '200':
+          description: 移动成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MoveResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 组织不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 循环引用冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /organizations/{id}/status:
+    patch:
+      summary: 切换组织状态
+      tags: [Organizations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 组织 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToggleStatusRequest'
+      responses:
+        '200':
+          description: 状态更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+        '400':
+          description: 无效的状态值
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 组织不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /organizations/{id}/tree:
+    get:
+      summary: 获取组织树形结构
+      tags: [Organizations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 组织 ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 树形结构数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgTreeResponse'
+        '404':
+          description: 组织不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================================================
+  # INVITATIONS (5 endpoints)
+  # ============================================================================
+  
+  /invitations/create:
+    post:
+      summary: 发送邀请
+      tags: [Invitations]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+            example:
+              email: "newuser@example.com"
+              role_id: 3
+              organization_id: 123
+              expires_hours: 168
+      responses:
+        '200':
+          description: 邀请已发送
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponse'
+        '400':
+          description: 请求无效或配额超限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 权限不足
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 邮箱已有待处理邀请
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /invitations/list:
+    get:
+      summary: 列出邀请
+      tags: [Invitations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: 按状态筛选
+          required: false
+          schema:
+            type: string
+            enum:
+              - pending
+              - used
+              - expired
+              - revoked
+        - name: email
+          in: query
+          description: 按邮箱筛选
+          required: false
+          schema:
+            type: string
+            format: email
+        - name: organization_id
+          in: query
+          description: 按组织筛选
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: 邀请列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInvitationList'
+
+  /invitations/{id}/revoke:
+    delete:
+      summary: 撤销邀请
+      tags: [Invitations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 邀请 ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 撤销成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteResponse'
+        '400':
+          description: 非待处理邀请无法撤销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 邀请不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 无权限撤销
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /invitations/{id}/details:
+    get:
+      summary: 获取邀请详情
+      tags: [Invitations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 邀请 ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 邀请详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationResponse'
+        '404':
+          description: 邀请不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 无权限查看
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /invitations/accept:
+    post:
+      summary: 接受邀请并自动注册
+      tags: [Invitations]
+      description: |
+        **公共接口** - 无需 JWT 认证
+        用户在邮件中点击邀请链接后，提交此接口完成注册并自动登录。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptInvitationRequest'
+            example:
+              invitation_code: "ABC12345"
+              password: "SecurePass123!"
+              phone: "+8613800138000"
+              nickname: "新用户"
+      responses:
+        '200':
+          description: 注册成功并自动登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptInvitationResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 邀请码无效、过期或已被使用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 邮箱或手机号已注册
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================================================
+  # DEVICES: CLAIM & TRANSFER (8 endpoints)
+  # ============================================================================
+  
+  /devices/claim-code/generate:
+    post:
+      summary: 生成设备认领码
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateClaimCodeRequest'
+            example:
+              sn: "SN202407220001"
+              expires_hours: 168
+      responses:
+        '200':
+          description: 认领码生成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claim_code:
+                    type: string
+                    example: "A1B2C3D4E5F6G7H8"
+                  expires_at:
+                    type: string
+                    format: date-time
+                    example: "2024-07-29T10:30:00Z"
+                  note:
+                    type: string
+                    example: "请将此代码告知安装商，有效期 168 小时"
+                  sn:
+                    type: string
+                    example: "SN202407220001"
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 无权限生成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 设备不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 设备已被认领
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devices/claim-code/verify:
+    post:
+      summary: 验证认领码
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyClaimCodeRequest'
+      responses:
+        '200':
+          description: 认领码有效
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                    example: true
+                  sn:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+                  remaining_time:
+                    type: integer
+                    description: 剩余秒数
+        '404':
+          description: 认领码无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 认领码已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devices/{sn}/claim:
+    post:
+      summary: 认领设备
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sn
+          in: path
+          required: true
+          description: 设备序列号
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimDeviceRequest'
+      responses:
+        '200':
+          description: 认领成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "设备认领成功"
+                  device_sn:
+                    type: string
+                  claimed_by:
+                    type: integer
+                    format: int64
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 认领码错误或跨租户限制
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 设备或认领码不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 设备已被认领
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devices/{sn}/request-transfer:
+    post:
+      summary: 发起设备所有权转移
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sn
+          in: path
+          required: true
+          description: 设备序列号
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequestRequest'
+      responses:
+        '200':
+          description: 转移请求已提交
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transfer_id:
+                    type: integer
+                    format: int64
+                  message:
+                    type: string
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 非设备所有者或目标租户相同
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 设备不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 已有待处理的转移请求
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devices/transfers/list:
+    get:
+      summary: 列出转移请求
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: 按状态筛选
+          required: false
+          schema:
+            type: string
+            enum:
+              - pending
+              - approved
+              - rejected
+              - cancelled
+        - name: type
+          in: query
+          description: 筛选范围
+          required: false
+          schema:
+            type: string
+            enum:
+              - mine
+              - all
+      responses:
+        '200':
+          description: 转移请求列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transfers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeviceTransferRequest'
+                  total:
+                    type: integer
+
+  /devices/transfers/{id}/approve:
+    post:
+      summary: 批准转移请求
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 转移请求 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - approved
+              properties:
+                approved:
+                  type: boolean
+                  example: true
+                reason:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: 转移已批准
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  transfer_id:
+                    type: integer
+                    format: int64
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 非转出方或转移已处理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 转移请求不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 转移状态不允许批准
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devices/transfers/{id}/reject:
+    post:
+      summary: 拒绝转移请求
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 转移请求 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - approved
+                - reason
+              properties:
+                approved:
+                  type: boolean
+                  example: false
+                reason:
+                  type: string
+                  minLength: 1
+                  example: "设备存在质量问题"
+      responses:
+        '200':
+          description: 转移已拒绝
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  transfer_id:
+                    type: integer
+        '400':
+          description: 请求无效或缺少原因
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 无权拒绝
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 转移请求不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devices/transfers/{id}/cancel:
+    post:
+      summary: 取消转移请求
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 转移请求 ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 转移已取消
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  transfer_id:
+                    type: integer
+        '403':
+          description: 非请求发起人或无管理员权限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 转移请求不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 转移状态不允许取消
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============================================================================
+  # MEMBERS: LIFECYCLE (12 endpoints)
+  # ============================================================================
+  
+  /members/add:
+    post:
+      summary: 添加成员到组织
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+            example:
+              user_id: 12345
+              organization_id: 678
+              membership_type: "full"
+              role_ids: [3, 5]
+              expires_at: null
+      responses:
+        '200':
+          description: 成员添加成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberLifecycleResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 用户或组织不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 已是活跃成员或达配额上限
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /memberships/{id}/update:
+    put:
+      summary: 更新成员关系
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 成员关系 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMembershipRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 成员关系不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /memberships/{id}/remove:
+    delete:
+      summary: 移除成员 (软删除)
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 成员关系 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: 成员已移除
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemoveMemberResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 成员关系不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /memberships/{id}/deactivate:
+    patch:
+      summary: 停用成员
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 成员关系 ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: 成员已停用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeactivateResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 成员关系不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 成员已是非活跃状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /memberships/{id}/reactivate:
+    patch:
+      summary: 恢复成员为活跃状态
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 成员关系 ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 成员已恢复活跃
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivateResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 成员关系不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 成员已是活跃状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /members/transfer/initiate:
+    post:
+      summary: 发起成员转移
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferInitiateRequest'
+            example:
+              membership_ids: [123, 456, 789]
+              target_org_id: 999
+              reason: "业务调整需要"
+      responses:
+        '200':
+          description: 转移完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberLifecycleResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 未找到有效的成员或目标组织
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 跨租户转移或状态不一致
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /members/transfer/accept:
+    post:
+      summary: 接受成员转移
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferApprovalRequest'
+      responses:
+        '200':
+          description: 转移已接受
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferAcceptResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /members/transfer/reject:
+    post:
+      summary: 拒绝成员转移
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - approved
+                - reason
+              properties:
+                approved:
+                  type: boolean
+                  example: false
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: 转移已拒绝
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransferRejectResponse'
+        '400':
+          description: 请求无效或缺少原因
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /members/transfers/list:
+    get:
+      summary: 列出待处理转移
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: 转移列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending_transfers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PendingTransferInfo'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  page_size:
+                    type: integer
+
+  /members/bulk-add:
+    post:
+      summary: 批量添加成员
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkAddRequest'
+            example:
+              user_ids: [123, 456, 789]
+              organization_id: 678
+              membership_type: "full"
+              role_ids: [3, 5]
+      responses:
+        '200':
+          description: 批量添加完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberLifecycleResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 部分用户不存在或已达配额
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /members/bulk-transfer:
+    post:
+      summary: 批量转移成员
+      tags: [Members]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkTransferRequest'
+            example:
+              membership_ids: [123, 456, 789]
+              target_org_id: 999
+              reason: "团队重组"
+      responses:
+        '200':
+          description: 批量转移完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberLifecycleResponse'
+        '400':
+          description: 请求无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 跨租户转移不支持
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+# ============================================================================
+# COMPONENTS - Schemas
+# ============================================================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token 在登录后获取，有效期 15 分钟
+
+  schemas:
+    # Base Types
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: 错误码
+          example: "FORBIDDEN"
+        message:
+          type: string
+          description: 人类可读的错误描述
+          example: "Forbidden access"
+        details:
+          type: object
+          description: 额外的错误详情 (可选)
+    
+    UpdateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "organization updated"
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            version:
+              type: integer
+    
+    DeleteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "organization deleted"
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+    
+    StatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "status updated"
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+            status:
+              type: string
+    
+    RemoveMemberResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          message:
+            type: string
+            example: "成员已从组织中移除"
+        data:
+          type: object
+          properties:
+            membership_id:
+              type: integer
+              format: int64
+            user_id:
+              type: integer
+              format: int64
+    
+    ActivateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          message:
+            type: string
+            example: "成员已恢复活跃"
+        data:
+          type: object
+          properties:
+            membership_id:
+              type: integer
+              format: int64
+    
+    DeactivateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          message:
+            type: string
+            example: "成员已停用"
+        data:
+          type: object
+          properties:
+            membership_id:
+              type: integer
+              format: int64
+    
+    TransferAcceptResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          example: "转移请求已接受（当前实现为即时转移）"
+    
+    TransferRejectResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            reason:
+              type: string
+    
+    MoveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            parent_id:
+              type: integer
+              format: int64
+            moved_at:
+              type: string
+              format: date-time
+    
+    # Organization Schemas
+    CreateOrganizationRequest:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "华南分公司"
+        type:
+          type: string
+          enum:
+            - manufacturer
+            - agent
+            - distributor
+            - customer
+            - service_partner
+          example: "distributor"
+        parent_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: 父组织 ID，null 表示直接隶属于根租户
+    
+    UpdateOrganizationRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "华南分公司 (更新)"
+    
+    MoveOrganizationRequest:
+      type: object
+      required:
+        - parent_id
+      properties:
+        parent_id:
+          type: integer
+          format: int64
+          description: 新的父组织 ID
+    
+    ToggleStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - active
+            - disabled
+            - quarantined
+          description: target status
+          example: "disabled"
+    
+    OrganizationType:
+      type: string
+      enum:
+        - manufacturer
+        - agent
+        - distributor
+        - customer
+        - service_partner
+    
+    OrganizationStatus:
+      type: string
+      enum:
+        - active
+        - disabled
+        - quarantined
+    
+    OrganizationSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/OrganizationType'
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+        has_children:
+          type: boolean
+          description: 是否有子节点
+    
+    OrganizationWithChildren:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        root_tenant_id:
+          type: integer
+          format: int64
+        parent_id:
+          type: integer
+          format: int64
+          nullable: true
+        type:
+          $ref: '#/components/schemas/OrganizationType'
+        code:
+          type: string
+          description: 组织编码 (可选)
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/OrganizationStatus'
+        version:
+          type: integer
+          format: int64
+          description: 乐观锁版本号
+        children_count:
+          type: integer
+          description: 子节点数量
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        child_organizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationSummary'
+    
+    PaginatedOrganizationList:
+      type: object
+      properties:
+        organizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationWithChildren'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        page_size:
+          type: integer
+    
+    OrgTreeResponse:
+      type: object
+      properties:
+        root_organization:
+          $ref: '#/components/schemas/OrganizationSummary'
+        subtree:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationSummary'
+        total_nodes:
+          type: integer
+    
+    # Invitation Schemas
+    CreateInvitationRequest:
+      type: object
+      required:
+        - email
+        - role_id
+        - expires_hours
+      properties:
+        email:
+          type: string
+          format: email
+          example: "newuser@example.com"
+        role_id:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 3
+          description: 角色 ID(1=specialist, 2=admin, etc.)
+        organization_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: 目标组织 ID
+        expires_hours:
+          type: integer
+          minimum: 1
+          maximum: 720
+          example: 168
+          description: 过期时间 (小时),最大 30 天
+    
+    AcceptInvitationRequest:
+      type: object
+      required:
+        - invitation_code
+        - password
+        - phone
+        - nickname
+      properties:
+        invitation_code:
+          type: string
+          minLength: 8
+          maxLength: 8
+          example: "ABC12345"
+          description: 邀请码 (8 位)
+        password:
+          type: string
+          minLength: 6
+          maxLength: 20
+          example: "SecurePass123!"
+          description: 用户密码
+        phone:
+          type: string
+          format: phone
+          example: "+8613800138000"
+          description: 手机号码
+        nickname:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: "张三"
+    
+    InvitationStatus:
+      type: string
+      enum:
+        - pending
+        - used
+        - expired
+        - revoked
+    
+    InvitationListItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+        role_id:
+          type: integer
+          format: int16
+        role_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/InvitationStatus'
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        inviter_name:
+          type: string
+        organization:
+          type: string
+          nullable: true
+          description: 组织名称
+    
+    InvitationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        email:
+          type: string
+          format: email
+        role_name:
+          type: string
+        token_hint:
+          type: string
+          description: 邀请码前缀显示 (仅用于调试)
+          example: "ABC12345****"
+        expires_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          description: 邀请人昵称
+        status:
+          $ref: '#/components/schemas/InvitationStatus'
+    
+    PaginatedInvitationList:
+      type: object
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvitationListItem'
+        page:
+          type: integer
+        page_size:
+          type: integer
+    
+    AcceptInvitationResponse:
+      type: object
+      properties:
+        invitation_id:
+          type: integer
+          format: int64
+        user:
+          $ref: '#/components/schemas/User'
+        access_token:
+          type: string
+          description: JWT access token
+        refresh_token:
+          type: string
+          description: JWT refresh token
+        expires_in:
+          type: integer
+          description: access token 有效期 (秒)
+          example: 900
+        permissions:
+          type: array
+          items:
+            type: string
+    
+    # Device Claim/Transfer Schemas
+    GenerateClaimCodeRequest:
+      type: object
+      required:
+        - sn
+        - expires_hours
+      properties:
+        sn:
+          type: string
+          description: 设备序列号
+          example: "SN202407220001"
+        expires_hours:
+          type: integer
+          minimum: 1
+          maximum: 8760
+          example: 168
+          description: 认领码有效期 (小时),最大 1 年
+    
+    VerifyClaimCodeRequest:
+      type: object
+      required:
+        - claim_code
+      properties:
+        claim_code:
+          type: string
+          minLength: 16
+          maxLength: 16
+          example: "A1B2C3D4E5F6G7H8"
+    
+    ClaimDeviceRequest:
+      type: object
+      required:
+        - sn
+        - claim_code
+      properties:
+        sn:
+          type: string
+          example: "SN202407220001"
+        claim_code:
+          type: string
+          minLength: 16
+          maxLength: 16
+          example: "A1B2C3D4E5F6G7H8"
+        user_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: 指定用户 ID(auto-resolve from JWT if omitted)
+    
+    TransferRequestRequest:
+      type: object
+      required:
+        - device_sn
+        - to_tenant_id
+      properties:
+        device_sn:
+          type: string
+          description: 设备序列号
+          example: "SN202407220001"
+        to_tenant_id:
+          type: integer
+          format: int64
+          description: 目标租户 ID
+        reason:
+          type: string
+          maxLength: 500
+          description: 转移原因 (可选)
+    
+    TransferStatus:
+      type: string
+      enum:
+        - pending
+        - approved
+        - rejected
+        - cancelled
+    
+    DeviceTransferRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        device_sn:
+          type: string
+        from_tenant_id:
+          type: integer
+          format: int64
+        to_tenant_id:
+          type: integer
+          format: int64
+        requester_user_id:
+          type: integer
+          format: int64
+        reason:
+          type: string
+        status:
+          $ref: '#/components/schemas/TransferStatus'
+        approved_by_user_id:
+          type: integer
+          format: int64
+          nullable: true
+        approved_at:
+          type: string
+          format: date-time
+          nullable: true
+        rejected_reason:
+          type: string
+          nullable: true
+        requested_at:
+          type: string
+          format: date-time
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+    
+    PendingTransferInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        membership_id:
+          type: integer
+          format: int64
+        user_id:
+          type: integer
+          format: int64
+        from_org_id:
+          type: integer
+          format: int64
+        to_org_id:
+          type: integer
+          format: int64
+        initiator_id:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+            - initiated
+            - accepted
+            - rejected
+            - cancelled
+            - completed
+        reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    
+    # Member Lifecycle Schemas
+    MembershipType:
+      type: string
+      enum:
+        - full
+        - read_only
+        - billing
+        - guest
+    
+    MembershipStatus:
+      type: string
+      enum:
+        - active
+        - inactive
+        - suspended
+        - revoked
+    
+    AddMemberRequest:
+      type: object
+      required:
+        - user_id
+        - organization_id
+      properties:
+        user_id:
+          type: integer
+          format: int64
+          description: 用户 ID
+        organization_id:
+          type: integer
+          format: int64
+          description: 目标组织 ID
+        membership_type:
+          $ref: '#/components/schemas/MembershipType'
+          default: "full"
+        role_ids:
+          type: array
+          items:
+            type: integer
+          description: 分配的角色 ID 列表
+          example: [3, 5]
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 过期时间
+    
+    UpdateMembershipRequest:
+      type: object
+      properties:
+        role_ids:
+          type: array
+          items:
+            type: integer
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+            - suspended
+        expires_at:
+          type: string
+          format: date-time
+        membership_type:
+          $ref: '#/components/schemas/MembershipType'
+    
+    TransferInitiateRequest:
+      type: object
+      required:
+        - membership_ids
+        - target_org_id
+      properties:
+        membership_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          minItems: 1
+          description: 要转移的成员关系 ID 列表
+        target_org_id:
+          type: integer
+          format: int64
+          description: 目标组织 ID
+        reason:
+          type: string
+          maxLength: 500
+    
+    TransferApprovalRequest:
+      type: object
+      required:
+        - approved
+      properties:
+        approved:
+          type: boolean
+          description: 是否接受转移
+        reason:
+          type: string
+          maxLength: 500
+          description: 拒绝原因 (当 approved=false 时必需)
+    
+    BulkAddRequest:
+      type: object
+      required:
+        - user_ids
+        - organization_id
+      properties:
+        user_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          minItems: 1
+          maxItems: 100
+          description: 用户 ID 列表
+        organization_id:
+          type: integer
+          format: int64
+          description: 目标组织 ID
+        membership_type:
+          $ref: '#/components/schemas/MembershipType'
+          default: "full"
+        role_ids:
+          type: array
+          items:
+            type: integer
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    
+    BulkTransferRequest:
+      type: object
+      required:
+        - membership_ids
+        - target_org_id
+      properties:
+        membership_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          minItems: 1
+          maxItems: 100
+          description: 成员关系 ID 列表
+        target_org_id:
+          type: integer
+          format: int64
+          description: 目标组织 ID
+        reason:
+          type: string
+          maxLength: 500
+    
+    MemberLifecycleResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        organization_id:
+          type: integer
+          format: int64
+        user_id:
+          type: integer
+          format: int64
+        membership_id:
+          type: integer
+          format: int64
+        transferred_count:
+          type: integer
+          description: 转移/添加的数量
+    
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        nickname:
+          type: string
+        role:
+          type: integer
+          description: 用户角色 ID
+        status:
+          type: integer
+          description: 用户状态
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+  examples:
+    create-org-request:
+      value:
+        name: "Tech Corp"
+        type: "agent"
+        parent_id: null
+    
+    org-list-response:
+      value:
+        organizations:
+          - id: 1
+            root_tenant_id: 100
+            parent_id: null
+            type: "manufacturer"
+            name: "辰烁科技"
+            status: "active"
+            children_count: 5
+            created_at: "2024-01-15T08:00:00Z"
+        total: 25
+        page: 1
+        page_size: 20
+    
+    create-invitation-request:
+      value:
+        email: "candidate@example.com"
+        role_id: 3
+        organization_id: 123
+        expires_hours: 168
+    
+    accept-invitation-success:
+      value:
+        invitation_id: 456
+        user:
+          id: 789
+          phone: "+8613800138000"
+          nickname: "李四"
+          role: 3
+        access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refresh_token: "refresh_token_xyz..."
+        expires_in: 900
+        permissions: ["devices:view", "stations:view"]
+    
+    generate-claim-code-response:
+      value:
+        claim_code: "A1B2C3D4E5F6G7H8"
+        expires_at: "2024-07-29T10:30:00Z"
+        note: "请将此代码告知安装商，有效期 168 小时"
+        sn: "SN202407220001"
+    
+    add-member-request:
+      value:
+        user_id: 12345
+        organization_id: 678
+        membership_type: "full"
+        role_ids: [3, 5]
+
+security:
+  - bearerAuth: []
+
+x-tagGroups:
+  - name: "Multi-Level Channel Platform API v1"
+    tags:
+      - Organizations
+      - Invitations
+      - Devices
+      - Members
+      - Bulk Operations
+
+x-version-history:
+  current: "1.0.0"
+  previous: []
+  planned:
+    - version: "2.0.0"
+      focus: "增强批量操作和实时推送通知"
+
+x-rate-limiting:
+  global:
+    rate: 1000
+    burst: 2000
+    unit: "requests per minute"
+  headers:
+    X-RateLimit-Limit:
+      description: 每分钟最大请求数
+      schema:
+        type: integer
+    X-RateLimit-Remaining:
+      description: 当前窗口剩余请求数
+      schema:
+        type: integer
+    X-RateLimit-Reset:
+      description: 限流窗口重置时间 (Unix timestamp)
+      schema:
+        type: integer
+        format: int64

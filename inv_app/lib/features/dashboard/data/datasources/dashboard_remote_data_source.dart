@@ -23,10 +23,13 @@ class DashboardRemoteDataSource {
 
   /// 获取电站排行
   Future<Response> getStationRanking({int limit = 5}) async {
-    return await dio.get('/dashboard/station-ranking', queryParameters: {
-      'period': 'today',
-      'limit': limit,
-    },);
+    return await dio.get(
+      '/dashboard/station-ranking',
+      queryParameters: {
+        'period': 'today',
+        'limit': limit,
+      },
+    );
   }
 }
 

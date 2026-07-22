@@ -65,8 +65,12 @@ class FirmwareDownloadService {
           // corrupt the file, so restart once from byte zero.
           if (response.statusCode != HttpStatus.partialContent) {
             await file.delete();
-            await _dio.download(url, filePath,
-                onReceiveProgress: onProgress, deleteOnError: false);
+            await _dio.download(
+              url,
+              filePath,
+              onReceiveProgress: onProgress,
+              deleteOnError: false,
+            );
           }
         } on DioException catch (e) {
           // 416 only means the range is unsatisfiable; integrity still must pass.
@@ -75,12 +79,18 @@ class FirmwareDownloadService {
             await _verifyFirmware(savedFile, expectedSize, expectedSha256);
             final fileSize = await savedFile.length();
             await _sharedPreferences.setString(
-                '$_keyPrefix$firmwareId', filePath);
+              '$_keyPrefix$firmwareId',
+              filePath,
+            );
             await _sharedPreferences.setInt(
-                '$_keySizePrefix$firmwareId', fileSize);
+              '$_keySizePrefix$firmwareId',
+              fileSize,
+            );
             if (expectedSha256 != null) {
               await _sharedPreferences.setString(
-                  '$_keySHA256Prefix$firmwareId', expectedSha256.toLowerCase());
+                '$_keySHA256Prefix$firmwareId',
+                expectedSha256.toLowerCase(),
+              );
             }
             _progressController.add(1.0);
             return filePath;
@@ -108,7 +118,9 @@ class FirmwareDownloadService {
       await _sharedPreferences.setInt('$_keySizePrefix$firmwareId', fileSize);
       if (expectedSha256 != null) {
         await _sharedPreferences.setString(
-            '$_keySHA256Prefix$firmwareId', expectedSha256.toLowerCase());
+          '$_keySHA256Prefix$firmwareId',
+          expectedSha256.toLowerCase(),
+        );
       }
 
       _progressController.add(1.0);
@@ -121,7 +133,10 @@ class FirmwareDownloadService {
   }
 
   Future<void> _verifyFirmware(
-      File file, int? expectedSize, String? expectedSha256) async {
+    File file,
+    int? expectedSize,
+    String? expectedSha256,
+  ) async {
     if (expectedSize != null &&
         expectedSize > 0 &&
         await file.length() != expectedSize) {

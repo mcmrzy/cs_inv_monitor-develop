@@ -51,11 +51,17 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8.r),
                 ),
-                child: Icon(Icons.show_chart_rounded, size: 18.w, color: AppColors.primary),
+                child: Icon(
+                  Icons.show_chart_rounded,
+                  size: 18.w,
+                  color: AppColors.primary,
+                ),
               ),
               SizedBox(width: 10.w),
               Text(
-                widget.data.length > 14 ? l10n.recent30DayTrend : l10n.recent7DayTrend,
+                widget.data.length > 14
+                    ? l10n.recent30DayTrend
+                    : l10n.recent7DayTrend,
                 style: TextStyle(
                   fontSize: 15.sp,
                   fontWeight: FontWeight.w600,
@@ -67,7 +73,10 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
               _buildLegendItem(AppColors.primary, l10n.powerGeneration),
               if (hasLoadData) ...[
                 SizedBox(width: 12.w),
-                _buildLegendItem(const Color(0xFFF5A623), l10n.powerConsumption),
+                _buildLegendItem(
+                  const Color(0xFFF5A623),
+                  l10n.powerConsumption,
+                ),
               ],
             ],
           ),
@@ -121,7 +130,11 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
       ),
       child: Row(
         children: [
-          Icon(Icons.calendar_today_rounded, size: 16.w, color: AppColors.primary),
+          Icon(
+            Icons.calendar_today_rounded,
+            size: 16.w,
+            color: AppColors.primary,
+          ),
           SizedBox(width: 8.w),
           Text(
             point.date,
@@ -132,10 +145,18 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
             ),
           ),
           const Spacer(),
-          _buildDetailChip(l10n.powerGeneration, '${point.energy.toStringAsFixed(1)} kWh', AppColors.primary),
+          _buildDetailChip(
+            l10n.powerGeneration,
+            '${point.energy.toStringAsFixed(1)} kWh',
+            AppColors.primary,
+          ),
           if (hasLoadData && point.load > 0) ...[
             SizedBox(width: 8.w),
-            _buildDetailChip(l10n.powerConsumption, '${point.load.toStringAsFixed(1)} kWh', const Color(0xFFF5A623)),
+            _buildDetailChip(
+              l10n.powerConsumption,
+              '${point.load.toStringAsFixed(1)} kWh',
+              const Color(0xFFF5A623),
+            ),
           ],
         ],
       ),
@@ -218,34 +239,38 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
         return FlSpot(entry.key.toDouble(), entry.value.load);
       }).toList();
 
-      lineBars.add(LineChartBarData(
-        spots: loadSpots,
-        isCurved: true,
-        curveSmoothness: 0.45,
-        preventCurveOverShooting: true,
-        barWidth: 3,
-        color: const Color(0xFFF5A623),
-        dotData: FlDotData(
-          show: true,
-          getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
-            radius: _touchedIndex == index ? 6 : 4,
-            color: _touchedIndex == index ? const Color(0xFFF5A623) : Colors.white,
-            strokeWidth: _touchedIndex == index ? 3 : 2,
-            strokeColor: const Color(0xFFF5A623),
+      lineBars.add(
+        LineChartBarData(
+          spots: loadSpots,
+          isCurved: true,
+          curveSmoothness: 0.45,
+          preventCurveOverShooting: true,
+          barWidth: 3,
+          color: const Color(0xFFF5A623),
+          dotData: FlDotData(
+            show: true,
+            getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
+              radius: _touchedIndex == index ? 6 : 4,
+              color: _touchedIndex == index
+                  ? const Color(0xFFF5A623)
+                  : Colors.white,
+              strokeWidth: _touchedIndex == index ? 3 : 2,
+              strokeColor: const Color(0xFFF5A623),
+            ),
+          ),
+          belowBarData: BarAreaData(
+            show: true,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                const Color(0xFFF5A623).withValues(alpha: 0.15),
+                const Color(0xFFF5A623).withValues(alpha: 0.0),
+              ],
+            ),
           ),
         ),
-        belowBarData: BarAreaData(
-          show: true,
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFFF5A623).withValues(alpha: 0.15),
-              const Color(0xFFF5A623).withValues(alpha: 0.0),
-            ],
-          ),
-        ),
-      ),);
+      );
     }
 
     return LineChartData(
@@ -284,7 +309,9 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
               final shouldShow = index == 0 ||
                   index == widget.data.length - 1 ||
                   (widget.data.length > 14 && index % 3 == 0) ||
-                  (widget.data.length > 4 && widget.data.length <= 14 && index % 2 == 0);
+                  (widget.data.length > 4 &&
+                      widget.data.length <= 14 &&
+                      index % 2 == 0);
               if (!shouldShow) {
                 return const SizedBox.shrink();
               }
@@ -299,7 +326,8 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
           ),
         ),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       borderData: FlBorderData(show: false),
       minX: 0,
@@ -312,7 +340,9 @@ class _EnergyTrendChartState extends State<EnergyTrendChart> {
         touchCallback: (FlTouchEvent event, LineTouchResponse? touchResponse) {
           if (event is FlTapUpEvent && touchResponse != null) {
             final spotIndex = touchResponse.lineBarSpots?.first.x.toInt();
-            if (spotIndex != null && spotIndex >= 0 && spotIndex < widget.data.length) {
+            if (spotIndex != null &&
+                spotIndex >= 0 &&
+                spotIndex < widget.data.length) {
               setState(() {
                 _touchedIndex = spotIndex;
               });

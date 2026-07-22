@@ -56,7 +56,7 @@ services:
   inv-api-server:
     build:
       context: ..
-      dockerfile: inv_api_server/Dockerfile
+      dockerfile: business-api/Dockerfile
       args:
         GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}
         ALPINE_MIRROR: ${ALPINE_MIRROR:-dl-cdn.alpinelinux.org}
@@ -87,7 +87,7 @@ services:
 
   inv-device-server:
     build:
-      context: ../inv_device_server
+      context: ../device-communication
       dockerfile: Dockerfile
       args:
         GOPROXY: ${GO_PROXY:-https://proxy.golang.org,direct}

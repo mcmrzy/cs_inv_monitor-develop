@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -135,7 +134,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           final fileName = '${chipName}_$version.bin';
 
           debugPrint(
-              '[PreDownload] Chip: $chipName, firmwareId: $firmwareId, url: $downloadUrl');
+            '[PreDownload] Chip: $chipName, firmwareId: $firmwareId, url: $downloadUrl',
+          );
 
           if (firmwareId > 0 && downloadUrl.isNotEmpty) {
             // 检查是否已下载
@@ -160,7 +160,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             }
           } else {
             debugPrint(
-                '[PreDownload] Skipping chip $chipName: invalid firmwareId or downloadUrl');
+              '[PreDownload] Skipping chip $chipName: invalid firmwareId or downloadUrl',
+            );
           }
         }
       }
@@ -247,8 +248,10 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             children: [
               const Icon(Icons.warning_rounded, color: AppColors.warning),
               SizedBox(width: 8.w),
-              Text(l10n.warningLevel,
-                  style: const TextStyle(color: AppColors.warning)),
+              Text(
+                l10n.warningLevel,
+                style: const TextStyle(color: AppColors.warning),
+              ),
             ],
           ),
           content: Text(
@@ -293,7 +296,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
         child: AppBar(
           title: Text(
             l10n.firmwareList,
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
           ),
           centerTitle: true,
           elevation: 0,
@@ -353,7 +356,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                         ? l10n.installingFirmware
                         : l10n.loadingUpgradeList,
                     style: TextStyle(
-                        fontSize: 14.sp, color: AppColors.textSecondary),
+                      fontSize: 14.sp,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -365,13 +370,18 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.error_outline_rounded,
-                      size: 48.sp, color: AppColors.error),
+                  Icon(
+                    Icons.error_outline_rounded,
+                    size: 48.sp,
+                    color: AppColors.error,
+                  ),
                   SizedBox(height: 12.h),
                   Text(
                     l10n.translateError(state.message),
                     style: TextStyle(
-                        fontSize: 14.sp, color: AppColors.textSecondary),
+                      fontSize: 14.sp,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   SizedBox(height: 20.h),
                   ElevatedButton(
@@ -394,13 +404,18 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.inventory_2_outlined,
-                        size: 56.sp, color: AppColors.textHint),
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 56.sp,
+                      color: AppColors.textHint,
+                    ),
                     SizedBox(height: 12.h),
                     Text(
                       l10n.noUpgradesAvailable,
                       style: TextStyle(
-                          fontSize: 14.sp, color: AppColors.textSecondary),
+                        fontSize: 14.sp,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -430,12 +445,16 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
               color: const Color(0xFFECFDF5),
               borderRadius: BorderRadius.circular(14.r),
               border: Border.all(
-                  color: AppColors.successLight.withValues(alpha: 0.3)),
+                color: AppColors.successLight.withValues(alpha: 0.3),
+              ),
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline_rounded,
-                    size: 20.sp, color: AppColors.successLight),
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 20.sp,
+                  color: AppColors.successLight,
+                ),
                 SizedBox(width: 10.w),
                 Expanded(
                   child: Column(
@@ -461,8 +480,11 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     ],
                   ),
                 ),
-                Icon(Icons.check_circle_rounded,
-                    size: 22.sp, color: AppColors.successLight),
+                Icon(
+                  Icons.check_circle_rounded,
+                  size: 22.sp,
+                  color: AppColors.successLight,
+                ),
               ],
             ),
           ),
@@ -621,7 +643,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                       Text(
                         fwVer,
                         style: TextStyle(
-                            fontSize: 11.sp, color: AppColors.textSecondary),
+                          fontSize: 11.sp,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
@@ -649,8 +673,11 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           SizedBox(height: 12.h),
           Row(
             children: [
-              Icon(Icons.calendar_today_outlined,
-                  size: 14.sp, color: AppColors.textHint),
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 14.sp,
+                color: AppColors.textHint,
+              ),
               SizedBox(width: 4.w),
               Text(
                 dateStr,
@@ -672,7 +699,8 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                             minHeight: 4.h,
                             backgroundColor: const Color(0xFFE5E7EB),
                             valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.primary),
+                              AppColors.primary,
+                            ),
                           ),
                         ),
                         SizedBox(height: 2.h),
@@ -681,7 +709,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                               ? '${(downloadProgress * 100).toStringAsFixed(0)}%'
                               : l10n.downloading,
                           style: TextStyle(
-                              fontSize: 10.sp, color: AppColors.primary),
+                            fontSize: 10.sp,
+                            color: AppColors.primary,
+                          ),
                         ),
                       ],
                     ),
@@ -739,7 +769,11 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
   }
 
   Widget _buildInstallButton(
-      BuildContext context, int packageId, String version, bool isRollbackVer) {
+    BuildContext context,
+    int packageId,
+    String version,
+    bool isRollbackVer,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     final bgColor = isRollbackVer ? AppColors.warning : AppColors.primary;
     return GestureDetector(
@@ -832,8 +866,10 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(l10n.selectFirmware,
-              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
+          title: Text(
+            l10n.selectFirmware,
+            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: validChips.map((chip) {
@@ -853,17 +889,26 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                     child: Text(
                       chipName.isNotEmpty ? chipName.substring(0, 1) : '?',
                       style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary),
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
                     ),
                   ),
                 ),
-                title: Text(chipName,
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14.sp)),
-                subtitle: Text('v$fwVer',
-                    style: TextStyle(
-                        fontSize: 12.sp, color: AppColors.textSecondary)),
+                title: Text(
+                  chipName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14.sp,
+                  ),
+                ),
+                subtitle: Text(
+                  'v$fwVer',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   _jumpToLocalOTA(chipMap);
@@ -873,7 +918,9 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.cancel),
+            ),
           ],
         );
       },

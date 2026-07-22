@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>.SenderName - 组织邀请</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #EFF2F7;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 30px auto;
+            padding: 20px 16px;
+        }
+        .header {
+            background: linear-gradient(135deg, #1E88E5, #42A5F5);
+            color: white;
+            padding: 32px 24px;
+            text-align: center;
+            border-radius: 24px 24px 0 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .content {
+            background: #FFFFFF;
+            border-radius: 0 0 24px 24px;
+            padding: 32px 28px;
+            margin-top: -8px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        }
+        .code-box {
+            background: linear-gradient(135deg, #F0F7FF 0%, #FFFFFF 100%);
+            padding: 24px 20px;
+            border-radius: 20px;
+            text-align: center;
+            font-size: 32px;
+            letter-spacing: 8px;
+            font-weight: 800;
+            margin: 28px 0;
+            border: 2px solid rgba(30,136,229,0.2);
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.02), 0 6px 12px -6px rgba(30,136,229,0.15);
+            color: #1363B3;
+        }
+        .footer {
+            text-align: center;
+            color: #9AA6B9;
+            font-size: 12px;
+            margin-top: 32px;
+            padding-top: 20px;
+            border-top: 1px solid #ECF0F5;
+        }
+        h2 {
+            font-size: 24px;
+            color: #0A1C2F;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        p {
+            font-size: 16px;
+            color: #3E4A5E;
+            margin: 12px 0;
+            line-height: 1.6;
+        }
+        .highlight {
+            font-weight: 600;
+            color: #1E88E5;
+        }
+        .warning-box {
+            background: #FFF8E1;
+            border-left: 4px solid #FFA000;
+            padding: 16px 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .link-button {
+            display: inline-block;
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #1E88E5, #42A5F5);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 600;
+            margin: 20px 0;
+            transition: all 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>.OrganizationName · 团队邀请</h1>
+        </div>
+        <div class="content">
+            <p>尊敬的<span class="highlight">.ToEmail</span>:</p>
+            
+            <p>您已被邀请加入 <strong class="highlight">.OrganizationName</strong>，担任 
+               <strong style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB); padding: 4px 12px; border-radius: 20px; color: #1565C0;">.RoleName</strong> 角色。
+            </p>
+            
+            <p>您的临时邀请码为:</p>
+            <div class="code-box">
+                .TokenHint****
+            </div>
+            
+            <div class="warning-box">
+                <p style="margin: 0; font-weight: 600; color: #F57C00;">⚠️ 重要提示</p>
+                <p style="margin: 8px 0 0 0; font-size: 14px; color: #616161;">
+                    此代码将在 <strong class="highlight">.ExpiresHours</strong> 小时后失效，请及时使用。
+                </p>
+            </div>
+            
+            <p>访问管理后台并使用此代码完成注册和加入流程。</p>
+            
+            <div style="text-align: center; margin: 32px 0;">
+                <a href="https://your-domain.com/auth/register?invite=.TokenHint" 
+                   class="link-button"
+                   style="background: linear-gradient(135deg, #1E88E5, #42A5F5); color: white; padding: 14px 28px; text-decoration: none; border-radius: 50px; font-weight: 600; display: inline-block;">
+                   立即加入组织
+                </a>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #ECF0F5; margin: 32px 0;">
+            
+            <p style="font-size: 14px; color: #7E8A9E; margin: 0;">
+                如果您没有收到此邀请，可能是有人误操作。如果您没有尝试加入该组织，请忽略此邮件。
+            </p>
+        </div>
+        <div class="footer">
+            <p>如需帮助，请联系系统管理员或发送邮件至 support@yourdomain.com</p>
+            <p>© .CompanyName · All rights reserved</p>
+            <p style="color: #C0CCDA; margin-top: 8px;">此邮件由系统自动发出，请勿直接回复</p>
+        </div>
+    </div>
+</body>
+</html>

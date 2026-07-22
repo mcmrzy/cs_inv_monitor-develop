@@ -63,23 +63,30 @@ class _RegisterPageState extends State<RegisterPage> {
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.pleaseInputCorrectEmail), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text(l10n.pleaseInputCorrectEmail),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
-    context.read<AuthBloc>().add(AuthSendEmailCodeRequested(email: email, type: 'register'));
+    context
+        .read<AuthBloc>()
+        .add(AuthSendEmailCodeRequested(email: email, type: 'register'));
   }
 
   void _handleRegister() {
     if (!_formKey.currentState!.validate()) return;
 
-    context.read<AuthBloc>().add(AuthEmailRegisterRequested(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-      code: _codeController.text.trim(),
-      phone: _phoneController.text.trim(),
-      nickname: _nicknameController.text.trim(),
-    ),);
+    context.read<AuthBloc>().add(
+          AuthEmailRegisterRequested(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+            code: _codeController.text.trim(),
+            phone: _phoneController.text.trim(),
+            nickname: _nicknameController.text.trim(),
+          ),
+        );
   }
 
   @override
@@ -89,11 +96,20 @@ class _RegisterPageState extends State<RegisterPage> {
         listener: (context, state) {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context)!.translateError(state.message)), backgroundColor: AppColors.error),
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
+                backgroundColor: AppColors.error,
+              ),
             );
           } else if (state is AuthCodeSent) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context)!.verificationCodeSent), backgroundColor: AppColors.success),
+              SnackBar(
+                content:
+                    Text(AppLocalizations.of(context)!.verificationCodeSent),
+                backgroundColor: AppColors.success,
+              ),
             );
             _startCountdown();
           } else if (state is AuthAuthenticated) {
@@ -143,9 +159,19 @@ class _RegisterPageState extends State<RegisterPage> {
       children: [
         Icon(Icons.person_add_outlined, size: 64.sp, color: AppColors.primary),
         SizedBox(height: 16.h),
-        Text(l10n.createAccount, style: TextStyle(fontSize: 28.sp, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        Text(
+          l10n.createAccount,
+          style: TextStyle(
+            fontSize: 28.sp,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
         SizedBox(height: 8.h),
-        Text(l10n.registerToUseAll, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
+        Text(
+          l10n.registerToUseAll,
+          style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+        ),
       ],
     );
   }
@@ -163,7 +189,9 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
       validator: (value) {
         if (value == null || value.isEmpty) return l10n.pleaseInputEmail;
-        if (!value.contains('@') || !value.contains('.')) return l10n.pleaseInputCorrectEmail;
+        if (!value.contains('@') || !value.contains('.')) {
+          return l10n.pleaseInputCorrectEmail;
+        }
         return null;
       },
     );
@@ -184,10 +212,13 @@ class _RegisterPageState extends State<RegisterPage> {
               hintText: l10n.pleaseInputVerificationCode,
               prefixIcon: const Icon(Icons.mark_email_read_outlined),
               counterText: '',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
             ),
             validator: (value) {
-              if (value == null || value.isEmpty) return l10n.pleaseInputVerificationCode;
+              if (value == null || value.isEmpty) {
+                return l10n.pleaseInputVerificationCode;
+              }
               if (value.length < 4) return l10n.pleaseInputCorrectCode;
               return null;
             },
@@ -195,18 +226,33 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
         SizedBox(width: 12.w),
         SizedBox(
-          width: 120.w, height: 56.h,
+          width: 120.w,
+          height: 56.h,
           child: ElevatedButton(
             onPressed: _isSendingCode ? null : _handleSendCode,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary, foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.grey.shade300, disabledForegroundColor: Colors.grey.shade500,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey.shade300,
+              disabledForegroundColor: Colors.grey.shade500,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8.r),
+              ),
               padding: EdgeInsets.zero,
             ),
             child: state is AuthCodeSending
-                ? SizedBox(height: 20.h, width: 20.w, child: const CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                : Text(_isSendingCode ? '${_countdownSeconds}s' : l10n.send, style: TextStyle(fontSize: 14.sp)),
+                ? SizedBox(
+                    height: 20.h,
+                    width: 20.w,
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Text(
+                    _isSendingCode ? '${_countdownSeconds}s' : l10n.send,
+                    style: TextStyle(fontSize: 14.sp),
+                  ),
           ),
         ),
       ],
@@ -245,7 +291,9 @@ class _RegisterPageState extends State<RegisterPage> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
-        if (value == null || value.trim().isEmpty) return l10n.pleaseInputUsername;
+        if (value == null || value.trim().isEmpty) {
+          return l10n.pleaseInputUsername;
+        }
         if (value.trim().length < 2) return l10n.usernameTooShort;
         return null;
       },
@@ -258,10 +306,15 @@ class _RegisterPageState extends State<RegisterPage> {
       controller: _passwordController,
       obscureText: _obscurePassword,
       decoration: InputDecoration(
-        labelText: l10n.password, hintText: l10n.inputNewPasswordHint,
+        labelText: l10n.password,
+        hintText: l10n.inputNewPasswordHint,
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
-          icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+          icon: Icon(
+            _obscurePassword
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+          ),
           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
@@ -280,11 +333,18 @@ class _RegisterPageState extends State<RegisterPage> {
       controller: _confirmPasswordController,
       obscureText: _obscureConfirmPassword,
       decoration: InputDecoration(
-        labelText: l10n.confirmPassword, hintText: l10n.pleaseConfirmPassword,
+        labelText: l10n.confirmPassword,
+        hintText: l10n.pleaseConfirmPassword,
         prefixIcon: const Icon(Icons.lock_outlined),
         suffixIcon: IconButton(
-          icon: Icon(_obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-          onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+          icon: Icon(
+            _obscureConfirmPassword
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+          ),
+          onPressed: () => setState(
+            () => _obscureConfirmPassword = !_obscureConfirmPassword,
+          ),
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
@@ -301,12 +361,20 @@ class _RegisterPageState extends State<RegisterPage> {
     return ElevatedButton(
       onPressed: state is AuthLoading ? null : _handleRegister,
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primary, foregroundColor: Colors.white,
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
         padding: EdgeInsets.symmetric(vertical: 14.h),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       child: state is AuthLoading
-          ? SizedBox(height: 20.h, width: 20.w, child: const CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+          ? SizedBox(
+              height: 20.h,
+              width: 20.w,
+              child: const CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
           : Text(l10n.register, style: TextStyle(fontSize: 16.sp)),
     );
   }
@@ -316,8 +384,14 @@ class _RegisterPageState extends State<RegisterPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(l10n.alreadyHaveAccount, style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary)),
-        TextButton(onPressed: () => context.go('/login'), child: Text(l10n.loginNow, style: TextStyle(fontSize: 14.sp))),
+        Text(
+          l10n.alreadyHaveAccount,
+          style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
+        ),
+        TextButton(
+          onPressed: () => context.go('/login'),
+          child: Text(l10n.loginNow, style: TextStyle(fontSize: 14.sp)),
+        ),
       ],
     );
   }

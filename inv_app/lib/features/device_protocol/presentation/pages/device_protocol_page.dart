@@ -251,7 +251,9 @@ class _DeviceProtocolView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('${l10n.masterHost}：${parallel.masterSn}'),
-        Text('${l10n.modeLabel}：${parallel.mode} · ${l10n.syncLabel}：${parallel.syncState}'),
+        Text(
+          '${l10n.modeLabel}：${parallel.mode} · ${l10n.syncLabel}：${parallel.syncState}',
+        ),
         Text(
           '${l10n.deviceCount}：${parallel.count} · ${l10n.totalPower}：${parallel.totalActivePower.toStringAsFixed(1)} W',
         ),

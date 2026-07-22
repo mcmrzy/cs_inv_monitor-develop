@@ -77,7 +77,8 @@ class AppTheme {
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF1565C0),
         unselectedItemColor: const Color(0xFF9E9E9E),
-        selectedLabelStyle: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),
+        selectedLabelStyle:
+            TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),
         unselectedLabelStyle: TextStyle(fontSize: 12.sp),
       ),
       dividerTheme: const DividerThemeData(
@@ -172,7 +173,8 @@ class AppTheme {
         backgroundColor: const Color(0xFF1A1D24),
         selectedItemColor: const Color(0xFF42A5F5),
         unselectedItemColor: const Color(0xFF6B7280),
-        selectedLabelStyle: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),
+        selectedLabelStyle:
+            TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600),
         unselectedLabelStyle: TextStyle(fontSize: 12.sp),
       ),
       dividerTheme: const DividerThemeData(
@@ -196,65 +198,72 @@ class AppTheme {
 ///
 /// Usage: `AppColor.surface(context)` instead of `Theme.of(context).colorScheme.surface`
 class AppColor {
-  static Color surface(BuildContext context) => Theme.of(context).colorScheme.surface;
-  static Color onSurface(BuildContext context) => Theme.of(context).colorScheme.onSurface;
-  static Color onSurfaceVariant(BuildContext context) => Theme.of(context).colorScheme.onSurfaceVariant;
-  static Color outline(BuildContext context) => Theme.of(context).colorScheme.outline;
-  static Color primary(BuildContext context) => Theme.of(context).colorScheme.primary;
-  static Color primaryContainer(BuildContext context) => Theme.of(context).colorScheme.primaryContainer;
+  static Color surface(BuildContext context) =>
+      Theme.of(context).colorScheme.surface;
+  static Color onSurface(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurface;
+  static Color onSurfaceVariant(BuildContext context) =>
+      Theme.of(context).colorScheme.onSurfaceVariant;
+  static Color outline(BuildContext context) =>
+      Theme.of(context).colorScheme.outline;
+  static Color primary(BuildContext context) =>
+      Theme.of(context).colorScheme.primary;
+  static Color primaryContainer(BuildContext context) =>
+      Theme.of(context).colorScheme.primaryContainer;
 
   /// Standard card decoration used across the app.
-  static BoxDecoration card(BuildContext context, {EdgeInsets? padding}) => BoxDecoration(
-    color: Theme.of(context).colorScheme.surface,
-    borderRadius: BorderRadius.circular(16.r),
-  );
+  static BoxDecoration card(BuildContext context, {EdgeInsets? padding}) =>
+      BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16.r),
+      );
 
   /// Card decoration with subtle shadow for elevated sections.
   static BoxDecoration cardElevated(BuildContext context) => BoxDecoration(
-    color: Theme.of(context).colorScheme.surface,
-    borderRadius: BorderRadius.circular(20.r),
-    boxShadow: [
-      BoxShadow(
-        color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06),
-        blurRadius: 16,
-        offset: const Offset(0, 4),
-      ),
-    ],
-  );
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      );
 
   /// Hero card with primary gradient background.
   static BoxDecoration heroCard(BuildContext context) => BoxDecoration(
-    gradient: const LinearGradient(
-      colors: [
-        Color(0xFF1565C0),
-        Color(0xFF1976D2),
-        Color(0xFF2196F3),
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ),
-    borderRadius: BorderRadius.circular(20.r),
-    boxShadow: [
-      BoxShadow(
-        color: const Color(0xFF1565C0).withValues(alpha: 0.4),
-        blurRadius: 20,
-        offset: const Offset(0, 8),
-      ),
-    ],
-  );
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF1565C0),
+            Color(0xFF1976D2),
+            Color(0xFF2196F3),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20.r),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1565C0).withValues(alpha: 0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      );
 
   /// Info card with primary container gradient.
   static BoxDecoration infoCard(BuildContext context) => BoxDecoration(
-    gradient: LinearGradient(
-      colors: [
-        Theme.of(context).colorScheme.primaryContainer,
-        Theme.of(context).colorScheme.surface,
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ),
-    borderRadius: BorderRadius.circular(16.r),
-  );
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primaryContainer,
+            Theme.of(context).colorScheme.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16.r),
+      );
 }
 
 /// Semantic color constants that work in both light and dark modes.

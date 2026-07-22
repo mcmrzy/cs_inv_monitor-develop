@@ -27,7 +27,8 @@ class StationDetailPage extends StatefulWidget {
   State<StationDetailPage> createState() => _StationDetailPageState();
 }
 
-class _StationDetailPageState extends State<StationDetailPage> with TickerProviderStateMixin {
+class _StationDetailPageState extends State<StationDetailPage>
+    with TickerProviderStateMixin {
   StationDetailLoaded? _cachedState;
   int _activeTabIndex = 0;
   late AnimationController _anim;
@@ -49,7 +50,9 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
   @override
   void initState() {
     super.initState();
-    _anim = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
+    _anim =
+        AnimationController(vsync: this, duration: const Duration(seconds: 4))
+          ..repeat();
     _cachedState = null;
     _activeTabIndex = 0;
     _weatherIcon = '\uD83C\uDF1E';
@@ -58,15 +61,21 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     _mqttSub = null;
     _mqttSubscribed.clear();
     _mqttActive = false;
-    context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+    context
+        .read<StationBloc>()
+        .add(StationDetailRequested(stationId: widget.stationId));
     final mqtt = getIt<MQTTService>();
     _statusSub = mqtt.statusStream.listen((_) {
       if (!mounted) return;
-      context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+      context
+          .read<StationBloc>()
+          .add(StationDetailRequested(stationId: widget.stationId));
     });
     _alarmSub = mqtt.alarmStream.listen((_) {
       if (!mounted) return;
-      context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+      context
+          .read<StationBloc>()
+          .add(StationDetailRequested(stationId: widget.stationId));
     });
     _fetchWeather();
   }
@@ -76,13 +85,17 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       final dio = getIt<Dio>();
       final res = await dio.get('/stations/${widget.stationId}/weather');
       if (res.statusCode == 200) {
-        final data = (res.data is Map) ? (res.data['data'] ?? res.data) as Map<String, dynamic> : res.data as Map<String, dynamic>;
+        final data = (res.data is Map)
+            ? (res.data['data'] ?? res.data) as Map<String, dynamic>
+            : res.data as Map<String, dynamic>;
         if (data['temp_min'] != null || data['temp_max'] != null) {
           if (!mounted) return;
           setState(() {
             _weatherIcon = data['icon'] as String? ?? '\uD83C\uDF1E';
-            final tempMin = (data['temp_min'] as num?)?.toStringAsFixed(0) ?? '--';
-            final tempMax = (data['temp_max'] as num?)?.toStringAsFixed(0) ?? '--';
+            final tempMin =
+                (data['temp_min'] as num?)?.toStringAsFixed(0) ?? '--';
+            final tempMax =
+                (data['temp_max'] as num?)?.toStringAsFixed(0) ?? '--';
             _weatherTemp = '$tempMin~$tempMax℃';
           });
           return;
@@ -111,11 +124,14 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     try {
       final tz = TimezoneUtils.getTimezoneFromStation(station);
       final encodedTz = TimezoneUtils.encodeTimezoneForUrl(tz);
-      final url = 'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lng&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=$encodedTz';
-      final openMeteoDio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 5),
-      ),);
+      final url =
+          'https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lng&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=$encodedTz';
+      final openMeteoDio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+        ),
+      );
       final res = await openMeteoDio.get(url);
       if (res.statusCode != 200) return;
 
@@ -130,8 +146,12 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       if (!mounted) return;
       setState(() {
         _weatherIcon = _weatherIconFromCode(code);
-        final tMin = tempMinList != null && tempMinList.isNotEmpty ? tempMinList[0].toStringAsFixed(0) : '--';
-        final tMax = tempMaxList != null && tempMaxList.isNotEmpty ? tempMaxList[0].toStringAsFixed(0) : '--';
+        final tMin = tempMinList != null && tempMinList.isNotEmpty
+            ? tempMinList[0].toStringAsFixed(0)
+            : '--';
+        final tMax = tempMaxList != null && tempMaxList.isNotEmpty
+            ? tempMaxList[0].toStringAsFixed(0)
+            : '--';
         _weatherTemp = '$tMin~$tMax℃';
       });
     } catch (_) {}
@@ -254,12 +274,15 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         return Scaffold(
           body: Column(
             children: [
-              if (ds.isFromCache) SafeArea(
-                bottom: false,
-                child: OfflineDataBanner(
-                  onRetry: () => context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId)),
+              if (ds.isFromCache)
+                SafeArea(
+                  bottom: false,
+                  child: OfflineDataBanner(
+                    onRetry: () => context.read<StationBloc>().add(
+                          StationDetailRequested(stationId: widget.stationId),
+                        ),
+                  ),
                 ),
-              ),
               Expanded(
                 child: IndexedStack(
                   index: _activeTabIndex,
@@ -302,7 +325,8 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     final coal = (totalKwh * 0.33).toStringAsFixed(1);
     final co2 = (totalKwh * 0.997).toStringAsFixed(1);
     final trees = (totalKwh * 0.05).toStringAsFixed(0);
-    final flows = _computeFlows(displayPvW, displayBattW, displayGridW, displayLoadW);
+    final flows =
+        _computeFlows(displayPvW, displayBattW, displayGridW, displayLoadW);
 
     return Stack(
       children: [
@@ -322,7 +346,9 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         StyledRefreshIndicator(
           color: AppColors.primary,
           onRefresh: () async {
-            context.read<StationBloc>().add(StationDetailRequested(stationId: widget.stationId));
+            context
+                .read<StationBloc>()
+                .add(StationDetailRequested(stationId: widget.stationId));
             _fetchWeather();
           },
           child: ListView(
@@ -331,7 +357,14 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               SizedBox(height: MediaQuery.of(context).padding.top + 6.h),
               _topBar(name, online),
               SizedBox(height: 8.h),
-              _flowArea(displayPvW, displayLoadW, displayBattW, displayGridW, displaySoc, flows),
+              _flowArea(
+                displayPvW,
+                displayLoadW,
+                displayBattW,
+                displayGridW,
+                displaySoc,
+                flows,
+              ),
               SizedBox(height: 10.h),
               _twoCards(displayPvW, totalPowerW, todayKwh),
               SizedBox(height: 10.h),
@@ -362,26 +395,65 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
                   borderRadius: BorderRadius.circular(8.r),
                   child: Padding(
                     padding: EdgeInsets.all(8.w),
-                    child: const Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+                    child: const Icon(
+                      Icons.arrow_back_ios_rounded,
+                      size: 18,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
               ),
               Expanded(
-                child: Text(name, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                 decoration: BoxDecoration(
-                  color: online ? const Color(0xFFECFDF5) : Colors.white.withValues(alpha: 0.8),
+                  color: online
+                      ? const Color(0xFFECFDF5)
+                      : Colors.white.withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(6.r),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 3, offset: const Offset(0, 1))],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(width: 6, height: 6, decoration: BoxDecoration(color: online ? AppColors.successLight : AppColors.textHint, shape: BoxShape.circle)),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: online
+                            ? AppColors.successLight
+                            : AppColors.textHint,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                     SizedBox(width: 4.w),
-                    Text(online ? l10n.online : l10n.offline, style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w500, color: online ? AppColors.successLight : AppColors.textHint)),
+                    Text(
+                      online ? l10n.online : l10n.offline,
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w500,
+                        color: online
+                            ? AppColors.successLight
+                            : AppColors.textHint,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -392,7 +464,13 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
             children: [
               Text(_weatherIcon, style: TextStyle(fontSize: 16.sp)),
               SizedBox(width: 6.w),
-              Text(_weatherTemp ?? '--~--℃', style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary)),
+              Text(
+                _weatherTemp ?? '--~--℃',
+                style: TextStyle(
+                  fontSize: 11.sp,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ],
           ),
         ],
@@ -400,7 +478,14 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     );
   }
 
-  Widget _flowArea(double pv, double load, double batt, double grid, double soc, List<FlowEdge> flows) {
+  Widget _flowArea(
+    double pv,
+    double load,
+    double batt,
+    double grid,
+    double soc,
+    List<FlowEdge> flows,
+  ) {
     final l10n = AppLocalizations.of(context)!;
     final pvW = pv.toStringAsFixed(0);
     final loadW = load.toStringAsFixed(0);
@@ -415,13 +500,46 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
           children: [
             Positioned.fill(
               child: CustomPaint(
-                painter: _EnergyFlowPainter(flows: flows, animValue: _anim.value),
+                painter:
+                    _EnergyFlowPainter(flows: flows, animValue: _anim.value),
               ),
             ),
-            _energyNode(l10n.pv, pvW, Icons.wb_sunny, const Color(0xFFF59E0B), const Alignment(0, -0.75), true, active: pv > 0),
-            _energyNode(l10n.load, loadW, Icons.home_rounded, const Color(0xFF3B82F6), const Alignment(0, 0.75), false, active: load > 0),
-            _energyNodeBatt(l10n.battery, battW, soc, Icons.battery_charging_full, AppColors.successLight, const Alignment(-0.75, 0), active: batt.abs() > 0),
-            _energyNode(l10n.grid, gridW, Icons.electrical_services, AppColors.textSecondary, const Alignment(0.75, 0), true, active: grid.abs() > 0),
+            _energyNode(
+              l10n.pv,
+              pvW,
+              Icons.wb_sunny,
+              const Color(0xFFF59E0B),
+              const Alignment(0, -0.75),
+              true,
+              active: pv > 0,
+            ),
+            _energyNode(
+              l10n.load,
+              loadW,
+              Icons.home_rounded,
+              const Color(0xFF3B82F6),
+              const Alignment(0, 0.75),
+              false,
+              active: load > 0,
+            ),
+            _energyNodeBatt(
+              l10n.battery,
+              battW,
+              soc,
+              Icons.battery_charging_full,
+              AppColors.successLight,
+              const Alignment(-0.75, 0),
+              active: batt.abs() > 0,
+            ),
+            _energyNode(
+              l10n.grid,
+              gridW,
+              Icons.electrical_services,
+              AppColors.textSecondary,
+              const Alignment(0.75, 0),
+              true,
+              active: grid.abs() > 0,
+            ),
           ],
         ),
       ),
@@ -447,7 +565,11 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [color.withValues(alpha: op1), color.withValues(alpha: op1 * 0.2), color.withValues(alpha: 0)],
+                  colors: [
+                    color.withValues(alpha: op1),
+                    color.withValues(alpha: op1 * 0.2),
+                    color.withValues(alpha: 0),
+                  ],
                   stops: const [0.5, 0.8, 1.0],
                 ),
               ),
@@ -458,7 +580,10 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
-                  colors: [color.withValues(alpha: op2), color.withValues(alpha: 0)],
+                  colors: [
+                    color.withValues(alpha: op2),
+                    color.withValues(alpha: 0),
+                  ],
                   stops: const [0.4, 1.0],
                 ),
               ),
@@ -469,25 +594,50 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     );
   }
 
-  Widget _energyNode(String label, String val, IconData icon, Color color, Alignment align, bool labelAbove, {bool active = false}) {
-    final labelWidget = Text(label, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary));
+  Widget _energyNode(
+    String label,
+    String val,
+    IconData icon,
+    Color color,
+    Alignment align,
+    bool labelAbove, {
+    bool active = false,
+  }) {
+    final labelWidget = Text(
+      label,
+      style: TextStyle(
+        fontSize: 12.sp,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textPrimary,
+      ),
+    );
     final circle = Container(
-      width: 80.w, height: 80.w,
+      width: 80.w,
+      height: 80.w,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: color.withValues(alpha: 0.45), width: 2.5),
         boxShadow: [
-          BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: 1),
+          BoxShadow(
+            color: color.withValues(alpha: 0.2),
+            blurRadius: 12,
+            spreadRadius: 1,
+          ),
         ],
       ),
       child: Center(
         child: Container(
-          width: 62.w, height: 62.w,
+          width: 62.w,
+          height: 62.w,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.white,
             boxShadow: [
-              BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6, offset: const Offset(0, 1)),
+              BoxShadow(
+                color: color.withValues(alpha: 0.1),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
+              ),
             ],
           ),
           child: Column(
@@ -495,8 +645,28 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
             children: [
               Icon(icon, size: 16.sp, color: color),
               SizedBox(height: 1.h),
-              Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(val, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: color, height: 1)))),
-              Text('W', style: TextStyle(fontSize: 8.sp, fontWeight: FontWeight.w600, color: color)),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    val,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+              Text(
+                'W',
+                style: TextStyle(
+                  fontSize: 8.sp,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
             ],
           ),
         ),
@@ -509,7 +679,13 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
         children: [
           if (labelAbove) labelWidget,
           if (labelAbove) SizedBox(height: 4.h),
-          if (active) Stack(alignment: Alignment.center, children: [_buildGlow(color), circle]) else circle,
+          if (active)
+            Stack(
+              alignment: Alignment.center,
+              children: [_buildGlow(color), circle],
+            )
+          else
+            circle,
           if (!labelAbove) SizedBox(height: 4.h),
           if (!labelAbove) labelWidget,
         ],
@@ -517,24 +693,42 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     );
   }
 
-  Widget _energyNodeBatt(String label, String val, double soc, IconData icon, Color color, Alignment align, {bool active = false}) {
+  Widget _energyNodeBatt(
+    String label,
+    String val,
+    double soc,
+    IconData icon,
+    Color color,
+    Alignment align, {
+    bool active = false,
+  }) {
     final circle = Container(
-      width: 80.w, height: 80.w,
+      width: 80.w,
+      height: 80.w,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: color.withValues(alpha: 0.45), width: 2.5),
         boxShadow: [
-          BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: 1),
+          BoxShadow(
+            color: color.withValues(alpha: 0.2),
+            blurRadius: 12,
+            spreadRadius: 1,
+          ),
         ],
       ),
       child: Center(
         child: Container(
-          width: 62.w, height: 62.w,
+          width: 62.w,
+          height: 62.w,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.white,
             boxShadow: [
-              BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6, offset: const Offset(0, 1)),
+              BoxShadow(
+                color: color.withValues(alpha: 0.1),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
+              ),
             ],
           ),
           child: Column(
@@ -546,12 +740,39 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
                 children: [
                   Icon(icon, size: 15.sp, color: color),
                   SizedBox(width: 2.w),
-                  Text('${soc.toStringAsFixed(0)}%', style: TextStyle(fontSize: 9.sp, fontWeight: FontWeight.w700, color: color)),
+                  Text(
+                    '${soc.toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 9.sp,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
                 ],
               ),
               SizedBox(height: 1.h),
-              Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(val, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w800, color: color, height: 1)))),
-              Text('W', style: TextStyle(fontSize: 8.sp, fontWeight: FontWeight.w600, color: color)),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    val,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+              Text(
+                'W',
+                style: TextStyle(
+                  fontSize: 8.sp,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
             ],
           ),
         ),
@@ -562,56 +783,94 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
           SizedBox(height: 4.h),
-          if (active) Stack(alignment: Alignment.center, children: [_buildGlow(color), circle]) else circle,
+          if (active)
+            Stack(
+              alignment: Alignment.center,
+              children: [_buildGlow(color), circle],
+            )
+          else
+            circle,
         ],
       ),
     );
   }
 
-  List<FlowEdge> _computeFlows(double pv, double batt, double grid, double load) {
+  List<FlowEdge> _computeFlows(
+    double pv,
+    double batt,
+    double grid,
+    double load,
+  ) {
     final flows = <FlowEdge>[];
     const threshold = 0.0;
 
     // PV → Load (main trunk)
     if (pv > threshold && load > threshold) {
-      flows.add(const FlowEdge(
-        from: NodePosition.top, to: NodePosition.bottom,
-        fromColor: Color(0xFFF59E0B), toColor: Color(0xFF3B82F6),
-      ),);
+      flows.add(
+        const FlowEdge(
+          from: NodePosition.top,
+          to: NodePosition.bottom,
+          fromColor: Color(0xFFF59E0B),
+          toColor: Color(0xFF3B82F6),
+        ),
+      );
     }
 
     // PV → Battery (left branch)
     if (pv > threshold && batt > threshold) {
-      flows.add(const FlowEdge(
-        from: NodePosition.top, to: NodePosition.left,
-        fromColor: Color(0xFFF59E0B), toColor: AppColors.successLight,
-      ),);
+      flows.add(
+        const FlowEdge(
+          from: NodePosition.top,
+          to: NodePosition.left,
+          fromColor: Color(0xFFF59E0B),
+          toColor: AppColors.successLight,
+        ),
+      );
     }
 
     // Battery → Load (left branch, discharging)
     if (batt < -threshold) {
-      flows.add(const FlowEdge(
-        from: NodePosition.left, to: NodePosition.bottom,
-        fromColor: AppColors.successLight, toColor: Color(0xFF3B82F6),
-      ),);
+      flows.add(
+        const FlowEdge(
+          from: NodePosition.left,
+          to: NodePosition.bottom,
+          fromColor: AppColors.successLight,
+          toColor: Color(0xFF3B82F6),
+        ),
+      );
     }
 
     // Grid → Load (right branch, importing)
     if (grid > threshold) {
-      flows.add(const FlowEdge(
-        from: NodePosition.right, to: NodePosition.bottom,
-        fromColor: AppColors.textSecondary, toColor: Color(0xFF3B82F6),
-      ),);
+      flows.add(
+        const FlowEdge(
+          from: NodePosition.right,
+          to: NodePosition.bottom,
+          fromColor: AppColors.textSecondary,
+          toColor: Color(0xFF3B82F6),
+        ),
+      );
     }
 
     // Load → Grid (right branch, exporting to grid)
     if (grid < -threshold) {
-      flows.add(const FlowEdge(
-        from: NodePosition.bottom, to: NodePosition.right,
-        fromColor: Color(0xFF3B82F6), toColor: AppColors.textSecondary,
-      ),);
+      flows.add(
+        const FlowEdge(
+          from: NodePosition.bottom,
+          to: NodePosition.right,
+          fromColor: Color(0xFF3B82F6),
+          toColor: AppColors.textSecondary,
+        ),
+      );
     }
 
     return flows;
@@ -625,23 +884,59 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Row(
         children: [
-          Expanded(child: _crd(Icons.wb_sunny_outlined, w, 'W', l10n.currentPower, const Color(0xFFF59E0B))),
+          Expanded(
+            child: _crd(
+              Icons.wb_sunny_outlined,
+              w,
+              'W',
+              l10n.currentPower,
+              const Color(0xFFF59E0B),
+            ),
+          ),
           SizedBox(width: 10.w),
-          Expanded(child: _crd(Icons.bolt_rounded, kwh, 'kWh', l10n.todayGeneration, AppColors.successLight)),
+          Expanded(
+            child: _crd(
+              Icons.bolt_rounded,
+              kwh,
+              'kWh',
+              l10n.todayGeneration,
+              AppColors.successLight,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _crd(IconData icon, String val, String unit, String label, Color accent) {
+  Widget _crd(
+    IconData icon,
+    String val,
+    String unit,
+    String label,
+    Color accent,
+  ) {
     return Container(
       padding: EdgeInsets.all(14.w),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14.r), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           Container(
-            width: 36.w, height: 36.w,
-            decoration: BoxDecoration(color: accent.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10.r)),
+            width: 36.w,
+            height: 36.w,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10.r),
+            ),
             child: Icon(icon, size: 18.sp, color: accent),
           ),
           SizedBox(width: 10.w),
@@ -652,13 +947,33 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(val, style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1)),
+                    Text(
+                      val,
+                      style: TextStyle(
+                        fontSize: 22.sp,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                        height: 1,
+                      ),
+                    ),
                     SizedBox(width: 4.w),
-                    Padding(padding: EdgeInsets.only(bottom: 2.h), child: Text(unit, style: TextStyle(fontSize: 11.sp, color: AppColors.textHint))),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: 2.h),
+                      child: Text(
+                        unit,
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 SizedBox(height: 2.h),
-                Text(label, style: TextStyle(fontSize: 10.sp, color: AppColors.textHint)),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                ),
               ],
             ),
           ),
@@ -673,7 +988,17 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Container(
         padding: EdgeInsets.all(16.w),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14.r), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14.r),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Row(
           children: [
             _sItem(month.toStringAsFixed(0), 'kWh', l10n.monthlyGeneration),
@@ -693,13 +1018,33 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(val, style: TextStyle(fontSize: 19.sp, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1)),
+              Text(
+                val,
+                style: TextStyle(
+                  fontSize: 19.sp,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  height: 1,
+                ),
+              ),
               SizedBox(width: 3.w),
-              Padding(padding: EdgeInsets.only(bottom: 2.h), child: Text(unit, style: TextStyle(fontSize: 10.sp, color: AppColors.textHint))),
+              Padding(
+                padding: EdgeInsets.only(bottom: 2.h),
+                child: Text(
+                  unit,
+                  style: TextStyle(
+                    fontSize: 10.sp,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ),
             ],
           ),
           SizedBox(height: 4.h),
-          Text(label, style: TextStyle(fontSize: 10.sp, color: AppColors.textHint)),
+          Text(
+            label,
+            style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+          ),
         ],
       ),
     );
@@ -711,19 +1056,51 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
       padding: EdgeInsets.symmetric(horizontal: 16.w),
       child: Container(
         padding: EdgeInsets.all(14.w),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14.r), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2))]),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14.r),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.socialContribution, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            Text(
+              l10n.socialContribution,
+              style: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
             SizedBox(height: 10.h),
             Row(
               children: [
-                _ecoCard('$coal kg', l10n.coalSaved, Icons.factory_outlined, const Color(0xFF06B6D4)),
+                _ecoCard(
+                  '$coal kg',
+                  l10n.coalSaved,
+                  Icons.factory_outlined,
+                  const Color(0xFF06B6D4),
+                ),
                 SizedBox(width: 8.w),
-                _ecoCard('$co2 kg', l10n.co2Reduction, Icons.cloud_outlined, AppColors.successLight),
+                _ecoCard(
+                  '$co2 kg',
+                  l10n.co2Reduction,
+                  Icons.cloud_outlined,
+                  AppColors.successLight,
+                ),
                 SizedBox(width: 8.w),
-                _ecoCard(l10n.str('tree_count', {'count': trees}), l10n.treeEquivalent, Icons.park_outlined, const Color(0xFF84CC16)),
+                _ecoCard(
+                  l10n.str('tree_count', {'count': trees}),
+                  l10n.treeEquivalent,
+                  Icons.park_outlined,
+                  const Color(0xFF84CC16),
+                ),
               ],
             ),
           ],
@@ -745,9 +1122,19 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
           children: [
             Icon(icon, size: 20.sp, color: color),
             SizedBox(height: 6.h),
-            Text(val, style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700, color: color)),
+            Text(
+              val,
+              style: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
             SizedBox(height: 2.h),
-            Text(label, style: TextStyle(fontSize: 9.sp, color: AppColors.textHint)),
+            Text(
+              label,
+              style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
+            ),
           ],
         ),
       ),
@@ -780,13 +1167,26 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               borderRadius: BorderRadius.circular(8.r),
               child: Padding(
                 padding: EdgeInsets.all(8.w),
-                child: const Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+                child: const Icon(
+                  Icons.arrow_back_ios_rounded,
+                  size: 18,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
           ),
           SizedBox(width: 4.w),
           Expanded(
-            child: Text(name, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              name,
+              style: TextStyle(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -798,7 +1198,16 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
     return Container(
       height: 56.h + MediaQuery.of(context).padding.bottom,
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, -1))]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, -1),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           _tab(0, Icons.info_outline, l10n.stationOverview),
@@ -823,9 +1232,20 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 20.sp, color: active ? AppColors.primary : AppColors.textHint),
+              Icon(
+                icon,
+                size: 20.sp,
+                color: active ? AppColors.primary : AppColors.textHint,
+              ),
               SizedBox(height: 2.h),
-              Text(label, style: TextStyle(fontSize: 10.sp, fontWeight: active ? FontWeight.w600 : FontWeight.w400, color: active ? AppColors.primary : AppColors.textHint)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.sp,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                  color: active ? AppColors.primary : AppColors.textHint,
+                ),
+              ),
             ],
           ),
         ),
@@ -835,7 +1255,9 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
 
   Widget _buildDevicesBody(dynamic ds) {
     final station = ds.station;
-    final name = station != null ? (station['station_name'] ?? station['name'] ?? '') : '';
+    final name = station != null
+        ? (station['station_name'] ?? station['name'] ?? '')
+        : '';
     final devices = _mergeMqttFaultStatus((ds.devices as List?) ?? []);
 
     return Stack(
@@ -898,12 +1320,25 @@ class _StationDetailPageState extends State<StationDetailPage> with TickerProvid
               borderRadius: BorderRadius.circular(8.r),
               child: Padding(
                 padding: EdgeInsets.all(8.w),
-                child: const Icon(Icons.arrow_back_ios_rounded, size: 18, color: AppColors.textPrimary),
+                child: const Icon(
+                  Icons.arrow_back_ios_rounded,
+                  size: 18,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
           ),
           Expanded(
-            child: Text(name, style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+            child: Text(
+              name,
+              style: TextStyle(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -934,157 +1369,251 @@ class _EnergyFlowPainter extends CustomPainter {
   _EnergyFlowPainter({required this.flows, required this.animValue});
 
   @override
-void paint(Canvas canvas, Size size) {
-  final cx = size.width / 2;
-  final cy = size.height / 2;
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
 
-  // 动态计算：80.w / 2 = 40 * size.width / 375
-  final nodeR = 40.0 * size.width / 375.0;
-  // 标签12.sp + 间距4.h 导致圆心偏移 = (12.w/375 + 4.h/812) / 2
-  // gapH = 4 * size.height / 400 = size.height / 100 (因为 400.h = size.height)
-  // labelH ≈ 12 * size.width / 375
-  final labelOff = (12.0 * size.width / 375.0 + size.height / 100.0) / 2.0;
+    // 动态计算：80.w / 2 = 40 * size.width / 375
+    final nodeR = 40.0 * size.width / 375.0;
+    // 标签12.sp + 间距4.h 导致圆心偏移 = (12.w/375 + 4.h/812) / 2
+    // gapH = 4 * size.height / 400 = size.height / 100 (因为 400.h = size.height)
+    // labelH ≈ 12 * size.width / 375
+    final labelOff = (12.0 * size.width / 375.0 + size.height / 100.0) / 2.0;
 
-  // Align 坐标 → 圆的实际中心（含标签偏移）
-  // labelAbove=true 的节点（光伏、电网、储能）：圆心下移 labelOff
-  // labelAbove=false 的节点（负载）：圆心在 Align 锚点上方 labelOff
-  final pvC = Offset(cx, size.height * 0.125 + labelOff);
-  final loadC = Offset(cx, size.height * 0.875 - labelOff);
-  final battC = Offset(size.width * 0.125, cy + labelOff);
-  final gridC = Offset(size.width * 0.875, cy + labelOff);
+    // Align 坐标 → 圆的实际中心（含标签偏移）
+    // labelAbove=true 的节点（光伏、电网、储能）：圆心下移 labelOff
+    // labelAbove=false 的节点（负载）：圆心在 Align 锚点上方 labelOff
+    final pvC = Offset(cx, size.height * 0.125 + labelOff);
+    final loadC = Offset(cx, size.height * 0.875 - labelOff);
+    final battC = Offset(size.width * 0.125, cy + labelOff);
+    final gridC = Offset(size.width * 0.875, cy + labelOff);
 
-  const pvColor = Color(0xFFF59E0B);
-  const loadColor = Color(0xFF3B82F6);
-  const battColor = AppColors.successLight;
-  const gridColor = AppColors.textSecondary;
-  const r = 16.0;
-  const offset = 8.0;
+    const pvColor = Color(0xFFF59E0B);
+    const loadColor = Color(0xFF3B82F6);
+    const battColor = AppColors.successLight;
+    const gridColor = AppColors.textSecondary;
+    const r = 16.0;
+    const offset = 8.0;
 
-  bool hasEdge(NodePosition a, NodePosition b) =>
-      flows.any((f) => (f.from == a && f.to == b) || (f.from == b && f.to == a));
+    bool hasEdge(NodePosition a, NodePosition b) => flows
+        .any((f) => (f.from == a && f.to == b) || (f.from == b && f.to == a));
 
-  // ── 光伏 ↔ 负载：中心竖直线（完全保留，走cx） ──
-  if (hasEdge(NodePosition.top, NodePosition.bottom)) {
-    final a = Offset(pvC.dx, pvC.dy + nodeR);
-    final b = Offset(loadC.dx, loadC.dy - nodeR);
-    _line(canvas, a, b, pvColor, loadColor);
-    _particles(canvas, a, b, pvColor, loadColor);
-    _drawArrow(canvas, b.dx, b.dy + 12, loadColor);
-  }
-
-  // ── 储能 ↔ 光伏：向右 → 拐弯 → 走 cx-offset 竖线 → 到光伏中心左侧 ──
-  if (hasEdge(NodePosition.left, NodePosition.top)) {
-    final battRight = Offset(battC.dx + nodeR, battC.dy);
-    final pvTarget = Offset(pvC.dx - offset, pvC.dy + nodeR);
-    final bY = battC.dy;
-    final pvToBatt = flows.any((f) => f.from == NodePosition.top && f.to == NodePosition.left);
-
-    // pvToBatt=true：PV→储能，粒子reverse=true，从pv到batt移动 → 颜色顺序也要反过来
-    final lineStartColor = pvToBatt ? pvColor : battColor;
-    final lineEndColor = pvToBatt ? battColor : pvColor;
-    
-    _solidLine(canvas, battRight, Offset(cx - offset - r, bY), lineEndColor);
-    
-    _curvedArcOnly(canvas, 
-      Offset(cx - offset - r, bY), 
-      Offset(cx - offset, bY), 
-      Offset(cx - offset, bY - r), 
-      lineEndColor, lineStartColor,
-      reverse: !pvToBatt,);
-    
-    _solidLine(canvas, Offset(cx - offset, bY - r), pvTarget, lineStartColor);
-
-    _curvedParticlesV(canvas, battRight, Offset(cx - offset - r, bY), Offset(cx - offset, bY), Offset(cx - offset, bY - r), pvTarget, battColor, pvColor,
-      reverse: pvToBatt,);
-    if (pvToBatt) {
-      _drawArrow(canvas, battRight.dx - 12, bY, battColor, pointingLeft: true);
-    } else {
-      _drawArrow(canvas, pvTarget.dx, pvTarget.dy - 12, pvColor, pointingUp: true);
+    // ── 光伏 ↔ 负载：中心竖直线（完全保留，走cx） ──
+    if (hasEdge(NodePosition.top, NodePosition.bottom)) {
+      final a = Offset(pvC.dx, pvC.dy + nodeR);
+      final b = Offset(loadC.dx, loadC.dy - nodeR);
+      _line(canvas, a, b, pvColor, loadColor);
+      _particles(canvas, a, b, pvColor, loadColor);
+      _drawArrow(canvas, b.dx, b.dy + 12, loadColor);
     }
-  }
 
-  // ── 储能 ↔ 负载：向右 → 拐弯 → 走 cx-offset 竖线 → 到负载中心左侧 ──
-  if (hasEdge(NodePosition.left, NodePosition.bottom)) {
-    final battRight = Offset(battC.dx + nodeR, battC.dy);
-    final loadTarget = Offset(loadC.dx - offset, loadC.dy - nodeR);
-    final bY = battC.dy;
+    // ── 储能 ↔ 光伏：向右 → 拐弯 → 走 cx-offset 竖线 → 到光伏中心左侧 ──
+    if (hasEdge(NodePosition.left, NodePosition.top)) {
+      final battRight = Offset(battC.dx + nodeR, battC.dy);
+      final pvTarget = Offset(pvC.dx - offset, pvC.dy + nodeR);
+      final bY = battC.dy;
+      final pvToBatt = flows
+          .any((f) => f.from == NodePosition.top && f.to == NodePosition.left);
 
-    _solidLine(canvas, battRight, Offset(cx - offset - r, bY), battColor);
-    
-    _curvedArcOnly(canvas,
-      Offset(cx - offset - r, bY),
-      Offset(cx - offset, bY),
-      Offset(cx - offset, bY + r),
-      battColor, loadColor,);
-    
-    _solidLine(canvas, Offset(cx - offset, bY + r), loadTarget, loadColor);
+      // pvToBatt=true：PV→储能，粒子reverse=true，从pv到batt移动 → 颜色顺序也要反过来
+      final lineStartColor = pvToBatt ? pvColor : battColor;
+      final lineEndColor = pvToBatt ? battColor : pvColor;
 
-    _curvedParticlesV(canvas, battRight, Offset(cx - offset - r, bY), Offset(cx - offset, bY), Offset(cx - offset, bY + r), loadTarget, battColor, loadColor);
-    _drawArrow(canvas, loadTarget.dx, loadTarget.dy - 12, loadColor);
-  }
+      _solidLine(canvas, battRight, Offset(cx - offset - r, bY), lineEndColor);
 
-  // ── 电网 ↔ 光伏：向左 → 拐弯 → 走 cx+offset 竖线 → 到光伏中心右侧 ──
-  if (hasEdge(NodePosition.right, NodePosition.top)) {
-    final gridLeft = Offset(gridC.dx - nodeR, gridC.dy);
-    final pvTarget = Offset(pvC.dx + offset, pvC.dy + nodeR);
-    final gY = gridC.dy;
-    final pvToGrid = flows.any((f) => f.from == NodePosition.top && f.to == NodePosition.right);
+      _curvedArcOnly(
+        canvas,
+        Offset(cx - offset - r, bY),
+        Offset(cx - offset, bY),
+        Offset(cx - offset, bY - r),
+        lineEndColor,
+        lineStartColor,
+        reverse: !pvToBatt,
+      );
 
-    final lineStartColor = pvToGrid ? pvColor : gridColor;
-    final lineEndColor = pvToGrid ? gridColor : pvColor;
-    
-    _solidLine(canvas, gridLeft, Offset(cx + offset + r, gY), lineEndColor);
-    
-    _curvedArcOnly(canvas,
-      Offset(cx + offset + r, gY),
-      Offset(cx + offset, gY),
-      Offset(cx + offset, gY - r),
-      lineEndColor, lineStartColor,
-      reverse: !pvToGrid,);
-    
-    _solidLine(canvas, Offset(cx + offset, gY - r), pvTarget, lineStartColor);
+      _solidLine(canvas, Offset(cx - offset, bY - r), pvTarget, lineStartColor);
 
-    _curvedParticlesV(canvas, gridLeft, Offset(cx + offset + r, gY), Offset(cx + offset, gY), Offset(cx + offset, gY - r), pvTarget, gridColor, pvColor,
-      reverse: pvToGrid,);
-    if (pvToGrid) {
-      _drawArrow(canvas, gridLeft.dx + 12, gY, gridColor, pointingLeft: false);
-    } else {
-      _drawArrow(canvas, pvTarget.dx, pvTarget.dy - 12, pvColor, pointingUp: true);
+      _curvedParticlesV(
+        canvas,
+        battRight,
+        Offset(cx - offset - r, bY),
+        Offset(cx - offset, bY),
+        Offset(cx - offset, bY - r),
+        pvTarget,
+        battColor,
+        pvColor,
+        reverse: pvToBatt,
+      );
+      if (pvToBatt) {
+        _drawArrow(
+          canvas,
+          battRight.dx - 12,
+          bY,
+          battColor,
+          pointingLeft: true,
+        );
+      } else {
+        _drawArrow(
+          canvas,
+          pvTarget.dx,
+          pvTarget.dy - 12,
+          pvColor,
+          pointingUp: true,
+        );
+      }
     }
-  }
 
-  // ── 电网 ↔ 负载：向左 → 拐弯 → 走 cx+offset 竖线 → 到负载中心右侧 ──
-  if (hasEdge(NodePosition.right, NodePosition.bottom)) {
-    final gridLeft = Offset(gridC.dx - nodeR, gridC.dy);
-    final loadTarget = Offset(loadC.dx + offset, loadC.dy - nodeR);
-    final gY = gridC.dy;
-    final loadToGrid = flows.any((f) => f.from == NodePosition.bottom && f.to == NodePosition.right);
+    // ── 储能 ↔ 负载：向右 → 拐弯 → 走 cx-offset 竖线 → 到负载中心左侧 ──
+    if (hasEdge(NodePosition.left, NodePosition.bottom)) {
+      final battRight = Offset(battC.dx + nodeR, battC.dy);
+      final loadTarget = Offset(loadC.dx - offset, loadC.dy - nodeR);
+      final bY = battC.dy;
 
-    final lineStartColor = loadToGrid ? loadColor : gridColor;
-    final lineEndColor = loadToGrid ? gridColor : loadColor;
-    
-    _solidLine(canvas, gridLeft, Offset(cx + offset + r, gY), lineEndColor);
-    
-    _curvedArcOnly(canvas,
-      Offset(cx + offset + r, gY),
-      Offset(cx + offset, gY),
-      Offset(cx + offset, gY + r),
-      lineEndColor, lineStartColor,
-      reverse: !loadToGrid,);
-    
-    _solidLine(canvas, Offset(cx + offset, gY + r), loadTarget, lineStartColor);
+      _solidLine(canvas, battRight, Offset(cx - offset - r, bY), battColor);
 
-    _curvedParticlesV(canvas, gridLeft, Offset(cx + offset + r, gY), Offset(cx + offset, gY), Offset(cx + offset, gY + r), loadTarget, gridColor, loadColor,
-      reverse: loadToGrid,);
-    if (loadToGrid) {
-      _drawArrow(canvas, gridLeft.dx + 12, gY, gridColor, pointingLeft: false);
-    } else {
+      _curvedArcOnly(
+        canvas,
+        Offset(cx - offset - r, bY),
+        Offset(cx - offset, bY),
+        Offset(cx - offset, bY + r),
+        battColor,
+        loadColor,
+      );
+
+      _solidLine(canvas, Offset(cx - offset, bY + r), loadTarget, loadColor);
+
+      _curvedParticlesV(
+        canvas,
+        battRight,
+        Offset(cx - offset - r, bY),
+        Offset(cx - offset, bY),
+        Offset(cx - offset, bY + r),
+        loadTarget,
+        battColor,
+        loadColor,
+      );
       _drawArrow(canvas, loadTarget.dx, loadTarget.dy - 12, loadColor);
     }
-  }
-}
 
-  void _drawArrow(Canvas canvas, double x, double y, Color c, {bool pointingLeft = false, bool pointingUp = false}) {
+    // ── 电网 ↔ 光伏：向左 → 拐弯 → 走 cx+offset 竖线 → 到光伏中心右侧 ──
+    if (hasEdge(NodePosition.right, NodePosition.top)) {
+      final gridLeft = Offset(gridC.dx - nodeR, gridC.dy);
+      final pvTarget = Offset(pvC.dx + offset, pvC.dy + nodeR);
+      final gY = gridC.dy;
+      final pvToGrid = flows
+          .any((f) => f.from == NodePosition.top && f.to == NodePosition.right);
+
+      final lineStartColor = pvToGrid ? pvColor : gridColor;
+      final lineEndColor = pvToGrid ? gridColor : pvColor;
+
+      _solidLine(canvas, gridLeft, Offset(cx + offset + r, gY), lineEndColor);
+
+      _curvedArcOnly(
+        canvas,
+        Offset(cx + offset + r, gY),
+        Offset(cx + offset, gY),
+        Offset(cx + offset, gY - r),
+        lineEndColor,
+        lineStartColor,
+        reverse: !pvToGrid,
+      );
+
+      _solidLine(canvas, Offset(cx + offset, gY - r), pvTarget, lineStartColor);
+
+      _curvedParticlesV(
+        canvas,
+        gridLeft,
+        Offset(cx + offset + r, gY),
+        Offset(cx + offset, gY),
+        Offset(cx + offset, gY - r),
+        pvTarget,
+        gridColor,
+        pvColor,
+        reverse: pvToGrid,
+      );
+      if (pvToGrid) {
+        _drawArrow(
+          canvas,
+          gridLeft.dx + 12,
+          gY,
+          gridColor,
+          pointingLeft: false,
+        );
+      } else {
+        _drawArrow(
+          canvas,
+          pvTarget.dx,
+          pvTarget.dy - 12,
+          pvColor,
+          pointingUp: true,
+        );
+      }
+    }
+
+    // ── 电网 ↔ 负载：向左 → 拐弯 → 走 cx+offset 竖线 → 到负载中心右侧 ──
+    if (hasEdge(NodePosition.right, NodePosition.bottom)) {
+      final gridLeft = Offset(gridC.dx - nodeR, gridC.dy);
+      final loadTarget = Offset(loadC.dx + offset, loadC.dy - nodeR);
+      final gY = gridC.dy;
+      final loadToGrid = flows.any(
+        (f) => f.from == NodePosition.bottom && f.to == NodePosition.right,
+      );
+
+      final lineStartColor = loadToGrid ? loadColor : gridColor;
+      final lineEndColor = loadToGrid ? gridColor : loadColor;
+
+      _solidLine(canvas, gridLeft, Offset(cx + offset + r, gY), lineEndColor);
+
+      _curvedArcOnly(
+        canvas,
+        Offset(cx + offset + r, gY),
+        Offset(cx + offset, gY),
+        Offset(cx + offset, gY + r),
+        lineEndColor,
+        lineStartColor,
+        reverse: !loadToGrid,
+      );
+
+      _solidLine(
+        canvas,
+        Offset(cx + offset, gY + r),
+        loadTarget,
+        lineStartColor,
+      );
+
+      _curvedParticlesV(
+        canvas,
+        gridLeft,
+        Offset(cx + offset + r, gY),
+        Offset(cx + offset, gY),
+        Offset(cx + offset, gY + r),
+        loadTarget,
+        gridColor,
+        loadColor,
+        reverse: loadToGrid,
+      );
+      if (loadToGrid) {
+        _drawArrow(
+          canvas,
+          gridLeft.dx + 12,
+          gY,
+          gridColor,
+          pointingLeft: false,
+        );
+      } else {
+        _drawArrow(canvas, loadTarget.dx, loadTarget.dy - 12, loadColor);
+      }
+    }
+  }
+
+  void _drawArrow(
+    Canvas canvas,
+    double x,
+    double y,
+    Color c, {
+    bool pointingLeft = false,
+    bool pointingUp = false,
+  }) {
     const s = 6.0;
     final path = Path();
     if (pointingUp) {
@@ -1101,38 +1630,43 @@ void paint(Canvas canvas, Size size) {
       path.lineTo(x + s, y - s);
     }
     path.close();
-    canvas.drawPath(path, Paint()..color = c..style = PaintingStyle.fill);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = c
+        ..style = PaintingStyle.fill,
+    );
   }
 
   void _line(Canvas canvas, Offset a, Offset b, Color ca, Color cb) {
     final dx = b.dx - a.dx, dy = b.dy - a.dy;
     final len = sqrt(dx * dx + dy * dy);
     if (len < 1) return;
-    
+
     const segments = 20;
-    
+
     for (int i = 0; i < segments; i++) {
       final t1 = i / segments;
       final t2 = (i + 1) / segments;
-      
+
       final x1 = a.dx + dx * t1;
       final y1 = a.dy + dy * t1;
       final x2 = a.dx + dx * t2;
       final y2 = a.dy + dy * t2;
-      
+
       final color1 = _lerp3(ca, cb, t1);
       final color2 = _lerp3(ca, cb, t2);
-      
+
       final shader = ui.Gradient.linear(
-        Offset(x1, y1), 
-        Offset(x2, y2), 
-        [color1, color2], 
+        Offset(x1, y1),
+        Offset(x2, y2),
+        [color1, color2],
         [0.0, 1.0],
       );
-      
+
       canvas.drawLine(
-        Offset(x1, y1), 
-        Offset(x2, y2), 
+        Offset(x1, y1),
+        Offset(x2, y2),
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.8
@@ -1143,24 +1677,44 @@ void paint(Canvas canvas, Size size) {
   }
 
   void _solidLine(Canvas canvas, Offset a, Offset b, Color color) {
-    canvas.drawLine(a, b, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.8
-      ..strokeCap = StrokeCap.round
-      ..color = color,);
+    canvas.drawLine(
+      a,
+      b,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.8
+        ..strokeCap = StrokeCap.round
+        ..color = color,
+    );
   }
 
-  void _curvedArcOnly(Canvas canvas, Offset cornerStart, Offset control, Offset cornerEnd, Color ca, Color cb, {bool reverse = false}) {
+  void _curvedArcOnly(
+    Canvas canvas,
+    Offset cornerStart,
+    Offset control,
+    Offset cornerEnd,
+    Color ca,
+    Color cb, {
+    bool reverse = false,
+  }) {
     final path = Path();
     path.moveTo(cornerStart.dx, cornerStart.dy);
     path.quadraticBezierTo(control.dx, control.dy, cornerEnd.dx, cornerEnd.dy);
-    
-    final shader = ui.Gradient.linear(cornerStart, cornerEnd, [reverse ? cb : ca, reverse ? ca : cb], [0.0, 1.0]);
-    canvas.drawPath(path, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.8
-      ..strokeCap = StrokeCap.round
-      ..shader = shader,);
+
+    final shader = ui.Gradient.linear(
+      cornerStart,
+      cornerEnd,
+      [reverse ? cb : ca, reverse ? ca : cb],
+      [0.0, 1.0],
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.8
+        ..strokeCap = StrokeCap.round
+        ..shader = shader,
+    );
   }
 
   void _particles(Canvas canvas, Offset a, Offset b, Color ca, Color cb) {
@@ -1176,7 +1730,17 @@ void paint(Canvas canvas, Size size) {
     }
   }
 
-  void _curvedParticlesV(Canvas canvas, Offset start, Offset cornerStart, Offset control, Offset cornerEnd, Offset end, Color ca, Color cb, {bool reverse = false}) {
+  void _curvedParticlesV(
+    Canvas canvas,
+    Offset start,
+    Offset cornerStart,
+    Offset control,
+    Offset cornerEnd,
+    Offset end,
+    Color ca,
+    Color cb, {
+    bool reverse = false,
+  }) {
     final s1 = (cornerStart - start).distance;
     final bChord = (cornerEnd - cornerStart).distance;
     final bCtrl1 = (control - cornerStart).distance;
@@ -1200,8 +1764,12 @@ void paint(Canvas canvas, Size size) {
       } else if (d < s1 + s2) {
         final bt = (d - s1) / s2;
         final tInv = 1 - bt;
-        px = tInv * tInv * cornerStart.dx + 2 * tInv * bt * control.dx + bt * bt * cornerEnd.dx;
-        py = tInv * tInv * cornerStart.dy + 2 * tInv * bt * control.dy + bt * bt * cornerEnd.dy;
+        px = tInv * tInv * cornerStart.dx +
+            2 * tInv * bt * control.dx +
+            bt * bt * cornerEnd.dx;
+        py = tInv * tInv * cornerStart.dy +
+            2 * tInv * bt * control.dy +
+            bt * bt * cornerEnd.dy;
       } else {
         final lt = (d - s1 - s2) / s3;
         px = cornerEnd.dx + (end.dx - cornerEnd.dx) * lt;
@@ -1217,14 +1785,29 @@ void paint(Canvas canvas, Size size) {
     return cb;
   }
 
-  void _dot(Canvas canvas, double x, double y, double angle, double alpha, Color c) {
-    canvas.drawCircle(Offset(x, y), 5.0, Paint()
-      ..color = c.withValues(alpha: alpha * 0.5)
-      ..style = PaintingStyle.fill
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),);
-    canvas.drawCircle(Offset(x, y), 3.0, Paint()
-      ..color = c.withValues(alpha: alpha)
-      ..style = PaintingStyle.fill,);
+  void _dot(
+    Canvas canvas,
+    double x,
+    double y,
+    double angle,
+    double alpha,
+    Color c,
+  ) {
+    canvas.drawCircle(
+      Offset(x, y),
+      5.0,
+      Paint()
+        ..color = c.withValues(alpha: alpha * 0.5)
+        ..style = PaintingStyle.fill
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    canvas.drawCircle(
+      Offset(x, y),
+      3.0,
+      Paint()
+        ..color = c.withValues(alpha: alpha)
+        ..style = PaintingStyle.fill,
+    );
   }
 
   @override

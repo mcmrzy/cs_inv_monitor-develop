@@ -77,8 +77,9 @@ void main() {
   test(
     'initial state is AuthInitial',
     () {
-    expect(authBloc.state, equals(AuthInitial()));
-  },);
+      expect(authBloc.state, equals(AuthInitial()));
+    },
+  );
 
   // ---------------------------------------------------------------------------
   // AuthCheckRequested
@@ -87,18 +88,22 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthLoading, AuthAuthenticated] when token and userId exist',
       build: () {
-        when(() => mockStorageService.getToken()).thenAnswer((_) async => 'token');
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
         when(() => mockStorageService.getUserId()).thenAnswer((_) async => 1);
-        when(() => mockStorageService.getUserPhone()).thenAnswer((_) async => '13800138000');
+        when(() => mockStorageService.getUserPhone())
+            .thenAnswer((_) async => '13800138000');
         when(() => mockStorageService.getUserRole()).thenAnswer((_) async => 3);
         when(() => mockGetProfileUseCase()).thenAnswer(
           (_) async => right<Failure, User>(createTestUser()),
         );
-        when(() => mockMQTTService.connect(
-          any(),
-          username: any(named: 'username'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async {});
+        when(
+          () => mockMQTTService.connect(
+            any(),
+            username: any(named: 'username'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async {});
         when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
@@ -113,7 +118,8 @@ void main() {
       'emits [AuthLoading, AuthUnauthenticated] when no token',
       build: () {
         when(() => mockStorageService.getToken()).thenAnswer((_) async => null);
-        when(() => mockStorageService.getUserId()).thenAnswer((_) async => null);
+        when(() => mockStorageService.getUserId())
+            .thenAnswer((_) async => null);
         return authBloc;
       },
       act: (bloc) => bloc.add(AuthCheckRequested()),
@@ -133,54 +139,77 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthLoading, AuthAuthenticated] on successful login',
       build: () {
-        when(() => mockLoginUseCase(
-          account: any(named: 'account'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async => right<Failure, LoginResponse>(loginResponse));
-        when(() => mockStorageService.saveToken(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveRefreshToken(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserId(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserPhone(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserRole(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveRememberPassword(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveSavedPhone(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveSavedPassword(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.getToken()).thenAnswer((_) async => 'token');
-        when(() => mockMQTTService.connect(
-          any(),
-          username: any(named: 'username'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async {});
+        when(
+          () => mockLoginUseCase(
+            account: any(named: 'account'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async => right<Failure, LoginResponse>(loginResponse));
+        when(() => mockStorageService.saveToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRefreshToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserId(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserPhone(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserRole(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRememberPassword(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveSavedPhone(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveSavedPassword(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
+        when(
+          () => mockMQTTService.connect(
+            any(),
+            username: any(named: 'username'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async {});
         when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthLoginRequested(
-        account: '13800138000',
-        password: 'password123',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthLoginRequested(
+          account: '13800138000',
+          password: 'password123',
+        ),
+      ),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthAuthenticated>(),
       ],
       verify: (_) {
-        verify(() => mockStorageService.saveToken(loginResponse.token)).called(1);
-        verify(() => mockStorageService.saveUserId(loginResponse.user.id)).called(1);
+        verify(() => mockStorageService.saveToken(loginResponse.token))
+            .called(1);
+        verify(() => mockStorageService.saveUserId(loginResponse.user.id))
+            .called(1);
       },
     );
 
     blocTest<AuthBloc, AuthState>(
       'emits [AuthLoading, AuthError] on login failure',
       build: () {
-        when(() => mockLoginUseCase(
-          account: any(named: 'account'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async => left<Failure, LoginResponse>(createTestServerFailure()));
+        when(
+          () => mockLoginUseCase(
+            account: any(named: 'account'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer(
+          (_) async => left<Failure, LoginResponse>(createTestServerFailure()),
+        );
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthLoginRequested(
-        account: '13800138000',
-        password: 'wrong',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthLoginRequested(
+          account: '13800138000',
+          password: 'wrong',
+        ),
+      ),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthError>(),
@@ -190,36 +219,53 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'saves credentials when rememberPassword is true',
       build: () {
-        when(() => mockLoginUseCase(
-          account: any(named: 'account'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async => right<Failure, LoginResponse>(loginResponse));
-        when(() => mockStorageService.saveToken(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveRefreshToken(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserId(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserPhone(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserRole(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveRememberPassword(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveSavedPhone(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveSavedPassword(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.getToken()).thenAnswer((_) async => 'token');
-        when(() => mockMQTTService.connect(
-          any(),
-          username: any(named: 'username'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async {});
+        when(
+          () => mockLoginUseCase(
+            account: any(named: 'account'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async => right<Failure, LoginResponse>(loginResponse));
+        when(() => mockStorageService.saveToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRefreshToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserId(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserPhone(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserRole(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRememberPassword(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveSavedPhone(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveSavedPassword(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
+        when(
+          () => mockMQTTService.connect(
+            any(),
+            username: any(named: 'username'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async {});
         when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthLoginRequested(
-        account: '13800138000',
-        password: 'password123',
-        rememberPassword: true,
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthLoginRequested(
+          account: '13800138000',
+          password: 'password123',
+          rememberPassword: true,
+        ),
+      ),
       verify: (_) {
         verify(() => mockStorageService.saveRememberPassword(true)).called(1);
-        verify(() => mockStorageService.saveSavedPhone('13800138000')).called(1);
-        verify(() => mockStorageService.saveSavedPassword('password123')).called(1);
+        verify(() => mockStorageService.saveSavedPhone('13800138000'))
+            .called(1);
+        verify(() => mockStorageService.saveSavedPassword('password123'))
+            .called(1);
       },
     );
   });
@@ -235,10 +281,13 @@ void main() {
           (_) async => right<Failure, void>(null),
         );
         when(() => mockStorageService.deleteToken()).thenAnswer((_) async {});
-        when(() => mockStorageService.deleteRefreshToken()).thenAnswer((_) async {});
+        when(() => mockStorageService.deleteRefreshToken())
+            .thenAnswer((_) async {});
         when(() => mockStorageService.deleteUserId()).thenAnswer((_) async {});
-        when(() => mockStorageService.deleteUserPhone()).thenAnswer((_) async {});
-        when(() => mockStorageService.deleteUserRole()).thenAnswer((_) async {});
+        when(() => mockStorageService.deleteUserPhone())
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.deleteUserRole())
+            .thenAnswer((_) async {});
         when(() => mockMQTTService.disconnect()).thenAnswer((_) async {});
         when(() => mockJPushService.unbindUser()).thenAnswer((_) async {});
         return authBloc;
@@ -263,31 +312,46 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthLoading, AuthAuthenticated] on successful email login',
       build: () {
-        when(() => mockEmailLoginUseCase(
-          email: any(named: 'email'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async => right<Failure, LoginResponse>(loginResponse));
-        when(() => mockStorageService.saveToken(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveRefreshToken(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserId(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserPhone(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveUserRole(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveRememberPassword(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveSavedPhone(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveSavedPassword(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.getToken()).thenAnswer((_) async => 'token');
-        when(() => mockMQTTService.connect(
-          any(),
-          username: any(named: 'username'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async {});
+        when(
+          () => mockEmailLoginUseCase(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async => right<Failure, LoginResponse>(loginResponse));
+        when(() => mockStorageService.saveToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRefreshToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserId(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserPhone(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveUserRole(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRememberPassword(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveSavedPhone(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveSavedPassword(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
+        when(
+          () => mockMQTTService.connect(
+            any(),
+            username: any(named: 'username'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer((_) async {});
         when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthEmailLoginRequested(
-        email: 'test@example.com',
-        password: 'password123',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthEmailLoginRequested(
+          email: 'test@example.com',
+          password: 'password123',
+        ),
+      ),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthAuthenticated>(),
@@ -297,16 +361,22 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthLoading, AuthError] on email login failure',
       build: () {
-        when(() => mockEmailLoginUseCase(
-          email: any(named: 'email'),
-          password: any(named: 'password'),
-        ),).thenAnswer((_) async => left<Failure, LoginResponse>(createTestServerFailure()));
+        when(
+          () => mockEmailLoginUseCase(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+          ),
+        ).thenAnswer(
+          (_) async => left<Failure, LoginResponse>(createTestServerFailure()),
+        );
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthEmailLoginRequested(
-        email: 'test@example.com',
-        password: 'wrong',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthEmailLoginRequested(
+          email: 'test@example.com',
+          password: 'wrong',
+        ),
+      ),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthError>(),
@@ -321,16 +391,20 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthCodeSending, AuthCodeSent] on success',
       build: () {
-        when(() => mockSendCodeUseCase(
-          phone: any(named: 'phone'),
-          type: any(named: 'type'),
-        ),).thenAnswer((_) async => right<Failure, void>(null));
+        when(
+          () => mockSendCodeUseCase(
+            phone: any(named: 'phone'),
+            type: any(named: 'type'),
+          ),
+        ).thenAnswer((_) async => right<Failure, void>(null));
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthSendCodeRequested(
-        phone: '13800138000',
-        type: 'login',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthSendCodeRequested(
+          phone: '13800138000',
+          type: 'login',
+        ),
+      ),
       expect: () => [
         isA<AuthCodeSending>(),
         isA<AuthCodeSent>(),
@@ -340,16 +414,22 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthCodeSending, AuthError] on failure',
       build: () {
-        when(() => mockSendCodeUseCase(
-          phone: any(named: 'phone'),
-          type: any(named: 'type'),
-        ),).thenAnswer((_) async => left<Failure, void>(createTestServerFailure()));
+        when(
+          () => mockSendCodeUseCase(
+            phone: any(named: 'phone'),
+            type: any(named: 'type'),
+          ),
+        ).thenAnswer(
+          (_) async => left<Failure, void>(createTestServerFailure()),
+        );
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthSendCodeRequested(
-        phone: '13800138000',
-        type: 'login',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthSendCodeRequested(
+          phone: '13800138000',
+          type: 'login',
+        ),
+      ),
       expect: () => [
         isA<AuthCodeSending>(),
         isA<AuthError>(),
@@ -364,18 +444,22 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthLoading, AuthPasswordResetSuccess] on success',
       build: () {
-        when(() => mockResetPasswordUseCase(
-          phone: any(named: 'phone'),
-          code: any(named: 'code'),
-          newPassword: any(named: 'newPassword'),
-        ),).thenAnswer((_) async => right<Failure, void>(null));
+        when(
+          () => mockResetPasswordUseCase(
+            phone: any(named: 'phone'),
+            code: any(named: 'code'),
+            newPassword: any(named: 'newPassword'),
+          ),
+        ).thenAnswer((_) async => right<Failure, void>(null));
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthResetPasswordRequested(
-        phone: '13800138000',
-        code: '1234',
-        newPassword: 'newpass123',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthResetPasswordRequested(
+          phone: '13800138000',
+          code: '1234',
+          newPassword: 'newpass123',
+        ),
+      ),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthPasswordResetSuccess>(),
@@ -390,16 +474,20 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthLoading, AuthPasswordChangedSuccess] on success',
       build: () {
-        when(() => mockChangePasswordUseCase(
-          oldPassword: any(named: 'oldPassword'),
-          newPassword: any(named: 'newPassword'),
-        ),).thenAnswer((_) async => right<Failure, void>(null));
+        when(
+          () => mockChangePasswordUseCase(
+            oldPassword: any(named: 'oldPassword'),
+            newPassword: any(named: 'newPassword'),
+          ),
+        ).thenAnswer((_) async => right<Failure, void>(null));
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthChangePasswordRequested(
-        oldPassword: 'oldpass',
-        newPassword: 'newpass',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthChangePasswordRequested(
+          oldPassword: 'oldpass',
+          newPassword: 'newpass',
+        ),
+      ),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthPasswordChangedSuccess>(),
@@ -409,16 +497,24 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'emits [AuthLoading, AuthError] on failure',
       build: () {
-        when(() => mockChangePasswordUseCase(
-          oldPassword: any(named: 'oldPassword'),
-          newPassword: any(named: 'newPassword'),
-        ),).thenAnswer((_) async => left<Failure, void>(createTestServerFailure('Old password incorrect')));
+        when(
+          () => mockChangePasswordUseCase(
+            oldPassword: any(named: 'oldPassword'),
+            newPassword: any(named: 'newPassword'),
+          ),
+        ).thenAnswer(
+          (_) async => left<Failure, void>(
+            createTestServerFailure('Old password incorrect'),
+          ),
+        );
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthChangePasswordRequested(
-        oldPassword: 'wrong_old',
-        newPassword: 'newpass',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthChangePasswordRequested(
+          oldPassword: 'wrong_old',
+          newPassword: 'newpass',
+        ),
+      ),
       expect: () => [
         isA<AuthLoading>(),
         isA<AuthError>(),
@@ -433,18 +529,23 @@ void main() {
     blocTest<AuthBloc, AuthState>(
       'saves new token without emitting states',
       build: () {
-        when(() => mockStorageService.saveToken(any())).thenAnswer((_) async {});
-        when(() => mockStorageService.saveRefreshToken(any())).thenAnswer((_) async {});
+        when(() => mockStorageService.saveToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRefreshToken(any()))
+            .thenAnswer((_) async {});
         return authBloc;
       },
-      act: (bloc) => bloc.add(const AuthTokenRefreshed(
-        token: 'new_token',
-        refreshToken: 'new_refresh',
-      ),),
+      act: (bloc) => bloc.add(
+        const AuthTokenRefreshed(
+          token: 'new_token',
+          refreshToken: 'new_refresh',
+        ),
+      ),
       expect: () => <AuthState>[],
       verify: (_) {
         verify(() => mockStorageService.saveToken('new_token')).called(1);
-        verify(() => mockStorageService.saveRefreshToken('new_refresh')).called(1);
+        verify(() => mockStorageService.saveRefreshToken('new_refresh'))
+            .called(1);
       },
     );
   });

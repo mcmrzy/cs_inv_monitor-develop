@@ -5,7 +5,6 @@
 //   - Rate limiting (global + per-route)
 //   - RBAC permission checking (via Redis cache)
 //   - Request proxying to inv-api-server and inv-device-server
-//   - Prometheus metrics exposure
 //
 // Dependencies: Redis (RBAC cache, optional)
 // Listens on: :8080
@@ -43,8 +42,6 @@ func main() {
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("[GW] %v", err)
 	}
-
-	middleware.InitMetrics()
 
 	rdb, err := initRedis(cfg)
 	if err != nil {

@@ -19,6 +19,7 @@ import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
 import { Role } from '@/types'
 import { queryKeys } from '@/utils/queryKeys'
+import ChannelManagement from './ChannelManagement'
 import StatisticCard from '@/components/StatisticCard'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 
@@ -63,6 +64,7 @@ const AdminPage: React.FC = () => {
         { key: 'quotas', label: t('admin.systemQuota'), children: <QuotaTab /> },
         { key: 'permissions', label: t('admin.permissionConfig'), children: <PermissionTab /> },
         { key: 'api-overview', label: t('admin.apiOverview'), children: <APIOverviewTab onNavigateToPermissions={() => setActiveTab('permissions')} /> },
+        { key: 'channels', label: t('channel.title'), children: <ChannelManagement /> },
       ]} />
     </div>
   )

@@ -66,6 +66,13 @@ export const queryKeys = {
     list: (params?: Record<string, any>) => ['parallel', 'list', params] as const,
     detail: (id: string) => ['parallel', 'detail', id] as const,
   },
+  channels: {
+    organizations: () => ['channels', 'organizations'] as const,
+    organizationDetail: (id: number) => ['channels', 'organizations', id] as const,
+    members: (orgId: number, params?: Record<string, any>) => ['channels', 'members', orgId, params] as const,
+    invitations: (params?: Record<string, any>) => ['channels', 'invitations', params] as const,
+    transfers: (params?: Record<string, any>) => ['channels', 'transfers', params] as const,
+  },
   admin: {
     auditLogs: (params?: Record<string, any>) => ['admin', 'audit-logs', params] as const,
     health: () => ['admin', 'health'] as const,

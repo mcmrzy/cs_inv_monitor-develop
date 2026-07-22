@@ -24,8 +24,11 @@ class LocalFirmwareService {
 
     try {
       await _localComm.connect(deviceIP);
-      await _localComm.uploadFirmware(filePath,
-          manifest: manifest, onProgress: onProgress);
+      await _localComm.uploadFirmware(
+        filePath,
+        manifest: manifest,
+        onProgress: onProgress,
+      );
     } catch (e) {
       throw LocalFirmwareException('Upload firmware failed: $e');
     }
@@ -42,8 +45,9 @@ class LocalFirmwareService {
     return _calculateMD5(filePath);
   }
 
-  Future<Map<String, dynamic>> getLocalOTAProgress(
-      {required String deviceIP}) async {
+  Future<Map<String, dynamic>> getLocalOTAProgress({
+    required String deviceIP,
+  }) async {
     try {
       await _localComm.connect(deviceIP);
       return await _localComm.getOTAProgress();

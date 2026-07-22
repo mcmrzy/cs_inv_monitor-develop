@@ -31,11 +31,16 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
 
   void _submit() {
     if (_phoneController.text.trim().isNotEmpty) {
-      context.read<DeviceBloc>().add(DeviceControlRequested(
-        sn: widget.deviceSN,
-        cmdType: 'share',
-        params: {'phone': _phoneController.text.trim(), 'permission': _permission},
-      ),);
+      context.read<DeviceBloc>().add(
+            DeviceControlRequested(
+              sn: widget.deviceSN,
+              cmdType: 'share',
+              params: {
+                'phone': _phoneController.text.trim(),
+                'permission': _permission,
+              },
+            ),
+          );
     }
   }
 
@@ -51,7 +56,10 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.shareDeviceDesc(widget.deviceSN), style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
+                Text(
+                  l10n.shareDeviceDesc(widget.deviceSN),
+                  style: TextStyle(fontSize: 14.sp, color: Colors.grey),
+                ),
                 SizedBox(height: 16.h),
                 TextFormField(
                   controller: _phoneController,
@@ -59,12 +67,20 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
                   decoration: InputDecoration(
                     labelText: l10n.otherPhone,
                     hintText: l10n.inputOtherPhone,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
                     prefixIcon: const Icon(Icons.phone),
                   ),
                 ),
                 SizedBox(height: 16.h),
-                Text(l10n.sharePermission, style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500)),
+                Text(
+                  l10n.sharePermission,
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 SizedBox(height: 8.h),
                 Row(
                   children: [
@@ -77,7 +93,8 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
                     ChoiceChip(
                       label: Text(l10n.controllableLabel),
                       selected: _permission == 'control',
-                      onSelected: (v) => setState(() => _permission = 'control'),
+                      onSelected: (v) =>
+                          setState(() => _permission = 'control'),
                     ),
                   ],
                 ),

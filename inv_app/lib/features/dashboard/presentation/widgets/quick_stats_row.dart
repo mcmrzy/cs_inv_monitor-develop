@@ -115,10 +115,12 @@ class _StatChipState extends State<_StatChip>
     _scaleAnimation = Tween<double>(
       begin: 1.0,
       end: 0.95,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ),);
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
   }
 
   @override
@@ -129,7 +131,8 @@ class _StatChipState extends State<_StatChip>
 
   @override
   Widget build(BuildContext context) {
-    final change = widget.previousCount != null ? widget.count - widget.previousCount! : 0;
+    final change =
+        widget.previousCount != null ? widget.count - widget.previousCount! : 0;
     final isPositive = change > 0;
     final isNeutral = change == 0;
 
@@ -164,7 +167,10 @@ class _StatChipState extends State<_StatChip>
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(16.r),
-                border: Border.all(color: widget.color.withValues(alpha: 0.15), width: 1),
+                border: Border.all(
+                  color: widget.color.withValues(alpha: 0.15),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: widget.color.withValues(alpha: 0.1),
@@ -197,13 +203,17 @@ class _StatChipState extends State<_StatChip>
                   SizedBox(height: 2.h),
                   Text(
                     widget.label,
-                    style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   // 变化指示器
                   if (widget.previousCount != null) ...[
                     SizedBox(height: 4.h),
                     Container(
-                      padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
                       decoration: BoxDecoration(
                         color: changeColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8.r),
@@ -269,10 +279,12 @@ class _AnimatedCountState extends State<_AnimatedCount>
     _animation = Tween<double>(
       begin: 0,
       end: widget.count.toDouble(),
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ),);
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+      ),
+    );
     _controller.forward();
     _previousCount = widget.count;
   }
@@ -285,10 +297,12 @@ class _AnimatedCountState extends State<_AnimatedCount>
       _animation = Tween<double>(
         begin: _previousCount.toDouble(),
         end: widget.count.toDouble(),
-      ).animate(CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeOutCubic,
-      ),);
+      ).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: Curves.easeOutCubic,
+        ),
+      );
       _controller.reset();
       _controller.forward();
     }

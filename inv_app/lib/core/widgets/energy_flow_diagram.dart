@@ -78,12 +78,14 @@ class _EnergyFlowDiagramState extends State<EnergyFlowDiagram>
             width: 280.w,
             height: 280.h,
             child: AnimatedBuilder(
-              animation: Listenable.merge([_particleController, _pulseController]),
+              animation:
+                  Listenable.merge([_particleController, _pulseController]),
               builder: (context, _) {
                 return CustomPaint(
                   painter: _EnergyFlowPainter(
                     pvPower: widget.pvPower.isNaN ? 0 : widget.pvPower,
-                    batteryPower: widget.batteryPower.isNaN ? 0 : widget.batteryPower,
+                    batteryPower:
+                        widget.batteryPower.isNaN ? 0 : widget.batteryPower,
                     loadPower: widget.loadPower.isNaN ? 0 : widget.loadPower,
                     gridPower: widget.gridPower.isNaN ? 0 : widget.gridPower,
                     batterySoc: widget.batterySoc.isNaN ? 0 : widget.batterySoc,
@@ -218,20 +220,44 @@ class _EnergyFlowPainter extends CustomPainter {
 
     // ── Draw nodes ──
     _drawIconCircle(canvas, pvCenter, _nodeRadius, pvColor, Icons.wb_sunny);
-    _drawIconCircle(canvas, invCenter, _nodeRadius, AppColors.primary, Icons.power);
+    _drawIconCircle(
+      canvas,
+      invCenter,
+      _nodeRadius,
+      AppColors.primary,
+      Icons.power,
+    );
 
-    final battColor = batteryPower >= 0 ? batteryChargeColor : batteryDischargeColor;
+    final battColor =
+        batteryPower >= 0 ? batteryChargeColor : batteryDischargeColor;
     if (batteryPower != 0) {
       _drawPulseEffect(canvas, battCenter, battColor);
     }
-    _drawIconCircle(canvas, battCenter, _nodeRadius, battColor,
-        batteryPower >= 0 ? Icons.battery_charging_full : Icons.battery_alert,);
+    _drawIconCircle(
+      canvas,
+      battCenter,
+      _nodeRadius,
+      battColor,
+      batteryPower >= 0 ? Icons.battery_charging_full : Icons.battery_alert,
+    );
     _drawIconCircle(canvas, loadCenter, _nodeRadius, loadColor, Icons.home);
-    _drawIconCircle(canvas, gridCenter, _nodeRadius, gridColor, Icons.electrical_services);
+    _drawIconCircle(
+      canvas,
+      gridCenter,
+      _nodeRadius,
+      gridColor,
+      Icons.electrical_services,
+    );
 
     // ── Labels ──
     _drawNodeLabel(canvas, pvCenter, 'PV', pvColor, below: true);
-    _drawNodeLabel(canvas, invCenter, inverterOutputLabel, AppColors.primary, below: true);
+    _drawNodeLabel(
+      canvas,
+      invCenter,
+      inverterOutputLabel,
+      AppColors.primary,
+      below: true,
+    );
     _drawNodeLabel(canvas, battCenter, batteryLabel, battColor, below: true);
     _drawNodeLabel(canvas, loadCenter, loadLabel, loadColor, below: true);
     _drawNodeLabel(canvas, gridCenter, gridLabel, gridColor, below: true);
@@ -262,9 +288,21 @@ class _EnergyFlowPainter extends CustomPainter {
 
     // 逆变器 ↔ 电池 (straight horizontal — same Y level)
     if (batteryPower > 0) {
-      _drawActiveFlow(canvas, _PathDef.straight(invEdgeLeft, battEdgeRight), batteryChargeColor, batteryPower, 'bat_c');
+      _drawActiveFlow(
+        canvas,
+        _PathDef.straight(invEdgeLeft, battEdgeRight),
+        batteryChargeColor,
+        batteryPower,
+        'bat_c',
+      );
     } else if (batteryPower < 0) {
-      _drawActiveFlow(canvas, _PathDef.straight(battEdgeRight, invEdgeLeft), batteryDischargeColor, -batteryPower, 'bat_d');
+      _drawActiveFlow(
+        canvas,
+        _PathDef.straight(battEdgeRight, invEdgeLeft),
+        batteryDischargeColor,
+        -batteryPower,
+        'bat_d',
+      );
     } else {
       _drawInactivePath(canvas, _PathDef.straight(invEdgeLeft, battEdgeRight));
     }
@@ -279,9 +317,21 @@ class _EnergyFlowPainter extends CustomPainter {
 
     // 逆变器 ↔ 电网 (straight horizontal — same Y level)
     if (gridPower > 0) {
-      _drawActiveFlow(canvas, _PathDef.straight(invEdgeRight, gridEdgeLeft), gridColor, gridPower, 'grid_e');
+      _drawActiveFlow(
+        canvas,
+        _PathDef.straight(invEdgeRight, gridEdgeLeft),
+        gridColor,
+        gridPower,
+        'grid_e',
+      );
     } else if (gridPower < 0) {
-      _drawActiveFlow(canvas, _PathDef.straight(gridEdgeLeft, invEdgeRight), gridColor, -gridPower, 'grid_i');
+      _drawActiveFlow(
+        canvas,
+        _PathDef.straight(gridEdgeLeft, invEdgeRight),
+        gridColor,
+        -gridPower,
+        'grid_i',
+      );
     } else {
       _drawInactivePath(canvas, _PathDef.straight(invEdgeRight, gridEdgeLeft));
     }
@@ -291,7 +341,13 @@ class _EnergyFlowPainter extends CustomPainter {
 
   // ── Active flow: dashed line + particles + label ──
 
-  void _drawActiveFlow(Canvas canvas, _PathDef path, Color color, double power, String tag) {
+  void _drawActiveFlow(
+    Canvas canvas,
+    _PathDef path,
+    Color color,
+    double power,
+    String tag,
+  ) {
     if (path.length <= 0) return;
     _drawDashedPath(canvas, path, color);
     _drawParticles(canvas, path, color, power);
@@ -380,13 +436,21 @@ class _EnergyFlowPainter extends CustomPainter {
       final alpha = 0.2 + 0.7 * t;
 
       // Glow
-      canvas.drawCircle(pos, sz + 2, Paint()
-        ..color = color.withValues(alpha: alpha * 0.4)
-        ..style = PaintingStyle.fill,);
+      canvas.drawCircle(
+        pos,
+        sz + 2,
+        Paint()
+          ..color = color.withValues(alpha: alpha * 0.4)
+          ..style = PaintingStyle.fill,
+      );
       // Core
-      canvas.drawCircle(pos, sz, Paint()
-        ..color = color.withValues(alpha: alpha)
-        ..style = PaintingStyle.fill,);
+      canvas.drawCircle(
+        pos,
+        sz,
+        Paint()
+          ..color = color.withValues(alpha: alpha)
+          ..style = PaintingStyle.fill,
+      );
     }
   }
 
@@ -401,12 +465,23 @@ class _EnergyFlowPainter extends CustomPainter {
     final labelPos = mid + perp * 18;
     if (labelPos.dx.isNaN || labelPos.dy.isNaN) return;
 
-    final paragraph = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 10))
-          ..pushStyle(ui.TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600))
+    final paragraph = (ui.ParagraphBuilder(
+      ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 10),
+    )
+          ..pushStyle(
+            ui.TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          )
           ..addText(text))
         .build()
       ..layout(const ui.ParagraphConstraints(width: 100));
-    canvas.drawParagraph(paragraph, Offset(labelPos.dx - 50, labelPos.dy - paragraph.height / 2));
+    canvas.drawParagraph(
+      paragraph,
+      Offset(labelPos.dx - 50, labelPos.dy - paragraph.height / 2),
+    );
   }
 
   // ── Decorations ──
@@ -430,27 +505,61 @@ class _EnergyFlowPainter extends CustomPainter {
     );
   }
 
-  void _drawIconCircle(Canvas canvas, Offset center, double radius, Color color, IconData icon) {
-    canvas.drawCircle(center, radius, Paint()
-      ..color = color.withValues(alpha: 0.15)
-      ..style = PaintingStyle.fill,);
-    canvas.drawCircle(center, radius, Paint()
-      ..color = color.withValues(alpha: 0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2,);
+  void _drawIconCircle(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    Color color,
+    IconData icon,
+  ) {
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = color.withValues(alpha: 0.15)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = color.withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
 
-    final paragraph = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 20))
+    final paragraph = (ui.ParagraphBuilder(
+      ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 20),
+    )
           ..pushStyle(ui.TextStyle(color: color, fontSize: 20))
           ..addText(String.fromCharCode(icon.codePoint)))
         .build()
       ..layout(const ui.ParagraphConstraints(width: 40));
-    canvas.drawParagraph(paragraph, Offset(center.dx - 20, center.dy - paragraph.height / 2));
+    canvas.drawParagraph(
+      paragraph,
+      Offset(center.dx - 20, center.dy - paragraph.height / 2),
+    );
   }
 
-  void _drawNodeLabel(Canvas canvas, Offset center, String text, Color color, {required bool below}) {
-    final y = below ? center.dy + _nodeRadius + 8 : center.dy - _nodeRadius - 20;
-    final paragraph = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 11))
-          ..pushStyle(ui.TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600))
+  void _drawNodeLabel(
+    Canvas canvas,
+    Offset center,
+    String text,
+    Color color, {
+    required bool below,
+  }) {
+    final y =
+        below ? center.dy + _nodeRadius + 8 : center.dy - _nodeRadius - 20;
+    final paragraph = (ui.ParagraphBuilder(
+      ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 11),
+    )
+          ..pushStyle(
+            ui.TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          )
           ..addText(text))
         .build()
       ..layout(const ui.ParagraphConstraints(width: 80));
@@ -465,12 +574,23 @@ class _EnergyFlowPainter extends CustomPainter {
         ? batteryChargeColor
         : (batteryPower < 0 ? batteryDischargeColor : Colors.grey);
 
-    final paragraph = (ui.ParagraphBuilder(ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 10))
-          ..pushStyle(ui.TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600))
+    final paragraph = (ui.ParagraphBuilder(
+      ui.ParagraphStyle(textAlign: TextAlign.center, fontSize: 10),
+    )
+          ..pushStyle(
+            ui.TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          )
           ..addText('$socText $stateIcon'))
         .build()
       ..layout(const ui.ParagraphConstraints(width: 60));
-    canvas.drawParagraph(paragraph, Offset(battCenter.dx - 30, battCenter.dy - 48));
+    canvas.drawParagraph(
+      paragraph,
+      Offset(battCenter.dx - 30, battCenter.dy - 48),
+    );
   }
 
   @override

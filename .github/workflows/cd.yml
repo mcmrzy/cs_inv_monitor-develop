@@ -41,8 +41,8 @@ jobs:
       - name: Build & Push inv-device-server
         uses: docker/build-push-action@v6
         with:
-          context: ./inv_device_server
-          file: ./inv_device_server/Dockerfile
+          context: ./device-communication
+          file: ./device-communication/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/inv-device-server:${{ env.DEPLOY_SHA }}
@@ -54,7 +54,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./inv_api_server/Dockerfile
+          file: ./business-api/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/inv-api-server:${{ env.DEPLOY_SHA }}

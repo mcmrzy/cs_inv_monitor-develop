@@ -46,7 +46,8 @@ class DeviceRepositoryImpl implements DeviceRepository {
           return const Right(<String, dynamic>{});
         }
         return const Left(
-            ServerFailure('Response format error: expected object data'));
+          ServerFailure('Response format error: expected object data'),
+        );
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -62,7 +63,8 @@ class DeviceRepositoryImpl implements DeviceRepository {
           return Right(inner);
         }
         return const Left(
-            ServerFailure('Response format error: expected list data'));
+          ServerFailure('Response format error: expected list data'),
+        );
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -70,11 +72,19 @@ class DeviceRepositoryImpl implements DeviceRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> getList(
-      {int? stationId, int? status, int page = 1, int pageSize = 20}) async {
+  Future<Either<Failure, Map<String, dynamic>>> getList({
+    int? stationId,
+    int? status,
+    int page = 1,
+    int pageSize = 20,
+  }) async {
     try {
       final response = await remoteDataSource.getList(
-          stationId: stationId, status: status, page: page, pageSize: pageSize);
+        stationId: stationId,
+        status: status,
+        page: page,
+        pageSize: pageSize,
+      );
       return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));
@@ -97,7 +107,8 @@ class DeviceRepositoryImpl implements DeviceRepository {
 
   @override
   Future<Either<Failure, Map<String, dynamic>>> getRealtimeData(
-      String sn) async {
+    String sn,
+  ) async {
     try {
       final response = await remoteDataSource.getRealtimeData(sn);
       return _parseData(response);
@@ -136,7 +147,10 @@ class DeviceRepositoryImpl implements DeviceRepository {
 
   @override
   Future<Either<Failure, void>> control(
-      String sn, String cmdType, Map<String, dynamic> params) async {
+    String sn,
+    String cmdType,
+    Map<String, dynamic> params,
+  ) async {
     try {
       final response = await remoteDataSource.control(sn, cmdType, params);
       final parsed = _parseData(response, allowEmpty: true);
@@ -149,10 +163,11 @@ class DeviceRepositoryImpl implements DeviceRepository {
   }
 
   @override
-  Future<Either<Failure, void>> sendCommand(
-      {required String sn,
-      required String command,
-      required Map<String, dynamic> params}) async {
+  Future<Either<Failure, void>> sendCommand({
+    required String sn,
+    required String command,
+    required Map<String, dynamic> params,
+  }) async {
     return control(sn, command, params);
   }
 
@@ -169,7 +184,11 @@ class DeviceRepositoryImpl implements DeviceRepository {
 
   @override
   Future<Either<Failure, List<dynamic>>> getHistory(
-      String sn, String startDate, String endDate, String period) async {
+    String sn,
+    String startDate,
+    String endDate,
+    String period,
+  ) async {
     try {
       final response =
           await remoteDataSource.getHistory(sn, startDate, endDate, period);
@@ -183,7 +202,11 @@ class DeviceRepositoryImpl implements DeviceRepository {
 
   @override
   Future<Either<Failure, Map<String, dynamic>>> getStatistics(
-      String sn, String startDate, String endDate, String period) async {
+    String sn,
+    String startDate,
+    String endDate,
+    String period,
+  ) async {
     try {
       final response =
           await remoteDataSource.getStatistics(sn, startDate, endDate, period);
@@ -209,7 +232,8 @@ class DeviceRepositoryImpl implements DeviceRepository {
 
   @override
   Future<Either<Failure, List<Map<String, dynamic>>>> getModelFieldsByCode(
-      String modelCode) async {
+    String modelCode,
+  ) async {
     try {
       final response = await remoteDataSource.getModelFieldsByCode(modelCode);
       final data = response.data;
@@ -217,7 +241,8 @@ class DeviceRepositoryImpl implements DeviceRepository {
         final inner = data['data'];
         if (inner is List) return Right(inner.cast<Map<String, dynamic>>());
         return const Left(
-            ServerFailure('Response format error: expected list data'));
+          ServerFailure('Response format error: expected list data'),
+        );
       }
       return const Left(ServerFailure('Failed to get field metadata'));
     } on DioException catch (e) {

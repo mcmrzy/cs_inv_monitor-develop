@@ -1,0 +1,95 @@
+server:
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 0s # SSE 长连接需要无写超时
+  mode: release
+
+database:
+  host: postgres
+  port: 5432
+  user: postgres
+  password: ""
+  database: inv_mqtt
+  ssl_mode: disable
+  max_open_conns: 100
+  max_idle_conns: 20
+  conn_max_lifetime: 30m
+  conn_max_idle_time: 10m
+
+redis:
+  host: redis
+  port: 6379
+  password: ""
+  db: 0
+
+jwt:
+  secret: ""
+  expire_time: 15m
+  refresh_expire_time: 168h
+  issuer: inv-api-server
+
+sms:
+  provider: aliyun
+  access_key: ""
+  secret_key: ""
+  sign_name: ""
+  template: ""
+
+email:
+  host: smtp.qq.com
+  port: 465
+  username: ""
+  password: ""
+  from: ""
+  use_ssl: true
+  tls_insecure: false  # Never enable in production!
+  sender_name: "CSERGY Smart Energy Platform"  # Display name
+
+log:
+  level: info
+  filename: logs/api-server.log
+  max_size: 100
+  max_backups: 10
+  max_age: 30
+  compress: true
+
+timezone: Asia/Shanghai
+
+backends:
+  device_server: http://inv-device-server:8081
+  internal_key: ""
+  upload_dir: /data/firmware
+
+# 数据库自动迁移配置
+# Docker 环境中通过 docker-compose.yml 挂载 database 目录
+migration:
+  dir: /app/database/migrations
+  schema_file: /app/database/schema.sql
+  baseline_version: 22
+  auto_run: true
+
+# 极光推送配置 (通过环境变量 JPUSH_* 覆盖)
+jpush:
+  enabled: false
+  app_key: ""
+  master_secret: ""
+  timeout: 10
+  dedup_ttl: 120
+
+# RBAC 缓存配置
+rbac:
+  enabled: true
+  ttl_duration: 5m
+  max_idle_conns: 10
+
+# Email Queue 配置 (生产环境推荐启用)
+email_queue:
+  enabled: false  # 开发环境可禁用，生产环境设为 true
+  kafka_brokers: ["kafka:9092"]
+  topic: "email-sent"
+  dlq_topic: "email-dead-letter-queue"
+  workers: 5
+  batch_size: 50
+  batch_timeout: 5s
+  max_retries: 3
+  rate_limit: 10  # emails per second

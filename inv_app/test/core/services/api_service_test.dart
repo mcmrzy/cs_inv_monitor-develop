@@ -38,8 +38,12 @@ void main() {
           'data': {'name': 'test'},
         },
       );
-      when(() => mockDio.get(any(), queryParameters: any(named: 'queryParameters')))
-          .thenAnswer((_) async => response);
+      when(
+        () => mockDio.get(
+          any(),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenAnswer((_) async => response);
 
       final result = await apiService.get(
         '/test',
@@ -59,8 +63,12 @@ void main() {
           'message': 'Invalid input',
         },
       );
-      when(() => mockDio.get(any(), queryParameters: any(named: 'queryParameters')))
-          .thenAnswer((_) async => response);
+      when(
+        () => mockDio.get(
+          any(),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenAnswer((_) async => response);
 
       final result = await apiService.get(
         '/test',
@@ -78,8 +86,12 @@ void main() {
     });
 
     test('returns Left with UnauthorizedFailure on 401', () async {
-      when(() => mockDio.get(any(), queryParameters: any(named: 'queryParameters')))
-          .thenThrow(
+      when(
+        () => mockDio.get(
+          any(),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenThrow(
         DioException(
           requestOptions: RequestOptions(),
           type: DioExceptionType.badResponse,
@@ -103,8 +115,12 @@ void main() {
     });
 
     test('returns Left with NetworkFailure on connection timeout', () async {
-      when(() => mockDio.get(any(), queryParameters: any(named: 'queryParameters')))
-          .thenThrow(
+      when(
+        () => mockDio.get(
+          any(),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenThrow(
         DioException(
           requestOptions: RequestOptions(),
           type: DioExceptionType.connectionTimeout,
@@ -124,8 +140,12 @@ void main() {
     });
 
     test('returns Left with NetworkFailure on connection error', () async {
-      when(() => mockDio.get(any(), queryParameters: any(named: 'queryParameters')))
-          .thenThrow(
+      when(
+        () => mockDio.get(
+          any(),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenThrow(
         DioException(
           requestOptions: RequestOptions(),
           type: DioExceptionType.connectionError,
@@ -145,8 +165,12 @@ void main() {
     });
 
     test('returns Left with ServerFailure on generic exception', () async {
-      when(() => mockDio.get(any(), queryParameters: any(named: 'queryParameters')))
-          .thenThrow(Exception('Unknown error'));
+      when(
+        () => mockDio.get(
+          any(),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenThrow(Exception('Unknown error'));
 
       final result = await apiService.get(
         '/test',
@@ -174,11 +198,13 @@ void main() {
           'data': {'id': 1},
         },
       );
-      when(() => mockDio.post(
-            any(),
-            data: any(named: 'data'),
-            queryParameters: any(named: 'queryParameters'),
-          ),).thenAnswer((_) async => response);
+      when(
+        () => mockDio.post(
+          any(),
+          data: any(named: 'data'),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenAnswer((_) async => response);
 
       final result = await apiService.post(
         '/test',
@@ -191,11 +217,13 @@ void main() {
     });
 
     test('returns Left on DioException', () async {
-      when(() => mockDio.post(
-            any(),
-            data: any(named: 'data'),
-            queryParameters: any(named: 'queryParameters'),
-          ),).thenThrow(
+      when(
+        () => mockDio.post(
+          any(),
+          data: any(named: 'data'),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenThrow(
         DioException(
           requestOptions: RequestOptions(),
           type: DioExceptionType.badResponse,
@@ -232,11 +260,13 @@ void main() {
           'data': {'updated': true},
         },
       );
-      when(() => mockDio.put(
-            any(),
-            data: any(named: 'data'),
-            queryParameters: any(named: 'queryParameters'),
-          ),).thenAnswer((_) async => response);
+      when(
+        () => mockDio.put(
+          any(),
+          data: any(named: 'data'),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenAnswer((_) async => response);
 
       final result = await apiService.put(
         '/test/1',
@@ -253,10 +283,9 @@ void main() {
   // DELETE
   // ---------------------------------------------------------------------------
   group('DELETE', () {
-    test(
-      'returns Right on successful response',
-      skip: true, // TODO: investigate mock matching issue with Dio.delete
-      () async {
+    test('returns Right on successful response',
+        skip: true, // TODO: investigate mock matching issue with Dio.delete
+        () async {
       final response = Response(
         requestOptions: RequestOptions(),
         statusCode: 200,
@@ -265,11 +294,13 @@ void main() {
           'data': {},
         },
       );
-      when(() => mockDio.delete(
-            any(),
-            data: any(named: 'data'),
-            queryParameters: any(named: 'queryParameters'),
-          ),).thenAnswer((_) async => response);
+      when(
+        () => mockDio.delete(
+          any(),
+          data: any(named: 'data'),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenAnswer((_) async => response);
 
       final result = await apiService.delete(
         '/test/1',
@@ -279,13 +310,14 @@ void main() {
       expect(result.isRight(), true);
     });
 
-    test(
-      'returns Left with NotFoundFailure on 404', () async {
-      when(() => mockDio.delete(
-            any(),
-            data: any(named: 'data'),
-            queryParameters: any(named: 'queryParameters'),
-          ),).thenThrow(
+    test('returns Left with NotFoundFailure on 404', () async {
+      when(
+        () => mockDio.delete(
+          any(),
+          data: any(named: 'data'),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenThrow(
         DioException(
           requestOptions: RequestOptions(),
           type: DioExceptionType.badResponse,
@@ -319,8 +351,12 @@ void main() {
         statusCode: 200,
         data: 'not a map',
       );
-      when(() => mockDio.get(any(), queryParameters: any(named: 'queryParameters')))
-          .thenAnswer((_) async => response);
+      when(
+        () => mockDio.get(
+          any(),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenAnswer((_) async => response);
 
       final result = await apiService.get(
         '/test',
@@ -340,8 +376,12 @@ void main() {
         statusCode: 500,
         data: {'code': 0, 'data': {}},
       );
-      when(() => mockDio.get(any(), queryParameters: any(named: 'queryParameters')))
-          .thenAnswer((_) async => response);
+      when(
+        () => mockDio.get(
+          any(),
+          queryParameters: any(named: 'queryParameters'),
+        ),
+      ).thenAnswer((_) async => response);
 
       final result = await apiService.get(
         '/test',

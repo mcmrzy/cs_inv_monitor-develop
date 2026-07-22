@@ -195,10 +195,12 @@ class _AnimatedEnergyValueState extends State<_AnimatedEnergyValue>
     _animation = Tween<double>(
       begin: 0,
       end: widget.value,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ),);
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOutCubic,
+      ),
+    );
     _controller.forward();
     _previousValue = widget.value;
   }
@@ -211,10 +213,12 @@ class _AnimatedEnergyValueState extends State<_AnimatedEnergyValue>
       _animation = Tween<double>(
         begin: _previousValue,
         end: widget.value,
-      ).animate(CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeOutCubic,
-      ),);
+      ).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: Curves.easeOutCubic,
+        ),
+      );
       _controller.reset();
       _controller.forward();
     }

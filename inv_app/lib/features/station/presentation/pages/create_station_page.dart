@@ -80,11 +80,13 @@ class _CreateStationPageState extends State<CreateStationPage> {
   void _showErr(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: Text(msg),
-          backgroundColor: AppColors.errorLight,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10.r))),
+        content: Text(msg),
+        backgroundColor: AppColors.errorLight,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10.r),
+        ),
+      ),
     );
   }
 
@@ -117,8 +119,10 @@ class _CreateStationPageState extends State<CreateStationPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)!.newStation,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+        title: Text(
+          AppLocalizations.of(context)!.newStation,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+        ),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -133,7 +137,8 @@ class _CreateStationPageState extends State<CreateStationPage> {
           } else if (state is StationError) {
             setState(() => _submitting = false);
             _showErr(
-                AppLocalizations.of(context)!.translateError(state.message));
+              AppLocalizations.of(context)!.translateError(state.message),
+            );
           }
         },
         builder: (context, state) {
@@ -150,14 +155,17 @@ class _CreateStationPageState extends State<CreateStationPage> {
                     child: Column(
                       children: [
                         _field(
-                            _nameCtl,
-                            AppLocalizations.of(context)!.stationName,
-                            AppLocalizations.of(context)!.stationNameHint,
-                            required: true),
+                          _nameCtl,
+                          AppLocalizations.of(context)!.stationName,
+                          AppLocalizations.of(context)!.stationNameHint,
+                          required: true,
+                        ),
                         SizedBox(height: 12.h),
                         Container(
                           padding: EdgeInsets.symmetric(
-                              horizontal: 14.w, vertical: 12.h),
+                            horizontal: 14.w,
+                            vertical: 12.h,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F9FF),
                             borderRadius: BorderRadius.circular(12.r),
@@ -165,16 +173,20 @@ class _CreateStationPageState extends State<CreateStationPage> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.info_outline_rounded,
-                                  size: 18.sp, color: const Color(0xFF0284C7)),
+                              Icon(
+                                Icons.info_outline_rounded,
+                                size: 18.sp,
+                                color: const Color(0xFF0284C7),
+                              ),
                               SizedBox(width: 10.w),
                               Expanded(
                                 child: Text(
                                   AppLocalizations.of(context)!
                                       .capacityAutoCalculate,
                                   style: TextStyle(
-                                      fontSize: 13.sp,
-                                      color: const Color(0xFF0369A1)),
+                                    fontSize: 13.sp,
+                                    color: const Color(0xFF0369A1),
+                                  ),
                                 ),
                               ),
                             ],
@@ -195,7 +207,9 @@ class _CreateStationPageState extends State<CreateStationPage> {
                           onTap: _openRegionPicker,
                           child: Container(
                             padding: EdgeInsets.symmetric(
-                                horizontal: 14.w, vertical: 14.h),
+                              horizontal: 14.w,
+                              vertical: 14.h,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF8FAFB),
                               borderRadius: BorderRadius.circular(12.r),
@@ -204,8 +218,11 @@ class _CreateStationPageState extends State<CreateStationPage> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.location_on_outlined,
-                                    size: 20.sp, color: AppColors.primary),
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 20.sp,
+                                  color: AppColors.primary,
+                                ),
                                 SizedBox(width: 10.w),
                                 Expanded(
                                   child: Text(
@@ -224,17 +241,21 @@ class _CreateStationPageState extends State<CreateStationPage> {
                                     ),
                                   ),
                                 ),
-                                Icon(Icons.chevron_right_rounded,
-                                    size: 20.sp, color: AppColors.textHint),
+                                Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 20.sp,
+                                  color: AppColors.textHint,
+                                ),
                               ],
                             ),
                           ),
                         ),
                         SizedBox(height: 12.h),
                         _field(
-                            _detailCtl,
-                            AppLocalizations.of(context)!.detailAddress,
-                            AppLocalizations.of(context)!.detailAddressHint),
+                          _detailCtl,
+                          AppLocalizations.of(context)!.detailAddress,
+                          AppLocalizations.of(context)!.detailAddressHint,
+                        ),
                       ],
                     ),
                   ),
@@ -248,7 +269,8 @@ class _CreateStationPageState extends State<CreateStationPage> {
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14.r)),
+                          borderRadius: BorderRadius.circular(14.r),
+                        ),
                         elevation: 0,
                       ),
                       child: _submitting
@@ -256,19 +278,29 @@ class _CreateStationPageState extends State<CreateStationPage> {
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2.5, color: Colors.white))
-                          : Text(AppLocalizations.of(context)!.createStationBtn,
+                                strokeWidth: 2.5,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              AppLocalizations.of(context)!.createStationBtn,
                               style: TextStyle(
-                                  fontSize: 16.sp,
-                                  fontWeight: FontWeight.w600)),
+                                fontSize: 16.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                     ),
                   ),
                   SizedBox(height: 16.h),
                   TextButton(
                     onPressed: () => context.pop(),
-                    child: Text(AppLocalizations.of(context)!.cancel,
-                        style: TextStyle(
-                            fontSize: 14.sp, color: AppColors.textHint)),
+                    child: Text(
+                      AppLocalizations.of(context)!.cancel,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -279,16 +311,19 @@ class _CreateStationPageState extends State<CreateStationPage> {
     );
   }
 
-  Widget _buildSection(
-      {required IconData icon,
-      required String title,
-      required String subtitle,
-      required Widget child}) {
+  Widget _buildSection({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(16.r)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -298,23 +333,31 @@ class _CreateStationPageState extends State<CreateStationPage> {
                 width: 36.w,
                 height: 36.w,
                 decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(10.r)),
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10.r),
+                ),
                 child: Icon(icon, size: 18.sp, color: AppColors.primary),
               ),
               SizedBox(width: 10.w),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 15.sp,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                   SizedBox(height: 1.h),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 11.sp, color: AppColors.textHint)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11.sp,
+                      color: AppColors.textHint,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -326,22 +369,31 @@ class _CreateStationPageState extends State<CreateStationPage> {
     );
   }
 
-  Widget _field(TextEditingController ctl, String label, String hint,
-      {bool required = false, TextInputType keyboard = TextInputType.text}) {
+  Widget _field(
+    TextEditingController ctl,
+    String label,
+    String hint, {
+    bool required = false,
+    TextInputType keyboard = TextInputType.text,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(label,
-                style: TextStyle(
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13.sp,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
+            ),
             if (required)
-              Text(' *',
-                  style:
-                      TextStyle(fontSize: 13.sp, color: AppColors.errorLight)),
+              Text(
+                ' *',
+                style: TextStyle(fontSize: 13.sp, color: AppColors.errorLight),
+              ),
           ],
         ),
         SizedBox(height: 8.h),
@@ -358,18 +410,22 @@ class _CreateStationPageState extends State<CreateStationPage> {
             contentPadding:
                 EdgeInsets.symmetric(horizontal: 14.w, vertical: 13.h),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12.r),
-                borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            ),
             enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12.r),
-                borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+            ),
             focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12.r),
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.5)),
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.5),
+            ),
             errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12.r),
-                borderSide: const BorderSide(color: AppColors.errorLight)),
+              borderRadius: BorderRadius.circular(12.r),
+              borderSide: const BorderSide(color: AppColors.errorLight),
+            ),
           ),
           validator: required
               ? (v) => (v == null || v.trim().isEmpty)
@@ -406,8 +462,12 @@ class _RegionPickerRoute extends PageRouteBuilder<Map<String, String>> {
             return SlideTransition(
               position:
                   Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
-                      .animate(CurvedAnimation(
-                          parent: animation, curve: Curves.easeOutCubic)),
+                      .animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ),
+              ),
               child: child,
             );
           },
@@ -502,10 +562,12 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
     final prov = widget.provinces[_provIdx];
     String? city;
     String? dist;
-    if (_cities.isNotEmpty && _cityIdx < _cities.length)
+    if (_cities.isNotEmpty && _cityIdx < _cities.length) {
       city = _cities[_cityIdx];
-    if (_districts.isNotEmpty && _distIdx < _districts.length)
+    }
+    if (_districts.isNotEmpty && _distIdx < _districts.length) {
       dist = _districts[_distIdx];
+    }
     if (city == null) return;
     Navigator.of(context)
         .pop({'province': prov, 'city': city, 'district': dist ?? ''});
@@ -529,29 +591,41 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                   padding:
                       EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
                   decoration: const BoxDecoration(
-                      border: Border(
-                          bottom: BorderSide(color: AppColors.surfaceHover))),
+                    border: Border(
+                      bottom: BorderSide(color: AppColors.surfaceHover),
+                    ),
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Text(AppLocalizations.of(context)!.cancel,
-                            style: TextStyle(
-                                fontSize: 15.sp, color: AppColors.textHint)),
-                      ),
-                      Text(AppLocalizations.of(context)!.selectRegion,
+                        child: Text(
+                          AppLocalizations.of(context)!.cancel,
                           style: TextStyle(
-                              fontSize: 16.sp,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary)),
+                            fontSize: 15.sp,
+                            color: AppColors.textHint,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        AppLocalizations.of(context)!.selectRegion,
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
                       TextButton(
                         onPressed: _confirm,
-                        child: Text(AppLocalizations.of(context)!.confirm,
-                            style: TextStyle(
-                                fontSize: 15.sp,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.primary)),
+                        child: Text(
+                          AppLocalizations.of(context)!.confirm,
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -561,25 +635,37 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                   child: Row(
                     children: [
                       Expanded(
-                          flex: 3,
-                          child: _buildColumn(widget.provinces, _provCtrl,
-                              _provIdx, _onProvChanged,
-                              colLabel:
-                                  AppLocalizations.of(context)!.localProvince)),
+                        flex: 3,
+                        child: _buildColumn(
+                          widget.provinces,
+                          _provCtrl,
+                          _provIdx,
+                          _onProvChanged,
+                          colLabel: AppLocalizations.of(context)!.localProvince,
+                        ),
+                      ),
                       Container(width: 1, color: AppColors.surfaceHover),
                       Expanded(
-                          flex: 3,
-                          child: _buildColumn(
-                              _cities, _cityCtrl, _cityIdx, _onCityChanged,
-                              colLabel:
-                                  AppLocalizations.of(context)!.localCity)),
+                        flex: 3,
+                        child: _buildColumn(
+                          _cities,
+                          _cityCtrl,
+                          _cityIdx,
+                          _onCityChanged,
+                          colLabel: AppLocalizations.of(context)!.localCity,
+                        ),
+                      ),
                       Container(width: 1, color: AppColors.surfaceHover),
                       Expanded(
-                          flex: 3,
-                          child: _buildColumn(
-                              _districts, _distCtrl, _distIdx, _onDistChanged,
-                              colLabel:
-                                  AppLocalizations.of(context)!.localDistrict)),
+                        flex: 3,
+                        child: _buildColumn(
+                          _districts,
+                          _distCtrl,
+                          _distIdx,
+                          _onDistChanged,
+                          colLabel: AppLocalizations.of(context)!.localDistrict,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -591,20 +677,27 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
     );
   }
 
-  Widget _buildColumn(List<String> items, FixedExtentScrollController ctrl,
-      int idx, ValueChanged<int> onChange,
-      {String colLabel = ''}) {
+  Widget _buildColumn(
+    List<String> items,
+    FixedExtentScrollController ctrl,
+    int idx,
+    ValueChanged<int> onChange, {
+    String colLabel = '',
+  }) {
     return Column(
       children: [
         Container(
           height: _itemH,
           color: const Color(0xFFF8FAFB),
           alignment: Alignment.center,
-          child: Text(colLabel,
-              style: TextStyle(
-                  fontSize: 12.sp,
-                  color: AppColors.textHint,
-                  fontWeight: FontWeight.w500)),
+          child: Text(
+            colLabel,
+            style: TextStyle(
+              fontSize: 12.sp,
+              color: AppColors.textHint,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
         Expanded(
           child: Stack(
@@ -618,7 +711,8 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
                       decoration: BoxDecoration(
                         color: AppColors.primary.withValues(alpha: 0.06),
                         border: const Border.symmetric(
-                            horizontal: BorderSide(color: Color(0xFFE5E7EB))),
+                          horizontal: BorderSide(color: Color(0xFFE5E7EB)),
+                        ),
                       ),
                     ),
                     const Spacer(),

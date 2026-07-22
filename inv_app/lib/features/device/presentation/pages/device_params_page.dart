@@ -27,7 +27,9 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
   @override
   void initState() {
     super.initState();
-    context.read<DeviceBloc>().add(DeviceLocalParamsRequested(deviceIP: widget.deviceIP));
+    context
+        .read<DeviceBloc>()
+        .add(DeviceLocalParamsRequested(deviceIP: widget.deviceIP));
   }
 
   List<DeviceParam> _parseParams(Map<String, dynamic> raw) {
@@ -44,9 +46,14 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           unit: val['unit'] as String? ?? '',
           paramType: val['paramType'] as String? ?? _inferType(val['value']),
           options: (val['options'] as List<dynamic>?)
-                  ?.map((o) => o is Map<String, dynamic>
-                      ? ParamOption(value: o['value'], label: o['label'] as String? ?? '${o['value']}')
-                      : ParamOption(value: o, label: '$o'),)
+                  ?.map(
+                    (o) => o is Map<String, dynamic>
+                        ? ParamOption(
+                            value: o['value'],
+                            label: o['label'] as String? ?? '${o['value']}',
+                          )
+                        : ParamOption(value: o, label: '$o'),
+                  )
                   .toList() ??
               [],
           isDangerous: val['isDangerous'] as bool? ?? false,
@@ -81,7 +88,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     if (_searchQuery.isEmpty) return params;
     final q = _searchQuery.toLowerCase();
     return params
-        .where((p) => p.label.toLowerCase().contains(q) || p.key.toLowerCase().contains(q))
+        .where(
+          (p) =>
+              p.label.toLowerCase().contains(q) ||
+              p.key.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -91,7 +102,9 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
   }
 
   int get _modifiedCount {
-    return _modifiedValues.entries.where((e) => e.value != _originalValues[e.key]).length;
+    return _modifiedValues.entries
+        .where((e) => e.value != _originalValues[e.key])
+        .length;
   }
 
   void _onValueChanged(String key, dynamic newValue) {
@@ -135,15 +148,22 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
 
     if (!mounted) return;
     context.read<DeviceBloc>().add(
-          DeviceLocalParamsUpdateRequested(deviceIP: widget.deviceIP, params: paramsToWrite),
+          DeviceLocalParamsUpdateRequested(
+            deviceIP: widget.deviceIP,
+            params: paramsToWrite,
+          ),
         );
   }
 
   void _showNumberEditDialog(DeviceParam param) {
     final controller = TextEditingController(text: '${param.value}');
-    final minVal = param.minValue is num ? (param.minValue as num).toDouble() : 0.0;
-    final maxVal = param.maxValue is num ? (param.maxValue as num).toDouble() : 100.0;
-    double sliderVal = (param.value is num ? (param.value as num).toDouble() : minVal).clamp(minVal, maxVal);
+    final minVal =
+        param.minValue is num ? (param.minValue as num).toDouble() : 0.0;
+    final maxVal =
+        param.maxValue is num ? (param.maxValue as num).toDouble() : 100.0;
+    double sliderVal =
+        (param.value is num ? (param.value as num).toDouble() : minVal)
+            .clamp(minVal, maxVal);
 
     showDialog(
       context: context,
@@ -151,7 +171,9 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.r),
+              ),
               title: Text(param.label),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -161,13 +183,19 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                       padding: EdgeInsets.only(bottom: 8.h),
                       child: Text(
                         param.description!,
-                        style: TextStyle(fontSize: 12.sp, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   if (maxVal - minVal <= 200 && (maxVal - minVal) > 1)
                     Row(
                       children: [
-                        Text('${minVal.toInt()}', style: TextStyle(fontSize: 12.sp)),
+                        Text(
+                          '${minVal.toInt()}',
+                          style: TextStyle(fontSize: 12.sp),
+                        ),
                         Expanded(
                           child: Slider(
                             value: sliderVal.clamp(minVal, maxVal),
@@ -181,13 +209,17 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                             },
                           ),
                         ),
-                        Text('${maxVal.toInt()}', style: TextStyle(fontSize: 12.sp)),
+                        Text(
+                          '${maxVal.toInt()}',
+                          style: TextStyle(fontSize: 12.sp),
+                        ),
                       ],
                     ),
                   SizedBox(height: 8.h),
                   TextField(
                     controller: controller,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       hintText: '$minVal ~ $maxVal',
                       suffixText: param.unit,
@@ -195,7 +227,9 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                     onChanged: (v) {
                       final parsed = double.tryParse(v);
                       if (parsed != null) {
-                        setDialogState(() => sliderVal = parsed.clamp(minVal, maxVal));
+                        setDialogState(
+                          () => sliderVal = parsed.clamp(minVal, maxVal),
+                        );
                       }
                     },
                   ),
@@ -249,7 +283,12 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           if (state is DeviceError) {
             setState(() => _isApplying = false);
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(AppLocalizations.of(context)!.translateError(state.message)), backgroundColor: AppColors.error),
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.translateError(state.message),
+                ),
+                backgroundColor: AppColors.error,
+              ),
             );
           }
         },
@@ -259,7 +298,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           }
 
           if (state is DeviceError && _params.isEmpty) {
-            return Center(child: Text(AppLocalizations.of(context)!.translateError(state.message)));
+            return Center(
+              child: Text(
+                AppLocalizations.of(context)!.translateError(state.message),
+              ),
+            );
           }
 
           if (state is DeviceParamsLoaded) {
@@ -297,10 +340,13 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
               Expanded(
                 child: StyledRefreshIndicator(
                   onRefresh: () async {
-                    context.read<DeviceBloc>().add(DeviceLocalParamsRequested(deviceIP: widget.deviceIP));
+                    context.read<DeviceBloc>().add(
+                          DeviceLocalParamsRequested(deviceIP: widget.deviceIP),
+                        );
                   },
                   child: ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
                     itemCount: groupKeys.length,
                     itemBuilder: (context, index) {
                       final groupKey = groupKeys[index];
@@ -318,7 +364,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     );
   }
 
-  Widget _buildGroupTile(ThemeData theme, String groupKey, List<DeviceParam> params) {
+  Widget _buildGroupTile(
+    ThemeData theme,
+    String groupKey,
+    List<DeviceParam> params,
+  ) {
     return Container(
       margin: EdgeInsets.only(bottom: 8.h),
       decoration: BoxDecoration(
@@ -334,8 +384,10 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
       ),
       child: ExpansionTile(
         initiallyExpanded: true,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-        collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
+        collapsedShape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
         title: Text(
           groupKey,
           style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w700),
@@ -354,7 +406,10 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
         border: Border(
           top: BorderSide(color: theme.dividerColor, width: 0.5),
           left: param.isDangerous
-              ? BorderSide(color: AppColors.error.withValues(alpha: 0.6), width: 3)
+              ? BorderSide(
+                  color: AppColors.error.withValues(alpha: 0.6),
+                  width: 3,
+                )
               : BorderSide.none,
         ),
       ),
@@ -371,7 +426,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                       if (param.isDangerous)
                         Padding(
                           padding: EdgeInsets.only(right: 4.w),
-                          child: Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 16.sp),
+                          child: Icon(
+                            Icons.warning_amber_rounded,
+                            color: AppColors.error,
+                            size: 16.sp,
+                          ),
                         ),
                       Flexible(
                         child: Text(
@@ -379,7 +438,9 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                           style: TextStyle(
                             fontSize: 14.sp,
                             fontWeight: FontWeight.w500,
-                            color: param.isDangerous ? AppColors.error : theme.colorScheme.onSurface,
+                            color: param.isDangerous
+                                ? AppColors.error
+                                : theme.colorScheme.onSurface,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -389,14 +450,19 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                 ),
                 if (modified)
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4.r),
                     ),
                     child: Text(
-                        AppLocalizations.of(context)!.paramModified,
-                      style: TextStyle(fontSize: 10.sp, color: AppColors.primary, fontWeight: FontWeight.w600),
+                      AppLocalizations.of(context)!.paramModified,
+                      style: TextStyle(
+                        fontSize: 10.sp,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
               ],
@@ -406,7 +472,10 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                 padding: EdgeInsets.only(top: 2.h),
                 child: Text(
                   param.description!,
-                  style: TextStyle(fontSize: 11.sp, color: theme.colorScheme.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             SizedBox(height: 6.h),
@@ -417,7 +486,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     );
   }
 
-  Widget _buildParamControl(ThemeData theme, DeviceParam param, dynamic currentValue) {
+  Widget _buildParamControl(
+    ThemeData theme,
+    DeviceParam param,
+    dynamic currentValue,
+  ) {
     switch (param.paramType) {
       case 'number':
         return _buildNumberControl(theme, param, currentValue);
@@ -432,7 +505,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     }
   }
 
-  Widget _buildNumberControl(ThemeData theme, DeviceParam param, dynamic currentValue) {
+  Widget _buildNumberControl(
+    ThemeData theme,
+    DeviceParam param,
+    dynamic currentValue,
+  ) {
     return Row(
       children: [
         Expanded(
@@ -443,7 +520,9 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                 style: TextStyle(
                   fontSize: 16.sp,
                   fontWeight: FontWeight.bold,
-                  color: _isModified(param.key) ? AppColors.primary : theme.colorScheme.onSurface,
+                  color: _isModified(param.key)
+                      ? AppColors.primary
+                      : theme.colorScheme.onSurface,
                 ),
               ),
               if (param.unit.isNotEmpty)
@@ -451,7 +530,10 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
                   padding: EdgeInsets.only(left: 4.w),
                   child: Text(
                     param.unit,
-                    style: TextStyle(fontSize: 12.sp, color: theme.colorScheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
             ],
@@ -461,7 +543,8 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           icon: Icon(Icons.edit, size: 20.sp, color: theme.colorScheme.primary),
           onPressed: () => _showNumberEditDialog(param),
           style: IconButton.styleFrom(
-            backgroundColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+            backgroundColor:
+                theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
             minimumSize: Size(36.w, 36.w),
           ),
         ),
@@ -469,7 +552,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     );
   }
 
-  Widget _buildEnumControl(ThemeData theme, DeviceParam param, dynamic currentValue) {
+  Widget _buildEnumControl(
+    ThemeData theme,
+    DeviceParam param,
+    dynamic currentValue,
+  ) {
     if (param.options.length <= 4) {
       return Wrap(
         spacing: 6.w,
@@ -491,10 +578,12 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
       isExpanded: true,
       underline: const SizedBox.shrink(),
       items: param.options
-          .map((opt) => DropdownMenuItem<dynamic>(
-                value: opt.value,
-                child: Text(opt.label, style: TextStyle(fontSize: 13.sp)),
-              ),)
+          .map(
+            (opt) => DropdownMenuItem<dynamic>(
+              value: opt.value,
+              child: Text(opt.label, style: TextStyle(fontSize: 13.sp)),
+            ),
+          )
           .toList(),
       onChanged: (v) {
         if (v != null) _onValueChanged(param.key, v);
@@ -502,12 +591,20 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     );
   }
 
-  Widget _buildBoolControl(ThemeData theme, DeviceParam param, dynamic currentValue) {
-    final val = currentValue is bool ? currentValue : currentValue == 1 || currentValue == '1' || currentValue == 'true';
+  Widget _buildBoolControl(
+    ThemeData theme,
+    DeviceParam param,
+    dynamic currentValue,
+  ) {
+    final val = currentValue is bool
+        ? currentValue
+        : currentValue == 1 || currentValue == '1' || currentValue == 'true';
     return Row(
       children: [
         Text(
-          val ? AppLocalizations.of(context)!.paramOn : AppLocalizations.of(context)!.paramOff,
+          val
+              ? AppLocalizations.of(context)!.paramOn
+              : AppLocalizations.of(context)!.paramOff,
           style: TextStyle(
             fontSize: 14.sp,
             color: val ? AppColors.success : theme.colorScheme.onSurfaceVariant,
@@ -523,7 +620,11 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
     );
   }
 
-  Widget _buildTextControl(ThemeData theme, DeviceParam param, dynamic currentValue) {
+  Widget _buildTextControl(
+    ThemeData theme,
+    DeviceParam param,
+    dynamic currentValue,
+  ) {
     final controller = TextEditingController(text: '${currentValue ?? ''}');
     return TextField(
       controller: controller,
@@ -555,21 +656,30 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
           children: [
             Expanded(
               child: Text(
-                AppLocalizations.of(context)!.paramModifiedCount('$_modifiedCount'),
-                style: TextStyle(fontSize: 13.sp, color: theme.colorScheme.onSurfaceVariant),
+                AppLocalizations.of(context)!
+                    .paramModifiedCount('$_modifiedCount'),
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
             FilledButton(
               onPressed: _isApplying ? null : _applyChanges,
               style: FilledButton.styleFrom(
                 padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
               ),
               child: _isApplying
                   ? SizedBox(
                       width: 18.w,
                       height: 18.w,
-                      child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: const CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : Text(AppLocalizations.of(context)!.applyChanges),
             ),

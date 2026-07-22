@@ -43,7 +43,8 @@ class AlarmRepositoryImpl implements AlarmRepository {
           return const Right(<String, dynamic>{});
         }
         return const Left(
-            ServerFailure('Response format error: expected object data'));
+          ServerFailure('Response format error: expected object data'),
+        );
       }
       return Left(ServerFailure(data['message'] ?? 'Request failed'));
     }
@@ -51,11 +52,19 @@ class AlarmRepositoryImpl implements AlarmRepository {
   }
 
   @override
-  Future<Either<Failure, Map<String, dynamic>>> getList(
-      {int? stationId, int? status, int page = 1, int pageSize = 20}) async {
+  Future<Either<Failure, Map<String, dynamic>>> getList({
+    int? stationId,
+    int? status,
+    int page = 1,
+    int pageSize = 20,
+  }) async {
     try {
       final response = await remoteDataSource.getList(
-          stationId: stationId, status: status, page: page, pageSize: pageSize);
+        stationId: stationId,
+        status: status,
+        page: page,
+        pageSize: pageSize,
+      );
       return _parseData(response);
     } on DioException catch (e) {
       return Left(_mapError(e));

@@ -6,10 +6,13 @@ class NotificationRemoteDataSource {
   NotificationRemoteDataSource(this.dio);
 
   Future<Response> getList({int page = 1, int pageSize = 50}) async {
-    return await dio.get('/notifications', queryParameters: {
-      'page': page,
-      'page_size': pageSize,
-    },);
+    return await dio.get(
+      '/notifications',
+      queryParameters: {
+        'page': page,
+        'page_size': pageSize,
+      },
+    );
   }
 
   Future<Response> getStats() async {

@@ -42,13 +42,13 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     final prefs = await _getSharedPrefs();
     if (mounted) {
       setState(() {
-        _pushEnabled = prefs['$_keyPush'] ?? true;
-        _alertEnabled = prefs['$_keyAlert'] ?? true;
-        _offlineEnabled = prefs['$_keyOffline'] ?? true;
-        _systemEnabled = prefs['$_keySystem'] ?? true;
-        _dndStart = prefs['$_keyDndStart'] ?? '22:00';
-        _dndEnd = prefs['$_keyDndEnd'] ?? '07:00';
-        _dndEnabled = prefs['$_keyDndEnabled'] ?? false;
+        _pushEnabled = prefs[_keyPush] ?? true;
+        _alertEnabled = prefs[_keyAlert] ?? true;
+        _offlineEnabled = prefs[_keyOffline] ?? true;
+        _systemEnabled = prefs[_keySystem] ?? true;
+        _dndStart = prefs[_keyDndStart] ?? '22:00';
+        _dndEnd = prefs[_keyDndEnd] ?? '07:00';
+        _dndEnabled = prefs[_keyDndEnabled] ?? false;
         _loading = false;
       });
     }
@@ -56,13 +56,13 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
 
   Future<Map<String, dynamic>> _getSharedPrefs() async {
     return {
-      '$_keyPush': await _storage.getNotifyPush(),
-      '$_keyAlert': await _storage.getNotifyAlert(),
-      '$_keyOffline': await _storage.getNotifyOffline(),
-      '$_keySystem': await _storage.getNotifySystem(),
-      '$_keyDndStart': await _storage.getNotifyDndStart(),
-      '$_keyDndEnd': await _storage.getNotifyDndEnd(),
-      '$_keyDndEnabled': await _storage.getNotifyDndEnabled(),
+      _keyPush: await _storage.getNotifyPush(),
+      _keyAlert: await _storage.getNotifyAlert(),
+      _keyOffline: await _storage.getNotifyOffline(),
+      _keySystem: await _storage.getNotifySystem(),
+      _keyDndStart: await _storage.getNotifyDndStart(),
+      _keyDndEnd: await _storage.getNotifyDndEnd(),
+      _keyDndEnabled: await _storage.getNotifyDndEnabled(),
     };
   }
 
@@ -110,7 +110,8 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
     );
 
     if (selected != null && mounted) {
-      final timeStr = '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
+      final timeStr =
+          '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
       if (type == 'start') {
         setState(() => _dndStart = timeStr);
         await _saveSetting(_keyDndStart, timeStr);
@@ -145,7 +146,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               setState(() => _pushEnabled = value);
               await _saveSetting(_keyPush, value);
             },
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
           const Divider(height: 1),
           SwitchListTile(
@@ -156,7 +157,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               setState(() => _alertEnabled = value);
               await _saveSetting(_keyAlert, value);
             },
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
           const Divider(height: 1),
           SwitchListTile(
@@ -167,7 +168,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               setState(() => _offlineEnabled = value);
               await _saveSetting(_keyOffline, value);
             },
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
           const Divider(height: 1),
           SwitchListTile(
@@ -178,7 +179,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               setState(() => _systemEnabled = value);
               await _saveSetting(_keySystem, value);
             },
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
           _buildSectionTitle(l10n.dndSection),
           SwitchListTile(
@@ -189,7 +190,7 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               setState(() => _dndEnabled = value);
               await _saveSetting(_keyDndEnabled, value);
             },
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
           if (_dndEnabled) ...[
             const Divider(height: 1),
@@ -218,7 +219,11 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
       padding: EdgeInsets.fromLTRB(16.w, 16.h, 16.w, 8.h),
       child: Text(
         title,
-        style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600, color: AppColors.textHint),
+        style: TextStyle(
+          fontSize: 13.sp,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textHint,
+        ),
       ),
     );
   }
@@ -234,10 +239,14 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
               title: Text(l10n.resetNotifySettings),
               content: Text(l10n.resetNotifyConfirm),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.cancel)),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: Text(l10n.cancel),
+                ),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                  style:
+                      FilledButton.styleFrom(backgroundColor: AppColors.error),
                   child: Text(l10n.reset),
                 ),
               ],
@@ -263,7 +272,10 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
                 _dndEnd = '07:00';
               });
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.notifySettingsReset), duration: const Duration(seconds: 1)),
+                SnackBar(
+                  content: Text(l10n.notifySettingsReset),
+                  duration: const Duration(seconds: 1),
+                ),
               );
             }
           }
@@ -272,7 +284,8 @@ class _NotifySettingsPageState extends State<NotifySettingsPage> {
           foregroundColor: AppColors.error,
           side: BorderSide(color: AppColors.error.withAlpha(40)),
           padding: EdgeInsets.symmetric(vertical: 14.h),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
         ),
         child: Text(l10n.resetAllNotify),
       ),

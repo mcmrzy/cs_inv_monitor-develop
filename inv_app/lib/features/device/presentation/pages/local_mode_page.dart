@@ -211,7 +211,9 @@ class _LocalModePageState extends State<LocalModePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isLocal ? AppLocalizations.of(context)!.localMode : AppLocalizations.of(context)!.remoteMode,
+                  isLocal
+                      ? AppLocalizations.of(context)!.localMode
+                      : AppLocalizations.of(context)!.remoteMode,
                   style: TextStyle(
                     fontSize: 15.sp,
                     fontWeight: FontWeight.w600,
@@ -220,7 +222,9 @@ class _LocalModePageState extends State<LocalModePage> {
                 ),
                 SizedBox(height: 2.h),
                 Text(
-                  isLocal ? AppLocalizations.of(context)!.localModeDirectAp : AppLocalizations.of(context)!.remoteModeCloud,
+                  isLocal
+                      ? AppLocalizations.of(context)!.localModeDirectAp
+                      : AppLocalizations.of(context)!.remoteModeCloud,
                   style: TextStyle(
                     fontSize: 12.sp,
                     color: AppColors.textHint,
@@ -258,7 +262,11 @@ class _LocalModePageState extends State<LocalModePage> {
       ),
       child: Row(
         children: [
-          Icon(Icons.warning_amber_rounded, size: 18.sp, color: const Color(0xFFF97316)),
+          Icon(
+            Icons.warning_amber_rounded,
+            size: 18.sp,
+            color: const Color(0xFFF97316),
+          ),
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
@@ -304,7 +312,10 @@ class _LocalModePageState extends State<LocalModePage> {
                     SizedBox(width: 8.w),
                     Text(
                       AppLocalizations.of(context)!.scanDevices,
-                      style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 15.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -323,7 +334,11 @@ class _LocalModePageState extends State<LocalModePage> {
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline_rounded, size: 18.sp, color: AppColors.error),
+          Icon(
+            Icons.error_outline_rounded,
+            size: 18.sp,
+            color: AppColors.error,
+          ),
           SizedBox(width: 8.w),
           Expanded(
             child: Text(
@@ -342,7 +357,11 @@ class _LocalModePageState extends State<LocalModePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.wifi_off_rounded, size: 56.sp, color: AppColors.textHint),
+            Icon(
+              Icons.wifi_off_rounded,
+              size: 56.sp,
+              color: AppColors.textHint,
+            ),
             SizedBox(height: 12.h),
             Text(
               AppLocalizations.of(context)!.noDeviceFound,
@@ -365,7 +384,8 @@ class _LocalModePageState extends State<LocalModePage> {
           Padding(
             padding: EdgeInsets.only(bottom: 8.h),
             child: Text(
-              AppLocalizations.of(context)!.deviceApCount('${_apDevices.length}'),
+              AppLocalizations.of(context)!
+                  .deviceApCount('${_apDevices.length}'),
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
@@ -379,7 +399,8 @@ class _LocalModePageState extends State<LocalModePage> {
           Padding(
             padding: EdgeInsets.only(top: 12.h, bottom: 8.h),
             child: Text(
-              AppLocalizations.of(context)!.lanDeviceCount('${_mdnsDevices.length}'),
+              AppLocalizations.of(context)!
+                  .lanDeviceCount('${_mdnsDevices.length}'),
               style: TextStyle(
                 fontSize: 13.sp,
                 fontWeight: FontWeight.w600,
@@ -405,9 +426,7 @@ class _LocalModePageState extends State<LocalModePage> {
         elevation: 0,
         child: InkWell(
           borderRadius: BorderRadius.circular(14.r),
-          onTap: isConnected
-              ? null
-              : () => _connectToDevice(device),
+          onTap: isConnected ? null : () => _connectToDevice(device),
           child: Padding(
             padding: EdgeInsets.all(14.w),
             child: Row(
@@ -422,9 +441,7 @@ class _LocalModePageState extends State<LocalModePage> {
                     borderRadius: BorderRadius.circular(10.r),
                   ),
                   child: Icon(
-                    isConnected
-                        ? Icons.wifi
-                        : Icons.wifi_tethering,
+                    isConnected ? Icons.wifi : Icons.wifi_tethering,
                     size: 20.sp,
                     color: isConnected
                         ? AppColors.successLight
@@ -458,7 +475,11 @@ class _LocalModePageState extends State<LocalModePage> {
                           ),
                           if (device.isEncrypted) ...[
                             SizedBox(width: 8.w),
-                            Icon(Icons.lock_outline, size: 12.sp, color: AppColors.textHint),
+                            Icon(
+                              Icons.lock_outline,
+                              size: 12.sp,
+                              color: AppColors.textHint,
+                            ),
                           ],
                         ],
                       ),
@@ -473,7 +494,8 @@ class _LocalModePageState extends State<LocalModePage> {
                   )
                 else if (isConnected)
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                    padding:
+                        EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
                     decoration: BoxDecoration(
                       color: const Color(0xFFECFDF5),
                       borderRadius: BorderRadius.circular(6.r),
@@ -488,7 +510,11 @@ class _LocalModePageState extends State<LocalModePage> {
                     ),
                   )
                 else
-                  Icon(Icons.chevron_right_rounded, size: 18.sp, color: AppColors.textHint),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18.sp,
+                    color: AppColors.textHint,
+                  ),
               ],
             ),
           ),
@@ -525,7 +551,11 @@ class _LocalModePageState extends State<LocalModePage> {
                     color: const Color(0xFFF0FDF4),
                     borderRadius: BorderRadius.circular(10.r),
                   ),
-                  child: Icon(Icons.lan, size: 20.sp, color: AppColors.successLight),
+                  child: Icon(
+                    Icons.lan,
+                    size: 20.sp,
+                    color: AppColors.successLight,
+                  ),
                 ),
                 SizedBox(width: 12.w),
                 Expanded(
@@ -551,7 +581,11 @@ class _LocalModePageState extends State<LocalModePage> {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, size: 18.sp, color: AppColors.textHint),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18.sp,
+                  color: AppColors.textHint,
+                ),
               ],
             ),
           ),
@@ -571,7 +605,9 @@ class _LocalModePageState extends State<LocalModePage> {
           margin: EdgeInsets.only(right: 1.w),
           decoration: BoxDecoration(
             color: active
-                ? (level >= 3 ? AppColors.successLight : const Color(0xFFF59E0B))
+                ? (level >= 3
+                    ? AppColors.successLight
+                    : const Color(0xFFF59E0B))
                 : const Color(0xFFE5E7EB),
             borderRadius: BorderRadius.circular(1.r),
           ),

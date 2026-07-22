@@ -10,10 +10,13 @@ class StationRemoteDataSource {
   }
 
   Future<Response> getList({int page = 1, int pageSize = 20}) async {
-    return await dio.get('/stations', queryParameters: {
-      'page': page,
-      'page_size': pageSize,
-    },);
+    return await dio.get(
+      '/stations',
+      queryParameters: {
+        'page': page,
+        'page_size': pageSize,
+      },
+    );
   }
 
   Future<Response> getDetail(int stationId) async {
@@ -32,12 +35,20 @@ class StationRemoteDataSource {
     return await dio.delete('/stations/$stationId');
   }
 
-  Future<Response> getStatistics(int stationId, String startDate, String endDate, String period) async {
-    return await dio.get('/stations/$stationId/statistics', queryParameters: {
-      'start_date': startDate,
-      'end_date': endDate,
-      'period': period,
-    },);
+  Future<Response> getStatistics(
+    int stationId,
+    String startDate,
+    String endDate,
+    String period,
+  ) async {
+    return await dio.get(
+      '/stations/$stationId/statistics',
+      queryParameters: {
+        'start_date': startDate,
+        'end_date': endDate,
+        'period': period,
+      },
+    );
   }
 }
 

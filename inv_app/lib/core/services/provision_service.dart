@@ -16,8 +16,12 @@ class ProvisionResult {
   final String? ssid;
   final String? ip;
 
-  ProvisionResult(
-      {required this.success, required this.message, this.ssid, this.ip});
+  ProvisionResult({
+    required this.success,
+    required this.message,
+    this.ssid,
+    this.ip,
+  });
 }
 
 class ProvisionService {
@@ -67,7 +71,9 @@ class ProvisionService {
 
   /// POST JSON 请求
   Future<ProvisionResult> _postJson(
-      String url, Map<String, dynamic> body) async {
+    String url,
+    Map<String, dynamic> body,
+  ) async {
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: _httpTimeout);
     try {
@@ -78,10 +84,15 @@ class ProvisionService {
           await request.close().timeout(const Duration(seconds: 10));
       final responseBody = await response.transform(utf8.decoder).join();
       return _parseResponse(
-          response.statusCode, responseBody, 'JSON POST $url');
+        response.statusCode,
+        responseBody,
+        'JSON POST $url',
+      );
     } on FormatException {
       return ProvisionResult(
-          success: false, message: 'Format mismatch (JSON POST)');
+        success: false,
+        message: 'Format mismatch (JSON POST)',
+      );
     } catch (e) {
       return ProvisionResult(success: false, message: 'Request timeout: $e');
     } finally {
@@ -101,7 +112,9 @@ class ProvisionService {
           data is Map &&
           (data['ok'] == true || data['result'] == 'ok')) {
         return ProvisionResult(
-            success: true, message: data['message']?.toString() ?? 'OK');
+          success: true,
+          message: data['message']?.toString() ?? 'OK',
+        );
       }
       final msg = data is Map ? (data['message']?.toString() ?? body) : body;
       return ProvisionResult(success: false, message: '[$tag] $msg');
@@ -133,7 +146,9 @@ class ProvisionService {
         );
       }
       return ProvisionResult(
-          success: false, message: 'Waiting for connection...');
+        success: false,
+        message: 'Waiting for connection...',
+      );
     } catch (_) {
       return ProvisionResult(success: false, message: 'Device rebooting...');
     } finally {

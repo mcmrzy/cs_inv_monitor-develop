@@ -1,0 +1,327 @@
+name: API Documentation Validation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+    paths:
+      - 'docs/openapi.yaml'
+      - 'docs/swagger/**'
+      - 'business-api/internal/docs/swagger/**'
+      - '.github/workflows/api-docs-validation.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'docs/openapi.yaml'
+      - 'docs/swagger/**'
+      - 'business-api/internal/docs/swagger/**'
+
+jobs:
+  validate-openapi:
+    name: Validate OpenAPI Specification
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Spectral (OpenAPI linter)
+        run: npm install -g @stoplight/spectral-cli
+
+      - name: Validate OpenAPI spec with Spectral
+        run: spectral lint docs/openapi.yaml --ruleset https://raw.githubusercontent.com/stoplightio/spectral/main/rulesets/oas.yaml
+
+      - name: Install Redocly CLI
+        run: npm install -g @redocly/cli
+
+      - name: Bundle OpenAPI spec
+        run: redocly bundle docs/openapi.yaml -o docs/openapi.bundled.yaml
+
+      - name: Validate bundled spec
+        run: redocly lint docs/openapi.bundled.yaml
+
+      - name: Upload bundled spec as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-bundled
+          path: docs/openapi.bundled.yaml
+          retention-days: 30
+
+  validate-go-swagger:
+    name: Validate Go Swagger Annotations
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Install swag
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+
+      - name: Generate swagger docs
+        working-directory: ./business-api
+        run: |
+          swag init \
+            --parseDependency \
+            --parseInternal \
+            --generalInfo cmd/main.go \
+            --output internal/docs/swagger \
+            --dir . \
+            --exclude ./vendor
+
+      - name: Verify generated docs
+        working-directory: ./business-api
+        run: |
+          if [ ! -f internal/docs/swagger/swagger.json ]; then
+            echo "swagger.json not generated!"
+            exit 1
+          fi
+          if [ ! -f internal/docs/swagger/swagger.yaml ]; then
+            echo "swagger.yaml not generated!"
+            exit 1
+          fi
+          echo "Swagger docs generated successfully"
+          ls -la internal/docs/swagger/
+
+      - name: Upload swagger docs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swagger-generated
+          path: business-api/internal/docs/swagger/
+          retention-days: 30
+
+  check-endpoint-coverage:
+    name: Check Endpoint Documentation Coverage
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yq (YAML processor)
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.35.2/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Count documented endpoints
+        run: |
+          echo "=== Endpoint Coverage Report ==="
+          
+          # Count paths in OpenAPI spec
+          TOTAL_PATHS=$(yq eval '.paths | keys | length' docs/openapi.yaml)
+          echo "Total documented paths: $TOTAL_PATHS"
+          
+          # Expected endpoint groups
+          echo ""
+          echo "Expected endpoint groups:"
+          echo "- Organizations: 8 endpoints"
+          echo "- Invitations: 5 endpoints"
+          echo "- Devices (claim/transfer): 8 endpoints"
+          echo "- Members (lifecycle): 12 endpoints"
+          echo "Total expected: 33 endpoints"
+          
+          # Verify required tags exist
+          echo ""
+          echo "Checking required tags..."
+          TAGS=$(yq eval '.tags[].name' docs/openapi.yaml | sort | uniq)
+          echo "Found tags: $TAGS"
+          
+          # Check for required tags
+          REQUIRED_TAGS=("Organizations" "Invitations" "Devices" "Members")
+          for tag in "${REQUIRED_TAGS[@]}"; do
+            if echo "$TAGS" | grep -q "^$tag$"; then
+              echo "✓ Tag '$tag' found"
+            else
+              echo "✗ Tag '$tag' missing!"
+              exit 1
+            fi
+          done
+          
+          echo ""
+          echo "=== Coverage check passed ==="
+
+      - name: Validate examples
+        run: |
+          echo "=== Validating Examples ==="
+          
+          # Check if examples section exists
+          EXAMPLES_COUNT=$(yq eval '.components.examples | keys | length' docs/openapi.yaml)
+          echo "Total examples defined: $EXAMPLES_COUNT"
+          
+          if [ "$EXAMPLES_COUNT" -lt 5 ]; then
+            echo "Warning: Less than 5 examples defined"
+          fi
+          
+          # Verify example structure
+          yq eval '.components.examples | to_entries | .[] | select(.value.value == null) | .key' docs/openapi.yaml > /tmp/empty_examples.txt
+          if [ -s /tmp/empty_examples.txt ]; then
+            echo "Empty examples found:"
+            cat /tmp/empty_examples.txt
+            exit 1
+          fi
+          
+          echo "All examples valid"
+
+  generate-postman:
+    name: Generate Postman Collection
+    runs-on: ubuntu-latest
+    needs: [validate-openapi]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install openapi-to-postman converter
+        run: npm install -g openapi-to-postman
+
+      - name: Convert OpenAPI to Postman collection
+        run: |
+          openapi2postmanv2 \
+            --spec docs/openapi.yaml \
+            --output docs/postman/collection.json \
+            --options folderStrategy=Tags,requestNameSource=URL
+
+      - name: Verify Postman collection
+        run: |
+          if [ ! -f docs/postman/collection.json ]; then
+            echo "Postman collection not generated!"
+            exit 1
+          fi
+          echo "Postman collection generated successfully"
+          cat docs/postman/collection.json | jq '.info.name, .info.version'
+
+      - name: Upload Postman collection as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: postman-collection
+          path: docs/postman/
+          retention-days: 30
+
+  deploy-docs:
+    name: Deploy Documentation to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [validate-openapi, validate-go-swagger, check-endpoint-coverage]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    permissions:
+      pages: write
+      id-token: write
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Build documentation site
+        run: |
+          mkdir -p _site/docs
+          cp docs/swagger/index.html _site/
+          cp docs/openapi.yaml _site/docs/
+          
+          # Create index.html redirect
+          cat > _site/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="refresh" content="0; url=/docs/swagger/">
+            <title>API Documentation</title>
+          </head>
+          <body>
+            <p>Redirecting to <a href="/docs/swagger/">API Documentation</a>...</p>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  notify:
+    name: Notify on Documentation Changes
+    runs-on: ubuntu-latest
+    needs: [validate-openapi, check-endpoint-coverage]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for API changes
+        id: check_changes
+        run: |
+          # Get changed files
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E 'docs/openapi.yaml|docs/swagger/' || true)
+          
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "api_changed=true" >> $GITHUB_OUTPUT
+            echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+            echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "api_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR
+        if: steps.check_changes.outputs.api_changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const changedFiles = `${{ steps.check_changes.outputs.changed_files }}`;
+            const comment = `## 📚 API Documentation Changes Detected
+            
+            The following API documentation files have been modified:
+            
+            \`\`\`
+            ${changedFiles}
+            \`\`\`
+            
+            ### Review Checklist:
+            - [ ] OpenAPI specification validated successfully
+            - [ ] All new endpoints documented
+            - [ ] Request/response examples provided
+            - [ ] Authentication requirements specified
+            - [ ] Error codes documented
+            
+            The updated documentation will be automatically deployed to GitHub Pages upon merge.
+            
+            ---
+            *Generated by API Documentation Validation Workflow*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

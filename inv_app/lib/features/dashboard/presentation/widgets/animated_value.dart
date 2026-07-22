@@ -40,10 +40,12 @@ class _AnimatedValueState extends State<AnimatedValue>
     _animation = Tween<double>(
       begin: 0,
       end: widget.value,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    ),);
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOut,
+      ),
+    );
     _controller.forward();
     _previousValue = widget.value;
   }
@@ -56,10 +58,12 @@ class _AnimatedValueState extends State<AnimatedValue>
       _animation = Tween<double>(
         begin: _previousValue,
         end: widget.value,
-      ).animate(CurvedAnimation(
-        parent: _controller,
-        curve: Curves.easeOut,
-      ),);
+      ).animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: Curves.easeOut,
+        ),
+      );
       _controller.reset();
       _controller.forward();
     }
@@ -79,7 +83,7 @@ class _AnimatedValueState extends State<AnimatedValue>
         final displayValue = widget.formatter != null
             ? widget.formatter!(_animation.value)
             : _formatValue(_animation.value);
-        
+
         return Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -87,22 +91,22 @@ class _AnimatedValueState extends State<AnimatedValue>
           children: [
             Text(
               displayValue,
-              style: widget.valueStyle ?? 
-                const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
+              style: widget.valueStyle ??
+                  const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
             ),
             if (widget.unit.isNotEmpty) ...[
               const SizedBox(width: 4),
               Text(
                 widget.unit,
-                style: widget.unitStyle ?? 
-                  const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
+                style: widget.unitStyle ??
+                    const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white70,
+                    ),
               ),
             ],
           ],
@@ -146,13 +150,13 @@ class TrendValue extends StatelessWidget {
     final trend = previousValue != null && previousValue! > 0
         ? ((value - previousValue!) / previousValue! * 100)
         : 0.0;
-    
+
     final isPositive = trend > 0;
     final isNeutral = trend == 0;
-    
+
     Color trendColor;
     IconData trendIcon;
-    
+
     if (isNeutral) {
       trendColor = Colors.grey;
       trendIcon = Icons.trending_flat;

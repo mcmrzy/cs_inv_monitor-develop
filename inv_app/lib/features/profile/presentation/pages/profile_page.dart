@@ -29,7 +29,14 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(l10n.myProfile, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17, color: AppColors.textPrimary)),
+        title: Text(
+          l10n.myProfile,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 17,
+            color: AppColors.textPrimary,
+          ),
+        ),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
@@ -60,7 +67,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildHeader(String phone, int role, bool isLoading, AppLocalizations l10n) {
+  Widget _buildHeader(
+    String phone,
+    int role,
+    bool isLoading,
+    AppLocalizations l10n,
+  ) {
     String roleText;
     switch (role) {
       case 0:
@@ -85,12 +97,17 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Row(
         children: [
           Container(
-            width: 56.w, height: 56.w,
+            width: 56.w,
+            height: 56.w,
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16.r),
             ),
-            child: Icon(Icons.person_rounded, size: 28.sp, color: AppColors.primary),
+            child: Icon(
+              Icons.person_rounded,
+              size: 28.sp,
+              color: AppColors.primary,
+            ),
           ),
           SizedBox(width: 16.w),
           Expanded(
@@ -99,25 +116,46 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 if (isLoading)
                   Container(
-                    width: 100.w, height: 16.h,
-                    decoration: BoxDecoration(color: AppColors.surfaceHover, borderRadius: BorderRadius.circular(4.r)),
+                    width: 100.w,
+                    height: 16.h,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceHover,
+                      borderRadius: BorderRadius.circular(4.r),
+                    ),
                   )
                 else
-                  Text(displayName,
-                      style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),),
+                  Text(
+                    displayName,
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                 SizedBox(height: 4.h),
                 if (isLoading)
                   Container(
-                    width: 60.w, height: 12.h,
-                    decoration: BoxDecoration(color: AppColors.surfaceHover, borderRadius: BorderRadius.circular(4.r)),
+                    width: 60.w,
+                    height: 12.h,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceHover,
+                      borderRadius: BorderRadius.circular(4.r),
+                    ),
                   )
                 else
-                  Text(l10n.roleLabel(roleText),
-                      style: TextStyle(fontSize: 13.sp, color: AppColors.textHint),),
+                  Text(
+                    l10n.roleLabel(roleText),
+                    style:
+                        TextStyle(fontSize: 13.sp, color: AppColors.textHint),
+                  ),
               ],
             ),
           ),
-          Icon(Icons.chevron_right_rounded, size: 20.sp, color: AppColors.textHint),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 20.sp,
+            color: AppColors.textHint,
+          ),
         ],
       ),
     );
@@ -128,10 +166,26 @@ class _ProfilePageState extends State<ProfilePage> {
     final items = [
       (Icons.solar_power_rounded, l10n.myStations, () => context.go('/home')),
       (Icons.devices_rounded, l10n.myDevices, () => context.go('/devices')),
-      (Icons.system_update_alt_rounded, l10n.otaTitle, () => context.push('/ota')),
-      (Icons.notifications_outlined, l10n.messageNotifySettings, () => context.push('/notify-settings')),
-      (Icons.settings_outlined, l10n.systemSettings, () => context.push('/settings')),
-      (Icons.lock_outlined, l10n.changePassword, () => context.push('/change-password')),
+      (
+        Icons.system_update_alt_rounded,
+        l10n.otaTitle,
+        () => context.push('/ota')
+      ),
+      (
+        Icons.notifications_outlined,
+        l10n.messageNotifySettings,
+        () => context.push('/notify-settings')
+      ),
+      (
+        Icons.settings_outlined,
+        l10n.systemSettings,
+        () => context.push('/settings')
+      ),
+      (
+        Icons.lock_outlined,
+        l10n.changePassword,
+        () => context.push('/change-password')
+      ),
       (Icons.info_outline, l10n.aboutUs, () => context.push('/about')),
     ];
 
@@ -145,14 +199,34 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Material(
         color: Colors.transparent,
         child: Column(
-          children: items.map((item) => ListTile(
-            leading: Icon(item.$1, size: 22.sp, color: AppColors.textSecondary),
-            title: Text(item.$2, style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary)),
-            trailing: Icon(Icons.chevron_right_rounded, size: 18.sp, color: AppColors.textHint),
-            onTap: item.$3,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
-          ),).toList(),
+          children: items
+              .map(
+                (item) => ListTile(
+                  leading: Icon(
+                    item.$1,
+                    size: 22.sp,
+                    color: AppColors.textSecondary,
+                  ),
+                  title: Text(
+                    item.$2,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  trailing: Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18.sp,
+                    color: AppColors.textHint,
+                  ),
+                  onTap: item.$3,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16.w),
+                ),
+              )
+              .toList(),
         ),
       ),
     );
@@ -168,15 +242,22 @@ class _ProfilePageState extends State<ProfilePage> {
             builder: (ctx) => AlertDialog(
               title: Text(l10n.logout),
               content: Text(l10n.logoutConfirm),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14.r),
+              ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(l10n.cancel),
+                ),
                 FilledButton(
                   onPressed: () {
                     Navigator.pop(ctx);
                     context.read<AuthBloc>().add(AuthLogoutRequested());
                   },
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.errorLight),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.errorLight,
+                  ),
                   child: Text(l10n.confirm),
                 ),
               ],
@@ -187,7 +268,8 @@ class _ProfilePageState extends State<ProfilePage> {
           foregroundColor: AppColors.errorLight,
           side: BorderSide(color: AppColors.errorLight.withValues(alpha: 0.2)),
           padding: EdgeInsets.symmetric(vertical: 14.h),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
         ),
         child: Text(l10n.logout),
       ),

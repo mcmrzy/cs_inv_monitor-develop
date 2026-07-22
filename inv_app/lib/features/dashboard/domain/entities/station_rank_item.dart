@@ -15,7 +15,8 @@ class StationRankItem {
   factory StationRankItem.fromJson(Map<String, dynamic> json) {
     return StationRankItem(
       stationId: (json['stationId'] ?? json['station_id'] ?? 0) as int,
-      stationName: (json['stationName'] ?? json['station_name'] ?? '-') as String,
+      stationName:
+          (json['stationName'] ?? json['station_name'] ?? '-') as String,
       energy: (json['energy'] as num?)?.toDouble() ?? 0,
       deviceCount: (json['deviceCount'] ?? json['device_count'] ?? 0) as int,
     );

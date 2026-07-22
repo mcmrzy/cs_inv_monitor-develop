@@ -78,11 +78,16 @@ class LocalDiscoveryService {
     try {
       final isRegistered = await WiFiForIoTPlugin.isRegisteredWifiNetwork(ssid);
       if (isRegistered == true) {
-        return await WiFiForIoTPlugin.findAndConnect(ssid,
-            password: password ?? '');
+        return await WiFiForIoTPlugin.findAndConnect(
+          ssid,
+          password: password ?? '',
+        );
       }
-      return await WiFiForIoTPlugin.connect(ssid,
-          password: password ?? '', withInternet: false);
+      return await WiFiForIoTPlugin.connect(
+        ssid,
+        password: password ?? '',
+        withInternet: false,
+      );
     } catch (_) {
       return false;
     }

@@ -74,7 +74,7 @@ class _SplashPageState extends State<SplashPage> {
                 l10n.smartMonitorPlatform,
                 style: GoogleFonts.notoSansSc(
                   fontSize: 16.sp,
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withValues(alpha: 0.9),
                 ),
               ),
               SizedBox(height: 48.h),

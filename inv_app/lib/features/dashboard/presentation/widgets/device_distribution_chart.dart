@@ -46,7 +46,11 @@ class DeviceDistributionChart extends StatelessWidget {
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8.r),
                 ),
-                child: Icon(Icons.pie_chart_rounded, size: 18.w, color: AppColors.primary),
+                child: Icon(
+                  Icons.pie_chart_rounded,
+                  size: 18.w,
+                  color: AppColors.primary,
+                ),
               ),
               SizedBox(width: 10.w),
               Text(
@@ -104,7 +108,11 @@ class DeviceDistributionChart extends StatelessWidget {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.devices_rounded, size: 32.w, color: AppColors.textHint),
+                            Icon(
+                              Icons.devices_rounded,
+                              size: 32.w,
+                              color: AppColors.textHint,
+                            ),
                             SizedBox(height: 4.h),
                             Text(
                               l10n.noDevicesYet,
@@ -123,11 +131,32 @@ class DeviceDistributionChart extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _legendRow(context, AppColors.online, l10n.statusOnline, onlineCount, total, Icons.check_circle_rounded),
+                    _legendRow(
+                      context,
+                      AppColors.online,
+                      l10n.statusOnline,
+                      onlineCount,
+                      total,
+                      Icons.check_circle_rounded,
+                    ),
                     SizedBox(height: 16.h),
-                    _legendRow(context, AppColors.offline, l10n.statusOffline, offlineCount, total, Icons.pause_circle_rounded),
+                    _legendRow(
+                      context,
+                      AppColors.offline,
+                      l10n.statusOffline,
+                      offlineCount,
+                      total,
+                      Icons.pause_circle_rounded,
+                    ),
                     SizedBox(height: 16.h),
-                    _legendRow(context, AppColors.fault, l10n.statusFault, faultCount, total, Icons.error_rounded),
+                    _legendRow(
+                      context,
+                      AppColors.fault,
+                      l10n.statusFault,
+                      faultCount,
+                      total,
+                      Icons.error_rounded,
+                    ),
                   ],
                 ),
               ),
@@ -145,34 +174,47 @@ class DeviceDistributionChart extends StatelessWidget {
     final sections = <PieChartSectionData>[];
 
     if (onlineCount > 0) {
-      sections.add(PieChartSectionData(
-        value: onlineCount.toDouble(),
-        color: AppColors.online,
-        radius: 16.w,
-        showTitle: false,
-      ),);
+      sections.add(
+        PieChartSectionData(
+          value: onlineCount.toDouble(),
+          color: AppColors.online,
+          radius: 16.w,
+          showTitle: false,
+        ),
+      );
     }
     if (offlineCount > 0) {
-      sections.add(PieChartSectionData(
-        value: offlineCount.toDouble(),
-        color: AppColors.offline,
-        radius: 16.w,
-        showTitle: false,
-      ),);
+      sections.add(
+        PieChartSectionData(
+          value: offlineCount.toDouble(),
+          color: AppColors.offline,
+          radius: 16.w,
+          showTitle: false,
+        ),
+      );
     }
     if (faultCount > 0) {
-      sections.add(PieChartSectionData(
-        value: faultCount.toDouble(),
-        color: AppColors.fault,
-        radius: 16.w,
-        showTitle: false,
-      ),);
+      sections.add(
+        PieChartSectionData(
+          value: faultCount.toDouble(),
+          color: AppColors.fault,
+          radius: 16.w,
+          showTitle: false,
+        ),
+      );
     }
 
     return sections;
   }
 
-  Widget _legendRow(BuildContext context, Color color, String label, int count, int total, IconData icon) {
+  Widget _legendRow(
+    BuildContext context,
+    Color color,
+    String label,
+    int count,
+    int total,
+    IconData icon,
+  ) {
     final percent = total > 0 ? (count / total * 100).toStringAsFixed(0) : '0';
     final l10n = AppLocalizations.of(context)!;
     return Row(
@@ -192,7 +234,8 @@ class DeviceDistributionChart extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
+                style:
+                    TextStyle(fontSize: 13.sp, color: AppColors.textSecondary),
               ),
               SizedBox(height: 2.h),
               LinearProgressIndicator(

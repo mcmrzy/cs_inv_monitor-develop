@@ -8,7 +8,6 @@ import (
 	"api-gateway/internal/proxy"
 
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type Config struct {
@@ -47,7 +46,6 @@ func Setup(cfg Config) *gin.Engine {
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.SanitizeIdentityHeaders())
 	r.Use(middleware.RequestLogger())
-	r.Use(middleware.Prometheus())
 	r.Use(middleware.RateLimit(cfg.GlobalRate, cfg.GlobalBurst))
 
 	if len(cfg.RouteLimits) > 0 {
@@ -103,10 +101,17 @@ func registerGatewayEndpoints(r *gin.Engine) {
 		})
 	})
 
-	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
-
 	r.GET("/api/docs", func(c *gin.Context) {
 		c.JSON(http.StatusOK, buildAPIDoc())
+	})
+
+	// Swagger UI endpoints for API documentation
+	r.GET("/api/swagger", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/api/swagger/index.html")
+	})
+	r.Static("/api/swagger", "./docs/swagger")
+	r.GET("/api/openapi.yaml", func(c *gin.Context) {
+		c.File("./docs/openapi.yaml")
 	})
 }
 
@@ -159,6 +164,13 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/firmwares", p.RewriteHandler("/api/v1/ota/firmware"))
 	userGroup.Any("/api/v1/work-orders/*action", p.Handler())
 	userGroup.Any("/api/v1/work-orders", p.Handler())
+
+	// Channel Platform — 渠道平台管理（组织、邀请、成员、设备认领转移）
+	userGroup.Any("/api/v1/organizations/*action", p.Handler())
+	userGroup.Any("/api/v1/organizations", p.Handler())
+	userGroup.Any("/api/v1/invitations/*action", p.Handler())
+	userGroup.Any("/api/v1/members/*action", p.Handler())
+	publicGroup.Any("/api/v1/invitations/accept", p.Handler())
 
 	// Admin — 需管理员（route-groups 单独注册，其余通过 admin/*action 通配符代理）
 	adminGroup.GET("/api/v1/admin/route-groups", func(c *gin.Context) {
@@ -231,7 +243,6 @@ func buildAPIDoc() APIDoc {
 			{Path: "/api/v1/devices/:sn/parallel-state", Method: "GET", Description: "Device parallel state", Auth: true, Role: "user", Backend: "api-server"},
 			{Path: "/api/v1/devices/:sn/three-phase", Method: "GET", Description: "Device three-phase telemetry", Auth: true, Role: "user", Backend: "api-server"},
 			{Path: "/health", Method: "GET", Description: "健康检查", Auth: false, Role: "public", Backend: "gateway"},
-			{Path: "/metrics", Method: "GET", Description: "Prometheus 指标", Auth: false, Role: "public", Backend: "gateway"},
 			{Path: "/api/docs", Method: "GET", Description: "API 文档", Auth: false, Role: "public", Backend: "gateway"},
 
 			{Path: "/api/v1/auth/login", Method: "POST", Description: "用户登录", Auth: false, Role: "public", Backend: "api-server"},
@@ -307,7 +318,6 @@ func buildRouteGroups() map[string][]RouteGroup {
 				Name: "public", Label: "公开接口", Description: "无需认证",
 				Routes: []RouteInfo{
 					{Path: "/health", Method: "GET", Description: "健康检查", Backend: "gateway"},
-					{Path: "/metrics", Method: "GET", Description: "Prometheus 指标", Backend: "gateway"},
 					{Path: "/api/docs", Method: "GET", Description: "API 文档", Backend: "gateway"},
 					{Path: "/api/v1/auth/login", Method: "ALL", Description: "登录", Backend: "api-server"},
 					{Path: "/api/v1/auth/register", Method: "ALL", Description: "注册", Backend: "api-server"},

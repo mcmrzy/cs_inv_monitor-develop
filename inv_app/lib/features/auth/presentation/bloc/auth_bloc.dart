@@ -90,12 +90,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
       } catch (_) {}
 
-      emit(AuthAuthenticated(
-        userId: userId,
-        phone: phone,
-        role: role,
-        user: user,
-      ),);
+      emit(
+        AuthAuthenticated(
+          userId: userId,
+          phone: phone,
+          role: role,
+          user: user,
+        ),
+      );
 
       _connectMQTT(phone.isNotEmpty ? phone : 'user_$userId');
       jpushService.bindUser(userId);
@@ -138,15 +140,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await storageService.saveSavedPassword('');
         }
 
-        emit(AuthAuthenticated(
-          userId: response.user.id,
-          phone: response.user.phone,
-          role: response.user.role,
-          user: response.user,
-        ),);
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            role: response.user.role,
+            user: response.user,
+          ),
+        );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
+        _connectMQTT(
+          response.user.phone.isNotEmpty
+              ? response.user.phone
+              : 'user_${response.user.id}',
+        );
       },
     );
   }
@@ -176,12 +184,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveUserRole(response.user.role);
 
-        emit(AuthAuthenticated(
-          userId: response.user.id,
-          phone: response.user.phone,
-          role: response.user.role,
-          user: response.user,
-        ),);
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            role: response.user.role,
+            user: response.user,
+          ),
+        );
 
         jpushService.bindUser(response.user.id);
       },
@@ -276,12 +286,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (_) {
         final currentState = state;
         if (currentState is AuthAuthenticated) {
-          emit(AuthAuthenticated(
-            userId: currentState.userId,
-            phone: currentState.phone,
-            role: currentState.role,
-            user: currentState.user,
-          ),);
+          emit(
+            AuthAuthenticated(
+              userId: currentState.userId,
+              phone: currentState.phone,
+              role: currentState.role,
+              user: currentState.user,
+            ),
+          );
         }
       },
     );
@@ -321,15 +333,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await storageService.saveSavedPassword('');
         }
 
-        emit(AuthAuthenticated(
-          userId: response.user.id,
-          phone: response.user.phone,
-          role: response.user.role,
-          user: response.user,
-        ),);
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            role: response.user.role,
+            user: response.user,
+          ),
+        );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
+        _connectMQTT(
+          response.user.phone.isNotEmpty
+              ? response.user.phone
+              : 'user_${response.user.id}',
+        );
       },
     );
   }
@@ -360,15 +378,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserRole(response.user.role);
 
-        emit(AuthAuthenticated(
-          userId: response.user.id,
-          phone: response.user.phone,
-          role: response.user.role,
-          user: response.user,
-        ),);
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            role: response.user.role,
+            user: response.user,
+          ),
+        );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
+        _connectMQTT(
+          response.user.phone.isNotEmpty
+              ? response.user.phone
+              : 'user_${response.user.id}',
+        );
       },
     );
   }
@@ -421,15 +445,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveUserRole(response.user.role);
 
-        emit(AuthAuthenticated(
-          userId: response.user.id,
-          phone: response.user.phone,
-          role: response.user.role,
-          user: response.user,
-        ),);
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            role: response.user.role,
+            user: response.user,
+          ),
+        );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
+        _connectMQTT(
+          response.user.phone.isNotEmpty
+              ? response.user.phone
+              : 'user_${response.user.id}',
+        );
       },
     );
   }
@@ -455,15 +485,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await storageService.saveUserPhone(response.user.phone);
         await storageService.saveUserRole(response.user.role);
 
-        emit(AuthAuthenticated(
-          userId: response.user.id,
-          phone: response.user.phone,
-          role: response.user.role,
-          user: response.user,
-        ),);
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            role: response.user.role,
+            user: response.user,
+          ),
+        );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(response.user.phone.isNotEmpty ? response.user.phone : 'user_${response.user.id}');
+        _connectMQTT(
+          response.user.phone.isNotEmpty
+              ? response.user.phone
+              : 'user_${response.user.id}',
+        );
       },
     );
   }
@@ -481,7 +517,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         username: clientId,
         password: token,
       );
-    } catch (e) {
     } finally {
       _mqttConnecting = false;
     }

@@ -1,5 +1,7 @@
 /// 时区管理工具
 /// 后端存储/传输统一使用 UTC, 前端根据站点时区进行本地化显示
+library;
+
 import 'package:intl/intl.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -35,7 +37,11 @@ class TimezoneUtils {
     {'id': 'Asia/Ho_Chi_Minh', 'label': 'UTC+7 胡志明', 'labelZh': 'UTC+7 胡志明'},
     {'id': 'Asia/Bangkok', 'label': 'UTC+7 曼谷', 'labelZh': 'UTC+7 曼谷'},
     {'id': 'Asia/Jakarta', 'label': 'UTC+7 雅加达', 'labelZh': 'UTC+7 雅加达'},
-    {'id': 'Asia/Kolkata', 'label': 'UTC+5:30 加尔各答', 'labelZh': 'UTC+5:30 加尔各答'},
+    {
+      'id': 'Asia/Kolkata',
+      'label': 'UTC+5:30 加尔各答',
+      'labelZh': 'UTC+5:30 加尔各答',
+    },
     {'id': 'Asia/Dubai', 'label': 'UTC+4 迪拜', 'labelZh': 'UTC+4 迪拜'},
     {'id': 'Asia/Riyadh', 'label': 'UTC+3 利雅得', 'labelZh': 'UTC+3 利雅得'},
     {'id': 'Asia/Tehran', 'label': 'UTC+3:30 德黑兰', 'labelZh': 'UTC+3:30 德黑兰'},
@@ -50,7 +56,11 @@ class TimezoneUtils {
     {'id': 'America/Chicago', 'label': 'UTC-6 芝加哥', 'labelZh': 'UTC-6 芝加哥'},
     {'id': 'America/Denver', 'label': 'UTC-7 丹佛', 'labelZh': 'UTC-7 丹佛'},
     {'id': 'America/Los_Angeles', 'label': 'UTC-8 洛杉矶', 'labelZh': 'UTC-8 洛杉矶'},
-    {'id': 'America/Mexico_City', 'label': 'UTC-6 墨西哥城', 'labelZh': 'UTC-6 墨西哥城'},
+    {
+      'id': 'America/Mexico_City',
+      'label': 'UTC-6 墨西哥城',
+      'labelZh': 'UTC-6 墨西哥城',
+    },
     {'id': 'America/Sao_Paulo', 'label': 'UTC-3 圣保罗', 'labelZh': 'UTC-3 圣保罗'},
   ];
 
@@ -86,17 +96,28 @@ class TimezoneUtils {
   }
 
   /// 将 UTC 时间字符串格式化为相对时间（支持国际化）
-  static String formatRelativeTime(String? dateTimeStr, {AppLocalizations? l10n}) {
-    if (dateTimeStr == null || dateTimeStr.isEmpty) return l10n?.unknown ?? 'Unknown';
+  static String formatRelativeTime(
+    String? dateTimeStr, {
+    AppLocalizations? l10n,
+  }) {
+    if (dateTimeStr == null || dateTimeStr.isEmpty) {
+      return l10n?.unknown ?? 'Unknown';
+    }
     try {
       final dt = DateTime.parse(dateTimeStr).toLocal();
       final now = DateTime.now();
       final diff = now.difference(dt);
       if (l10n != null) {
         if (diff.inMinutes < 1) return l10n.timeJustNow;
-        if (diff.inMinutes < 60) return l10n.str('time_minutes_ago', {'minutes': '${diff.inMinutes}'});
-        if (diff.inHours < 24) return l10n.str('time_hours_ago', {'hours': '${diff.inHours}'});
-        if (diff.inDays < 30) return l10n.str('time_days_ago', {'days': '${diff.inDays}'});
+        if (diff.inMinutes < 60) {
+          return l10n.str('time_minutes_ago', {'minutes': '${diff.inMinutes}'});
+        }
+        if (diff.inHours < 24) {
+          return l10n.str('time_hours_ago', {'hours': '${diff.inHours}'});
+        }
+        if (diff.inDays < 30) {
+          return l10n.str('time_days_ago', {'days': '${diff.inDays}'});
+        }
       } else {
         if (diff.inMinutes < 1) return 'Just now';
         if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
@@ -113,11 +134,15 @@ class TimezoneUtils {
   /// [dateTimeStr] UTC 时间字符串
   /// [timezone] 目标时区（如 'Asia/Shanghai'），如果为 null 则使用设备本地时区
   /// [format] 输出格式
-  static String formatLocalTime(String? dateTimeStr, {String format = 'yyyy-MM-dd HH:mm:ss', String? timezone}) {
+  static String formatLocalTime(
+    String? dateTimeStr, {
+    String format = 'yyyy-MM-dd HH:mm:ss',
+    String? timezone,
+  }) {
     if (dateTimeStr == null || dateTimeStr.isEmpty) return '-';
     try {
       final dt = DateTime.parse(dateTimeStr);
-      
+
       // 如果提供了时区，使用该时区转换
       if (timezone != null && timezone.isNotEmpty) {
         initialize(); // 确保时区数据已初始化
@@ -130,7 +155,7 @@ class TimezoneUtils {
           return DateFormat(format).format(dt.toLocal());
         }
       }
-      
+
       // 否则使用设备本地时区
       return DateFormat(format).format(dt.toLocal());
     } catch (_) {

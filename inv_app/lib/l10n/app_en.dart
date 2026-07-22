@@ -173,8 +173,8 @@ const Map<String, String> en = {
   'start_upgrade': 'Start Upgrade',
   'firmware_list': 'Firmware List',
   'already_latest': 'Already Latest',
-    'changelog': 'Changelog',
-    'chips_to_upgrade_label': 'Chips to Upgrade',
+  'changelog': 'Changelog',
+  'chips_to_upgrade_label': 'Chips to Upgrade',
   'device_upgrading': 'Upgrading...',
 
   // Network / Local
@@ -270,11 +270,14 @@ const Map<String, String> en = {
   'connection_failed': 'Connection Failed',
   'location_permission_required': 'Location permission required to scan WiFi',
   'enable_location_service': 'Please enable location services (GPS)',
-  'device_hotspot_not_found': 'Device {sn} hotspot not found (CS_INV_{sn}), please ensure the device hotspot is on',
+  'device_hotspot_not_found':
+      'Device {sn} hotspot not found (CS_INV_{sn}), please ensure the device hotspot is on',
   'scan_failed': 'Scan failed: {error}',
-  'connection_failed_no_hotspot': 'Connection failed: device hotspot not detected, please retry',
+  'connection_failed_no_hotspot':
+      'Connection failed: device hotspot not detected, please retry',
   'connection_failed_retry': 'Failed to connect {ssid}, please retry',
-  'connected_hotspot_cannot_access': 'Connected to device hotspot, but cannot access the device.',
+  'connected_hotspot_cannot_access':
+      'Connected to device hotspot, but cannot access the device.',
   'try_following': 'Try the following:',
   'disable_mobile_data': '1. Disable mobile data in phone settings',
   'ensure_wifi_connected': '2. Ensure WiFi is connected to device hotspot',
@@ -282,28 +285,34 @@ const Map<String, String> en = {
   'current_hotspot': 'Current Hotspot',
   'device_ip_label': 'Device IP',
   'firmware_file_not_found': 'Firmware file not found',
-  'upload_complete_wait_reboot': 'Upload complete, waiting for device reboot...',
+  'upload_complete_wait_reboot':
+      'Upload complete, waiting for device reboot...',
   'upload_firmware_failed': 'Failed to upload firmware: {error}',
   'upgrade_timeout': 'Upgrade timeout',
   'idle': 'Idle',
   'uploading': 'Uploading',
-  'firmware_download_hint': 'Pre-download firmware on the OTA page first, or tap the button below to download',
+  'firmware_download_hint':
+      'Pre-download firmware on the OTA page first, or tap the button below to download',
   'download_firmware': 'Download Firmware',
   'firmware_ready': 'Firmware Ready',
   'connecting_to': 'Connecting {ssid}...',
   'scanning_device_hotspot': 'Scanning for device hotspot...',
   'connected': 'Connected',
   'connect_device_ap': 'Connect Device AP Hotspot',
-  'auto_scan_hint': 'Auto-scan for device hotspot, or connect manually then tap the button below',
+  'auto_scan_hint':
+      'Auto-scan for device hotspot, or connect manually then tap the button below',
   'rescan_hotspot': 'Rescan Hotspot',
   'check_connection': 'Check Connection',
   'pushing_firmware': 'Pushing Firmware',
   'do_not_disconnect': 'Do not disconnect device power',
   'firmware_verify_failed': 'Firmware verification failed',
-  'firmware_corrupted_hint': 'Firmware file may be corrupted, please re-download',
+  'firmware_corrupted_hint':
+      'Firmware file may be corrupted, please re-download',
   'redownload': 'Re-download',
-  'configure_control_fields_hint': 'Please configure device model control fields in the admin page',
-  'device_offline_warning': 'Device offline, control commands may not be delivered',
+  'configure_control_fields_hint':
+      'Please configure device model control fields in the admin page',
+  'device_offline_warning':
+      'Device offline, control commands may not be delivered',
   'command_send_failed': 'Failed to send command: {error}',
   'control_tab_running': 'Running',
   'control_tab_battery': 'Battery Protection',
@@ -313,20 +322,25 @@ const Map<String, String> en = {
   'control_executing': 'Executing...',
   'control_applied': 'Applied',
   'control_execution_failed': 'Execution failed',
-  'control_load_failed': 'Device control data failed to load. Values shown may be incomplete.',
+  'control_load_failed':
+      'Device control data failed to load. Values shown may be incomplete.',
   'control_partial_failed': '{count} control data sections failed to load.',
   'control_charge_gentle': 'Gentle',
   'control_charge_standard': 'Standard',
   'control_charge_fast': 'Fast',
-  'setting_load_failed': 'Some device settings failed to load. Do not treat the displayed defaults as device values.',
-  'realtime_load_failed': 'Device realtime data failed to load. Check the connection and retry.',
-  'realtime_mqtt_fallback': 'Cloud data is unavailable. Showing live MQTT data with fallback field definitions.',
+  'setting_load_failed':
+      'Some device settings failed to load. Do not treat the displayed defaults as device values.',
+  'realtime_load_failed':
+      'Device realtime data failed to load. Check the connection and retry.',
+  'realtime_mqtt_fallback':
+      'Cloud data is unavailable. Showing live MQTT data with fallback field definitions.',
   'control_ac_output': 'AC Output',
   'control_enabled': 'Enabled',
   'control_disabled': 'Disabled',
   'control_enable_ac_title': 'Enable AC Output',
   'control_disable_ac_title': 'Disable AC Output',
-  'control_enable_ac_confirm': 'Enable AC output? The device will start supplying power.',
+  'control_enable_ac_confirm':
+      'Enable AC output? The device will start supplying power.',
   'control_disable_ac_confirm': 'Disable AC output? The load will lose power.',
   'control_current_mode': 'Current Operating Mode',
   'control_energy_flow': 'Energy Flow',
@@ -336,7 +350,8 @@ const Map<String, String> en = {
   'control_reserve_soc': 'Backup Reserve SOC',
   'control_reserve_soc_hint': 'The battery will not discharge below this value',
   'control_target_soc': 'Charge Target SOC',
-  'control_target_soc_hint': 'Charging stops when the battery reaches this value',
+  'control_target_soc_hint':
+      'Charging stops when the battery reaches this value',
   'control_charge_speed': 'Charge Speed Preset',
   'control_bms_limits': 'Live BMS Limits',
   'control_schedule_list': 'Schedule',
@@ -378,11 +393,13 @@ const Map<String, String> en = {
   'current_version_label': 'Current Version: {version}',
   'new_version_label': 'New Version: {version}',
   'waiting_device_response': 'Waiting for device response... ({seconds}s)',
-  'waiting_hotspot_recovery': 'Device rebooting, waiting for hotspot recovery... ({seconds}s)',
+  'waiting_hotspot_recovery':
+      'Device rebooting, waiting for hotspot recovery... ({seconds}s)',
   'hotspot_reconnected': 'Hotspot recovered, checking upgrade result...',
   'push_complete_wait_reboot': 'Push complete, waiting for device reboot...',
   'current_wifi': 'Current WiFi',
-  'connect_wifi_first': 'Please connect to device hotspot first (Current WiFi: {wifi})',
+  'connect_wifi_first':
+      'Please connect to device hotspot first (Current WiFi: {wifi})',
   'yes': 'Yes',
   'no': 'No',
   'command_prefix': 'Command',
@@ -466,7 +483,8 @@ const Map<String, String> en = {
   'process_time': 'Processed',
   'no_installer_contact': 'No installer contact info',
   'no_alarm_description': 'No description for this alarm code.',
-  'please_contact_service': 'Please contact installer or support for assistance.',
+  'please_contact_service':
+      'Please contact installer or support for assistance.',
   'upgrade_detail': 'Upgrade Detail',
   'device_label': 'Device',
   'cancel_upgrade': 'Cancel',
@@ -596,7 +614,8 @@ const Map<String, String> en = {
   'other_group': 'Other',
 
   // Provision additions
-  'smart_config_mode_desc': 'SmartConfig: broadcast WiFi info from phone to device without connecting to device hotspot',
+  'smart_config_mode_desc':
+      'SmartConfig: broadcast WiFi info from phone to device without connecting to device hotspot',
   'smart_config_timeout_hint': 'SmartConfig timeout or failed, please retry',
   'ble_provision': 'BLE Config',
   'ble_scanning': 'Scanning BLE devices...',
@@ -622,29 +641,36 @@ const Map<String, String> en = {
   'ble_bluetooth_off': 'Bluetooth is off',
   'ble_permission_required': 'Bluetooth permission required',
   'ble_location_required': 'Location permission required',
-  'ble_mode_desc': 'BLE Config: Scan devices via Bluetooth, configure WiFi directly without switching networks',
+  'ble_mode_desc':
+      'BLE Config: Scan devices via Bluetooth, configure WiFi directly without switching networks',
   'ble_scan_device': 'Scan BLE Devices',
   'ble_device_name': 'Device Name',
-  'ble_provision_success': 'Provisioning success! Device is connecting to WiFi...',
-  'ble_provision_waiting': 'Provisioning success, waiting for device to come online...',
+  'ble_provision_success':
+      'Provisioning success! Device is connecting to WiFi...',
+  'ble_provision_waiting':
+      'Provisioning success, waiting for device to come online...',
   'provision_ready': 'Ready',
   'provision_timeout': '⏱ Config timeout',
   'provision_failed_x': '❌ Config failed',
   'connecting_ssid': 'Connecting {ssid}...',
   'waiting_stable_connection': 'Waiting for connection...',
-  'no_device_hotspot_retry': 'Connection failed: device hotspot not detected, please retry',
+  'no_device_hotspot_retry':
+      'Connection failed: device hotspot not detected, please retry',
   'connected_scanning': 'Connected to {ssid}, scanning...',
   'connection_ssid_failed': 'Failed to connect {ssid}, please retry',
   'scanning_wifi_via_device': 'Scanning WiFi via device...',
   'no_wifi_found_input_manually': 'No WiFi found, please enter manually',
   'found_n_wifi': 'Found {count} WiFi(s)',
   'selected_wifi_input_password': 'Selected {ssid}, enter password',
-  'provision_success_connecting': '✅ Provisioning success! Device connecting to WiFi...',
-  'provision_complete_wifi_ip': '✅ Provisioning complete! WiFi: {ssid}  IP: {ip}',
+  'provision_success_connecting':
+      '✅ Provisioning success! Device connecting to WiFi...',
+  'provision_complete_wifi_ip':
+      '✅ Provisioning complete! WiFi: {ssid}  IP: {ip}',
   'waiting_device_connection_n': 'Waiting for device... ({step}/15)',
   'config_sent_device_restart': '✅ Config sent, device will restart',
   'device_online_wifi': '✅ Device connected to WiFi and online',
-  'switched_to_remote_mode': '✅ Switched back to original WiFi, entering remote mode',
+  'switched_to_remote_mode':
+      '✅ Switched back to original WiFi, entering remote mode',
   'device_online': '✅ Device online',
   'provision_success_waiting': 'Provisioning success, waiting for device...',
 
@@ -652,7 +678,8 @@ const Map<String, String> en = {
   'local_connection': 'Local Connection',
   'local_mode_direct_ap': 'Direct AP connection, no internet needed',
   'remote_mode_cloud': 'Connect via cloud server',
-  'ap_disconnect_warning': 'Connecting to device AP will disconnect internet, local control only',
+  'ap_disconnect_warning':
+      'Connecting to device AP will disconnect internet, local control only',
   'scan_devices': 'Scan Devices',
   'no_device_found': 'No Device Found',
   'ensure_device_ap_mode': 'Ensure device is powered on with AP mode enabled',
@@ -668,7 +695,8 @@ const Map<String, String> en = {
   'please_select_district': 'Please select district',
   'station_name': 'Station Name',
   'station_name_hint': 'e.g. My Rooftop Station',
-  'capacity_auto_calculate': 'Capacity will be auto-calculated from connected inverter rated power',
+  'capacity_auto_calculate':
+      'Capacity will be auto-calculated from connected inverter rated power',
   'detail_address': 'Detailed Address',
   'detail_address_hint': 'e.g. 123 Main St (optional)',
   'select_province_city_district': 'Select province/city/district',
@@ -699,7 +727,8 @@ const Map<String, String> en = {
   'sn_confirm_add': 'Please confirm SN is correct. Still add this device?',
   'flash_light': 'Flash',
   'flip_camera': 'Flip',
-  'sn_format_desc': 'SN format: 16-digit CSERGY standard (e.g. H1CNA0013A000011)',
+  'sn_format_desc':
+      'SN format: 16-digit CSERGY standard (e.g. H1CNA0013A000011)',
   'n_devices': '{count} device(s)',
 
   // I18n additions
@@ -733,9 +762,11 @@ const Map<String, String> en = {
   'new_password_label': 'New Password',
   'confirm_password_label': 'Confirm Password',
   'password_length_hint': 'Password must be 6-20 characters',
-  'dangerous_param_warning': 'Contains dangerous parameters, modification may affect device safety',
+  'dangerous_param_warning':
+      'Contains dangerous parameters, modification may affect device safety',
   'confirm_change_dangerous': 'Confirm (Dangerous)',
-  'provision_success_switch_wifi': 'Device provisioned. Please switch back to your original WiFi.',
+  'provision_success_switch_wifi':
+      'Device provisioned. Please switch back to your original WiFi.',
   'later': 'Later',
   'search_sn_or_model': 'Search SN or model',
   'device_type_label': 'Device Type',
@@ -855,8 +886,10 @@ const Map<String, String> en = {
   'firmware_unknown': 'Unknown',
 
   // User agreement / Privacy policy content
-  'user_agreement_content': '1. Service Content\nThis system provides remote monitoring, data query, and parameter configuration for PV inverters.\n\n2. User Responsibilities\nUsers should keep their account credentials safe and be responsible for all operations under their account.\n\n3. Data Usage\nThe system collects device operation data for monitoring and analysis. See Privacy Policy for details.\n\n4. Service Changes\nWe reserve the right to modify or terminate services at any time with prior notice.\n\n5. Disclaimer\nWe are not liable for service interruptions caused by force majeure such as device failure or network outage.',
-  'privacy_policy_content': '1. Information Collection\nWe collect: device operation data, user account information, and operation logs.\n\n2. Information Usage\nCollected information is used for: device monitoring and alerts, service optimization, and technical support.\n\n3. Information Protection\nWe use encryption and access controls to protect your information security.\n\n4. Information Sharing\nWe do not share user data with third parties without user consent.\n\n5. Contact\nFor privacy-related questions, please contact technical support.',
+  'user_agreement_content':
+      '1. Service Content\nThis system provides remote monitoring, data query, and parameter configuration for PV inverters.\n\n2. User Responsibilities\nUsers should keep their account credentials safe and be responsible for all operations under their account.\n\n3. Data Usage\nThe system collects device operation data for monitoring and analysis. See Privacy Policy for details.\n\n4. Service Changes\nWe reserve the right to modify or terminate services at any time with prior notice.\n\n5. Disclaimer\nWe are not liable for service interruptions caused by force majeure such as device failure or network outage.',
+  'privacy_policy_content':
+      '1. Information Collection\nWe collect: device operation data, user account information, and operation logs.\n\n2. Information Usage\nCollected information is used for: device monitoring and alerts, service optimization, and technical support.\n\n3. Information Protection\nWe use encryption and access controls to protect your information security.\n\n4. Information Sharing\nWe do not share user data with third parties without user consent.\n\n5. Contact\nFor privacy-related questions, please contact technical support.',
 
   // Search hints
   'search_device_hint': 'Search device name/SN',
@@ -889,7 +922,8 @@ const Map<String, String> en = {
 
   // App Update
   'browser_download_title': 'Download in Browser',
-  'browser_download_desc': 'The download link is a web page and cannot be installed directly. Please open the link in your browser to manually download and install v{version}',
+  'browser_download_desc':
+      'The download link is a web page and cannot be installed directly. Please open the link in your browser to manually download and install v{version}',
   'open_in_browser': 'Open in Browser',
 
   // ====== Parameter Settings Page ======
@@ -933,10 +967,14 @@ const Map<String, String> en = {
   'setting_set_success': 'Parameters saved',
   'setting_set_failed': 'Failed to save parameters',
   'setting_force_confirm_title': 'Confirm Dangerous Operation',
-  'setting_force_charge_confirm': 'Enable force charge? This may affect the battery.',
-  'setting_force_discharge_confirm': 'Enable force discharge? This may affect the battery.',
-  'setting_restart_confirm': 'Execute fault reset? The inverter will briefly restart.',
-  'setting_advanced_hint': 'These parameters may affect device safety. Modify with caution.',
+  'setting_force_charge_confirm':
+      'Enable force charge? This may affect the battery.',
+  'setting_force_discharge_confirm':
+      'Enable force discharge? This may affect the battery.',
+  'setting_restart_confirm':
+      'Execute fault reset? The inverter will briefly restart.',
+  'setting_advanced_hint':
+      'These parameters may affect device safety. Modify with caution.',
   'setting_restart_btn': 'Execute Reset',
   'telemetry_metadata': 'Telemetry Metadata',
   'telemetry_protocol_version': 'Protocol Version',
@@ -950,7 +988,8 @@ const Map<String, String> en = {
   'pv_generation_power': 'PV Generation Power',
   'time_30_days': '30D',
   'confirm_install': 'Confirm Install',
-  'old_version_warning': 'About to install an older firmware version ({version}). Continue?',
+  'old_version_warning':
+      'About to install an older firmware version ({version}). Continue?',
   'installing_firmware': 'Installing firmware...',
   'loading_upgrade_list': 'Loading upgrade list...',
   'no_upgrades_available': 'No upgrades available',
@@ -967,10 +1006,14 @@ const Map<String, String> en = {
   'ble_device_not_connected': 'No BLE device is connected',
   'ble_ready': 'Ready',
   'ble_scanning_short': 'Scanning...',
-  'device_connecting_wifi': 'Device is connecting to WiFi, please check device status',
-  'check_device_working': 'Please check if the device is working properly, then rescan',
-  'ensure_provision_mode': 'Please ensure the device is powered on and in provisioning mode',
-  'ble_mode_description': 'BLE Config: Scan devices via Bluetooth, configure WiFi without switching networks',
+  'device_connecting_wifi':
+      'Device is connecting to WiFi, please check device status',
+  'check_device_working':
+      'Please check if the device is working properly, then rescan',
+  'ensure_provision_mode':
+      'Please ensure the device is powered on and in provisioning mode',
+  'ble_mode_description':
+      'BLE Config: Scan devices via Bluetooth, configure WiFi without switching networks',
   'provisioning_now': 'Provisioning...',
   'send_wifi_config': 'Send WiFi Config',
   'protocol_telemetry': 'Protocol Telemetry',
@@ -1000,13 +1043,15 @@ const Map<String, String> en = {
   'total_active_label': 'Total Active',
   'frequency_label': 'Frequency',
   'protocol_telemetry_title': 'Protocol Telemetry',
-  'protocol_telemetry_desc': 'Alarm lifecycle, parallel state & three-phase 3min history',
+  'protocol_telemetry_desc':
+      'Alarm lifecycle, parallel state & three-phase 3min history',
   'chip_firmware_version': 'Chip Firmware Version',
   'view_available_upgrades': 'View available upgrades',
   'current_firmware_version': 'Current Firmware Version',
   'alarm_label': 'Alarm',
   'source_label': 'Source',
-  'inverter_no_response': 'Inverter not responding, auto-disconnected from device AP and switched to home WiFi',
+  'inverter_no_response':
+      'Inverter not responding, auto-disconnected from device AP and switched to home WiFi',
   'load_power': 'Load Power',
   'no_data_available': 'No data available',
 };

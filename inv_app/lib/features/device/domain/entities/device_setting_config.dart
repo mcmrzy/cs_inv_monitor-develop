@@ -76,7 +76,11 @@ class SettingGroup {
 
 /// 参数分组列表（决定 Tab 顺序）
 const List<SettingGroup> settingGroups = [
-  SettingGroup(key: 'charge_discharge', labelKey: 'tab_charge_discharge', icon: 'battery'),
+  SettingGroup(
+    key: 'charge_discharge',
+    labelKey: 'tab_charge_discharge',
+    icon: 'battery',
+  ),
   SettingGroup(key: 'work_mode', labelKey: 'tab_work_mode', icon: 'mode'),
   SettingGroup(key: 'advanced', labelKey: 'tab_advanced', icon: 'advanced'),
 ];

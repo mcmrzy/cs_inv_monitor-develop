@@ -24,7 +24,8 @@ class EnergyStatisticsTab extends StatefulWidget {
   State<EnergyStatisticsTab> createState() => _EnergyStatisticsTabState();
 }
 
-class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with AutomaticKeepAliveClientMixin {
+class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
+    with AutomaticKeepAliveClientMixin {
   @override
   bool get wantKeepAlive => true;
 
@@ -34,7 +35,7 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
   List<EnergyDataPoint> _dataPoints = [];
   EnergySummary _summary = const EnergySummary();
   late AppLocalizations _l10n;
-  
+
   // 通知数据
   List<Map<String, dynamic>> _alarms = [];
   bool _alarmsLoading = false;
@@ -67,11 +68,14 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     setState(() => _alarmsLoading = true);
     try {
       final dio = getIt<Dio>();
-      final response = await dio.get('/alarms', queryParameters: {
-        'station_id': widget.stationId,
-        'page': 1,
-        'page_size': 5,
-      },);
+      final response = await dio.get(
+        '/alarms',
+        queryParameters: {
+          'station_id': widget.stationId,
+          'page': 1,
+          'page_size': 5,
+        },
+      );
       if (response.statusCode == 200 && mounted) {
         final body = response.data;
         if (body is Map<String, dynamic> && body['code'] == 0) {
@@ -105,9 +109,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
           period = 'hour';
           break;
         case 'month':
-          startDate = '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-01';
-          final lastDay = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
-          endDate = '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-$lastDay';
+          startDate =
+              '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-01';
+          final lastDay =
+              DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+          endDate =
+              '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-$lastDay';
           period = 'day';
           break;
         case 'year':
@@ -130,11 +137,14 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         path = '/stations/summary/statistics';
       }
 
-      final response = await dio.get(path, queryParameters: {
-        'start_date': startDate,
-        'end_date': endDate,
-        'period': period,
-      },);
+      final response = await dio.get(
+        path,
+        queryParameters: {
+          'start_date': startDate,
+          'end_date': endDate,
+          'period': period,
+        },
+      );
 
       if (response.statusCode == 200) {
         final body = response.data;
@@ -154,7 +164,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         }
 
         final points = rawList
-            .map((e) => EnergyDataPoint.fromStationStats(e as Map<String, dynamic>))
+            .map(
+              (e) =>
+                  EnergyDataPoint.fromStationStats(e as Map<String, dynamic>),
+            )
             .toList();
 
         if (mounted) {
@@ -176,16 +189,24 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
 
   Future<void> _fetchPowerFlow() async {
     if (_period != 'day') {
-      if (mounted) setState(() { _powerFlowData = []; _powerFlowLoading = false; });
+      if (mounted) {
+        setState(() {
+          _powerFlowData = [];
+          _powerFlowLoading = false;
+        });
+      }
       return;
     }
     if (mounted) setState(() => _powerFlowLoading = true);
     try {
       final dio = getIt<Dio>();
-      final response = await dio.get('/dashboard/energy-flow', queryParameters: {
-        'date': _formatDate(_selectedDate),
-        if (widget.stationId != null) 'stationId': widget.stationId,
-      });
+      final response = await dio.get(
+        '/dashboard/energy-flow',
+        queryParameters: {
+          'date': _formatDate(_selectedDate),
+          if (widget.stationId != null) 'stationId': widget.stationId,
+        },
+      );
       if (response.statusCode == 200) {
         final body = response.data;
         if (body is Map<String, dynamic> && body['code'] == 0) {
@@ -205,7 +226,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         }
       }
     } catch (_) {}
-    if (mounted) setState(() { _powerFlowData = []; _powerFlowLoading = false; });
+    if (mounted) {
+      setState(() {
+        _powerFlowData = [];
+        _powerFlowLoading = false;
+      });
+    }
   }
 
   String _formatDate(DateTime date) {
@@ -266,7 +292,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
           _selectedDate = _selectedDate.add(Duration(days: offset));
           break;
         case 'month':
-          _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + offset, 1);
+          _selectedDate =
+              DateTime(_selectedDate.year, _selectedDate.month + offset, 1);
           break;
         case 'year':
           _selectedDate = DateTime(_selectedDate.year + offset, 1, 1);
@@ -356,14 +383,19 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
             children: [
               IconButton(
                 onPressed: () => _navigateDate(-1),
-                icon: Icon(Icons.chevron_left, size: 24.sp, color: AppColors.textSecondary),
+                icon: Icon(
+                  Icons.chevron_left,
+                  size: 24.sp,
+                  color: AppColors.textSecondary,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: BoxConstraints(minWidth: 36.w, minHeight: 36.w),
               ),
               GestureDetector(
                 onTap: _showDatePicker,
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(8.r),
@@ -380,14 +412,22 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                         ),
                       ),
                       SizedBox(width: 4.w),
-                      Icon(Icons.keyboard_arrow_down, size: 18.sp, color: AppColors.primary),
+                      Icon(
+                        Icons.keyboard_arrow_down,
+                        size: 18.sp,
+                        color: AppColors.primary,
+                      ),
                     ],
                   ),
                 ),
               ),
               IconButton(
                 onPressed: () => _navigateDate(1),
-                icon: Icon(Icons.chevron_right, size: 24.sp, color: AppColors.textSecondary),
+                icon: Icon(
+                  Icons.chevron_right,
+                  size: 24.sp,
+                  color: AppColors.textSecondary,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: BoxConstraints(minWidth: 36.w, minHeight: 36.w),
               ),
@@ -466,7 +506,14 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     );
   }
 
-  Widget _buildMetricCard(String label, double value, String unit, IconData icon, Color color, double? change) {
+  Widget _buildMetricCard(
+    String label,
+    double value,
+    String unit,
+    IconData icon,
+    Color color,
+    double? change,
+  ) {
     return Container(
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
@@ -498,7 +545,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               Expanded(
                 child: Text(
                   label,
-                  style: TextStyle(fontSize: 12.sp, color: AppColors.textSecondary),
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: AppColors.textSecondary,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -512,7 +562,9 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                   text: TextSpan(
                     children: [
                       TextSpan(
-                        text: value >= 1000 ? (value / 1000).toStringAsFixed(1) : value.toStringAsFixed(1),
+                        text: value >= 1000
+                            ? (value / 1000).toStringAsFixed(1)
+                            : value.toStringAsFixed(1),
                         style: TextStyle(
                           fontSize: 20.sp,
                           fontWeight: FontWeight.w700,
@@ -522,7 +574,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                       ),
                       TextSpan(
                         text: ' ${value >= 1000 ? 'MWh' : unit}',
-                        style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                        style: TextStyle(
+                          fontSize: 10.sp,
+                          color: AppColors.textHint,
+                        ),
                       ),
                     ],
                   ),
@@ -532,7 +587,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                 Container(
                   padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
                   decoration: BoxDecoration(
-                    color: (change >= 0 ? AppColors.successLight : AppColors.errorLight).withValues(alpha: 0.1),
+                    color: (change >= 0
+                            ? AppColors.successLight
+                            : AppColors.errorLight)
+                        .withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4.r),
                   ),
                   child: Row(
@@ -541,14 +599,18 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                       Icon(
                         change >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
                         size: 10.sp,
-                        color: change >= 0 ? AppColors.successLight : AppColors.errorLight,
+                        color: change >= 0
+                            ? AppColors.successLight
+                            : AppColors.errorLight,
                       ),
                       Text(
                         '${change.abs().toStringAsFixed(1)}%',
                         style: TextStyle(
                           fontSize: 10.sp,
                           fontWeight: FontWeight.w600,
-                          color: change >= 0 ? AppColors.successLight : AppColors.errorLight,
+                          color: change >= 0
+                              ? AppColors.successLight
+                              : AppColors.errorLight,
                         ),
                       ),
                     ],
@@ -574,7 +636,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
             children: [
               Icon(Icons.show_chart, size: 48.sp, color: AppColors.textHint),
               SizedBox(height: 8.h),
-              Text(l10n.noData, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+              Text(
+                l10n.noData,
+                style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+              ),
             ],
           ),
         ),
@@ -589,13 +654,19 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         children: [
           Text(
             l10n.powerTrend,
-            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
           SizedBox(height: 16.h),
           if (_powerFlowLoading && _powerFlowData.isEmpty)
             SizedBox(
               height: 220.h,
-              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              child: const Center(
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             )
           else
             _buildLineChart(),
@@ -618,7 +689,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
             children: [
               Icon(Icons.bar_chart, size: 48.sp, color: AppColors.textHint),
               SizedBox(height: 8.h),
-              Text(l10n.noData, style: TextStyle(fontSize: 14.sp, color: AppColors.textHint)),
+              Text(
+                l10n.noData,
+                style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
+              ),
             ],
           ),
         ),
@@ -633,7 +707,11 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         children: [
           Text(
             l10n.energyTrend,
-            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
           SizedBox(height: 16.h),
           _buildBarChart(),
@@ -668,7 +746,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             SizedBox(width: 4.w),
-            Text(label, style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary)),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+            ),
           ],
         );
       }).toList(),
@@ -699,7 +780,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             SizedBox(width: 4.w),
-            Text(label, style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary)),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11.sp, color: AppColors.textSecondary),
+            ),
           ],
         );
       }).toList(),
@@ -716,29 +800,47 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         children: [
           Row(
             children: [
-              Icon(Icons.notifications_outlined, size: 18.sp, color: AppColors.orange),
+              Icon(
+                Icons.notifications_outlined,
+                size: 18.sp,
+                color: AppColors.orange,
+              ),
               SizedBox(width: 8.w),
               Text(
                 l10n.recentAlarms,
-                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ],
           ),
           SizedBox(height: 12.h),
           _alarmsLoading
-              ? Center(child: Padding(
-                  padding: EdgeInsets.all(20.w),
-                  child: const CircularProgressIndicator(strokeWidth: 2),
-                ),)
+              ? Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.w),
+                    child: const CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
               : _alarms.isEmpty
                   ? Center(
                       child: Padding(
                         padding: EdgeInsets.all(20.w),
-                        child: Text(l10n.noAlarms, style: TextStyle(fontSize: 13.sp, color: AppColors.textHint)),
+                        child: Text(
+                          l10n.noAlarms,
+                          style: TextStyle(
+                            fontSize: 13.sp,
+                            color: AppColors.textHint,
+                          ),
+                        ),
                       ),
                     )
                   : Column(
-                      children: _alarms.map((alarm) => _buildAlarmItem(alarm)).toList(),
+                      children: _alarms
+                          .map((alarm) => _buildAlarmItem(alarm))
+                          .toList(),
                     ),
         ],
       ),
@@ -764,7 +866,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         parsedCode = int.tryParse(str) ?? -1;
       }
     }
-    final alarmEntry = parsedCode >= 0 ? AlarmCodeMapping.getEntry(parsedCode) : null;
+    final alarmEntry =
+        parsedCode >= 0 ? AlarmCodeMapping.getEntry(parsedCode) : null;
     final severity = alarmEntry?.severity ?? _levelToSeverity(level);
 
     Color levelColor;
@@ -795,7 +898,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     if (occurredAt.isNotEmpty) {
       try {
         final dt = DateTime.parse(occurredAt).toLocal();
-        timeStr = '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+        timeStr =
+            '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
       } catch (_) {
         timeStr = occurredAt;
       }
@@ -804,7 +908,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     return Container(
       padding: EdgeInsets.symmetric(vertical: 10.h),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.divider.withValues(alpha: 0.3), width: 0.5)),
+        border: Border(
+          bottom: BorderSide(
+            color: AppColors.divider.withValues(alpha: 0.3),
+            width: 0.5,
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -814,21 +923,42 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               color: levelColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(4.r),
             ),
-            child: Text(levelText, style: TextStyle(fontSize: 9.sp, fontWeight: FontWeight.w600, color: levelColor)),
+            child: Text(
+              levelText,
+              style: TextStyle(
+                fontSize: 9.sp,
+                fontWeight: FontWeight.w600,
+                color: levelColor,
+              ),
+            ),
           ),
           SizedBox(width: 10.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(message, style: TextStyle(fontSize: 12.sp, color: AppColors.textPrimary), maxLines: 2, overflow: TextOverflow.ellipsis),
+                Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 SizedBox(height: 2.h),
-                Text(deviceSn, style: TextStyle(fontSize: 10.sp, color: AppColors.textHint)),
+                Text(
+                  deviceSn,
+                  style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                ),
               ],
             ),
           ),
           if (timeStr.isNotEmpty)
-            Text(timeStr, style: TextStyle(fontSize: 10.sp, color: AppColors.textHint)),
+            Text(
+              timeStr,
+              style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+            ),
         ],
       ),
     );
@@ -862,7 +992,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     }
 
     // 从 energy-flow 数据构建 4 条折线
-    final spotsList = <List<FlSpot>>[[], [], [], []]; // pv, charge, discharge, load
+    final spotsList = <List<FlSpot>>[
+      [],
+      [],
+      [],
+      [],
+    ]; // pv, charge, discharge, load
 
     for (final d in _powerFlowData) {
       final timeStr = d['time'] as String?;
@@ -888,7 +1023,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     final double yMax = maxVal > 0 ? maxVal * 1.2 : 100.0;
     final yInterval = _calcYInterval(yMax);
 
-    final colors = [AppColors.orange, AppColors.successLight, AppColors.blue, AppColors.purple];
+    final colors = [
+      AppColors.orange,
+      AppColors.successLight,
+      AppColors.blue,
+      AppColors.purple,
+    ];
     final currentHour = DateTime.now().hour;
     final screenWidth = MediaQuery.of(context).size.width;
 
@@ -923,7 +1063,8 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                     if (value < 0) return const SizedBox.shrink();
                     return Text(
                       _formatPowerLabel(value),
-                      style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+                      style:
+                          TextStyle(fontSize: 10.sp, color: AppColors.textHint),
                     );
                   },
                 ),
@@ -940,29 +1081,47 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                       '${hour}h',
                       style: TextStyle(
                         fontSize: 9.sp,
-                        color: hour == currentHour ? AppColors.primary : AppColors.textHint,
-                        fontWeight: hour == currentHour ? FontWeight.w600 : FontWeight.normal,
+                        color: hour == currentHour
+                            ? AppColors.primary
+                            : AppColors.textHint,
+                        fontWeight: hour == currentHour
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                       ),
                     );
                   },
                 ),
               ),
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles:
+                  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              rightTitles:
+                  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             ),
             borderData: FlBorderData(show: false),
-            lineBarsData: List.generate(4, (i) => _buildLineData(spotsList[i], colors[i])),
+            lineBarsData: List.generate(
+              4,
+              (i) => _buildLineData(spotsList[i], colors[i]),
+            ),
             lineTouchData: LineTouchData(
               touchTooltipData: LineTouchTooltipData(
                 getTooltipItems: (spots) => spots.map((spot) {
-                  final labels = [_l10n.pvGeneration, _l10n.batteryCharge, _l10n.batteryDischarge, _l10n.loadPower];
+                  final labels = [
+                    _l10n.pvGeneration,
+                    _l10n.batteryCharge,
+                    _l10n.batteryDischarge,
+                    _l10n.loadPower,
+                  ];
                   // 从 X 轴小数小时还原 HH:MM
                   final totalMinutes = (spot.x * 60).round();
                   final hh = (totalMinutes ~/ 60).toString().padLeft(2, '0');
                   final mm = (totalMinutes % 60).toString().padLeft(2, '0');
                   return LineTooltipItem(
                     '$hh:$mm ${labels[spot.barIndex]}: ${spot.y.toStringAsFixed(0)} W',
-                    TextStyle(fontSize: 11.sp, color: Colors.white, fontWeight: FontWeight.w500),
+                    TextStyle(
+                      fontSize: 11.sp,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
                   );
                 }).toList(),
               ),
@@ -1017,7 +1176,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                final labels = [_l10n.pvGeneration, _l10n.batteryCharge, _l10n.batteryDischarge, _l10n.inverterOutput];
+                final labels = [
+                  _l10n.pvGeneration,
+                  _l10n.batteryCharge,
+                  _l10n.batteryDischarge,
+                  _l10n.inverterOutput,
+                ];
                 return BarTooltipItem(
                   '${labels[rodIndex]}: ${rod.toY.toStringAsFixed(1)} kWh\n',
                   TextStyle(fontSize: 11.sp, color: Colors.white),
@@ -1032,7 +1196,9 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                 reservedSize: 40.w,
                 interval: maxY > 0 ? maxY / 4 : 1,
                 getTitlesWidget: (value, meta) => Text(
-                  value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : value.toStringAsFixed(0),
+                  value >= 1000
+                      ? '${(value / 1000).toStringAsFixed(1)}k'
+                      : value.toStringAsFixed(0),
                   style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
                 ),
               ),
@@ -1044,26 +1210,33 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                 interval: _period == 'day' ? 3.0 : null,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
-                  if (index < 0 || index >= _dataPoints.length) return const SizedBox.shrink();
+                  if (index < 0 || index >= _dataPoints.length) {
+                    return const SizedBox.shrink();
+                  }
                   if (_period == 'day') {
                     if (index % 3 != 0) return const SizedBox.shrink();
                   } else {
                     const maxLabels = 5;
-                    final step = (_dataPoints.length / maxLabels).ceil().clamp(1, _dataPoints.length);
+                    final step = (_dataPoints.length / maxLabels)
+                        .ceil()
+                        .clamp(1, _dataPoints.length);
                     if (index % step != 0) return const SizedBox.shrink();
                   }
                   return Padding(
                     padding: EdgeInsets.only(top: 4.h),
                     child: Text(
                       _formatTimeLabel(_dataPoints[index].time),
-                      style: TextStyle(fontSize: 9.sp, color: AppColors.textHint),
+                      style:
+                          TextStyle(fontSize: 9.sp, color: AppColors.textHint),
                     ),
                   );
                 },
               ),
             ),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           ),
           gridData: FlGridData(
             show: true,
@@ -1083,10 +1256,13 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
 
   List<BarChartGroupData> _buildBarGroups() {
     // 根据数据点数量决定柱子宽度
-    final barWidth = _dataPoints.length <= 7 ? 6.w : 
-                     _dataPoints.length <= 15 ? 4.w : 3.w;
+    final barWidth = _dataPoints.length <= 7
+        ? 6.w
+        : _dataPoints.length <= 15
+            ? 4.w
+            : 3.w;
     final barsSpace = _dataPoints.length <= 7 ? 2.w : 1.w;
-    
+
     return _dataPoints.asMap().entries.map((entry) {
       final i = entry.key;
       final point = entry.value;
@@ -1155,16 +1331,39 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(_l10n.selectDate, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
+                  Text(
+                    _l10n.selectDate,
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   SizedBox(height: 16.h),
                   if (_period == 'day') ...[
                     SizedBox(
                       height: 150.h,
                       child: Row(
                         children: [
-                          Expanded(child: _buildYearWheel(selectedYear, (v) => setSheetState(() => selectedYear = v))),
-                          Expanded(child: _buildMonthWheel(selectedMonth, (v) => setSheetState(() => selectedMonth = v))),
-                          Expanded(child: _buildDayWheel(selectedDay, selectedYear, selectedMonth, (v) => setSheetState(() => selectedDay = v))),
+                          Expanded(
+                            child: _buildYearWheel(
+                              selectedYear,
+                              (v) => setSheetState(() => selectedYear = v),
+                            ),
+                          ),
+                          Expanded(
+                            child: _buildMonthWheel(
+                              selectedMonth,
+                              (v) => setSheetState(() => selectedMonth = v),
+                            ),
+                          ),
+                          Expanded(
+                            child: _buildDayWheel(
+                              selectedDay,
+                              selectedYear,
+                              selectedMonth,
+                              (v) => setSheetState(() => selectedDay = v),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1173,15 +1372,28 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                       height: 150.h,
                       child: Row(
                         children: [
-                          Expanded(child: _buildYearWheel(selectedYear, (v) => setSheetState(() => selectedYear = v))),
-                          Expanded(child: _buildMonthWheel(selectedMonth, (v) => setSheetState(() => selectedMonth = v))),
+                          Expanded(
+                            child: _buildYearWheel(
+                              selectedYear,
+                              (v) => setSheetState(() => selectedYear = v),
+                            ),
+                          ),
+                          Expanded(
+                            child: _buildMonthWheel(
+                              selectedMonth,
+                              (v) => setSheetState(() => selectedMonth = v),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ] else ...[
                     SizedBox(
                       height: 150.h,
-                      child: _buildYearWheel(selectedYear, (v) => setSheetState(() => selectedYear = v)),
+                      child: _buildYearWheel(
+                        selectedYear,
+                        (v) => setSheetState(() => selectedYear = v),
+                      ),
                     ),
                   ],
                   SizedBox(height: 16.h),
@@ -1190,7 +1402,11 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
                     child: FilledButton(
                       onPressed: () {
                         setState(() {
-                          _selectedDate = DateTime(selectedYear, selectedMonth, selectedDay);
+                          _selectedDate = DateTime(
+                            selectedYear,
+                            selectedMonth,
+                            selectedDay,
+                          );
                         });
                         Navigator.pop(ctx);
                         _fetchData();
@@ -1218,7 +1434,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
         builder: (context, index) {
           final year = 2020 + index;
           return Center(
-            child: Text('$year', style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary)),
+            child: Text(
+              '$year',
+              style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+            ),
           );
         },
         childCount: 20,
@@ -1235,7 +1454,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       childDelegate: ListWheelChildBuilderDelegate(
         builder: (context, index) {
           return Center(
-            child: Text('${index + 1}', style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary)),
+            child: Text(
+              '${index + 1}',
+              style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+            ),
           );
         },
         childCount: 12,
@@ -1243,7 +1465,12 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
     );
   }
 
-  Widget _buildDayWheel(int selected, int year, int month, ValueChanged<int> onChanged) {
+  Widget _buildDayWheel(
+    int selected,
+    int year,
+    int month,
+    ValueChanged<int> onChanged,
+  ) {
     final maxDay = DateTime(year, month + 1, 0).day;
     return ListWheelScrollView.useDelegate(
       itemExtent: 40.h,
@@ -1253,7 +1480,10 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab> with Automati
       childDelegate: ListWheelChildBuilderDelegate(
         builder: (context, index) {
           return Center(
-            child: Text('${index + 1}', style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary)),
+            child: Text(
+              '${index + 1}',
+              style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+            ),
           );
         },
         childCount: maxDay,

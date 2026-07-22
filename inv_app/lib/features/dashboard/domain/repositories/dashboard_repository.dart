@@ -9,7 +9,9 @@ abstract class DashboardRepository {
 
   /// 获取发电趋势数据
   /// [type] 时间范围类型：'day'(7日)、'week'(28日)、'month'(12个月)
-  Future<Either<Failure, List<TrendDataPoint>>> getTrendData({String type = 'day'});
+  Future<Either<Failure, List<TrendDataPoint>>> getTrendData({
+    String type = 'day',
+  });
 
   /// 获取设备分布数据
   Future<Either<Failure, Map<String, dynamic>>> getDeviceDistribution();
