@@ -272,3 +272,52 @@ func (r *InvitationRepository) CountByStatus(ctx context.Context, db *pgxpool.Po
 	err := db.QueryRow(ctx, query, rootTenantID, organizationID, status).Scan(&count)
 	return count, err
 }
+
+// Insert creates a new invitation record within a transaction
+func (r *InvitationRepository) Insert(ctx context.Context, tx pgx.Tx, invitation *model.Invitation) error {
+	query := `
+		INSERT INTO invitations (root_tenant_id, organization_id, inviter_user_id, email, role_id,
+								 token_digest, expires_at, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id
+	`
+	return tx.QueryRow(ctx, query,
+		invitation.RootTenantID, invitation.OrganizationID, invitation.InviterUserID,
+		invitation.Email, invitation.RoleID, invitation.TokenDigest,
+		invitation.ExpiresAt, invitation.Status, invitation.CreatedAt, invitation.UpdatedAt,
+	).Scan(&invitation.ID)
+}
+
+// roleNames maps legacy role IDs to human-readable names
+var roleNames = map[int]string{
+	1: "org_admin",
+	2: "channel_manager",
+	3: "channel_manager",
+	4: "operator",
+	5: "viewer",
+}
+
+// roleCodes maps legacy role IDs to role code strings
+var roleCodes = map[int]string{
+	1: "org_admin",
+	2: "channel_manager",
+	3: "channel_manager",
+	4: "operator",
+	5: "viewer",
+}
+
+// GetRoleName returns the human-readable name for a legacy role ID
+func GetRoleName(roleID int) string {
+	if name, ok := roleNames[roleID]; ok {
+		return name
+	}
+	return fmt.Sprintf("role_%d", roleID)
+}
+
+// GetRoleCode returns the role code string for a legacy role ID
+func GetRoleCode(roleID int) string {
+	if code, ok := roleCodes[roleID]; ok {
+		return code
+	}
+	return fmt.Sprintf("role_%d", roleID)
+}

@@ -13,6 +13,7 @@ import (
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -127,14 +128,13 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		}
 	}()
 
-	// Get user's root_tenant_id from context claim
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	// Get user's root_tenant_id from actor context
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		tx.Rollback(ctx)
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// If ParentID provided, validate it belongs to same root_tenant
 	var parentID *int64
@@ -297,15 +297,14 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 	defer tx.Rollback(ctx)
 
 	// Get user's root_tenant_id
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// Check super admin access
-	isSuperAdmin := role == 0 // RoleSuperAdmin
+	_ = role == 0 // RoleSuperAdmin
 	
 	var totalCount int64
 	var orgs []OrganizationWithChildren
@@ -406,12 +405,11 @@ func (h *OrganizationHandler) GetByID(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// Fetch organization
 	var org OrganizationWithChildren
@@ -498,12 +496,11 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 		}
 	}()
 
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// Check if org exists and belongs to tenant
 	var currentType string
@@ -576,12 +573,11 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 		}
 	}()
 
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// Check if org exists and has no children (hard delete prevented, soft delete only)
 	var childCount int
@@ -664,12 +660,11 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 		}
 	}()
 
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// Validate new parent exists and belongs to same tenant
 	var newParentType string
@@ -731,7 +726,7 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 	}
 
 	// Rebuild closure for moved node and its descendants
-	_, err = tx.Exec(`
+	_, err = tx.Exec(ctx, `
 		WITH RECURSIVE subtree AS (
 			SELECT id, root_tenant_id FROM organizations WHERE id = $1
 			UNION ALL
@@ -806,12 +801,11 @@ func (h *OrganizationHandler) ToggleStatus(c *gin.Context) {
 		}
 	}()
 
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// Check if org exists
 	var currentStatus string
@@ -877,12 +871,11 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 
-	rootTenantID, exists := c.Get("root_tenant_id")
-	if !exists {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.HandleError(c, apperr.Forbidden("tenant context missing"))
 		return
 	}
-	tenantID := rootTenantID.(int64)
 
 	// Verify organization belongs to tenant
 	var orgName string

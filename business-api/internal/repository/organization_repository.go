@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"inv-api-server/internal/model"
@@ -295,4 +296,56 @@ func (r *OrganizationRepository) ListVisibleMemberships(ctx context.Context, pla
 		return nil, err
 	}
 	return memberships, nil
+}
+
+// GetByID retrieves an organization by its ID
+func (r *OrganizationRepository) GetByID(ctx context.Context, id int64) (*model.Organization, error) {
+	query := `
+		SELECT id, root_tenant_id, parent_id, org_type,
+		       COALESCE(code, ''), name, status, version,
+		       created_at, updated_at, deleted_at
+		FROM organizations
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+	var org model.Organization
+	var persistenceStatus string
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&org.ID, &org.RootTenantID, &org.ParentID, &org.Type,
+		&org.Code, &org.Name, &persistenceStatus, &org.Version,
+		&org.CreatedAt, &org.UpdatedAt, &org.DeletedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	org.Status = model.ProjectOrganizationStatus(persistenceStatus)
+	return &org, nil
+}
+
+// CreateMembership inserts a new organization membership within a transaction
+func (r *OrganizationRepository) CreateMembership(ctx context.Context, tx pgx.Tx, membership *model.OrganizationMembership) error {
+	query := `
+		INSERT INTO organization_memberships (root_tenant_id, organization_id, user_id, status, version)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id
+	`
+	return tx.QueryRow(ctx, query,
+		membership.RootTenantID, membership.OrganizationID, membership.UserID,
+		membership.Status, membership.Version,
+	).Scan(&membership.ID)
+}
+
+// CreateRoleAssignment inserts a new membership role assignment within a transaction
+func (r *OrganizationRepository) CreateRoleAssignment(ctx context.Context, tx pgx.Tx, ra *model.MembershipRoleAssignment) error {
+	query := `
+		INSERT INTO membership_role_assignments (root_tenant_id, organization_id, membership_id, role_code, status, version)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
+	`
+	return tx.QueryRow(ctx, query,
+		ra.RootTenantID, ra.OrganizationID, ra.MembershipID,
+		ra.RoleCode, ra.Status, ra.Version,
+	).Scan(&ra.ID)
 }

@@ -250,7 +250,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	if err := h.invitationRepo.Insert(ctx, tx, invitation); err != nil {
 		if strings.Contains(err.Error(), "uq_invitations_root_org_email") ||
 			strings.Contains(err.Error(), "unique_violation") {
-			response.HandleError(c, apperr.Conflict("该邮箱已有待处理的邀请", err))
+			response.HandleError(c, apperr.Conflict("该邮箱已有待处理的邀请"))
 			return
 		}
 		response.HandleError(c, apperr.Internal("保存邀请失败", err))
@@ -265,7 +265,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	// Log for external notification service (NOT sending here)
 	go func() {
 		if h.emailService != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			
 			err := h.emailService.SendInvitationEmail(
@@ -320,7 +320,6 @@ func (h *InvitationHandler) List(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	userID := middleware.GetUserID(c)
 
 	// Build filter conditions
 	filter := repository.ListInvitationsFilter{
@@ -337,8 +336,8 @@ func (h *InvitationHandler) List(c *gin.Context) {
 	}
 
 	response.Success(c, ListInvitationsResponse{
-		Total:    total,
-		Items:    items,
+		Total:    int(total),
+		Items:    convertInvitationItems(items),
 		Page:     query.Page,
 		PageSize: query.PageSize,
 	})
@@ -436,7 +435,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	// Resolve organization and root_tenant
 	org, err := h.orgRepo.GetByID(ctx, *invitation.OrganizationID)
 	if err != nil || org == nil {
-		response.HandleError(c, apperr.Internal("组织信息错误"))
+		response.HandleError(c, apperr.Internal("组织信息错误", err))
 		return
 	}
 
@@ -470,7 +469,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	// Update user role based on invitation
-	if err := h.userRepo.UpdateRole(ctx, tx, newUser.ID, int(invitation.RoleID)); err != nil {
+	if err := h.userRepo.UpdateRoleWithTx(ctx, tx, newUser.ID, int(invitation.RoleID)); err != nil {
 		response.HandleError(c, apperr.Internal("更新用户角色失败", err))
 		return
 	}
@@ -482,7 +481,6 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		UserID:         newUser.ID,
 		Status:         "active",
 		Version:        1,
-		JoinedAt:       time.Now(),
 	}
 
 	if err := h.orgRepo.CreateMembership(ctx, tx, membership); err != nil {
@@ -498,7 +496,6 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		RoleCode:       repository.GetRoleCode(int(invitation.RoleID)),
 		Status:         "active",
 		Version:        1,
-		AssignedBy:     invitation.InviterUserID,
 	}
 
 	if err := h.orgRepo.CreateRoleAssignment(ctx, tx, roleAssignment); err != nil {
@@ -525,7 +522,8 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	// Generate JWT tokens for auto-login
-	accessToken, refreshToken, err := h.jwtService.GenerateToken(newUser.ID, newUser.Phone, newUser.Role)
+	userRole := newUser.Role
+	accessToken, refreshToken, err := h.jwtService.GenerateToken(newUser.ID, newUser.Phone, &userRole)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("生成令牌失败", err))
 		return
@@ -609,4 +607,43 @@ func (h *InvitationHandler) resolveOrganizationFromContext(ctx context.Context, 
 		return nil, fmt.Errorf("context resolution requires organization_id parameter")
 	}
 	return nil, fmt.Errorf("no context resolver available")
+}
+
+// convertInvitationItems converts repository list items to handler response items
+func convertInvitationItems(items []repository.ListInvitationsResponseItem) []InvitationListItem {
+	result := make([]InvitationListItem, 0, len(items))
+	for _, item := range items {
+		il := InvitationListItem{
+			ID:          item.ID,
+			Email:       item.Email,
+			RoleID:      item.RoleID,
+			RoleName:    repository.GetRoleName(int(item.RoleID)),
+			Status:      item.Status,
+			ExpiresAt:   item.ExpiresAt.Format(time.RFC3339),
+			CreatedAt:   item.CreatedAt.Format(time.RFC3339),
+			InviterName: item.InviterName,
+		}
+		if item.OrgName != nil {
+			il.Organization = item.OrgName
+		}
+		result = append(result, il)
+	}
+	return result
+}
+
+// loadUserPermissions loads user permissions from RBAC cache
+func loadUserPermissions(c *gin.Context, rbacCache *service.RBACCache, userID int64) []string {
+	permissions := make([]string, 0)
+	if rbacCache == nil {
+		return permissions
+	}
+	loaded, err := rbacCache.GetUserPermissions(c.Request.Context(), userID)
+	if err != nil {
+		logger.Warn("Failed to load permissions", zap.Int64("user_id", userID), zap.Error(err))
+		return permissions
+	}
+	if loaded == nil {
+		return permissions
+	}
+	return loaded
 }

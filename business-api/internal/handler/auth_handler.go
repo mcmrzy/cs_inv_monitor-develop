@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"inv-api-server/pkg/timezone"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -78,6 +80,7 @@ type AuthHandler struct {
 type authorizationContextResolver interface {
 	ResolveAuthorizationSessionContext(ctx context.Context, userID, organizationID int64) (model.AuthorizationSessionContext, error)
 	ResolveUserSessionVersion(ctx context.Context, userID int64) (int64, error)
+	ResolveDefaultSessionContext(ctx context.Context, userID int64) (model.AuthorizationSessionContext, error)
 }
 
 func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService, rbacCache *service.RBACCache, captchaHandler *CaptchaHandler) *AuthHandler {
@@ -95,20 +98,84 @@ func (h *AuthHandler) SetAuthorizationContextResolver(resolver authorizationCont
 	h.contextResolver = resolver
 }
 
-func (h *AuthHandler) generateLoginTokenPair(ctx context.Context, user *model.User) (string, string, error) {
+// loginTokenResult holds the tokens and the active organization context
+// produced during login / registration.
+type loginTokenResult struct {
+	AccessToken          string
+	RefreshToken         string
+	ActiveOrganizationID int64
+	RootTenantID         int64
+	MembershipID         int64
+}
+
+func (h *AuthHandler) generateLoginTokenPair(ctx context.Context, user *model.User) (loginTokenResult, error) {
 	if h.contextResolver == nil {
-		return "", "", fmt.Errorf("authorization context resolver unavailable")
+		return loginTokenResult{}, fmt.Errorf("authorization context resolver unavailable")
 	}
-	sessionVersion, err := h.contextResolver.ResolveUserSessionVersion(ctx, user.ID)
+
+	// Try to resolve the user's first active organization membership.
+	resolved, err := h.contextResolver.ResolveDefaultSessionContext(ctx, user.ID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return loginTokenResult{}, fmt.Errorf("resolve default session context: %w", err)
+	}
+
+	// When the user has no active membership (super-admin without org,
+	// freshly-registered account, etc.) build a synthetic system-level
+	// context so the gateway still accepts the token.
+	if !resolved.Valid() {
+		sessionVersion, svErr := h.contextResolver.ResolveUserSessionVersion(ctx, user.ID)
+		if svErr != nil {
+			return loginTokenResult{}, fmt.Errorf("resolve session version: %w", svErr)
+		}
+		if sessionVersion <= 0 {
+			return loginTokenResult{}, fmt.Errorf("invalid session version")
+		}
+		resolved = model.AuthorizationSessionContext{
+			Actor: model.ActorContext{
+				UserID:            user.ID,
+				RootTenantID:      user.ID,
+				OrganizationID:    user.ID,
+				MembershipID:      user.ID,
+				MembershipVersion: 1,
+			},
+			AuthorizationVersion: 1,
+			SessionVersion:       sessionVersion,
+			Phone:                user.Phone,
+			LegacyRole:           user.Role,
+		}
+	}
+
+	// Generate a session ID (JTI) shared by both tokens.
+	sessionID, err := jwt.GenerateSessionID()
 	if err != nil {
-		return "", "", fmt.Errorf("resolve session version: %w", err)
+		return loginTokenResult{}, fmt.Errorf("generate session id: %w", err)
 	}
-	if sessionVersion <= 0 {
-		return "", "", fmt.Errorf("invalid session version")
+
+	rolePtr := jwt.PtrInt(resolved.LegacyRole)
+	accessToken, err := h.jwtService.GenerateContextAccessTokenForSession(
+		resolved.Actor.UserID, resolved.Actor.RootTenantID, resolved.Actor.OrganizationID,
+		resolved.Actor.MembershipID, resolved.Actor.MembershipVersion,
+		resolved.AuthorizationVersion, resolved.SessionVersion,
+		sessionID, resolved.Phone, rolePtr,
+	)
+	if err != nil {
+		return loginTokenResult{}, fmt.Errorf("generate access token: %w", err)
 	}
-	// Convert user.Role (int) to pointer for nullable role
-	rolePtr := jwt.PtrInt(user.Role)
-	return h.jwtService.GenerateTokenWithSessionVersion(user.ID, user.Phone, rolePtr, sessionVersion)
+
+	refreshToken, err := h.jwtService.GenerateRefreshTokenForSession(
+		resolved.Actor.UserID, resolved.SessionVersion, sessionID,
+	)
+	if err != nil {
+		return loginTokenResult{}, fmt.Errorf("generate refresh token: %w", err)
+	}
+
+	return loginTokenResult{
+		AccessToken:          accessToken,
+		RefreshToken:         refreshToken,
+		ActiveOrganizationID: resolved.Actor.OrganizationID,
+		RootTenantID:         resolved.Actor.RootTenantID,
+		MembershipID:         resolved.Actor.MembershipID,
+	}, nil
 }
 
 type LoginRequest struct {
@@ -117,11 +184,14 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	AccessToken  string      `json:"access_token"`
-	RefreshToken string      `json:"refresh_token"`
-	User         *model.User `json:"user"`
-	ExpiresIn    int64       `json:"expires_in"`
-	Permissions  []string    `json:"permissions"`
+	AccessToken          string      `json:"access_token"`
+	RefreshToken         string      `json:"refresh_token"`
+	User                 *model.User `json:"user"`
+	ExpiresIn            int64       `json:"expires_in"`
+	Permissions          []string    `json:"permissions"`
+	ActiveOrganizationID int64       `json:"active_organization_id,omitempty"`
+	RootTenantID         int64       `json:"root_tenant_id,omitempty"`
+	MembershipID         int64       `json:"membership_id,omitempty"`
 }
 
 // loadUserPermissions keeps every login and registration response on the same
@@ -204,13 +274,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 登录成功，清除失败记录
 	h.userService.Cache().Del(c.Request.Context(), failKey)
 
-	token, refreshToken, err := h.generateLoginTokenPair(c.Request.Context(), user)
+	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
-	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, refreshToken, refreshTokenLifetime); err != nil {
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
 		response.HandleError(c, apperr.Internal("create refresh session failed", err))
 		return
 	}
@@ -234,15 +304,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 
 	// 设置 httpOnly cookie（同时返回 body 保持兼容）
-	setAuthCookies(c, token, refreshToken, accessTokenLifetime, refreshTokenLifetime)
+	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
-		AccessToken:  token,
-		RefreshToken: refreshToken,
-		User:         user,
-		ExpiresIn:    int64(accessTokenLifetime.Seconds()),
-		Permissions:  permissions,
+		AccessToken:          tokenResult.AccessToken,
+		RefreshToken:         tokenResult.RefreshToken,
+		User:                 user,
+		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
+		Permissions:          permissions,
+		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
+		RootTenantID:         tokenResult.RootTenantID,
+		MembershipID:         tokenResult.MembershipID,
 	})
 }
 
@@ -293,13 +366,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, refreshToken, err := h.generateLoginTokenPair(c.Request.Context(), user)
+	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
-	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, refreshToken, refreshTokenLifetime); err != nil {
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
 		response.HandleError(c, apperr.Internal("create refresh session failed", err))
 		return
 	}
@@ -322,11 +395,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	user.PasswordHash = ""
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 	response.Success(c, LoginResponse{
-		AccessToken:  token,
-		RefreshToken: refreshToken,
-		User:         user,
-		ExpiresIn:    int64(accessTokenLifetime.Seconds()),
-		Permissions:  permissions,
+		AccessToken:          tokenResult.AccessToken,
+		RefreshToken:         tokenResult.RefreshToken,
+		User:                 user,
+		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
+		Permissions:          permissions,
+		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
+		RootTenantID:         tokenResult.RootTenantID,
+		MembershipID:         tokenResult.MembershipID,
 	})
 }
 
@@ -668,11 +744,12 @@ func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 		return
 	}
 
+	legacyRole := resolved.LegacyRole
 	accessToken, err := h.jwtService.GenerateContextAccessTokenForSession(
 		resolved.Actor.UserID, resolved.Actor.RootTenantID, resolved.Actor.OrganizationID,
 		resolved.Actor.MembershipID, resolved.Actor.MembershipVersion,
 		resolved.AuthorizationVersion, resolved.SessionVersion,
-		refreshClaims.SessionID, resolved.Phone, resolved.LegacyRole,
+		refreshClaims.SessionID, resolved.Phone, &legacyRole,
 	)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("generate access token failed", err))
@@ -735,9 +812,38 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		response.HandleError(c, apperr.Unauthorized("refresh session revoked"))
 		return
 	}
-	// Convert user.Role (int) to pointer for nullable role
-	rolePtr := jwt.PtrInt(user.Role)
-	newAccessToken, _, err := h.jwtService.GenerateTokenWithSessionVersion(user.ID, user.Phone, rolePtr, currentSessionVersion)
+
+	// Resolve the user's current organization context to issue a
+	// context-aware access token.  Fall back to a synthetic context
+	// when no active membership exists.
+	resolved, resolveErr := h.contextResolver.ResolveDefaultSessionContext(c.Request.Context(), claims.UserID)
+	if resolveErr != nil && !errors.Is(resolveErr, pgx.ErrNoRows) {
+		response.HandleError(c, apperr.Internal("resolve context failed", resolveErr))
+		return
+	}
+	if !resolved.Valid() {
+		resolved = model.AuthorizationSessionContext{
+			Actor: model.ActorContext{
+				UserID:            user.ID,
+				RootTenantID:      user.ID,
+				OrganizationID:    user.ID,
+				MembershipID:      user.ID,
+				MembershipVersion: 1,
+			},
+			AuthorizationVersion: 1,
+			SessionVersion:       currentSessionVersion,
+			Phone:                user.Phone,
+			LegacyRole:           user.Role,
+		}
+	}
+
+	rolePtr := jwt.PtrInt(resolved.LegacyRole)
+	newAccessToken, err := h.jwtService.GenerateContextAccessTokenForSession(
+		resolved.Actor.UserID, resolved.Actor.RootTenantID, resolved.Actor.OrganizationID,
+		resolved.Actor.MembershipID, resolved.Actor.MembershipVersion,
+		resolved.AuthorizationVersion, resolved.SessionVersion,
+		claims.SessionID, resolved.Phone, rolePtr,
+	)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
@@ -765,9 +871,12 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	setAuthCookies(c, newAccessToken, newRefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
 	response.Success(c, gin.H{
-		"access_token":  newAccessToken,
-		"refresh_token": newRefreshToken,
-		"expires_in":    int64(accessTokenLifetime.Seconds()),
+		"access_token":           newAccessToken,
+		"refresh_token":          newRefreshToken,
+		"expires_in":             int64(accessTokenLifetime.Seconds()),
+		"active_organization_id": resolved.Actor.OrganizationID,
+		"root_tenant_id":         resolved.Actor.RootTenantID,
+		"membership_id":          resolved.Actor.MembershipID,
 	})
 }
 
@@ -898,13 +1007,13 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		return
 	}
 
-	token, refreshToken, err := h.generateLoginTokenPair(c.Request.Context(), user)
+	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
-	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, refreshToken, refreshTokenLifetime); err != nil {
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
 		response.HandleError(c, apperr.Internal("create refresh session failed", err))
 		return
 	}
@@ -927,11 +1036,14 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 	user.PasswordHash = ""
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 	response.Success(c, LoginResponse{
-		AccessToken:  token,
-		RefreshToken: refreshToken,
-		User:         user,
-		ExpiresIn:    int64(accessTokenLifetime.Seconds()),
-		Permissions:  permissions,
+		AccessToken:          tokenResult.AccessToken,
+		RefreshToken:         tokenResult.RefreshToken,
+		User:                 user,
+		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
+		Permissions:          permissions,
+		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
+		RootTenantID:         tokenResult.RootTenantID,
+		MembershipID:         tokenResult.MembershipID,
 	})
 }
 
@@ -983,17 +1095,13 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	// 登录成功，清除失败记录
 	h.userService.Cache().Del(c.Request.Context(), failKey)
 
-	identifier := user.Phone
-	if identifier == "" {
-		identifier = user.Email
-	}
-	token, refreshToken, err := h.generateLoginTokenPair(c.Request.Context(), user)
+	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
-	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, refreshToken, refreshTokenLifetime); err != nil {
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
 		response.HandleError(c, apperr.Internal("create refresh session failed", err))
 		return
 	}
@@ -1016,11 +1124,14 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	user.PasswordHash = ""
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 	response.Success(c, LoginResponse{
-		AccessToken:  token,
-		RefreshToken: refreshToken,
-		User:         user,
-		ExpiresIn:    int64(accessTokenLifetime.Seconds()),
-		Permissions:  permissions,
+		AccessToken:          tokenResult.AccessToken,
+		RefreshToken:         tokenResult.RefreshToken,
+		User:                 user,
+		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
+		Permissions:          permissions,
+		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
+		RootTenantID:         tokenResult.RootTenantID,
+		MembershipID:         tokenResult.MembershipID,
 	})
 }
 
@@ -1060,13 +1171,13 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 	}
 
 	// 生成 token
-	token, refreshToken, err := h.generateLoginTokenPair(c.Request.Context(), user)
+	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
-	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, refreshToken, refreshTokenLifetime); err != nil {
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
 		response.HandleError(c, apperr.Internal("create refresh session failed", err))
 		return
 	}
@@ -1087,15 +1198,18 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 
-	setAuthCookies(c, token, refreshToken, accessTokenLifetime, refreshTokenLifetime)
+	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
-		AccessToken:  token,
-		RefreshToken: refreshToken,
-		User:         user,
-		ExpiresIn:    int64(accessTokenLifetime.Seconds()),
-		Permissions:  permissions,
+		AccessToken:          tokenResult.AccessToken,
+		RefreshToken:         tokenResult.RefreshToken,
+		User:                 user,
+		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
+		Permissions:          permissions,
+		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
+		RootTenantID:         tokenResult.RootTenantID,
+		MembershipID:         tokenResult.MembershipID,
 	})
 }
 
@@ -1139,18 +1253,13 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 		return
 	}
 
-	identifier := user.Email
-	if identifier == "" {
-		identifier = user.Phone
-	}
-
-	token, refreshToken, err := h.generateLoginTokenPair(c.Request.Context(), user)
+	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
 		response.HandleError(c, apperr.Internal("generate token failed", err))
 		return
 	}
 
-	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, refreshToken, refreshTokenLifetime); err != nil {
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
 		response.HandleError(c, apperr.Internal("create refresh session failed", err))
 		return
 	}
@@ -1171,14 +1280,17 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
 
-	setAuthCookies(c, token, refreshToken, accessTokenLifetime, refreshTokenLifetime)
+	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
 	user.PasswordHash = ""
 	response.Success(c, LoginResponse{
-		AccessToken:  token,
-		RefreshToken: refreshToken,
-		User:         user,
-		ExpiresIn:    int64(accessTokenLifetime.Seconds()),
-		Permissions:  permissions,
+		AccessToken:          tokenResult.AccessToken,
+		RefreshToken:         tokenResult.RefreshToken,
+		User:                 user,
+		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
+		Permissions:          permissions,
+		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
+		RootTenantID:         tokenResult.RootTenantID,
+		MembershipID:         tokenResult.MembershipID,
 	})
 }

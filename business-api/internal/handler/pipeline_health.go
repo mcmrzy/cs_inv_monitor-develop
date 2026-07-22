@@ -39,7 +39,7 @@ type PipelineMetricsResponse struct {
 	AvgKafkaLag         float64                 `json:"avg_kafka_lag"`         // average lag across consumers
 	CommandSuccessRate  float64                 `json:"command_success_rate"`  // percentage (0-100)
 	SnapshotTime        time.Time               `json:"snapshot_time"`
-	AdditionaIMetrics   map[string]interface{}  `json:"additional_metrics,omitempty"`
+	AdditionalMetrics   map[string]interface{}  `json:"additional_metrics,omitempty"`
 }
 
 // PipelineHealthHandler handles pipeline health aggregation endpoints
@@ -187,7 +187,7 @@ func (h *PipelineHealthHandler) GetPipelineMetrics(c *gin.Context) {
 
 	metrics := &PipelineMetricsResponse{
 		SnapshotTime: time.Now().UTC(),
-		AdditionaIMetrics: make(map[string]interface{}),
+		AdditionalMetrics: make(map[string]interface{}),
 	}
 
 	// Get online device count from active heartbeat keys

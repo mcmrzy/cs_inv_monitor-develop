@@ -192,6 +192,19 @@ func GetPhone(c *gin.Context) string {
 	return p
 }
 
+// GetRootTenantID extracts the root_tenant_id from the actor context in the gin context
+func GetRootTenantID(c *gin.Context) int64 {
+	v, exists := c.Get("actor_context")
+	if !exists {
+		return 0
+	}
+	actor, ok := v.(model.ActorContext)
+	if !ok {
+		return 0
+	}
+	return actor.RootTenantID
+}
+
 func CORS(allowedOrigins []string) gin.HandlerFunc {
 	originSet := make(map[string]bool, len(allowedOrigins))
 	for _, origin := range allowedOrigins {

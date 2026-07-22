@@ -7,10 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"log"
-	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"inv-api-server/internal/middleware"
@@ -953,7 +950,7 @@ func (h *DeviceClaimTransferHandler) emitEvent(c *gin.Context, eventName string,
 	_ = c // Avoid unused variable warning if needed later
 }
 
-func scanTransferRequests(rows pgxpool.Rows) ([]DeviceTransferRequest, error) {
+func scanTransferRequests(rows pgx.Rows) ([]DeviceTransferRequest, error) {
 	var transfers []DeviceTransferRequest
 
 	for rows.Next() {
