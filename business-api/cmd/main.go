@@ -1047,14 +1047,18 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.PUT("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.UpdateUpgradePackage)
 			otaGroup.DELETE("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradePackage)
 			otaGroup.PATCH("/packages/:id/publish", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.PublishPackage)
-			otaGroup.POST("/packages/push", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushPackageUpgrade)
+			// NOTE: POST /packages (collection create) conflicts with any static
+			// sub-route at POST method, so push is at /upgrades/push-package.
+			otaGroup.POST("/upgrades/push-package", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushPackageUpgrade)
 			otaGroup.POST("/packages/:id/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackPackageUpgrade)
 			otaGroup.GET("/packages/:id/details", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetPackageUpgradeDetails)
 
 			// 鍗囩骇浠诲姟绠＄悊锛堟柊缁熶竴鎺ュ彛锛?
 			otaGroup.GET("/tasks", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListUpgradeTasks)
 			otaGroup.POST("/tasks", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateUpgradeTask)
-			otaGroup.GET("/tasks/stats", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetTaskStats)
+			// NOTE: /tasks/:id wildcard conflicts with static sub-routes,
+			// so stats uses /task-stats at the ota group level.
+			otaGroup.GET("/task-stats", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetTaskStats)
 			otaGroup.GET("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeTask)
 			otaGroup.POST("/tasks/:id/execute", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.ExecuteUpgradeTask)
 			otaGroup.POST("/tasks/:id/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgradeTask)
@@ -1062,8 +1066,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.DELETE("/tasks/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradeTask)
 			otaGroup.GET("/tasks/:id/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeTaskDevices)
 
-			otaGroup.GET("/firmware/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetDevicesByFirmware)
-			otaGroup.GET("/firmware/package-devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackageDevices)
+			// NOTE: /firmware/:id wildcard conflicts with static sub-routes,
+			// so device/package queries use /by-device and /by-package.
+			otaGroup.GET("/firmware/by-device", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetDevicesByFirmware)
+			otaGroup.GET("/firmware/by-package", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackageDevices)
 
 			// APP绔帴鍙ｏ紙鎵€鏈夌櫥褰曠敤鎴峰彲璁块棶锛?
 			otaGroup.GET("/check/:sn", deps.OTAHandler.CheckUpdate)
@@ -1076,7 +1082,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/app/packages/install", deps.OTAHandler.AppInstallPackage)
 			otaGroup.GET("/devices/:sn/package-upgrade/:packageId", deps.OTAHandler.GetDevicePackageUpgradeInfo)
 			otaGroup.GET("/devices/:sn/upgrade-packages", deps.OTAHandler.ListDeviceUpgradePackages)
-			otaGroup.GET("/packages/available/:sn", deps.OTAHandler.GetAvailablePackages)
+			otaGroup.GET("/available-packages/:sn", deps.OTAHandler.GetAvailablePackages)
 			otaGroup.POST("/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackUpgrade)
 			otaGroup.POST("/rollback-to-published", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackToPublishedVersion)
 

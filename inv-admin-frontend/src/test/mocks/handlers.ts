@@ -246,7 +246,7 @@ export const handlers = [
   }),
 
   /** OTA 任务统计 */
-  http.get(`${API_BASE}/ota/tasks/stats`, () => {
+  http.get(`${API_BASE}/ota/task-stats`, () => {
     return HttpResponse.json({
       code: 0,
       message: 'success',

@@ -339,7 +339,7 @@ var appAllowedPrefixes = []string{
 	"/api/v1/ota/check/",
 	"/api/v1/ota/resend/",
 	"/api/v1/ota/devices/",
-	"/api/v1/ota/packages/available/",
+	"/api/v1/ota/available-packages/",
 }
 
 // appAllowedMethodPaths 定义 APP 端按 HTTP 方法精确控制的白名单。

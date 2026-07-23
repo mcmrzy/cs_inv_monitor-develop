@@ -11,9 +11,9 @@ class OtaRemoteDataSource {
   Future<Response> triggerOTA(String sn, int packageId) async =>
       dio.post('/ota/trigger', data: {'sn': sn, 'package_id': packageId});
 
-  /// GET /ota/packages/available/:sn — 获取设备可用升级包列表
+  /// GET /ota/available-packages/:sn — 获取设备可用升级包列表
   Future<Response> getAvailablePackages(String sn) async =>
-      dio.get('/ota/packages/available/$sn');
+      dio.get('/ota/available-packages/$sn');
 
   /// POST /ota/devices/:sn/local-ota-result — 本地OTA结果上报
   Future<Response> reportLocalOTAResult({

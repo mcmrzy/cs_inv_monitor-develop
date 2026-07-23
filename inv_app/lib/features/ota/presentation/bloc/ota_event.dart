@@ -59,7 +59,7 @@ class OTAFirmwareListRequested extends OtaEvent {
 }
 
 /// 加载设备可用升级包列表
-/// 调用 GET /ota/packages/available/:sn 获取设备专属可用升级包
+/// 调用 GET /ota/available-packages/:sn 获取设备专属可用升级包
 /// 响应格式: {code: 0, data: [{id, user_version, user_changelog, is_force, model, main_version, ...}]}
 class LoadAvailablePackages extends OtaEvent {
   final String sn;

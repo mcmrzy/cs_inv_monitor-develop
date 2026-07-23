@@ -10,7 +10,7 @@ abstract class OtaRepository {
     int packageId,
   );
 
-  /// GET /ota/packages/available/:sn — 获取设备可用升级包列表
+  /// GET /ota/available-packages/:sn — 获取设备可用升级包列表
   Future<Either<Failure, List<dynamic>>> getAvailablePackages(String sn);
 
   /// POST /ota/local-result — 本地OTA结果上报
