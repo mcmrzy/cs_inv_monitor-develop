@@ -1,4 +1,4 @@
-// Package main is the entry point for inv-api-server, the user-facing REST API service.
+﻿// Package main is the entry point for inv-api-server, the user-facing REST API service.
 //
 // Responsibilities:
 //   - User authentication (login/register/JWT refresh, SMS & email verification)
@@ -209,14 +209,14 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
-	// 事件驱动：监听 Redis Keyspace Notification，心跳 key 过期时立即标记设备离线
+	// 浜嬩欢椹卞姩锛氱洃鍚?Redis Keyspace Notification锛屽績璺?key 杩囨湡鏃剁珛鍗虫爣璁拌澶囩绾?
 	go runHeartbeatExpiryListener(rdb, deviceRepo, heartbeatDone)
-	// 兜底：每 5 分钟全量扫描一次，处理监听器可能遗漏的情况
+	// 鍏滃簳锛氭瘡 5 鍒嗛挓鍏ㄩ噺鎵弿涓€娆★紝澶勭悊鐩戝惉鍣ㄥ彲鑳介仐婕忕殑鎯呭喌
 	go runHeartbeatCheck(deviceRepo, heartbeatDone)
 
-	// OTA 升级超时清理：每 5 分钟扫描卡住的升级记录并更新关联任务统计
+	// OTA 鍗囩骇瓒呮椂娓呯悊锛氭瘡 5 鍒嗛挓鎵弿鍗′綇鐨勫崌绾ц褰曞苟鏇存柊鍏宠仈浠诲姟缁熻
 	go runOTATimeoutCleanup(db, heartbeatDone)
-	// OTA 定时任务：领取并执行到期任务，重启后也会恢复已到期但未执行的任务。
+	// OTA 瀹氭椂浠诲姟锛氶鍙栧苟鎵ц鍒版湡浠诲姟锛岄噸鍚悗涔熶細鎭㈠宸插埌鏈熶絾鏈墽琛岀殑浠诲姟銆?
 	go runOTAScheduler(db, otaService, heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
@@ -255,17 +255,17 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	serve(cfg, router)
 }
 
-// runHeartbeatExpiryListener 监听 Redis Keyspace Notification，当 device:heartbeat:{sn} key 过期时
-// 立即将设备标记为离线，实现事件驱动的离线检测，延迟从分钟级降到秒级
+// runHeartbeatExpiryListener 鐩戝惉 Redis Keyspace Notification锛屽綋 device:heartbeat:{sn} key 杩囨湡鏃?
+// 绔嬪嵆灏嗚澶囨爣璁颁负绂荤嚎锛屽疄鐜颁簨浠堕┍鍔ㄧ殑绂荤嚎妫€娴嬶紝寤惰繜浠庡垎閽熺骇闄嶅埌绉掔骇
 func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.DeviceRepository, done chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 等待 Redis 连接就绪
+	// 绛夊緟 Redis 杩炴帴灏辩华
 	time.Sleep(2 * time.Second)
 
-	// 启用 keyspace notifications for expired events (Ex)
-	// 重试 3 次，确保配置成功
+	// 鍚敤 keyspace notifications for expired events (Ex)
+	// 閲嶈瘯 3 娆★紝纭繚閰嶇疆鎴愬姛
 	var configErr error
 	for i := 0; i < 3; i++ {
 		configErr = rdb.ConfigSet(ctx, "notify-keyspace-events", "Ex").Err()
@@ -284,11 +284,11 @@ func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.Device
 	}
 	logger.Info("Redis keyspace notifications enabled for event-driven offline detection")
 
-	// 订阅 key 过期事件: __keyspace@<db>__:device:heartbeat:*
+	// 璁㈤槄 key 杩囨湡浜嬩欢: __keyspace@<db>__:device:heartbeat:*
 	pubsub := rdb.PSubscribe(ctx, "__keyspace@*__:device:heartbeat:*")
 	defer pubsub.Close()
 
-	// 等待订阅就绪
+	// 绛夊緟璁㈤槄灏辩华
 	time.Sleep(500 * time.Millisecond)
 
 	ch := pubsub.Channel()
@@ -303,11 +303,11 @@ func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.Device
 				logger.Warn("Heartbeat expiry listener channel closed unexpectedly")
 				return
 			}
-			// 只处理 expired 事件
+			// 鍙鐞?expired 浜嬩欢
 			if msg.Payload != "expired" {
 				continue
 			}
-			// 从 channel 名称提取设备 SN: __keyspace@0__:device:heartbeat:{sn}
+			// 浠?channel 鍚嶇О鎻愬彇璁惧 SN: __keyspace@0__:device:heartbeat:{sn}
 			channel := msg.Channel
 			prefix := "device:heartbeat:"
 			idx := strings.LastIndex(channel, prefix)
@@ -320,7 +320,7 @@ func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.Device
 			}
 
 			logger.Info("Device heartbeat key expired, marking offline", zap.String("sn", sn))
-			// 标记设备离线（使用新的 context 避免超时）
+			// 鏍囪璁惧绂荤嚎锛堜娇鐢ㄦ柊鐨?context 閬垮厤瓒呮椂锛?
 			offlineCtx, offlineCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			result, err := deviceRepo.MarkDeviceOfflineBySN(offlineCtx, sn)
 			offlineCancel()
@@ -339,7 +339,7 @@ func runHeartbeatExpiryListener(rdb *redis.Client, deviceRepo *repository.Device
 }
 
 func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, done chan struct{}) {
-	// 兜底扫描从 5 分钟缩短为 60 秒，确保事件驱动失效时也能快速发现离线
+	// 鍏滃簳鎵弿浠?5 鍒嗛挓缂╃煭涓?60 绉掞紝纭繚浜嬩欢椹卞姩澶辨晥鏃朵篃鑳藉揩閫熷彂鐜扮绾?
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -360,9 +360,9 @@ func runHeartbeatCheck(deviceRepo *repository.DeviceRepository, done chan struct
 	}
 }
 
-// runOTATimeoutCleanup 定期清理卡住的 OTA 升级记录。
-// 每 5 分钟扫描一次 status='upgrading' 且 started_at 超过 15 分钟的记录，
-// 将其标记为 failed，并更新关联 upgrade_tasks 的统计数据与状态。
+// runOTATimeoutCleanup 瀹氭湡娓呯悊鍗′綇鐨?OTA 鍗囩骇璁板綍銆?
+// 姣?5 鍒嗛挓鎵弿涓€娆?status='upgrading' 涓?started_at 瓒呰繃 15 鍒嗛挓鐨勮褰曪紝
+// 灏嗗叾鏍囪涓?failed锛屽苟鏇存柊鍏宠仈 upgrade_tasks 鐨勭粺璁℃暟鎹笌鐘舵€併€?
 func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -372,7 +372,7 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 			logger.Info("OTA timeout cleanup stopped")
 			return
 		case <-ticker.C:
-			// 1. 查找所有 status='upgrading' 且 started_at 超过 15 分钟的记录
+			// 1. 鏌ユ壘鎵€鏈?status='upgrading' 涓?started_at 瓒呰繃 15 鍒嗛挓鐨勮褰?
 			rows, err := db.Query(context.Background(), `
 				SELECT id, COALESCE(task_id, 0)
 				FROM device_upgrades
@@ -396,15 +396,15 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 				continue
 			}
 
-			// 2. 批量标记为 failed
+			// 2. 鎵归噺鏍囪涓?failed
 			for _, r := range staleRecords {
 				db.Exec(context.Background(), `
-					UPDATE device_upgrades SET status = 'failed', error_message = '升级超时，设备可能已断连', updated_at = NOW()
+					UPDATE device_upgrades SET status = 'failed', error_message = '鍗囩骇瓒呮椂锛岃澶囧彲鑳藉凡鏂繛', updated_at = NOW()
 					WHERE id = $1 AND status = 'upgrading'`, r.id)
 				logger.Info("OTA upgrade marked as timed out", zap.Int64("id", r.id))
 			}
 
-			// 3. 更新关联任务统计
+			// 3. 鏇存柊鍏宠仈浠诲姟缁熻
 			taskIDs := map[int64]bool{}
 			for _, r := range staleRecords {
 				if r.taskID > 0 {
@@ -419,7 +419,7 @@ func runOTATimeoutCleanup(db *pgxpool.Pool, done chan struct{}) {
 						updated_at = NOW()
 					WHERE id = $1`, taskID)
 
-				// 检查是否全部完成
+				// 妫€鏌ユ槸鍚﹀叏閮ㄥ畬鎴?
 				var total, success, failed int
 				if err := db.QueryRow(context.Background(), `
 					SELECT total_devices, success_count, failed_count FROM upgrade_tasks WHERE id = $1
@@ -485,7 +485,7 @@ func runOTAScheduler(db *pgxpool.Pool, otaService *service.OTAService, done chan
 				_, _ = db.Exec(context.Background(), `
 					UPDATE upgrade_tasks SET status = 'failed', notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $2),
 					completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND status IN ('pending','running')
-				`, taskID, "定时执行失败: "+err.Error())
+				`, taskID, "瀹氭椂鎵ц澶辫触: "+err.Error())
 			}
 		}
 		if len(taskIDs) > 0 {
@@ -738,8 +738,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/ota-cmd-ack", internalHandler.OTACmdAck)
 	}
 
-	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
-	// 使用 http.ServeContent 替代 Gin Static，优化大文件传输
+	// 鍥轰欢鏂囦欢涓嬭浇锛堟棤闇€璁よ瘉锛岃澶囩洿鎺ヨ闂?/firmware/xxx.bin锛?
+	// 浣跨敤 http.ServeContent 鏇夸唬 Gin Static锛屼紭鍖栧ぇ鏂囦欢浼犺緭
 	firmwareDir := "/data/firmware"
 	if err := os.MkdirAll(firmwareDir, 0755); err != nil {
 		panic("create firmware directory: " + err.Error())
@@ -782,12 +782,12 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.POST("/auth/phone-code-login", deps.AuthHandler.PhoneCodeLogin)
 		api.POST("/auth/email-code-login", deps.AuthHandler.EmailCodeLogin)
 
-		// 公共参考数据 (无需认证)
+		// 鍏叡鍙傝€冩暟鎹?(鏃犻渶璁よ瘉)
 		api.GET("/timezones", func(c *gin.Context) {
 			response.Success(c, timezone.GetTimezoneList())
 		})
 
-		// 验证码 API（无需认证）
+		// 楠岃瘉鐮?API锛堟棤闇€璁よ瘉锛?
 		captchaLimit := middleware.RateLimitWith(2, 5)
 		api.GET("/captcha/generate", captchaLimit, deps.CaptchaHandler.GenerateCaptcha)
 		api.POST("/captcha/verify", captchaLimit, deps.CaptchaHandler.VerifyCaptcha)
@@ -856,7 +856,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/devices/unbind-requests/:id/approve", deps.DeviceHandler.ApproveUnbind)
 			auth.POST("/devices/unbind-requests/:id/reject", deps.DeviceHandler.RejectUnbind)
 
-			// 设备认领与转移管理（新增）
+			// 璁惧璁ら涓庤浆绉荤鐞嗭紙鏂板锛?
 			auth.POST("/devices/claim-code/generate", deps.DeviceClaimTransferHandler.GenerateClaimCode)
 			auth.POST("/devices/claim-code/verify", deps.DeviceClaimTransferHandler.VerifyClaimCode)
 			auth.POST("/devices/:sn/claim", deps.DeviceClaimTransferHandler.ClaimDevice)
@@ -866,20 +866,20 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/devices/transfers/:id/reject", deps.DeviceClaimTransferHandler.RejectTransfer)
 			auth.POST("/devices/transfers/:id/cancel", deps.DeviceClaimTransferHandler.CancelTransfer)
 
-			// 设备分配安装商
+			// 璁惧鍒嗛厤瀹夎鍟?
 			auth.POST("/devices/:sn/assign-installer", deps.DeviceHandler.AssignInstaller)
 			auth.DELETE("/devices/:sn/installer", deps.DeviceHandler.RemoveInstaller)
 			auth.POST("/devices/batch-assign-installer", deps.DeviceHandler.BatchAssignInstaller)
 			auth.POST("/devices/import-excel", deps.DeviceHandler.ImportExcel)
 
-			// 电池配置模板
+			// 鐢垫睜閰嶇疆妯℃澘
 			auth.GET("/devices/:sn/battery-config", deps.BatteryHandler.GetDeviceConfig)
 			auth.PUT("/devices/:sn/battery-config", deps.BatteryHandler.BindDeviceConfig)
 			auth.GET("/battery-profiles", deps.BatteryHandler.ListProfiles)
 			auth.GET("/battery-profiles/:id", deps.BatteryHandler.GetProfile)
 			auth.POST("/battery-profiles", deps.BatteryHandler.CreateProfile)
 
-			// 能源计划与临时覆盖
+			// 鑳芥簮璁″垝涓庝复鏃惰鐩?
 			auth.GET("/devices/:sn/energy-schedule", deps.EnergyScheduleHandler.GetSchedule)
 			auth.PUT("/devices/:sn/energy-schedule", deps.EnergyScheduleHandler.UpdateSchedule)
 			auth.POST("/devices/:sn/control-overrides", deps.EnergyScheduleHandler.CreateOverride)
@@ -896,10 +896,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/alarms/:id/ignore", deps.AlarmHandler.Ignore)
 			auth.DELETE("/alarms/:id", deps.AlarmHandler.Delete)
 
-			// 通知管理
+			// 閫氱煡绠＄悊
 			auth.GET("/notifications", deps.NotificationHandler.List)
 			auth.GET("/notifications/stats", deps.NotificationHandler.GetStats)
-			// SSE 实时推送端点（必须在参数路由之前注册）
+			// SSE 瀹炴椂鎺ㄩ€佺鐐癸紙蹇呴』鍦ㄥ弬鏁拌矾鐢变箣鍓嶆敞鍐岋級
 			auth.GET("/notifications/stream", internalHandler.NotificationStream)
 			auth.DELETE("/notifications/clear", deps.NotificationHandler.ClearAll)
 			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
@@ -1022,12 +1022,12 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 		otaGroup := api.Group("/ota").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
-			// 需要权限的管理接口
+			// 闇€瑕佹潈闄愮殑绠＄悊鎺ュ彛
 			otaGroup.GET("/firmware", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListFirmware)
 			otaGroup.GET("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetFirmware)
 			otaGroup.POST("/firmware", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateFirmware)
 			otaGroup.DELETE("/firmware/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteFirmware)
-			// 升级管理（替代旧 /tasks）
+			// 鍗囩骇绠＄悊锛堟浛浠ｆ棫 /tasks锛?
 			otaGroup.GET("/upgrades/dashboard", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradeDashboard)
 			otaGroup.POST("/upgrades/push", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.PushUpgrade)
 			otaGroup.GET("/upgrades/firmware/:firmwareId", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetFirmwareUpgradeDetails)
@@ -1035,7 +1035,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/upgrades/cancel", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.CancelUpgrade)
 			otaGroup.DELETE("/upgrades/firmware/:firmwareId", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteUpgradesByFirmware)
 
-			// 升级包管理
+			// 鍗囩骇鍖呯鐞?
 			otaGroup.GET("/packages", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListUpgradePackages)
 			otaGroup.GET("/packages/:id", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackage)
 			otaGroup.POST("/packages", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateUpgradePackage)
@@ -1046,7 +1046,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/packages/:id/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackPackageUpgrade)
 			otaGroup.GET("/packages/:id/details", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetPackageUpgradeDetails)
 
-			// 升级任务管理（新统一接口）
+			// 鍗囩骇浠诲姟绠＄悊锛堟柊缁熶竴鎺ュ彛锛?
 			otaGroup.GET("/tasks", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListUpgradeTasks)
 			otaGroup.POST("/tasks", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateUpgradeTask)
 			otaGroup.GET("/tasks/stats", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetTaskStats)
@@ -1060,7 +1060,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.GET("/firmware/devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetDevicesByFirmware)
 			otaGroup.GET("/firmware/package-devices", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.GetUpgradePackageDevices)
 
-			// APP端接口（所有登录用户可访问）
+			// APP绔帴鍙ｏ紙鎵€鏈夌櫥褰曠敤鎴峰彲璁块棶锛?
 			otaGroup.GET("/check/:sn", deps.OTAHandler.CheckUpdate)
 			otaGroup.POST("/trigger", deps.OTAHandler.TriggerOTA)
 			otaGroup.POST("/resend/:sn", deps.OTAHandler.ResendUpgradeCommand)
@@ -1075,8 +1075,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			otaGroup.POST("/rollback", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackUpgrade)
 			otaGroup.POST("/rollback-to-published", middleware.RequirePermission(deps.PermChecker, "ota", "control"), deps.OTAHandler.RollbackToPublishedVersion)
 
-			// App版本管理
-			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP检查更新（无需额外权限）
+			// App鐗堟湰绠＄悊
+			otaGroup.GET("/app/check", deps.OTAHandler.CheckAppUpdate) // APP妫€鏌ユ洿鏂帮紙鏃犻渶棰濆鏉冮檺锛?
 			otaGroup.GET("/app/versions", middleware.RequirePermission(deps.PermChecker, "ota", "view"), deps.OTAHandler.ListAppVersions)
 			otaGroup.POST("/app/versions", middleware.RequirePermission(deps.PermChecker, "ota", "create"), deps.OTAHandler.CreateAppVersion)
 			otaGroup.DELETE("/app/versions/:id", middleware.RequirePermission(deps.PermChecker, "ota", "delete"), deps.OTAHandler.DeleteAppVersion)
@@ -1093,9 +1093,14 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			pipelineHealthGroup.GET("/pipeline-metrics", deps.PipelineHealthHandler.GetPipelineMetrics)
 			
 			// Task 12: DLQ management endpoints
+			// NOTE: retry-all and clear use query param ?consumer_type=xxx to avoid
+			// Gin wildcard conflict between :id and :consumer_type at the same path level.
 			pipelineHealthGroup.GET("/dlq", deps.DLQHandler.List)
 			pipelineHealthGroup.POST("/dlq/:id/retry", deps.DLQHandler.Retry)
 			pipelineHealthGroup.DELETE("/dlq/:id", deps.DLQHandler.Delete)
+			pipelineHealthGroup.POST("/dlq/retry-all", deps.DLQHandler.RetryAll)
+			pipelineHealthGroup.DELETE("/dlq/clear", deps.DLQHandler.Clear)
+			pipelineHealthGroup.GET("/dlq/stats", deps.DLQHandler.Stats)
 			
 			// Task 13: SSE pipeline health stream (implemented in ws_handler.go)
 			pipelineHealthGroup.GET("/pipeline-health/stream", handler.PipelineHealthSSE(deps.RDB))
@@ -1139,7 +1144,7 @@ func requestBodyLimit() gin.HandlerFunc {
 }
 
 func setTimezone(tz string) error {
-	// 统一使用 UTC 作为服务端时区, 前端根据站点 timezone 做本地化显示
+	// 缁熶竴浣跨敤 UTC 浣滀负鏈嶅姟绔椂鍖? 鍓嶇鏍规嵁绔欑偣 timezone 鍋氭湰鍦板寲鏄剧ず
 	loc, err := time.LoadLocation("UTC")
 	if err != nil {
 		return fmt.Errorf("invalid timezone UTC: %w", err)
@@ -1179,7 +1184,7 @@ func setupRouterMinimal(cfg *config.Config) *gin.Engine {
 
 	router := gin.New()
 	router.Use(gin.Recovery())
-	// 使用配置的 CORS origins，或默认仅允许 localhost
+	// 浣跨敤閰嶇疆鐨?CORS origins锛屾垨榛樿浠呭厑璁?localhost
 	corsOrigins := cfg.CORS.AllowedOrigins
 	if len(corsOrigins) == 0 {
 		corsOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
