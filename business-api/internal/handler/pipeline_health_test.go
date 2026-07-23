@@ -15,6 +15,16 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// extractData extracts the "data" field from the standard response wrapper
+// response.Success wraps data in {"code":0, "message":"success", "data": ...}
+func extractData(t *testing.T, body []byte) map[string]interface{} {
+	var resp map[string]interface{}
+	assert.NoError(t, json.Unmarshal(body, &resp))
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(t, ok, "expected 'data' field in response, got: %s", string(body))
+	return data
+}
+
 // PipelineHealthHandlerTestSuite tests for PipelineHealthHandler
 type PipelineHealthHandlerTestSuite struct {
 	suite.Suite
@@ -75,8 +85,7 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_AllOK() {
 
 	// Assert response
 	suite.Equal(http.StatusOK, w.Code)
-	var result map[string]interface{}
-	suite.NoError(json.Unmarshal(w.Body.Bytes(), &result))
+	result := extractData(suite.T(), w.Body.Bytes())
 
 	// Verify overall status is "ok"
 	overallStatus, ok := result["overall_status"].(string)
@@ -105,8 +114,7 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_DegradedWhenServ
 	suite.handler.GetPipelineHealth(c)
 
 	suite.Equal(http.StatusOK, w.Code)
-	var result map[string]interface{}
-	suite.NoError(json.Unmarshal(w.Body.Bytes(), &result))
+	result := extractData(suite.T(), w.Body.Bytes())
 
 	// Overall should be "degraded" since one service is degraded
 	overallStatus, ok := result["overall_status"].(string)
@@ -130,8 +138,7 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_DownWhenServiceD
 	suite.handler.GetPipelineHealth(c)
 
 	suite.Equal(http.StatusOK, w.Code)
-	var result map[string]interface{}
-	suite.NoError(json.Unmarshal(w.Body.Bytes(), &result))
+	result := extractData(suite.T(), w.Body.Bytes())
 
 	// Overall should be "down" since one service is down
 	overallStatus, ok := result["overall_status"].(string)
@@ -141,7 +148,8 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_DownWhenServiceD
 
 // TestPipelineHealth_MissingKeys tests when health keys don't exist
 func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_MissingKeys() {
-	// Don't set any health keys - they should all be missing
+	// Flush all keys to ensure clean state
+	suite.rdb.FlushDB(context.Background())
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -150,8 +158,7 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_MissingKeys() {
 	suite.handler.GetPipelineHealth(c)
 
 	suite.Equal(http.StatusOK, w.Code)
-	var result map[string]interface{}
-	suite.NoError(json.Unmarshal(w.Body.Bytes(), &result))
+	result := extractData(suite.T(), w.Body.Bytes())
 
 	// Overall should be "down" when all keys are missing
 	overallStatus, ok := result["overall_status"].(string)
@@ -181,8 +188,7 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_PipelineMetrics(
 	suite.handler.GetPipelineMetrics(c)
 
 	suite.Equal(http.StatusOK, w.Code)
-	var result map[string]interface{}
-	suite.NoError(json.Unmarshal(w.Body.Bytes(), &result))
+	result := extractData(suite.T(), w.Body.Bytes())
 
 	// Verify DLQ count
 	dlqPending, ok := result["dlq_pending"].(float64)
@@ -204,8 +210,7 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_PingRedis() {
 	suite.handler.PingRedis(c)
 
 	suite.Equal(http.StatusOK, w.Code)
-	var result map[string]interface{}
-	suite.NoError(json.Unmarshal(w.Body.Bytes(), &result))
+	result := extractData(suite.T(), w.Body.Bytes())
 
 	status, ok := result["status"].(string)
 	suite.True(ok)
@@ -231,6 +236,8 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealthServiceCheck() {
 	for _, tt := range tests {
 		suite.T().Run(tt.name, func(t *testing.T) {
 			key := "test:health:key"
+			// Clear the key before each subtest
+			suite.rdb.Del(ctx, key)
 			if tt.setupValue != "" {
 				suite.rdb.Set(ctx, key, tt.setupValue, 0)
 			}
@@ -262,8 +269,12 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealthResponseStructure
 
 	suite.Equal(http.StatusOK, w.Code)
 	
+	// Extract the wrapped data into PipelineHealthResponse
+	var resp map[string]interface{}
+	suite.NoError(json.Unmarshal(w.Body.Bytes(), &resp))
+	dataBytes, _ := json.Marshal(resp["data"])
 	var result PipelineHealthResponse
-	suite.NoError(json.Unmarshal(w.Body.Bytes(), &result))
+	suite.NoError(json.Unmarshal(dataBytes, &result))
 
 	// Verify required fields are present
 	suite.Equal("ok", result.OverallStatus)
@@ -373,9 +384,9 @@ func TestPipelineHealth_StandaloneTests(t *testing.T) {
 
 		handler := NewPipelineHealthHandler(rdb)
 		
-		rdb.Set(context.Background(), "kafka:lag:consumer1", "10", 0)
-		rdb.Set(context.Background(), "kafka:lag:consumer2", "20", 0)
-		rdb.Set(context.Background(), "kafka:lag:consumer3", "30", 0)
+		rdb.Set(context.Background(), "kafka:lag:bridge-consumer", "10", 0)
+		rdb.Set(context.Background(), "kafka:lag:device-server-consumer", "20", 0)
+		rdb.Set(context.Background(), "kafka:lag:api-consumer", "30", 0)
 
 		lag := handler.getAverageKafkaLag(context.Background())
 		assert.Equal(t, float64(20), lag) // (10+20+30)/3
