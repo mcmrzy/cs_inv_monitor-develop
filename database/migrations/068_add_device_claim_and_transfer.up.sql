@@ -112,7 +112,14 @@ $$ LANGUAGE plpgsql;
 -- Grant permissions (adjust as needed for your role structure)
 -- ============================================
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON device_claim_tokens TO postgres;
-GRANT SELECT, INSERT, UPDATE, DELETE ON device_transfer_requests TO postgres;
-GRANT EXECUTE ON FUNCTION cleanup_expired_claim_tokens() TO postgres;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO postgres;
+-- Grant permissions to the current database user (portable across environments)
+DO $$
+BEGIN
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON device_claim_tokens TO ' || current_user;
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON device_transfer_requests TO ' || current_user;
+    EXECUTE 'GRANT EXECUTE ON FUNCTION cleanup_expired_claim_tokens() TO ' || current_user;
+    EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ' || current_user;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'Skipping GRANT (non-fatal): %', SQLERRM;
+END
+$$;
