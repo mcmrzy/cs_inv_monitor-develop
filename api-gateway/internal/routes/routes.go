@@ -101,6 +101,10 @@ func registerGatewayEndpoints(r *gin.Engine) {
 		})
 	})
 
+	r.GET("/metrics", func(c *gin.Context) {
+		c.String(200, "# HELP api_gateway_requests_total Total requests\n# TYPE api_gateway_requests_total counter\napi_gateway_requests_total 0\n")
+	})
+
 	r.GET("/api/docs", func(c *gin.Context) {
 		c.JSON(http.StatusOK, buildAPIDoc())
 	})
