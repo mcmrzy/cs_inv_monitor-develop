@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -219,7 +219,7 @@ func (h *AuthHandler) loadUserPermissions(ctx context.Context, userID int64) []s
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -276,12 +276,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate token failed", err))
+		response.Error(c, 500, "generate token failed")
 		return
 	}
 
 	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
-		response.HandleError(c, apperr.Internal("create refresh session failed", err))
+		response.Error(c, 500, "create refresh session failed")
 		return
 	}
 
@@ -328,13 +328,13 @@ type RegisterRequest struct {
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	existingUser, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -350,7 +350,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("password encryption failed", err))
+		response.Error(c, 500, "password encryption failed")
 		return
 	}
 
@@ -362,18 +362,18 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := h.userService.Create(c.Request.Context(), user); err != nil {
-		response.HandleError(c, apperr.Internal("create user failed", err))
+		response.Error(c, 500, "create user failed")
 		return
 	}
 
 	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate token failed", err))
+		response.Error(c, 500, "generate token failed")
 		return
 	}
 
 	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
-		response.HandleError(c, apperr.Internal("create refresh session failed", err))
+		response.Error(c, 500, "create refresh session failed")
 		return
 	}
 
@@ -414,7 +414,7 @@ type SendCodeRequest struct {
 func (h *AuthHandler) SendCode(c *gin.Context) {
 	var req SendCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -436,7 +436,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	// 检查手机号注册状态
 	existingUser, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -472,13 +472,13 @@ type ResetPasswordRequest struct {
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	user, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -494,12 +494,12 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("password encryption failed", err))
+		response.Error(c, 500, "password encryption failed")
 		return
 	}
 
 	if err := h.userService.UpdatePassword(c.Request.Context(), user.ID, string(hashedPassword)); err != nil {
-		response.HandleError(c, apperr.Internal("update password failed", err))
+		response.Error(c, 500, "update password failed")
 		return
 	}
 	if err := h.jwtService.RevokeAllUserTokens(c.Request.Context(), user.ID); err != nil {
@@ -525,7 +525,7 @@ type EmailResetPasswordRequest struct {
 func (h *AuthHandler) EmailResetPassword(c *gin.Context) {
 	var req EmailResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -536,7 +536,7 @@ func (h *AuthHandler) EmailResetPassword(c *gin.Context) {
 
 	user, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -552,12 +552,12 @@ func (h *AuthHandler) EmailResetPassword(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("password encryption failed", err))
+		response.Error(c, 500, "password encryption failed")
 		return
 	}
 
 	if err := h.userService.UpdatePassword(c.Request.Context(), user.ID, string(hashedPassword)); err != nil {
-		response.HandleError(c, apperr.Internal("update password failed", err))
+		response.Error(c, 500, "update password failed")
 		return
 	}
 	if err := h.jwtService.RevokeAllUserTokens(c.Request.Context(), user.ID); err != nil {
@@ -585,13 +585,13 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	user, err := h.userService.GetByID(c.Request.Context(), userID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -602,12 +602,12 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("password encryption failed", err))
+		response.Error(c, 500, "password encryption failed")
 		return
 	}
 
 	if err := h.userService.UpdatePassword(c.Request.Context(), userID, string(hashedPassword)); err != nil {
-		response.HandleError(c, apperr.Internal("update password failed", err))
+		response.Error(c, 500, "update password failed")
 		return
 	}
 	if err := h.jwtService.RevokeAllUserTokens(c.Request.Context(), userID); err != nil {
@@ -622,12 +622,12 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 
 	user, err := h.userService.GetByID(c.Request.Context(), userID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if user == nil {
-		response.HandleError(c, apperr.NotFound("user not found"))
+		response.Error(c, 404, "user not found")
 		return
 	}
 
@@ -646,20 +646,20 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 
 	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	// 验证时区
 	if req.Timezone != "" {
 		if err := timezone.ValidateTimezone(req.Timezone); err != nil {
-			response.HandleError(c, apperr.BadRequest("invalid timezone: "+req.Timezone))
+			response.Error(c, 400, "invalid timezone: "+req.Timezone)
 			return
 		}
 	}
 
 	if err := h.userService.UpdateProfile(c.Request.Context(), userID, req.Nickname, req.Avatar, req.Timezone); err != nil {
-		response.HandleError(c, apperr.Internal("update profile failed", err))
+		response.Error(c, 500, "update profile failed")
 		return
 	}
 
@@ -717,30 +717,30 @@ type AuthorizationContextRequest struct {
 
 func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 	if h.contextResolver == nil {
-		response.HandleError(c, apperr.Internal("authorization context resolver unavailable", nil))
+		response.Error(c, 500, "authorization context resolver unavailable")
 		return
 	}
 	var req AuthorizationContextRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.OrganizationID <= 0 {
-		response.HandleError(c, apperr.BadRequest("organization_id is required"))
+		response.Error(c, 400, "organization_id is required")
 		return
 	}
 	if req.RefreshToken == "" {
 		req.RefreshToken, _ = c.Cookie("refresh_token")
 	}
 	if req.RefreshToken == "" {
-		response.HandleError(c, apperr.Unauthorized("missing refresh token"))
+		response.Error(c, 401, "missing refresh token")
 		return
 	}
 
 	refreshClaims, err := h.jwtService.ParseRefreshToken(req.RefreshToken)
 	if err != nil {
-		response.HandleError(c, apperr.Unauthorized("invalid refresh session"))
+		response.Error(c, 401, "invalid refresh session")
 		return
 	}
 	resolved, err := h.contextResolver.ResolveAuthorizationSessionContext(c.Request.Context(), refreshClaims.UserID, req.OrganizationID)
 	if err != nil || !resolved.Valid() || resolved.SessionVersion != refreshClaims.SessionVersion {
-		response.HandleError(c, apperr.Unauthorized("organization membership is not active"))
+		response.Error(c, 401, "organization membership is not active")
 		return
 	}
 
@@ -752,12 +752,12 @@ func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 		refreshClaims.SessionID, resolved.Phone, &legacyRole,
 	)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate access token failed", err))
+		response.Error(c, 500, "generate access token failed")
 		return
 	}
 	newRefreshToken, err := h.jwtService.GenerateRefreshTokenForSession(resolved.Actor.UserID, resolved.SessionVersion, refreshClaims.SessionID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate refresh token failed", err))
+		response.Error(c, 500, "generate refresh token failed")
 		return
 	}
 	swapped, swapErr := h.jwtService.SwapRefreshToken(c.Request.Context(), resolved.Actor.UserID, req.RefreshToken, newRefreshToken, refreshTokenLifetime)
@@ -765,7 +765,7 @@ func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 		_ = h.jwtService.RevokeRefreshToken(c.Request.Context(), resolved.Actor.UserID, req.RefreshToken)
 	}
 	if err := requireRefreshSwap(swapped, swapErr); err != nil {
-		response.HandleError(c, err)
+		response.Error(c, 500, err.Error())
 		return
 	}
 
@@ -788,28 +788,28 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	if req.RefreshToken == "" {
-		response.HandleError(c, apperr.BadRequest("missing refresh token"))
+		response.Error(c, 400, "missing refresh token")
 		return
 	}
 
 	claims, err := h.jwtService.ParseRefreshToken(req.RefreshToken)
 	if err != nil {
-		response.HandleError(c, apperr.Unauthorized("invalid refresh token"))
+		response.Error(c, 401, "invalid refresh token")
 		return
 	}
 
 	if h.contextResolver == nil {
-		response.HandleError(c, apperr.Internal("authorization context resolver unavailable", nil))
+		response.Error(c, 500, "authorization context resolver unavailable")
 		return
 	}
 	currentSessionVersion, err := h.contextResolver.ResolveUserSessionVersion(c.Request.Context(), claims.UserID)
 	if err != nil || currentSessionVersion != claims.SessionVersion {
-		response.HandleError(c, apperr.Unauthorized("refresh session revoked"))
+		response.Error(c, 401, "refresh session revoked")
 		return
 	}
 	user, err := h.userService.GetByID(c.Request.Context(), claims.UserID)
 	if err != nil || user == nil || user.Status != 1 {
-		response.HandleError(c, apperr.Unauthorized("refresh session revoked"))
+		response.Error(c, 401, "refresh session revoked")
 		return
 	}
 
@@ -818,7 +818,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	// when no active membership exists.
 	resolved, resolveErr := h.contextResolver.ResolveDefaultSessionContext(c.Request.Context(), claims.UserID)
 	if resolveErr != nil && !errors.Is(resolveErr, pgx.ErrNoRows) {
-		response.HandleError(c, apperr.Internal("resolve context failed", resolveErr))
+		response.Error(c, 500, "resolve context failed")
 		return
 	}
 	if !resolved.Valid() {
@@ -845,12 +845,12 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		claims.SessionID, resolved.Phone, rolePtr,
 	)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate token failed", err))
+		response.Error(c, 500, "generate token failed")
 		return
 	}
 	newRefreshToken, err := h.jwtService.GenerateRefreshTokenForSession(claims.UserID, currentSessionVersion, claims.SessionID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate refresh token failed", err))
+		response.Error(c, 500, "generate refresh token failed")
 		return
 	}
 
@@ -860,10 +860,10 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 	if err := requireRefreshSwap(swapped, swapErr); err != nil {
 		if _, ok := err.(*apperr.AppError); ok {
-			response.HandleError(c, err)
+			response.Error(c, 500, err.Error())
 			return
 		}
-		response.HandleError(c, apperr.Internal("token refresh failed", err))
+		response.Error(c, 500, "token refresh failed")
 		return
 	}
 
@@ -890,7 +890,7 @@ type SendEmailCodeRequest struct {
 func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 	var req SendEmailCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -917,7 +917,7 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 	// 检查邮箱注册状态
 	existingUser, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -955,7 +955,7 @@ type EmailRegisterRequest struct {
 func (h *AuthHandler) EmailRegister(c *gin.Context) {
 	var req EmailRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -988,7 +988,7 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("password encryption failed", err))
+		response.Error(c, 500, "password encryption failed")
 		return
 	}
 
@@ -1003,18 +1003,18 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 
 	if err := h.userService.Create(c.Request.Context(), user); err != nil {
 		logger.Error("create user failed", zap.String("email", req.Email), zap.Error(err))
-		response.HandleError(c, apperr.Internal("创建用户失败，请稍后重试", err))
+		response.Error(c, 500, "创建用户失败，请稍后重试")
 		return
 	}
 
 	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate token failed", err))
+		response.Error(c, 500, "generate token failed")
 		return
 	}
 
 	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
-		response.HandleError(c, apperr.Internal("create refresh session failed", err))
+		response.Error(c, 500, "create refresh session failed")
 		return
 	}
 
@@ -1055,7 +1055,7 @@ type EmailLoginRequest struct {
 func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	var req EmailLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -1070,7 +1070,7 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 
 	user, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -1097,12 +1097,12 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 
 	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate token failed", err))
+		response.Error(c, 500, "generate token failed")
 		return
 	}
 
 	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
-		response.HandleError(c, apperr.Internal("create refresh session failed", err))
+		response.Error(c, 500, "create refresh session failed")
 		return
 	}
 
@@ -1144,7 +1144,7 @@ type PhoneCodeLoginRequest struct {
 func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 	var req PhoneCodeLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -1156,7 +1156,7 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 
 	user, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -1173,12 +1173,12 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 	// 生成 token
 	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate token failed", err))
+		response.Error(c, 500, "generate token failed")
 		return
 	}
 
 	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
-		response.HandleError(c, apperr.Internal("create refresh session failed", err))
+		response.Error(c, 500, "create refresh session failed")
 		return
 	}
 
@@ -1222,7 +1222,7 @@ type EmailCodeLoginRequest struct {
 func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 	var req EmailCodeLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -1239,7 +1239,7 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 
 	user, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -1255,12 +1255,12 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 
 	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("generate token failed", err))
+		response.Error(c, 500, "generate token failed")
 		return
 	}
 
 	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
-		response.HandleError(c, apperr.Internal("create refresh session failed", err))
+		response.Error(c, 500, "create refresh session failed")
 		return
 	}
 

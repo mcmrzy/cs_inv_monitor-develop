@@ -100,7 +100,7 @@ func TestCrossTenant_TransferDeviceNonAdmin(t *testing.T) {
 
 	// User B tries to transfer the device
 	resp, status := doJSON(t, ctx.Client, "POST",
-		fmt.Sprintf("%s/api/v1/devices/%s/request-transfer", ctx.BaseURL, sn),
+		fmt.Sprintf("%s/api/v1/devices/by-sn/%s/request-transfer", ctx.BaseURL, sn),
 		map[string]interface{}{
 			"device_sn":    sn,
 			"to_tenant_id": 999,

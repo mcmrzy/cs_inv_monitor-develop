@@ -261,13 +261,13 @@ func TestDeviceManagementFlow(t *testing.T) {
 	t.Logf("list devices: status=%d code=%d", status, resp.Code)
 
 	// Step 3: Get device detail
-	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices/"+testSN, nil, token)
+	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices/by-sn/"+testSN, nil, token)
 	t.Logf("get device: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
 	require.Equal(t, http.StatusOK, status, "get device HTTP status")
 	require.Equal(t, 0, resp.Code, "get device should succeed")
 
 	// Step 4: Unbind the owned device through the same self-service path used by the app.
-	resp, status = doJSON(t, client, "POST", cfg.APIBaseURL+"/api/v1/devices/"+testSN+"/unbind", nil, token)
+	resp, status = doJSON(t, client, "POST", cfg.APIBaseURL+"/api/v1/devices/by-sn/"+testSN+"/unbind", nil, token)
 	require.Equal(t, http.StatusOK, status, "unbind HTTP status")
 	require.Equal(t, 0, resp.Code, "unbind should succeed")
 }
@@ -325,7 +325,7 @@ func TestDataIsolation(t *testing.T) {
 	require.Equal(t, 0, resp.Code, "user A bind should succeed")
 
 	// User B should NOT see user A's device
-	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices/"+snA, nil, tokenB)
+	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices/by-sn/"+snA, nil, tokenB)
 	t.Logf("userB get userA device: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
 	// Expect: 404 or 403 or business error code indicating no access
 	assert.NotEqual(t, 0, resp.Code, "user B must not see user A's device")

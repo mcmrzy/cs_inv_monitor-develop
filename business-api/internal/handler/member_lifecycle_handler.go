@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"inv-api-server/internal/job"
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -339,7 +338,7 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 	
 	var req AddMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -356,27 +355,27 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 	// Validate target user exists
 	targetUser, err := h.getUserByID(ctx, req.UserID)
 	if err != nil || targetUser == nil {
-		response.HandleError(c, apperr.NotFound("用户不存在"))
+		response.Error(c, 404, "用户不存在")
 		return
 	}
 
 	// Validate target organization exists and belongs to same tenant as user
 	targetOrg, err := h.getOrgByID(ctx, req.OrganizationID)
 	if err != nil || targetOrg == nil {
-		response.HandleError(c, apperr.NotFound("组织不存在"))
+		response.Error(c, 404, "组织不存在")
 		return
 	}
 
 	// Tenant isolation check: user must be active
 	if targetUser == nil {
-		response.HandleError(c, apperr.NotFound("用户不存在"))
+		response.Error(c, 404, "用户不存在")
 		return
 	}
 
 	// Get root_tenant_id from actor context
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
@@ -384,24 +383,24 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 	usage, err := h.checkQuota(ctx, tenantID)
 	if err != nil {
 		log.Printf("[AddMember] quota check failed: %v", err)
-		response.HandleError(c, apperr.Internal("检查配额失败", err))
+		response.Error(c, 500, "检查配额失败")
 		return
 	}
 	if usage.UserLimit > 0 && usage.UserCount >= usage.UserLimit {
-		response.HandleError(c, apperr.Conflict("已达用户数上限，无法添加新成员"))
+		response.Error(c, 409, "已达用户数上限，无法添加新成员")
 		return
 	}
 
 	// Check if already a member with active status
 	existing, _ := h.getExistingMembership(ctx, req.UserID, req.OrganizationID)
 	if existing != nil && existing.Status == "active" {
-		response.HandleError(c, apperr.Conflict("该用户已是此组织活跃成员"))
+		response.Error(c, 409, "该用户已是此组织活跃成员")
 		return
 	}
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -419,11 +418,11 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 			WHERE id = $1 AND deleted_at IS NULL
 		`, existing.ID, req.RoleIDs, req.MembershipType, req.ExpiresAt)
 		if err != nil {
-			response.HandleError(c, apperr.Conflict("更新成员关系失败"))
+			response.Error(c, 409, "更新成员关系失败")
 			return
 		}
 		if result.RowsAffected() == 0 {
-			response.HandleError(c, apperr.NotFound("原成员记录已失效"))
+			response.Error(c, 404, "原成员记录已失效")
 			return
 		}
 	} else {
@@ -434,7 +433,7 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 			VALUES ($1, $2, $3, $4, $5, 'active', $6)
 		`, tenantID, req.OrganizationID, req.UserID, req.MembershipType, req.RoleIDs, req.ExpiresAt)
 		if err != nil {
-			response.HandleError(c, apperr.Conflict("添加成员失败：约束冲突"))
+			response.Error(c, 409, "添加成员失败：约束冲突")
 			return
 		}
 	}
@@ -443,7 +442,7 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 	h.invalidateAuthCache(tenantID, req.OrganizationID)
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("保存成员记录失败", err))
+		response.Error(c, 500, "保存成员记录失败")
 		return
 	}
 
@@ -468,13 +467,13 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	membershipID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("无效的会员关系 ID"))
+		response.Error(c, 400, "无效的会员关系 ID")
 		return
 	}
 
 	var req UpdateMembershipRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -483,24 +482,24 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 	// Fetch current membership
 	membership, err := h.getMembershipByID(ctx, membershipID)
 	if err != nil || membership == nil {
-		response.HandleError(c, apperr.NotFound("成员关系不存在"))
+		response.Error(c, 404, "成员关系不存在")
 		return
 	}
 
 	// Verify ownership/access
 	orgTenantID := middleware.GetRootTenantID(c)
 	if orgTenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 	if membership.RootTenantID != orgTenantID {
-		response.HandleError(c, apperr.Forbidden("无权访问此组织成员关系"))
+		response.Error(c, 403, "无权访问此组织成员关系")
 		return
 	}
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -517,7 +516,7 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 		validStatus := map[string]bool{"active": true, "inactive": true, "suspended": true}
 		if !validStatus[*req.Status] {
 			tx.Rollback(ctx)
-			response.HandleError(c, apperr.BadRequest("无效的状态值"))
+			response.Error(c, 400, "无效的状态值")
 			return
 		}
 		query += `, status = $` + fmt.Sprintf("%d", len(params)+1)
@@ -531,7 +530,7 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 		validTypes := map[string]bool{"full": true, "read_only": true, "billing": true, "guest": true}
 		if !validTypes[*req.MembershipType] {
 			tx.Rollback(ctx)
-			response.HandleError(c, apperr.BadRequest("无效的会员类型"))
+			response.Error(c, 400, "无效的会员类型")
 			return
 		}
 		query += `, membership_type = $` + fmt.Sprintf("%d", len(params)+1)
@@ -543,14 +542,14 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 
 	_, err = tx.Exec(ctx, query, params...)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("更新成员信息失败", err))
+		response.Error(c, 500, "更新成员信息失败")
 		return
 	}
 
 	h.invalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
 	
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("保存更新失败", err))
+		response.Error(c, 500, "保存更新失败")
 		return
 	}
 
@@ -576,13 +575,13 @@ func (h *MemberLifecycleHandler) RemoveMember(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	membershipID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("无效的会员关系 ID"))
+		response.Error(c, 400, "无效的会员关系 ID")
 		return
 	}
 
 	var req RemoveMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -590,14 +589,14 @@ func (h *MemberLifecycleHandler) RemoveMember(c *gin.Context) {
 
 	membership, err := h.getMembershipByID(ctx, membershipID)
 	if err != nil || membership == nil {
-		response.HandleError(c, apperr.NotFound("成员关系不存在"))
+		response.Error(c, 404, "成员关系不存在")
 		return
 	}
 
 	// Soft delete only: set status='inactive'
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -608,18 +607,18 @@ func (h *MemberLifecycleHandler) RemoveMember(c *gin.Context) {
 		WHERE id = $1 AND deleted_at IS NULL
 	`, membershipID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("删除成员失败", err))
+		response.Error(c, 500, "删除成员失败")
 		return
 	}
 	if result.RowsAffected() == 0 {
-		response.HandleError(c, apperr.NotFound("成员记录已不存在或已删除"))
+		response.Error(c, 404, "成员记录已不存在或已删除")
 		return
 	}
 
 	h.invalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("保存更改失败", err))
+		response.Error(c, 500, "保存更改失败")
 		return
 	}
 
@@ -642,13 +641,13 @@ func (h *MemberLifecycleHandler) DeactivateMember(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	membershipID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("无效的会员关系 ID"))
+		response.Error(c, 400, "无效的会员关系 ID")
 		return
 	}
 
 	var req DeactivateMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -656,18 +655,18 @@ func (h *MemberLifecycleHandler) DeactivateMember(c *gin.Context) {
 
 	membership, err := h.getMembershipByID(ctx, membershipID)
 	if err != nil || membership == nil {
-		response.HandleError(c, apperr.NotFound("成员关系不存在"))
+		response.Error(c, 404, "成员关系不存在")
 		return
 	}
 
 	if membership.Status != "active" {
-		response.HandleError(c, apperr.Conflict("成员已经是非活跃状态"))
+		response.Error(c, 409, "成员已经是非活跃状态")
 		return
 	}
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -678,18 +677,18 @@ func (h *MemberLifecycleHandler) DeactivateMember(c *gin.Context) {
 		WHERE id = $1 AND status = 'active'
 	`, membershipID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("停用成员失败", err))
+		response.Error(c, 500, "停用成员失败")
 		return
 	}
 	if result.RowsAffected() == 0 {
-		response.HandleError(c, apperr.Conflict("成员状态未改变"))
+		response.Error(c, 409, "成员状态未改变")
 		return
 	}
 
 	h.invalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("保存停用失败", err))
+		response.Error(c, 500, "保存停用失败")
 		return
 	}
 
@@ -709,7 +708,7 @@ func (h *MemberLifecycleHandler) ReactivateMember(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	membershipID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("无效的会员关系 ID"))
+		response.Error(c, 400, "无效的会员关系 ID")
 		return
 	}
 
@@ -717,18 +716,18 @@ func (h *MemberLifecycleHandler) ReactivateMember(c *gin.Context) {
 
 	membership, err := h.getMembershipByID(ctx, membershipID)
 	if err != nil || membership == nil {
-		response.HandleError(c, apperr.NotFound("成员关系不存在"))
+		response.Error(c, 404, "成员关系不存在")
 		return
 	}
 
 	if membership.Status == "active" {
-		response.HandleError(c, apperr.Conflict("成员已经是活跃状态"))
+		response.Error(c, 409, "成员已经是活跃状态")
 		return
 	}
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -739,18 +738,18 @@ func (h *MemberLifecycleHandler) ReactivateMember(c *gin.Context) {
 		WHERE id = $1 AND status IN ('inactive', 'suspended')
 	`, membershipID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("恢复成员失败", err))
+		response.Error(c, 500, "恢复成员失败")
 		return
 	}
 	if result.RowsAffected() == 0 {
-		response.HandleError(c, apperr.Conflict("成员状态未改变"))
+		response.Error(c, 409, "成员状态未改变")
 		return
 	}
 
 	h.invalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("保存恢复失败", err))
+		response.Error(c, 500, "保存恢复失败")
 		return
 	}
 
@@ -772,12 +771,12 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 
 	var req TransferInitiateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if len(req.MembershipIDs) == 0 {
-		response.HandleError(c, apperr.BadRequest("请选择要转移的成员"))
+		response.Error(c, 400, "请选择要转移的成员")
 		return
 	}
 
@@ -786,7 +785,7 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 	// Fetch all memberships
 	memberships, err := h.getMembershipsByIDList(ctx, req.MembershipIDs)
 	if err != nil || len(memberships) == 0 {
-		response.HandleError(c, apperr.NotFound("未找到有效的成员关系"))
+		response.Error(c, 404, "未找到有效的成员关系")
 		return
 	}
 
@@ -796,11 +795,11 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 
 	for _, m := range memberships {
 		if m.RootTenantID != rootTenantID {
-			response.HandleError(c, apperr.Conflict("跨租户批量转移不支持，请确保所有成员属于同一租户"))
+			response.Error(c, 409, "跨租户批量转移不支持，请确保所有成员属于同一租户")
 			return
 		}
 		if m.Status != "active" {
-			response.HandleError(c, apperr.BadRequest(fmt.Sprintf("成员 ID=%d 不是活跃状态", m.ID)))
+			response.Error(c, 400, fmt.Sprintf("成员 ID=%d 不是活跃状态", m.ID))
 			return
 		}
 	}
@@ -808,17 +807,17 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 	// Verify target org exists and belongs to same tenant
 	targetOrg, err := h.getOrgByID(ctx, req.TargetOrgID)
 	if err != nil || targetOrg == nil {
-		response.HandleError(c, apperr.NotFound("目标组织不存在"))
+		response.Error(c, 404, "目标组织不存在")
 		return
 	}
 	if targetOrg.RootTenantID != rootTenantID {
-		response.HandleError(c, apperr.Forbidden("目标组织不在同一租户下"))
+		response.Error(c, 403, "目标组织不在同一租户下")
 		return
 	}
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -833,7 +832,7 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 			DELETE FROM organization_memberships WHERE id = $1 AND deleted_at IS NULL
 		`, membership.ID)
 		if err != nil {
-			response.HandleError(c, apperr.Internal("移除旧成员关系失败", err))
+			response.Error(c, 500, "移除旧成员关系失败")
 			return
 		}
 
@@ -845,7 +844,7 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 			FROM organization_memberships WHERE id = $3
 		`, targetOrg.RootTenantID, targetOrg.ID, membership.ID)
 		if err != nil {
-			response.HandleError(c, apperr.Internal("添加到目标组织失败", err))
+			response.Error(c, 500, "添加到目标组织失败")
 			return
 		}
 		if result.RowsAffected() > 0 {
@@ -854,7 +853,7 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交成员转移失败", err))
+		response.Error(c, 500, "提交成员转移失败")
 		return
 	}
 
@@ -886,12 +885,12 @@ func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
 	
 	var req TransferApprovalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if !req.Approved {
-		response.HandleError(c, apperr.BadRequest("拒绝转移需要提供原因"))
+		response.Error(c, 400, "拒绝转移需要提供原因")
 		return
 	}
 
@@ -912,17 +911,17 @@ func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
 
 	var req TransferApprovalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if req.Approved {
-		response.HandleError(c, apperr.BadRequest("拒绝转移必须设置 approved=false"))
+		response.Error(c, 400, "拒绝转移必须设置 approved=false")
 		return
 	}
 
 	if req.Reason == "" {
-		response.HandleError(c, apperr.BadRequest("拒绝转移必须提供原因"))
+		response.Error(c, 400, "拒绝转移必须提供原因")
 		return
 	}
 
@@ -984,7 +983,7 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 
 	var req BulkAddRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -993,19 +992,19 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 	// Validate target organization
 	targetOrg, err := h.getOrgByID(ctx, req.OrganizationID)
 	if err != nil || targetOrg == nil {
-		response.HandleError(c, apperr.NotFound("组织不存在"))
+		response.Error(c, 404, "组织不存在")
 		return
 	}
 
 	// Get root_tenant_id from actor context
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
 	if targetOrg.RootTenantID != tenantID {
-		response.HandleError(c, apperr.Forbidden("组织不属于当前租户范围"))
+		response.Error(c, 403, "组织不属于当前租户范围")
 		return
 	}
 
@@ -1013,7 +1012,7 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 	_, err = h.checkQuota(ctx, tenantID)
 	if err != nil {
 		log.Printf("[BulkAdd] quota check failed: %v", err)
-		response.HandleError(c, apperr.Internal("检查配额失败", err))
+		response.Error(c, 500, "检查配额失败")
 		return
 	}
 
@@ -1036,7 +1035,7 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 	// Store job in Redis
 	if err := h.jobStore.CreateJob(ctx, bulkJob); err != nil {
 		log.Printf("[BulkAdd] failed to create job: %v", err)
-		response.HandleError(c, apperr.Internal("创建批量任务失败", err))
+		response.Error(c, 500, "创建批量任务失败")
 		return
 	}
 
@@ -1073,7 +1072,7 @@ func (h *MemberLifecycleHandler) processBulkAddSync(c *gin.Context, userID, tena
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -1113,7 +1112,7 @@ func (h *MemberLifecycleHandler) processBulkAddSync(c *gin.Context, userID, tena
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("批量添加失败", err))
+		response.Error(c, 500, "批量添加失败")
 		return
 	}
 
@@ -1137,7 +1136,7 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 
 	var req BulkTransferRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -1146,7 +1145,7 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 	// Fetch memberships
 	memberships, err := h.getMembershipsByIDList(ctx, req.MembershipIDs)
 	if err != nil || len(memberships) == 0 {
-		response.HandleError(c, apperr.NotFound("未找到有效成员"))
+		response.Error(c, 404, "未找到有效成员")
 		return
 	}
 
@@ -1154,7 +1153,7 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 	rootTenantID := memberships[0].RootTenantID
 	for _, m := range memberships {
 		if m.RootTenantID != rootTenantID {
-			response.HandleError(c, apperr.Conflict("跨租户批量转移不支持"))
+			response.Error(c, 409, "跨租户批量转移不支持")
 			return
 		}
 	}
@@ -1162,7 +1161,7 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 	// Validate target org
 	targetOrg, err := h.getOrgByID(ctx, req.TargetOrgID)
 	if err != nil || targetOrg.RootTenantID != rootTenantID {
-		response.HandleError(c, apperr.Forbidden("目标组织不在同一租户下"))
+		response.Error(c, 403, "目标组织不在同一租户下")
 		return
 	}
 
@@ -1179,7 +1178,7 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 	// Store job in Redis
 	if err := h.jobStore.CreateJob(ctx, bulkJob); err != nil {
 		log.Printf("[BulkTransfer] failed to create job: %v", err)
-		response.HandleError(c, apperr.Internal("创建批量转移任务失败", err))
+		response.Error(c, 500, "创建批量转移任务失败")
 		return
 	}
 
@@ -1222,7 +1221,7 @@ func (h *MemberLifecycleHandler) processBulkTransferSync(c *gin.Context, userID,
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -1248,7 +1247,7 @@ func (h *MemberLifecycleHandler) processBulkTransferSync(c *gin.Context, userID,
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("批量转移失败", err))
+		response.Error(c, 500, "批量转移失败")
 		return
 	}
 

@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -58,7 +57,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		Status:   status,
 	})
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询用户列表失败", err))
+		response.Error(c, 500, "查询用户列表失败")
 		return
 	}
 
@@ -71,13 +70,13 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	userID := parseID(c.Param("id"))
 	if userID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		response.Error(c, 400, "invalid user id")
 		return
 	}
 
 	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil || user == nil {
-		response.HandleError(c, apperr.NotFound("用户不存在"))
+		response.Error(c, 404, "用户不存在")
 		return
 	}
 	user.PasswordHash = ""
@@ -91,18 +90,18 @@ type UpdateUserRoleRequest struct {
 func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
 	userID := parseID(c.Param("id"))
 	if userID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		response.Error(c, 400, "invalid user id")
 		return
 	}
 
 	var req UpdateUserRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if err := h.userRepo.UpdateRole(c.Request.Context(), userID, req.Role); err != nil {
-		response.HandleError(c, apperr.Internal("更新角色失败", err))
+		response.Error(c, 500, "更新角色失败")
 		return
 	}
 
@@ -120,12 +119,12 @@ type UpdatePermissionRequest struct {
 func (h *AdminHandler) UpdatePermission(c *gin.Context) {
 	var req UpdatePermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if err := h.userRepo.UpsertPermission(c.Request.Context(), req.Role, req.Resource, req.Action, req.IsAllowed); err != nil {
-		response.HandleError(c, apperr.Internal("更新权限失败", err))
+		response.Error(c, 500, "更新权限失败")
 		return
 	}
 
@@ -139,12 +138,12 @@ func (h *AdminHandler) ListRolePermissions(c *gin.Context) {
 		roleParam = c.Query("role")
 	}
 	if roleParam == "" {
-		response.HandleError(c, apperr.BadRequest("缺少 role 参数"))
+		response.Error(c, 400, "缺少 role 参数")
 		return
 	}
 	role := parseID(roleParam)
 	if role < 0 {
-		response.HandleError(c, apperr.BadRequest("invalid role"))
+		response.Error(c, 400, "invalid role")
 		return
 	}
 
@@ -170,7 +169,7 @@ func (h *AdminHandler) ListRolePermissions(c *gin.Context) {
 			ORDER BY p.resource, p.action
 		`, role)
 		if err != nil {
-			response.HandleError(c, apperr.Internal("查询权限失败", err))
+			response.Error(c, 500, "查询权限失败")
 			return
 		}
 	}
@@ -203,20 +202,20 @@ func (h *AdminHandler) UpdateRolePermissions(c *gin.Context) {
 	roleParam := c.Param("role")
 	role := parseID(roleParam)
 	if role < 0 {
-		response.HandleError(c, apperr.BadRequest("invalid role"))
+		response.Error(c, 400, "invalid role")
 		return
 	}
 
 	var req UpdateRolePermissionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	ctx := c.Request.Context()
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("事务开启失败", err))
+		response.Error(c, 500, "事务开启失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -228,13 +227,13 @@ func (h *AdminHandler) UpdateRolePermissions(c *gin.Context) {
 			ON CONFLICT (role, resource, action) DO UPDATE SET is_allowed = $4, updated_at = NOW()
 		`, role, p.Resource, p.Action, p.IsAllowed)
 		if err != nil {
-			response.HandleError(c, apperr.Internal("更新权限失败", err))
+			response.Error(c, 500, "更新权限失败")
 			return
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交事务失败", err))
+		response.Error(c, 500, "提交事务失败")
 		return
 	}
 
@@ -251,13 +250,13 @@ func (h *AdminHandler) TogglePermission(c *gin.Context) {
 	roleParam := c.Param("role")
 	role := parseID(roleParam)
 	if role < 0 {
-		response.HandleError(c, apperr.BadRequest("invalid role"))
+		response.Error(c, 400, "invalid role")
 		return
 	}
 
 	var req TogglePermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -269,13 +268,13 @@ func (h *AdminHandler) TogglePermission(c *gin.Context) {
 		role, req.Resource, req.Action,
 	).Scan(&current)
 	if err != nil && err != pgx.ErrNoRows {
-		response.HandleError(c, apperr.Internal("查询权限失败", err))
+		response.Error(c, 500, "查询权限失败")
 		return
 	}
 
 	newVal := !current
 	if err := h.userRepo.UpsertPermission(ctx, int(role), req.Resource, req.Action, newVal); err != nil {
-		response.HandleError(c, apperr.Internal("更新权限失败", err))
+		response.Error(c, 500, "更新权限失败")
 		return
 	}
 
@@ -286,13 +285,13 @@ func (h *AdminHandler) TogglePermission(c *gin.Context) {
 func (h *AdminHandler) ToggleUserStatus(c *gin.Context) {
 	userID := parseID(c.Param("id"))
 	if userID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		response.Error(c, 400, "invalid user id")
 		return
 	}
 
 	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil || user == nil {
-		response.HandleError(c, apperr.NotFound("用户不存在"))
+		response.Error(c, 404, "用户不存在")
 		return
 	}
 
@@ -302,7 +301,7 @@ func (h *AdminHandler) ToggleUserStatus(c *gin.Context) {
 	}
 
 	if err := h.userRepo.UpdateStatus(c.Request.Context(), userID, newStatus); err != nil {
-		response.HandleError(c, apperr.Internal("更新用户状态失败", err))
+		response.Error(c, 500, "更新用户状态失败")
 		return
 	}
 	response.SuccessWithMessage(c, "用户状态已更新", nil)
@@ -311,7 +310,7 @@ func (h *AdminHandler) ToggleUserStatus(c *gin.Context) {
 func (h *AdminHandler) ListAllModels(c *gin.Context) {
 	models, err := h.modelRepo.ListAllWithDeviceCount(c.Request.Context())
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询型号列表失败", err))
+		response.Error(c, 500, "查询型号列表失败")
 		return
 	}
 	response.Success(c, models)
@@ -361,7 +360,7 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 	countArgs := make([]interface{}, len(args))
 	copy(countArgs, args)
 	if err := h.db.QueryRow(ctx, countQuery, countArgs...).Scan(&total); err != nil {
-		response.HandleError(c, apperr.Internal("查询审计日志失败", err))
+		response.Error(c, 500, "查询审计日志失败")
 		return
 	}
 
@@ -377,7 +376,7 @@ func (h *AdminHandler) GetAuditLogs(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询审计日志失败", err))
+		response.Error(c, 500, "查询审计日志失败")
 		return
 	}
 	defer rows.Close()
@@ -443,7 +442,7 @@ func (h *AdminHandler) ExportAuditLogs(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("导出审计日志失败", err))
+		response.Error(c, 500, "导出审计日志失败")
 		return
 	}
 	defer rows.Close()
@@ -565,13 +564,13 @@ func (h *AdminHandler) UpdateSystemConfig(c *gin.Context) {
 
 	var body map[string]interface{}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("事务开启失败", err))
+		response.Error(c, 500, "事务开启失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -584,13 +583,13 @@ func (h *AdminHandler) UpdateSystemConfig(c *gin.Context) {
 			ON CONFLICT (config_key) DO UPDATE SET config_value = $2, updated_at = NOW()
 		`, key, string(valueBytes))
 		if err != nil {
-			response.HandleError(c, apperr.Internal("保存配置失败: "+key, err))
+			response.Error(c, 500, "保存配置失败: "+key)
 			return
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交事务失败", err))
+		response.Error(c, 500, "提交事务失败")
 		return
 	}
 
@@ -611,7 +610,7 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 	var total int64
 	err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role = 1 AND deleted_at IS NULL`).Scan(&total)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询租户列表失败", err))
+		response.Error(c, 500, "查询租户列表失败")
 		return
 	}
 
@@ -624,7 +623,7 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 		LIMIT $1 OFFSET $2
 	`, pageSize, offset)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询租户列表失败", err))
+		response.Error(c, 500, "查询租户列表失败")
 		return
 	}
 	defer rows.Close()
@@ -679,26 +678,26 @@ type CreateTenantRequest struct {
 func (h *AdminHandler) CreateTenant(c *gin.Context) {
 	var req CreateTenantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	ctx := c.Request.Context()
 	if !validTenantLimit(req.DeviceLimit) || !validTenantLimit(req.UserLimit) {
-		response.HandleError(c, apperr.BadRequest("tenant limits must be between 0 and 100000"))
+		response.Error(c, 400, "tenant limits must be between 0 and 100000")
 		return
 	}
 
 	var exists int
 	h.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE phone = $1 AND deleted_at IS NULL`, req.Phone).Scan(&exists)
 	if exists > 0 {
-		response.HandleError(c, apperr.BadRequest("该手机号已注册"))
+		response.Error(c, 400, "该手机号已注册")
 		return
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("密码加密失败", err))
+		response.Error(c, 500, "密码加密失败")
 		return
 	}
 
@@ -715,7 +714,7 @@ func (h *AdminHandler) CreateTenant(c *gin.Context) {
 		RETURNING id, created_at, updated_at
 	`, req.Phone, req.Email, string(hashedPassword), nickname, req.DeviceLimit, req.UserLimit).Scan(&userID, &createdAt, &updatedAt)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("创建租户失败", err))
+		response.Error(c, 500, "创建租户失败")
 		return
 	}
 
@@ -739,25 +738,25 @@ type UpdateTenantRequest struct {
 func (h *AdminHandler) UpdateTenant(c *gin.Context) {
 	tenantID := parseID(c.Param("id"))
 	if tenantID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid tenant id"))
+		response.Error(c, 400, "invalid tenant id")
 		return
 	}
 
 	var req UpdateTenantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	ctx := c.Request.Context()
 	if !validTenantLimit(req.DeviceLimit) || !validTenantLimit(req.UserLimit) {
-		response.HandleError(c, apperr.BadRequest("tenant limits must be between 0 and 100000"))
+		response.Error(c, 400, "tenant limits must be between 0 and 100000")
 		return
 	}
 
 	user, err := h.userRepo.GetByID(ctx, tenantID)
 	if err != nil || user == nil {
-		response.HandleError(c, apperr.NotFound("租户不存在"))
+		response.Error(c, 404, "租户不存在")
 		return
 	}
 
@@ -765,7 +764,7 @@ func (h *AdminHandler) UpdateTenant(c *gin.Context) {
 		device_limit=COALESCE($1,device_limit),user_limit=COALESCE($2,user_limit),updated_at=NOW()
 		WHERE id=$3 AND role=1 AND deleted_at IS NULL`, req.DeviceLimit, req.UserLimit, tenantID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("update tenant quota failed", err))
+		response.Error(c, 500, "update tenant quota failed")
 		return
 	}
 
@@ -785,7 +784,7 @@ func (h *AdminHandler) UpdateTenant(c *gin.Context) {
 func (h *AdminHandler) ToggleTenant(c *gin.Context) {
 	tenantID := parseID(c.Param("id"))
 	if tenantID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid tenant id"))
+		response.Error(c, 400, "invalid tenant id")
 		return
 	}
 
@@ -793,7 +792,7 @@ func (h *AdminHandler) ToggleTenant(c *gin.Context) {
 
 	user, err := h.userRepo.GetByID(ctx, tenantID)
 	if err != nil || user == nil {
-		response.HandleError(c, apperr.NotFound("租户不存在"))
+		response.Error(c, 404, "租户不存在")
 		return
 	}
 
@@ -803,7 +802,7 @@ func (h *AdminHandler) ToggleTenant(c *gin.Context) {
 	}
 
 	if err := h.userRepo.UpdateStatus(ctx, tenantID, newStatus); err != nil {
-		response.HandleError(c, apperr.Internal("更新租户状态失败", err))
+		response.Error(c, 500, "更新租户状态失败")
 		return
 	}
 	response.SuccessWithMessage(c, "租户状态已更新", nil)
@@ -833,7 +832,7 @@ func (h *AdminHandler) GetMetrics(c *gin.Context) {
 func (h *AdminHandler) GetUserChildren(c *gin.Context) {
 	userID := parseID(c.Param("id"))
 	if userID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		response.Error(c, 400, "invalid user id")
 		return
 	}
 
@@ -842,7 +841,7 @@ func (h *AdminHandler) GetUserChildren(c *gin.Context) {
 
 	children, total, err := h.userRepo.ListByParentID(c.Request.Context(), userID, page, pageSize)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询下级用户失败", err))
+		response.Error(c, 500, "查询下级用户失败")
 		return
 	}
 
@@ -870,13 +869,13 @@ type UpdateUserRequest struct {
 func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	userID := parseID(c.Param("id"))
 	if userID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		response.Error(c, 400, "invalid user id")
 		return
 	}
 
 	var req UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -884,7 +883,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 
 	user, err := h.userRepo.GetByID(ctx, userID)
 	if err != nil || user == nil {
-		response.HandleError(c, apperr.NotFound("用户不存在"))
+		response.Error(c, 404, "用户不存在")
 		return
 	}
 
@@ -919,7 +918,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	}
 
 	if len(setClauses) == 0 {
-		response.HandleError(c, apperr.BadRequest("没有需要更新的字段"))
+		response.Error(c, 400, "没有需要更新的字段")
 		return
 	}
 
@@ -928,7 +927,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	args = append(args, userID)
 
 	if _, err := h.db.Exec(ctx, query, args...); err != nil {
-		response.HandleError(c, apperr.Internal("更新用户失败", err))
+		response.Error(c, 500, "更新用户失败")
 		return
 	}
 
@@ -948,20 +947,20 @@ type UpdateUserParentRequest struct {
 func (h *AdminHandler) UpdateUserParent(c *gin.Context) {
 	userID := parseID(c.Param("id"))
 	if userID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		response.Error(c, 400, "invalid user id")
 		return
 	}
 
 	var req UpdateUserParentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	// 验证用户存在
 	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil || user == nil {
-		response.HandleError(c, apperr.NotFound("用户不存在"))
+		response.Error(c, 404, "用户不存在")
 		return
 	}
 
@@ -969,22 +968,22 @@ func (h *AdminHandler) UpdateUserParent(c *gin.Context) {
 	if req.ParentID != nil {
 		parent, err := h.userRepo.GetByID(c.Request.Context(), *req.ParentID)
 		if err != nil || parent == nil {
-			response.HandleError(c, apperr.NotFound("上级用户不存在"))
+			response.Error(c, 404, "上级用户不存在")
 			return
 		}
 		// 验证层级关系：设备商(1)->安装商(2)->终端用户(3)
 		if user.Role <= parent.Role {
-			response.HandleError(c, apperr.BadRequest("上级用户角色必须高于当前用户"))
+			response.Error(c, 400, "上级用户角色必须高于当前用户")
 			return
 		}
 		if err := ensureTenantUserCapacity(c.Request.Context(), h.db, *req.ParentID, userID); err != nil {
-			response.HandleError(c, apperr.BadRequest(err.Error()))
+			response.Error(c, 400, err.Error())
 			return
 		}
 	}
 
 	if err := h.userRepo.UpdateParentID(c.Request.Context(), userID, req.ParentID); err != nil {
-		response.HandleError(c, apperr.Internal("更新上级关系失败", err))
+		response.Error(c, 500, "更新上级关系失败")
 		return
 	}
 
@@ -1000,31 +999,31 @@ type ResetUserPasswordRequest struct {
 func (h *AdminHandler) ResetUserPassword(c *gin.Context) {
 	userID := parseID(c.Param("id"))
 	if userID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid user id"))
+		response.Error(c, 400, "invalid user id")
 		return
 	}
 
 	var req ResetUserPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if len(req.NewPassword) < 6 {
-		response.HandleError(c, apperr.BadRequest("密码长度不能少于6位"))
+		response.Error(c, 400, "密码长度不能少于6位")
 		return
 	}
 
 	// 验证用户存在
 	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil || user == nil {
-		response.HandleError(c, apperr.NotFound("用户不存在"))
+		response.Error(c, 404, "用户不存在")
 		return
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("密码加密失败", err))
+		response.Error(c, 500, "密码加密失败")
 		return
 	}
 
@@ -1032,7 +1031,7 @@ func (h *AdminHandler) ResetUserPassword(c *gin.Context) {
 		"UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL",
 		string(hashedPassword), userID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("重置密码失败", err))
+		response.Error(c, 500, "重置密码失败")
 		return
 	}
 

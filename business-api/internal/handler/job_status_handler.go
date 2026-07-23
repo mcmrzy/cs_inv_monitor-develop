@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"inv-api-server/internal/job"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -33,7 +32,7 @@ func (h *JobStatusHandler) GetJobStatus(c *gin.Context) {
 	ctx := c.Request.Context()
 	job, err := h.jobStore.GetJob(ctx, jobID)
 	if err != nil {
-		response.HandleError(c, apperr.NotFound("作业不存在或已过期"))
+		response.Error(c, 404, "作业不存在或已过期")
 		return
 	}
 
@@ -60,7 +59,7 @@ func (h *JobStatusHandler) GetJobStats(c *gin.Context) {
 	ctx := c.Request.Context()
 	stats, err := h.jobStore.GetStats(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("获取作业统计失败", err))
+		response.Error(c, 500, "获取作业统计失败")
 		return
 	}
 
@@ -90,7 +89,7 @@ func (h *JobStatusHandler) ListJobs(c *gin.Context) {
 	}
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("获取作业列表失败", err))
+		response.Error(c, 500, "获取作业列表失败")
 		return
 	}
 
@@ -133,20 +132,20 @@ func (h *JobStatusHandler) CancelJob(c *gin.Context) {
 	ctx := c.Request.Context()
 	job, err := h.jobStore.GetJob(ctx, jobID)
 	if err != nil {
-		response.HandleError(c, apperr.NotFound("作业不存在"))
+		response.Error(c, 404, "作业不存在")
 		return
 	}
 
 	// Only pending jobs can be cancelled
 	if job.Status != "pending" {
-		response.HandleError(c, apperr.Conflict("只有等待中的作业可以被取消"))
+		response.Error(c, 409, "只有等待中的作业可以被取消")
 		return
 	}
 
 	// Update job status to cancelled
 	job.Status = "cancelled"
 	if err := h.jobStore.UpdateStatus(job); err != nil {
-		response.HandleError(c, apperr.Internal("取消作业失败", err))
+		response.Error(c, 500, "取消作业失败")
 		return
 	}
 
@@ -169,13 +168,13 @@ func (h *JobStatusHandler) DeleteJob(c *gin.Context) {
 	// Verify job exists
 	_, err := h.jobStore.GetJob(ctx, jobID)
 	if err != nil {
-		response.HandleError(c, apperr.NotFound("作业不存在"))
+		response.Error(c, 404, "作业不存在")
 		return
 	}
 
 	// Delete job and progress data
 	if err := h.jobStore.DeleteJob(ctx, jobID); err != nil {
-		response.HandleError(c, apperr.Internal("删除作业失败", err))
+		response.Error(c, 500, "删除作业失败")
 		return
 	}
 
@@ -200,7 +199,7 @@ func (h *JobStatusHandler) CleanupOldJobs(c *gin.Context) {
 
 	count, err := h.jobStore.CleanupOldJobs(ctx, olderThan)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("清理作业失败", err))
+		response.Error(c, 500, "清理作业失败")
 		return
 	}
 

@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"strconv"
@@ -6,7 +6,6 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +23,7 @@ func NewBatteryHandler(batteryService *service.BatteryService) *BatteryHandler {
 func (h *BatteryHandler) ListProfiles(c *gin.Context) {
 	profiles, err := h.batteryService.ListProfiles(c.Request.Context())
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询电池模板列表失败", err))
+		response.Error(c, 500, "查询电池模板列表失败")
 		return
 	}
 	response.Success(c, profiles)
@@ -34,17 +33,17 @@ func (h *BatteryHandler) ListProfiles(c *gin.Context) {
 func (h *BatteryHandler) GetProfile(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("无效的模板ID"))
+		response.Error(c, 400, "无效的模板ID")
 		return
 	}
 
 	profile, err := h.batteryService.GetProfile(c.Request.Context(), id)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询电池模板失败", err))
+		response.Error(c, 500, "查询电池模板失败")
 		return
 	}
 	if profile == nil {
-		response.HandleError(c, apperr.NotFound("电池模板不存在"))
+		response.Error(c, 404, "电池模板不存在")
 		return
 	}
 
@@ -55,20 +54,20 @@ func (h *BatteryHandler) GetProfile(c *gin.Context) {
 func (h *BatteryHandler) CreateProfile(c *gin.Context) {
 	var req repository.CreateBatteryProfileReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("请求参数无效: "+err.Error()))
+		response.Error(c, 400, "请求参数无效: "+err.Error())
 		return
 	}
 
 	if req.ProfileCode == "" {
-		response.HandleError(c, apperr.BadRequest("profile_code 不能为空"))
+		response.Error(c, 400, "profile_code 不能为空")
 		return
 	}
 	if req.Chemistry == "" {
-		response.HandleError(c, apperr.BadRequest("chemistry 不能为空"))
+		response.Error(c, 400, "chemistry 不能为空")
 		return
 	}
 	if req.SeriesCells <= 0 {
-		response.HandleError(c, apperr.BadRequest("series_cells 必须大于 0"))
+		response.Error(c, 400, "series_cells 必须大于 0")
 		return
 	}
 	if req.ChargeEnvelope == nil {
@@ -80,7 +79,7 @@ func (h *BatteryHandler) CreateProfile(c *gin.Context) {
 
 	profile, err := h.batteryService.CreateProfile(c.Request.Context(), req)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("创建电池模板失败", err))
+		response.Error(c, 500, "创建电池模板失败")
 		return
 	}
 
@@ -91,22 +90,22 @@ func (h *BatteryHandler) CreateProfile(c *gin.Context) {
 func (h *BatteryHandler) BindDeviceConfig(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		response.Error(c, 400, "设备 SN 不能为空")
 		return
 	}
 
 	var req repository.UpsertBatteryConfigReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("请求参数无效: "+err.Error()))
+		response.Error(c, 400, "请求参数无效: "+err.Error())
 		return
 	}
 
 	if req.ProfileID <= 0 {
-		response.HandleError(c, apperr.BadRequest("profile_id 必须大于 0"))
+		response.Error(c, 400, "profile_id 必须大于 0")
 		return
 	}
 	if req.CapacityAh <= 0 {
-		response.HandleError(c, apperr.BadRequest("capacity_ah 必须大于 0"))
+		response.Error(c, 400, "capacity_ah 必须大于 0")
 		return
 	}
 	if req.ParallelStrings <= 0 {
@@ -116,7 +115,7 @@ func (h *BatteryHandler) BindDeviceConfig(c *gin.Context) {
 	req.ConfiguredBy = middleware.GetUserID(c)
 
 	if err := h.batteryService.BindDeviceConfig(c.Request.Context(), sn, req); err != nil {
-		response.HandleError(c, apperr.Internal("绑定设备电池配置失败", err))
+		response.Error(c, 500, "绑定设备电池配置失败")
 		return
 	}
 
@@ -127,17 +126,17 @@ func (h *BatteryHandler) BindDeviceConfig(c *gin.Context) {
 func (h *BatteryHandler) GetDeviceConfig(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		response.Error(c, 400, "设备 SN 不能为空")
 		return
 	}
 
 	cfg, err := h.batteryService.GetDeviceConfig(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询设备电池配置失败", err))
+		response.Error(c, 500, "查询设备电池配置失败")
 		return
 	}
 	if cfg == nil {
-		response.HandleError(c, apperr.NotFound("设备未配置电池模板"))
+		response.Error(c, 404, "设备未配置电池模板")
 		return
 	}
 

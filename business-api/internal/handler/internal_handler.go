@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
@@ -252,11 +251,11 @@ func (h *InternalHandler) unsubscribeSSE(userID int64, clientID string) {
 func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	var req internalDeviceStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.SN == "" {
-		response.HandleError(c, apperr.BadRequest("sn is required"))
+		response.Error(c, 400, "sn is required")
 		return
 	}
 
@@ -293,7 +292,7 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 	`, req.SN, newStatus)
 	if err != nil {
 		logger.Error("InternalDeviceStatus failed", zap.String("sn", req.SN), zap.Error(err))
-		response.HandleError(c, apperr.Internal("update device status failed", err))
+		response.Error(c, 500, "update device status failed")
 		return
 	}
 
@@ -421,11 +420,11 @@ func (h *InternalHandler) pushRealtimeData(ctx context.Context, sn string, data 
 func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 	var req internalDeviceInfoRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.SN == "" {
-		response.HandleError(c, apperr.BadRequest("sn is required"))
+		response.Error(c, 400, "sn is required")
 		return
 	}
 
@@ -463,7 +462,7 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 		req.RatedPower, req.RatedVoltage, req.RatedFreq, req.BatteryVoltage, req.BatteryType, req.CellCount, req.TempSensorCount)
 	if err != nil {
 		logger.Error("InternalDeviceInfo failed", zap.String("sn", req.SN), zap.Error(err))
-		response.HandleError(c, apperr.Internal("upsert device info failed", err))
+		response.Error(c, 500, "upsert device info failed")
 		return
 	}
 
@@ -676,11 +675,11 @@ func (h *InternalHandler) updateDeviceFirmwareVersion(ctx context.Context, sn, c
 func (h *InternalHandler) DeviceData(c *gin.Context) {
 	var req internalDeviceDataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.SN == "" || req.Topic == "" || req.Data == nil {
-		response.HandleError(c, apperr.BadRequest("sn, topic and data are required"))
+		response.Error(c, 400, "sn, topic and data are required")
 		return
 	}
 
@@ -737,7 +736,7 @@ func (h *InternalHandler) DeviceData(c *gin.Context) {
 			req.TotalPV, req.TotalCharge, req.TotalDischarge, req.TotalLoad, runMinutes)
 		if err != nil {
 			logger.Error("InternalDeviceData upsert day data failed", zap.String("sn", req.SN), zap.Error(err))
-			response.HandleError(c, apperr.Internal("upsert device day data failed", err))
+			response.Error(c, 500, "upsert device day data failed")
 			return
 		}
 
@@ -848,11 +847,11 @@ func (h *InternalHandler) handleBatchEnergyData(ctx context.Context, req interna
 func (h *InternalHandler) DeviceCmdStatus(c *gin.Context) {
 	var req internalDeviceCmdStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.SN == "" {
-		response.HandleError(c, apperr.BadRequest("sn is required"))
+		response.Error(c, 400, "sn is required")
 		return
 	}
 
@@ -867,7 +866,7 @@ func (h *InternalHandler) DeviceCmdStatus(c *gin.Context) {
 	`, req.SN, req.Cmd, req.Result, req.Message, req.Timestamp)
 	if err != nil {
 		logger.Error("InternalDeviceCmdStatus failed", zap.String("sn", req.SN), zap.Error(err))
-		response.HandleError(c, apperr.Internal("insert command log failed", err))
+		response.Error(c, 500, "insert command log failed")
 		return
 	}
 
@@ -891,11 +890,11 @@ type internalDeviceCmdResultRequest struct {
 func (h *InternalHandler) DeviceCmdResult(c *gin.Context) {
 	var req internalDeviceCmdResultRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.SN == "" {
-		response.HandleError(c, apperr.BadRequest("sn is required"))
+		response.Error(c, 400, "sn is required")
 		return
 	}
 
@@ -1018,11 +1017,11 @@ type internalOTACmdAckRequest struct {
 func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 	var req internalOTACmdAckRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.DeviceSN == "" {
-		response.HandleError(c, apperr.BadRequest("device_sn is required"))
+		response.Error(c, 400, "device_sn is required")
 		return
 	}
 
@@ -1055,7 +1054,7 @@ func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 		`, req.DeviceSN, upgradeID)
 		if err != nil {
 			logger.Error("OTACmdAck update failed", zap.String("sn", req.DeviceSN), zap.Error(err))
-			response.HandleError(c, apperr.Internal("update OTA cmd ack failed", err))
+			response.Error(c, 500, "update OTA cmd ack failed")
 			return
 		}
 		logger.Info("OTA cmd_ack applied", zap.String("sn", req.DeviceSN), zap.Int64("rows_affected", tag.RowsAffected()))
@@ -1067,15 +1066,15 @@ func (h *InternalHandler) OTACmdAck(c *gin.Context) {
 func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	var req internalOTAStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.DeviceSN == "" {
-		response.HandleError(c, apperr.BadRequest("device_sn is required"))
+		response.Error(c, 400, "device_sn is required")
 		return
 	}
 	if req.Progress < 0 || req.Progress > 100 {
-		response.HandleError(c, apperr.BadRequest("progress must be between 0 and 100"))
+		response.Error(c, 400, "progress must be between 0 and 100")
 		return
 	}
 
@@ -1125,7 +1124,7 @@ func (h *InternalHandler) OTAStatus(c *gin.Context) {
 	`, req.DeviceSN, dbStatus, req.Progress, req.Message, upgradeID, req.FirmwareID)
 	if err != nil {
 		logger.Error("InternalOTAStatus failed", zap.String("sn", req.DeviceSN), zap.Error(err))
-		response.HandleError(c, apperr.Internal("update OTA status failed", err))
+		response.Error(c, 500, "update OTA status failed")
 		return
 	}
 
@@ -1358,17 +1357,17 @@ reference after the next release audit; it must never be routed again.
 func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	var req internalDeviceAlarmRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.SN == "" {
-		response.HandleError(c, apperr.BadRequest("sn is required"))
+		response.Error(c, 400, "sn is required")
 		return
 	}
 	if len(req.Trigger) > 0 {
 		trimmed := bytes.TrimLeft(req.Trigger, " \t\r\n")
 		if len(trimmed) == 0 || trimmed[0] != '{' {
-			response.HandleError(c, apperr.BadRequest("invalid trigger type"))
+			response.Error(c, 400, "invalid trigger type")
 			return
 		}
 	}
@@ -1626,7 +1625,7 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 	`, req.SN, alarmType, alarmLevel, alarmLevel, req.Source, stationID, userID, faultCode, faultMessage, string(detailJSON), faultMessage)
 	if err != nil {
 		logger.Error("InternalDeviceAlarm insert failed", zap.String("sn", req.SN), zap.Error(err))
-		response.HandleError(c, apperr.Internal("insert alarm failed", err))
+		response.Error(c, 500, "insert alarm failed")
 		return
 	}
 
@@ -1887,15 +1886,15 @@ type internalParallelStateRequest struct {
 func (h *InternalHandler) ParallelState(c *gin.Context) {
 	var req internalParallelStateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.StationID == 0 {
-		response.HandleError(c, apperr.BadRequest("station_id is required"))
+		response.Error(c, 400, "station_id is required")
 		return
 	}
 	if req.MasterSN == "" {
-		response.HandleError(c, apperr.BadRequest("master_sn is required"))
+		response.Error(c, 400, "master_sn is required")
 		return
 	}
 	if len(req.Machines) == 0 {
@@ -1945,7 +1944,7 @@ func (h *InternalHandler) ParallelState(c *gin.Context) {
 		req.TotalActivePower, req.SyncState, []byte(req.Machines), req.ReportedAt)
 	if err != nil {
 		logger.Error("ParallelState upsert failed", zap.Int64("station_id", req.StationID), zap.Error(err))
-		response.HandleError(c, apperr.Internal("upsert parallel state failed", err))
+		response.Error(c, 500, "upsert parallel state failed")
 		return
 	}
 
@@ -2015,11 +2014,11 @@ type internalThreePhaseDataRequest struct {
 func (h *InternalHandler) ThreePhaseData(c *gin.Context) {
 	var req internalThreePhaseDataRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.SN == "" {
-		response.HandleError(c, apperr.BadRequest("sn is required"))
+		response.Error(c, 400, "sn is required")
 		return
 	}
 	if req.EventTime.IsZero() {
@@ -2053,7 +2052,7 @@ func (h *InternalHandler) ThreePhaseData(c *gin.Context) {
 		req.Frequency, req.VoltageUnbalance, req.CurrentUnbalance, rawEnvelope)
 	if err != nil {
 		logger.Error("ThreePhaseData insert failed", zap.String("sn", req.SN), zap.Error(err))
-		response.HandleError(c, apperr.Internal("insert three phase data failed", err))
+		response.Error(c, 500, "insert three phase data failed")
 		return
 	}
 
@@ -2214,7 +2213,7 @@ func (h *InternalHandler) GetThreePhaseHistory(c *gin.Context) {
 	rows, err := h.db.Query(ctx, dataQuery, dataArgs...)
 	if err != nil {
 		logger.Error("GetThreePhaseHistory query failed", zap.String("sn", sn), zap.Error(err))
-		response.HandleError(c, apperr.Internal("query three phase history failed", err))
+		response.Error(c, 500, "query three phase history failed")
 		return
 	}
 	defer rows.Close()
@@ -2340,7 +2339,7 @@ func (h *InternalHandler) GetAlarmEvents(c *gin.Context) {
 	rows, err := h.db.Query(ctx, dataQuery, dataArgs...)
 	if err != nil {
 		logger.Error("GetAlarmEvents query failed", zap.String("sn", sn), zap.Error(err))
-		response.HandleError(c, apperr.Internal("query alarm events failed", err))
+		response.Error(c, 500, "query alarm events failed")
 		return
 	}
 	defer rows.Close()

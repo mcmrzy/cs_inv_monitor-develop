@@ -13,7 +13,6 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -128,35 +127,44 @@ func (h *DeviceClaimTransferHandler) GenerateClaimCode(c *gin.Context) {
 
 	var req GenerateClaimCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request: " + err.Error()))
+		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
 
 	ctx := c.Request.Context()
 
-	// Query device by SN
+	// Try to query device by SN; if not found, use user's tenant context
 	device, err := h.getDeviceBySN(ctx, req.SN)
+	var rootTenantID int64
 	if err != nil || device == nil {
-		response.HandleError(c, apperr.NotFound("设备不存在"))
-		return
-	}
-
-	// Validate user has permission to manage this device
-	if !h.canManageDevice(ctx, userID, device.ID) {
-		response.HandleError(c, apperr.Forbidden("无权限生成认领码"))
-		return
-	}
-
-	// Check device not already claimed
-	if device.Status != 0 && device.Status != 1 { // assuming 0=unbound, 1=claimed or similar
-		response.HandleError(c, apperr.Conflict("设备已被认领，无法再次生成认领码"))
-		return
+		// Device not yet in system — use current user's root tenant
+		rootTenantID = middleware.GetRootTenantID(c)
+		if rootTenantID == 0 {
+			rootTenantID = userID
+		}
+	} else {
+		// Validate user has permission to manage this device
+		if !h.canManageDevice(ctx, userID, device.ID) {
+			response.Error(c, 403, "无权限生成认领码")
+			return
+		}
+		// Check device not already claimed
+		if device.Status != 0 && device.Status != 1 {
+			response.Error(c, 409, "设备已被认领，无法再次生成认领码")
+			return
+		}
+		// Get device's root tenant
+		rootTenantID, err = h.getRootTenantID(ctx, device.UserID)
+		if err != nil {
+			response.Error(c, 500, "获取租户信息失败")
+			return
+		}
 	}
 
 	// Generate secure claim code (96-bit entropy → ~13 base64 chars)
 	codeBytes := make([]byte, 12)
 	if _, err := rand.Read(codeBytes); err != nil {
-		response.HandleError(c, apperr.Internal("生成随机码失败", err))
+		response.Error(c, 500, "生成随机码失败")
 		return
 	}
 	rawClaimCode := base64.URLEncoding.EncodeToString(codeBytes)[:16] // Fixed 16 chars
@@ -168,17 +176,10 @@ func (h *DeviceClaimTransferHandler) GenerateClaimCode(c *gin.Context) {
 	// Calculate expiration
 	expiresAt := time.Now().Add(time.Duration(req.ExpiresHours) * time.Hour)
 
-	// Get device's root tenant
-	rootTenantID, err := h.getRootTenantID(ctx, device.UserID)
-	if err != nil {
-		response.HandleError(c, apperr.Internal("获取租户信息失败", err))
-		return
-	}
-
 	// Upsert claim token
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -206,12 +207,12 @@ func (h *DeviceClaimTransferHandler) GenerateClaimCode(c *gin.Context) {
 	).Scan(&tokenID)
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("保存认领码失败", err))
+		response.Error(c, 500, "保存认领码失败")
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交认领码失败", err))
+		response.Error(c, 500, "提交认领码失败")
 		return
 	}
 
@@ -219,6 +220,7 @@ func (h *DeviceClaimTransferHandler) GenerateClaimCode(c *gin.Context) {
 	response.Success(c, map[string]any{
 		"claim_code": rawClaimCode,
 		"expires_at": expiresAt.Format(time.RFC3339),
+		"status":     "pending",
 		"note":       fmt.Sprintf("请将此代码告知安装商，有效期%d小时", req.ExpiresHours),
 		"sn":         req.SN,
 	})
@@ -229,7 +231,7 @@ func (h *DeviceClaimTransferHandler) GenerateClaimCode(c *gin.Context) {
 func (h *DeviceClaimTransferHandler) VerifyClaimCode(c *gin.Context) {
 	var req VerifyClaimCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request: " + err.Error()))
+		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
 
@@ -250,16 +252,16 @@ func (h *DeviceClaimTransferHandler) VerifyClaimCode(c *gin.Context) {
 		)
 
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("无效的认领码"))
+		response.Error(c, 404, "无效的认领码")
 		return
 	} else if err != nil {
-		response.HandleError(c, apperr.Internal("查询认领码失败", err))
+		response.Error(c, 500, "查询认领码失败")
 		return
 	}
 
 	// Check expiration
 	if time.Now().After(token.ExpiresAt) {
-		response.HandleError(c, apperr.Forbidden("认领码已过期"))
+		response.Error(c, 403, "认领码已过期")
 		return
 	}
 
@@ -281,7 +283,7 @@ func (h *DeviceClaimTransferHandler) ClaimDevice(c *gin.Context) {
 	var req ClaimDeviceRequest
 	req.SN = sn
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request: " + err.Error()))
+		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
 
@@ -304,33 +306,33 @@ func (h *DeviceClaimTransferHandler) ClaimDevice(c *gin.Context) {
 		)
 
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("设备或认领码不存在"))
+		response.Error(c, 404, "设备或认领码不存在")
 		return
 	} else if err != nil {
-		response.HandleError(c, apperr.Internal("查询认领码失败", err))
+		response.Error(c, 500, "查询认领码失败")
 		return
 	}
 
 	// Validate not already claimed
 	if token.Status != "unclaimed" {
 		if token.ClaimedByUserID != nil {
-			response.HandleError(c, apperr.Conflict("设备已被用户"+strconv.FormatInt(*token.ClaimedByUserID, 10)+"认领"))
+			response.Error(c, 409, "设备已被用户"+strconv.FormatInt(*token.ClaimedByUserID, 10)+"认领")
 		} else {
-			response.HandleError(c, apperr.Conflict("设备认领码已失效"))
+			response.Error(c, 409, "设备认领码已失效")
 		}
 		return
 	}
 
 	// Validate expiration
 	if time.Now().After(token.ExpiresAt) {
-		response.HandleError(c, apperr.Forbidden("认领码已过期"))
+		response.Error(c, 403, "认领码已过期")
 		return
 	}
 
 	// Validate digest match
 	providedDigest := sha256.Sum256([]byte(req.ClaimCode))
 	if hex.EncodeToString(providedDigest[:]) != token.ClaimCodeDigest {
-		response.HandleError(c, apperr.Forbidden("认领码错误"))
+		response.Error(c, 403, "认领码错误")
 		return
 	}
 
@@ -343,19 +345,19 @@ func (h *DeviceClaimTransferHandler) ClaimDevice(c *gin.Context) {
 	// Verify tenant matching
 	userTenantID, err := h.getRootTenantID(ctx, claimingUserID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("获取用户租户信息失败", err))
+		response.Error(c, 500, "获取用户租户信息失败")
 		return
 	}
 
 	if token.RootTenantID != userTenantID {
-		response.HandleError(c, apperr.Forbidden("跨租户认领需要管理员权限"))
+		response.Error(c, 403, "跨租户认领需要管理员权限")
 		return
 	}
 
 	// Begin transaction
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -369,12 +371,12 @@ func (h *DeviceClaimTransferHandler) ClaimDevice(c *gin.Context) {
 	`, req.SN)
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("更新设备状态失败", err))
+		response.Error(c, 500, "更新设备状态失败")
 		return
 	}
 
 	if result.RowsAffected() == 0 {
-		response.HandleError(c, apperr.Conflict("设备可能已被其他操作改变状态"))
+		response.Error(c, 409, "设备可能已被其他操作改变状态")
 		return
 	}
 
@@ -386,12 +388,12 @@ func (h *DeviceClaimTransferHandler) ClaimDevice(c *gin.Context) {
 	`, claimingUserID, token.ID)
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("更新认领码状态失败", err))
+		response.Error(c, 500, "更新认领码状态失败")
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交认领事务失败", err))
+		response.Error(c, 500, "提交认领事务失败")
 		return
 	}
 
@@ -423,7 +425,7 @@ func (h *DeviceClaimTransferHandler) RequestTransfer(c *gin.Context) {
 	var req TransferRequestRequest
 	req.DeviceSN = sn
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request: " + err.Error()))
+		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
 
@@ -432,31 +434,31 @@ func (h *DeviceClaimTransferHandler) RequestTransfer(c *gin.Context) {
 	// Get device
 	device, err := h.getDeviceBySN(ctx, req.DeviceSN)
 	if err != nil || device == nil {
-		response.HandleError(c, apperr.NotFound("设备不存在"))
+		response.Error(c, 404, "设备不存在")
 		return
 	}
 
 	// Verify requester owns the device
 	currentTenantID, err := h.getRootTenantID(ctx, device.UserID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("获取租户信息失败", err))
+		response.Error(c, 500, "获取租户信息失败")
 		return
 	}
 
 	userTenantID, err := h.getRootTenantID(ctx, userID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("获取用户租户信息失败", err))
+		response.Error(c, 500, "获取用户租户信息失败")
 		return
 	}
 
 	if currentTenantID != userTenantID {
-		response.HandleError(c, apperr.Forbidden("只能转移自己拥有的设备"))
+		response.Error(c, 403, "只能转移自己拥有的设备")
 		return
 	}
 
 	// Validate target tenant is different
 	if req.ToTenantID == currentTenantID {
-		response.HandleError(c, apperr.BadRequest("目标租户不能与当前租户相同"))
+		response.Error(c, 400, "目标租户不能与当前租户相同")
 		return
 	}
 
@@ -468,12 +470,12 @@ func (h *DeviceClaimTransferHandler) RequestTransfer(c *gin.Context) {
 	`, req.DeviceSN).Scan(&existingCount)
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("检查现有转移请求失败", err))
+		response.Error(c, 500, "检查现有转移请求失败")
 		return
 	}
 
 	if existingCount > 0 {
-		response.HandleError(c, apperr.Conflict("该设备已有待处理的转移请求"))
+		response.Error(c, 409, "该设备已有待处理的转移请求")
 		return
 	}
 
@@ -487,7 +489,7 @@ func (h *DeviceClaimTransferHandler) RequestTransfer(c *gin.Context) {
 	`, req.DeviceSN, currentTenantID, req.ToTenantID, userID, req.Reason).Scan(&transferID)
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("创建转移请求失败", err))
+		response.Error(c, 500, "创建转移请求失败")
 		return
 	}
 
@@ -516,7 +518,7 @@ func (h *DeviceClaimTransferHandler) ListTransfers(c *gin.Context) {
 	// Status filter
 	statusFilter := c.Query("status")
 	if statusFilter != "" && !contains([]string{"pending", "approved", "rejected", "cancelled"}, statusFilter) {
-		response.HandleError(c, apperr.BadRequest("invalid status filter"))
+		response.Error(c, 400, "invalid status filter")
 		return
 	}
 
@@ -535,7 +537,7 @@ func (h *DeviceClaimTransferHandler) ListTransfers(c *gin.Context) {
 	}
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询转移请求失败", err))
+		response.Error(c, 500, "查询转移请求失败")
 		return
 	}
 
@@ -552,18 +554,18 @@ func (h *DeviceClaimTransferHandler) ApproveTransfer(c *gin.Context) {
 	
 	transferID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid transfer ID"))
+		response.Error(c, 400, "invalid transfer ID")
 		return
 	}
 
 	var req DeviceTransferApprovalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request: " + err.Error()))
+		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
 
 	if !req.Approved {
-		response.HandleError(c, apperr.BadRequest("approve endpoint requires approved=true"))
+		response.Error(c, 400, "approve endpoint requires approved=true")
 		return
 	}
 
@@ -586,35 +588,35 @@ func (h *DeviceClaimTransferHandler) ApproveTransfer(c *gin.Context) {
 		)
 
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("转移请求不存在"))
+		response.Error(c, 404, "转移请求不存在")
 		return
 	} else if err != nil {
-		response.HandleError(c, apperr.Internal("查询转移请求失败", err))
+		response.Error(c, 500, "查询转移请求失败")
 		return
 	}
 
 	// Validate state
 	if transfer.Status != "pending" {
-		response.HandleError(c, apperr.Conflict("转移请求当前状态为 "+transfer.Status+", 无法批准"))
+		response.Error(c, 409, "转移请求当前状态为 "+transfer.Status+", 无法批准")
 		return
 	}
 
 	// Verify approver is the recipient
 	userTenantID, err := h.getRootTenantID(ctx, userID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("获取租户信息失败", err))
+		response.Error(c, 500, "获取租户信息失败")
 		return
 	}
 
 	if userTenantID != transfer.FromTenantID {
-		response.HandleError(c, apperr.Forbidden("只有转出方可以批准转移请求"))
+		response.Error(c, 403, "只有转出方可以批准转移请求")
 		return
 	}
 
 	// Begin transaction
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -628,7 +630,7 @@ func (h *DeviceClaimTransferHandler) ApproveTransfer(c *gin.Context) {
 	`, userID, now, now, transferID)
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("更新转移请求状态失败", err))
+		response.Error(c, 500, "更新转移请求状态失败")
 		return
 	}
 
@@ -636,7 +638,7 @@ func (h *DeviceClaimTransferHandler) ApproveTransfer(c *gin.Context) {
 	// This completes the approval workflow, but device records are not yet updated
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交转移审批失败", err))
+		response.Error(c, 500, "提交转移审批失败")
 		return
 	}
 
@@ -661,24 +663,24 @@ func (h *DeviceClaimTransferHandler) RejectTransfer(c *gin.Context) {
 
 	transferID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid transfer ID"))
+		response.Error(c, 400, "invalid transfer ID")
 		return
 	}
 
 	var req DeviceTransferApprovalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request: " + err.Error()))
+		response.Error(c, 400, "invalid request: "+err.Error())
 		return
 	}
 
 	if req.Approved {
-		response.HandleError(c, apperr.BadRequest("reject endpoint requires approved=false"))
+		response.Error(c, 400, "reject endpoint requires approved=false")
 		return
 	}
 
 	// Validate reason provided for rejection
 	if req.Reason == "" {
-		response.HandleError(c, apperr.BadRequest("rejection must include a reason"))
+		response.Error(c, 400, "rejection must include a reason")
 		return
 	}
 
@@ -700,34 +702,34 @@ func (h *DeviceClaimTransferHandler) RejectTransfer(c *gin.Context) {
 		)
 
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("转移请求不存在"))
+		response.Error(c, 404, "转移请求不存在")
 		return
 	} else if err != nil {
-		response.HandleError(c, apperr.Internal("查询转移请求失败", err))
+		response.Error(c, 500, "查询转移请求失败")
 		return
 	}
 
 	if transfer.Status != "pending" {
-		response.HandleError(c, apperr.Conflict("转移请求当前状态为 "+transfer.Status))
+		response.Error(c, 409, "转移请求当前状态为 "+transfer.Status)
 		return
 	}
 
 	// Verify approver permissions (same as approve)
 	userTenantID, err := h.getRootTenantID(ctx, userID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("获取租户信息失败", err))
+		response.Error(c, 500, "获取租户信息失败")
 		return
 	}
 
 	if userTenantID != transfer.FromTenantID {
-		response.HandleError(c, apperr.Forbidden("只有转出方可以拒绝转移请求"))
+		response.Error(c, 403, "只有转出方可以拒绝转移请求")
 		return
 	}
 
 	// Update transfer
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -741,12 +743,12 @@ func (h *DeviceClaimTransferHandler) RejectTransfer(c *gin.Context) {
 	`, req.Reason, userID, now, now, transferID)
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("更新转移请求状态失败", err))
+		response.Error(c, 500, "更新转移请求状态失败")
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交转移拒绝失败", err))
+		response.Error(c, 500, "提交转移拒绝失败")
 		return
 	}
 
@@ -770,7 +772,7 @@ func (h *DeviceClaimTransferHandler) CancelTransfer(c *gin.Context) {
 
 	transferID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid transfer ID"))
+		response.Error(c, 400, "invalid transfer ID")
 		return
 	}
 
@@ -792,10 +794,10 @@ func (h *DeviceClaimTransferHandler) CancelTransfer(c *gin.Context) {
 		)
 
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("转移请求不存在"))
+		response.Error(c, 404, "转移请求不存在")
 		return
 	} else if err != nil {
-		response.HandleError(c, apperr.Internal("查询转移请求失败", err))
+		response.Error(c, 500, "查询转移请求失败")
 		return
 	}
 
@@ -804,19 +806,19 @@ func (h *DeviceClaimTransferHandler) CancelTransfer(c *gin.Context) {
 	isAdmin := userRole == 0
 
 	if transfer.Status != "pending" {
-		response.HandleError(c, apperr.Conflict("转移请求当前状态为 "+transfer.Status))
+		response.Error(c, 409, "转移请求当前状态为 "+transfer.Status)
 		return
 	}
 
 	if transfer.RequesterUserID != userID && !isAdmin {
-		response.HandleError(c, apperr.Forbidden("只有请求发起者或管理员可以取消转移"))
+		response.Error(c, 403, "只有请求发起者或管理员可以取消转移")
 		return
 	}
 
 	// Update transfer
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -829,12 +831,12 @@ func (h *DeviceClaimTransferHandler) CancelTransfer(c *gin.Context) {
 	`, now, transferID)
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("取消转移请求失败", err))
+		response.Error(c, 500, "取消转移请求失败")
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交取消操作失败", err))
+		response.Error(c, 500, "提交取消操作失败")
 		return
 	}
 
