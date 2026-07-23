@@ -236,7 +236,8 @@ func TestJWTSecurity_角色值不可被篡改(t *testing.T) {
 
 	adminClaims, err := jwtService.ParseToken(adminToken)
 	require.NoError(t, err)
-	assert.Equal(t, 0, adminClaims.Role, "管理员 token 角色为 0")
+	require.NotNil(t, adminClaims.Role, "管理员 token 角色不应为 nil")
+	assert.Equal(t, 0, *adminClaims.Role, "管理员 token 角色为 0")
 
 	// 确保两个 token 不同
 	assert.NotEqual(t, token, adminToken, "不同角色的 token 应不同")
