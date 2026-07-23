@@ -740,7 +740,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 	// 鍥轰欢鏂囦欢涓嬭浇锛堟棤闇€璁よ瘉锛岃澶囩洿鎺ヨ闂?/firmware/xxx.bin锛?
 	// 浣跨敤 http.ServeContent 鏇夸唬 Gin Static锛屼紭鍖栧ぇ鏂囦欢浼犺緭
-	firmwareDir := "/data/firmware"
+	firmwareDir := config.FirmwareDataDir()
 	if err := os.MkdirAll(firmwareDir, 0755); err != nil {
 		panic("create firmware directory: " + err.Error())
 	}
