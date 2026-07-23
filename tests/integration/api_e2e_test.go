@@ -327,9 +327,8 @@ func TestDataIsolation(t *testing.T) {
 	// User B should NOT see user A's device
 	resp, status = doJSON(t, client, "GET", cfg.APIBaseURL+"/api/v1/devices/by-sn/"+snA, nil, tokenB)
 	t.Logf("userB get userA device: status=%d code=%d msg=%s", status, resp.Code, resp.Message)
-	// Expect: 404 or 403 or business error code indicating no access
+	// API convention: HTTP 200 with non-zero business code for access denied / not found
 	assert.NotEqual(t, 0, resp.Code, "user B must not see user A's device")
-	assert.Contains(t, []int{http.StatusForbidden, http.StatusNotFound}, status)
 }
 
 // TestRateLimiting verifies the gateway rate limiting is active.
