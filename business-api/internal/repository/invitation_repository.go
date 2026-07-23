@@ -24,19 +24,22 @@ func NewInvitationRepository() *InvitationRepository {
 // GetById retrieves an invitation by ID
 func (r *InvitationRepository) GetById(ctx context.Context, db *pgxpool.Pool, id int64) (*model.Invitation, error) {
 	query := `
-		SELECT id, root_tenant_id, organization_id, inviter_user_id, email, role_id,
-			   token_digest, expires_at, used_at, status, created_at, updated_at
+		SELECT id, root_tenant_id, organization_id, invited_by, recipient,
+		       token_key_id, token_digest, role_assignments,
+		       expires_at, accepted_at, status, version, created_at, updated_at
 		FROM invitations WHERE id = $1
 	`
 
 	var invitation model.Invitation
-	var usedAt sql.NullTime
+	var acceptedAt sql.NullTime
+	var orgID int64
 
 	err := db.QueryRow(ctx, query, id).Scan(
-		&invitation.ID, &invitation.RootTenantID, &invitation.OrganizationID,
-		&invitation.InviterUserID, &invitation.Email, &invitation.RoleID,
-		&invitation.TokenDigest, &invitation.ExpiresAt, &usedAt, 
-		&invitation.Status, &invitation.CreatedAt, &invitation.UpdatedAt,
+		&invitation.ID, &invitation.RootTenantID, &orgID,
+		&invitation.InvitedBy, &invitation.Recipient,
+		&invitation.TokenKeyID, &invitation.TokenDigest, &invitation.RoleAssignments,
+		&invitation.ExpiresAt, &acceptedAt,
+		&invitation.Status, &invitation.Version, &invitation.CreatedAt, &invitation.UpdatedAt,
 	)
 
 	if err != nil {
@@ -46,29 +49,33 @@ func (r *InvitationRepository) GetById(ctx context.Context, db *pgxpool.Pool, id
 		return nil, err
 	}
 
-	if usedAt.Valid {
-		invitation.UsedAt = &usedAt.Time
+	invitation.OrganizationID = &orgID
+	if acceptedAt.Valid {
+		invitation.AcceptedAt = &acceptedAt.Time
 	}
 
 	return &invitation, nil
 }
 
-// FindByTokenDigest finds an invitation by its SHA-256 token digest
-func (r *InvitationRepository) FindByTokenDigest(ctx context.Context, db *pgxpool.Pool, digestHex string) (*model.Invitation, error) {
+// FindByTokenDigest finds an invitation by its SHA-256 token digest (raw BYTEA).
+func (r *InvitationRepository) FindByTokenDigest(ctx context.Context, db *pgxpool.Pool, digest []byte) (*model.Invitation, error) {
 	query := `
-		SELECT id, root_tenant_id, organization_id, inviter_user_id, email, role_id,
-			   token_digest, expires_at, used_at, status, created_at, updated_at
+		SELECT id, root_tenant_id, organization_id, invited_by, recipient,
+		       token_key_id, token_digest, role_assignments,
+		       expires_at, accepted_at, status, version, created_at, updated_at
 		FROM invitations WHERE token_digest = $1 AND status = 'pending'
 	`
 
 	var invitation model.Invitation
-	var usedAt sql.NullTime
+	var acceptedAt sql.NullTime
+	var orgID int64
 
-	err := db.QueryRow(ctx, query, digestHex).Scan(
-		&invitation.ID, &invitation.RootTenantID, &invitation.OrganizationID,
-		&invitation.InviterUserID, &invitation.Email, &invitation.RoleID,
-		&invitation.TokenDigest, &invitation.ExpiresAt, &usedAt,
-		&invitation.Status, &invitation.CreatedAt, &invitation.UpdatedAt,
+	err := db.QueryRow(ctx, query, digest).Scan(
+		&invitation.ID, &invitation.RootTenantID, &orgID,
+		&invitation.InvitedBy, &invitation.Recipient,
+		&invitation.TokenKeyID, &invitation.TokenDigest, &invitation.RoleAssignments,
+		&invitation.ExpiresAt, &acceptedAt,
+		&invitation.Status, &invitation.Version, &invitation.CreatedAt, &invitation.UpdatedAt,
 	)
 
 	if err != nil {
@@ -78,8 +85,9 @@ func (r *InvitationRepository) FindByTokenDigest(ctx context.Context, db *pgxpoo
 		return nil, err
 	}
 
-	if usedAt.Valid {
-		invitation.UsedAt = &usedAt.Time
+	invitation.OrganizationID = &orgID
+	if acceptedAt.Valid {
+		invitation.AcceptedAt = &acceptedAt.Time
 	}
 
 	return &invitation, nil
@@ -120,7 +128,7 @@ func (r *InvitationRepository) MarkUsed(ctx context.Context, tx any, id int64, u
 func (r *InvitationRepository) markUsedWithPool(ctx context.Context, pool *pgxpool.Pool, id int64, userID int64) error {
 	query := `
 		UPDATE invitations 
-		SET status = 'used', used_at = NOW(), updated_at = NOW()
+		SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()
 		WHERE id = $1 AND status = 'pending'
 	`
 	result, err := pool.Exec(ctx, query, id)
@@ -128,7 +136,7 @@ func (r *InvitationRepository) markUsedWithPool(ctx context.Context, pool *pgxpo
 		return err
 	}
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("invitation already used or not found")
+		return fmt.Errorf("invitation already accepted or not found")
 	}
 	return nil
 }
@@ -136,7 +144,7 @@ func (r *InvitationRepository) markUsedWithPool(ctx context.Context, pool *pgxpo
 func (r *InvitationRepository) markUsedWithTx(ctx context.Context, tx pgx.Tx, id int64, userID int64) error {
 	query := `
 		UPDATE invitations 
-		SET status = 'used', used_at = NOW(), updated_at = NOW()
+		SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()
 		WHERE id = $1 AND status = 'pending'
 	`
 	result, err := tx.Exec(ctx, query, id)
@@ -144,7 +152,7 @@ func (r *InvitationRepository) markUsedWithTx(ctx context.Context, tx pgx.Tx, id
 		return err
 	}
 	if result.RowsAffected() == 0 {
-		return fmt.Errorf("invitation already used or not found")
+		return fmt.Errorf("invitation already accepted or not found")
 	}
 	return nil
 }
@@ -182,7 +190,7 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 		args = append(args, filter.OrganizationID)
 	}
 	if filter.Email != "" {
-		countQuery += " AND LOWER(email) = LOWER($" + strconv.Itoa(len(args)+1) + ")"
+		countQuery += " AND LOWER(recipient) = LOWER($" + strconv.Itoa(len(args)+1) + ")"
 		args = append(args, filter.Email)
 	}
 	if filter.Status != "" {
@@ -198,12 +206,13 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 	// Fetch paginated results
 	offset := (page - 1) * pageSize
 	listQuery := `
-		SELECT i.id, i.root_tenant_id, i.organization_id, i.inviter_user_id, i.email, i.role_id,
-			   i.token_digest, i.expires_at, i.used_at, i.status, i.created_at, i.updated_at,
-			   COALESCE(u.nickname, 'Unknown') as inviter_name,
-			   COALESCE(o.name, NULL) as org_name
+		SELECT i.id, i.root_tenant_id, i.organization_id, i.invited_by, i.recipient,
+		       i.token_key_id, i.token_digest, i.role_assignments,
+		       i.expires_at, i.accepted_at, i.status, i.version, i.created_at, i.updated_at,
+		       COALESCE(u.nickname, 'Unknown') as inviter_name,
+		       COALESCE(o.name, NULL) as org_name
 		FROM invitations i
-		LEFT JOIN users u ON i.inviter_user_id = u.id
+		LEFT JOIN users u ON i.invited_by = u.id
 		LEFT JOIN organizations o ON i.organization_id = o.id AND o.root_tenant_id = i.root_tenant_id
 		WHERE i.root_tenant_id = $1
 	`
@@ -214,7 +223,7 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 		listArgs = append(listArgs, filter.OrganizationID)
 	}
 	if filter.Email != "" {
-		listQuery += " AND LOWER(i.email) = LOWER($" + strconv.Itoa(len(listArgs)+1) + ")"
+		listQuery += " AND LOWER(i.recipient) = LOWER($" + strconv.Itoa(len(listArgs)+1) + ")"
 		listArgs = append(listArgs, filter.Email)
 	}
 	if filter.Status != "" {
@@ -234,22 +243,25 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 	var items []ListInvitationsResponseItem
 	for rows.Next() {
 		var item ListInvitationsResponseItem
-		var usedAt sql.NullTime
+		var acceptedAt sql.NullTime
 		var inviterName, orgName string
 		var hasOrgName bool
+		var orgID int64
 
 		err := rows.Scan(
-			&item.ID, &item.RootTenantID, &item.OrganizationID, &item.InviterUserID,
-			&item.Email, &item.RoleID, &item.TokenDigest, &item.ExpiresAt, 
-			&usedAt, &item.Status, &item.CreatedAt, &item.UpdatedAt,
+			&item.ID, &item.RootTenantID, &orgID, &item.InvitedBy,
+			&item.Recipient, &item.TokenKeyID, &item.TokenDigest, &item.RoleAssignments,
+			&item.ExpiresAt, &acceptedAt, &item.Status, &item.Version,
+			&item.CreatedAt, &item.UpdatedAt,
 			&inviterName, &orgName, &hasOrgName,
 		)
 		if err != nil {
 			return 0, nil, err
 		}
 
-		if usedAt.Valid {
-			item.UsedAt = &usedAt.Time
+		item.OrganizationID = &orgID
+		if acceptedAt.Valid {
+			item.AcceptedAt = &acceptedAt.Time
 		}
 		item.InviterName = inviterName
 		if hasOrgName {
@@ -276,14 +288,16 @@ func (r *InvitationRepository) CountByStatus(ctx context.Context, db *pgxpool.Po
 // Insert creates a new invitation record within a transaction
 func (r *InvitationRepository) Insert(ctx context.Context, tx pgx.Tx, invitation *model.Invitation) error {
 	query := `
-		INSERT INTO invitations (root_tenant_id, organization_id, inviter_user_id, email, role_id,
-								 token_digest, expires_at, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO invitations (root_tenant_id, organization_id, invited_by, recipient,
+								 token_key_id, token_digest, role_assignments,
+								 expires_at, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id
 	`
 	return tx.QueryRow(ctx, query,
-		invitation.RootTenantID, invitation.OrganizationID, invitation.InviterUserID,
-		invitation.Email, invitation.RoleID, invitation.TokenDigest,
+		invitation.RootTenantID, invitation.OrganizationID, invitation.InvitedBy,
+		invitation.Recipient, invitation.TokenKeyID, invitation.TokenDigest,
+		invitation.RoleAssignments,
 		invitation.ExpiresAt, invitation.Status, invitation.CreatedAt, invitation.UpdatedAt,
 	).Scan(&invitation.ID)
 }
