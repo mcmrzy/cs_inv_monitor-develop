@@ -107,7 +107,7 @@ describe('deviceApi', () => {
   describe('sendCommand', () => {
     it('should send control command to device', async () => {
       server.use(
-        http.post('/api/v1/devices/:sn/control', async ({ request }) => {
+        http.post('/api/v1/devices/by-sn/:sn/control', async ({ request }) => {
           const body = (await request.json()) as any
           return HttpResponse.json({
             code: 0,
@@ -128,7 +128,7 @@ describe('deviceApi', () => {
   describe('unbindDevice', () => {
     it('should unbind device', async () => {
       server.use(
-        http.post('/api/v1/devices/:sn/unbind', () => {
+        http.post('/api/v1/devices/by-sn/:sn/unbind', () => {
           return HttpResponse.json({ code: 0, message: 'unbound' })
         }),
       )
