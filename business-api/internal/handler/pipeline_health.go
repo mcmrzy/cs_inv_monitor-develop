@@ -166,6 +166,14 @@ func (h *PipelineHealthHandler) checkServiceHealth(ctx context.Context, serviceN
 			LastCheckTime: time.Now().UTC(),
 			Message:       "service running but with issues",
 		}
+	case "down":
+		return PipelineHealthStatus{
+			ServiceName:   serviceName,
+			ServiceType:   serviceType,
+			Status:        "down",
+			LastCheckTime: time.Now().UTC(),
+			Message:       "service is down",
+		}
 	default:
 		return PipelineHealthStatus{
 			ServiceName:   serviceName,
