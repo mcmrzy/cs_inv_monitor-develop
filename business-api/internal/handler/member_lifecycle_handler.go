@@ -160,14 +160,13 @@ func (h *MemberLifecycleHandler) getOrgByID(ctx context.Context, orgID int64) (*
 func (h *MemberLifecycleHandler) getMembershipByID(ctx context.Context, membershipID int64) (*OrganizationMembership, error) {
 	var membership OrganizationMembership
 	err := h.db.QueryRow(ctx, `
-		SELECT id, root_tenant_id, organization_id, user_id, membership_type,
-		       role_ids, status, expires_at, created_at, updated_at
-		FROM organization_memberships WHERE id = $1 AND deleted_at IS NULL
+		SELECT id, root_tenant_id, organization_id, user_id,
+		       status, expires_at, created_at, updated_at
+		FROM organization_memberships WHERE id = $1
 	`, membershipID).Scan(
 		&membership.ID, &membership.RootTenantID, &membership.OrganizationID,
-		&membership.UserID, &membership.MembershipType, &membership.RoleIDs,
-		&membership.Status, &membership.ExpiresAt, &membership.CreatedAt,
-		&membership.UpdatedAt,
+		&membership.UserID, &membership.Status, &membership.ExpiresAt,
+		&membership.CreatedAt, &membership.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -182,10 +181,10 @@ func (h *MemberLifecycleHandler) getMembershipsByIDList(ctx context.Context, mem
 	}
 
 	rows, err := h.db.Query(ctx, `
-		SELECT id, root_tenant_id, organization_id, user_id, membership_type,
-		       role_ids, status, expires_at, created_at, updated_at
+		SELECT id, root_tenant_id, organization_id, user_id,
+		       status, expires_at, created_at, updated_at
 		FROM organization_memberships 
-		WHERE id = ANY($1) AND deleted_at IS NULL
+		WHERE id = ANY($1)
 	`, membershipIDs)
 	if err != nil {
 		return nil, err
@@ -197,8 +196,7 @@ func (h *MemberLifecycleHandler) getMembershipsByIDList(ctx context.Context, mem
 		var m OrganizationMembership
 		if err := rows.Scan(
 			&m.ID, &m.RootTenantID, &m.OrganizationID, &m.UserID,
-			&m.MembershipType, &m.RoleIDs, &m.Status, &m.ExpiresAt,
-			&m.CreatedAt, &m.UpdatedAt,
+			&m.Status, &m.ExpiresAt, &m.CreatedAt, &m.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -212,21 +210,23 @@ func (h *MemberLifecycleHandler) getMembershipsByIDList(ctx context.Context, mem
 func (h *MemberLifecycleHandler) checkQuota(ctx context.Context, rootTenantID int64) (*TenantQuotaUsage, error) {
 	usage := &TenantQuotaUsage{}
 
-	// Get tenant quota limits
+	// Get tenant quota limits from organization_quotas (root org, resource_type='members')
+	var userLimit int64
 	err := h.db.QueryRow(ctx, `
-		SELECT user_limit FROM tenant_roots WHERE id = $1
-	`, rootTenantID).Scan(&usage.UserLimit)
+		SELECT quota_limit FROM organization_quotas
+		WHERE root_tenant_id = $1 AND organization_id = $1 AND resource_type = 'members'
+	`, rootTenantID).Scan(&userLimit)
 	if err != nil {
-		return nil, err
-	}
-	if usage.UserLimit <= 0 {
-		usage.UserLimit = -1 // unlimited
+		// No quota configured = unlimited
+		usage.UserLimit = -1
+	} else {
+		usage.UserLimit = userLimit
 	}
 
 	// Count current members
 	err = h.db.QueryRow(ctx, `
 		SELECT COUNT(DISTINCT user_id) FROM organization_memberships 
-		WHERE root_tenant_id = $1 AND status IN ('active', 'suspended')
+		WHERE root_tenant_id = $1 AND status = 'active'
 	`, rootTenantID).Scan(&usage.UserCount)
 	if err != nil {
 		return nil, err
@@ -239,14 +239,14 @@ func (h *MemberLifecycleHandler) checkQuota(ctx context.Context, rootTenantID in
 func (h *MemberLifecycleHandler) getExistingMembership(ctx context.Context, userID int64, orgID int64) (*OrganizationMembership, error) {
 	var membership OrganizationMembership
 	err := h.db.QueryRow(ctx, `
-		SELECT id, root_tenant_id, organization_id, user_id, membership_type,
-		       role_ids, status, expires_at, created_at, updated_at
+		SELECT id, root_tenant_id, organization_id, user_id,
+		       status, version, expires_at, joined_at, created_at, updated_at
 		FROM organization_memberships 
-		WHERE user_id = $1 AND organization_id = $2 AND deleted_at IS NULL
+		WHERE user_id = $1 AND organization_id = $2 AND status = 'active'
 	`, userID, orgID).Scan(
 		&membership.ID, &membership.RootTenantID, &membership.OrganizationID,
-		&membership.UserID, &membership.MembershipType, &membership.RoleIDs,
-		&membership.Status, &membership.ExpiresAt, &membership.CreatedAt,
+		&membership.UserID, &membership.Status, &membership.Version,
+		&membership.ExpiresAt, &membership.JoinedAt, &membership.CreatedAt,
 		&membership.UpdatedAt,
 	)
 	if err != nil {
@@ -316,10 +316,10 @@ type OrganizationMembership struct {
 	RootTenantID   int64      `json:"root_tenant_id"`
 	OrganizationID int64      `json:"organization_id"`
 	UserID         int64      `json:"user_id"`
-	MembershipType string     `json:"membership_type"`
-	RoleIDs        []int      `json:"role_ids"`
 	Status         string     `json:"status"`
+	Version        int64      `json:"version"`
 	ExpiresAt      *time.Time `json:"expires_at"`
+	JoinedAt       time.Time  `json:"joined_at"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 }
@@ -342,12 +342,9 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 		return
 	}
 
-	// Validate membership type
-	validTypes := map[string]bool{
-		"full": true, "read_only": true, "billing": true, "guest": true,
-	}
-	if !validTypes[req.MembershipType] {
-		req.MembershipType = "full" // default
+	// Validate membership request fields
+	if req.MembershipType == "" {
+		req.MembershipType = "full"
 	}
 
 	ctx := c.Request.Context()
@@ -417,12 +414,10 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 		result, err := tx.Exec(ctx, `
 			UPDATE organization_memberships 
 			SET status = 'active', 
-			    role_ids = COALESCE($3, role_ids),
-			    membership_type = COALESCE($4, membership_type),
-			    expires_at = COALESCE($5, expires_at),
+			    expires_at = COALESCE($3, expires_at),
 			    updated_at = NOW()
-			WHERE id = $1 AND deleted_at IS NULL
-		`, existing.ID, req.RoleIDs, req.MembershipType, req.ExpiresAt)
+			WHERE id = $1
+		`, existing.ID, req.ExpiresAt)
 		if err != nil {
 			response.Error(c, 409, "更新成员关系失败")
 			return
@@ -435,9 +430,9 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 		// Create new membership
 		_, err := tx.Exec(ctx, `
 			INSERT INTO organization_memberships 
-				(root_tenant_id, organization_id, user_id, membership_type, role_ids, status, expires_at)
-			VALUES ($1, $2, $3, $4, $5, 'active', $6)
-		`, tenantID, req.OrganizationID, req.UserID, req.MembershipType, req.RoleIDs, req.ExpiresAt)
+				(root_tenant_id, organization_id, user_id, status, expires_at)
+			VALUES ($1, $2, $3, 'active', $4)
+		`, tenantID, req.OrganizationID, req.UserID, req.ExpiresAt)
 		if err != nil {
 			response.Error(c, 409, "添加成员失败：约束冲突")
 			return
@@ -514,10 +509,6 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 	query := `UPDATE organization_memberships SET updated_at = NOW()`
 	params := []interface{}{membershipID}
 
-	if req.RoleIDs != nil {
-		query += `, role_ids = $` + fmt.Sprintf("%d", len(params)+1)
-		params = append(params, *req.RoleIDs)
-	}
 	if req.Status != nil {
 		validStatus := map[string]bool{"active": true, "inactive": true, "suspended": true}
 		if !validStatus[*req.Status] {
@@ -532,18 +523,7 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 		query += `, expires_at = $` + fmt.Sprintf("%d", len(params)+1)
 		params = append(params, *req.ExpiresAt)
 	}
-	if req.MembershipType != nil {
-		validTypes := map[string]bool{"full": true, "read_only": true, "billing": true, "guest": true}
-		if !validTypes[*req.MembershipType] {
-			tx.Rollback(ctx)
-			response.Error(c, 400, "无效的会员类型")
-			return
-		}
-		query += `, membership_type = $` + fmt.Sprintf("%d", len(params)+1)
-		params = append(params, *req.MembershipType)
-	}
-
-	query += ` WHERE id = $` + fmt.Sprintf("%d", len(params))
+	query += ` WHERE id = $` + fmt.Sprintf("%d", len(params)+1)
 	params = append(params, membershipID)
 
 	_, err = tx.Exec(ctx, query, params...)
@@ -562,10 +542,8 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 	h.auditLog(userID, "member.update", membership.OrganizationID, map[string]interface{}{
 		"membership_id": membershipID,
 		"changed_fields": map[string]interface{}{
-			"role_ids":       req.RoleIDs,
-			"status":         req.Status,
-			"expires_at":     req.ExpiresAt,
-			"membership_type": req.MembershipType,
+			"status":     req.Status,
+			"expires_at": req.ExpiresAt,
 		},
 	})
 
@@ -609,8 +587,8 @@ func (h *MemberLifecycleHandler) RemoveMember(c *gin.Context) {
 
 	result, err := tx.Exec(ctx, `
 		UPDATE organization_memberships 
-		SET status = 'inactive', deleted_at = NOW(), updated_at = NOW()
-		WHERE id = $1 AND deleted_at IS NULL
+		SET status = 'revoked', updated_at = NOW()
+		WHERE id = $1 AND status = 'active'
 	`, membershipID)
 	if err != nil {
 		response.Error(c, 500, "删除成员失败")
@@ -835,7 +813,7 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 	for _, membership := range memberships {
 		// Delete old membership
 		_, err := tx.Exec(ctx, `
-			DELETE FROM organization_memberships WHERE id = $1 AND deleted_at IS NULL
+			DELETE FROM organization_memberships WHERE id = $1
 		`, membership.ID)
 		if err != nil {
 			response.Error(c, 500, "移除旧成员关系失败")
@@ -845,8 +823,8 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 		// Create new membership in target org
 		result, err := tx.Exec(ctx, `
 			INSERT INTO organization_memberships 
-				(root_tenant_id, organization_id, user_id, membership_type, role_ids, status, expires_at, created_at, updated_at)
-			SELECT $1, $2, user_id, membership_type, role_ids, 'active', expires_at, NOW(), NOW()
+				(root_tenant_id, organization_id, user_id, status, expires_at, created_at, updated_at)
+			SELECT $1, $2, user_id, 'active', expires_at, NOW(), NOW()
 			FROM organization_memberships WHERE id = $3
 		`, targetOrg.RootTenantID, targetOrg.ID, membership.ID)
 		if err != nil {
@@ -887,35 +865,66 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 // TransferAccept handles POST /api/v1/members/transfer/accept - Accept transfer request
 // Note: In current implementation, transfers are immediate, not delayed approval-based
 func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
-	_ = middleware.GetUserID(c)
-	
-	var req TransferApprovalRequest
+	userID := middleware.GetUserID(c)
+
+	var req struct {
+		TransferID int64 `json:"transfer_id" binding:"required"`
+		Approved   bool  `json:"approved"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if !req.Approved {
-		response.Error(c, 400, "拒绝转移需要提供原因")
+		response.Error(c, 400, "拒绝转移需要使用 transfer/reject 接口")
 		return
 	}
 
-	_ = c.Request.Context()
+	ctx := c.Request.Context()
 
-	// TODO: If implementing delayed transfers:
-	// 1. Find pending transfer(s) for this user
-	// 2. Update status to 'accepted'
-	// 3. Execute actual transfer
-	// 4. Send notifications
+	// Look up the transfer request
+	var transferStatus string
+	err := h.db.QueryRow(ctx, `
+		SELECT status FROM member_transfer_requests
+		WHERE id = $1
+	`, req.TransferID).Scan(&transferStatus)
+	if err != nil {
+		response.Error(c, 404, "转移请求不存在")
+		return
+	}
+	if transferStatus != "initiated" {
+		response.Error(c, 400, "转移请求状态不允许接受")
+		return
+	}
 
-	response.SuccessWithMessage(c, "转移请求已接受（当前实现为即时转移）", nil)
+	// Mark transfer as accepted
+	_, err = h.db.Exec(ctx, `
+		UPDATE member_transfer_requests
+		SET status = 'accepted', updated_at = NOW()
+		WHERE id = $1
+	`, req.TransferID)
+	if err != nil {
+		response.Error(c, 500, "更新转移请求失败")
+		return
+	}
+
+	_ = userID
+	response.SuccessWithMessage(c, "转移请求已接受", map[string]interface{}{
+		"transfer_id": req.TransferID,
+		"status":      "accepted",
+	})
 }
 
 // TransferReject handles POST /api/v1/members/transfer/reject - Reject transfer request
 func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
-	_ = middleware.GetUserID(c)
+	userID := middleware.GetUserID(c)
 
-	var req TransferApprovalRequest
+	var req struct {
+		TransferID int64  `json:"transfer_id" binding:"required"`
+		Approved   bool   `json:"approved"`
+		Reason     string `json:"reason"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request")
 		return
@@ -931,15 +940,38 @@ func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
 		return
 	}
 
-	_ = c.Request.Context()
+	ctx := c.Request.Context()
 
-	// TODO: If implementing delayed transfers:
-	// 1. Find pending transfer(s) for this user
-	// 2. Update status to 'rejected'
-	// 3. Send rejection notification
+	// Look up the transfer request
+	var transferStatus string
+	err := h.db.QueryRow(ctx, `
+		SELECT status FROM member_transfer_requests
+		WHERE id = $1
+	`, req.TransferID).Scan(&transferStatus)
+	if err != nil {
+		response.Error(c, 404, "转移请求不存在")
+		return
+	}
+	if transferStatus != "initiated" {
+		response.Error(c, 400, "转移请求状态不允许拒绝")
+		return
+	}
 
+	// Mark transfer as rejected
+	_, err = h.db.Exec(ctx, `
+		UPDATE member_transfer_requests
+		SET status = 'rejected', reason = $2, updated_at = NOW()
+		WHERE id = $1
+	`, req.TransferID, req.Reason)
+	if err != nil {
+		response.Error(c, 500, "更新转移请求失败")
+		return
+	}
+
+	_ = userID
 	response.SuccessWithMessage(c, "转移请求已拒绝", map[string]interface{}{
-		"reason": req.Reason,
+		"transfer_id": req.TransferID,
+		"reason":      req.Reason,
 	})
 }
 
@@ -993,6 +1025,12 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 		return
 	}
 
+	// Validate membership type
+	validTypes := map[string]bool{"full": true, "read_only": true, "billing": true, "guest": true}
+	if !validTypes[req.MembershipType] {
+		req.MembershipType = "full"
+	}
+
 	ctx := c.Request.Context()
 
 	// Validate target organization
@@ -1020,12 +1058,6 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 		log.Printf("[BulkAdd] quota check failed: %v", err)
 		response.Error(c, 500, "检查配额失败")
 		return
-	}
-
-	// Validate membership type
-	validTypes := map[string]bool{"full": true, "read_only": true, "billing": true, "guest": true}
-	if !validTypes[req.MembershipType] {
-		req.MembershipType = "full"
 	}
 
 	// For small batches (<10 items), process synchronously
@@ -1102,15 +1134,15 @@ func (h *MemberLifecycleHandler) processBulkAddSync(c *gin.Context, userID, tena
 		if existing != nil && existing.Status != "active" {
 			_, _ = tx.Exec(ctx, `
 				UPDATE organization_memberships 
-				SET status = 'active', role_ids = $3, membership_type = $4, expires_at = $5, updated_at = NOW()
+				SET status = 'active', expires_at = $3, updated_at = NOW()
 				WHERE id = $1
-			`, existing.ID, req.RoleIDs, req.MembershipType, req.ExpiresAt)
+			`, existing.ID, req.ExpiresAt)
 		} else {
 			result, err := tx.Exec(ctx, `
 				INSERT INTO organization_memberships 
-					(root_tenant_id, organization_id, user_id, membership_type, role_ids, status, expires_at)
-				VALUES ($1, $2, $3, $4, $5, 'active', $6)
-			`, tenantID, req.OrganizationID, uid, req.MembershipType, req.RoleIDs, req.ExpiresAt)
+					(root_tenant_id, organization_id, user_id, status, expires_at)
+				VALUES ($1, $2, $3, 'active', $4)
+			`, tenantID, req.OrganizationID, uid, req.ExpiresAt)
 			if err == nil && result.RowsAffected() > 0 {
 				addedCount++
 			}
@@ -1243,8 +1275,8 @@ func (h *MemberLifecycleHandler) processBulkTransferSync(c *gin.Context, userID,
 		// Insert new in target org
 		result, err := tx.Exec(ctx, `
 			INSERT INTO organization_memberships 
-				(root_tenant_id, organization_id, user_id, membership_type, role_ids, status, expires_at)
-			SELECT $1, $2, user_id, membership_type, role_ids, 'active', expires_at
+				(root_tenant_id, organization_id, user_id, status, expires_at)
+			SELECT $1, $2, user_id, 'active', expires_at
 			FROM organization_memberships WHERE id = $3
 		`, targetOrg.RootTenantID, targetOrg.ID, membership.ID)
 		if err == nil && result.RowsAffected() > 0 {
