@@ -54,6 +54,7 @@ func setupChannelTest(t *testing.T) *channelTestContext {
 		require.NoError(t, err, "promote user role for phone %s", phone)
 	}
 
+	// Re-login after promotion so JWT tokens carry the updated role=0
 	tokenA := loginUser(t, cfg.APIBaseURL, phoneA, pw)
 	tokenB := loginUser(t, cfg.APIBaseURL, phoneB, pw)
 
@@ -75,7 +76,7 @@ func (c *channelTestContext) createOrg(t *testing.T, name, orgType string, paren
 	if parentID != nil {
 		body["parent_id"] = *parentID
 	}
-	resp, status := doJSON(t, c.Client, "POST", c.BaseURL+"/api/v1/organizations", body, c.Token)
+	resp, status := doJSONWithRetry(t, c.Client, "POST", c.BaseURL+"/api/v1/organizations", body, c.Token, 5)
 	require.Equal(t, http.StatusOK, status, "create org HTTP status: %s", resp.Message)
 	require.Equal(t, 0, resp.Code, "create org business code: %s", resp.Message)
 
@@ -97,7 +98,7 @@ func (c *channelTestContext) createInvitation(t *testing.T, email string, roleID
 	if orgID != nil {
 		body["organization_id"] = *orgID
 	}
-	resp, status := doJSON(t, c.Client, "POST", c.BaseURL+"/api/v1/invitations/create", body, c.Token)
+	resp, status := doJSONWithRetry(t, c.Client, "POST", c.BaseURL+"/api/v1/invitations/create", body, c.Token, 5)
 	require.Equal(t, http.StatusOK, status, "create invitation HTTP: %s", resp.Message)
 	require.Equal(t, 0, resp.Code, "create invitation biz: %s", resp.Message)
 
@@ -113,7 +114,7 @@ func (c *channelTestContext) generateClaimCode(t *testing.T, sn string, expiresH
 		"sn":            sn,
 		"expires_hours": expiresHours,
 	}
-	resp, status := doJSON(t, c.Client, "POST", c.BaseURL+"/api/v1/devices/claim-code/generate", body, c.Token)
+	resp, status := doJSONWithRetry(t, c.Client, "POST", c.BaseURL+"/api/v1/devices/claim-code/generate", body, c.Token, 5)
 	require.Equal(t, http.StatusOK, status, "generate claim code HTTP: %s", resp.Message)
 	require.Equal(t, 0, resp.Code, "generate claim code biz: %s", resp.Message)
 
@@ -132,7 +133,7 @@ func (c *channelTestContext) addMember(t *testing.T, userID, orgID int64, roleID
 	if roleIDs != nil {
 		body["role_ids"] = roleIDs
 	}
-	resp, status := doJSON(t, c.Client, "POST", c.BaseURL+"/api/v1/members/add", body, c.Token)
+	resp, status := doJSONWithRetry(t, c.Client, "POST", c.BaseURL+"/api/v1/members/add", body, c.Token, 5)
 	require.Equal(t, http.StatusOK, status, "add member HTTP: %s", resp.Message)
 
 	var data map[string]interface{}

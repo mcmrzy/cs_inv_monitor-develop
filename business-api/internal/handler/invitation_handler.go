@@ -185,8 +185,9 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	}
 
 	// Verify user has permission to create invitations in this organization
+	// Super-admin (0) and admin (1) bypass permission check; org_admin (2+) need explicit permission
 	hasPerm := h.permChecker.CheckPermission(userID, "organizations", "invite")
-	if !hasPerm && role < 2 { // org_admin and above
+	if !hasPerm && role >= 2 {
 		response.Error(c, 403, "insufficient permissions to create invitations")
 		return
 	}
@@ -361,8 +362,8 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 		return
 	}
 
-	// Validate user has permission
-	if invitation.InviterUserID != userID && middleware.GetRole(c) < 2 { // admin level check
+	// Validate user has permission: inviter or admin (role < 2) can revoke
+	if invitation.InviterUserID != userID && middleware.GetRole(c) >= 2 {
 		response.Error(c, 403, "无权撤销此邀请")
 		return
 	}
@@ -565,8 +566,8 @@ func (h *InvitationHandler) Details(c *gin.Context) {
 		return
 	}
 
-	// Check permissions - only inviter or admin can view details
-	if invitation.InviterUserID != middleware.GetUserID(c) && middleware.GetRole(c) < 2 {
+	// Check permissions - only inviter or admin (role < 2) can view details
+	if invitation.InviterUserID != middleware.GetUserID(c) && middleware.GetRole(c) >= 2 {
 		response.Error(c, 403, "无权查看此邀请详情")
 		return
 	}
