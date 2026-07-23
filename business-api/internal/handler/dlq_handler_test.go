@@ -40,16 +40,16 @@ func (suite *DLQHandlerTestSuite) SetupSuite() {
 	// Create handler
 	suite.handler = NewDLQHandler(suite.rdb)
 
-	// Setup Gin router — NOTE: retry-all and clear use query param ?consumer_type=xxx
-	// to avoid Gin wildcard conflict between :id and :consumer_type at the same path level.
+	// Setup Gin router — wildcard :id routes under /messages/ to avoid
+	// Gin wildcard vs static segment conflict.
 	gin.SetMode(gin.TestMode)
 	suite.router = gin.Default()
 	suite.router.GET("/api/v1/system/dlq", suite.handler.List)
-	suite.router.POST("/api/v1/system/dlq/:id/retry", suite.handler.Retry)
-	suite.router.DELETE("/api/v1/system/dlq/:id", suite.handler.Delete)
+	suite.router.GET("/api/v1/system/dlq/stats", suite.handler.Stats)
 	suite.router.POST("/api/v1/system/dlq/retry-all", suite.handler.RetryAll)
 	suite.router.DELETE("/api/v1/system/dlq/all", suite.handler.Clear)
-	suite.router.GET("/api/v1/system/dlq/stats", suite.handler.Stats)
+	suite.router.POST("/api/v1/system/dlq/messages/:id/retry", suite.handler.Retry)
+	suite.router.DELETE("/api/v1/system/dlq/messages/:id", suite.handler.Delete)
 }
 
 // TearDownSuite runs after all tests in the suite
@@ -226,7 +226,7 @@ func (suite *DLQHandlerTestSuite) TestDLQHandler_Retry() {
 	// Retry the message
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("POST", "/api/v1/system/dlq/bridge-0/retry", nil)
+	c.Request = httptest.NewRequest("POST", "/api/v1/system/dlq/messages/bridge-0/retry", nil)
 	c.Params = gin.Params{{Key: "id", Value: "bridge-0"}}
 
 	suite.handler.Retry(c)
@@ -258,7 +258,7 @@ func (suite *DLQHandlerTestSuite) TestDLQHandler_Retry() {
 func (suite *DLQHandlerTestSuite) TestDLQHandler_Retry_NotFound() {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("POST", "/api/v1/system/dlq/bridge-999/retry", nil)
+	c.Request = httptest.NewRequest("POST", "/api/v1/system/dlq/messages/bridge-999/retry", nil)
 	c.Params = gin.Params{{Key: "id", Value: "bridge-999"}}
 
 	suite.handler.Retry(c)
@@ -270,7 +270,7 @@ func (suite *DLQHandlerTestSuite) TestDLQHandler_Retry_NotFound() {
 func (suite *DLQHandlerTestSuite) TestDLQHandler_Retry_InvalidID() {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("POST", "/api/v1/system/dlq/invalid-id/retry", nil)
+	c.Request = httptest.NewRequest("POST", "/api/v1/system/dlq/messages/invalid-id/retry", nil)
 	c.Params = gin.Params{{Key: "id", Value: "invalid-id"}}
 
 	suite.handler.Retry(c)
@@ -303,7 +303,7 @@ func (suite *DLQHandlerTestSuite) TestDLQHandler_Delete() {
 	// Delete first message
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("DELETE", "/api/v1/system/dlq/bridge-0", nil)
+	c.Request = httptest.NewRequest("DELETE", "/api/v1/system/dlq/messages/bridge-0", nil)
 	c.Params = gin.Params{{Key: "id", Value: "bridge-0"}}
 
 	suite.handler.Delete(c)

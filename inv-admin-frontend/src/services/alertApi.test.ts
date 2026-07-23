@@ -104,7 +104,7 @@ describe('notificationApi', () => {
   describe('clearAll', () => {
     it('should clear all notifications', async () => {
       server.use(
-        http.delete('/api/v1/notifications/clear', () => {
+        http.delete('/api/v1/notifications/clear-all', () => {
           return HttpResponse.json({ code: 0, message: 'cleared' })
         }),
       )

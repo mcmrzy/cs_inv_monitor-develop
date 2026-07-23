@@ -821,87 +821,91 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/stations/:id", deps.StationHandler.Delete)
 			auth.GET("/stations/:id/statistics", deps.StationHandler.GetStatistics)
 
+			// ── Devices: static (collection-level) routes ──
+			// All :sn wildcard routes are under /devices/by-sn/ to prevent
+			// Gin wildcard-vs-static conflicts at the same path level.
 			auth.GET("/devices", deps.DeviceHandler.List)
 			auth.POST("/devices", deps.DeviceHandler.Create)
-			auth.GET("/devices/:sn", deps.DeviceHandler.GetDetail)
-			auth.GET("/devices/:sn/realtime", deps.DeviceHandler.GetRealtimeData)
 			auth.POST("/devices/bind", deps.DeviceHandler.Bind)
-			auth.POST("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
-			auth.DELETE("/devices/:sn/unbind", deps.DeviceHandler.Unbind)
-			auth.POST("/devices/:sn/request-unbind", deps.DeviceHandler.RequestUnbind)
-			auth.DELETE("/devices/:sn", deps.DeviceHandler.DeleteDevice)
-			auth.PUT("/devices/:sn", deps.DeviceHandler.Update)
-			auth.POST("/devices/:sn/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.Control)
 			auth.POST("/devices/batch/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.BatchControl)
-			auth.GET("/devices/:sn/control-fields", deps.DeviceHandler.GetControlFields)
-			auth.GET("/devices/:sn/control-capabilities", deps.DeviceHandler.GetControlCapabilities)
-			auth.GET("/devices/:sn/control-state", deps.DeviceHandler.GetControlState)
-			auth.GET("/devices/:sn/commands", deps.DeviceHandler.GetCommands)
-			auth.GET("/devices/:sn/commands/history", deps.DeviceHandler.GetCommands)
-			auth.GET("/devices/:sn/telemetry", deps.DeviceHandler.GetTelemetry)
-			auth.GET("/devices/:sn/telemetry/export", deps.DeviceHandler.ExportTelemetry)
-			auth.GET("/devices/:sn/telemetry/export-excel", deps.DeviceHandler.ExportTelemetryExcel)
-			auth.GET("/devices/:sn/lifecycle", deps.DeviceHandler.GetLifecycleHistory)
-			auth.GET("/devices/:sn/history", deps.DeviceHandler.GetHistory)
-			auth.GET("/devices/:sn/alarms", deps.DeviceHandler.GetAlarms)
-			auth.GET("/devices/:sn/alarm-events", internalHandler.GetAlarmEvents)
-			auth.GET("/devices/:sn/parallel-state", internalHandler.GetParallelState)
-			auth.GET("/devices/:sn/three-phase", internalHandler.GetThreePhaseHistory)
-			auth.GET("/alarm-events/:id", internalHandler.GetAlarmEventDetail)
-			auth.GET("/devices/:sn/statistics", deps.DeviceHandler.GetStatistics)
 			auth.POST("/devices/add-to-station", deps.DeviceHandler.AddToStation)
-			auth.POST("/devices/:sn/remove-from-station", deps.DeviceHandler.RemoveFromStation)
 			auth.GET("/devices/scan/local", deps.DeviceHandler.ScanLocal)
 			auth.GET("/devices/unbind-requests", deps.DeviceHandler.GetUnbindRequests)
 			auth.POST("/devices/unbind-requests/:id/approve", deps.DeviceHandler.ApproveUnbind)
 			auth.POST("/devices/unbind-requests/:id/reject", deps.DeviceHandler.RejectUnbind)
-
-			// 璁惧璁ら涓庤浆绉荤鐞嗭紙鏂板锛?
 			auth.POST("/devices/claim-code/generate", deps.DeviceClaimTransferHandler.GenerateClaimCode)
 			auth.POST("/devices/claim-code/verify", deps.DeviceClaimTransferHandler.VerifyClaimCode)
-			auth.POST("/devices/:sn/claim", deps.DeviceClaimTransferHandler.ClaimDevice)
-			auth.POST("/devices/:sn/request-transfer", deps.DeviceClaimTransferHandler.RequestTransfer)
 			auth.GET("/devices/transfers/list", deps.DeviceClaimTransferHandler.ListTransfers)
 			auth.POST("/devices/transfers/:id/approve", deps.DeviceClaimTransferHandler.ApproveTransfer)
 			auth.POST("/devices/transfers/:id/reject", deps.DeviceClaimTransferHandler.RejectTransfer)
 			auth.POST("/devices/transfers/:id/cancel", deps.DeviceClaimTransferHandler.CancelTransfer)
-
-			// 璁惧鍒嗛厤瀹夎鍟?
-			auth.POST("/devices/:sn/assign-installer", deps.DeviceHandler.AssignInstaller)
-			auth.DELETE("/devices/:sn/installer", deps.DeviceHandler.RemoveInstaller)
 			auth.POST("/devices/batch-assign-installer", deps.DeviceHandler.BatchAssignInstaller)
 			auth.POST("/devices/import-excel", deps.DeviceHandler.ImportExcel)
-
-			// 鐢垫睜閰嶇疆妯℃澘
-			auth.GET("/devices/:sn/battery-config", deps.BatteryHandler.GetDeviceConfig)
-			auth.PUT("/devices/:sn/battery-config", deps.BatteryHandler.BindDeviceConfig)
 			auth.GET("/battery-profiles", deps.BatteryHandler.ListProfiles)
 			auth.GET("/battery-profiles/:id", deps.BatteryHandler.GetProfile)
 			auth.POST("/battery-profiles", deps.BatteryHandler.CreateProfile)
 
-			// 鑳芥簮璁″垝涓庝复鏃惰鐩?
-			auth.GET("/devices/:sn/energy-schedule", deps.EnergyScheduleHandler.GetSchedule)
-			auth.PUT("/devices/:sn/energy-schedule", deps.EnergyScheduleHandler.UpdateSchedule)
-			auth.POST("/devices/:sn/control-overrides", deps.EnergyScheduleHandler.CreateOverride)
-			auth.GET("/devices/:sn/control-overrides", deps.EnergyScheduleHandler.ListOverrides)
-			auth.DELETE("/devices/:sn/control-overrides/:id", deps.EnergyScheduleHandler.CancelOverride)
+			// ── Devices: per-device (:sn wildcard) routes ──
+			devBySN := auth.Group("/devices/by-sn")
+			{
+				devBySN.GET("/:sn", deps.DeviceHandler.GetDetail)
+				devBySN.GET("/:sn/realtime", deps.DeviceHandler.GetRealtimeData)
+				devBySN.POST("/:sn/unbind", deps.DeviceHandler.Unbind)
+				devBySN.DELETE("/:sn/unbind", deps.DeviceHandler.Unbind)
+				devBySN.POST("/:sn/request-unbind", deps.DeviceHandler.RequestUnbind)
+				devBySN.DELETE("/:sn", deps.DeviceHandler.DeleteDevice)
+				devBySN.PUT("/:sn", deps.DeviceHandler.Update)
+				devBySN.POST("/:sn/control", middleware.RequirePermission(deps.PermChecker, "devices", "control"), deps.DeviceHandler.Control)
+				devBySN.GET("/:sn/control-fields", deps.DeviceHandler.GetControlFields)
+				devBySN.GET("/:sn/control-capabilities", deps.DeviceHandler.GetControlCapabilities)
+				devBySN.GET("/:sn/control-state", deps.DeviceHandler.GetControlState)
+				devBySN.GET("/:sn/commands", deps.DeviceHandler.GetCommands)
+				devBySN.GET("/:sn/commands/history", deps.DeviceHandler.GetCommands)
+				devBySN.GET("/:sn/telemetry", deps.DeviceHandler.GetTelemetry)
+				devBySN.GET("/:sn/telemetry/export", deps.DeviceHandler.ExportTelemetry)
+				devBySN.GET("/:sn/telemetry/export-excel", deps.DeviceHandler.ExportTelemetryExcel)
+				devBySN.GET("/:sn/lifecycle", deps.DeviceHandler.GetLifecycleHistory)
+				devBySN.GET("/:sn/history", deps.DeviceHandler.GetHistory)
+				devBySN.GET("/:sn/alarms", deps.DeviceHandler.GetAlarms)
+				devBySN.GET("/:sn/alarm-events", internalHandler.GetAlarmEvents)
+				devBySN.GET("/:sn/parallel-state", internalHandler.GetParallelState)
+				devBySN.GET("/:sn/three-phase", internalHandler.GetThreePhaseHistory)
+				devBySN.GET("/:sn/statistics", deps.DeviceHandler.GetStatistics)
+				devBySN.POST("/:sn/remove-from-station", deps.DeviceHandler.RemoveFromStation)
+				devBySN.POST("/:sn/claim", deps.DeviceClaimTransferHandler.ClaimDevice)
+				devBySN.POST("/:sn/request-transfer", deps.DeviceClaimTransferHandler.RequestTransfer)
+				devBySN.POST("/:sn/assign-installer", deps.DeviceHandler.AssignInstaller)
+				devBySN.DELETE("/:sn/installer", deps.DeviceHandler.RemoveInstaller)
+				devBySN.GET("/:sn/battery-config", deps.BatteryHandler.GetDeviceConfig)
+				devBySN.PUT("/:sn/battery-config", deps.BatteryHandler.BindDeviceConfig)
+				devBySN.GET("/:sn/energy-schedule", deps.EnergyScheduleHandler.GetSchedule)
+				devBySN.PUT("/:sn/energy-schedule", deps.EnergyScheduleHandler.UpdateSchedule)
+				devBySN.POST("/:sn/control-overrides", deps.EnergyScheduleHandler.CreateOverride)
+				devBySN.GET("/:sn/control-overrides", deps.EnergyScheduleHandler.ListOverrides)
+				devBySN.DELETE("/:sn/control-overrides/:id", deps.EnergyScheduleHandler.CancelOverride)
+			}
+
+			auth.GET("/alarm-events/:id", internalHandler.GetAlarmEventDetail)
+
 
 			auth.GET("/alarms", deps.AlarmHandler.List)
-			auth.DELETE("/alarms/clear", deps.AlarmHandler.ClearAll)
-			auth.PUT("/alarms/read", deps.AlarmHandler.MarkRead)
 			auth.GET("/alarms/stats", deps.AlarmHandler.GetStats)
 			auth.GET("/alarms/:id", deps.AlarmHandler.GetByID)
 			auth.PUT("/alarms/:id/handle", deps.AlarmHandler.MarkHandled)
 			auth.POST("/alarms/:id/acknowledge", deps.AlarmHandler.Acknowledge)
 			auth.POST("/alarms/:id/ignore", deps.AlarmHandler.Ignore)
 			auth.DELETE("/alarms/:id", deps.AlarmHandler.Delete)
+			// Renamed to avoid wildcard conflict with DELETE /alarms/:id
+			auth.DELETE("/alarms/clear-all", deps.AlarmHandler.ClearAll)
+			// Renamed to avoid wildcard conflict with PUT /alarms/:id/handle
+			auth.PUT("/alarms/mark-read", deps.AlarmHandler.MarkRead)
 
 			// 閫氱煡绠＄悊
 			auth.GET("/notifications", deps.NotificationHandler.List)
 			auth.GET("/notifications/stats", deps.NotificationHandler.GetStats)
 			// SSE 瀹炴椂鎺ㄩ€佺鐐癸紙蹇呴』鍦ㄥ弬鏁拌矾鐢变箣鍓嶆敞鍐岋級
 			auth.GET("/notifications/stream", internalHandler.NotificationStream)
-			auth.DELETE("/notifications/clear", deps.NotificationHandler.ClearAll)
+			auth.DELETE("/notifications/clear-all", deps.NotificationHandler.ClearAll)
 			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
 
 			registerModelRoutes(auth, deps.ModelHandler, deps.PermChecker)
@@ -923,8 +927,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.DELETE("/alert-rules/:id", deps.AlertRuleHandler.Delete)
 
 			auth.GET("/work-orders", deps.WorkOrderHandler.List)
-			auth.GET("/work-orders/stats", deps.WorkOrderHandler.GetStatistics)
-			auth.GET("/work-orders/templates", deps.WorkOrderHandler.ListTemplates)
+			// Renamed to avoid wildcard conflict with GET /work-orders/:id
+			auth.GET("/work-order-stats", deps.WorkOrderHandler.GetStatistics)
+			auth.GET("/work-order-templates", deps.WorkOrderHandler.ListTemplates)
 			auth.POST("/work-orders", deps.WorkOrderHandler.Create)
 			auth.GET("/work-orders/:id", deps.WorkOrderHandler.GetByID)
 			auth.PUT("/work-orders/:id", deps.WorkOrderHandler.Update)
@@ -1093,14 +1098,14 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			pipelineHealthGroup.GET("/pipeline-metrics", deps.PipelineHealthHandler.GetPipelineMetrics)
 			
 			// Task 12: DLQ management endpoints
-			// NOTE: retry-all and clear use query param ?consumer_type=xxx to avoid
-			// Gin wildcard conflict between :id and :consumer_type at the same path level.
+			// NOTE: wildcard :id routes are under /dlq/messages/ to avoid
+			// Gin wildcard vs static segment conflict (e.g. :id vs retry-all).
 			pipelineHealthGroup.GET("/dlq", deps.DLQHandler.List)
-			pipelineHealthGroup.POST("/dlq/:id/retry", deps.DLQHandler.Retry)
-			pipelineHealthGroup.DELETE("/dlq/:id", deps.DLQHandler.Delete)
+			pipelineHealthGroup.GET("/dlq/stats", deps.DLQHandler.Stats)
 			pipelineHealthGroup.POST("/dlq/retry-all", deps.DLQHandler.RetryAll)
 			pipelineHealthGroup.DELETE("/dlq/all", deps.DLQHandler.Clear)
-			pipelineHealthGroup.GET("/dlq/stats", deps.DLQHandler.Stats)
+			pipelineHealthGroup.POST("/dlq/messages/:id/retry", deps.DLQHandler.Retry)
+			pipelineHealthGroup.DELETE("/dlq/messages/:id", deps.DLQHandler.Delete)
 			
 			// Task 13: SSE pipeline health stream (implemented in ws_handler.go)
 			pipelineHealthGroup.GET("/pipeline-health/stream", handler.PipelineHealthSSE(deps.RDB))

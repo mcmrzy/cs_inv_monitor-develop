@@ -75,7 +75,7 @@ func TestRegisterModelRoutesEnforcesGovernancePermissions(t *testing.T) {
 		{http.MethodPost, "/api/v1/models/1/fields", "edit"},
 		{http.MethodPut, "/api/v1/models/1/fields/2", "edit"},
 		{http.MethodDelete, "/api/v1/models/1/fields/2", "edit"},
-		{http.MethodPut, "/api/v1/models/1/fields/batch", "edit"},
+		{http.MethodPut, "/api/v1/models/1/fields-batch", "edit"},
 		{http.MethodGet, "/api/v1/models/1/protocols", "protocol_view"},
 		{http.MethodPost, "/api/v1/models/1/protocols", "protocol_publish"},
 		{http.MethodPut, "/api/v1/models/1/protocols/2", "protocol_publish"},

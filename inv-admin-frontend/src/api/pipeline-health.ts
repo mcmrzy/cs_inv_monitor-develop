@@ -51,16 +51,16 @@ export async function getDLQList(
 
 /**
  * 重试单条 DLQ 消息
- * POST /api/v1/system/dlq/:id/retry
+ * POST /api/v1/system/dlq/messages/:id/retry
  */
 export async function retryDLQItem(id: string): Promise<void> {
-  await api.post(`${BASE}/dlq/${encodeURIComponent(id)}/retry`);
+  await api.post(`${BASE}/dlq/messages/${encodeURIComponent(id)}/retry`);
 }
 
 /**
  * 删除单条 DLQ 消息
- * DELETE /api/v1/system/dlq/:id
+ * DELETE /api/v1/system/dlq/messages/:id
  */
 export async function deleteDLQItem(id: string): Promise<void> {
-  await api.delete(`${BASE}/dlq/${encodeURIComponent(id)}`);
+  await api.delete(`${BASE}/dlq/messages/${encodeURIComponent(id)}`);
 }
