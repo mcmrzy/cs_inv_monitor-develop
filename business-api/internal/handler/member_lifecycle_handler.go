@@ -820,13 +820,12 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 			return
 		}
 
-		// Create new membership in target org
+		// Create new membership in target org using saved user_id and expires_at
 		result, err := tx.Exec(ctx, `
 			INSERT INTO organization_memberships 
 				(root_tenant_id, organization_id, user_id, status, expires_at, created_at, updated_at)
-			SELECT $1, $2, user_id, 'active', expires_at, NOW(), NOW()
-			FROM organization_memberships WHERE id = $3
-		`, targetOrg.RootTenantID, targetOrg.ID, membership.ID)
+			VALUES ($1, $2, $3, 'active', $4, NOW(), NOW())
+		`, targetOrg.RootTenantID, targetOrg.ID, membership.UserID, membership.ExpiresAt)
 		if err != nil {
 			response.Error(c, 500, "添加到目标组织失败")
 			return
@@ -1272,13 +1271,12 @@ func (h *MemberLifecycleHandler) processBulkTransferSync(c *gin.Context, userID,
 			continue
 		}
 
-		// Insert new in target org
+		// Insert new in target org using saved user_id and expires_at
 		result, err := tx.Exec(ctx, `
 			INSERT INTO organization_memberships 
 				(root_tenant_id, organization_id, user_id, status, expires_at)
-			SELECT $1, $2, user_id, 'active', expires_at
-			FROM organization_memberships WHERE id = $3
-		`, targetOrg.RootTenantID, targetOrg.ID, membership.ID)
+			VALUES ($1, $2, $3, 'active', $4)
+		`, targetOrg.RootTenantID, targetOrg.ID, membership.UserID, membership.ExpiresAt)
 		if err == nil && result.RowsAffected() > 0 {
 			transferredCount++
 		}

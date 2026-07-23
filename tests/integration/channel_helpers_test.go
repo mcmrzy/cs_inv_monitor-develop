@@ -135,6 +135,7 @@ func (c *channelTestContext) addMember(t *testing.T, userID, orgID int64, roleID
 	}
 	resp, status := doJSONWithRetry(t, c.Client, "POST", c.BaseURL+"/api/v1/members/add", body, c.Token, 5)
 	require.Equal(t, http.StatusOK, status, "add member HTTP: %s", resp.Message)
+	require.Equal(t, 0, resp.Code, "add member biz code: %s", resp.Message)
 
 	var data map[string]interface{}
 	if resp.Data != nil {

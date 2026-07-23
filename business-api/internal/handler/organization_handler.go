@@ -195,14 +195,14 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		Scan(&org.ID, &org.CreatedAt, &org.UpdatedAt)
 	if err != nil {
 		tx.Rollback(ctx)
-		log.Printf("[CreateOrg] insert error: user_id=%d, err=%v", userID, err)
-		response.Error(c, 500, "create organization failed")
+		log.Printf("[CreateOrg] insert error: user_id=%d, tenant_id=%d, parent_id=%v, type=%s, err=%v", userID, tenantID, parentID, req.Type, err)
+		response.Error(c, 500, fmt.Sprintf("create organization failed: %v", err))
 		return
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[CreateOrg] commit error: user_id=%d, err=%v", userID, err)
-		response.Error(c, 500, "create organization failed")
+		response.Error(c, 500, fmt.Sprintf("create organization failed: %v", err))
 		return
 	}
 

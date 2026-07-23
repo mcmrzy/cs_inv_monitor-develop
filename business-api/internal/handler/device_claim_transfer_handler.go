@@ -242,14 +242,17 @@ func (h *DeviceClaimTransferHandler) VerifyClaimCode(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Find claim token by digest
+	// Find claim token by digest (stored as hex-encoded VARCHAR)
+	digest := sha256.Sum256([]byte(req.ClaimCode))
+	claimCodeDigest := hex.EncodeToString(digest[:])
+
 	var token DeviceClaimToken
 	err := h.db.QueryRow(ctx, `
 		SELECT id, sn, claim_code_digest, root_tenant_id, assigned_organization_id, 
 			   status, expires_at, claimed_at, claimed_by_user_id, created_at, updated_at
 		FROM device_claim_tokens 
 		WHERE claim_code_digest = $1 AND status = 'unclaimed'
-	`, sha256.Sum256([]byte(req.ClaimCode))).
+	`, claimCodeDigest).
 		Scan(
 			&token.ID, &token.SN, &token.ClaimCodeDigest, &token.RootTenantID,
 			&token.AssignedOrganizationID, &token.Status, &token.ExpiresAt,
