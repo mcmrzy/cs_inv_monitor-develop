@@ -61,6 +61,23 @@ func doJSON(t *testing.T, client *http.Client, method, url string, body interfac
 	return &apiResp, resp.StatusCode
 }
 
+// doJSONWithRetry wraps doJSON and retries on HTTP 429 (rate limit) responses.
+func doJSONWithRetry(t *testing.T, client *http.Client, method, url string, body interface{}, token string, maxRetries int) (*apiResponse, int) {
+	t.Helper()
+	var resp *apiResponse
+	var status int
+	for i := 0; i <= maxRetries; i++ {
+		resp, status = doJSON(t, client, method, url, body, token)
+		if status != http.StatusTooManyRequests {
+			return resp, status
+		}
+		wait := time.Duration(500*(i+1)) * time.Millisecond
+		t.Logf("429 rate limited on %s %s, retry %d/%d after %v", method, url, i+1, maxRetries, wait)
+		time.Sleep(wait)
+	}
+	return resp, status
+}
+
 // setEmailCode stores a verification code through the isolated test Redis
 // endpoint. It must never depend on a named developer/production container.
 func setEmailCode(t *testing.T, email, codeType, code string) {
@@ -93,7 +110,7 @@ func registerUser(t *testing.T, baseURL, phone, password string) {
 		"code":     testCode,
 		"nickname": nickname,
 	}
-	resp, status := doJSON(t, client, "POST", baseURL+"/api/v1/auth/email-register", payload, "")
+	resp, status := doJSONWithRetry(t, client, "POST", baseURL+"/api/v1/auth/email-register", payload, "", 5)
 	t.Logf("register status=%d code=%d msg=%s", status, resp.Code, resp.Message)
 	require.Equal(t, 0, resp.Code, "registration should succeed")
 }
@@ -106,7 +123,7 @@ func loginUser(t *testing.T, baseURL, account, password string) string {
 		"account":  account,
 		"password": password,
 	}
-	resp, status := doJSON(t, client, "POST", baseURL+"/api/v1/auth/login", payload, "")
+	resp, status := doJSONWithRetry(t, client, "POST", baseURL+"/api/v1/auth/login", payload, "", 5)
 	require.Equal(t, 200, status, "login HTTP status")
 
 	if resp.Code != 0 {
