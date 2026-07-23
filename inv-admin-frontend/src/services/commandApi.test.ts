@@ -6,7 +6,7 @@ import { commandApi } from './commandApi'
 describe('commandApi contracts', () => {
   it('loads executable templates from control capabilities', async () => {
     server.use(
-      http.get('/api/v1/devices/:sn/control-capabilities', ({ params }) =>
+      http.get('/api/v1/devices/by-sn/:sn/control-capabilities', ({ params }) =>
         HttpResponse.json({
           code: 0,
           data: [{
@@ -28,7 +28,7 @@ describe('commandApi contracts', () => {
 
   it('loads command history from the paginated history endpoint', async () => {
     server.use(
-      http.get('/api/v1/devices/:sn/commands/history', () =>
+      http.get('/api/v1/devices/by-sn/:sn/commands/history', () =>
         HttpResponse.json({
           code: 0,
           data: { items: [{ id: 1, command_name: 'restart' }], total: 1 },
