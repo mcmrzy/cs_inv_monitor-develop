@@ -261,7 +261,7 @@ func TestOrganizationCreate_WithParent(t *testing.T) {
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
 		map[string]interface{}{"name": childName, "type": "agent", "parent_id": parentID},
-		ctx.Token)
+		ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code, "create with parent should succeed: %s", resp.Message)
 
@@ -274,7 +274,7 @@ func TestOrganizationCreate_ParentNotFound(t *testing.T) {
 	ctx := setupChannelTest(t)
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
 		map[string]interface{}{"name": "orphan", "type": "agent", "parent_id": 999999999},
-		ctx.Token)
+		ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "create with non-existent parent should fail")
 }
