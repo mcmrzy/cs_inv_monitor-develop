@@ -269,7 +269,7 @@ func parseMessageID(id string) (consumerType string, index int64, err error) {
 // This is a bulk operation - use with caution
 func (h *DLQHandler) RetryAll(c *gin.Context) {
 	ctx := c.Request.Context()
-	consumerType := c.Param("consumer_type")
+	consumerType := c.Query("consumer_type")
 
 	if consumerType == "" {
 		response.BadRequest(c, "Consumer type required")
@@ -337,7 +337,7 @@ func (h *DLQHandler) RetryAll(c *gin.Context) {
 // This is a destructive operation - use with caution
 func (h *DLQHandler) Clear(c *gin.Context) {
 	ctx := c.Request.Context()
-	consumerType := c.Param("consumer_type")
+	consumerType := c.Query("consumer_type")
 
 	if consumerType == "" {
 		response.BadRequest(c, "Consumer type required")
