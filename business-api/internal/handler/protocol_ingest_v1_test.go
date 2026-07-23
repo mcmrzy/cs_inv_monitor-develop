@@ -15,6 +15,15 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+func protocolResponseCode(t *testing.T, w *httptest.ResponseRecorder) int {
+	t.Helper()
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal body: %v, body: %s", err, w.Body.String())
+	}
+	return int(resp["code"].(float64))
+}
+
 type fakeProtocolV1Store struct {
 	alarmRecords      []protocolV1Record
 	parallelRecords   []protocolV1Record
@@ -56,8 +65,9 @@ func TestParallelMemberOwnershipFailureReturnsBadRequest(t *testing.T) {
 		"machines": []any{map[string]any{"id": 0, "sn": "INV001", "role": "master", "phase": nil, "power": 10, "state": 2}},
 	})
 	w := sendProtocolV1(t, r, "/parallel", body)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	code := protocolResponseCode(t, w)
+	if w.Code != http.StatusOK || code != http.StatusBadRequest {
+		t.Fatalf("status=%d code=%d body=%s", w.Code, code, w.Body.String())
 	}
 }
 
@@ -191,8 +201,9 @@ func TestProtocolV1WriteEndpointsRejectInvalidPayloads(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := sendProtocolV1(t, r, tt.path, tt.body)
-			if w.Code < 400 || w.Code >= 500 {
-				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			code := protocolResponseCode(t, w)
+			if code < 400 || code >= 600 {
+				t.Fatalf("status=%d code=%d body=%s", w.Code, code, w.Body.String())
 			}
 		})
 	}

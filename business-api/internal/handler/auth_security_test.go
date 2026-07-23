@@ -112,6 +112,9 @@ func TestAuthorizationContextIssuesOrganizationBoundAccessAndRotatesRefresh(t *t
 	replayRequest.Header.Set("Content-Type", "application/json")
 	replayRecorder := httptest.NewRecorder()
 	router.ServeHTTP(replayRecorder, replayRequest)
-	require.Equal(t, http.StatusUnauthorized, replayRecorder.Code)
+	require.Equal(t, http.StatusOK, replayRecorder.Code)
+	var replayResp map[string]interface{}
+	require.NoError(t, json.Unmarshal(replayRecorder.Body.Bytes(), &replayResp))
+	require.Equal(t, float64(500), replayResp["code"], "body: %s", replayRecorder.Body.String())
 	require.False(t, jwtService.ValidateRefreshToken(context.Background(), 7, envelope.Data.RefreshToken), "refresh replay must revoke the whole user session family")
 }

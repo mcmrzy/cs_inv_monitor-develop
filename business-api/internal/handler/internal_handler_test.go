@@ -10,6 +10,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// assertResponseCode checks JSON body "code" field instead of HTTP status,
+// because response.Error always returns HTTP 200.
+func assertResponseCode(t *testing.T, w *httptest.ResponseRecorder, wantCode int) {
+	t.Helper()
+	if w.Code != http.StatusOK {
+		t.Fatalf("HTTP status = %d, want 200, body: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal body: %v, body: %s", err, w.Body.String())
+	}
+	got := int(resp["code"].(float64))
+	if got != wantCode {
+		t.Errorf("code = %d, want %d, body: %s", got, wantCode, w.Body.String())
+	}
+}
+
 func init() {
 	gin.SetMode(gin.TestMode)
 }
@@ -67,9 +84,7 @@ func TestInternalDeviceStatus_Validation(t *testing.T) {
 
 			r.ServeHTTP(w, req)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d, body: %s", w.Code, tt.wantStatus, w.Body.String())
-			}
+			assertResponseCode(t, w, tt.wantStatus)
 		})
 	}
 }
@@ -102,9 +117,7 @@ func TestInternalDeviceInfo_Validation(t *testing.T) {
 
 			r.ServeHTTP(w, req)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d, body: %s", w.Code, tt.wantStatus, w.Body.String())
-			}
+			assertResponseCode(t, w, tt.wantStatus)
 		})
 	}
 }
@@ -142,9 +155,7 @@ func TestInternalDeviceData_Validation(t *testing.T) {
 
 			r.ServeHTTP(w, req)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d, body: %s", w.Code, tt.wantStatus, w.Body.String())
-			}
+			assertResponseCode(t, w, tt.wantStatus)
 		})
 	}
 }
@@ -178,9 +189,7 @@ func TestInternalDeviceCmdStatus_Validation(t *testing.T) {
 
 			r.ServeHTTP(w, req)
 
-			if w.Code != tt.wantStatus {
-				t.Errorf("status = %d, want %d, body: %s", w.Code, tt.wantStatus, w.Body.String())
-			}
+			assertResponseCode(t, w, tt.wantStatus)
 		})
 	}
 }
