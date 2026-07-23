@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,6 +26,8 @@ type channelTestContext struct {
 }
 
 // setupChannelTest creates two registered+logged-in users and returns a context.
+// After registration the users' role is promoted from end-user (5) to
+// super-admin (0) so that they can create organizations in tests.
 func setupChannelTest(t *testing.T) *channelTestContext {
 	t.Helper()
 	cfg := LoadConfig()
@@ -36,11 +39,22 @@ func setupChannelTest(t *testing.T) *channelTestContext {
 	// User A — primary admin
 	phoneA := fmt.Sprintf("150%08d", time.Now().UnixNano()%100000000)
 	registerUser(t, cfg.APIBaseURL, phoneA, pw)
-	tokenA := loginUser(t, cfg.APIBaseURL, phoneA, pw)
-
 	// User B — secondary user (for cross-tenant / isolation tests)
 	phoneB := fmt.Sprintf("151%08d", time.Now().UnixNano()%100000000)
 	registerUser(t, cfg.APIBaseURL, phoneB, pw)
+
+	// Promote both users from end-user (role=5) to super-admin (role=0)
+	// so that OrganizationHandler.Create does not reject them with 403.
+	pool := ConnectDB(t, cfg)
+	defer pool.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, phone := range []string{phoneA, phoneB} {
+		_, err := pool.Exec(ctx, "UPDATE users SET role = 0 WHERE phone = $1", phone)
+		require.NoError(t, err, "promote user role for phone %s", phone)
+	}
+
+	tokenA := loginUser(t, cfg.APIBaseURL, phoneA, pw)
 	tokenB := loginUser(t, cfg.APIBaseURL, phoneB, pw)
 
 	return &channelTestContext{
