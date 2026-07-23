@@ -1,4 +1,4 @@
-﻿// Package main is the entry point for inv-api-server, the user-facing REST API service.
+// Package main is the entry point for inv-api-server, the user-facing REST API service.
 //
 // Responsibilities:
 //   - User authentication (login/register/JWT refresh, SMS & email verification)
