@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type User struct {
 	ID           int64      `json:"id"`
@@ -531,17 +534,36 @@ type AppVersion struct {
 }
 
 // Invitation represents an invitation to join an organization with SHA-256 token security.
+// Field names match the DB columns defined in migration 064.
 type Invitation struct {
-	ID             int64     `json:"id"`
-	RootTenantID   int64     `json:"root_tenant_id"`
-	OrganizationID *int64    `json:"organization_id,omitempty"`
-	InviterUserID  int64     `json:"inviter_user_id"`
-	Email          string    `json:"email"`
-	RoleID         int16     `json:"role_id"`
-	TokenDigest    string    `json:"-"` // SHA-256 hash, never expose raw token
-	ExpiresAt      time.Time `json:"expires_at"`
-	UsedAt         *time.Time `json:"used_at,omitempty"`
-	Status         string    `json:"status"` // pending|used|expired|revoked
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID               int64     `json:"id"`
+	RootTenantID     int64     `json:"root_tenant_id"`
+	OrganizationID   *int64    `json:"organization_id,omitempty"`
+	InvitedBy        int64     `json:"invited_by"`
+	Recipient        string    `json:"recipient"`
+	TokenKeyID       string    `json:"-"`
+	TokenDigest      []byte    `json:"-"` // SHA-256 raw bytes (BYTEA), never expose
+	RoleAssignments  string    `json:"role_assignments"` // JSONB array, e.g. "[{\"role_id\":3}]"
+	ExpiresAt        time.Time `json:"expires_at"`
+	AcceptedAt       *time.Time `json:"accepted_at,omitempty"`
+	Status           string    `json:"status"` // pending|accepted|rejected|expired|revoked
+	Version          int64     `json:"version"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// FirstRoleID extracts the first role_id from the RoleAssignments JSONB array.
+// Returns 0 if the array is empty or malformed.
+func (inv *Invitation) FirstRoleID() int {
+	if inv.RoleAssignments == "" || inv.RoleAssignments == "[]" {
+		return 0
+	}
+	// Quick parse: look for "role_id":N pattern
+	var arr []struct {
+		RoleID int `json:"role_id"`
+	}
+	if err := json.Unmarshal([]byte(inv.RoleAssignments), &arr); err != nil || len(arr) == 0 {
+		return 0
+	}
+	return arr[0].RoleID
 }

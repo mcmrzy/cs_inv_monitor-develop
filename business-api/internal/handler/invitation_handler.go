@@ -235,31 +235,38 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 
 	// Create invitation record
 	now := time.Now()
+	roleAssignmentsJSON := fmt.Sprintf("[{\"role_id\":%d}]", req.RoleID)
 	invitation := &model.Invitation{
-		RootTenantID:   org.RootTenantID,
-		OrganizationID: orgID,
-		InviterUserID:  userID,
-		Email:          strings.ToLower(strings.TrimSpace(req.Email)),
-		RoleID:         int16(req.RoleID),
-		TokenDigest:    hex.EncodeToString(tokenDigest[:]),
-		ExpiresAt:      now.Add(time.Duration(req.ExpiresHours) * time.Hour),
-		Status:         "pending",
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		RootTenantID:    org.RootTenantID,
+		OrganizationID:  orgID,
+		InvitedBy:       userID,
+		Recipient:       strings.ToLower(strings.TrimSpace(req.Email)),
+		TokenKeyID:      "default",
+		TokenDigest:     tokenDigest[:], // raw BYTEA for DB
+		RoleAssignments: roleAssignmentsJSON,
+		ExpiresAt:       now.Add(time.Duration(req.ExpiresHours) * time.Hour),
+		Status:          "pending",
+		Version:         1,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	if err := h.invitationRepo.Insert(ctx, tx, invitation); err != nil {
-		if strings.Contains(err.Error(), "uq_invitations_root_org_email") ||
+		if strings.Contains(err.Error(), "uq_invitations_pending_recipient") ||
 			strings.Contains(err.Error(), "unique_violation") {
 			response.Error(c, 409, "该邮箱已有待处理的邀请")
 			return
 		}
-		response.Error(c, 500, "保存邀请失败")
+		logger.Error("Invitation insert failed", zap.Error(err),
+			zap.Int64("root_tenant_id", invitation.RootTenantID),
+			zap.Any("organization_id", invitation.OrganizationID))
+		response.Error(c, 500, fmt.Sprintf("保存邀请失败: %v", err))
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "保存邀请失败")
+		logger.Error("Invitation commit failed", zap.Error(err))
+		response.Error(c, 500, fmt.Sprintf("保存邀请失败: %v", err))
 		return
 	}
 
@@ -270,7 +277,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 			defer cancel()
 			
 			err := h.emailService.SendInvitationEmail(
-				invitation.Email,
+				invitation.Recipient,
 				rawToken[:8], // Show first 8 chars only
 				roleName,
 				org.Name,
@@ -280,21 +287,21 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 			if err != nil {
 				logger.Warn("Failed to send invitation email",
 					zap.Int64("invitation_id", invitation.ID),
-					zap.String("email", invitation.Email),
+					zap.String("email", invitation.Recipient),
 					zap.Error(err))
 				// Don't rollback transaction for email errors - log and continue
 			}
 		} else {
 			logger.Info("Invitation created, notification dispatched",
 				zap.Int64("invitation_id", invitation.ID),
-				zap.String("email", invitation.Email),
+				zap.String("email", invitation.Recipient),
 				zap.String("token_hint", rawToken[:8]+"****"))
 		}
 	}()
 
 	response.Success(c, InvitationResponse{
 		ID:        invitation.ID,
-		Email:     invitation.Email,
+		Email:     invitation.Recipient,
 		RoleName:  repository.GetRoleName(int(req.RoleID)),
 		TokenHint: rawToken[:8] + "****", // Show partial for debugging
 		ExpiresAt: invitation.ExpiresAt.Format(time.RFC3339),
@@ -364,7 +371,7 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 	}
 
 	// Validate user has permission: inviter or admin (role < 2) can revoke
-	if invitation.InviterUserID != userID && middleware.GetRole(c) >= 2 {
+	if invitation.InvitedBy != userID && middleware.GetRole(c) >= 2 {
 		response.Error(c, 403, "无权撤销此邀请")
 		return
 	}
@@ -401,13 +408,12 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		return
 	}
 
-	// Compute SHA-256 digest of the invitation code
+	// Compute SHA-256 digest of the invitation code (raw bytes for BYTEA column)
 	tokenBytes := []byte(req.InvitationCode)
 	tokenDigest := sha256.Sum256(tokenBytes)
-	digestHex := hex.EncodeToString(tokenDigest[:])
 
-	// Find invitation by digest
-	invitation, err := h.invitationRepo.FindByTokenDigest(ctx, h.db, digestHex)
+	// Find invitation by digest (raw BYTEA)
+	invitation, err := h.invitationRepo.FindByTokenDigest(ctx, h.db, tokenDigest[:])
 	if err != nil || invitation == nil {
 		response.Error(c, 401, "无效的邀请码")
 		return
@@ -415,7 +421,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 
 	// Validate invitation status and expiration
 	if invitation.Status != "pending" {
-		if invitation.Status == "used" {
+		if invitation.Status == "accepted" {
 			response.Error(c, 401, "邀请码已被使用")
 		} else if invitation.Status == "revoked" {
 			response.Error(c, 401, "邀请码已被撤销")
@@ -470,7 +476,8 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	// Update user role based on invitation
-	if err := h.userRepo.UpdateRoleWithTx(ctx, tx, newUser.ID, int(invitation.RoleID)); err != nil {
+	roleID := invitation.FirstRoleID()
+	if err := h.userRepo.UpdateRoleWithTx(ctx, tx, newUser.ID, roleID); err != nil {
 		response.Error(c, 500, "更新用户角色失败")
 		return
 	}
@@ -494,7 +501,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		RootTenantID:   invitation.RootTenantID,
 		OrganizationID: *invitation.OrganizationID,
 		MembershipID:   membership.ID,
-		RoleCode:       repository.GetRoleCode(int(invitation.RoleID)),
+		RoleCode:       repository.GetRoleCode(roleID),
 		Status:         "active",
 		Version:        1,
 	}
@@ -568,13 +575,13 @@ func (h *InvitationHandler) Details(c *gin.Context) {
 	}
 
 	// Check permissions - only inviter or admin (role < 2) can view details
-	if invitation.InviterUserID != middleware.GetUserID(c) && middleware.GetRole(c) >= 2 {
+	if invitation.InvitedBy != middleware.GetUserID(c) && middleware.GetRole(c) >= 2 {
 		response.Error(c, 403, "无权查看此邀请详情")
 		return
 	}
 
 	// Get inviter info
-	inviter, err := h.userRepo.GetByID(ctx, invitation.InviterUserID)
+	inviter, err := h.userRepo.GetByID(ctx, invitation.InvitedBy)
 	inviterName := "未知用户"
 	if err == nil && inviter != nil {
 		inviterName = inviter.Nickname
@@ -582,8 +589,8 @@ func (h *InvitationHandler) Details(c *gin.Context) {
 
 	response.Success(c, InvitationResponse{
 		ID:        invitation.ID,
-		Email:     invitation.Email,
-		RoleName:  repository.GetRoleName(int(invitation.RoleID)),
+		Email:     invitation.Recipient,
+		RoleName:  repository.GetRoleName(invitation.FirstRoleID()),
 		ExpiresAt: invitation.ExpiresAt.Format(time.RFC3339),
 		CreatedBy: inviterName,
 		Status:    invitation.Status,
@@ -614,11 +621,12 @@ func (h *InvitationHandler) resolveOrganizationFromContext(ctx context.Context, 
 func convertInvitationItems(items []repository.ListInvitationsResponseItem) []InvitationListItem {
 	result := make([]InvitationListItem, 0, len(items))
 	for _, item := range items {
+		roleID := int16(item.FirstRoleID())
 		il := InvitationListItem{
 			ID:          item.ID,
-			Email:       item.Email,
-			RoleID:      item.RoleID,
-			RoleName:    repository.GetRoleName(int(item.RoleID)),
+			Email:       item.Recipient,
+			RoleID:      roleID,
+			RoleName:    repository.GetRoleName(item.FirstRoleID()),
 			Status:      item.Status,
 			ExpiresAt:   item.ExpiresAt.Format(time.RFC3339),
 			CreatedAt:   item.CreatedAt.Format(time.RFC3339),

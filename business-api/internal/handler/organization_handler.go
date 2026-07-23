@@ -143,7 +143,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		if err != nil {
 			tx.Rollback(ctx)
 			log.Printf("[CreateOrg] ensure_tenant_root error: user_id=%d, tenant_id=%d, err=%v", userID, tenantID, err)
-			response.Error(c, 500, "system error")
+			response.Error(c, 500, fmt.Sprintf("create organization failed: %v", err))
 			return
 		}
 	}

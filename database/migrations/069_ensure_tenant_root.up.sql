@@ -70,15 +70,46 @@ BEGIN
     WHERE id = p_tenant_id AND deleted_at IS NULL;
 
     IF FOUND THEN
-        -- Re-point closure entries to the new negative ID.
-        UPDATE organization_closure SET ancestor_id = -p_tenant_id
-            WHERE root_tenant_id = v_stale_root AND ancestor_id = p_tenant_id;
-        UPDATE organization_closure SET descendant_id = -p_tenant_id
-            WHERE root_tenant_id = v_stale_root AND descendant_id = p_tenant_id;
-        -- Re-point tenant_roots if it referenced the stale org.
-        UPDATE tenant_roots SET organization_id = -p_tenant_id
-            WHERE organization_id = p_tenant_id;
-        -- Move the stale row out of the way (negative ID).
+        -- Clean up all stale data for this tenant before moving the root row.
+        -- This handles child orgs, memberships, invitations, and closure entries
+        -- left behind by previous test runs or interrupted provisioning.
+        -- Deletion order respects FK ON DELETE RESTRICT constraints.
+
+        -- 1. Remove rows from leaf tables that reference stale orgs.
+        DELETE FROM role_permission_grants WHERE root_tenant_id = v_stale_root;
+        DELETE FROM resource_grants WHERE root_tenant_id = v_stale_root;
+        DELETE FROM authorization_resources WHERE root_tenant_id = v_stale_root;
+        DELETE FROM organization_quota_usage WHERE root_tenant_id = v_stale_root;
+        DELETE FROM organization_quotas WHERE root_tenant_id = v_stale_root;
+        DELETE FROM invitations WHERE root_tenant_id = v_stale_root;
+        DELETE FROM membership_role_assignments WHERE root_tenant_id = v_stale_root;
+        DELETE FROM organization_memberships WHERE root_tenant_id = v_stale_root;
+
+        -- 2. Clear audit_logs FK (SET active_organization_id to NULL).
+        UPDATE audit_logs SET active_organization_id = NULL
+            WHERE root_tenant_id = v_stale_root;
+
+        -- 3. Remove closure entries (guard allows SECURITY DEFINER).
+        DELETE FROM organization_closure WHERE root_tenant_id = v_stale_root;
+
+        -- 4. Remove tenant_roots entry.
+        DELETE FROM tenant_roots WHERE root_tenant_id = v_stale_root;
+
+        -- 5. Delete child orgs iteratively (leaves first to satisfy self-ref FK).
+        LOOP
+            DELETE FROM organizations
+                WHERE root_tenant_id = v_stale_root
+                  AND id <> p_tenant_id
+                  AND NOT EXISTS (
+                      SELECT 1 FROM organizations c
+                      WHERE c.root_tenant_id = v_stale_root
+                        AND c.parent_id = organizations.id
+                        AND c.id <> organizations.id
+                  );
+            EXIT WHEN NOT FOUND;
+        END LOOP;
+
+        -- 6. Move the stale root org out of the way (negative ID).
         UPDATE organizations SET id = -id WHERE id = p_tenant_id;
     END IF;
 

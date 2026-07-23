@@ -52,26 +52,29 @@ func TestOrganizationCreate_MissingName(t *testing.T) {
 
 func TestOrganizationList_Pagination(t *testing.T) {
 	ctx := setupChannelTest(t)
-	// Create 3 orgs
+	// Create an agent org first (distributor must be under agent)
+	agentID := ctx.createOrg(t, fmt.Sprintf("org-list-agent-%d", ts()), "agent", nil)
+	// Create 3 distributor orgs under the agent
 	for i := 0; i < 3; i++ {
-		ctx.createOrg(t, fmt.Sprintf("org-list-%d-%d", ts(), i), "distributor", nil)
+		ctx.createOrg(t, fmt.Sprintf("org-list-%d-%d", ts(), i), "distributor", &agentID)
 	}
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
-		ctx.BaseURL+"/api/v1/organizations?page=1&page_size=2", nil, ctx.Token, 5)
+		ctx.BaseURL+"/api/v1/organizations?page=1&page_size=10", nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp.Data, &data))
 	total, _ := data["total"].(float64)
-	assert.GreaterOrEqual(t, int(total), 3, "total should reflect at least 3 orgs")
+	assert.GreaterOrEqual(t, int(total), 4, "total should reflect at least 4 orgs (1 agent + 3 distributors)")
 }
 
 func TestOrganizationList_FilterByType(t *testing.T) {
 	ctx := setupChannelTest(t)
-	ctx.createOrg(t, fmt.Sprintf("org-ft-cust-%d", ts()), "customer", nil)
-	ctx.createOrg(t, fmt.Sprintf("org-ft-agent-%d", ts()), "agent", nil)
+	agentID := ctx.createOrg(t, fmt.Sprintf("org-ft-agent-%d", ts()), "agent", nil)
+	distID := ctx.createOrg(t, fmt.Sprintf("org-ft-dist-%d", ts()), "distributor", &agentID)
+	ctx.createOrg(t, fmt.Sprintf("org-ft-cust-%d", ts()), "customer", &distID)
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
 		ctx.BaseURL+"/api/v1/organizations?type=customer", nil, ctx.Token, 5)

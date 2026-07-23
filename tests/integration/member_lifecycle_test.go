@@ -170,7 +170,8 @@ func TestMemberRemove_SoftDelete(t *testing.T) {
 func TestMemberTransfer_Initiate(t *testing.T) {
 	ctx := setupChannelTest(t)
 	orgFrom := ctx.createOrg(t, fmt.Sprintf("mem-trf-from-%d", ts()), "agent", nil)
-	orgTo := ctx.createOrg(t, fmt.Sprintf("mem-trf-to-%d", ts()), "distributor", nil)
+	agentID2 := ctx.createOrg(t, fmt.Sprintf("mem-trf-agent2-%d", ts()), "agent", nil)
+	orgTo := ctx.createOrg(t, fmt.Sprintf("mem-trf-to-%d", ts()), "distributor", &agentID2)
 
 	profileResp, _ := doJSON(t, ctx.Client, "GET", ctx.BaseURL+"/api/v1/auth/profile", nil, ctx.Token2)
 	var profile map[string]interface{}
@@ -271,7 +272,8 @@ func TestMemberBulkAdd(t *testing.T) {
 
 func TestMemberBulkTransfer(t *testing.T) {
 	ctx := setupChannelTest(t)
-	orgTo := ctx.createOrg(t, fmt.Sprintf("mem-bulk-trf-%d", ts()), "distributor", nil)
+	agentID := ctx.createOrg(t, fmt.Sprintf("mem-bulk-agent-%d", ts()), "agent", nil)
+	orgTo := ctx.createOrg(t, fmt.Sprintf("mem-bulk-trf-%d", ts()), "distributor", &agentID)
 
 	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/members/bulk-transfer",
 		map[string]interface{}{
