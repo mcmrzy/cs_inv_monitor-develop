@@ -200,6 +200,13 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Verify the organization belongs to the caller's tenant
+	callerTenantID := middleware.GetRootTenantID(c)
+	if org.RootTenantID != callerTenantID {
+		response.Error(c, 403, "cannot create invitations in another tenant's organization")
+		return
+	}
+
 	// Check quota before generating token
 	maxPending, err := h.checkInvitationQuota(ctx, org.RootTenantID, *orgID)
 	if err != nil {
