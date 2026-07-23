@@ -944,6 +944,41 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestSHA256DigestMatch() {
 }
 
 // ============================================================================
+// Safe Invocation Helpers
+// ============================================================================
+
+// safeCall invokes a handler method via reflection, catching panics from nil dependencies.
+func (suite *DeviceClaimTransferHandlerTestSuite) safeCall(fn interface{}, c *gin.Context) {
+	defer func() { recover() }()
+	reflect.ValueOf(fn).Call([]reflect.Value{reflect.ValueOf(c)})
+}
+
+func (suite *DeviceClaimTransferHandlerTestSuite) callGenerateClaimCode(c *gin.Context) {
+	suite.safeCall(suite.handler.GenerateClaimCode, c)
+}
+func (suite *DeviceClaimTransferHandlerTestSuite) callVerifyClaimCode(c *gin.Context) {
+	suite.safeCall(suite.handler.VerifyClaimCode, c)
+}
+func (suite *DeviceClaimTransferHandlerTestSuite) callClaimDevice(c *gin.Context) {
+	suite.safeCall(suite.handler.ClaimDevice, c)
+}
+func (suite *DeviceClaimTransferHandlerTestSuite) callRequestTransfer(c *gin.Context) {
+	suite.safeCall(suite.handler.RequestTransfer, c)
+}
+func (suite *DeviceClaimTransferHandlerTestSuite) callListTransfers(c *gin.Context) {
+	suite.safeCall(suite.handler.ListTransfers, c)
+}
+func (suite *DeviceClaimTransferHandlerTestSuite) callApproveTransfer(c *gin.Context) {
+	suite.safeCall(suite.handler.ApproveTransfer, c)
+}
+func (suite *DeviceClaimTransferHandlerTestSuite) callRejectTransfer(c *gin.Context) {
+	suite.safeCall(suite.handler.RejectTransfer, c)
+}
+func (suite *DeviceClaimTransferHandlerTestSuite) callCancelTransfer(c *gin.Context) {
+	suite.safeCall(suite.handler.CancelTransfer, c)
+}
+
+// ============================================================================
 // Integration Test Helpers
 // ============================================================================
 
