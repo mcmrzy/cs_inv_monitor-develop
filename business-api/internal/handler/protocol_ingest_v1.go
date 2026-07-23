@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"bytes"
@@ -127,20 +127,20 @@ type threePhaseV1Data struct {
 func (h *InternalHandler) IngestAlarmV1(c *gin.Context) {
 	record, rawData, err := decodeProtocolV1(c.Request, "alarm")
 	if err != nil {
-		response.HandleError(c, err)
+		response.Error(c, 500, err.Error())
 		return
 	}
 	var data alarmV1Data
 	if err := requireObjectFields(rawData, false, "source", "code", "level", "state"); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid alarm data: "+err.Error()))
+		response.Error(c, 400, "invalid alarm data: "+err.Error())
 		return
 	}
 	if err := decodeStrictJSON(rawData, &data); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid alarm data: "+err.Error()))
+		response.Error(c, 400, "invalid alarm data: "+err.Error())
 		return
 	}
 	if err := validateAlarmV1(data); err != nil {
-		response.HandleError(c, apperr.BadRequest(err.Error()))
+		response.Error(c, 400, err.Error())
 		return
 	}
 	result, storeErr := h.protocolStore().IngestAlarm(c.Request.Context(), record, data)
@@ -150,20 +150,20 @@ func (h *InternalHandler) IngestAlarmV1(c *gin.Context) {
 func (h *InternalHandler) IngestParallelV1(c *gin.Context) {
 	record, rawData, err := decodeProtocolV1(c.Request, "parallel")
 	if err != nil {
-		response.HandleError(c, err)
+		response.Error(c, 500, err.Error())
 		return
 	}
 	var data parallelV1Data
 	if err := requireParallelFields(rawData); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid parallel data: "+err.Error()))
+		response.Error(c, 400, "invalid parallel data: "+err.Error())
 		return
 	}
 	if err := decodeStrictJSON(rawData, &data); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid parallel data: "+err.Error()))
+		response.Error(c, 400, "invalid parallel data: "+err.Error())
 		return
 	}
 	if err := validateParallelV1(record.SN, data); err != nil {
-		response.HandleError(c, apperr.BadRequest(err.Error()))
+		response.Error(c, 400, err.Error())
 		return
 	}
 	result, storeErr := h.protocolStore().IngestParallel(c.Request.Context(), record, data)
@@ -173,20 +173,20 @@ func (h *InternalHandler) IngestParallelV1(c *gin.Context) {
 func (h *InternalHandler) IngestThreePhaseV1(c *gin.Context) {
 	record, rawData, err := decodeProtocolV1(c.Request, "three_phase")
 	if err != nil {
-		response.HandleError(c, err)
+		response.Error(c, 500, err.Error())
 		return
 	}
 	var data threePhaseV1Data
 	if err := requireObjectFields(rawData, false, "voltage", "current", "active_power", "total_active_power", "line_voltage", "frequency", "voltage_unbalance", "current_unbalance"); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid three_phase data: "+err.Error()))
+		response.Error(c, 400, "invalid three_phase data: "+err.Error())
 		return
 	}
 	if err := decodeStrictJSON(rawData, &data); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid three_phase data: "+err.Error()))
+		response.Error(c, 400, "invalid three_phase data: "+err.Error())
 		return
 	}
 	if err := validateThreePhaseV1(data); err != nil {
-		response.HandleError(c, apperr.BadRequest(err.Error()))
+		response.Error(c, 400, err.Error())
 		return
 	}
 	result, storeErr := h.protocolStore().IngestThreePhase(c.Request.Context(), record, data)
@@ -204,12 +204,12 @@ func (h *InternalHandler) finishProtocolIngest(c *gin.Context, result protocolV1
 	if err != nil {
 		switch {
 		case errors.Is(err, errProtocolDeviceNotFound):
-			response.HandleError(c, apperr.NotFound("device not found"))
+			response.Error(c, 404, "device not found")
 		case errors.Is(err, errProtocolNoStation), errors.Is(err, errProtocolParallelMember), errors.Is(err, errProtocolNotThreePhase):
-			response.HandleError(c, apperr.BadRequest(err.Error()))
+			response.Error(c, 400, err.Error())
 		default:
 			logger.Error("protocol v1 ingest failed", zap.Error(err))
-			response.HandleError(c, apperr.Internal("protocol ingest failed", err))
+			response.Error(c, 500, "protocol ingest failed")
 		}
 		return
 	}

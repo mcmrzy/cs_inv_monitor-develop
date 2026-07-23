@@ -801,6 +801,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			authInv := auth.Group("/invitations")
 			{
 				authInv.POST("/create", deps.InvitationHandler.Create)
+				authInv.POST("/accept", deps.InvitationHandler.Accept)
 				authInv.GET("/list", deps.InvitationHandler.List)
 				authInv.DELETE("/:id/revoke", deps.InvitationHandler.Revoke)
 				authInv.GET("/:id/details", deps.InvitationHandler.Details)

@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"strconv"
@@ -6,7 +6,6 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -65,7 +64,7 @@ func (h *AlarmHandler) List(c *gin.Context) {
 
 	alarms, total, err := h.alarmService.List(c.Request.Context(), params)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -77,24 +76,24 @@ func (h *AlarmHandler) GetByID(c *gin.Context) {
 	role := middleware.GetRole(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid alarm id"))
+		response.Error(c, 400, "invalid alarm id")
 		return
 	}
 
 	alarm, err := h.alarmService.GetByID(c.Request.Context(), alarmID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if alarm == nil {
-		response.HandleError(c, apperr.NotFound("alarm not found"))
+		response.Error(c, 404, "alarm not found")
 		return
 	}
 
 	// 管理员可以查看任何告警，普通用户只能查看自己的
 	if role > 1 && alarm.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -106,29 +105,29 @@ func (h *AlarmHandler) MarkHandled(c *gin.Context) {
 	role := middleware.GetRole(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid alarm id"))
+		response.Error(c, 400, "invalid alarm id")
 		return
 	}
 
 	alarm, err := h.alarmService.GetByID(c.Request.Context(), alarmID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if alarm == nil {
-		response.HandleError(c, apperr.NotFound("alarm not found"))
+		response.Error(c, 404, "alarm not found")
 		return
 	}
 
 	// 管理员可以处理任何告警，普通用户只能处理自己的
 	if role > 1 && alarm.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	if err := h.alarmService.MarkHandled(c.Request.Context(), alarmID, userID); err != nil {
-		response.HandleError(c, apperr.Internal("mark handled failed", err))
+		response.Error(c, 500, "mark handled failed")
 		return
 	}
 
@@ -142,12 +141,12 @@ func (h *AlarmHandler) MarkRead(c *gin.Context) {
 		IDs []int64 `json:"ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if err := h.alarmService.MarkRead(c.Request.Context(), req.IDs, userID); err != nil {
-		response.HandleError(c, apperr.Internal("mark read failed", err))
+		response.Error(c, 500, "mark read failed")
 		return
 	}
 
@@ -160,7 +159,7 @@ func (h *AlarmHandler) GetStats(c *gin.Context) {
 
 	stats, err := h.alarmService.GetStats(c.Request.Context(), userID, role)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get stats failed", err))
+		response.Error(c, 500, "get stats failed")
 		return
 	}
 
@@ -173,26 +172,26 @@ func (h *AlarmHandler) Acknowledge(c *gin.Context) {
 	role := middleware.GetRole(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid alarm id"))
+		response.Error(c, 400, "invalid alarm id")
 		return
 	}
 
 	alarm, err := h.alarmService.GetByID(c.Request.Context(), alarmID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	if alarm == nil {
-		response.HandleError(c, apperr.NotFound("alarm not found"))
+		response.Error(c, 404, "alarm not found")
 		return
 	}
 	if role > 1 && alarm.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	if err := h.alarmService.MarkHandled(c.Request.Context(), alarmID, userID); err != nil {
-		response.HandleError(c, apperr.Internal("mark handled failed", err))
+		response.Error(c, 500, "mark handled failed")
 		return
 	}
 
@@ -205,26 +204,26 @@ func (h *AlarmHandler) Ignore(c *gin.Context) {
 	role := middleware.GetRole(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid alarm id"))
+		response.Error(c, 400, "invalid alarm id")
 		return
 	}
 
 	alarm, err := h.alarmService.GetByID(c.Request.Context(), alarmID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	if alarm == nil {
-		response.HandleError(c, apperr.NotFound("alarm not found"))
+		response.Error(c, 404, "alarm not found")
 		return
 	}
 	if role > 1 && alarm.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	if err := h.alarmService.MarkIgnored(c.Request.Context(), alarmID); err != nil {
-		response.HandleError(c, apperr.Internal("mark ignored failed", err))
+		response.Error(c, 500, "mark ignored failed")
 		return
 	}
 
@@ -236,27 +235,27 @@ func (h *AlarmHandler) Delete(c *gin.Context) {
 	role := middleware.GetRole(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid alarm id"))
+		response.Error(c, 400, "invalid alarm id")
 		return
 	}
 
 	// Ownership check: non-admin users can only delete their own alarms
 	alarm, err := h.alarmService.GetByID(c.Request.Context(), alarmID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	if alarm == nil {
-		response.HandleError(c, apperr.NotFound("alarm not found"))
+		response.Error(c, 404, "alarm not found")
 		return
 	}
 	if role > 1 && alarm.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	if err := h.alarmService.Delete(c.Request.Context(), alarmID); err != nil {
-		response.HandleError(c, apperr.Internal("delete failed", err))
+		response.Error(c, 500, "delete failed")
 		return
 	}
 
@@ -266,12 +265,12 @@ func (h *AlarmHandler) Delete(c *gin.Context) {
 func (h *AlarmHandler) ClearAll(c *gin.Context) {
 	// Only admin can clear all alarms
 	if middleware.GetRole(c) != 0 {
-		response.HandleError(c, apperr.Forbidden("admin only"))
+		response.Error(c, 403, "admin only")
 		return
 	}
 
 	if err := h.alarmService.ClearAll(c.Request.Context()); err != nil {
-		response.HandleError(c, apperr.Internal("clear failed", err))
+		response.Error(c, 500, "clear failed")
 		return
 	}
 

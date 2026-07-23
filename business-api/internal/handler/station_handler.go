@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
 
@@ -63,7 +62,7 @@ func (h *StationHandler) Create(c *gin.Context) {
 
 	var req CreateStationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -89,7 +88,7 @@ func (h *StationHandler) Create(c *gin.Context) {
 		station.Timezone = timezone.AsiaShanghai
 	}
 	if err := timezone.ValidateTimezone(station.Timezone); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid timezone: "+station.Timezone))
+		response.Error(c, 400, "invalid timezone: "+station.Timezone)
 		return
 	}
 
@@ -105,7 +104,7 @@ func (h *StationHandler) Create(c *gin.Context) {
 
 	if err := h.stationService.Create(c.Request.Context(), station); err != nil {
 		log.Printf("[CreateStation] error: user_id=%d, err=%v", userID, err)
-		response.HandleError(c, apperr.Internal("创建电站失败，请稍后重试", err))
+		response.Error(c, 500, "创建电站失败，请稍后重试")
 		return
 	}
 
@@ -144,34 +143,34 @@ type UpdateStationRequest struct {
 func (h *StationHandler) Update(c *gin.Context) {
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid station id"))
+		response.Error(c, 400, "invalid station id")
 		return
 	}
 
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if station == nil {
-		response.HandleError(c, apperr.NotFound("station not found"))
+		response.Error(c, 404, "station not found")
 		return
 	}
 
 	allowed, accessErr := h.canAccessStation(c, stationID)
 	if accessErr != nil {
-		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		response.Error(c, 500, "check station permission failed")
 		return
 	}
 	if !allowed {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	var req UpdateStationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -210,7 +209,7 @@ func (h *StationHandler) Update(c *gin.Context) {
 	}
 	if req.Timezone != "" {
 		if err := timezone.ValidateTimezone(req.Timezone); err != nil {
-			response.HandleError(c, apperr.BadRequest("invalid timezone: "+req.Timezone))
+			response.Error(c, 400, "invalid timezone: "+req.Timezone)
 			return
 		}
 		station.Timezone = req.Timezone
@@ -227,7 +226,7 @@ func (h *StationHandler) Update(c *gin.Context) {
 	}
 
 	if err := h.stationService.Update(c.Request.Context(), station); err != nil {
-		response.HandleError(c, apperr.Internal("update station failed", err))
+		response.Error(c, 500, "update station failed")
 		return
 	}
 
@@ -237,33 +236,33 @@ func (h *StationHandler) Update(c *gin.Context) {
 func (h *StationHandler) Delete(c *gin.Context) {
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid station id"))
+		response.Error(c, 400, "invalid station id")
 		return
 	}
 
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if station == nil {
-		response.HandleError(c, apperr.NotFound("station not found"))
+		response.Error(c, 404, "station not found")
 		return
 	}
 
 	allowed, accessErr := h.canAccessStation(c, stationID)
 	if accessErr != nil {
-		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		response.Error(c, 500, "check station permission failed")
 		return
 	}
 	if !allowed {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	if err := h.stationService.Delete(c.Request.Context(), stationID); err != nil {
-		response.HandleError(c, apperr.Internal("delete station failed", err))
+		response.Error(c, 500, "delete station failed")
 		return
 	}
 
@@ -276,7 +275,7 @@ func (h *StationHandler) Assign(c *gin.Context) {
 
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid station id"))
+		response.Error(c, 400, "invalid station id")
 		return
 	}
 
@@ -284,55 +283,55 @@ func (h *StationHandler) Assign(c *gin.Context) {
 		UserID int64 `json:"user_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if req.UserID <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid user_id"))
+		response.Error(c, 400, "invalid user_id")
 		return
 	}
 
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if station == nil {
-		response.HandleError(c, apperr.NotFound("station not found"))
+		response.Error(c, 404, "station not found")
 		return
 	}
 
 	allowed, accessErr := h.canAccessStation(c, stationID)
 	if accessErr != nil {
-		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		response.Error(c, 500, "check station permission failed")
 		return
 	}
 	if !allowed {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	targetUser, err := h.userService.GetByID(c.Request.Context(), req.UserID)
 	if err != nil || targetUser == nil || targetUser.Status != 1 {
-		response.HandleError(c, apperr.BadRequest("target user not found or disabled"))
+		response.Error(c, 400, "target user not found or disabled")
 		return
 	}
 	if role != service.RoleSuperAdmin {
 		inScope, scopeErr := h.userService.IsUserInScope(c.Request.Context(), actorID, req.UserID)
 		if scopeErr != nil {
-			response.HandleError(c, apperr.Internal("check user scope failed", scopeErr))
+			response.Error(c, 500, "check user scope failed")
 			return
 		}
 		if !inScope || !service.CanManageRole(role, targetUser.Role) {
-			response.HandleError(c, apperr.Forbidden("target user is outside your management scope"))
+			response.Error(c, 403, "target user is outside your management scope")
 			return
 		}
 	}
 
 	if err := h.stationService.Assign(c.Request.Context(), stationID, req.UserID); err != nil {
-		response.HandleError(c, apperr.Internal("assign station failed", err))
+		response.Error(c, 500, "assign station failed")
 		return
 	}
 
@@ -342,28 +341,28 @@ func (h *StationHandler) Assign(c *gin.Context) {
 func (h *StationHandler) GetByID(c *gin.Context) {
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid station id"))
+		response.Error(c, 400, "invalid station id")
 		return
 	}
 
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if station == nil {
-		response.HandleError(c, apperr.NotFound("station not found"))
+		response.Error(c, 404, "station not found")
 		return
 	}
 
 	allowed, accessErr := h.canAccessStation(c, stationID)
 	if accessErr != nil {
-		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		response.Error(c, 500, "check station permission failed")
 		return
 	}
 	if !allowed {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -460,7 +459,7 @@ func (h *StationHandler) List(c *gin.Context) {
 	}
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -470,7 +469,7 @@ func (h *StationHandler) List(c *gin.Context) {
 	for _, st := range stations {
 		devices, err := h.deviceService.GetByStationID(ctx, st.ID)
 		if err != nil {
-			response.HandleError(c, apperr.Internal("system error", err))
+			response.Error(c, 500, "system error")
 			return
 		}
 		deviceCount := len(devices)
@@ -553,7 +552,7 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 		total = int64(len(stations))
 	}
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -566,7 +565,7 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 		// 直接使用电站的状态而不是计算设备状态
 		devices, err := h.deviceService.GetByStationID(c.Request.Context(), station.ID)
 		if err != nil {
-			response.HandleError(c, apperr.Internal("system error", err))
+			response.Error(c, 500, "system error")
 			return
 		}
 		deviceCount := len(devices)
@@ -655,22 +654,22 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 func (h *StationHandler) GetStatistics(c *gin.Context) {
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid station id"))
+		response.Error(c, 400, "invalid station id")
 		return
 	}
 
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil || station == nil {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 	allowed, accessErr := h.canAccessStation(c, stationID)
 	if accessErr != nil {
-		response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+		response.Error(c, 500, "check station permission failed")
 		return
 	}
 	if !allowed {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -688,7 +687,7 @@ func (h *StationHandler) GetStatistics(c *gin.Context) {
 
 	data, err := h.stationService.GetStatistics(c.Request.Context(), stationID, startDate, endDate, period, tz)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get statistics failed", err))
+		response.Error(c, 500, "get statistics failed")
 		return
 	}
 

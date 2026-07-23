@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -115,7 +114,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	countQuery := `SELECT COUNT(*) ` + baseQuery
 	var total int64
 	if err := h.db.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -126,7 +125,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, query, args...)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer rows.Close()
@@ -148,14 +147,14 @@ func (h *NotificationHandler) List(c *gin.Context) {
 		var n Notification
 		var stationID *int64
 		if err := rows.Scan(&n.ID, &n.DeviceSN, &stationID, &n.UserID, &n.NotifyType, &n.Title, &n.Content, &n.Status, &n.CreatedAt); err != nil {
-			response.HandleError(c, apperr.Internal("system error", err))
+			response.Error(c, 500, "system error")
 			return
 		}
 		n.StationID = stationID
 		items = append(items, &n)
 	}
 	if err := rows.Err(); err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -176,12 +175,12 @@ func (h *NotificationHandler) GetStats(c *gin.Context) {
 	var total, unread int
 	if role == service.RoleSuperAdmin {
 		if err := h.db.QueryRow(ctx, query).Scan(&total, &unread); err != nil {
-			response.HandleError(c, apperr.Internal("system error", err))
+			response.Error(c, 500, "system error")
 			return
 		}
 	} else {
 		if err := h.db.QueryRow(ctx, query, userID).Scan(&total, &unread); err != nil {
-			response.HandleError(c, apperr.Internal("system error", err))
+			response.Error(c, 500, "system error")
 			return
 		}
 	}
@@ -195,7 +194,7 @@ func (h *NotificationHandler) GetStats(c *gin.Context) {
 func (h *NotificationHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid notification id"))
+		response.Error(c, 400, "invalid notification id")
 		return
 	}
 
@@ -211,11 +210,11 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 			notificationMutationScope("n", role, 2), id, middleware.GetUserID(c))
 	}
 	if err != nil {
-		response.HandleError(c, apperr.Internal("delete failed", err))
+		response.Error(c, 500, "delete failed")
 		return
 	}
 	if tag.RowsAffected() != 1 {
-		response.HandleError(c, apperr.Forbidden("notification is outside your data scope"))
+		response.Error(c, 403, "notification is outside your data scope")
 		return
 	}
 
@@ -235,7 +234,7 @@ func (h *NotificationHandler) ClearAll(c *gin.Context) {
 			notificationMutationScope("n", role, 1), middleware.GetUserID(c))
 	}
 	if err != nil {
-		response.HandleError(c, apperr.Internal("clear failed", err))
+		response.Error(c, 500, "clear failed")
 		return
 	}
 
@@ -253,22 +252,22 @@ type pushAnnouncementRequest struct {
 func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 	var req pushAnnouncementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request body"))
+		response.Error(c, 400, "invalid request body")
 		return
 	}
 
 	req.Title = strings.TrimSpace(req.Title)
 	req.Content = strings.TrimSpace(req.Content)
 	if req.Title == "" || req.Content == "" {
-		response.HandleError(c, apperr.BadRequest("title and content are required"))
+		response.Error(c, 400, "title and content are required")
 		return
 	}
 	if len(req.Title) > 200 || len(req.Content) > 10000 {
-		response.HandleError(c, apperr.BadRequest("title or content is too long"))
+		response.Error(c, 400, "title or content is too long")
 		return
 	}
 	if strings.TrimSpace(req.Target) == "" {
-		response.HandleError(c, apperr.BadRequest("target is required"))
+		response.Error(c, 400, "target is required")
 		return
 	}
 
@@ -283,11 +282,11 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 	switch {
 	case req.Target == "all":
 		if actorRole != service.RoleSuperAdmin {
-			response.HandleError(c, apperr.Forbidden("only super administrators can broadcast to all users"))
+			response.Error(c, 403, "only super administrators can broadcast to all users")
 			return
 		}
 		if err := h.saveBroadcastAnnouncement(ctx, deviceSN, notifyType, req.Title, req.Content); err != nil {
-			response.HandleError(c, apperr.Internal("failed to save announcement", err))
+			response.Error(c, 500, "failed to save announcement")
 			return
 		}
 		h.jpushService.SendBroadcastAsync(ctx, req.Title, req.Content, map[string]string{
@@ -298,7 +297,7 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 		stationIDStr := strings.TrimPrefix(req.Target, "station_")
 		stationID, err := strconv.ParseInt(stationIDStr, 10, 64)
 		if err != nil || stationID <= 0 {
-			response.HandleError(c, apperr.BadRequest("invalid station target"))
+			response.Error(c, 400, "invalid station target")
 			return
 		}
 		if actorRole != service.RoleSuperAdmin {
@@ -315,27 +314,27 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 				)
 			`, adminID, stationID).Scan(&allowed)
 			if err != nil {
-				response.HandleError(c, apperr.Internal("failed to check station scope", err))
+				response.Error(c, 500, "failed to check station scope")
 				return
 			}
 			if !allowed {
-				response.HandleError(c, apperr.Forbidden("station is outside your management scope"))
+				response.Error(c, 403, "station is outside your management scope")
 				return
 			}
 		}
 
 		userIDs, err := h.getUserIDsByStation(ctx, stationID)
 		if err != nil {
-			response.HandleError(c, apperr.Internal("failed to query station users", err))
+			response.Error(c, 500, "failed to query station users")
 			return
 		}
 		if len(userIDs) == 0 {
-			response.HandleError(c, apperr.BadRequest("no users found in station"))
+			response.Error(c, 400, "no users found in station")
 			return
 		}
 
 		if err := h.saveAnnouncements(ctx, deviceSN, &stationID, userIDs, notifyType, req.Title, req.Content); err != nil {
-			response.HandleError(c, apperr.Internal("failed to save announcement", err))
+			response.Error(c, 500, "failed to save announcement")
 			return
 		}
 		h.jpushService.SendNotificationAsync(ctx, userIDs, notifyType, deviceSN, req.Title, req.Content)
@@ -344,18 +343,18 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 		userIDStr := strings.TrimPrefix(req.Target, "user_")
 		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil || userID <= 0 {
-			response.HandleError(c, apperr.BadRequest("invalid user target"))
+			response.Error(c, 400, "invalid user target")
 			return
 		}
 		var active bool
 		if err = h.db.QueryRow(ctx, `SELECT EXISTS(
 			SELECT 1 FROM users WHERE id = $1 AND status = 1 AND deleted_at IS NULL
 		)`, userID).Scan(&active); err != nil {
-			response.HandleError(c, apperr.Internal("failed to query target user", err))
+			response.Error(c, 500, "failed to query target user")
 			return
 		}
 		if !active {
-			response.HandleError(c, apperr.BadRequest("target user not found or disabled"))
+			response.Error(c, 400, "target user not found or disabled")
 			return
 		}
 		if actorRole != service.RoleSuperAdmin {
@@ -366,23 +365,23 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 				WHERE h.ancestor_id = $1 AND h.descendant_id = $2
 			)`, adminID, userID).Scan(&allowed)
 			if err != nil {
-				response.HandleError(c, apperr.Internal("failed to check user scope", err))
+				response.Error(c, 500, "failed to check user scope")
 				return
 			}
 			if !allowed {
-				response.HandleError(c, apperr.Forbidden("user is outside your management scope"))
+				response.Error(c, 403, "user is outside your management scope")
 				return
 			}
 		}
 
 		if err := h.saveAnnouncement(ctx, deviceSN, nil, userID, notifyType, req.Title, req.Content); err != nil {
-			response.HandleError(c, apperr.Internal("failed to save announcement", err))
+			response.Error(c, 500, "failed to save announcement")
 			return
 		}
 		h.jpushService.SendNotificationAsync(ctx, []int64{userID}, notifyType, deviceSN, req.Title, req.Content)
 
 	default:
-		response.HandleError(c, apperr.BadRequest("invalid target"))
+		response.Error(c, 400, "invalid target")
 		return
 	}
 

@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"strconv"
@@ -7,7 +7,6 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -25,13 +24,13 @@ func NewEnergyScheduleHandler(scheduleService *service.EnergyScheduleService) *E
 func (h *EnergyScheduleHandler) GetSchedule(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		response.Error(c, 400, "设备 SN 不能为空")
 		return
 	}
 
 	schedule, err := h.scheduleService.GetSchedule(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询能源计划失败", err))
+		response.Error(c, 500, "查询能源计划失败")
 		return
 	}
 	if schedule == nil {
@@ -52,13 +51,13 @@ func (h *EnergyScheduleHandler) GetSchedule(c *gin.Context) {
 func (h *EnergyScheduleHandler) UpdateSchedule(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		response.Error(c, 400, "设备 SN 不能为空")
 		return
 	}
 
 	var req repository.UpsertScheduleReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("请求参数无效: "+err.Error()))
+		response.Error(c, 400, "请求参数无效: "+err.Error())
 		return
 	}
 
@@ -73,7 +72,7 @@ func (h *EnergyScheduleHandler) UpdateSchedule(c *gin.Context) {
 	ifMatch := c.GetHeader("If-Match")
 	expectedRevision, err := strconv.ParseInt(ifMatch, 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("If-Match header 缺失或无效，需提供当前 revision"))
+		response.Error(c, 400, "If-Match header 缺失或无效，需提供当前 revision")
 		return
 	}
 
@@ -81,7 +80,7 @@ func (h *EnergyScheduleHandler) UpdateSchedule(c *gin.Context) {
 
 	result, err := h.scheduleService.UpdateSchedule(c.Request.Context(), sn, req, expectedRevision)
 	if err != nil {
-		response.HandleError(c, err)
+		response.Error(c, 500, err.Error())
 		return
 	}
 
@@ -94,30 +93,30 @@ func (h *EnergyScheduleHandler) UpdateSchedule(c *gin.Context) {
 func (h *EnergyScheduleHandler) CreateOverride(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		response.Error(c, 400, "设备 SN 不能为空")
 		return
 	}
 
 	var req repository.CreateOverrideReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("请求参数无效: "+err.Error()))
+		response.Error(c, 400, "请求参数无效: "+err.Error())
 		return
 	}
 
 	if req.Domain == "" {
-		response.HandleError(c, apperr.BadRequest("domain 不能为空"))
+		response.Error(c, 400, "domain 不能为空")
 		return
 	}
 	if req.Value == nil {
-		response.HandleError(c, apperr.BadRequest("value 不能为空"))
+		response.Error(c, 400, "value 不能为空")
 		return
 	}
 	if req.ExpiresAt.IsZero() {
-		response.HandleError(c, apperr.BadRequest("expires_at 不能为空"))
+		response.Error(c, 400, "expires_at 不能为空")
 		return
 	}
 	if req.ExpiresAt.Before(time.Now()) {
-		response.HandleError(c, apperr.BadRequest("expires_at 不能是过去时间"))
+		response.Error(c, 400, "expires_at 不能是过去时间")
 		return
 	}
 
@@ -125,7 +124,7 @@ func (h *EnergyScheduleHandler) CreateOverride(c *gin.Context) {
 
 	override, err := h.scheduleService.CreateOverride(c.Request.Context(), sn, req)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("创建临时覆盖失败", err))
+		response.Error(c, 500, "创建临时覆盖失败")
 		return
 	}
 
@@ -136,13 +135,13 @@ func (h *EnergyScheduleHandler) CreateOverride(c *gin.Context) {
 func (h *EnergyScheduleHandler) ListOverrides(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		response.Error(c, 400, "设备 SN 不能为空")
 		return
 	}
 
 	overrides, err := h.scheduleService.ListActiveOverrides(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询临时覆盖列表失败", err))
+		response.Error(c, 500, "查询临时覆盖列表失败")
 		return
 	}
 
@@ -153,18 +152,18 @@ func (h *EnergyScheduleHandler) ListOverrides(c *gin.Context) {
 func (h *EnergyScheduleHandler) CancelOverride(c *gin.Context) {
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("设备 SN 不能为空"))
+		response.Error(c, 400, "设备 SN 不能为空")
 		return
 	}
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("无效的覆盖 ID"))
+		response.Error(c, 400, "无效的覆盖 ID")
 		return
 	}
 
 	if err := h.scheduleService.CancelOverride(c.Request.Context(), sn, id); err != nil {
-		response.HandleError(c, apperr.Internal("取消临时覆盖失败", err))
+		response.Error(c, 500, "取消临时覆盖失败")
 		return
 	}
 

@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"encoding/json"
@@ -10,7 +10,6 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
@@ -48,23 +47,23 @@ type WeatherResponse struct {
 func (h *WeatherHandler) GetStationWeather(c *gin.Context) {
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid station id"))
+		response.Error(c, 400, "invalid station id")
 		return
 	}
 
 	station, err := h.stationService.GetByID(c.Request.Context(), stationID)
 	if err != nil || station == nil {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 	if middleware.GetRole(c) != service.RoleSuperAdmin {
 		allowed, accessErr := h.stationService.HasAccess(c.Request.Context(), middleware.GetUserID(c), stationID)
 		if accessErr != nil {
-			response.HandleError(c, apperr.Internal("check station permission failed", accessErr))
+			response.Error(c, 500, "check station permission failed")
 			return
 		}
 		if !allowed {
-			response.HandleError(c, apperr.Forbidden("permission denied"))
+			response.Error(c, 403, "permission denied")
 			return
 		}
 	}
@@ -81,7 +80,7 @@ func (h *WeatherHandler) GetStationWeather(c *gin.Context) {
 	}
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("weather service unavailable", err))
+		response.Error(c, 500, "weather service unavailable")
 		return
 	}
 

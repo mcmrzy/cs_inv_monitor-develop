@@ -102,7 +102,7 @@ func TestDeviceClaim_WithValidCode(t *testing.T) {
 
 	// Claim device
 	resp, status := doJSON(t, ctx.Client, "POST",
-		fmt.Sprintf("%s/api/v1/devices/%s/claim", ctx.BaseURL, sn),
+		fmt.Sprintf("%s/api/v1/devices/by-sn/%s/claim", ctx.BaseURL, sn),
 		map[string]interface{}{"sn": sn, "claim_code": claimCode}, ctx.Token)
 	assert.Equal(t, http.StatusOK, status)
 	t.Logf("claim: code=%d msg=%s", resp.Code, resp.Message)
@@ -118,7 +118,7 @@ func TestDeviceClaim_WithWrongCode(t *testing.T) {
 		map[string]interface{}{"sn": sn, "station_id": 0}, ctx.Token)
 
 	resp, status := doJSON(t, ctx.Client, "POST",
-		fmt.Sprintf("%s/api/v1/devices/%s/claim", ctx.BaseURL, sn),
+		fmt.Sprintf("%s/api/v1/devices/by-sn/%s/claim", ctx.BaseURL, sn),
 		map[string]interface{}{"sn": sn, "claim_code": "WRONG-CODE"}, ctx.Token)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "wrong code should be rejected")
@@ -130,7 +130,7 @@ func TestDeviceClaim_UnauthorizedNoToken(t *testing.T) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	_, status := doJSON(t, client, "POST",
-		cfg.APIBaseURL+"/api/v1/devices/TEST-SN/claim",
+		cfg.APIBaseURL+"/api/v1/devices/by-sn/TEST-SN/claim",
 		map[string]interface{}{"sn": "TEST-SN", "claim_code": "CODE"}, "")
 	assert.Equal(t, http.StatusUnauthorized, status)
 }
@@ -149,7 +149,7 @@ func TestDeviceTransfer_RequestTransfer(t *testing.T) {
 
 	// Request transfer to another tenant
 	resp, status := doJSON(t, ctx.Client, "POST",
-		fmt.Sprintf("%s/api/v1/devices/%s/request-transfer", ctx.BaseURL, sn),
+		fmt.Sprintf("%s/api/v1/devices/by-sn/%s/request-transfer", ctx.BaseURL, sn),
 		map[string]interface{}{
 			"device_sn":    sn,
 			"to_tenant_id": 999,
@@ -212,7 +212,7 @@ func TestDeviceTransfer_FullLifecycle(t *testing.T) {
 
 	// Request transfer
 	transferResp, status := doJSON(t, ctx.Client, "POST",
-		fmt.Sprintf("%s/api/v1/devices/%s/request-transfer", ctx.BaseURL, sn),
+		fmt.Sprintf("%s/api/v1/devices/by-sn/%s/request-transfer", ctx.BaseURL, sn),
 		map[string]interface{}{
 			"device_sn":    sn,
 			"to_tenant_id": 1,

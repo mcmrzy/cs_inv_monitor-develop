@@ -16,7 +16,6 @@ import (
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 
@@ -154,13 +153,13 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 
 	var req CreateInvitationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	// Role validation: only non-endusers can create invitations
 	if role == service.RoleEndUser || role < 1 || role > 5 {
-		response.HandleError(c, apperr.Forbidden("end users cannot create invitations"))
+		response.Error(c, 403, "end users cannot create invitations")
 		return
 	}
 
@@ -169,7 +168,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	// Get inviter info
 	inviter, err := h.userRepo.GetByID(ctx, userID)
 	if err != nil || inviter == nil {
-		response.HandleError(c, apperr.NotFound("inviter not found"))
+		response.Error(c, 404, "inviter not found")
 		return
 	}
 
@@ -180,7 +179,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		orgID, err = h.resolveOrganizationFromContext(ctx, userID)
 		if err != nil {
 			logger.Warn("Failed to resolve organization from context", zap.Error(err))
-			response.HandleError(c, apperr.BadRequest("organization required"))
+			response.Error(c, 400, "organization required")
 			return
 		}
 	}
@@ -188,35 +187,35 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	// Verify user has permission to create invitations in this organization
 	hasPerm := h.permChecker.CheckPermission(userID, "organizations", "invite")
 	if !hasPerm && role < 2 { // org_admin and above
-		response.HandleError(c, apperr.Forbidden("insufficient permissions to create invitations"))
+		response.Error(c, 403, "insufficient permissions to create invitations")
 		return
 	}
 
 	// Get organization to resolve root_tenant_id
 	org, err := h.orgRepo.GetByID(ctx, *orgID)
 	if err != nil || org == nil {
-		response.HandleError(c, apperr.NotFound("organization not found"))
+		response.Error(c, 404, "organization not found")
 		return
 	}
 
 	// Check quota before generating token
 	maxPending, err := h.checkInvitationQuota(ctx, org.RootTenantID, *orgID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("检查配额失败", err))
+		response.Error(c, 500, "检查配额失败")
 		return
 	}
 
 	// Count current pending invitations
 	currentCount, _ := h.invitationRepo.CountByStatus(ctx, h.db, org.RootTenantID, *orgID, "pending")
 	if currentCount >= int64(maxPending) {
-		response.HandleError(c, apperr.Forbidden("invitation quota exceeded"))
+		response.Error(c, 403, "invitation quota exceeded")
 		return
 	}
 
 	// Generate secure token (crypto/rand)
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		response.HandleError(c, apperr.Internal("生成邀请码失败", err))
+		response.Error(c, 500, "生成邀请码失败")
 		return
 	}
 	rawToken := hex.EncodeToString(tokenBytes)
@@ -227,7 +226,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -250,15 +249,15 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	if err := h.invitationRepo.Insert(ctx, tx, invitation); err != nil {
 		if strings.Contains(err.Error(), "uq_invitations_root_org_email") ||
 			strings.Contains(err.Error(), "unique_violation") {
-			response.HandleError(c, apperr.Conflict("该邮箱已有待处理的邀请"))
+			response.Error(c, 409, "该邮箱已有待处理的邀请")
 			return
 		}
-		response.HandleError(c, apperr.Internal("保存邀请失败", err))
+		response.Error(c, 500, "保存邀请失败")
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("保存邀请失败", err))
+		response.Error(c, 500, "保存邀请失败")
 		return
 	}
 
@@ -307,7 +306,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 func (h *InvitationHandler) List(c *gin.Context) {
 	var query ListInvitationsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid query"))
+		response.Error(c, 400, "invalid query")
 		return
 	}
 
@@ -331,7 +330,7 @@ func (h *InvitationHandler) List(c *gin.Context) {
 
 	total, items, err := h.invitationRepo.ListWithDetails(ctx, h.db, filter, query.Page, query.PageSize)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询邀请列表失败", err))
+		response.Error(c, 500, "查询邀请列表失败")
 		return
 	}
 
@@ -348,7 +347,7 @@ func (h *InvitationHandler) List(c *gin.Context) {
 func (h *InvitationHandler) Revoke(c *gin.Context) {
 	invitationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid invitation ID"))
+		response.Error(c, 400, "invalid invitation ID")
 		return
 	}
 
@@ -358,25 +357,25 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 	// Get invitation details
 	invitation, err := h.invitationRepo.GetById(ctx, h.db, invitationID)
 	if err != nil || invitation == nil {
-		response.HandleError(c, apperr.NotFound("邀请不存在"))
+		response.Error(c, 404, "邀请不存在")
 		return
 	}
 
 	// Validate user has permission
 	if invitation.InviterUserID != userID && middleware.GetRole(c) < 2 { // admin level check
-		response.HandleError(c, apperr.Forbidden("无权撤销此邀请"))
+		response.Error(c, 403, "无权撤销此邀请")
 		return
 	}
 
 	// Can only revoke pending invitations
 	if invitation.Status != "pending" {
-		response.HandleError(c, apperr.BadRequest("只能撤销待处理的邀请"))
+		response.Error(c, 400, "只能撤销待处理的邀请")
 		return
 	}
 
 	// Revoke the invitation
 	if err := h.invitationRepo.Revoke(ctx, h.db, invitationID); err != nil {
-		response.HandleError(c, apperr.Internal("撤销邀请失败", err))
+		response.Error(c, 500, "撤销邀请失败")
 		return
 	}
 
@@ -388,7 +387,7 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 func (h *InvitationHandler) Accept(c *gin.Context) {
 	var req AcceptInvitationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -396,7 +395,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 
 	// Validate password strength
 	if len(req.Password) < 6 || len(req.Password) > 20 {
-		response.HandleError(c, apperr.BadRequest("密码长度必须在 6-20 个字符之间"))
+		response.Error(c, 400, "密码长度必须在 6-20 个字符之间")
 		return
 	}
 
@@ -408,47 +407,47 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	// Find invitation by digest
 	invitation, err := h.invitationRepo.FindByTokenDigest(ctx, h.db, digestHex)
 	if err != nil || invitation == nil {
-		response.HandleError(c, apperr.Unauthorized("无效的邀请码"))
+		response.Error(c, 401, "无效的邀请码")
 		return
 	}
 
 	// Validate invitation status and expiration
 	if invitation.Status != "pending" {
 		if invitation.Status == "used" {
-			response.HandleError(c, apperr.Unauthorized("邀请码已被使用"))
+			response.Error(c, 401, "邀请码已被使用")
 		} else if invitation.Status == "revoked" {
-			response.HandleError(c, apperr.Unauthorized("邀请码已被撤销"))
+			response.Error(c, 401, "邀请码已被撤销")
 		} else if invitation.Status == "expired" {
-			response.HandleError(c, apperr.Unauthorized("邀请码已过期"))
+			response.Error(c, 401, "邀请码已过期")
 		} else {
-			response.HandleError(c, apperr.Unauthorized("无效的邀请码"))
+			response.Error(c, 401, "无效的邀请码")
 		}
 		return
 	}
 
 	if time.Now().After(invitation.ExpiresAt) {
 		h.invitationRepo.UpdateStatus(ctx, h.db, invitation.ID, "expired")
-		response.HandleError(c, apperr.Unauthorized("邀请码已过期"))
+		response.Error(c, 401, "邀请码已过期")
 		return
 	}
 
 	// Resolve organization and root_tenant
 	org, err := h.orgRepo.GetByID(ctx, *invitation.OrganizationID)
 	if err != nil || org == nil {
-		response.HandleError(c, apperr.Internal("组织信息错误", err))
+		response.Error(c, 500, "组织信息错误")
 		return
 	}
 
 	// Hash the user's password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("密码加密失败", err))
+		response.Error(c, 500, "密码加密失败")
 		return
 	}
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("数据库事务开始失败", err))
+		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -464,13 +463,13 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	if err := h.userRepo.CreateWithTx(ctx, tx, newUser); err != nil {
-		response.HandleError(c, apperr.Internal("创建用户失败", err))
+		response.Error(c, 500, "创建用户失败")
 		return
 	}
 
 	// Update user role based on invitation
 	if err := h.userRepo.UpdateRoleWithTx(ctx, tx, newUser.ID, int(invitation.RoleID)); err != nil {
-		response.HandleError(c, apperr.Internal("更新用户角色失败", err))
+		response.Error(c, 500, "更新用户角色失败")
 		return
 	}
 
@@ -484,7 +483,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	if err := h.orgRepo.CreateMembership(ctx, tx, membership); err != nil {
-		response.HandleError(c, apperr.Internal("加入组织失败", err))
+		response.Error(c, 500, "加入组织失败")
 		return
 	}
 
@@ -499,18 +498,18 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	if err := h.orgRepo.CreateRoleAssignment(ctx, tx, roleAssignment); err != nil {
-		response.HandleError(c, apperr.Internal("分配角色失败", err))
+		response.Error(c, 500, "分配角色失败")
 		return
 	}
 
 	// Mark invitation as used
 	if err := h.invitationRepo.MarkUsed(ctx, tx, invitation.ID, newUser.ID); err != nil {
-		response.HandleError(c, apperr.Internal("标记邀请为已用失败", err))
+		response.Error(c, 500, "标记邀请为已用失败")
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		response.HandleError(c, apperr.Internal("提交事务失败", err))
+		response.Error(c, 500, "提交事务失败")
 		return
 	}
 
@@ -525,7 +524,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	userRole := newUser.Role
 	accessToken, refreshToken, err := h.jwtService.GenerateToken(newUser.ID, newUser.Phone, &userRole)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("生成令牌失败", err))
+		response.Error(c, 500, "生成令牌失败")
 		return
 	}
 
@@ -554,7 +553,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 func (h *InvitationHandler) Details(c *gin.Context) {
 	invitationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid invitation ID"))
+		response.Error(c, 400, "invalid invitation ID")
 		return
 	}
 
@@ -562,13 +561,13 @@ func (h *InvitationHandler) Details(c *gin.Context) {
 
 	invitation, err := h.invitationRepo.GetById(ctx, h.db, invitationID)
 	if err != nil || invitation == nil {
-		response.HandleError(c, apperr.NotFound("邀请不存在"))
+		response.Error(c, 404, "邀请不存在")
 		return
 	}
 
 	// Check permissions - only inviter or admin can view details
 	if invitation.InviterUserID != middleware.GetUserID(c) && middleware.GetRole(c) < 2 {
-		response.HandleError(c, apperr.Forbidden("无权查看此邀请详情"))
+		response.Error(c, 403, "无权查看此邀请详情")
 		return
 	}
 

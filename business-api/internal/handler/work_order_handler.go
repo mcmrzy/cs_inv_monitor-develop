@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -91,7 +90,7 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 	filter := workOrderDataScope("w", role, 1) + ` AND ($2='' OR w.status=$2) AND ($3='' OR w.priority=$3)`
 	var total int64
 	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM work_orders w WHERE `+filter, userID, status, priority).Scan(&total); err != nil {
-		response.HandleError(c, apperr.Internal("list work orders failed", err))
+		response.Error(c, 500, "list work orders failed")
 		return
 	}
 	rows, err := h.db.Query(ctx, `SELECT `+workOrderJSON+`
@@ -99,13 +98,13 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 		WHERE `+filter+` ORDER BY w.created_at DESC LIMIT $4 OFFSET $5`,
 		userID, status, priority, pageSize, (page-1)*pageSize)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("list work orders failed", err))
+		response.Error(c, 500, "list work orders failed")
 		return
 	}
 	defer rows.Close()
 	items, err := scanJSONMaps(rows)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("decode work orders failed", err))
+		response.Error(c, 500, "decode work orders failed")
 		return
 	}
 	response.Page(c, items, total, page, pageSize)
@@ -114,7 +113,7 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 func (h *WorkOrderHandler) GetByID(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		response.HandleError(c, apperr.BadRequest("invalid order id"))
+		response.Error(c, 400, "invalid order id")
 		return
 	}
 	var raw []byte
@@ -124,16 +123,16 @@ func (h *WorkOrderHandler) GetByID(c *gin.Context) {
 		FROM work_orders w LEFT JOIN users c ON c.id=w.creator_id LEFT JOIN users a ON a.id=w.assigned_to
 		WHERE w.id::text=$1 AND `+workOrderDataScope("w", middleware.GetRole(c), 2), id, middleware.GetUserID(c)).Scan(&raw)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("work order not found"))
+		response.Error(c, 404, "work order not found")
 		return
 	}
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get work order failed", err))
+		response.Error(c, 500, "get work order failed")
 		return
 	}
 	var item map[string]interface{}
 	if err := json.Unmarshal(raw, &item); err != nil {
-		response.HandleError(c, apperr.Internal("decode work order failed", err))
+		response.Error(c, 500, "decode work order failed")
 		return
 	}
 	response.Success(c, item)
@@ -149,7 +148,7 @@ func (h *WorkOrderHandler) GetStatistics(c *gin.Context) {
 		FROM work_orders w WHERE `+workOrderDataScope("w", role, 1), userID).
 		Scan(&open, &inProgress, &resolved, &closed)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("work order statistics failed", err))
+		response.Error(c, 500, "work order statistics failed")
 		return
 	}
 	response.Success(c, gin.H{"total": open + inProgress + resolved + closed, "open": open, "inProgress": inProgress, "resolved": resolved, "closed": closed})
@@ -158,12 +157,12 @@ func (h *WorkOrderHandler) GetStatistics(c *gin.Context) {
 func (h *WorkOrderHandler) Create(c *gin.Context) {
 	var req workOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Title) == "" || strings.TrimSpace(req.Description) == "" {
-		response.HandleError(c, apperr.BadRequest("title and description are required"))
+		response.Error(c, 400, "title and description are required")
 		return
 	}
 	normalizeWorkOrderRequest(&req)
 	if !validPriority(req.Priority) {
-		response.HandleError(c, apperr.BadRequest("invalid priority"))
+		response.Error(c, 400, "invalid priority")
 		return
 	}
 	var id string
@@ -173,7 +172,7 @@ func (h *WorkOrderHandler) Create(c *gin.Context) {
 		req.Title, req.Description, req.Priority, req.DeviceSN, middleware.GetUserID(c), req.AssignedTo,
 		req.TemplateType, slaHours(req.Priority)).Scan(&id)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("create work order failed", err))
+		response.Error(c, 500, "create work order failed")
 		return
 	}
 	_, _ = h.db.Exec(c.Request.Context(), `INSERT INTO work_order_events(work_order_id,status,operator_id,remark) VALUES($1,'open',$2,'created')`, id, middleware.GetUserID(c))
@@ -183,16 +182,16 @@ func (h *WorkOrderHandler) Create(c *gin.Context) {
 func (h *WorkOrderHandler) Update(c *gin.Context) {
 	var req workOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	normalizeWorkOrderRequest(&req)
 	if req.Status != "" && !validWorkOrderStatus(req.Status) {
-		response.HandleError(c, apperr.BadRequest("invalid work order status"))
+		response.Error(c, 400, "invalid work order status")
 		return
 	}
 	if req.Priority != "" && !validPriority(req.Priority) {
-		response.HandleError(c, apperr.BadRequest("invalid priority"))
+		response.Error(c, 400, "invalid priority")
 		return
 	}
 	result, err := h.db.Exec(c.Request.Context(), `UPDATE work_orders SET
@@ -206,11 +205,11 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 		AND ($10::bigint IS NULL OR lock_version=$10)`,
 		c.Param("id"), req.Title, req.Description, req.Status, req.Priority, req.DeviceSN, req.AssignedTo, req.Resolution, middleware.GetUserID(c), req.ExpectedVersion)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("update work order failed", err))
+		response.Error(c, 500, "update work order failed")
 		return
 	}
 	if result.RowsAffected() == 0 {
-		response.HandleError(c, apperr.NotFound("work order not found"))
+		response.Error(c, 404, "work order not found")
 		return
 	}
 	if req.Status != "" {
@@ -228,11 +227,11 @@ func (h *WorkOrderHandler) Escalate(c *gin.Context) {
 		WHERE id::text=$1 AND status NOT IN('resolved','closed') AND `+workOrderDataScope("work_orders", middleware.GetRole(c), 2)+`
 		RETURNING status`, c.Param("id"), middleware.GetUserID(c)).Scan(&status)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.BadRequest("work order cannot be escalated"))
+		response.Error(c, 400, "work order cannot be escalated")
 		return
 	}
 	if err != nil {
-		response.HandleError(c, apperr.Internal("escalate work order failed", err))
+		response.Error(c, 500, "escalate work order failed")
 		return
 	}
 	_, _ = h.db.Exec(c.Request.Context(), `INSERT INTO work_order_events(work_order_id,status,operator_id,remark) VALUES($1,$2,$3,'escalated')`, c.Param("id"), status, middleware.GetUserID(c))
@@ -242,43 +241,43 @@ func (h *WorkOrderHandler) Escalate(c *gin.Context) {
 func (h *WorkOrderHandler) UploadAttachments(c *gin.Context) {
 	var allowed bool
 	if err := h.db.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM work_orders w WHERE w.id::text=$1 AND `+workOrderDataScope("w", middleware.GetRole(c), 2)+`)`, c.Param("id"), middleware.GetUserID(c)).Scan(&allowed); err != nil {
-		response.HandleError(c, apperr.Internal("validate work order scope failed", err))
+		response.Error(c, 500, "validate work order scope failed")
 		return
 	}
 	if !allowed {
-		response.HandleError(c, apperr.NotFound("work order not found"))
+		response.Error(c, 404, "work order not found")
 		return
 	}
 	form, err := c.MultipartForm()
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid multipart request"))
+		response.Error(c, 400, "invalid multipart request")
 		return
 	}
 	files := form.File["files"]
 	if len(files) == 0 || len(files) > 5 {
-		response.HandleError(c, apperr.BadRequest("1 to 5 image files are required"))
+		response.Error(c, 400, "1 to 5 image files are required")
 		return
 	}
 	if err := os.MkdirAll(h.uploadRoot, 0750); err != nil {
-		response.HandleError(c, apperr.Internal("create attachment directory failed", err))
+		response.Error(c, 500, "create attachment directory failed")
 		return
 	}
 	urls := make([]string, 0, len(files))
 	for index, header := range files {
 		file, err := header.Open()
 		if err != nil {
-			response.HandleError(c, apperr.BadRequest("open attachment failed"))
+			response.Error(c, 400, "open attachment failed")
 			return
 		}
 		content, readErr := io.ReadAll(io.LimitReader(file, 10<<20+1))
 		file.Close()
 		if readErr != nil || len(content) > 10<<20 {
-			response.HandleError(c, apperr.BadRequest("attachment exceeds 10MB"))
+			response.Error(c, 400, "attachment exceeds 10MB")
 			return
 		}
 		mimeType := http.DetectContentType(content)
 		if !strings.HasPrefix(mimeType, "image/") {
-			response.HandleError(c, apperr.BadRequest("only image attachments are allowed"))
+			response.Error(c, 400, "only image attachments are allowed")
 			return
 		}
 		ext := strings.ToLower(filepath.Ext(header.Filename))
@@ -287,7 +286,7 @@ func (h *WorkOrderHandler) UploadAttachments(c *gin.Context) {
 		}
 		name := fmt.Sprintf("%s-%d-%d%s", c.Param("id"), time.Now().UnixNano(), index, ext)
 		if err := os.WriteFile(filepath.Join(h.uploadRoot, name), content, 0640); err != nil {
-			response.HandleError(c, apperr.Internal("save attachment failed", err))
+			response.Error(c, 500, "save attachment failed")
 			return
 		}
 		url := "/firmware/work-orders/" + name
@@ -295,7 +294,7 @@ func (h *WorkOrderHandler) UploadAttachments(c *gin.Context) {
 			c.Param("id"), filepath.Base(header.Filename), url, mimeType, len(content), middleware.GetUserID(c))
 		if err != nil {
 			_ = os.Remove(filepath.Join(h.uploadRoot, name))
-			response.HandleError(c, apperr.Internal("save attachment metadata failed", err))
+			response.Error(c, 500, "save attachment metadata failed")
 			return
 		}
 		urls = append(urls, url)
@@ -312,16 +311,16 @@ func (h *WorkOrderHandler) DownloadAttachment(c *gin.Context) {
 		WHERE w.id::text=$1 AND attachment.id::text=$2 AND `+workOrderDataScope("w", middleware.GetRole(c), 3),
 		c.Param("id"), c.Param("attachmentId"), middleware.GetUserID(c)).Scan(&fileURL, &mimeType, &fileName)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("attachment not found"))
+		response.Error(c, 404, "attachment not found")
 		return
 	}
 	if err != nil {
-		response.HandleError(c, apperr.Internal("load attachment failed", err))
+		response.Error(c, 500, "load attachment failed")
 		return
 	}
 	storedName := filepath.Base(fileURL)
 	if storedName == "." || storedName == "" {
-		response.HandleError(c, apperr.NotFound("attachment not found"))
+		response.Error(c, 404, "attachment not found")
 		return
 	}
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filepath.Base(fileName)))
@@ -343,11 +342,11 @@ func (h *WorkOrderHandler) Delete(c *gin.Context) {
 	}
 	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM work_orders WHERE id::text=$1 AND `+workOrderDataScope("work_orders", middleware.GetRole(c), 2), c.Param("id"), middleware.GetUserID(c))
 	if err != nil {
-		response.HandleError(c, apperr.Internal("delete work order failed", err))
+		response.Error(c, 500, "delete work order failed")
 		return
 	}
 	if result.RowsAffected() == 0 {
-		response.HandleError(c, apperr.NotFound("work order not found"))
+		response.Error(c, 404, "work order not found")
 		return
 	}
 	for _, name := range attachmentFiles {

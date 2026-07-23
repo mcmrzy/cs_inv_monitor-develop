@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"encoding/csv"
@@ -14,7 +14,6 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
 
@@ -83,7 +82,7 @@ func (h *DeviceHandler) List(c *gin.Context) {
 	}
 
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -112,17 +111,17 @@ func (h *DeviceHandler) GetDetail(c *gin.Context) {
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if device == nil {
-		response.HandleError(c, apperr.NotFound("device not found"))
+		response.Error(c, 404, "device not found")
 		return
 	}
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -199,18 +198,18 @@ func (h *DeviceHandler) GetRealtimeData(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	data, err := h.deviceService.GetRealtimeData(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if data == nil {
-		response.HandleError(c, apperr.NotFound("no data"))
+		response.Error(c, 404, "no data")
 		return
 	}
 
@@ -240,29 +239,29 @@ func (h *DeviceHandler) Bind(c *gin.Context) {
 
 	var req BindDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if !deviceSNRegex.MatchString(req.SN) {
-		response.HandleError(c, apperr.BadRequest("invalid SN format"))
+		response.Error(c, 400, "invalid SN format")
 		return
 	}
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), req.SN)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if device == nil {
 		if err := h.deviceService.EnsureDevice(c.Request.Context(), req.SN); err != nil {
-			response.HandleError(c, apperr.Internal("create device failed", err))
+			response.Error(c, 500, "create device failed")
 			return
 		}
 		device, err = h.deviceService.GetBySN(c.Request.Context(), req.SN)
 		if err != nil || device == nil {
-			response.HandleError(c, apperr.Internal("system error", err))
+			response.Error(c, 500, "system error")
 			return
 		}
 	}
@@ -272,7 +271,7 @@ func (h *DeviceHandler) Bind(c *gin.Context) {
 		return
 	}
 	if err := ensureTenantDeviceCapacity(c.Request.Context(), h.db, userID); err != nil {
-		response.HandleError(c, apperr.BadRequest(err.Error()))
+		response.Error(c, 400, err.Error())
 		return
 	}
 
@@ -281,7 +280,7 @@ func (h *DeviceHandler) Bind(c *gin.Context) {
 			response.Error(c, 5002, "device already bound")
 			return
 		}
-		response.HandleError(c, apperr.Internal("bind device failed", err))
+		response.Error(c, 500, "bind device failed")
 		return
 	}
 
@@ -296,22 +295,22 @@ func (h *DeviceHandler) Unbind(c *gin.Context) {
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if device == nil {
-		response.HandleError(c, apperr.NotFound("device not found"))
+		response.Error(c, 404, "device not found")
 		return
 	}
 
 	if !isAdmin && device.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	if err := h.deviceService.Unbind(c.Request.Context(), sn); err != nil {
-		response.HandleError(c, apperr.Internal("unbind device failed", err))
+		response.Error(c, 500, "unbind device failed")
 		return
 	}
 
@@ -326,17 +325,17 @@ func (h *DeviceHandler) RequestUnbind(c *gin.Context) {
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if device == nil {
-		response.HandleError(c, apperr.NotFound("device not found"))
+		response.Error(c, 404, "device not found")
 		return
 	}
 
 	if !isAdmin && device.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -347,7 +346,7 @@ func (h *DeviceHandler) RequestUnbind(c *gin.Context) {
 
 	id, err := h.deviceService.RequestUnbind(c.Request.Context(), sn, userID, req.Reason)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("create unbind request failed", err))
+		response.Error(c, 500, "create unbind request failed")
 		return
 	}
 
@@ -371,13 +370,13 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 
 	// 步骤1前置：RBAC devices:control + 数据归属检查（兼容现有中间件层）
 	if !isAdmin && !h.deviceService.HasControlPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	var req ControlRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -396,7 +395,7 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 			})
 			return
 		}
-		response.HandleError(c, err)
+		response.Error(c, 500, err.Error())
 		return
 	}
 
@@ -428,13 +427,13 @@ func (h *DeviceHandler) GetControlFields(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	fields, err := h.deviceService.GetControlFieldsBySN(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询控制字段失败", err))
+		response.Error(c, 500, "查询控制字段失败")
 		return
 	}
 
@@ -449,13 +448,13 @@ func (h *DeviceHandler) GetControlCapabilities(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	caps, err := h.deviceService.GetControlCapabilitiesBySN(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("查询控制能力失败", err))
+		response.Error(c, 500, "查询控制能力失败")
 		return
 	}
 
@@ -477,38 +476,38 @@ type CreateDeviceRequest struct {
 func (h *DeviceHandler) Create(c *gin.Context) {
 	role := middleware.GetRole(c)
 	if role > 4 {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	var req CreateDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request body"))
+		response.Error(c, 400, "invalid request body")
 		return
 	}
 
 	if !deviceSNRegex.MatchString(req.SN) {
-		response.HandleError(c, apperr.BadRequest("invalid SN format"))
+		response.Error(c, 400, "invalid SN format")
 		return
 	}
 
 	// Check if device already exists
 	existing, err := h.deviceService.GetBySN(c.Request.Context(), req.SN)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	if existing != nil {
-		response.HandleError(c, apperr.BadRequest("device already exists"))
+		response.Error(c, 400, "device already exists")
 		return
 	}
 
 	if err := h.deviceService.Create(c.Request.Context(), req.SN, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			response.HandleError(c, apperr.BadRequest("device already exists"))
+			response.Error(c, 400, "device already exists")
 			return
 		}
-		response.HandleError(c, apperr.Internal("failed to create device", err))
+		response.Error(c, 500, "failed to create device")
 		return
 	}
 
@@ -538,25 +537,25 @@ func (h *DeviceHandler) Update(c *gin.Context) {
 	// Ownership check: non-admin users can only update their own devices
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	if device == nil {
-		response.HandleError(c, apperr.NotFound("device not found"))
+		response.Error(c, 404, "device not found")
 		return
 	}
 	if !isAdmin && device.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	var req UpdateDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request body"))
+		response.Error(c, 400, "invalid request body")
 		return
 	}
 	if err := h.deviceService.Update(c.Request.Context(), sn, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
-		response.HandleError(c, apperr.Internal("failed to update device", err))
+		response.Error(c, 500, "failed to update device")
 		return
 	}
 	response.SuccessWithMessage(c, "device updated", nil)
@@ -569,7 +568,7 @@ func (h *DeviceHandler) GetHistory(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -581,7 +580,7 @@ func (h *DeviceHandler) GetHistory(c *gin.Context) {
 
 	data, err := h.deviceService.GetHistoryData(c.Request.Context(), sn, startDate, endDate, period, tz)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get history failed", err))
+		response.Error(c, 500, "get history failed")
 		return
 	}
 
@@ -595,7 +594,7 @@ func (h *DeviceHandler) GetAlarms(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -610,7 +609,7 @@ func (h *DeviceHandler) GetAlarms(c *gin.Context) {
 
 	alarms, total, err := h.alarmService.GetByDeviceSN(c.Request.Context(), sn, page, pageSize)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -634,13 +633,13 @@ func (h *DeviceHandler) AddToStation(c *gin.Context) {
 
 	var req AddDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), req.SN)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
@@ -652,23 +651,23 @@ func (h *DeviceHandler) AddToStation(c *gin.Context) {
 	if !isAdmin {
 		// Check device ownership
 		if device.UserID != userID {
-			response.HandleError(c, apperr.Forbidden("permission denied"))
+			response.Error(c, 403, "permission denied")
 			return
 		}
 		// Check station ownership
 		station, err := h.stationService.GetByID(c.Request.Context(), req.StationID)
 		if err != nil || station == nil {
-			response.HandleError(c, apperr.BadRequest("station not found"))
+			response.Error(c, 400, "station not found")
 			return
 		}
 		if station.UserID != userID {
-			response.HandleError(c, apperr.Forbidden("station not owned by you"))
+			response.Error(c, 403, "station not owned by you")
 			return
 		}
 	}
 
 	if err := h.deviceService.AddToStation(c.Request.Context(), req.SN, req.StationID); err != nil {
-		response.HandleError(c, apperr.Internal("add to station failed", err))
+		response.Error(c, 500, "add to station failed")
 		return
 	}
 
@@ -682,13 +681,13 @@ func (h *DeviceHandler) RemoveFromStation(c *gin.Context) {
 
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("invalid sn"))
+		response.Error(c, 400, "invalid sn")
 		return
 	}
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	if device == nil {
@@ -697,12 +696,12 @@ func (h *DeviceHandler) RemoveFromStation(c *gin.Context) {
 	}
 
 	if !isAdmin && device.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	if err := h.deviceService.RemoveFromStation(c.Request.Context(), sn); err != nil {
-		response.HandleError(c, apperr.Internal("remove from station failed", err))
+		response.Error(c, 500, "remove from station failed")
 		return
 	}
 
@@ -714,7 +713,7 @@ func (h *DeviceHandler) ScanLocal(c *gin.Context) {
 
 	devices, err := h.deviceService.ScanLocalNetwork(c.Request.Context(), userID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("scan failed", err))
+		response.Error(c, 500, "scan failed")
 		return
 	}
 
@@ -728,7 +727,7 @@ func (h *DeviceHandler) GetStatistics(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -756,7 +755,7 @@ func (h *DeviceHandler) GetStatistics(c *gin.Context) {
 
 	data, err := h.deviceService.GetStatistics(c.Request.Context(), sn, startDate, endDate, period, tz)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get statistics failed", err))
+		response.Error(c, 500, "get statistics failed")
 		return
 	}
 
@@ -767,12 +766,12 @@ func (h *DeviceHandler) GetControlState(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
 	if middleware.GetRole(c) != 0 && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 	state, err := h.deviceService.GetControlState(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get control state failed", err))
+		response.Error(c, 500, "get control state failed")
 		return
 	}
 	response.Success(c, state)
@@ -789,7 +788,7 @@ func (h *DeviceHandler) GetCommands(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -804,7 +803,7 @@ func (h *DeviceHandler) GetCommands(c *gin.Context) {
 
 	commands, total, err := h.deviceService.GetCommandHistory(c.Request.Context(), sn, page, pageSize)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get commands failed", err))
+		response.Error(c, 500, "get commands failed")
 		return
 	}
 
@@ -823,16 +822,16 @@ func (h *DeviceHandler) BatchControl(c *gin.Context) {
 		Params  map[string]interface{} `json:"params"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request: sns and command are required"))
+		response.Error(c, 400, "invalid request: sns and command are required")
 		return
 	}
 
 	if len(req.SNs) == 0 {
-		response.HandleError(c, apperr.BadRequest("sns cannot be empty"))
+		response.Error(c, 400, "sns cannot be empty")
 		return
 	}
 	if len(req.SNs) > 50 {
-		response.HandleError(c, apperr.BadRequest("batch size cannot exceed 50"))
+		response.Error(c, 400, "batch size cannot exceed 50")
 		return
 	}
 
@@ -876,7 +875,7 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -923,7 +922,7 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
 	if err != nil {
 		log.Printf("[GetTelemetry] error: sn=%s, err=%v", sn, err)
-		response.HandleError(c, apperr.Internal("获取遥测数据失败", err))
+		response.Error(c, 500, "获取遥测数据失败")
 		return
 	}
 
@@ -957,7 +956,7 @@ func (h *DeviceHandler) GetLifecycleHistory(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -973,7 +972,7 @@ func (h *DeviceHandler) GetLifecycleHistory(c *gin.Context) {
 	items, total, err := h.deviceService.GetLifecycleHistory(c.Request.Context(), sn, page, pageSize)
 	if err != nil {
 		log.Printf("[GetLifecycleHistory] error: sn=%s, err=%v", sn, err)
-		response.HandleError(c, apperr.Internal("获取生命周期历史失败", err))
+		response.Error(c, 500, "获取生命周期历史失败")
 		return
 	}
 
@@ -983,7 +982,7 @@ func (h *DeviceHandler) GetLifecycleHistory(c *gin.Context) {
 func (h *DeviceHandler) GetUnbindRequests(c *gin.Context) {
 	role := middleware.GetRole(c)
 	if role != 0 {
-		response.HandleError(c, apperr.Forbidden("admin only"))
+		response.Error(c, 403, "admin only")
 		return
 	}
 
@@ -998,7 +997,7 @@ func (h *DeviceHandler) GetUnbindRequests(c *gin.Context) {
 
 	items, total, err := h.deviceService.GetUnbindRequests(c.Request.Context(), page, pageSize)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get unbind requests failed", err))
+		response.Error(c, 500, "get unbind requests failed")
 		return
 	}
 
@@ -1008,13 +1007,13 @@ func (h *DeviceHandler) GetUnbindRequests(c *gin.Context) {
 func (h *DeviceHandler) ApproveUnbind(c *gin.Context) {
 	role := middleware.GetRole(c)
 	if role != 0 {
-		response.HandleError(c, apperr.Forbidden("admin only"))
+		response.Error(c, 403, "admin only")
 		return
 	}
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request id"))
+		response.Error(c, 400, "invalid request id")
 		return
 	}
 
@@ -1026,7 +1025,7 @@ func (h *DeviceHandler) ApproveUnbind(c *gin.Context) {
 
 	if err := h.deviceService.ApproveUnbind(c.Request.Context(), id, userID, req.Comment); err != nil {
 		log.Printf("[ApproveUnbind] error: id=%d, err=%v", id, err)
-		response.HandleError(c, apperr.Internal("操作失败，请稍后重试", err))
+		response.Error(c, 500, "操作失败，请稍后重试")
 		return
 	}
 
@@ -1036,13 +1035,13 @@ func (h *DeviceHandler) ApproveUnbind(c *gin.Context) {
 func (h *DeviceHandler) RejectUnbind(c *gin.Context) {
 	role := middleware.GetRole(c)
 	if role != 0 {
-		response.HandleError(c, apperr.Forbidden("admin only"))
+		response.Error(c, 403, "admin only")
 		return
 	}
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request id"))
+		response.Error(c, 400, "invalid request id")
 		return
 	}
 
@@ -1054,7 +1053,7 @@ func (h *DeviceHandler) RejectUnbind(c *gin.Context) {
 
 	if err := h.deviceService.RejectUnbind(c.Request.Context(), id, userID, req.Comment); err != nil {
 		log.Printf("[RejectUnbind] error: id=%d, err=%v", id, err)
-		response.HandleError(c, apperr.Internal("操作失败，请稍后重试", err))
+		response.Error(c, 500, "操作失败，请稍后重试")
 		return
 	}
 
@@ -1069,22 +1068,22 @@ func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 
 	if device == nil {
-		response.HandleError(c, apperr.NotFound("device not found"))
+		response.Error(c, 404, "device not found")
 		return
 	}
 
 	if !isAdmin && device.UserID != userID {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
 	if err := h.deviceService.Delete(c.Request.Context(), sn); err != nil {
-		response.HandleError(c, apperr.Internal("delete device failed", err))
+		response.Error(c, 500, "delete device failed")
 		return
 	}
 
@@ -1100,33 +1099,33 @@ type AssignInstallerRequest struct {
 func (h *DeviceHandler) AssignInstaller(c *gin.Context) {
 	// Only admin can assign installers
 	if middleware.GetRole(c) != 0 {
-		response.HandleError(c, apperr.Forbidden("admin only"))
+		response.Error(c, 403, "admin only")
 		return
 	}
 
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("device sn is required"))
+		response.Error(c, 400, "device sn is required")
 		return
 	}
 
 	var req AssignInstallerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	// 验证设备存在
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil || device == nil {
-		response.HandleError(c, apperr.NotFound("device not found"))
+		response.Error(c, 404, "device not found")
 		return
 	}
 
 	// 更新设备的installer_id
 	err = h.deviceService.UpdateInstallerID(c.Request.Context(), sn, req.InstallerID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("failed to assign installer", err))
+		response.Error(c, 500, "failed to assign installer")
 		return
 	}
 
@@ -1143,25 +1142,25 @@ type BatchAssignInstallerRequest struct {
 func (h *DeviceHandler) BatchAssignInstaller(c *gin.Context) {
 	// Only admin can batch assign installers
 	if middleware.GetRole(c) != 0 {
-		response.HandleError(c, apperr.Forbidden("admin only"))
+		response.Error(c, 403, "admin only")
 		return
 	}
 
 	var req BatchAssignInstallerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	if len(req.DeviceSNs) == 0 {
-		response.HandleError(c, apperr.BadRequest("deviceSns is required"))
+		response.Error(c, 400, "deviceSns is required")
 		return
 	}
 
 	// 批量更新设备的installer_id
 	err := h.deviceService.BatchUpdateInstallerID(c.Request.Context(), req.DeviceSNs, req.InstallerID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("failed to batch assign installer", err))
+		response.Error(c, 500, "failed to batch assign installer")
 		return
 	}
 
@@ -1172,20 +1171,20 @@ func (h *DeviceHandler) BatchAssignInstaller(c *gin.Context) {
 func (h *DeviceHandler) RemoveInstaller(c *gin.Context) {
 	// Only admin can remove installers
 	if middleware.GetRole(c) != 0 {
-		response.HandleError(c, apperr.Forbidden("admin only"))
+		response.Error(c, 403, "admin only")
 		return
 	}
 
 	sn := c.Param("sn")
 	if sn == "" {
-		response.HandleError(c, apperr.BadRequest("device sn is required"))
+		response.Error(c, 400, "device sn is required")
 		return
 	}
 
 	// 更新设备的installer_id为null
 	err := h.deviceService.UpdateInstallerID(c.Request.Context(), sn, 0)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("failed to remove installer", err))
+		response.Error(c, 500, "failed to remove installer")
 		return
 	}
 
@@ -1202,20 +1201,20 @@ func (h *DeviceHandler) ImportExcel(c *gin.Context) {
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("请选择要上传的文件"))
+		response.Error(c, 400, "请选择要上传的文件")
 		return
 	}
 
 	src, err := file.Open()
 	if err != nil {
-		response.HandleError(c, apperr.Internal("打开文件失败", err))
+		response.Error(c, 500, "打开文件失败")
 		return
 	}
 	defer src.Close()
 
 	f, err := excelize.OpenReader(src)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("无法解析Excel文件，请确保为 .xlsx 格式"))
+		response.Error(c, 400, "无法解析Excel文件，请确保为 .xlsx 格式")
 		return
 	}
 	defer f.Close()
@@ -1223,7 +1222,7 @@ func (h *DeviceHandler) ImportExcel(c *gin.Context) {
 	sheetName := f.GetSheetName(0)
 	rows, err := f.GetRows(sheetName)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("读取Excel数据失败"))
+		response.Error(c, 400, "读取Excel数据失败")
 		return
 	}
 
@@ -1331,7 +1330,7 @@ func (h *DeviceHandler) ExportTelemetry(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -1358,7 +1357,7 @@ func (h *DeviceHandler) ExportTelemetry(c *gin.Context) {
 	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
 	if err != nil {
 		log.Printf("[ExportTelemetry] error: sn=%s, err=%v", sn, err)
-		response.HandleError(c, apperr.Internal("获取遥测数据失败", err))
+		response.Error(c, 500, "获取遥测数据失败")
 		return
 	}
 
@@ -1406,7 +1405,7 @@ func (h *DeviceHandler) ExportTelemetryExcel(c *gin.Context) {
 	isAdmin := role == 0
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
-		response.HandleError(c, apperr.Forbidden("permission denied"))
+		response.Error(c, 403, "permission denied")
 		return
 	}
 
@@ -1433,7 +1432,7 @@ func (h *DeviceHandler) ExportTelemetryExcel(c *gin.Context) {
 	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
 	if err != nil {
 		log.Printf("[ExportTelemetryExcel] error: sn=%s, err=%v", sn, err)
-		response.HandleError(c, apperr.Internal("获取遥测数据失败", err))
+		response.Error(c, 500, "获取遥测数据失败")
 		return
 	}
 

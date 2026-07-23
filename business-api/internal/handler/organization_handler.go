@@ -9,7 +9,6 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -92,13 +91,13 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 
 	var req CreateOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
 	// Role validation: only non-enduser can create orgs (roles 0-4, not 5=enduser)
 	if role == 5 { // RoleEndUser
-		response.HandleError(c, apperr.Forbidden("end users cannot create organizations"))
+		response.Error(c, 403, "end users cannot create organizations")
 		return
 	}
 
@@ -111,7 +110,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		"service_partner": true,
 	}
 	if !validTypes[req.Type] {
-		response.HandleError(c, apperr.BadRequest("invalid organization type"))
+		response.Error(c, 400, "invalid organization type")
 		return
 	}
 
@@ -119,7 +118,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		log.Printf("[CreateOrg] tx begin error: user_id=%d, err=%v", userID, err)
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer func() {
@@ -132,8 +131,29 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
 		tx.Rollback(ctx)
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
+	}
+
+	// Ensure tenant root manufacturer org exists (required by DB constraints)
+	if req.Type != "manufacturer" {
+		var rootExists bool
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM organizations WHERE id = $1 AND root_tenant_id = $1 AND org_type = 'manufacturer' AND deleted_at IS NULL)`, tenantID).Scan(&rootExists)
+		if err != nil {
+			tx.Rollback(ctx)
+			log.Printf("[CreateOrg] check root error: %v", err)
+			response.Error(c, 500, "system error")
+			return
+		}
+		if !rootExists {
+			_, err = tx.Exec(ctx, `INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status, version) VALUES ($1, $1, NULL, 'manufacturer', 'Root Tenant', 'active', 1) ON CONFLICT (id) DO NOTHING`, tenantID)
+			if err != nil {
+				tx.Rollback(ctx)
+				log.Printf("[CreateOrg] create root org error: %v", err)
+				response.Error(c, 500, "system error")
+				return
+			}
+		}
 	}
 
 	// If ParentID provided, validate it belongs to same root_tenant
@@ -145,27 +165,27 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		`, *req.ParentID).Scan(&checkTenantID)
 		if err == pgx.ErrNoRows {
 			tx.Rollback(ctx)
-			response.HandleError(c, apperr.NotFound("parent organization not found"))
+			response.Error(c, 404, "parent organization not found")
 			return
 		}
 		if err != nil {
 			tx.Rollback(ctx)
 			log.Printf("[CreateOrg] query parent error: err=%v", err)
-			response.HandleError(c, apperr.Internal("query parent failed", err))
+			response.Error(c, 500, "query parent failed")
 			return
 		}
 		if checkTenantID != tenantID {
 			tx.Rollback(ctx)
-			response.HandleError(c, apperr.Forbidden("parent organization not in tenant scope"))
+			response.Error(c, 403, "parent organization not in tenant scope")
 			return
 		}
 		parentID = req.ParentID
-	} else {
-		// Direct child of root tenant
-		parentID = nil
+	} else if req.Type != "manufacturer" {
+		// Default parent is the manufacturer root org
+		parentID = &tenantID
 	}
 
-	// Insert organization
+	// Insert organization — the AFTER INSERT trigger handles closure and tenant_roots
 	org := &model.Organization{
 		ID:           0, // Let DB generate
 		RootTenantID: tenantID,
@@ -185,54 +205,13 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	if err != nil {
 		tx.Rollback(ctx)
 		log.Printf("[CreateOrg] insert error: user_id=%d, err=%v", userID, err)
-		if err.Error() == "duplicate key value violates unique constraint" {
-			response.HandleError(c, apperr.Conflict("organization with same name already exists under this parent"))
-		} else {
-			response.HandleError(c, apperr.Internal("create organization failed", err))
-		}
+		response.Error(c, 500, "create organization failed")
 		return
-	}
-
-	// Update closure table for hierarchy
-	if parentID != nil {
-		_, err = tx.Exec(ctx, `
-			WITH RECURSIVE ancestors AS (
-				SELECT ancestor_id, descendant_id FROM organization_closure 
-				WHERE root_tenant_id = $1 AND descendant_id = $2
-				UNION ALL
-				SELECT oc.ancestor_id, oc.descendant_id
-				FROM organization_closure oc
-				JOIN ancestors a ON oc.descendant_id = a.ancestor_id
-				WHERE oc.root_tenant_id = $1
-			)
-			INSERT INTO organization_closure (root_tenant_id, ancestor_id, descendant_id, depth)
-			SELECT $1, a.ancestor_id, $2, a.depth + 1 FROM ancestors a
-			UNION
-			SELECT $1, $2, $2, 0
-		`, tenantID, *parentID)
-		if err != nil {
-			tx.Rollback(ctx)
-			log.Printf("[CreateOrg] update closure error: err=%v", err)
-			response.HandleError(c, apperr.Internal("update organization hierarchy failed", err))
-			return
-		}
-	} else {
-		// Root-level org (direct child of manufacturer)
-		_, err = tx.Exec(ctx, `
-			INSERT INTO organization_closure (root_tenant_id, ancestor_id, descendant_id, depth)
-			SELECT $1, $1, $2, 0
-		`, tenantID, org.ID)
-		if err != nil {
-			tx.Rollback(ctx)
-			log.Printf("[CreateOrg] insert root closure error: err=%v", err)
-			response.HandleError(c, apperr.Internal("update organization hierarchy failed", err))
-			return
-		}
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[CreateOrg] commit error: user_id=%d, err=%v", userID, err)
-		response.HandleError(c, apperr.Internal("create organization failed", err))
+		response.Error(c, 500, "create organization failed")
 		return
 	}
 
@@ -291,7 +270,7 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		log.Printf("[ListOrg] tx begin error: user_id=%d, err=%v", userID, err)
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer tx.Rollback(ctx)
@@ -299,7 +278,7 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 	// Get user's root_tenant_id
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
@@ -332,7 +311,7 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 		argIdx++
 	}
 
-	query += ` GROUP BY o.id, child.id ORDER BY o.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
+	query += ` GROUP BY o.id ORDER BY o.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
 
 	// Calculate offset
 	offset := int64((page - 1) * pageSize)
@@ -341,7 +320,7 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		log.Printf("[ListOrg] query error: user_id=%d, err=%v", userID, err)
-		response.HandleError(c, apperr.Internal("query organizations failed", err))
+		response.Error(c, 500, "query organizations failed")
 		return
 	}
 	defer rows.Close()
@@ -373,13 +352,13 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 	err = tx.QueryRow(ctx, countQuery, countArgs...).Scan(&totalCount)
 	if err != nil {
 		log.Printf("[ListOrg] count error: err=%v", err)
-		response.HandleError(c, apperr.Internal("count organizations failed", err))
+		response.Error(c, 500, "count organizations failed")
 		return
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[ListOrg] commit error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query failed", err))
+		response.Error(c, 500, "query failed")
 		return
 	}
 
@@ -392,7 +371,7 @@ func (h *OrganizationHandler) GetByID(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid organization id"))
+		response.Error(c, 400, "invalid organization id")
 		return
 	}
 
@@ -400,14 +379,14 @@ func (h *OrganizationHandler) GetByID(c *gin.Context) {
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		log.Printf("[GetOrgById] tx begin error: user_id=%d, id=%d, err=%v", userID, id, err)
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer tx.Rollback(ctx)
 
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
@@ -424,18 +403,18 @@ func (h *OrganizationHandler) GetByID(c *gin.Context) {
 		&org.Status, &org.Version, &org.CreatedAt, &org.UpdatedAt, &org.ChildrenCount,
 	)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("organization not found"))
+		response.Error(c, 404, "organization not found")
 		return
 	}
 	if err != nil {
 		log.Printf("[GetOrgById] query error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query organization failed", err))
+		response.Error(c, 500, "query organization failed")
 		return
 	}
 
 	// Verify access
 	if org.RootTenantID != tenantID {
-		response.HandleError(c, apperr.Forbidden("access denied"))
+		response.Error(c, 403, "access denied")
 		return
 	}
 
@@ -460,7 +439,7 @@ func (h *OrganizationHandler) GetByID(c *gin.Context) {
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[GetOrgById] commit error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query failed", err))
+		response.Error(c, 500, "query failed")
 		return
 	}
 
@@ -473,13 +452,13 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid organization id"))
+		response.Error(c, 400, "invalid organization id")
 		return
 	}
 
 	var req UpdateOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -487,7 +466,7 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		log.Printf("[UpdateOrg] tx begin error: user_id=%d, id=%d, err=%v", userID, id, err)
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer func() {
@@ -498,7 +477,7 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
@@ -509,12 +488,12 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 		SELECT org_type, parent_id FROM organizations WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&currentType, &currentParentID)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("organization not found"))
+		response.Error(c, 404, "organization not found")
 		return
 	}
 	if err != nil {
 		log.Printf("[UpdateOrg] query error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query organization failed", err))
+		response.Error(c, 500, "query organization failed")
 		return
 	}
 
@@ -528,18 +507,18 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 	var updatedAt time.Time
 	err = tx.QueryRow(ctx, updateQuery, id, req.Name, tenantID).Scan(&id, &newVersion, &updatedAt)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.Forbidden("organization not found or not in tenant scope"))
+		response.Error(c, 403, "organization not found or not in tenant scope")
 		return
 	}
 	if err != nil {
 		log.Printf("[UpdateOrg] update error: err=%v", err)
-		response.HandleError(c, apperr.Internal("update organization failed", err))
+		response.Error(c, 500, "update organization failed")
 		return
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[UpdateOrg] commit error: err=%v", err)
-		response.HandleError(c, apperr.Internal("update failed", err))
+		response.Error(c, 500, "update failed")
 		return
 	}
 
@@ -556,7 +535,7 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid organization id"))
+		response.Error(c, 400, "invalid organization id")
 		return
 	}
 
@@ -564,7 +543,7 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		log.Printf("[DeleteOrg] tx begin error: user_id=%d, id=%d, err=%v", userID, id, err)
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer func() {
@@ -575,7 +554,7 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
@@ -586,11 +565,11 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 	`, id).Scan(&childCount)
 	if err != nil {
 		log.Printf("[DeleteOrg] check children error: err=%v", err)
-		response.HandleError(c, apperr.Internal("check children failed", err))
+		response.Error(c, 500, "check children failed")
 		return
 	}
 	if childCount > 0 {
-		response.HandleError(c, apperr.BadRequest("cannot delete organization with children"))
+		response.Error(c, 400, "cannot delete organization with children")
 		return
 	}
 
@@ -603,12 +582,12 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 	var deletedID int64
 	err = tx.QueryRow(ctx, deleteQuery, id, tenantID).Scan(&deletedID)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("organization not found or already deleted"))
+		response.Error(c, 404, "organization not found or already deleted")
 		return
 	}
 	if err != nil {
 		log.Printf("[DeleteOrg] delete error: err=%v", err)
-		response.HandleError(c, apperr.Internal("delete organization failed", err))
+		response.Error(c, 500, "delete organization failed")
 		return
 	}
 
@@ -624,7 +603,7 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[DeleteOrg] commit error: err=%v", err)
-		response.HandleError(c, apperr.Internal("delete failed", err))
+		response.Error(c, 500, "delete failed")
 		return
 	}
 
@@ -637,13 +616,13 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid organization id"))
+		response.Error(c, 400, "invalid organization id")
 		return
 	}
 
 	var req MoveOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -651,7 +630,7 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		log.Printf("[MoveOrg] tx begin error: user_id=%d, id=%d, err=%v", userID, id, err)
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer func() {
@@ -662,7 +641,7 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
@@ -672,12 +651,12 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 		SELECT org_type FROM organizations WHERE id = $1 AND root_tenant_id = $2 AND deleted_at IS NULL
 	`, req.ParentID, tenantID).Scan(&newParentType)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("parent organization not found"))
+		response.Error(c, 404, "parent organization not found")
 		return
 	}
 	if err != nil {
 		log.Printf("[MoveOrg] query parent error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query parent failed", err))
+		response.Error(c, 500, "query parent failed")
 		return
 	}
 
@@ -689,11 +668,11 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 	`, tenantID, req.ParentID, id).Scan(&isAncestor)
 	if err != nil {
 		log.Printf("[MoveOrg] check ancestor error: err=%v", err)
-		response.HandleError(c, apperr.Internal("check circular reference failed", err))
+		response.Error(c, 500, "check circular reference failed")
 		return
 	}
 	if isAncestor {
-		response.HandleError(c, apperr.Conflict("cannot move organization into its own descendant"))
+		response.Error(c, 409, "cannot move organization into its own descendant")
 		return
 	}
 
@@ -706,12 +685,12 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 	var updatedID int64
 	err = tx.QueryRow(ctx, updateQuery, id, req.ParentID, tenantID).Scan(&updatedID)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("organization not found or not in tenant scope"))
+		response.Error(c, 404, "organization not found or not in tenant scope")
 		return
 	}
 	if err != nil {
 		log.Printf("[MoveOrg] update parent error: err=%v", err)
-		response.HandleError(c, apperr.Internal("move organization failed", err))
+		response.Error(c, 500, "move organization failed")
 		return
 	}
 
@@ -751,7 +730,7 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[MoveOrg] commit error: err=%v", err)
-		response.HandleError(c, apperr.Internal("move failed", err))
+		response.Error(c, 500, "move failed")
 		return
 	}
 
@@ -768,13 +747,13 @@ func (h *OrganizationHandler) ToggleStatus(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid organization id"))
+		response.Error(c, 400, "invalid organization id")
 		return
 	}
 
 	var req ToggleStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 
@@ -784,7 +763,7 @@ func (h *OrganizationHandler) ToggleStatus(c *gin.Context) {
 		model.OrganizationStatusDisabled: true,
 	}
 	if !validStatus[req.Status] {
-		response.HandleError(c, apperr.BadRequest("invalid status value"))
+		response.Error(c, 400, "invalid status value")
 		return
 	}
 
@@ -792,7 +771,7 @@ func (h *OrganizationHandler) ToggleStatus(c *gin.Context) {
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		log.Printf("[ToggleStatus] tx begin error: user_id=%d, id=%d, err=%v", userID, id, err)
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer func() {
@@ -803,7 +782,7 @@ func (h *OrganizationHandler) ToggleStatus(c *gin.Context) {
 
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
@@ -813,12 +792,12 @@ func (h *OrganizationHandler) ToggleStatus(c *gin.Context) {
 		SELECT status FROM organizations WHERE id = $1 AND root_tenant_id = $2 AND deleted_at IS NULL
 	`, id, tenantID).Scan(&currentStatus)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("organization not found"))
+		response.Error(c, 404, "organization not found")
 		return
 	}
 	if err != nil {
 		log.Printf("[ToggleStatus] query error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query organization failed", err))
+		response.Error(c, 500, "query organization failed")
 		return
 	}
 
@@ -834,14 +813,14 @@ func (h *OrganizationHandler) ToggleStatus(c *gin.Context) {
 		err = tx.QueryRow(ctx, updateQuery, id, req.Status, tenantID).Scan(&id, &newVersion, &updatedAt)
 		if err != nil {
 			log.Printf("[ToggleStatus] update error: err=%v", err)
-			response.HandleError(c, apperr.Internal("update status failed", err))
+			response.Error(c, 500, "update status failed")
 			return
 		}
 	}
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[ToggleStatus] commit error: err=%v", err)
-		response.HandleError(c, apperr.Internal("update failed", err))
+		response.Error(c, 500, "update failed")
 		return
 	}
 
@@ -858,7 +837,7 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid organization id"))
+		response.Error(c, 400, "invalid organization id")
 		return
 	}
 
@@ -866,14 +845,14 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		log.Printf("[GetTree] tx begin error: user_id=%d, id=%d, err=%v", userID, id, err)
-		response.HandleError(c, apperr.Internal("system error", err))
+		response.Error(c, 500, "system error")
 		return
 	}
 	defer tx.Rollback(ctx)
 
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
-		response.HandleError(c, apperr.Forbidden("tenant context missing"))
+		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
@@ -883,12 +862,12 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 		SELECT name FROM organizations WHERE id = $1 AND root_tenant_id = $2 AND deleted_at IS NULL
 	`, id, tenantID).Scan(&orgName)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("organization not found"))
+		response.Error(c, 404, "organization not found")
 		return
 	}
 	if err != nil {
 		log.Printf("[GetTree] query error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query organization failed", err))
+		response.Error(c, 500, "query organization failed")
 		return
 	}
 
@@ -911,7 +890,7 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 	rows, err := tx.Query(ctx, subtreeQuery, id)
 	if err != nil {
 		log.Printf("[GetTree] query subtree error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query subtree failed", err))
+		response.Error(c, 500, "query subtree failed")
 		return
 	}
 	defer rows.Close()
@@ -939,7 +918,7 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[GetTree] commit error: err=%v", err)
-		response.HandleError(c, apperr.Internal("query failed", err))
+		response.Error(c, 500, "query failed")
 		return
 	}
 

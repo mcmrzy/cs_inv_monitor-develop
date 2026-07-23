@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/service"
-	"inv-api-server/pkg/apperr"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -101,7 +100,7 @@ func (h *AlertRuleHandler) List(c *gin.Context) {
 	scope := alertRuleDataScope("r", role, 1)
 	var total int64
 	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM alert_rules r WHERE `+scope, userID).Scan(&total); err != nil {
-		response.HandleError(c, apperr.Internal("list alert rules failed", err))
+		response.Error(c, 500, "list alert rules failed")
 		return
 	}
 	rows, err := h.db.Query(ctx, `
@@ -109,7 +108,7 @@ func (h *AlertRuleHandler) List(c *gin.Context) {
 		FROM alert_rules r WHERE `+scope+`
 		ORDER BY r.updated_at DESC, r.id DESC LIMIT $2 OFFSET $3`, userID, pageSize, (page-1)*pageSize)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("list alert rules failed", err))
+		response.Error(c, 500, "list alert rules failed")
 		return
 	}
 	defer rows.Close()
@@ -118,7 +117,7 @@ func (h *AlertRuleHandler) List(c *gin.Context) {
 		var raw []byte
 		var item map[string]interface{}
 		if err := rows.Scan(&raw); err != nil || json.Unmarshal(raw, &item) != nil {
-			response.HandleError(c, apperr.Internal("decode alert rule failed", err))
+			response.Error(c, 500, "decode alert rule failed")
 			return
 		}
 		items = append(items, item)
@@ -134,16 +133,16 @@ func (h *AlertRuleHandler) GetByID(c *gin.Context) {
 	var raw []byte
 	err := h.db.QueryRow(c.Request.Context(), `SELECT to_jsonb(r) FROM alert_rules r WHERE id=$1 AND `+alertRuleDataScope("r", middleware.GetRole(c), 2), id, middleware.GetUserID(c)).Scan(&raw)
 	if err == pgx.ErrNoRows {
-		response.HandleError(c, apperr.NotFound("alert rule not found"))
+		response.Error(c, 404, "alert rule not found")
 		return
 	}
 	if err != nil {
-		response.HandleError(c, apperr.Internal("get alert rule failed", err))
+		response.Error(c, 500, "get alert rule failed")
 		return
 	}
 	var item map[string]interface{}
 	if err := json.Unmarshal(raw, &item); err != nil {
-		response.HandleError(c, apperr.Internal("decode alert rule failed", err))
+		response.Error(c, 500, "decode alert rule failed")
 		return
 	}
 	response.Success(c, item)
@@ -152,20 +151,20 @@ func (h *AlertRuleHandler) GetByID(c *gin.Context) {
 func (h *AlertRuleHandler) Create(c *gin.Context) {
 	var req alertRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("name and conditions are required"))
+		response.Error(c, 400, "name and conditions are required")
 		return
 	}
 	if err := validateAlertRuleValues(req.Name, req.Level, req.Conditions, req.DeviceSN, req.StationID); err != nil {
-		response.HandleError(c, apperr.BadRequest(err.Error()))
+		response.Error(c, 400, err.Error())
 		return
 	}
 	allowed, err := h.canTarget(c, req.DeviceSN, req.StationID)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("validate alert rule scope failed", err))
+		response.Error(c, 500, "validate alert rule scope failed")
 		return
 	}
 	if !allowed {
-		response.HandleError(c, apperr.Forbidden("alert rule target is outside your scope"))
+		response.Error(c, 403, "alert rule target is outside your scope")
 		return
 	}
 	normalizeAlertRule(&req)
@@ -178,7 +177,7 @@ func (h *AlertRuleHandler) Create(c *gin.Context) {
 		req.Name, req.Type, req.StationID, req.DeviceSN, conditions, req.Severity, channels,
 		req.CooldownMinutes, *req.Enabled, middleware.GetUserID(c)).Scan(&id)
 	if err != nil {
-		response.HandleError(c, apperr.Internal("create alert rule failed", err))
+		response.Error(c, 500, "create alert rule failed")
 		return
 	}
 	response.SuccessWithMessage(c, "rule created", gin.H{"id": id})
@@ -191,20 +190,20 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 	}
 	var req alertRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.HandleError(c, apperr.BadRequest("invalid request"))
+		response.Error(c, 400, "invalid request")
 		return
 	}
 	if req.DeviceSN != nil && req.StationID != nil {
-		response.HandleError(c, apperr.BadRequest("device_sn and station_id are mutually exclusive"))
+		response.Error(c, 400, "device_sn and station_id are mutually exclusive")
 		return
 	}
 	allowed, scopeErr := h.canTarget(c, req.DeviceSN, req.StationID)
 	if scopeErr != nil {
-		response.HandleError(c, apperr.Internal("validate alert rule scope failed", scopeErr))
+		response.Error(c, 500, "validate alert rule scope failed")
 		return
 	}
 	if !allowed {
-		response.HandleError(c, apperr.Forbidden("alert rule target is outside your scope"))
+		response.Error(c, 403, "alert rule target is outside your scope")
 		return
 	}
 	normalizeAlertRule(&req)
@@ -222,11 +221,11 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 		WHERE id=$1 AND `+alertRuleDataScope("alert_rules", middleware.GetRole(c), 11), id, req.Name, req.Type, req.StationID, req.DeviceSN, conditions,
 		req.Severity, channels, req.CooldownMinutes, req.Enabled, middleware.GetUserID(c))
 	if err != nil {
-		response.HandleError(c, apperr.Internal("update alert rule failed", err))
+		response.Error(c, 500, "update alert rule failed")
 		return
 	}
 	if result.RowsAffected() == 0 {
-		response.HandleError(c, apperr.NotFound("alert rule not found"))
+		response.Error(c, 404, "alert rule not found")
 		return
 	}
 	response.SuccessWithMessage(c, "rule updated", gin.H{"id": id})
@@ -239,11 +238,11 @@ func (h *AlertRuleHandler) Delete(c *gin.Context) {
 	}
 	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM alert_rules WHERE id=$1 AND `+alertRuleDataScope("alert_rules", middleware.GetRole(c), 2), id, middleware.GetUserID(c))
 	if err != nil {
-		response.HandleError(c, apperr.Internal("delete alert rule failed", err))
+		response.Error(c, 500, "delete alert rule failed")
 		return
 	}
 	if result.RowsAffected() == 0 {
-		response.HandleError(c, apperr.NotFound("alert rule not found"))
+		response.Error(c, 404, "alert rule not found")
 		return
 	}
 	response.SuccessWithMessage(c, "rule deleted", gin.H{"id": id})
@@ -252,7 +251,7 @@ func (h *AlertRuleHandler) Delete(c *gin.Context) {
 func parseRuleID(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
-		response.HandleError(c, apperr.BadRequest("invalid rule id"))
+		response.Error(c, 400, "invalid rule id")
 		return 0, false
 	}
 	return id, true
