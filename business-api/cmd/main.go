@@ -1099,7 +1099,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			pipelineHealthGroup.POST("/dlq/:id/retry", deps.DLQHandler.Retry)
 			pipelineHealthGroup.DELETE("/dlq/:id", deps.DLQHandler.Delete)
 			pipelineHealthGroup.POST("/dlq/retry-all", deps.DLQHandler.RetryAll)
-			pipelineHealthGroup.DELETE("/dlq/clear", deps.DLQHandler.Clear)
+			pipelineHealthGroup.DELETE("/dlq/all", deps.DLQHandler.Clear)
 			pipelineHealthGroup.GET("/dlq/stats", deps.DLQHandler.Stats)
 			
 			// Task 13: SSE pipeline health stream (implemented in ws_handler.go)

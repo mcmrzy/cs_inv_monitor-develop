@@ -48,7 +48,7 @@ func (suite *DLQHandlerTestSuite) SetupSuite() {
 	suite.router.POST("/api/v1/system/dlq/:id/retry", suite.handler.Retry)
 	suite.router.DELETE("/api/v1/system/dlq/:id", suite.handler.Delete)
 	suite.router.POST("/api/v1/system/dlq/retry-all", suite.handler.RetryAll)
-	suite.router.DELETE("/api/v1/system/dlq/clear", suite.handler.Clear)
+	suite.router.DELETE("/api/v1/system/dlq/all", suite.handler.Clear)
 	suite.router.GET("/api/v1/system/dlq/stats", suite.handler.Stats)
 }
 
@@ -379,7 +379,7 @@ func (suite *DLQHandlerTestSuite) TestDLQHandler_Clear() {
 	// Clear DLQ via query param
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest("DELETE", "/api/v1/system/dlq/clear?consumer_type=bridge", nil)
+	c.Request = httptest.NewRequest("DELETE", "/api/v1/system/dlq/all?consumer_type=bridge", nil)
 
 	suite.handler.Clear(c)
 
