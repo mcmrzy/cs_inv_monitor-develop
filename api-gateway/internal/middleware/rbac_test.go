@@ -25,7 +25,7 @@ func TestIsAppAllowedPath(t *testing.T) {
 		{"/api/v1/ota/devices/DEV001", true},
 		{"/api/v1/ota/app/check", true},
 		{"/api/v1/ota/app/packages", true},
-		{"/api/v1/ota/packages/available/1", true},
+		{"/api/v1/ota/available-packages/1", true},
 		{"/api/v1/ota/app/packages/install", true},
 		{"/api/v1/ota/trigger-admin", false},
 		{"/api/v1/ota/app/packages/admin-delete", false},

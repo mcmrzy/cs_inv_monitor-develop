@@ -155,7 +155,7 @@ class OtaBloc extends Bloc<OtaEvent, OtaState> {
   }
 
   /// 加载设备可用升级包列表
-  /// 调用 GET /ota/packages/available/:sn
+  /// 调用 GET /ota/available-packages/:sn
   /// 响应: {code: 0, data: [{id, user_version, user_changelog, is_force, model, main_version, ...}]}
   Future<void> _onLoadAvailablePackages(
     LoadAvailablePackages event,

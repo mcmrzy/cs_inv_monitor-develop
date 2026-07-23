@@ -56,14 +56,14 @@ export const otaApi = {
   }) => api.put(`/ota/packages/${id}`, data),
   deletePackage: (id: number) => api.delete(`/ota/packages/${id}`),
   pushPackageUpgrade: (data: { package_id: number; device_sns: string[]; immediate?: boolean; rollout_percent?: number }) =>
-    api.post('/ota/packages/push', data),
+    api.post('/ota/upgrades/push-package', data),
   getPackageUpgradeDetails: (packageId: number) => api.get(`/ota/packages/${packageId}/details`, { expectedDataShape: 'object' }),
   rollbackPackage: (id: number, data: { immediate?: boolean }) => api.post(`/ota/packages/${id}/rollback`, data),
 
   // 回退升级（新接口）
   rollbackUpgrade: (data: { sn: string; package_id: number }) => api.post('/ota/rollback', data),
   // 获取设备可用升级包
-  getAvailablePackages: (sn: string) => api.get(`/ota/packages/available/${sn}`, { expectedDataShape: 'object' }),
+  getAvailablePackages: (sn: string) => api.get(`/ota/available-packages/${sn}`, { expectedDataShape: 'object' }),
 
   // 升级任务管理（新统一接口）
   listTasks: (params?: any) => api.get('/ota/tasks', { params, expectedDataShape: 'page' }),
@@ -83,13 +83,13 @@ export const otaApi = {
   cancelTask: (id: number | string) => api.post(`/ota/tasks/${id}/cancel`),
   retryTask: (id: number | string) => api.post(`/ota/tasks/${id}/retry`),
   deleteTask: (id: number | string) => api.delete(`/ota/tasks/${id}`),
-  getTaskStats: () => api.get('/ota/tasks/stats', { expectedDataShape: 'object' }),
+  getTaskStats: () => api.get('/ota/task-stats', { expectedDataShape: 'object' }),
 
   // 固件-设备关联查询
   getDevicesByFirmware: (model: string, targetChip: string, version: string) =>
-    api.get('/ota/firmware/devices', { params: { model, target_chip: targetChip, version }, expectedDataShape: 'object' }),
+    api.get('/ota/firmware/by-device', { params: { model, target_chip: targetChip, version }, expectedDataShape: 'object' }),
   getUpgradePackageDevices: (packageId: number, status?: string) =>
-    api.get('/ota/firmware/package-devices', { params: { package_id: packageId, status }, expectedDataShape: 'object' }),
+    api.get('/ota/firmware/by-package', { params: { package_id: packageId, status }, expectedDataShape: 'object' }),
 
   // 发布升级包
   publishPackage: (id: number, data: PublishPackageRequest) =>
