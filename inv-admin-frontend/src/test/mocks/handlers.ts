@@ -66,7 +66,7 @@ export const handlers = [
   }),
 
   /** 设备详情 */
-  http.get(`${API_BASE}/devices/:sn`, ({ params }) => {
+  http.get(`${API_BASE}/devices/by-sn/:sn`, ({ params }) => {
     const device = mockDevices.find((d) => d.sn === params.sn)
     if (device) {
       return HttpResponse.json({ code: 0, message: 'success', data: device })
@@ -80,17 +80,17 @@ export const handlers = [
   }),
 
   /** 更新设备 */
-  http.put(`${API_BASE}/devices/:sn`, async () => {
+  http.put(`${API_BASE}/devices/by-sn/:sn`, async () => {
     return HttpResponse.json({ code: 0, message: 'success', data: null })
   }),
 
   /** 删除设备 */
-  http.delete(`${API_BASE}/devices/:sn`, () => {
+  http.delete(`${API_BASE}/devices/by-sn/:sn`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: null })
   }),
 
   /** 设备实时数据 */
-  http.get(`${API_BASE}/devices/:sn/realtime`, () => {
+  http.get(`${API_BASE}/devices/by-sn/:sn/realtime`, () => {
     return HttpResponse.json({
       code: 0,
       message: 'success',
@@ -105,7 +105,7 @@ export const handlers = [
   }),
 
   /** 设备遥测历史 */
-  http.get(`${API_BASE}/devices/:sn/telemetry`, () => {
+  http.get(`${API_BASE}/devices/by-sn/:sn/telemetry`, () => {
     return HttpResponse.json({
       code: 0,
       message: 'success',
@@ -195,7 +195,7 @@ export const handlers = [
   }),
 
   /** 清空告警 */
-  http.delete(`${API_BASE}/alarms/clear`, () => {
+  http.delete(`${API_BASE}/alarms/clear-all`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: null })
   }),
 
@@ -450,12 +450,12 @@ export const handlers = [
   }),
 
   /** 工单统计 */
-  http.get(`${API_BASE}/work-orders/stats`, () => {
+  http.get(`${API_BASE}/work-order-stats`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: { total: 10, open: 3, inProgress: 4, resolved: 2, closed: 1 } })
   }),
 
   /** 工单模板 */
-  http.get(`${API_BASE}/work-orders/templates`, () => {
+  http.get(`${API_BASE}/work-order-templates`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: [] })
   }),
 
@@ -474,17 +474,17 @@ export const handlers = [
   }),
 
   /** 设备命令模板 */
-  http.get(`${API_BASE}/devices/:sn/commands`, () => {
+  http.get(`${API_BASE}/devices/by-sn/:sn/commands`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: [] })
   }),
 
   /** 设备命令历史 */
-  http.get(`${API_BASE}/devices/:sn/commands/history`, () => {
+  http.get(`${API_BASE}/devices/by-sn/:sn/commands/history`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: { items: [], total: 0 } })
   }),
 
   /** 设备命令执行 */
-  http.post(`${API_BASE}/devices/:sn/control`, async () => {
+  http.post(`${API_BASE}/devices/by-sn/:sn/control`, async () => {
     return HttpResponse.json({ code: 0, message: 'success', data: { req_id: 'cmd-001' } })
   }),
 

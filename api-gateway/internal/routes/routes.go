@@ -168,6 +168,8 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/firmwares", p.RewriteHandler("/api/v1/ota/firmware"))
 	userGroup.Any("/api/v1/work-orders/*action", p.Handler())
 	userGroup.Any("/api/v1/work-orders", p.Handler())
+	userGroup.Any("/api/v1/work-order-stats", p.Handler())
+	userGroup.Any("/api/v1/work-order-templates", p.Handler())
 
 	// Channel Platform — 渠道平台管理（组织、邀请、成员、设备认领转移）
 	userGroup.Any("/api/v1/organizations/*action", p.Handler())

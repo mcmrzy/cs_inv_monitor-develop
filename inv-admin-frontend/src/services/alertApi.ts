@@ -6,12 +6,12 @@ export const alertApi = {
   handle: (id: number) => api.post(`/alarms/${id}/acknowledge`),
   ignore: (id: number) => api.post(`/alarms/${id}/ignore`),
   delete: (id: number) => api.delete(`/alarms/${id}`),
-  clearAll: () => api.delete('/alarms/clear'),
+  clearAll: () => api.delete('/alarms/clear-all'),
 }
 
 export const notificationApi = {
   list: (params?: any) => api.get('/notifications', { params, expectedDataShape: 'page' }),
   getStats: () => api.get('/notifications/stats', { expectedDataShape: 'object' }),
   delete: (id: number) => api.delete(`/notifications/${id}`),
-  clearAll: () => api.delete('/notifications/clear'),
+  clearAll: () => api.delete('/notifications/clear-all'),
 }

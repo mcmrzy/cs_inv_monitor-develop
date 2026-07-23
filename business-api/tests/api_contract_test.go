@@ -39,13 +39,15 @@ func init() {
 // groupPrefixes maps Gin route-group variable names (as used in main.go and
 // model_routes.go) to their full URL prefixes.
 var groupPrefixes = map[string]string{
-	"api":           "/api/v1",
-	"auth":          "/api/v1",
-	"internal":      "/api/v1/internal",
-	"adminGroup":    "/api/v1/admin",
-	"usersGroup":    "/api/v1/users",
-	"parallelGroup": "/api/v1/parallel-groups",
-	"otaGroup":      "/api/v1/ota",
+	"api":                  "/api/v1",
+	"auth":                 "/api/v1",
+	"internal":             "/api/v1/internal",
+	"adminGroup":           "/api/v1/admin",
+	"usersGroup":           "/api/v1/users",
+	"parallelGroup":        "/api/v1/parallel-groups",
+	"otaGroup":             "/api/v1/ota",
+	"devBySN":              "/api/v1/devices/by-sn",
+	"pipelineHealthGroup":  "/api/v1/system",
 }
 
 // routeRegexp matches Gin route-registration statements such as:
@@ -95,28 +97,28 @@ var expectedFrontendRoutes = []struct {
 	// ---- Devices ----
 	{"GET", "/api/v1/devices"},
 	{"POST", "/api/v1/devices"},
-	{"GET", "/api/v1/devices/:sn"},
-	{"PUT", "/api/v1/devices/:sn"},
-	{"DELETE", "/api/v1/devices/:sn"},
-	{"POST", "/api/v1/devices/:sn/unbind"},
-	{"POST", "/api/v1/devices/:sn/request-unbind"},
+	{"GET", "/api/v1/devices/by-sn/:sn"},
+	{"PUT", "/api/v1/devices/by-sn/:sn"},
+	{"DELETE", "/api/v1/devices/by-sn/:sn"},
+	{"POST", "/api/v1/devices/by-sn/:sn/unbind"},
+	{"POST", "/api/v1/devices/by-sn/:sn/request-unbind"},
 	{"GET", "/api/v1/devices/unbind-requests"},
 	{"POST", "/api/v1/devices/unbind-requests/:id/approve"},
 	{"POST", "/api/v1/devices/unbind-requests/:id/reject"},
-	{"GET", "/api/v1/devices/:sn/lifecycle"},
+	{"GET", "/api/v1/devices/by-sn/:sn/lifecycle"},
 	{"POST", "/api/v1/devices/import-excel"},
-	{"GET", "/api/v1/devices/:sn/telemetry"},
-	{"GET", "/api/v1/devices/:sn/realtime"},
-	{"POST", "/api/v1/devices/:sn/control"},
-	{"GET", "/api/v1/devices/:sn/commands"},
-	{"GET", "/api/v1/devices/:sn/commands/history"},
-	{"GET", "/api/v1/devices/:sn/telemetry/export"},
-	{"GET", "/api/v1/devices/:sn/telemetry/export-excel"},
-	{"POST", "/api/v1/devices/:sn/assign-installer"},
-	{"DELETE", "/api/v1/devices/:sn/installer"},
+	{"GET", "/api/v1/devices/by-sn/:sn/telemetry"},
+	{"GET", "/api/v1/devices/by-sn/:sn/realtime"},
+	{"POST", "/api/v1/devices/by-sn/:sn/control"},
+	{"GET", "/api/v1/devices/by-sn/:sn/commands"},
+	{"GET", "/api/v1/devices/by-sn/:sn/commands/history"},
+	{"GET", "/api/v1/devices/by-sn/:sn/telemetry/export"},
+	{"GET", "/api/v1/devices/by-sn/:sn/telemetry/export-excel"},
+	{"POST", "/api/v1/devices/by-sn/:sn/assign-installer"},
+	{"DELETE", "/api/v1/devices/by-sn/:sn/installer"},
 	{"POST", "/api/v1/devices/batch-assign-installer"},
 	{"POST", "/api/v1/devices/add-to-station"},
-	{"POST", "/api/v1/devices/:sn/remove-from-station"},
+	{"POST", "/api/v1/devices/by-sn/:sn/remove-from-station"},
 
 	// ---- Parallel Groups ----
 	{"GET", "/api/v1/parallel-groups"},
@@ -266,7 +268,7 @@ func TestAPIContract_RequestUnbindRouteExists(t *testing.T) {
 	source, err := os.ReadFile("../cmd/main.go")
 	require.NoError(t, err)
 
-	expected := `auth.POST("/devices/:sn/request-unbind"`
+	expected := `devBySN.POST("/:sn/request-unbind"`
 	if !strings.Contains(string(source), expected) {
 		t.Fatalf("request-unbind route is missing in main.go: expected %s", expected)
 	}

@@ -297,6 +297,8 @@ var resourceActionMap = map[string]string{
 	"/api/v1/alert-rules/":       "alert_rules",
 	"/api/v1/work-orders":        "work_orders",
 	"/api/v1/work-orders/":       "work_orders",
+	"/api/v1/work-order-stats":   "work_orders",
+	"/api/v1/work-order-templates": "work_orders",
 	"/api/v1/firmwares":          "firmware",
 	"/api/v1/organizations":      "organizations",
 	"/api/v1/organizations/":     "organizations",

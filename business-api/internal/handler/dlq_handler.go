@@ -142,7 +142,7 @@ func (h *DLQHandler) List(c *gin.Context) {
 // @Description Pop message from DLQ and re-enqueue to original topic
 // @Tags DLQ Management
 // @Param id path string true "DLQ message ID"
-// @Router /api/v1/system/dlq/:id/retry [post]
+// @Router /api/v1/system/dlq/messages/:id/retry [post]
 func (h *DLQHandler) Retry(c *gin.Context) {
 	ctx := c.Request.Context()
 	messageID := c.Param("id")
@@ -215,7 +215,7 @@ func (h *DLQHandler) Retry(c *gin.Context) {
 // @Description Remove specific DLQ entry
 // @Tags DLQ Management
 // @Param id path string true "DLQ message ID"
-// @Router /api/v1/system/dlq/:id [delete]
+// @Router /api/v1/system/dlq/messages/:id [delete]
 func (h *DLQHandler) Delete(c *gin.Context) {
 	ctx := c.Request.Context()
 	messageID := c.Param("id")

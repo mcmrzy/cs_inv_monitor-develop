@@ -77,8 +77,8 @@ export const workOrderApi = {
       status,
       ...(expectedVersion === undefined ? {} : { expectedVersion }),
     }, idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined),
-  getStats: () => api.get('/work-orders/stats', { expectedDataShape: 'object' }),
-  getTemplates: () => api.get('/work-orders/templates', { expectedDataShape: 'array' }),
+  getStats: () => api.get('/work-order-stats', { expectedDataShape: 'object' }),
+  getTemplates: () => api.get('/work-order-templates', { expectedDataShape: 'array' }),
   uploadAttachment: (id: string, formData: FormData) =>
     api.post(`/work-orders/${id}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
