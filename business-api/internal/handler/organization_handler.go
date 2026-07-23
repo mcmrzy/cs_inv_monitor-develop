@@ -135,24 +135,16 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Ensure tenant root manufacturer org exists (required by DB constraints)
+	// Ensure tenant root manufacturer org exists (required by DB constraints).
+	// The ensure_tenant_root function (SECURITY DEFINER) safely handles stale
+	// rows from previous test runs and guarantees tenant_roots + closure entries.
 	if req.Type != "manufacturer" {
-		var rootExists bool
-		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM organizations WHERE id = $1 AND root_tenant_id = $1 AND org_type = 'manufacturer' AND deleted_at IS NULL)`, tenantID).Scan(&rootExists)
+		_, err = tx.Exec(ctx, `SELECT ensure_tenant_root($1)`, tenantID)
 		if err != nil {
 			tx.Rollback(ctx)
-			log.Printf("[CreateOrg] check root error: %v", err)
+			log.Printf("[CreateOrg] ensure_tenant_root error: user_id=%d, tenant_id=%d, err=%v", userID, tenantID, err)
 			response.Error(c, 500, "system error")
 			return
-		}
-		if !rootExists {
-			_, err = tx.Exec(ctx, `INSERT INTO organizations (id, root_tenant_id, parent_id, org_type, name, status, version) VALUES ($1, $1, NULL, 'manufacturer', 'Root Tenant', 'active', 1) ON CONFLICT (id) DO NOTHING`, tenantID)
-			if err != nil {
-				tx.Rollback(ctx)
-				log.Printf("[CreateOrg] create root org error: %v", err)
-				response.Error(c, 500, "system error")
-				return
-			}
 		}
 	}
 
