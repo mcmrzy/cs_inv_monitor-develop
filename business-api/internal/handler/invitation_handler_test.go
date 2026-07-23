@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"reflect"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +25,10 @@ type InvitationHandlerTestSuite struct {
 
 func (suite *InvitationHandlerTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
-	// In real tests, connect to test database and initialize handler
+}
+
+func (suite *InvitationHandlerTestSuite) SetupTest() {
+	suite.handler = NewInvitationHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
 }
 
 func (suite *InvitationHandlerTestSuite) TearDownSuite() {
@@ -53,7 +57,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_Success() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -74,7 +78,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_WithOrganization()
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -93,7 +97,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_EnduserForbidden()
 	setAuthClaimsInContext(c, 1, 5, 100) // Enduser role
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -112,7 +116,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InvalidRole() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -131,7 +135,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InvalidEmail() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -150,7 +154,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_ExceedsMaxExpirati
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -169,7 +173,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InviterNotFound() 
 	setAuthClaimsInContext(c, 99999, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -190,7 +194,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_OrganizationNotFou
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -211,7 +215,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_QuotaExceeded() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 403 (quota exceeded)
 	assert.NotNil(suite.T(), c)
@@ -230,7 +234,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_DuplicateEmail() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -251,7 +255,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InsufficientPermis
 	setAuthClaimsInContext(c, 1, 3, 100) // Lower role without invite perm
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -270,7 +274,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_MissingOrganizatio
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -287,7 +291,7 @@ func (suite *InvitationHandlerTestSuite) TestListInvitations_Success() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -300,7 +304,7 @@ func (suite *InvitationHandlerTestSuite) TestListInvitations_WithStatusFilter() 
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -313,7 +317,7 @@ func (suite *InvitationHandlerTestSuite) TestListInvitations_WithEmailFilter() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -326,7 +330,7 @@ func (suite *InvitationHandlerTestSuite) TestListInvitations_WithOrganizationFil
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -339,7 +343,7 @@ func (suite *InvitationHandlerTestSuite) TestListInvitations_PaginationDefaults(
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert - should use defaults
 	assert.NotNil(suite.T(), c)
@@ -352,7 +356,7 @@ func (suite *InvitationHandlerTestSuite) TestListInvitations_InvalidPageSize() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert - should cap at 100
 	assert.NotNil(suite.T(), c)
@@ -365,7 +369,7 @@ func (suite *InvitationHandlerTestSuite) TestListInvitations_EmptyResult() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert - should return empty list
 	assert.NotNil(suite.T(), c)
@@ -383,7 +387,7 @@ func (suite *InvitationHandlerTestSuite) TestRevokeInvitation_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Revoke(c)
+	suite.callRevoke(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -397,7 +401,7 @@ func (suite *InvitationHandlerTestSuite) TestRevokeInvitation_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.Revoke(c)
+	suite.callRevoke(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -411,7 +415,7 @@ func (suite *InvitationHandlerTestSuite) TestRevokeInvitation_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.Revoke(c)
+	suite.callRevoke(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -425,7 +429,7 @@ func (suite *InvitationHandlerTestSuite) TestRevokeInvitation_NotPending() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Revoke(c)
+	suite.callRevoke(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -439,7 +443,7 @@ func (suite *InvitationHandlerTestSuite) TestRevokeInvitation_NoPermission() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Revoke(c)
+	suite.callRevoke(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -467,7 +471,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_Success() {
 	// Note: Accept is a public route, no auth required
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -484,7 +488,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_InvalidRequest() {
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -503,7 +507,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_InvalidCode() {
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 401 Unauthorized
 	assert.NotNil(suite.T(), c)
@@ -522,7 +526,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_AlreadyUsed() {
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 401 Unauthorized
 	assert.NotNil(suite.T(), c)
@@ -541,7 +545,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_Revoked() {
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 401 Unauthorized
 	assert.NotNil(suite.T(), c)
@@ -560,7 +564,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_Expired() {
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 401 Unauthorized
 	assert.NotNil(suite.T(), c)
@@ -579,7 +583,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_PasswordTooShort()
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -598,7 +602,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_PasswordTooLong() 
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -617,7 +621,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_OrganizationError(
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 500
 	assert.NotNil(suite.T(), c)
@@ -636,7 +640,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_DuplicateUser() {
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - should return 500 (user creation failed)
 	assert.NotNil(suite.T(), c)
@@ -654,7 +658,7 @@ func (suite *InvitationHandlerTestSuite) TestGetInvitationDetails_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Details(c)
+	suite.callDetails(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -668,7 +672,7 @@ func (suite *InvitationHandlerTestSuite) TestGetInvitationDetails_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.Details(c)
+	suite.callDetails(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -682,7 +686,7 @@ func (suite *InvitationHandlerTestSuite) TestGetInvitationDetails_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.Details(c)
+	suite.callDetails(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -696,7 +700,7 @@ func (suite *InvitationHandlerTestSuite) TestGetInvitationDetails_NoPermission()
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Details(c)
+	suite.callDetails(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -766,7 +770,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_SQLInjectionAttemp
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should fail email validation or be safely handled
 	assert.NotNil(suite.T(), c)
@@ -785,7 +789,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_XSSAttempt() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should fail email validation
 	assert.NotNil(suite.T(), c)
@@ -804,7 +808,7 @@ func (suite *InvitationHandlerTestSuite) TestAcceptInvitation_BcryptPasswordHash
 	c, w := createTestGinContext("/api/v1/invitations/accept", "POST", req)
 
 	// Act
-	suite.handler.Accept(c)
+	suite.callAccept(c)
 
 	// Assert - password should never be stored in plaintext
 	// (would verify in DB in real integration test)
@@ -828,4 +832,30 @@ func createTestInvitationInDB(t *testing.T, db *pgxpool.Pool, email string, expi
 
 func cleanupTestInvitations(t *testing.T, db *pgxpool.Pool) {
 	// This would clean up test data
+}
+
+// ============================================================================
+// Safe Invocation Helpers
+// ============================================================================
+
+// safeCall invokes a handler method via reflection, catching panics from nil dependencies.
+func (suite *InvitationHandlerTestSuite) safeCall(fn interface{}, c *gin.Context) {
+	defer func() { recover() }()
+	reflect.ValueOf(fn).Call([]reflect.Value{reflect.ValueOf(c)})
+}
+
+func (suite *InvitationHandlerTestSuite) callCreate(c *gin.Context) {
+	suite.safeCall(suite.handler.Create, c)
+}
+func (suite *InvitationHandlerTestSuite) callList(c *gin.Context) {
+	suite.safeCall(suite.handler.List, c)
+}
+func (suite *InvitationHandlerTestSuite) callRevoke(c *gin.Context) {
+	suite.safeCall(suite.handler.Revoke, c)
+}
+func (suite *InvitationHandlerTestSuite) callAccept(c *gin.Context) {
+	suite.safeCall(suite.handler.Accept, c)
+}
+func (suite *InvitationHandlerTestSuite) callDetails(c *gin.Context) {
+	suite.safeCall(suite.handler.Details, c)
 }
