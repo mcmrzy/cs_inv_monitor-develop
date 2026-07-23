@@ -404,17 +404,16 @@ func getSubjectByCodeType(codeType string) string {
 
 // MaskEmail masks the email address for logging purposes
 func maskEmail(email string) string {
-	if len(email) <= 8 {
-		return email
-	}
 	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		return email
+	if len(parts) != 2 || parts[0] == "" {
+		return "***"
 	}
 	username := parts[0]
 	domain := parts[1]
-	maskedUsername := username[:2] + strings.Repeat("*", len(username)-2)
-	return maskedUsername + "@" + domain
+	if len(username) < 2 || domain == "" {
+		return "***"
+	}
+	return string(username[0]) + "***@" + domain
 }
 
 // SendInvitationEmail sends invitation emails to new users
