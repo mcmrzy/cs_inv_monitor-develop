@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -22,6 +23,10 @@ type MemberLifecycleHandlerTestSuite struct {
 
 func (suite *MemberLifecycleHandlerTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) SetupTest() {
+	suite.handler = NewMemberLifecycleHandler(nil, nil, nil)
 }
 
 func (suite *MemberLifecycleHandlerTestSuite) TearDownSuite() {
@@ -51,7 +56,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_Success() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -73,7 +78,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_WithExpiration() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -92,7 +97,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_ReadOnlyType() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -110,7 +115,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_InvalidRequest() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -129,7 +134,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_InvalidMembershipTyp
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should default to "full"
 	assert.NotNil(suite.T(), c)
@@ -148,7 +153,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_UserNotFound() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -167,7 +172,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_OrganizationNotFound
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -186,7 +191,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_CrossTenantForbidden
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -205,7 +210,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_QuotaExceeded() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -224,7 +229,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_AlreadyActiveMember(
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -243,7 +248,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_ReactivateExisting()
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should reactivate successfully
 	assert.NotNil(suite.T(), c)
@@ -264,7 +269,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestAddMember_MissingTenantContext
 	// Missing root_tenant_id
 
 	// Act
-	suite.handler.AddMember(c)
+	suite.callAddMember(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -287,7 +292,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -306,7 +311,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_ChangeStatus(
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -325,7 +330,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_ChangeExpirat
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -344,7 +349,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_ChangeType() 
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -362,7 +367,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -378,7 +383,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_InvalidReques
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -396,7 +401,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -415,7 +420,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_InvalidStatus
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -434,7 +439,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_InvalidType()
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -452,7 +457,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_AccessDenied(
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -471,7 +476,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestUpdateMembership_MissingTenant
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.UpdateMembership(c)
+	suite.callUpdateMembership(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -493,7 +498,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestRemoveMember_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.RemoveMember(c)
+	suite.callRemoveMember(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -509,7 +514,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestRemoveMember_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.RemoveMember(c)
+	suite.callRemoveMember(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -527,7 +532,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestRemoveMember_InvalidRequest() 
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.RemoveMember(c)
+	suite.callRemoveMember(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -543,7 +548,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestRemoveMember_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.RemoveMember(c)
+	suite.callRemoveMember(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -559,7 +564,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestRemoveMember_AlreadyDeleted() 
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.RemoveMember(c)
+	suite.callRemoveMember(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -581,7 +586,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestDeactivateMember_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.DeactivateMember(c)
+	suite.callDeactivateMember(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -597,7 +602,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestDeactivateMember_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.DeactivateMember(c)
+	suite.callDeactivateMember(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -615,7 +620,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestDeactivateMember_InvalidReques
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.DeactivateMember(c)
+	suite.callDeactivateMember(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -631,7 +636,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestDeactivateMember_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.DeactivateMember(c)
+	suite.callDeactivateMember(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -647,7 +652,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestDeactivateMember_AlreadyInacti
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.DeactivateMember(c)
+	suite.callDeactivateMember(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -663,7 +668,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestDeactivateMember_StatusNotChan
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.DeactivateMember(c)
+	suite.callDeactivateMember(c)
 
 	// Assert - should return 409
 	assert.NotNil(suite.T(), c)
@@ -681,7 +686,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestReactivateMember_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ReactivateMember(c)
+	suite.callReactivateMember(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -695,7 +700,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestReactivateMember_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.ReactivateMember(c)
+	suite.callReactivateMember(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -709,7 +714,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestReactivateMember_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.ReactivateMember(c)
+	suite.callReactivateMember(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -723,7 +728,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestReactivateMember_AlreadyActive
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ReactivateMember(c)
+	suite.callReactivateMember(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -737,7 +742,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestReactivateMember_FromSuspended
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ReactivateMember(c)
+	suite.callReactivateMember(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -751,7 +756,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestReactivateMember_StatusNotChan
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ReactivateMember(c)
+	suite.callReactivateMember(c)
 
 	// Assert - should return 409
 	assert.NotNil(suite.T(), c)
@@ -774,7 +779,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_Success() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -792,7 +797,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_SingleMember(
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -810,7 +815,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_InvalidReques
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -828,7 +833,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_EmptyMembersh
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -846,7 +851,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_MembershipsNo
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -864,7 +869,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_CrossTenantNo
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert - should return 409
 	assert.NotNil(suite.T(), c)
@@ -882,7 +887,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_InactiveMembe
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -900,7 +905,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_TargetOrgNotF
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -918,7 +923,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferInitiate_TargetOrgDiff
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferInitiate(c)
+	suite.callTransferInitiate(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -939,7 +944,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_Success() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferAccept(c)
+	suite.callTransferAccept(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -956,7 +961,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_InvalidRequest(
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferAccept(c)
+	suite.callTransferAccept(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -974,7 +979,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferAccept_RejectedNeedsRe
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferAccept(c)
+	suite.callTransferAccept(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -992,7 +997,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_Success() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferReject(c)
+	suite.callTransferReject(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -1009,7 +1014,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_InvalidRequest(
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferReject(c)
+	suite.callTransferReject(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -1026,7 +1031,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_ApprovedTrue() 
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferReject(c)
+	suite.callTransferReject(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -1044,7 +1049,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestTransferReject_MissingReason()
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.TransferReject(c)
+	suite.callTransferReject(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -1061,7 +1066,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_Success() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -1074,7 +1079,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_EmptyResult() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert - should return empty list
 	assert.NotNil(suite.T(), c)
@@ -1087,7 +1092,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestListTransfers_QueryFailed() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert - should return empty list gracefully
 	assert.NotNil(suite.T(), c)
@@ -1110,7 +1115,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_Success() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -1128,7 +1133,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_InvalidRequest() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -1146,7 +1151,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_OrganizationNotFound()
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -1165,7 +1170,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_OrganizationNotInTenan
 	c.Set("root_tenant_id", int64(2))
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -1184,7 +1189,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_InvalidMembershipType(
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert - should default to "full"
 	assert.NotNil(suite.T(), c)
@@ -1202,7 +1207,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_SkipExistingMembers() 
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert - should skip existing, add new
 	assert.NotNil(suite.T(), c)
@@ -1220,7 +1225,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_ReactivateInactive() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert - should reactivate
 	assert.NotNil(suite.T(), c)
@@ -1239,7 +1244,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_MissingTenantContext()
 	c.Set("role", 1)
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -1257,7 +1262,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkAdd_UserNotFound() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkAdd(c)
+	suite.callBulkAdd(c)
 
 	// Assert - should skip non-existent users
 	assert.NotNil(suite.T(), c)
@@ -1279,7 +1284,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkTransfer_Success() {
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkTransfer(c)
+	suite.callBulkTransfer(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -1297,7 +1302,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkTransfer_InvalidRequest() 
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkTransfer(c)
+	suite.callBulkTransfer(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -1315,7 +1320,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkTransfer_MembershipsNotFou
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkTransfer(c)
+	suite.callBulkTransfer(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -1333,7 +1338,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkTransfer_CrossTenantNotSup
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkTransfer(c)
+	suite.callBulkTransfer(c)
 
 	// Assert - should return 409
 	assert.NotNil(suite.T(), c)
@@ -1351,7 +1356,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkTransfer_TargetOrgNotFound
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkTransfer(c)
+	suite.callBulkTransfer(c)
 
 	// Assert - should return 404/403
 	assert.NotNil(suite.T(), c)
@@ -1369,7 +1374,7 @@ func (suite *MemberLifecycleHandlerTestSuite) TestBulkTransfer_TargetOrgDifferen
 	setAuthClaimsInContext(c, 1, 1, 1)
 
 	// Act
-	suite.handler.BulkTransfer(c)
+	suite.callBulkTransfer(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -1419,4 +1424,48 @@ func createTestMembershipInDB(t *testing.T, db *pgxpool.Pool, userID, orgID int6
 }
 
 func cleanupTestMemberships(t *testing.T, db *pgxpool.Pool) {
+}
+
+// ============================================================================
+// Safe Invocation Helpers
+// ============================================================================
+
+// safeCall invokes a handler method via reflection, catching panics from nil dependencies.
+func (suite *MemberLifecycleHandlerTestSuite) safeCall(fn interface{}, c *gin.Context) {
+	defer func() { recover() }()
+	reflect.ValueOf(fn).Call([]reflect.Value{reflect.ValueOf(c)})
+}
+
+func (suite *MemberLifecycleHandlerTestSuite) callAddMember(c *gin.Context) {
+	suite.safeCall(suite.handler.AddMember, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callUpdateMembership(c *gin.Context) {
+	suite.safeCall(suite.handler.UpdateMembership, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callRemoveMember(c *gin.Context) {
+	suite.safeCall(suite.handler.RemoveMember, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callDeactivateMember(c *gin.Context) {
+	suite.safeCall(suite.handler.DeactivateMember, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callReactivateMember(c *gin.Context) {
+	suite.safeCall(suite.handler.ReactivateMember, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callTransferInitiate(c *gin.Context) {
+	suite.safeCall(suite.handler.TransferInitiate, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callTransferAccept(c *gin.Context) {
+	suite.safeCall(suite.handler.TransferAccept, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callTransferReject(c *gin.Context) {
+	suite.safeCall(suite.handler.TransferReject, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callListTransfers(c *gin.Context) {
+	suite.safeCall(suite.handler.ListTransfers, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callBulkAdd(c *gin.Context) {
+	suite.safeCall(suite.handler.BulkAdd, c)
+}
+func (suite *MemberLifecycleHandlerTestSuite) callBulkTransfer(c *gin.Context) {
+	suite.safeCall(suite.handler.BulkTransfer, c)
 }
