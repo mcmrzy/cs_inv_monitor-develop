@@ -133,12 +133,15 @@ func TestOrganizationUpdate_NameOnly(t *testing.T) {
 
 func TestOrganizationMove_ToNewParent(t *testing.T) {
 	ctx := setupChannelTest(t)
-	parentID := ctx.createOrg(t, fmt.Sprintf("org-parent-%d", ts()), "manufacturer", nil)
-	childID := ctx.createOrg(t, fmt.Sprintf("org-child-%d", ts()), "agent", nil)
+	// Hierarchy: manufacturer(root, auto) → agent → distributor
+	agentID := ctx.createOrg(t, fmt.Sprintf("org-parent-%d", ts()), "agent", nil)
+	childID := ctx.createOrg(t, fmt.Sprintf("org-child-%d", ts()), "distributor", &agentID)
+	// Create a second agent to move the distributor under
+	agent2ID := ctx.createOrg(t, fmt.Sprintf("org-parent2-%d", ts()), "agent", nil)
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST",
 		fmt.Sprintf("%s/api/v1/organizations/%d/move", ctx.BaseURL, childID),
-		map[string]interface{}{"parent_id": parentID}, ctx.Token, 5)
+		map[string]interface{}{"parent_id": agent2ID}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	t.Logf("move org: code=%d msg=%s", resp.Code, resp.Message)
 	assert.Equal(t, 0, resp.Code, "move should succeed")
@@ -148,18 +151,19 @@ func TestOrganizationMove_ToNewParent(t *testing.T) {
 		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, childID), nil, ctx.Token, 5)
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp2.Data, &data))
-	assert.Equal(t, float64(parentID), data["parent_id"])
+	assert.Equal(t, float64(agent2ID), data["parent_id"])
 }
 
 func TestOrganizationMove_CircularReference(t *testing.T) {
 	ctx := setupChannelTest(t)
-	parentID := ctx.createOrg(t, fmt.Sprintf("org-circ-p-%d", ts()), "manufacturer", nil)
-	childID := ctx.createOrg(t, fmt.Sprintf("org-circ-c-%d", ts()), "agent", &parentID)
+	// Create agent (auto under manufacturer root), then distributor under agent
+	agentID := ctx.createOrg(t, fmt.Sprintf("org-circ-p-%d", ts()), "agent", nil)
+	distID := ctx.createOrg(t, fmt.Sprintf("org-circ-c-%d", ts()), "distributor", &agentID)
 
-	// Try to move parent under its own child 鈫?circular
+	// Try to move agent under its own distributor - circular
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST",
-		fmt.Sprintf("%s/api/v1/organizations/%d/move", ctx.BaseURL, parentID),
-		map[string]interface{}{"parent_id": childID}, ctx.Token, 5)
+		fmt.Sprintf("%s/api/v1/organizations/%d/move", ctx.BaseURL, agentID),
+		map[string]interface{}{"parent_id": distID}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "circular reference should be rejected")
 	t.Logf("circular ref: code=%d msg=%s", resp.Code, resp.Message)
@@ -219,8 +223,8 @@ func TestOrganizationDelete_SoftDelete(t *testing.T) {
 
 func TestOrganizationDelete_WithChildren_ShouldFail(t *testing.T) {
 	ctx := setupChannelTest(t)
-	parentID := ctx.createOrg(t, fmt.Sprintf("org-del-p-%d", ts()), "manufacturer", nil)
-	ctx.createOrg(t, fmt.Sprintf("org-del-c-%d", ts()), "agent", &parentID)
+	parentID := ctx.createOrg(t, fmt.Sprintf("org-del-p-%d", ts()), "agent", nil)
+	ctx.createOrg(t, fmt.Sprintf("org-del-c-%d", ts()), "distributor", &parentID)
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "DELETE",
 		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, parentID), nil, ctx.Token, 5)
@@ -231,9 +235,9 @@ func TestOrganizationDelete_WithChildren_ShouldFail(t *testing.T) {
 
 func TestOrganizationGetTree_FullHierarchy(t *testing.T) {
 	ctx := setupChannelTest(t)
-	rootID := ctx.createOrg(t, fmt.Sprintf("org-tree-root-%d", ts()), "manufacturer", nil)
-	childID := ctx.createOrg(t, fmt.Sprintf("org-tree-child-%d", ts()), "agent", &rootID)
-	ctx.createOrg(t, fmt.Sprintf("org-tree-grandchild-%d", ts()), "distributor", &childID)
+	rootID := ctx.createOrg(t, fmt.Sprintf("org-tree-root-%d", ts()), "agent", nil)
+	childID := ctx.createOrg(t, fmt.Sprintf("org-tree-child-%d", ts()), "distributor", &rootID)
+	ctx.createOrg(t, fmt.Sprintf("org-tree-grandchild-%d", ts()), "customer", &childID)
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
 		fmt.Sprintf("%s/api/v1/organizations/%d/tree", ctx.BaseURL, rootID), nil, ctx.Token, 5)
@@ -259,11 +263,11 @@ func TestOrganizationGetTree_NotFound(t *testing.T) {
 
 func TestOrganizationCreate_WithParent(t *testing.T) {
 	ctx := setupChannelTest(t)
-	parentID := ctx.createOrg(t, fmt.Sprintf("org-wp-parent-%d", ts()), "manufacturer", nil)
+	parentID := ctx.createOrg(t, fmt.Sprintf("org-wp-parent-%d", ts()), "agent", nil)
 	childName := fmt.Sprintf("org-wp-child-%d", ts())
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
-		map[string]interface{}{"name": childName, "type": "agent", "parent_id": parentID},
+		map[string]interface{}{"name": childName, "type": "distributor", "parent_id": parentID},
 		ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code, "create with parent should succeed: %s", resp.Message)
