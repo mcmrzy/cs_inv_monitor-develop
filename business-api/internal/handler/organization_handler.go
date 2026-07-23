@@ -101,9 +101,10 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Validate organization type
+	// Validate organization type.
+	// "manufacturer" cannot be created via the API — the root manufacturer
+	// org is provisioned automatically by ensure_tenant_root().
 	validTypes := map[string]bool{
-		"manufacturer":    true,
 		"agent":           true,
 		"distributor":     true,
 		"customer":        true,
@@ -138,14 +139,12 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	// Ensure tenant root manufacturer org exists (required by DB constraints).
 	// The ensure_tenant_root function (SECURITY DEFINER) safely handles stale
 	// rows from previous test runs and guarantees tenant_roots + closure entries.
-	if req.Type != "manufacturer" {
-		_, err = tx.Exec(ctx, `SELECT ensure_tenant_root($1)`, tenantID)
-		if err != nil {
-			tx.Rollback(ctx)
-			log.Printf("[CreateOrg] ensure_tenant_root error: user_id=%d, tenant_id=%d, err=%v", userID, tenantID, err)
-			response.Error(c, 500, fmt.Sprintf("create organization failed: %v", err))
-			return
-		}
+	_, err = tx.Exec(ctx, `SELECT ensure_tenant_root($1)`, tenantID)
+	if err != nil {
+		tx.Rollback(ctx)
+		log.Printf("[CreateOrg] ensure_tenant_root error: user_id=%d, tenant_id=%d, err=%v", userID, tenantID, err)
+		response.Error(c, 500, fmt.Sprintf("create organization failed: %v", err))
+		return
 	}
 
 	// If ParentID provided, validate it belongs to same root_tenant
@@ -172,7 +171,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 			return
 		}
 		parentID = req.ParentID
-	} else if req.Type != "manufacturer" {
+	} else {
 		// Default parent is the manufacturer root org
 		parentID = &tenantID
 	}
@@ -619,17 +618,6 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		log.Printf("[MoveOrg] tx begin error: user_id=%d, id=%d, err=%v", userID, id, err)
-		response.Error(c, 500, "system error")
-		return
-	}
-	defer func() {
-		if err != nil {
-			tx.Rollback(ctx)
-		}
-	}()
 
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
@@ -637,100 +625,36 @@ func (h *OrganizationHandler) Move(c *gin.Context) {
 		return
 	}
 
-	// Validate new parent exists and belongs to same tenant
-	var newParentType string
-	err = tx.QueryRow(ctx, `
-		SELECT org_type FROM organizations WHERE id = $1 AND root_tenant_id = $2 AND deleted_at IS NULL
-	`, req.ParentID, tenantID).Scan(&newParentType)
-	if err == pgx.ErrNoRows {
-		response.Error(c, 404, "parent organization not found")
-		return
-	}
+	// Use the governed_move_org SECURITY DEFINER function which handles
+	// circular-reference checks, hierarchy validation, parent_id update,
+	// and closure-table rebuild atomically.
+	var result string
+	err = h.db.QueryRow(ctx, `SELECT governed_move_org($1, $2, $3)`,
+		id, req.ParentID, tenantID).Scan(&result)
 	if err != nil {
-		log.Printf("[MoveOrg] query parent error: err=%v", err)
-		response.Error(c, 500, "query parent failed")
-		return
-	}
-
-	// Prevent circular references: check if new parent is descendant of org being moved
-	var isAncestor bool
-	err = tx.QueryRow(ctx, `
-		SELECT EXISTS(SELECT 1 FROM organization_closure 
-			WHERE root_tenant_id = $1 AND ancestor_id = $2 AND descendant_id = $3)
-	`, tenantID, req.ParentID, id).Scan(&isAncestor)
-	if err != nil {
-		log.Printf("[MoveOrg] check ancestor error: err=%v", err)
-		response.Error(c, 500, "check circular reference failed")
-		return
-	}
-	if isAncestor {
-		response.Error(c, 409, "cannot move organization into its own descendant")
-		return
-	}
-
-	// Update parent_id
-	updateQuery := `
-		UPDATE organizations SET parent_id = $2, updated_at = NOW(), version = version + 1
-		WHERE id = $1 AND root_tenant_id = $3
-		RETURNING id
-	`
-	var updatedID int64
-	err = tx.QueryRow(ctx, updateQuery, id, req.ParentID, tenantID).Scan(&updatedID)
-	if err == pgx.ErrNoRows {
-		response.Error(c, 404, "organization not found or not in tenant scope")
-		return
-	}
-	if err != nil {
-		log.Printf("[MoveOrg] update parent error: err=%v", err)
+		log.Printf("[MoveOrg] governed_move_org error: user_id=%d, id=%d, err=%v", userID, id, err)
 		response.Error(c, 500, "move organization failed")
 		return
 	}
 
-	// Recalculate closure table for moved subtree (simplified - in production use recursive CTE)
-	// Delete old relationships and recalculate
-	_, err = tx.Exec(ctx, `
-		DELETE FROM organization_closure 
-		WHERE root_tenant_id = $1 AND ancestor_id = $2 AND descendant_id <> $2
-	`, tenantID, id)
-	if err != nil {
-		log.Printf("[MoveOrg] cleanup closure error: err=%v", err)
+	switch result {
+	case "ok":
+		response.SuccessWithMessage(c, "organization moved", gin.H{
+			"id":        id,
+			"parent_id": req.ParentID,
+			"moved_at":  time.Now(),
+		})
+	case "circular_reference":
+		response.Error(c, 409, "cannot move organization into its own descendant")
+	case "org_not_found":
+		response.Error(c, 404, "organization not found or not in tenant scope")
+	case "parent_not_found":
+		response.Error(c, 404, "parent organization not found")
+	case "invalid_hierarchy":
+		response.Error(c, 400, "illegal organization hierarchy for move")
+	default:
+		response.Error(c, 500, "unexpected move result: "+result)
 	}
-
-	// Rebuild closure for moved node and its descendants
-	_, err = tx.Exec(ctx, `
-		WITH RECURSIVE subtree AS (
-			SELECT id, root_tenant_id FROM organizations WHERE id = $1
-			UNION ALL
-			SELECT o.id, o.root_tenant_id FROM organizations o
-			JOIN subtree s ON o.parent_id = s.id
-		)
-		INSERT INTO organization_closure (root_tenant_id, ancestor_id, descendant_id, depth)
-		SELECT s1.root_tenant_id, s2.id, s1.id, 
-		       (SELECT COUNT(*) FROM organization_closure c 
-		        WHERE c.root_tenant_id = s1.root_tenant_id 
-		        AND c.ancestor_id = s2.id 
-		        AND c.descendant_id = s1.id)
-		FROM subtree s1
-		JOIN subtree s2 ON s1.id != s2.id OR s1.id = $1
-		ON CONFLICT (root_tenant_id, ancestor_id, descendant_id) DO UPDATE
-		SET depth = EXCLUDED.depth
-	`, id)
-	if err != nil {
-		log.Printf("[MoveOrg] rebuild closure error: err=%v", err)
-		// Continue, closure update is best-effort
-	}
-
-	if err = tx.Commit(ctx); err != nil {
-		log.Printf("[MoveOrg] commit error: err=%v", err)
-		response.Error(c, 500, "move failed")
-		return
-	}
-
-	response.SuccessWithMessage(c, "organization moved", gin.H{
-		"id":         id,
-		"parent_id":  req.ParentID,
-		"moved_at":   time.Now(),
-	})
 }
 
 // ToggleStatus handles PATCH /api/v1/organizations/:id/status - Toggle organization status
