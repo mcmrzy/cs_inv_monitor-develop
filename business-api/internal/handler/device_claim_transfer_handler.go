@@ -143,9 +143,19 @@ func (h *DeviceClaimTransferHandler) GenerateClaimCode(c *gin.Context) {
 			rootTenantID = userID
 		}
 	} else {
-		// Validate user has permission to manage this device
-		if !h.canManageDevice(ctx, userID, device.ID) {
-			response.Error(c, 403, "无权限生成认领码")
+		// Device exists — always enforce cross-tenant check regardless of admin role
+		requesterTenantID, tcErr := h.getRootTenantID(ctx, userID)
+		if tcErr != nil {
+			response.Error(c, 500, "获取用户租户信息失败")
+			return
+		}
+		ownerTenantID, otErr := h.getRootTenantID(ctx, device.UserID)
+		if otErr != nil {
+			response.Error(c, 500, "获取设备租户信息失败")
+			return
+		}
+		if requesterTenantID != ownerTenantID {
+			response.Error(c, 403, "无权限为其他租户的设备生成认领码")
 			return
 		}
 		// Check device not already claimed
@@ -153,12 +163,7 @@ func (h *DeviceClaimTransferHandler) GenerateClaimCode(c *gin.Context) {
 			response.Error(c, 409, "设备已被认领，无法再次生成认领码")
 			return
 		}
-		// Get device's root tenant
-		rootTenantID, err = h.getRootTenantID(ctx, device.UserID)
-		if err != nil {
-			response.Error(c, 500, "获取租户信息失败")
-			return
-		}
+		rootTenantID = ownerTenantID
 	}
 
 	// Generate secure claim code (96-bit entropy → ~13 base64 chars)
@@ -859,18 +864,24 @@ func (h *DeviceClaimTransferHandler) CancelTransfer(c *gin.Context) {
 func (h *DeviceClaimTransferHandler) getDeviceBySN(ctx context.Context, sn string) (*model.Device, error) {
 	var device model.Device
 	err := h.db.QueryRow(ctx, `
-		SELECT id, sn, model, manufacturer, firmware_arm, firmware_esp, firmware_dsp, firmware_bms,
-			   main_version, device_type, rated_power, rated_voltage, rated_freq, battery_voltage,
-			   battery_type, cell_count, station_id, station_name, user_id, timezone, status,
-			   current_power, daily_energy, last_online_at, created_at, updated_at
+		SELECT id, sn, model,
+		       COALESCE(manufacturer, ''),
+		       COALESCE(firmware_arm, ''), COALESCE(firmware_esp, ''),
+		       COALESCE(firmware_dsp, ''), COALESCE(firmware_bms, ''),
+		       COALESCE(main_version, ''), COALESCE(device_type, ''),
+		       rated_power, rated_voltage, rated_freq, battery_voltage,
+		       COALESCE(battery_type, ''), cell_count,
+		       station_id, user_id, status,
+		       last_online_at, created_at, updated_at
 		FROM devices WHERE sn = $1
 	`, sn).Scan(
-		&device.ID, &device.SN, &device.Model, &device.Manufacturer, &device.FirmwareArm,
+		&device.ID, &device.SN, &device.Model,
+		&device.Manufacturer, &device.FirmwareArm,
 		&device.FirmwareEsp, &device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 		&device.DeviceType, &device.RatedPower, &device.RatedVoltage, &device.RatedFreq,
-		&device.BatteryVoltage, &device.BatteryType, &device.CellCount, &device.StationID,
-		&device.StationName, &device.UserID, &device.Timezone, &device.Status, &device.CurrentPower,
-		&device.DailyEnergy, &device.LastOnlineAt, &device.CreatedAt, &device.UpdatedAt,
+		&device.BatteryVoltage, &device.BatteryType, &device.CellCount,
+		&device.StationID, &device.UserID, &device.Status,
+		&device.LastOnlineAt, &device.CreatedAt, &device.UpdatedAt,
 	)
 
 	if err != nil {
@@ -883,7 +894,7 @@ func (h *DeviceClaimTransferHandler) getDeviceBySN(ctx context.Context, sn strin
 func (h *DeviceClaimTransferHandler) getRootTenantID(ctx context.Context, userID int64) (int64, error) {
 	var tenantID int64
 	err := h.db.QueryRow(ctx, `
-		SELECT COALESCE(parent_id, id) FROM admin_users WHERE id = $1
+		SELECT COALESCE(parent_id, id) FROM users WHERE id = $1 AND deleted_at IS NULL
 	`, userID).Scan(&tenantID)
 
 	if err != nil {

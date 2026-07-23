@@ -1,4 +1,4 @@
-//go:build integration
+﻿//go:build integration
 
 package integration
 
@@ -14,15 +14,15 @@ import (
 )
 
 // =============================================================================
-// TestOrganizationFlow — Comprehensive organization CRUD + hierarchy tests
+// TestOrganizationFlow 鈥?Comprehensive organization CRUD + hierarchy tests
 // =============================================================================
 
 func TestOrganizationCreate_ValidData(t *testing.T) {
 	ctx := setupChannelTest(t)
 	name := fmt.Sprintf("org-create-%d", ts())
 
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
-		map[string]interface{}{"name": name, "type": "agent"}, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
+		map[string]interface{}{"name": name, "type": "agent"}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code, "msg=%s", resp.Message)
 
@@ -36,16 +36,16 @@ func TestOrganizationCreate_ValidData(t *testing.T) {
 
 func TestOrganizationCreate_InvalidType(t *testing.T) {
 	ctx := setupChannelTest(t)
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
-		map[string]interface{}{"name": "bad-type", "type": "unknown_type"}, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
+		map[string]interface{}{"name": "bad-type", "type": "unknown_type"}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "should reject invalid org type")
 }
 
 func TestOrganizationCreate_MissingName(t *testing.T) {
 	ctx := setupChannelTest(t)
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
-		map[string]interface{}{"type": "agent"}, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
+		map[string]interface{}{"type": "agent"}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "should reject missing name")
 }
@@ -57,8 +57,8 @@ func TestOrganizationList_Pagination(t *testing.T) {
 		ctx.createOrg(t, fmt.Sprintf("org-list-%d-%d", ts(), i), "distributor", nil)
 	}
 
-	resp, status := doJSON(t, ctx.Client, "GET",
-		ctx.BaseURL+"/api/v1/organizations?page=1&page_size=2", nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		ctx.BaseURL+"/api/v1/organizations?page=1&page_size=2", nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
@@ -73,8 +73,8 @@ func TestOrganizationList_FilterByType(t *testing.T) {
 	ctx.createOrg(t, fmt.Sprintf("org-ft-cust-%d", ts()), "customer", nil)
 	ctx.createOrg(t, fmt.Sprintf("org-ft-agent-%d", ts()), "agent", nil)
 
-	resp, status := doJSON(t, ctx.Client, "GET",
-		ctx.BaseURL+"/api/v1/organizations?type=customer", nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		ctx.BaseURL+"/api/v1/organizations?type=customer", nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
@@ -91,8 +91,8 @@ func TestOrganizationGetByID_Found(t *testing.T) {
 	ctx := setupChannelTest(t)
 	orgID := ctx.createOrg(t, fmt.Sprintf("org-get-%d", ts()), "agent", nil)
 
-	resp, status := doJSON(t, ctx.Client, "GET",
-		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
@@ -103,8 +103,8 @@ func TestOrganizationGetByID_Found(t *testing.T) {
 
 func TestOrganizationGetByID_NotFound(t *testing.T) {
 	ctx := setupChannelTest(t)
-	resp, status := doJSON(t, ctx.Client, "GET",
-		ctx.BaseURL+"/api/v1/organizations/999999999", nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		ctx.BaseURL+"/api/v1/organizations/999999999", nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "should return error for non-existent org")
 }
@@ -114,15 +114,15 @@ func TestOrganizationUpdate_NameOnly(t *testing.T) {
 	orgID := ctx.createOrg(t, fmt.Sprintf("org-upd-%d", ts()), "agent", nil)
 	newName := fmt.Sprintf("org-updated-%d", ts())
 
-	resp, status := doJSON(t, ctx.Client, "PUT",
+	resp, status := doJSONWithRetry(t, ctx.Client, "PUT",
 		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID),
-		map[string]interface{}{"name": newName}, ctx.Token)
+		map[string]interface{}{"name": newName}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code, "update should succeed: %s", resp.Message)
 
 	// Verify the name changed
-	resp2, _ := doJSON(t, ctx.Client, "GET",
-		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token)
+	resp2, _ := doJSONWithRetry(t, ctx.Client, "GET",
+		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token, 5)
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp2.Data, &data))
 	assert.Equal(t, newName, data["name"])
@@ -133,16 +133,16 @@ func TestOrganizationMove_ToNewParent(t *testing.T) {
 	parentID := ctx.createOrg(t, fmt.Sprintf("org-parent-%d", ts()), "manufacturer", nil)
 	childID := ctx.createOrg(t, fmt.Sprintf("org-child-%d", ts()), "agent", nil)
 
-	resp, status := doJSON(t, ctx.Client, "POST",
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST",
 		fmt.Sprintf("%s/api/v1/organizations/%d/move", ctx.BaseURL, childID),
-		map[string]interface{}{"parent_id": parentID}, ctx.Token)
+		map[string]interface{}{"parent_id": parentID}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	t.Logf("move org: code=%d msg=%s", resp.Code, resp.Message)
 	assert.Equal(t, 0, resp.Code, "move should succeed")
 
 	// Verify parent changed
-	resp2, _ := doJSON(t, ctx.Client, "GET",
-		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, childID), nil, ctx.Token)
+	resp2, _ := doJSONWithRetry(t, ctx.Client, "GET",
+		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, childID), nil, ctx.Token, 5)
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp2.Data, &data))
 	assert.Equal(t, float64(parentID), data["parent_id"])
@@ -153,10 +153,10 @@ func TestOrganizationMove_CircularReference(t *testing.T) {
 	parentID := ctx.createOrg(t, fmt.Sprintf("org-circ-p-%d", ts()), "manufacturer", nil)
 	childID := ctx.createOrg(t, fmt.Sprintf("org-circ-c-%d", ts()), "agent", &parentID)
 
-	// Try to move parent under its own child → circular
-	resp, status := doJSON(t, ctx.Client, "POST",
+	// Try to move parent under its own child 鈫?circular
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST",
 		fmt.Sprintf("%s/api/v1/organizations/%d/move", ctx.BaseURL, parentID),
-		map[string]interface{}{"parent_id": childID}, ctx.Token)
+		map[string]interface{}{"parent_id": childID}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "circular reference should be rejected")
 	t.Logf("circular ref: code=%d msg=%s", resp.Code, resp.Message)
@@ -167,23 +167,23 @@ func TestOrganizationToggleStatus_ActiveDisabled(t *testing.T) {
 	orgID := ctx.createOrg(t, fmt.Sprintf("org-toggle-%d", ts()), "agent", nil)
 
 	// Disable
-	resp, status := doJSON(t, ctx.Client, "PATCH",
+	resp, status := doJSONWithRetry(t, ctx.Client, "PATCH",
 		fmt.Sprintf("%s/api/v1/organizations/%d/status", ctx.BaseURL, orgID),
-		map[string]interface{}{"status": "disabled"}, ctx.Token)
+		map[string]interface{}{"status": "disabled"}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code, "disable should succeed: %s", resp.Message)
 
 	// Verify disabled
-	resp2, _ := doJSON(t, ctx.Client, "GET",
-		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token)
+	resp2, _ := doJSONWithRetry(t, ctx.Client, "GET",
+		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token, 5)
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp2.Data, &data))
 	assert.Equal(t, "disabled", data["status"])
 
 	// Re-enable
-	resp3, status3 := doJSON(t, ctx.Client, "PATCH",
+	resp3, status3 := doJSONWithRetry(t, ctx.Client, "PATCH",
 		fmt.Sprintf("%s/api/v1/organizations/%d/status", ctx.BaseURL, orgID),
-		map[string]interface{}{"status": "active"}, ctx.Token)
+		map[string]interface{}{"status": "active"}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status3)
 	assert.Equal(t, 0, resp3.Code, "re-enable should succeed")
 }
@@ -192,9 +192,9 @@ func TestOrganizationToggleStatus_InvalidValue(t *testing.T) {
 	ctx := setupChannelTest(t)
 	orgID := ctx.createOrg(t, fmt.Sprintf("org-inv-status-%d", ts()), "agent", nil)
 
-	resp, status := doJSON(t, ctx.Client, "PATCH",
+	resp, status := doJSONWithRetry(t, ctx.Client, "PATCH",
 		fmt.Sprintf("%s/api/v1/organizations/%d/status", ctx.BaseURL, orgID),
-		map[string]interface{}{"status": "unknown"}, ctx.Token)
+		map[string]interface{}{"status": "unknown"}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "invalid status should be rejected")
 }
@@ -203,14 +203,14 @@ func TestOrganizationDelete_SoftDelete(t *testing.T) {
 	ctx := setupChannelTest(t)
 	orgID := ctx.createOrg(t, fmt.Sprintf("org-del-%d", ts()), "agent", nil)
 
-	resp, status := doJSON(t, ctx.Client, "DELETE",
-		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "DELETE",
+		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code, "delete should succeed: %s", resp.Message)
 
 	// Should not be found anymore
-	resp2, _ := doJSON(t, ctx.Client, "GET",
-		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token)
+	resp2, _ := doJSONWithRetry(t, ctx.Client, "GET",
+		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, orgID), nil, ctx.Token, 5)
 	assert.NotEqual(t, 0, resp2.Code, "deleted org should not be found")
 }
 
@@ -219,8 +219,8 @@ func TestOrganizationDelete_WithChildren_ShouldFail(t *testing.T) {
 	parentID := ctx.createOrg(t, fmt.Sprintf("org-del-p-%d", ts()), "manufacturer", nil)
 	ctx.createOrg(t, fmt.Sprintf("org-del-c-%d", ts()), "agent", &parentID)
 
-	resp, status := doJSON(t, ctx.Client, "DELETE",
-		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, parentID), nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "DELETE",
+		fmt.Sprintf("%s/api/v1/organizations/%d", ctx.BaseURL, parentID), nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "delete org with children should fail")
 	t.Logf("delete with children: code=%d msg=%s", resp.Code, resp.Message)
@@ -232,8 +232,8 @@ func TestOrganizationGetTree_FullHierarchy(t *testing.T) {
 	childID := ctx.createOrg(t, fmt.Sprintf("org-tree-child-%d", ts()), "agent", &rootID)
 	ctx.createOrg(t, fmt.Sprintf("org-tree-grandchild-%d", ts()), "distributor", &childID)
 
-	resp, status := doJSON(t, ctx.Client, "GET",
-		fmt.Sprintf("%s/api/v1/organizations/%d/tree", ctx.BaseURL, rootID), nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		fmt.Sprintf("%s/api/v1/organizations/%d/tree", ctx.BaseURL, rootID), nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
@@ -248,8 +248,8 @@ func TestOrganizationGetTree_FullHierarchy(t *testing.T) {
 
 func TestOrganizationGetTree_NotFound(t *testing.T) {
 	ctx := setupChannelTest(t)
-	resp, status := doJSON(t, ctx.Client, "GET",
-		ctx.BaseURL+"/api/v1/organizations/999999999/tree", nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		ctx.BaseURL+"/api/v1/organizations/999999999/tree", nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code)
 }
@@ -259,7 +259,7 @@ func TestOrganizationCreate_WithParent(t *testing.T) {
 	parentID := ctx.createOrg(t, fmt.Sprintf("org-wp-parent-%d", ts()), "manufacturer", nil)
 	childName := fmt.Sprintf("org-wp-child-%d", ts())
 
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
 		map[string]interface{}{"name": childName, "type": "agent", "parent_id": parentID},
 		ctx.Token)
 	assert.Equal(t, http.StatusOK, status)
@@ -272,7 +272,7 @@ func TestOrganizationCreate_WithParent(t *testing.T) {
 
 func TestOrganizationCreate_ParentNotFound(t *testing.T) {
 	ctx := setupChannelTest(t)
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/organizations",
 		map[string]interface{}{"name": "orphan", "type": "agent", "parent_id": 999999999},
 		ctx.Token)
 	assert.Equal(t, http.StatusOK, status)
@@ -283,3 +283,4 @@ func TestOrganizationCreate_ParentNotFound(t *testing.T) {
 func ts() int64 {
 	return time.Now().UnixNano() % 100000000
 }
+

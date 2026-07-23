@@ -36,10 +36,10 @@ func TestInvitationCreate_DuplicateEmail(t *testing.T) {
 	ctx.createInvitation(t, email, 3, &orgID, 48)
 
 	// Second invitation with same email → should conflict
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invitations/create",
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invitations/create",
 		map[string]interface{}{
 			"email": email, "role_id": 3, "organization_id": orgID, "expires_hours": 48,
-		}, ctx.Token)
+		}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	t.Logf("dup invitation: code=%d msg=%s", resp.Code, resp.Message)
 	// May return 409/conflict or a business error code
@@ -48,10 +48,10 @@ func TestInvitationCreate_DuplicateEmail(t *testing.T) {
 
 func TestInvitationCreate_InvalidEmail(t *testing.T) {
 	ctx := setupChannelTest(t)
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invitations/create",
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invitations/create",
 		map[string]interface{}{
 			"email": "not-an-email", "role_id": 3, "expires_hours": 48,
-		}, ctx.Token)
+		}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "invalid email should be rejected")
 }
@@ -59,10 +59,10 @@ func TestInvitationCreate_InvalidEmail(t *testing.T) {
 func TestInvitationCreate_InvalidRoleID(t *testing.T) {
 	ctx := setupChannelTest(t)
 	email := uniqueEmail("inv-badrole")
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invitations/create",
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invitations/create",
 		map[string]interface{}{
 			"email": email, "role_id": 99, "expires_hours": 48,
-		}, ctx.Token)
+		}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "invalid role_id should be rejected")
 }
@@ -95,7 +95,7 @@ func TestInvitationAccept_ValidCode(t *testing.T) {
 		"phone":           fmt.Sprintf("152%08d", ts()%100000000),
 		"nickname":        fmt.Sprintf("invited_%d", ts()),
 	}
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invitations/accept", acceptPayload, "")
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invite/accept", acceptPayload, "", 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code, "accept should succeed: %s", resp.Message)
 
@@ -115,7 +115,7 @@ func TestInvitationAccept_WrongCode(t *testing.T) {
 		"phone":           fmt.Sprintf("153%08d", ts()%100000000),
 		"nickname":        "wrong_code_user",
 	}
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invitations/accept", acceptPayload, "")
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/invite/accept", acceptPayload, "", 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "wrong code should be rejected")
 	t.Logf("wrong code: code=%d msg=%s", resp.Code, resp.Message)
@@ -130,8 +130,8 @@ func TestInvitationList_WithStatusFilter(t *testing.T) {
 		ctx.createInvitation(t, uniqueEmail("inv-list"), 3, &orgID, 48)
 	}
 
-	resp, status := doJSON(t, ctx.Client, "GET",
-		ctx.BaseURL+"/api/v1/invitations/list?status=pending&page=1&page_size=20", nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		ctx.BaseURL+"/api/v1/invitations/list?status=pending&page=1&page_size=20", nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
@@ -150,14 +150,14 @@ func TestInvitationRevoke_Pending(t *testing.T) {
 	invID, _ := invData["id"].(float64)
 	require.NotZero(t, invID, "invitation ID should be present")
 
-	resp, status := doJSON(t, ctx.Client, "DELETE",
-		fmt.Sprintf("%s/api/v1/invitations/%d/revoke", ctx.BaseURL, int64(invID)), nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "DELETE",
+		fmt.Sprintf("%s/api/v1/invitations/%d/revoke", ctx.BaseURL, int64(invID)), nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code, "revoke pending invitation should succeed: %s", resp.Message)
 
 	// Verify status changed
-	detailsResp, _ := doJSON(t, ctx.Client, "GET",
-		fmt.Sprintf("%s/api/v1/invitations/%d/details", ctx.BaseURL, int64(invID)), nil, ctx.Token)
+	detailsResp, _ := doJSONWithRetry(t, ctx.Client, "GET",
+		fmt.Sprintf("%s/api/v1/invitations/%d/details", ctx.BaseURL, int64(invID)), nil, ctx.Token, 5)
 	var detData map[string]interface{}
 	if detailsResp.Data != nil {
 		require.NoError(t, json.Unmarshal(detailsResp.Data, &detData))
@@ -174,12 +174,12 @@ func TestInvitationRevoke_AlreadyRevoked(t *testing.T) {
 	invID, _ := invData["id"].(float64)
 
 	// Revoke first time
-	doJSON(t, ctx.Client, "DELETE",
-		fmt.Sprintf("%s/api/v1/invitations/%d/revoke", ctx.BaseURL, int64(invID)), nil, ctx.Token)
+	doJSONWithRetry(t, ctx.Client, "DELETE",
+		fmt.Sprintf("%s/api/v1/invitations/%d/revoke", ctx.BaseURL, int64(invID)), nil, ctx.Token, 5)
 
 	// Revoke again → should conflict or error
-	resp, status := doJSON(t, ctx.Client, "DELETE",
-		fmt.Sprintf("%s/api/v1/invitations/%d/revoke", ctx.BaseURL, int64(invID)), nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "DELETE",
+		fmt.Sprintf("%s/api/v1/invitations/%d/revoke", ctx.BaseURL, int64(invID)), nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code, "re-revoking should fail")
 	t.Logf("re-revoke: code=%d msg=%s", resp.Code, resp.Message)
@@ -193,8 +193,8 @@ func TestInvitationDetails_Found(t *testing.T) {
 	invData := ctx.createInvitation(t, email, 3, &orgID, 48)
 	invID, _ := invData["id"].(float64)
 
-	resp, status := doJSON(t, ctx.Client, "GET",
-		fmt.Sprintf("%s/api/v1/invitations/%d/details", ctx.BaseURL, int64(invID)), nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		fmt.Sprintf("%s/api/v1/invitations/%d/details", ctx.BaseURL, int64(invID)), nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
@@ -205,8 +205,8 @@ func TestInvitationDetails_Found(t *testing.T) {
 
 func TestInvitationDetails_NotFound(t *testing.T) {
 	ctx := setupChannelTest(t)
-	resp, status := doJSON(t, ctx.Client, "GET",
-		ctx.BaseURL+"/api/v1/invitations/999999999/details", nil, ctx.Token)
+	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
+		ctx.BaseURL+"/api/v1/invitations/999999999/details", nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.NotEqual(t, 0, resp.Code)
 }
