@@ -74,7 +74,9 @@ func Auth(jwtService *service.JWTService, validators ...AuthorizationContextVali
 
 		c.Set("user_id", claims.UserID)
 		c.Set("phone", claims.Phone)
-		c.Set("role", claims.Role)
+		if claims.Role != nil {
+			c.Set("role", *claims.Role)
+		}
 		c.Set("actor_context", model.ActorContext{
 			UserID: claims.UserID, RootTenantID: claims.RootTenantID,
 			OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,
@@ -114,7 +116,9 @@ func OptionalAuth(jwtService *service.JWTService, validators ...AuthorizationCon
 				if err == nil && contextValid && !jwtService.IsBlacklisted(c.Request.Context(), jti) {
 					c.Set("user_id", claims.UserID)
 					c.Set("phone", claims.Phone)
-					c.Set("role", claims.Role)
+					if claims.Role != nil {
+						c.Set("role", *claims.Role)
+					}
 					c.Set("actor_context", model.ActorContext{
 						UserID: claims.UserID, RootTenantID: claims.RootTenantID,
 						OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,

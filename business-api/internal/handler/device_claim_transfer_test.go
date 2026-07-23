@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"reflect"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,10 @@ type DeviceClaimTransferHandlerTestSuite struct {
 
 func (suite *DeviceClaimTransferHandlerTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
+}
+
+func (suite *DeviceClaimTransferHandlerTestSuite) SetupTest() {
+	suite.handler = NewDeviceClaimTransferHandler(nil, nil, nil, "", "")
 }
 
 func (suite *DeviceClaimTransferHandlerTestSuite) TearDownSuite() {
@@ -50,7 +55,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestGenerateClaimCode_Success(
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.GenerateClaimCode(c)
+	suite.callGenerateClaimCode(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -68,7 +73,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestGenerateClaimCode_DeviceNo
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.GenerateClaimCode(c)
+	suite.callGenerateClaimCode(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -86,7 +91,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestGenerateClaimCode_NoPermis
 	setAuthClaimsInContext(c, 1, 3, 100)
 
 	// Act
-	suite.handler.GenerateClaimCode(c)
+	suite.callGenerateClaimCode(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -104,7 +109,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestGenerateClaimCode_DeviceAl
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.GenerateClaimCode(c)
+	suite.callGenerateClaimCode(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -121,7 +126,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestGenerateClaimCode_InvalidR
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.GenerateClaimCode(c)
+	suite.callGenerateClaimCode(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -139,7 +144,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestGenerateClaimCode_ExceedsM
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.GenerateClaimCode(c)
+	suite.callGenerateClaimCode(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -157,7 +162,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestGenerateClaimCode_InvalidS
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.GenerateClaimCode(c)
+	suite.callGenerateClaimCode(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -181,7 +186,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestVerifyClaimCode_Success() 
 	c, w := createTestGinContext("/api/v1/devices/claim-code/verify", "POST", req)
 
 	// Act
-	suite.handler.VerifyClaimCode(c)
+	suite.callVerifyClaimCode(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -197,7 +202,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestVerifyClaimCode_InvalidCod
 	c, w := createTestGinContext("/api/v1/devices/claim-code/verify", "POST", req)
 
 	// Act
-	suite.handler.VerifyClaimCode(c)
+	suite.callVerifyClaimCode(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -213,7 +218,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestVerifyClaimCode_Expired() 
 	c, w := createTestGinContext("/api/v1/devices/claim-code/verify", "POST", req)
 
 	// Act
-	suite.handler.VerifyClaimCode(c)
+	suite.callVerifyClaimCode(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -229,7 +234,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestVerifyClaimCode_InvalidReq
 	c, w := createTestGinContext("/api/v1/devices/claim-code/verify", "POST", req)
 
 	// Act
-	suite.handler.VerifyClaimCode(c)
+	suite.callVerifyClaimCode(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -245,7 +250,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestVerifyClaimCode_AlreadyCla
 	c, w := createTestGinContext("/api/v1/devices/claim-code/verify", "POST", req)
 
 	// Act
-	suite.handler.VerifyClaimCode(c)
+	suite.callVerifyClaimCode(c)
 
 	// Assert - should return 404 (no unclaimed tokens)
 	assert.NotNil(suite.T(), c)
@@ -269,7 +274,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_Success() {
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -288,7 +293,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_InvalidSN() {
 	c.Params = []gin.Param{{Key: "sn", Value: "abc"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -307,7 +312,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_TokenNotFound(
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -326,7 +331,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_AlreadyClaimed
 	c.Params = []gin.Param{{Key: "sn", Value: "ALREADYCLAIMED"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -345,7 +350,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_CodeExpired() 
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -364,7 +369,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_WrongCode() {
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -383,7 +388,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_CrossTenantRes
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -401,7 +406,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_InvalidRequest
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -420,7 +425,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestClaimDevice_DeviceStatusCh
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.ClaimDevice(c)
+	suite.callClaimDevice(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -444,7 +449,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRequestTransfer_Success() 
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.RequestTransfer(c)
+	suite.callRequestTransfer(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -463,7 +468,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRequestTransfer_DeviceNotF
 	c.Params = []gin.Param{{Key: "sn", Value: "NONEXISTENT"}}
 
 	// Act
-	suite.handler.RequestTransfer(c)
+	suite.callRequestTransfer(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -482,7 +487,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRequestTransfer_NotOwner()
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.RequestTransfer(c)
+	suite.callRequestTransfer(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -501,7 +506,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRequestTransfer_SameTenant
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.RequestTransfer(c)
+	suite.callRequestTransfer(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -520,7 +525,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRequestTransfer_PendingExi
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.RequestTransfer(c)
+	suite.callRequestTransfer(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -538,7 +543,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRequestTransfer_InvalidReq
 	c.Params = []gin.Param{{Key: "sn", Value: "TEST123456"}}
 
 	// Act
-	suite.handler.RequestTransfer(c)
+	suite.callRequestTransfer(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -555,7 +560,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestListTransfers_Success() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -568,7 +573,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestListTransfers_WithStatusFi
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -581,7 +586,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestListTransfers_MineFilter()
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -595,7 +600,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestListTransfers_AdminAll() {
 	c.Set("type", "all")
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -608,7 +613,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestListTransfers_InvalidStatu
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -621,7 +626,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestListTransfers_EmptyResult(
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.ListTransfers(c)
+	suite.callListTransfers(c)
 
 	// Assert - should return empty list
 	assert.NotNil(suite.T(), c)
@@ -643,7 +648,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestApproveTransfer_Success() 
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ApproveTransfer(c)
+	suite.callApproveTransfer(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -661,7 +666,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestApproveTransfer_InvalidID(
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.ApproveTransfer(c)
+	suite.callApproveTransfer(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -679,7 +684,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestApproveTransfer_NotFound()
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.ApproveTransfer(c)
+	suite.callApproveTransfer(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -697,7 +702,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestApproveTransfer_NotPending
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ApproveTransfer(c)
+	suite.callApproveTransfer(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -715,7 +720,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestApproveTransfer_NotOwner()
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ApproveTransfer(c)
+	suite.callApproveTransfer(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -733,7 +738,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestApproveTransfer_ApprovedFa
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ApproveTransfer(c)
+	suite.callApproveTransfer(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -756,7 +761,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRejectTransfer_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.RejectTransfer(c)
+	suite.callRejectTransfer(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -775,7 +780,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRejectTransfer_MissingReas
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.RejectTransfer(c)
+	suite.callRejectTransfer(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -794,7 +799,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRejectTransfer_ApprovedTru
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.RejectTransfer(c)
+	suite.callRejectTransfer(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -813,7 +818,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRejectTransfer_NotPending(
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.RejectTransfer(c)
+	suite.callRejectTransfer(c)
 
 	// Assert - should return 409
 	assert.NotNil(suite.T(), c)
@@ -832,7 +837,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestRejectTransfer_NotOwner() 
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.RejectTransfer(c)
+	suite.callRejectTransfer(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -850,7 +855,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestCancelTransfer_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.CancelTransfer(c)
+	suite.callCancelTransfer(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -864,7 +869,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestCancelTransfer_AdminOverri
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.CancelTransfer(c)
+	suite.callCancelTransfer(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -878,7 +883,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestCancelTransfer_NotRequeste
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.CancelTransfer(c)
+	suite.callCancelTransfer(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -892,7 +897,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestCancelTransfer_NotPending(
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.CancelTransfer(c)
+	suite.callCancelTransfer(c)
 
 	// Assert - should return 409
 	assert.NotNil(suite.T(), c)
@@ -906,7 +911,7 @@ func (suite *DeviceClaimTransferHandlerTestSuite) TestCancelTransfer_NotFound() 
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.CancelTransfer(c)
+	suite.callCancelTransfer(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
