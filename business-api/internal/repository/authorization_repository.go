@@ -132,6 +132,32 @@ func (r *AuthorizationRepository) ValidateAuthorizationSessionContext(ctx contex
 	if !expected.Valid() {
 		return false, nil
 	}
+
+	// Synthetic system-level contexts (issued to users without an active
+	// organization membership, e.g. freshly-registered or super-admin
+	// accounts) use UserID as RootTenantID / OrganizationID / MembershipID.
+	// They cannot be resolved through the organization hierarchy, so we
+	// validate them directly against the users table.
+	if expected.Actor.RootTenantID == expected.Actor.UserID &&
+		expected.Actor.OrganizationID == expected.Actor.UserID &&
+		expected.Actor.MembershipID == expected.Actor.UserID &&
+		expected.Actor.MembershipVersion == 1 &&
+		expected.AuthorizationVersion == 1 {
+		var sessionVersion int64
+		var status int
+		err := r.db.QueryRow(ctx, `
+			SELECT session_version, status FROM users
+			WHERE id=$1 AND deleted_at IS NULL
+		`, expected.Actor.UserID).Scan(&sessionVersion, &status)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return false, nil
+			}
+			return false, err
+		}
+		return status == 1 && sessionVersion == expected.SessionVersion, nil
+	}
+
 	current, err := r.ResolveAuthorizationSessionContext(ctx, expected.Actor.UserID, expected.Actor.OrganizationID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
