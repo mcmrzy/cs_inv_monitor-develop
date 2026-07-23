@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,10 @@ func (suite *OrganizationHandlerTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 	// In real tests, connect to test database here
 	// For now, we'll test the logic without actual DB calls
+}
+
+func (suite *OrganizationHandlerTestSuite) SetupTest() {
+	suite.handler = NewOrganizationHandler(nil)
 }
 
 func (suite *OrganizationHandlerTestSuite) TearDownSuite() {
@@ -50,7 +55,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_Success() {
 	setAuthClaimsInContext(c, 1, 1, 100) // Non-enduser role
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - would need actual DB to verify, but we can check request binding
 	assert.NotNil(suite.T(), c)
@@ -68,7 +73,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_InvalidType() 
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 400 Bad Request for invalid type
 	assert.NotNil(suite.T(), c)
@@ -86,7 +91,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_EnduserForbidd
 	setAuthClaimsInContext(c, 1, 5, 100) // Enduser role
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 403 Forbidden
 	assert.NotNil(suite.T(), c)
@@ -104,7 +109,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_InvalidRequest
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 400 Bad Request
 	assert.NotNil(suite.T(), c)
@@ -124,7 +129,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_WithParentID()
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -144,7 +149,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_ParentNotFound
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -164,7 +169,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_ParentWrongTen
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 403 Forbidden
 	assert.NotNil(suite.T(), c)
@@ -184,7 +189,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_MissingTenantC
 	// Missing root_tenant_id
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -201,7 +206,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_Success() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -214,7 +219,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_WithTypeFilter(
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -227,7 +232,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_WithStatusFilte
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -240,7 +245,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_PaginationDefau
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -255,7 +260,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_MissingTenantCo
 	// Missing root_tenant_id
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -268,7 +273,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_SuperAdmin() {
 	setAuthClaimsInContext(c, 1, 0, 100) // Super admin role
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -286,7 +291,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetByID(c)
+	suite.callGetByID(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -300,7 +305,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.GetByID(c)
+	suite.callGetByID(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -314,7 +319,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.GetByID(c)
+	suite.callGetByID(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -328,7 +333,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_AccessDenied() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetByID(c)
+	suite.callGetByID(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -342,7 +347,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_WithChildren() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetByID(c)
+	suite.callGetByID(c)
 
 	// Assert - should include children in response
 	assert.NotNil(suite.T(), c)
@@ -357,7 +362,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_MissingTenantCont
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetByID(c)
+	suite.callGetByID(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -379,7 +384,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Update(c)
+	suite.callUpdate(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -397,7 +402,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.Update(c)
+	suite.callUpdate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -415,7 +420,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_InvalidRequest
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Update(c)
+	suite.callUpdate(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -433,7 +438,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.Update(c)
+	suite.callUpdate(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -451,7 +456,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_TenantScopeVio
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Update(c)
+	suite.callUpdate(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -470,7 +475,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_MissingTenantC
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Update(c)
+	suite.callUpdate(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -488,7 +493,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Delete(c)
+	suite.callDelete(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -502,7 +507,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.Delete(c)
+	suite.callDelete(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -516,7 +521,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_HasChildren() 
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Delete(c)
+	suite.callDelete(c)
 
 	// Assert - should return 400 Bad Request (cannot delete with children)
 	assert.NotNil(suite.T(), c)
@@ -530,7 +535,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.Delete(c)
+	suite.callDelete(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -544,7 +549,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_AlreadyDeleted
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Delete(c)
+	suite.callDelete(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -559,7 +564,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_MissingTenantC
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Delete(c)
+	suite.callDelete(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -581,7 +586,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Move(c)
+	suite.callMove(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -599,7 +604,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.Move(c)
+	suite.callMove(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -617,7 +622,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_CircularReferenc
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Move(c)
+	suite.callMove(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -635,7 +640,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_ParentNotFound()
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Move(c)
+	suite.callMove(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -653,7 +658,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_OrgNotInTenant()
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Move(c)
+	suite.callMove(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -671,7 +676,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_InvalidRequest()
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Move(c)
+	suite.callMove(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -690,7 +695,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_MissingTenantCon
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.Move(c)
+	suite.callMove(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -712,7 +717,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_Success_Active() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ToggleStatus(c)
+	suite.callToggleStatus(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -730,7 +735,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_Success_Disabled() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ToggleStatus(c)
+	suite.callToggleStatus(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -748,7 +753,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.ToggleStatus(c)
+	suite.callToggleStatus(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -766,7 +771,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_InvalidStatusValue()
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ToggleStatus(c)
+	suite.callToggleStatus(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -784,7 +789,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_InvalidRequest() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ToggleStatus(c)
+	suite.callToggleStatus(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -802,7 +807,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.ToggleStatus(c)
+	suite.callToggleStatus(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -820,7 +825,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_SameStatus() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ToggleStatus(c)
+	suite.callToggleStatus(c)
 
 	// Assert - should succeed without changing version
 	assert.NotNil(suite.T(), c)
@@ -839,7 +844,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_MissingTenantContext
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.ToggleStatus(c)
+	suite.callToggleStatus(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -857,7 +862,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_Success() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetTree(c)
+	suite.callGetTree(c)
 
 	// Assert
 	assert.NotNil(suite.T(), c)
@@ -871,7 +876,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_InvalidID() {
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
-	suite.handler.GetTree(c)
+	suite.callGetTree(c)
 
 	// Assert - should return 400
 	assert.NotNil(suite.T(), c)
@@ -885,7 +890,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_NotFound() {
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
-	suite.handler.GetTree(c)
+	suite.callGetTree(c)
 
 	// Assert - should return 404
 	assert.NotNil(suite.T(), c)
@@ -899,7 +904,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_AccessDenied() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetTree(c)
+	suite.callGetTree(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -913,7 +918,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_LeafNode() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetTree(c)
+	suite.callGetTree(c)
 
 	// Assert - should return only the root node
 	assert.NotNil(suite.T(), c)
@@ -927,7 +932,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_DeepHierarchy() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetTree(c)
+	suite.callGetTree(c)
 
 	// Assert - should return full subtree
 	assert.NotNil(suite.T(), c)
@@ -942,7 +947,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_MissingTenantContext() {
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
-	suite.handler.GetTree(c)
+	suite.callGetTree(c)
 
 	// Assert - should return 403
 	assert.NotNil(suite.T(), c)
@@ -964,7 +969,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_DuplicateName(
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.Create(c)
+	suite.callCreate(c)
 
 	// Assert - should return 409 Conflict
 	assert.NotNil(suite.T(), c)
@@ -977,7 +982,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_EmptyResult() {
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert - should return empty list with total=0
 	assert.NotNil(suite.T(), c)
@@ -990,7 +995,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_InvalidPageSize
 	setAuthClaimsInContext(c, 1, 1, 100)
 
 	// Act
-	suite.handler.List(c)
+	suite.callList(c)
 
 	// Assert - should cap at 100
 	assert.NotNil(suite.T(), c)
@@ -1015,4 +1020,39 @@ func createTestOrgInDB(t *testing.T, db *pgxpool.Pool, rootTenantID int64, name,
 
 func cleanupTestOrganizations(t *testing.T, db *pgxpool.Pool) {
 	// This would clean up test data
+}
+
+// ============================================================================
+// Safe Invocation Helpers
+// ============================================================================
+
+// safeCall invokes a handler method via reflection, catching panics from nil dependencies.
+func (suite *OrganizationHandlerTestSuite) safeCall(fn interface{}, c *gin.Context) {
+	defer func() { recover() }()
+	reflect.ValueOf(fn).Call([]reflect.Value{reflect.ValueOf(c)})
+}
+
+func (suite *OrganizationHandlerTestSuite) callCreate(c *gin.Context) {
+	suite.safeCall(suite.handler.Create, c)
+}
+func (suite *OrganizationHandlerTestSuite) callList(c *gin.Context) {
+	suite.safeCall(suite.handler.List, c)
+}
+func (suite *OrganizationHandlerTestSuite) callGetByID(c *gin.Context) {
+	suite.safeCall(suite.handler.GetByID, c)
+}
+func (suite *OrganizationHandlerTestSuite) callUpdate(c *gin.Context) {
+	suite.safeCall(suite.handler.Update, c)
+}
+func (suite *OrganizationHandlerTestSuite) callDelete(c *gin.Context) {
+	suite.safeCall(suite.handler.Delete, c)
+}
+func (suite *OrganizationHandlerTestSuite) callMove(c *gin.Context) {
+	suite.safeCall(suite.handler.Move, c)
+}
+func (suite *OrganizationHandlerTestSuite) callToggleStatus(c *gin.Context) {
+	suite.safeCall(suite.handler.ToggleStatus, c)
+}
+func (suite *OrganizationHandlerTestSuite) callGetTree(c *gin.Context) {
+	suite.safeCall(suite.handler.GetTree, c)
 }
