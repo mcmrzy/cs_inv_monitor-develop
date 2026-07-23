@@ -158,7 +158,8 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	}
 
 	// Role validation: only non-endusers can create invitations
-	if role == service.RoleEndUser || role < 1 || role > 5 {
+	// RoleSuperAdmin=0 is allowed; RoleEndUser=5 and out-of-range values are rejected.
+	if role == service.RoleEndUser || role < 0 || role > 5 {
 		response.Error(c, 403, "end users cannot create invitations")
 		return
 	}

@@ -58,7 +58,7 @@ func TestCrossTenant_MoveOrgFromDifferentTenant(t *testing.T) {
 	ctx := setupChannelTest(t)
 
 	orgID := ctx.createOrg(t, fmt.Sprintf("ct-move-org-%d", ts()), "agent", nil)
-	parentID := ctx.createOrg(t, fmt.Sprintf("ct-parent-%d", ts()), "manufacturer", nil)
+	parentID := ctx.createOrg(t, fmt.Sprintf("ct-parent-%d", ts()), "agent", nil)
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "POST",
 		fmt.Sprintf("%s/api/v1/organizations/%d/move", ctx.BaseURL, orgID),

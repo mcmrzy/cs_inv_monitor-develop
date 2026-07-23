@@ -379,6 +379,12 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 		return
 	}
 
+	// Tenant isolation: org must belong to the same tenant as the caller
+	if targetOrg.RootTenantID != tenantID {
+		response.Error(c, 403, "无权操作此组织")
+		return
+	}
+
 	// Check quota before adding
 	usage, err := h.checkQuota(ctx, tenantID)
 	if err != nil {
