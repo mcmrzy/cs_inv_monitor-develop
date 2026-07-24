@@ -17,17 +17,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestFreshDatabaseBaselineAndMigrations mirrors the production migrator:
-// schema.sql is the version-22 baseline and numbered migrations after 22 are
-// applied transactionally in order.
+// TestFreshDatabaseBaselineAndMigrations verifies the post-squash contract:
+// schema.sql is the single baseline that already contains every migration
+// (0..max) pre-recorded in schema_migrations. There are no incremental
+// migrations to replay; the migrator will see all versions as applied and
+// skip them on startup.
 func TestFreshDatabaseBaselineAndMigrations(t *testing.T) {
 	cfg := LoadConfig()
 	requireService(t, cfg.DBHost, cfg.DBPort, "PostgreSQL")
 
-	// The API test database is already on the latest baseline. Replaying every
-	// historical migration there tests accidental idempotency, not the forward
-	// upgrade path. Use a disposable database so 001..latest execute in order
-	// against an actually empty PostgreSQL/TimescaleDB instance.
 	adminCfg := cfg
 	adminCfg.DBName = "postgres"
 	adminPool := ConnectDB(t, adminCfg)
@@ -49,59 +47,56 @@ func TestFreshDatabaseBaselineAndMigrations(t *testing.T) {
 	}()
 
 	migrationsDir := findMigrationsDir(t)
-	files := collectUpMigrations(t, migrationsDir)
-	require.NotEmpty(t, files, "no migration files found")
 	schemaPath := filepath.Join(filepath.Dir(migrationsDir), "schema.sql")
 	schemaSQL, err := os.ReadFile(schemaPath)
 	require.NoError(t, err, "read baseline schema")
 
-	_, err = pool.Exec(ctx, `CREATE TABLE schema_migrations (
-		version BIGINT PRIMARY KEY,
-		name VARCHAR(255) NOT NULL,
-		applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-	)`)
-	require.NoError(t, err, "create migration history")
+	// 1. schema.sql must run cleanly on a truly empty database.
+	_, err = pool.Exec(ctx, string(schemaSQL))
+	require.NoError(t, err, "squashed schema.sql must apply on empty DB")
 
-	const baselineVersion = 22
-	baselineTx, err := pool.Begin(ctx)
+	// 2. schema_migrations must have baseline (0) + 1..max_version all recorded.
+	var maxVer, totalRows int
+	err = pool.QueryRow(ctx,
+		`SELECT COALESCE(MAX(version),0), COUNT(*) FROM schema_migrations`).
+		Scan(&maxVer, &totalRows)
 	require.NoError(t, err)
-	_, err = baselineTx.Exec(ctx, string(schemaSQL))
-	require.NoError(t, err, "execute baseline schema")
-	_, err = baselineTx.Exec(ctx, `INSERT INTO schema_migrations(version,name) VALUES(0,'baseline_schema')`)
+	require.GreaterOrEqual(t, maxVer, 1, "baseline should contain at least one migration version")
+	// Expect every integer 0..maxVer to have a row (no gaps).
+	var gapCount int
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM generate_series(0, $1::bigint) g(v)
+		WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version = g.v)
+	`, maxVer).Scan(&gapCount)
 	require.NoError(t, err)
-	for _, f := range files {
-		if f.Number > baselineVersion {
-			continue
-		}
-		_, err = baselineTx.Exec(ctx,
-			`INSERT INTO schema_migrations(version,name) VALUES($1,$2) ON CONFLICT DO NOTHING`,
-			f.Number, f.Name)
-		require.NoError(t, err)
-	}
-	require.NoError(t, baselineTx.Commit(ctx), "commit baseline schema")
+	require.Zero(t, gapCount, "schema_migrations should have contiguous versions 0..%d", maxVer)
+	t.Logf("squash baseline: max_version=%d, total_rows=%d", maxVer, totalRows)
 
-	for _, f := range files {
-		if f.Number <= baselineVersion {
-			continue
-		}
-		if ok := t.Run(f.Name, func(t *testing.T) {
-			sql, err := os.ReadFile(filepath.Join(migrationsDir, f.Name))
-			require.NoError(t, err, "read migration file %s", f.Name)
-
-			tx, err := pool.Begin(ctx)
-			require.NoError(t, err)
-			defer func() { _ = tx.Rollback(ctx) }()
-			_, err = tx.Exec(ctx, string(sql))
-			require.NoError(t, err, "execute migration %s", f.Name)
-			_, err = tx.Exec(ctx,
-				`INSERT INTO schema_migrations(version,name) VALUES($1,$2)`,
-				f.Number, f.Name)
-			require.NoError(t, err, "record migration %s", f.Name)
-			require.NoError(t, tx.Commit(ctx), "commit migration %s", f.Name)
-		}); !ok {
-			break
-		}
+	// 3. Core business tables exist (spot-check a representative sample).
+	for _, tbl := range []string{
+		"users", "organizations", "devices", "device_telemetry_3min",
+		"device_cell_samples", "device_latest_state", "alarms",
+		"firmware_versions", "upgrade_tasks", "audit_logs",
+	} {
+		var exists bool
+		require.NoError(t, pool.QueryRow(ctx,
+			`SELECT to_regclass('public.' || $1) IS NOT NULL`, tbl).Scan(&exists))
+		assert.True(t, exists, "squashed schema must create %s", tbl)
 	}
+
+	// 4. device-server's required triggers exist (regression guard for #025).
+	var trigCount int
+	err = pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+		WHERE t.tgname IN ('trg_latest_cells','trg_telemetry_v2_derived')
+		  AND t.tgenabled <> 'D'
+	`).Scan(&trigCount)
+	require.NoError(t, err)
+	require.Equal(t, 2, trigCount, "telemetry derivative triggers must be present")
+
+	// 5. Re-running schema.sql is idempotent (CREATE OR REPLACE / IF NOT EXISTS / ON CONFLICT).
+	_, err = pool.Exec(ctx, string(schemaSQL))
+	require.NoError(t, err, "squashed schema.sql must be idempotent on replay")
 }
 
 func TestMigration064ChannelAuthorizationConstraints(t *testing.T) {
@@ -2077,17 +2072,58 @@ type migrationFile struct {
 
 func findMigrationsDir(t *testing.T) string {
 	t.Helper()
-	// Try common paths
-	candidates := []string{
+	// Try common paths. After the migration squash, database/migrations/
+	// contains only a placeholder file, so we also look at
+	// database/migrations.archive/ where the historical .up.sql files live.
+	type candidate struct {
+		path string
+		score int
+	}
+	var candidates []candidate
+	for _, rel := range []string{
 		"../../database/migrations",
 		"../../../database/migrations",
-		filepath.Join(os.Getenv("PROJECT_ROOT"), "database/migrations"),
-	}
-	for _, p := range candidates {
-		abs, _ := filepath.Abs(p)
+		"../../database/migrations.archive",
+		"../../../database/migrations.archive",
+	} {
+		abs, _ := filepath.Abs(rel)
 		if info, err := os.Stat(abs); err == nil && info.IsDir() {
-			return abs
+			entries, _ := os.ReadDir(abs)
+			// Prefer the directory with more real migration files so tests
+			// that read specific migrations (e.g. 064) find them.
+			score := 0
+			for _, e := range entries {
+				n := e.Name()
+				if strings.HasSuffix(n, ".up.sql") && !strings.Contains(n, "baseline_marker") {
+					score++
+				}
+			}
+			candidates = append(candidates, candidate{path: abs, score: score})
 		}
+	}
+	if envRoot := os.Getenv("PROJECT_ROOT"); envRoot != "" {
+		for _, sub := range []string{"database/migrations", "database/migrations.archive"} {
+			abs := filepath.Join(envRoot, sub)
+			if info, err := os.Stat(abs); err == nil && info.IsDir() {
+				entries, _ := os.ReadDir(abs)
+				score := 0
+				for _, e := range entries {
+					if strings.HasSuffix(e.Name(), ".up.sql") && !strings.Contains(e.Name(), "baseline_marker") {
+						score++
+					}
+				}
+				candidates = append(candidates, candidate{path: abs, score: score})
+			}
+		}
+	}
+	best := candidate{}
+	for _, c := range candidates {
+		if c.score > best.score {
+			best = c
+		}
+	}
+	if best.path != "" {
+		return best.path
 	}
 	t.Skip("migrations directory not found; set PROJECT_ROOT env var")
 	return ""
