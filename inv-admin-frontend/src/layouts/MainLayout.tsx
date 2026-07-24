@@ -270,7 +270,7 @@ const MainLayout: React.FC = () => {
             )}
             <Dropdown menu={{ items: userMenuItemsDropdown }} placement="bottomRight">
               <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Avatar size="small" icon={<UserOutlined />} src={user?.avatar} />
+                <Avatar size="small" icon={<UserOutlined />} src={user?.avatar && user.avatar.startsWith('http') ? user.avatar : undefined} />
                 <Typography.Text>{user?.nickname || t('header.user')}</Typography.Text>
               </div>
             </Dropdown>
