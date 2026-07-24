@@ -232,16 +232,25 @@ const MainLayout: React.FC = () => {
         collapsed={siderCollapsed}
         breakpoint="md"
         onBreakpoint={(broken) => { if (broken) setMobileCollapsed(true) }}
-        theme="dark"
         width={220}
-        style={{ overflow: 'auto', height: '100vh', position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 100 }}
+        style={{ overflow: 'auto', height: '100vh', position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 100, background: '#fff', borderRight: '1px solid #f0f0f0' }}
       >
-        <div style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-          <Typography.Text strong style={{ color: '#fff', fontSize: collapsed ? 16 : 18, whiteSpace: 'nowrap' }}>
-            {collapsed ? 'CSERGY' : t('app.title')}
-          </Typography.Text>
+        <div
+          style={{ height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}
+          onClick={() => navigate('/dashboard')}
+        >
+          {collapsed ? (
+            <span style={{ fontSize: 18, fontWeight: 700, color: '#1677ff', letterSpacing: 1 }}>C</span>
+          ) : (
+            <span style={{ fontSize: 16, fontWeight: 600, whiteSpace: 'nowrap' }}>
+              <span style={{ color: '#1677ff' }}>CSERGY</span>
+              <span style={{ color: '#d9d9d9', margin: '0 8px' }}>|</span>
+              <span style={{ color: '#1f1f1f' }}>辰烁科技</span>
+            </span>
+          )}
         </div>
-        <Menu theme="dark" mode="inline" selectedKeys={[selectedKey]} items={displayMenuItems} onClick={handleMenuClick} />
+        <Menu mode="inline" selectedKeys={[selectedKey]} items={displayMenuItems} onClick={handleMenuClick}
+          style={{ borderRight: 'none', marginTop: 4 }} />
       </Sider>
       <Layout style={{ marginLeft: siderCollapsed ? 80 : 220, transition: 'all 0.2s' }}>
         <Header style={{ padding: isMobile ? '0 12px' : '0 24px', background: themeToken.colorBgContainer, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${themeToken.colorBorderSecondary}`, position: 'sticky', top: 0, zIndex: 99 }}>
