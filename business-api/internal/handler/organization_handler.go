@@ -280,7 +280,7 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 	var orgs []OrganizationWithChildren
 
 	query := `
-		SELECT o.id, o.root_tenant_id, o.parent_id, o.org_type, o.code, o.name, 
+		SELECT o.id, o.root_tenant_id, o.parent_id, o.org_type, COALESCE(o.code, ''), o.name, 
 		       o.status, o.version, o.created_at, o.updated_at,
 		       COUNT(CASE WHEN child.id IS NOT NULL THEN 1 END) as children_count
 		FROM organizations o
@@ -384,7 +384,7 @@ func (h *OrganizationHandler) GetByID(c *gin.Context) {
 	// Fetch organization
 	var org OrganizationWithChildren
 	err = tx.QueryRow(ctx, `
-		SELECT o.id, o.root_tenant_id, o.parent_id, o.org_type, o.code, o.name, 
+		SELECT o.id, o.root_tenant_id, o.parent_id, o.org_type, COALESCE(o.code, ''), o.name, 
 		       o.status, o.version, o.created_at, o.updated_at,
 		       (SELECT COUNT(*) FROM organizations WHERE parent_id = o.id AND deleted_at IS NULL)
 		FROM organizations o
@@ -411,7 +411,7 @@ func (h *OrganizationHandler) GetByID(c *gin.Context) {
 
 	// Fetch child organizations
 	childrenRows, err := tx.Query(ctx, `
-		SELECT id, name, type, status 
+		SELECT id, name, org_type, status 
 		FROM organizations 
 		WHERE parent_id = $1 AND deleted_at IS NULL
 		ORDER BY name
@@ -584,7 +584,7 @@ func (h *OrganizationHandler) Delete(c *gin.Context) {
 
 	// Cascade delete membership records (soft delete approach)
 	_, err = tx.Exec(ctx, `
-		UPDATE organization_membership SET status = 'revoked', updated_at = NOW()
+		UPDATE organization_memberships SET status = 'revoked', updated_at = NOW()
 		WHERE organization_id = $1
 	`, id)
 	if err != nil {
@@ -791,15 +791,15 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 	var treeNodes []OrganizationSummary
 	subtreeQuery := `
 		WITH RECURSIVE subtree AS (
-			SELECT id, name, type, status, parent_id
+			SELECT id, name, org_type, status, parent_id
 			FROM organizations
 			WHERE id = $1 AND deleted_at IS NULL
 			UNION ALL
-			SELECT o.id, o.name, o.type, o.status, o.parent_id
+			SELECT o.id, o.name, o.org_type, o.status, o.parent_id
 			FROM organizations o
 			JOIN subtree s ON o.parent_id = s.id AND o.deleted_at IS NULL
 		)
-		SELECT id, name, type, status
+		SELECT id, name, org_type, status
 		FROM subtree
 		ORDER BY name
 	`

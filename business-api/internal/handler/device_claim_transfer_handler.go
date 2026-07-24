@@ -84,7 +84,7 @@ type DeviceTransferRequest struct {
 	Status            string     `json:"status"`
 	ApprovedByUserID  *int64     `json:"approved_by_user_id,omitempty"`
 	ApprovedAt        *time.Time `json:"approved_at,omitempty"`
-	RejectedReason    string     `json:"rejected_reason,omitempty"`
+	RejectedReason    *string    `json:"rejected_reason,omitempty"`
 	RequestedAt       time.Time  `json:"requested_at"`
 	ProcessedAt       *time.Time `json:"processed_at,omitempty"`
 	UpdatedAt         time.Time  `json:"updated_at"`

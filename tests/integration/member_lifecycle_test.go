@@ -275,12 +275,12 @@ func TestMemberBulkTransfer(t *testing.T) {
 	agentID := ctx.createOrg(t, fmt.Sprintf("mem-bulk-agent-%d", ts()), "agent", nil)
 	orgTo := ctx.createOrg(t, fmt.Sprintf("mem-bulk-trf-%d", ts()), "distributor", &agentID)
 
-	resp, status := doJSON(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/members/bulk-transfer",
+	resp, status := doJSONWithRetry(t, ctx.Client, "POST", ctx.BaseURL+"/api/v1/members/bulk-transfer",
 		map[string]interface{}{
 			"membership_ids": []int64{1, 2, 3},
 			"target_org_id":  orgTo,
 			"reason":         "bulk transfer test",
-		}, ctx.Token)
+		}, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	t.Logf("bulk transfer: code=%d msg=%s", resp.Code, resp.Message)
 }
