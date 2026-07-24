@@ -47,18 +47,11 @@ database:
   user: "${DB_USER}"
   password: "${DB_PASSWORD}"
   name: "${DB_NAME}"
+  ssl_mode: "${DB_SSL_MODE}"
 
 rbac:
   enabled: true
   cache_ttl_sec: 300
-
-database:
-  host: "${DB_HOST}"
-  port: ${DB_PORT}
-  user: "${DB_USER}"
-  password: "${DB_PASSWORD}"
-  name: "${DB_NAME}"
-  ssl_mode: "${DB_SSL_MODE}"
 
 cors:
   allowed_origins:
