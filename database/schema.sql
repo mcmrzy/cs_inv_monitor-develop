@@ -15,7 +15,7 @@
 -- ============================================
 
 -- 用户表
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     phone VARCHAR(20) NOT NULL UNIQUE,
     email VARCHAR(100),
@@ -41,7 +41,7 @@ CREATE INDEX idx_users_region ON users(region_id);
 CREATE INDEX idx_users_parent ON users(parent_id);
 
 -- 用户操作日志表
-CREATE TABLE user_operation_logs (
+CREATE TABLE IF NOT EXISTS user_operation_logs (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     device_sn VARCHAR(50),
@@ -60,7 +60,7 @@ CREATE INDEX idx_operation_logs_time ON user_operation_logs(created_at);
 -- [已废弃] user_sessions — 改用 JWT，表已移除
 
 -- 验证码表
-CREATE TABLE verification_codes (
+CREATE TABLE IF NOT EXISTS verification_codes (
     id BIGSERIAL PRIMARY KEY,
     phone VARCHAR(20) NOT NULL,
     code VARCHAR(6) NOT NULL,
@@ -89,7 +89,7 @@ CREATE INDEX IF NOT EXISTS idx_user_device_rel_sn ON user_device_rel(device_sn);
 -- ============================================
 
 -- 区域表(省市区)
-CREATE TABLE regions (
+CREATE TABLE IF NOT EXISTS regions (
     id BIGSERIAL PRIMARY KEY,
     parent_id BIGINT,
     name VARCHAR(50) NOT NULL,
@@ -100,7 +100,7 @@ CREATE TABLE regions (
 CREATE INDEX idx_regions_parent ON regions(parent_id);
 
 -- 电站表
-CREATE TABLE stations (
+CREATE TABLE IF NOT EXISTS stations (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -267,7 +267,7 @@ CREATE TABLE IF NOT EXISTS model_registry_migration_report (
 -- ============================================
 
 -- 设备表
-CREATE TABLE devices (
+CREATE TABLE IF NOT EXISTS devices (
     id BIGSERIAL PRIMARY KEY,
     sn VARCHAR(50) NOT NULL UNIQUE,
     model VARCHAR(100),
@@ -591,7 +591,7 @@ END $$;
 -- ============================================
 
 -- 告警表
-CREATE TABLE alarms (
+CREATE TABLE IF NOT EXISTS alarms (
     id BIGSERIAL PRIMARY KEY,
     device_sn VARCHAR(50) NOT NULL,
     station_id BIGINT,
@@ -631,7 +631,7 @@ CREATE INDEX IF NOT EXISTS idx_alarms_v1_active
     WHERE event_state = 'active';
 
 -- 告警通知记录表
-CREATE TABLE alarm_notifications (
+CREATE TABLE IF NOT EXISTS alarm_notifications (
     id BIGSERIAL PRIMARY KEY,
     alarm_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
@@ -645,7 +645,7 @@ CREATE INDEX idx_alarm_notify_alarm ON alarm_notifications(alarm_id);
 CREATE INDEX idx_alarm_notify_user ON alarm_notifications(user_id);
 
 -- 系统通知表（设备上下线等）
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id BIGSERIAL PRIMARY KEY,
     device_sn VARCHAR(50) NOT NULL,
     station_id BIGINT,
@@ -691,7 +691,7 @@ CREATE INDEX IF NOT EXISTS idx_alert_rules_target ON alert_rules(device_sn, stat
 -- ============================================
 
 -- 固件版本表
-CREATE TABLE firmware_versions (
+CREATE TABLE IF NOT EXISTS firmware_versions (
     id BIGSERIAL PRIMARY KEY,
     model VARCHAR(100) NOT NULL,
     version VARCHAR(50) NOT NULL,
@@ -988,7 +988,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_ip ON audit_logs(ip);
 -- 11. 系统配置表
 -- ============================================
 
-CREATE TABLE system_configs (
+CREATE TABLE IF NOT EXISTS system_configs (
     id BIGSERIAL PRIMARY KEY,
     config_key VARCHAR(100) NOT NULL UNIQUE,
     config_value TEXT,
@@ -4224,7 +4224,7 @@ DROP TABLE IF EXISTS device_three_phase_3min CASCADE;
 --    derives the canonical event_time/t/raw/hash fields for legacy writers.
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE device_alarm_events (
+CREATE TABLE IF NOT EXISTS device_alarm_events (
     id            BIGSERIAL PRIMARY KEY,
     device_sn     VARCHAR(50) NOT NULL,
     station_id    BIGINT,
@@ -4284,7 +4284,7 @@ BEFORE INSERT OR UPDATE ON device_alarm_events
 FOR EACH ROW EXECUTE FUNCTION normalize_device_alarm_event();
 
 -- Alarm snapshots can now reference a stable, globally unique event id.
-CREATE TABLE device_alarm_snapshots (
+CREATE TABLE IF NOT EXISTS device_alarm_snapshots (
     id                   BIGSERIAL PRIMARY KEY,
     device_sn            VARCHAR(50) NOT NULL,
     alarm_event_id       BIGINT NOT NULL
@@ -4316,7 +4316,7 @@ CREATE INDEX idx_alarm_snapshots_device_time
 -- 4. Parallel current state and immutable topology events.
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE device_parallel_state (
+CREATE TABLE IF NOT EXISTS device_parallel_state (
     station_id          BIGINT PRIMARY KEY REFERENCES stations(id) ON DELETE CASCADE,
     master_sn           VARCHAR(50) NOT NULL,
     enabled             BOOLEAN NOT NULL DEFAULT TRUE,
@@ -4385,7 +4385,7 @@ CREATE TRIGGER trg_normalize_device_parallel_state
 BEFORE INSERT OR UPDATE ON device_parallel_state
 FOR EACH ROW EXECUTE FUNCTION normalize_device_parallel_state();
 
-CREATE TABLE device_parallel_events (
+CREATE TABLE IF NOT EXISTS device_parallel_events (
     id            BIGSERIAL PRIMARY KEY,
     station_id    BIGINT NOT NULL REFERENCES stations(id) ON DELETE CASCADE,
     master_sn     VARCHAR(50) NOT NULL,
@@ -4453,7 +4453,7 @@ FOR EACH ROW EXECUTE FUNCTION normalize_device_parallel_event();
 -- 5. Three-phase 3-minute fact hypertable.
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE device_three_phase_3min (
+CREATE TABLE IF NOT EXISTS device_three_phase_3min (
     device_sn           VARCHAR(50) NOT NULL,
     topic               VARCHAR(64) NOT NULL DEFAULT 'three_phase' CHECK (topic = 'three_phase'),
     event_time          TIMESTAMPTZ NOT NULL,
@@ -5290,7 +5290,7 @@ ALTER TABLE device_control_events
 -- user-defined configuration; runtime state is tracked separately in
 -- device_parallel_state (migration 039).
 
-CREATE TABLE parallel_groups (
+CREATE TABLE IF NOT EXISTS parallel_groups (
     id              BIGSERIAL PRIMARY KEY,
     name            VARCHAR(100) NOT NULL,
     description     TEXT NOT NULL DEFAULT '',
@@ -5321,7 +5321,7 @@ COMMENT ON COLUMN parallel_groups.status IS '同步状态: synced | syncing | ou
 -- review the request and either approve or reject it.  A partial unique index
 -- ensures only one pending request exists per device at a time.
 
-CREATE TABLE device_unbind_requests (
+CREATE TABLE IF NOT EXISTS device_unbind_requests (
     id              BIGSERIAL PRIMARY KEY,
     device_sn       VARCHAR(50) NOT NULL,
     requested_by    BIGINT NOT NULL,
