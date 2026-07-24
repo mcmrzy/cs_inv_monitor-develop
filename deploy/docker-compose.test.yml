@@ -12,6 +12,8 @@ services:
       - "127.0.0.1:15432:5432"
     volumes:
       - test-pg-data:/var/lib/postgresql
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../database/migration_timescaledb.sql:/docker-entrypoint-initdb.d/02-timescaledb.sql:ro
     networks:
       - inv-test-net
     healthcheck:
