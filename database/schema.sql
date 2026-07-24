@@ -1949,7 +1949,7 @@ CREATE TEMP TABLE IF NOT EXISTS migration016_saved_views (
     qualified_name TEXT PRIMARY KEY,
     view_definition TEXT NOT NULL,
     view_comment TEXT
-) ON COMMIT DROP;
+);
 TRUNCATE migration016_saved_views;
 
 DO $$
