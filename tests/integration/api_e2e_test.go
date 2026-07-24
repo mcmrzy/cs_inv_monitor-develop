@@ -32,7 +32,10 @@ type loginResponse struct {
 
 // ---------- helpers ----------
 
-func doJSON(t *testing.T, client *http.Client, method, url string, body interface{}, token string) (*apiResponse, int) {
+// doJSONRaw executes a single HTTP request without retrying on 429. Use this
+// only for tests that intentionally verify rate-limiting behaviour; regular
+// tests should use doJSON (which auto-retries on 429) to avoid flakiness.
+func doJSONRaw(t *testing.T, client *http.Client, method, url string, body interface{}, token string) (*apiResponse, int) {
 	t.Helper()
 
 	var reqBody io.Reader
@@ -59,6 +62,29 @@ func doJSON(t *testing.T, client *http.Client, method, url string, body interfac
 	var apiResp apiResponse
 	_ = json.Unmarshal(respBody, &apiResp)
 	return &apiResp, resp.StatusCode
+}
+
+func doJSON(t *testing.T, client *http.Client, method, url string, body interface{}, token string) (*apiResponse, int) {
+	t.Helper()
+
+	// Retry on HTTP 429 (rate limit). The integration test suite runs many
+	// subtests in parallel against the same gateway, which shares a per-IP
+	// token bucket (global rate 100/s, burst 200). Member endpoints without a
+	// per-route limit can transiently be throttled; back off and retry so
+	// tests don't flake on rate limiting alone.
+	const maxRetries = 5
+
+	for i := 0; ; i++ {
+		resp, status := doJSONRaw(t, client, method, url, body, token)
+
+		if status != http.StatusTooManyRequests || i >= maxRetries {
+			return resp, status
+		}
+
+		wait := time.Duration(500*(i+1)) * time.Millisecond
+		t.Logf("429 rate limited on %s %s, retry %d/%d after %v", method, url, i+1, maxRetries, wait)
+		time.Sleep(wait)
+	}
 }
 
 // doJSONWithRetry wraps doJSON and retries on HTTP 429 (rate limit) responses.
@@ -338,11 +364,13 @@ func TestRateLimiting(t *testing.T) {
 
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	// Send many requests quickly to the login endpoint (rate: 10/s burst: 20)
+	// Send many requests quickly to the login endpoint (rate: 10/s burst: 20).
+	// Use doJSONRaw here so we observe the raw 429 from the gateway instead of
+	// doJSON's automatic retry-with-backoff behaviour.
 	rateLimited := false
 	for i := 0; i < 50; i++ {
 		payload := map[string]string{"account": "ratelimit@test.com", "password": "wrong"}
-		_, status := doJSON(t, client, "POST", cfg.APIBaseURL+"/api/v1/auth/login", payload, "")
+		_, status := doJSONRaw(t, client, "POST", cfg.APIBaseURL+"/api/v1/auth/login", payload, "")
 		if status == http.StatusTooManyRequests {
 			rateLimited = true
 			break
