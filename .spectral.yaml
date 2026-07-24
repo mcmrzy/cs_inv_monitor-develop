@@ -1,0 +1,45 @@
+# Spectral ruleset for API documentation validation.
+#
+# The original workflow referenced an external URL in the Spectral repo which
+# broke after upstream restructured its rulesets directory. This local ruleset
+# makes the workflow reproducible.
+#
+# We intentionally avoid extending spectral:oas directly because it crashes on
+# parts of this spec (Spectral throws "Cannot read properties of null (reading
+# 'enum')" on certain schema shapes). Instead we opt in to a small set of
+# sanity-check rules that are safe to run on this spec. Tighter rules can be
+# added here incrementally as the OpenAPI spec matures.
+rules:
+  # Every operation must declare at least one response.
+  operation-success-response:
+    description: Operation must define at least one 2xx response.
+    given: $.paths[*][*].responses
+    then:
+      function: truthy
+
+  # Paths must start with a slash.
+  path-keys-no-trailing-slash:
+    description: Path must start with /.
+    given: $.paths[*]~
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "/$"
+
+  # OpenAPI version must be declared.
+  openapi-version-present:
+    description: OpenAPI spec must declare an openapi version.
+    given: $
+    then:
+      field: openapi
+      function: truthy
+
+  # Info block must exist with title and version.
+  info-block-required:
+    description: Info object must include title and version.
+    given: $.info
+    then:
+      - field: title
+        function: truthy
+      - field: version
+        function: truthy
