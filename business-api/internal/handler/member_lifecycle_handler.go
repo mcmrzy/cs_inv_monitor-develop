@@ -142,7 +142,7 @@ func (h *MemberLifecycleHandler) getUserByID(ctx context.Context, userID int64) 
 func (h *MemberLifecycleHandler) getOrgByID(ctx context.Context, orgID int64) (*model.Organization, error) {
 	var org model.Organization
 	err := h.db.QueryRow(ctx, `
-		SELECT id, root_tenant_id, parent_id, org_type, code, name,
+		SELECT id, root_tenant_id, parent_id, org_type, COALESCE(code, ''), name,
 		       status, version, created_at, updated_at
 		FROM organizations WHERE id = $1 AND deleted_at IS NULL
 	`, orgID).Scan(

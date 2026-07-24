@@ -210,7 +210,7 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 		       i.token_key_id, i.token_digest, i.role_assignments,
 		       i.expires_at, i.accepted_at, i.status, i.version, i.created_at, i.updated_at,
 		       COALESCE(u.nickname, 'Unknown') as inviter_name,
-		       COALESCE(o.name, NULL) as org_name
+		       o.name as org_name
 		FROM invitations i
 		LEFT JOIN users u ON i.invited_by = u.id
 		LEFT JOIN organizations o ON i.organization_id = o.id AND o.root_tenant_id = i.root_tenant_id
@@ -244,8 +244,8 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 	for rows.Next() {
 		var item ListInvitationsResponseItem
 		var acceptedAt sql.NullTime
-		var inviterName, orgName string
-		var hasOrgName bool
+		var inviterName string
+		var orgName sql.NullString
 		var orgID int64
 
 		err := rows.Scan(
@@ -253,7 +253,7 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 			&item.Recipient, &item.TokenKeyID, &item.TokenDigest, &item.RoleAssignments,
 			&item.ExpiresAt, &acceptedAt, &item.Status, &item.Version,
 			&item.CreatedAt, &item.UpdatedAt,
-			&inviterName, &orgName, &hasOrgName,
+			&inviterName, &orgName,
 		)
 		if err != nil {
 			return 0, nil, err
@@ -264,8 +264,9 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 			item.AcceptedAt = &acceptedAt.Time
 		}
 		item.InviterName = inviterName
-		if hasOrgName {
-			item.OrgName = &orgName
+		if orgName.Valid {
+			name := orgName.String
+			item.OrgName = &name
 		}
 
 		items = append(items, item)
