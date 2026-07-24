@@ -76,6 +76,19 @@ func (s *UserService) GetByNickname(ctx context.Context, nickname string) (*mode
 	return s.repo.GetByNickname(ctx, nickname)
 }
 
+// GetRolePermissions returns allowed permission strings ("resource:action") for a role.
+func (s *UserService) GetRolePermissions(ctx context.Context, role int64) ([]string, error) {
+	entries, err := s.repo.GetRolePermissions(ctx, role)
+	if err != nil {
+		return nil, err
+	}
+	perms := make([]string, 0, len(entries))
+	for _, e := range entries {
+		perms = append(perms, e.Resource+":"+e.Action)
+	}
+	return perms, nil
+}
+
 func (s *UserService) Create(ctx context.Context, user *model.User) error {
 	return s.repo.Create(ctx, user)
 }

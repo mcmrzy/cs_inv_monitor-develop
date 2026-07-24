@@ -549,7 +549,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	// Load permissions for response
-	permissions := loadUserPermissions(c, h.rbacCache, newUser.ID)
+	permissions := loadUserPermissions(c, h.userRepo, newUser.ID)
 
 	// Clear sensitive data
 	newUser.PasswordHash = ""
@@ -647,19 +647,24 @@ func convertInvitationItems(items []repository.ListInvitationsResponseItem) []In
 	return result
 }
 
-// loadUserPermissions loads user permissions from RBAC cache
-func loadUserPermissions(c *gin.Context, rbacCache *service.RBACCache, userID int64) []string {
+// loadUserPermissions loads user permissions from role_permissions table
+func loadUserPermissions(c *gin.Context, userRepo *repository.UserRepository, userID int64) []string {
 	permissions := make([]string, 0)
-	if rbacCache == nil {
+	if userRepo == nil {
 		return permissions
 	}
-	loaded, err := rbacCache.GetUserPermissions(c.Request.Context(), userID)
+	user, err := userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil {
-		logger.Warn("Failed to load permissions", zap.Int64("user_id", userID), zap.Error(err))
+		logger.Warn("Failed to load user for permissions", zap.Int64("user_id", userID), zap.Error(err))
 		return permissions
 	}
-	if loaded == nil {
+	entries, err := userRepo.GetRolePermissions(c.Request.Context(), int64(user.Role))
+	if err != nil {
+		logger.Warn("Failed to load role permissions", zap.Int64("user_id", userID), zap.Int("role", user.Role), zap.Error(err))
 		return permissions
 	}
-	return loaded
+	for _, e := range entries {
+		permissions = append(permissions, e.Resource+":"+e.Action)
+	}
+	return permissions
 }

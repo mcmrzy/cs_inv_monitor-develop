@@ -200,17 +200,20 @@ type LoginResponse struct {
 // permission check for every protected request.
 func (h *AuthHandler) loadUserPermissions(ctx context.Context, userID int64) []string {
 	permissions := make([]string, 0)
-	if h.rbacCache == nil {
-		return permissions
-	}
 
-	loaded, err := h.rbacCache.GetUserPermissions(ctx, userID)
+	// Look up user to get their role
+	user, err := h.userService.GetByID(ctx, userID)
 	if err != nil {
-		logger.Warn("Failed to load permissions for auth response",
+		logger.Warn("Failed to load user for permissions",
 			zap.Int64("user_id", userID), zap.Error(err))
 		return permissions
 	}
-	if loaded == nil {
+
+	// Super-admin bypasses all permission checks, but still return full list for UI
+	loaded, err := h.userService.GetRolePermissions(ctx, int64(user.Role))
+	if err != nil {
+		logger.Warn("Failed to load role permissions for auth response",
+			zap.Int64("user_id", userID), zap.Int("role", user.Role), zap.Error(err))
 		return permissions
 	}
 	return loaded
