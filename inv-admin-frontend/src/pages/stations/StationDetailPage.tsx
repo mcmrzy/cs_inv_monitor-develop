@@ -310,7 +310,7 @@ const StationDetailPage: React.FC = () => {
     },
     {
       key: 'battery',
-      label: t('station.batteryDischarge'),
+      label: t('station.energyStorageDischarge'),
       color: '#EC4899',
       today: (deviceEnergy?.dailyDischarge ?? 0) > 0 ? deviceEnergy!.dailyDischarge : station.today_discharge,
       total: (deviceEnergy?.totalDischarge ?? 0) > 0 ? deviceEnergy!.totalDischarge : station.total_discharge,

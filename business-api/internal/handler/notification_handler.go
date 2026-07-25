@@ -24,8 +24,8 @@ func NewNotificationHandler(db *pgxpool.Pool, jpushService *service.JPushService
 	return &NotificationHandler{db: db, jpushService: jpushService}
 }
 
-func notificationDataScope(alias string, role int, userIDArg int) string {
-	if role == service.RoleSuperAdmin {
+func notificationDataScope(alias string, isSystemAdmin bool, userIDArg int) string {
+	if isSystemAdmin {
 		return "1=1"
 	}
 	return fmt.Sprintf(`(%[1]s.user_id = $%[2]d OR (
@@ -39,8 +39,8 @@ func notificationDataScope(alias string, role int, userIDArg int) string {
 // A user may inspect device notifications within their business data scope, but
 // deleting a notification is a personal mailbox operation and must not erase a
 // notification that belongs to another user who can access the same device.
-func notificationMutationScope(alias string, role int, userIDArg int) string {
-	if role == service.RoleSuperAdmin {
+func notificationMutationScope(alias string, isSystemAdmin bool, userIDArg int) string {
+	if isSystemAdmin {
 		return "1=1"
 	}
 	return fmt.Sprintf("%s.user_id = $%d", alias, userIDArg)
@@ -48,7 +48,7 @@ func notificationMutationScope(alias string, role int, userIDArg int) string {
 
 func (h *NotificationHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	notifyType := c.Query("notify_type")
@@ -71,10 +71,10 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	var args []interface{}
 	argIdx := 1
 
-	if role == service.RoleSuperAdmin {
+	if isSystemAdmin {
 		baseQuery = `FROM notifications n WHERE 1=1`
 	} else {
-		baseQuery = `FROM notifications n WHERE ` + notificationDataScope("n", role, 1)
+		baseQuery = `FROM notifications n WHERE ` + notificationDataScope("n", isSystemAdmin, 1)
 		args = append(args, userID)
 		argIdx = 2
 	}
@@ -163,17 +163,17 @@ func (h *NotificationHandler) List(c *gin.Context) {
 
 func (h *NotificationHandler) GetStats(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
 	query := `SELECT COUNT(*) AS total,
 		COUNT(CASE WHEN n.status = 0 THEN 1 END) AS unread
-		FROM notifications n WHERE ` + notificationDataScope("n", role, 1)
+		FROM notifications n WHERE ` + notificationDataScope("n", isSystemAdmin, 1)
 
 	var total, unread int
-	if role == service.RoleSuperAdmin {
+	if isSystemAdmin {
 		if err := h.db.QueryRow(ctx, query).Scan(&total, &unread); err != nil {
 			response.Error(c, 500, "system error")
 			return
@@ -201,13 +201,13 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	var tag interface{ RowsAffected() int64 }
-	if role == service.RoleSuperAdmin {
+	if isSystemAdmin {
 		tag, err = h.db.Exec(ctx, `DELETE FROM notifications WHERE id = $1`, id)
 	} else {
 		tag, err = h.db.Exec(ctx, `DELETE FROM notifications n WHERE n.id = $1 AND `+
-			notificationMutationScope("n", role, 2), id, middleware.GetUserID(c))
+			notificationMutationScope("n", isSystemAdmin, 2), id, middleware.GetUserID(c))
 	}
 	if err != nil {
 		response.Error(c, 500, "delete failed")
@@ -225,13 +225,13 @@ func (h *NotificationHandler) ClearAll(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	var err error
-	if role == service.RoleSuperAdmin {
+	if isSystemAdmin {
 		_, err = h.db.Exec(ctx, `DELETE FROM notifications`)
 	} else {
 		_, err = h.db.Exec(ctx, `DELETE FROM notifications n WHERE `+
-			notificationMutationScope("n", role, 1), middleware.GetUserID(c))
+			notificationMutationScope("n", isSystemAdmin, 1), middleware.GetUserID(c))
 	}
 	if err != nil {
 		response.Error(c, 500, "clear failed")

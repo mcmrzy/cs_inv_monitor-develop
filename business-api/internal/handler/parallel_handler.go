@@ -23,7 +23,7 @@ func NewParallelHandler(parallelService *service.ParallelService) *ParallelHandl
 
 // List 返回分页的并联组列表（仅管理员可查看）
 func (h *ParallelHandler) List(c *gin.Context) {
-	if middleware.GetRole(c) > 1 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -55,7 +55,7 @@ func (h *ParallelHandler) List(c *gin.Context) {
 
 // Get 返回单个并联组详情（仅管理员可查看）
 func (h *ParallelHandler) Get(c *gin.Context) {
-	if middleware.GetRole(c) > 1 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -79,7 +79,7 @@ func (h *ParallelHandler) Get(c *gin.Context) {
 
 // Create 创建并联组（仅管理员）
 func (h *ParallelHandler) Create(c *gin.Context) {
-	if middleware.GetRole(c) > 1 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -104,7 +104,7 @@ func (h *ParallelHandler) Create(c *gin.Context) {
 
 // Update 更新并联组（仅管理员）
 func (h *ParallelHandler) Update(c *gin.Context) {
-	if middleware.GetRole(c) > 1 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -137,7 +137,7 @@ func (h *ParallelHandler) Update(c *gin.Context) {
 
 // Delete 删除并联组（仅管理员）
 func (h *ParallelHandler) Delete(c *gin.Context) {
-	if middleware.GetRole(c) > 1 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}

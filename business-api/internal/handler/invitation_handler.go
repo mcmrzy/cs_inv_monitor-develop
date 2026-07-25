@@ -378,7 +378,7 @@ func (h *InvitationHandler) Revoke(c *gin.Context) {
 	}
 
 	// Validate user has permission: inviter or admin (role < 2) can revoke
-	if invitation.InvitedBy != userID && middleware.GetRole(c) >= 2 {
+	if invitation.InvitedBy != userID && !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "无权撤销此邀请")
 		return
 	}
@@ -581,7 +581,7 @@ func (h *InvitationHandler) Details(c *gin.Context) {
 	}
 
 	// Check permissions - only inviter or admin (role < 2) can view details
-	if invitation.InvitedBy != middleware.GetUserID(c) && middleware.GetRole(c) >= 2 {
+	if invitation.InvitedBy != middleware.GetUserID(c) && !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "无权查看此邀请详情")
 		return
 	}

@@ -17,9 +17,11 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// PermissionEntry holds a single permission code and its data scope granted
+// to the user through their active organization membership.
 type PermissionEntry struct {
-	Resource string `json:"resource"`
-	Action   string `json:"action"`
+	PermissionCode string `json:"permission_code"`
+	DataScope      string `json:"data_scope"`
 }
 
 type cacheEntry struct {
@@ -29,15 +31,14 @@ type cacheEntry struct {
 }
 
 type RBACMiddleware struct {
-	rdb       *redis.Client
-	pg        *pgxpool.Pool
-	cacheTTL  time.Duration
-	mu        sync.RWMutex
-	roleCache map[string]cacheEntry
-	// queryRolePermissions is replaceable in unit tests. Production always uses
-	// the legacy role_permissions table, which is the gateway's RBAC source of
-	// truth.
-	queryRolePermissions func(context.Context, int) ([]PermissionEntry, error)
+	rdb      *redis.Client
+	pg       *pgxpool.Pool
+	cacheTTL time.Duration
+	mu       sync.RWMutex
+	permCache map[string]cacheEntry
+	// queryUserPermissions is replaceable in unit tests. Production always
+	// queries membership_role_assignments + role_permission_grants.
+	queryUserPermissions func(context.Context, int64, int64, int64) ([]PermissionEntry, error)
 }
 
 func NewRBACMiddleware(rdb *redis.Client, pg *pgxpool.Pool, cacheTTLSec int) *RBACMiddleware {
@@ -48,156 +49,58 @@ func NewRBACMiddleware(rdb *redis.Client, pg *pgxpool.Pool, cacheTTLSec int) *RB
 		rdb:       rdb,
 		pg:        pg,
 		cacheTTL:  time.Duration(cacheTTLSec) * time.Second,
-		roleCache: make(map[string]cacheEntry),
+		permCache: make(map[string]cacheEntry),
 	}
-	r.queryRolePermissions = r.loadRolePermissionsFromDB
+	r.queryUserPermissions = r.loadUserPermissionsFromDB
 	return r
 }
 
-// Sentinel errors returned by getUserRole. hasPermission uses them to decide
-// whether falling back to the JWT role claim is safe.
+// Sentinel errors for permission resolution.
 var (
-	// errRoleUnknown: Redis is reachable but has not cached this user yet and
-	// no database is available to confirm the role. The role is genuinely
-	// unknown (not revoked), so a JWT fallback is acceptable.
-	errRoleUnknown = errors.New("user role not cached and no database to resolve it")
-	// errRoleExplicitlyEmpty: the cache holds an entry for the user but it
-	// contains no valid role (e.g. "[]"). This is an authoritative negative
-	// answer — the role was stripped — so the JWT claim must NOT override it.
-	errRoleExplicitlyEmpty = errors.New("user role cache entry is empty or invalid")
-	// errNoRoleSource: neither Redis nor a database is configured. The gateway
-	// is fully degraded and cannot authoritatively resolve any role.
-	errNoRoleSource = errors.New("no role resolution source available")
+	errPermsUnknown     = errors.New("user permissions not cached and no database to resolve them")
+	errPermsEmpty       = errors.New("user has no permission grants")
+	errNoPermSource     = errors.New("no permission resolution source available")
 )
 
-func (r *RBACMiddleware) getUserRole(ctx context.Context, userID string) (int, error) {
-	if r.rdb != nil {
-		cacheKey := "gw:user_roles:" + userID
-		cached, err := r.rdb.Get(ctx, cacheKey).Result()
-		if err == nil {
-			// Cache HIT — parse the cached role.
-			var roleIDs []int
-			if json.Unmarshal([]byte(cached), &roleIDs) == nil && len(roleIDs) > 0 && roleIDs[0] >= 0 && roleIDs[0] <= 5 {
-				return roleIDs[0], nil
-			}
-			if role, parseErr := strconv.Atoi(cached); parseErr == nil && role >= 0 && role <= 5 {
-				return role, nil
-			}
-			// Corrupt or out-of-range cache values must never coerce to role 0.
-			_ = r.rdb.Del(ctx, cacheKey).Err()
-		}
-		// Redis miss — fall through to the database when available.
-		if r.pg == nil {
-			// No DB to confirm: the role is genuinely unknown, not revoked.
-			return -1, errRoleUnknown
-		}
-	} else if r.pg == nil {
-		// Neither Redis nor a database is configured. The gateway is fully
-		// degraded and cannot authoritatively resolve any role.
-		return -1, errNoRoleSource
-	}
-
-	// Database lookup (reached when Redis missed but pg is available, or when
-	// Redis is absent but pg is available).
-	var role int
-	err := r.pg.QueryRow(ctx,
-		"SELECT COALESCE(role, -1) FROM users WHERE id = $1 AND status = 1 AND deleted_at IS NULL",
-		userID).Scan(&role)
-	if err != nil {
-		return -1, err
-	}
-
-	if r.rdb != nil && role >= 0 {
-		r.rdb.Set(ctx, "gw:user_roles:"+userID, role, r.cacheTTL)
-	}
-
-	return role, nil
-}
-
-func (r *RBACMiddleware) getRolePermissions(ctx context.Context, role int) ([]PermissionEntry, bool, error) {
-	cacheKey := fmt.Sprintf("gw:role_perms:%d", role)
+// resolveUserPermissions fetches the user's permission codes from cache or DB.
+// Cache key includes organization and membership to scope permissions correctly.
+func (r *RBACMiddleware) resolveUserPermissions(ctx context.Context, userID string, orgID string, membershipID string) ([]PermissionEntry, error) {
+	cacheKey := fmt.Sprintf("gw:user_perms:%s:%s:%s", userID, orgID, membershipID)
 
 	if r.rdb != nil {
 		cached, err := r.rdb.Get(ctx, cacheKey).Result()
 		if err == nil {
 			var perms []PermissionEntry
-			if err := json.Unmarshal([]byte(cached), &perms); err == nil {
-				r.mu.Lock()
-				r.roleCache[cacheKey] = cacheEntry{
-					perms:         perms,
-					cachedAt:      time.Now(),
-					authoritative: false,
-				}
-				r.mu.Unlock()
-				return perms, true, nil
+			if json.Unmarshal([]byte(cached), &perms) == nil {
+				return perms, nil
 			}
+			// Corrupt cache entry — delete and fall through to DB.
+			_ = r.rdb.Del(ctx, cacheKey).Err()
 		}
-		// A Redis miss is the cross-process invalidation signal emitted by the
-		// API admin handlers. Do not reuse an in-process entry after that signal.
-		perms, err := r.refreshRolePermissions(ctx, role)
-		return perms, false, err
+		// Redis miss — fall through to queryUserPermissions.
 	}
 
-	// Redis is optional in tests and degraded local deployments. In that case
-	// the bounded in-process cache remains useful.
-	r.mu.RLock()
-	if entry, ok := r.roleCache[cacheKey]; ok && time.Since(entry.cachedAt) < r.cacheTTL {
-		r.mu.RUnlock()
-		return entry.perms, !entry.authoritative, nil
+	// Database lookup
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil || uid <= 0 {
+		return nil, fmt.Errorf("invalid user ID: %s", userID)
 	}
-	r.mu.RUnlock()
+	oid, _ := strconv.ParseInt(orgID, 10, 64)
+	mid, _ := strconv.ParseInt(membershipID, 10, 64)
 
-	perms, err := r.refreshRolePermissions(ctx, role)
-	return perms, false, err
-}
-
-func (r *RBACMiddleware) loadRolePermissionsFromDB(ctx context.Context, role int) ([]PermissionEntry, error) {
-	if r.pg == nil {
-		return nil, fmt.Errorf("no database connection")
-	}
-
-	rows, err := r.pg.Query(ctx, `
-		SELECT resource, action
-		FROM role_permissions
-		WHERE role = $1 AND is_allowed = true
-	`, role)
-	if err != nil {
-		// role_permissions may not exist when migrations are incomplete. Fail
-		// closed instead of turning a storage failure into an implicit allow.
-		log.Printf("[WARN] RBAC: 查询 role_permissions 失败 (role=%d): %v - 请执行 012_create_role_permissions 迁移", role, err)
-		return nil, err
-	}
-	defer rows.Close()
-
-	var perms []PermissionEntry
-	for rows.Next() {
-		var p PermissionEntry
-		if err := rows.Scan(&p.Resource, &p.Action); err != nil {
-			continue
-		}
-		perms = append(perms, p)
-	}
-
-	return perms, rows.Err()
-}
-
-func (r *RBACMiddleware) refreshRolePermissions(ctx context.Context, role int) ([]PermissionEntry, error) {
-	if r.queryRolePermissions == nil {
-		return nil, fmt.Errorf("no role permission source")
-	}
-
-	perms, err := r.queryRolePermissions(ctx, role)
+	perms, err := r.queryUserPermissions(ctx, uid, oid, mid)
 	if err != nil {
 		return nil, err
 	}
-	cacheKey := fmt.Sprintf("gw:role_perms:%d", role)
+
+	// Cache the result
 	if r.rdb != nil {
 		data, _ := json.Marshal(perms)
 		r.rdb.Set(ctx, cacheKey, string(data), r.cacheTTL)
 	}
 
 	r.mu.Lock()
-	r.roleCache[cacheKey] = cacheEntry{
+	r.permCache[cacheKey] = cacheEntry{
 		perms:         perms,
 		cachedAt:      time.Now(),
 		authoritative: true,
@@ -207,112 +110,149 @@ func (r *RBACMiddleware) refreshRolePermissions(ctx context.Context, role int) (
 	return perms, nil
 }
 
-func (r *RBACMiddleware) hasPermission(userID string, resource string, action string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+// loadUserPermissionsFromDB queries the new organization-based permission tables.
+func (r *RBACMiddleware) loadUserPermissionsFromDB(ctx context.Context, userID, orgID, membershipID int64) ([]PermissionEntry, error) {
+	if r.pg == nil {
+		return nil, fmt.Errorf("no database connection")
+	}
 
+	// Build query with safe parameterized placeholders
+	query := `
+		SELECT DISTINCT pg.permission_code, pg.data_scope
+		FROM organization_memberships m
+		JOIN membership_role_assignments ra
+		  ON ra.root_tenant_id = m.root_tenant_id
+		 AND ra.organization_id = m.organization_id
+		 AND ra.membership_id = m.id
+		JOIN role_permission_grants pg
+		  ON pg.root_tenant_id = ra.root_tenant_id
+		 AND pg.role_assignment_id = ra.id
+		WHERE m.user_id = $1 AND m.deleted_at IS NULL
+	`
+	args := []interface{}{userID}
+	paramIdx := 2
+
+	if orgID > 0 {
+		query += fmt.Sprintf(` AND m.organization_id = $%d`, paramIdx)
+		args = append(args, orgID)
+		paramIdx++
+	}
+	if membershipID > 0 {
+		query += fmt.Sprintf(` AND m.id = $%d`, paramIdx)
+		args = append(args, membershipID)
+	}
+
+	rows, err := r.pg.Query(ctx, query, args...)
+	if err != nil {
+		log.Printf("[WARN] RBAC: 查询用户权限失败 (userID=%d): %v", userID, err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	var perms []PermissionEntry
+	for rows.Next() {
+		var p PermissionEntry
+		if err := rows.Scan(&p.PermissionCode, &p.DataScope); err != nil {
+			continue
+		}
+		perms = append(perms, p)
+	}
+
+	return perms, rows.Err()
+}
+
+// isSystemAdmin checks the X-Is-System-Admin header set by the JWT middleware.
+func isSystemAdmin(c *gin.Context) bool {
+	v := c.GetHeader("X-Is-System-Admin")
+	return v == "true" || v == "1"
+}
+
+// hasPermissionCode checks whether the user has the required permission code.
+func (r *RBACMiddleware) hasPermissionCode(c *gin.Context, permissionCode string) bool {
+	// System admins bypass all permission checks
+	if isSystemAdmin(c) {
+		return true
+	}
+
+	userID := c.GetHeader("X-User-ID")
 	if userID == "" {
 		return false
 	}
 
-	// A signed JWT can outlive an administrator's role change. Resolve the
-	// current role from the shared invalidatable cache/database so an old token
-	// cannot retain elevated (especially role=0) access.
-	role, err := r.getUserRole(ctx, userID)
-	if err != nil || role < 0 {
-		return false
-	}
+	orgID := c.GetHeader("X-Organization-ID")
+	membershipID := c.GetHeader("X-Membership-ID")
 
-	if role == 0 {
-		return true
-	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 3*time.Second)
+	defer cancel()
 
-	perms, needsAuthorityCheck, err := r.getRolePermissions(ctx, role)
+	perms, err := r.resolveUserPermissions(ctx, userID, orgID, membershipID)
 	if err != nil {
 		return false
 	}
 
-	if permissionIncluded(perms, resource, action) {
-		return true
-	}
-
-	// The API service and gateway historically shared the gw:role_perms:* cache
-	// while loading it from different RBAC schemas. A negative/stale cache entry
-	// must therefore be checked against the gateway's authoritative table before
-	// rejecting an otherwise valid device owner request.
-	if needsAuthorityCheck {
-		perms, err = r.refreshRolePermissions(ctx, role)
-		if err != nil {
-			return false
-		}
-	}
-
-	return permissionIncluded(perms, resource, action)
-}
-
-func permissionIncluded(perms []PermissionEntry, resource, action string) bool {
 	for _, p := range perms {
-		if p.Resource == resource && p.Action == action {
+		if p.PermissionCode == permissionCode {
 			return true
 		}
 	}
 	return false
 }
 
+// resourceActionMap maps URL path prefixes to resource names.
+// The resource name is combined with the HTTP method-derived action to form
+// a permission_code (e.g., "devices:view").
 var resourceActionMap = map[string]string{
-	"/api/v1/admin/":             "admin",
-	"/api/v1/internal/":          "admin",
-	"/api/v1/users":              "users",
-	"/api/v1/users/":             "users",
-	"/api/v1/ota/tasks":          "ota",
-	"/api/v1/ota/firmware":       "firmware",
-	"/api/v1/ota/firmwares":      "firmware",
-	"/api/v1/ota/":               "ota",
-	"/api/v1/parallel":           "parallel",
-	"/api/v1/parallel/":          "parallel",
-	"/api/v1/parallel-groups":    "parallel",
-	"/api/v1/parallel-groups/":   "parallel",
-	"/api/v1/devices":            "devices",
-	"/api/v1/devices/":           "devices",
-	"/api/v1/device/":            "devices",
-	"/api/v1/alarms":             "alerts",
-	"/api/v1/alarms/":            "alerts",
-	"/api/v1/alerts":             "alerts",
-	"/api/v1/alerts/":            "alerts",
-	"/api/v1/alarm-events":       "alerts",
-	"/api/v1/alarm-events/":      "alerts",
-	"/api/v1/stations":           "stations",
-	"/api/v1/stations/":          "stations",
-	"/api/v1/models":             "models",
-	"/api/v1/models/":            "models",
-	"/api/v1/field-catalog":      "models",
-	"/api/v1/protocol-versions":  "models",
-	"/api/v1/protocol-versions/": "models",
-	"/api/v1/dashboard":          "dashboard",
-	"/api/v1/dashboard/":         "dashboard",
-	"/api/v1/stats/":             "dashboard",
-	"/api/v1/notifications":      "notifications",
-	"/api/v1/notifications/":     "notifications",
-	"/api/v1/alert-rules":        "alert_rules",
-	"/api/v1/alert-rules/":       "alert_rules",
-	"/api/v1/work-orders":        "work_orders",
-	"/api/v1/work-orders/":       "work_orders",
-	"/api/v1/work-order-stats":   "work_orders",
+	"/api/v1/admin/":               "admin",
+	"/api/v1/internal/":            "admin",
+	"/api/v1/users":                "users",
+	"/api/v1/users/":               "users",
+	"/api/v1/ota/tasks":            "ota",
+	"/api/v1/ota/firmware":         "firmware",
+	"/api/v1/ota/firmwares":        "firmware",
+	"/api/v1/ota/":                 "ota",
+	"/api/v1/parallel":             "parallel",
+	"/api/v1/parallel/":            "parallel",
+	"/api/v1/parallel-groups":      "parallel",
+	"/api/v1/parallel-groups/":     "parallel",
+	"/api/v1/devices":              "devices",
+	"/api/v1/devices/":             "devices",
+	"/api/v1/device/":              "devices",
+	"/api/v1/alarms":               "alerts",
+	"/api/v1/alarms/":              "alerts",
+	"/api/v1/alerts":               "alerts",
+	"/api/v1/alerts/":              "alerts",
+	"/api/v1/alarm-events":         "alerts",
+	"/api/v1/alarm-events/":        "alerts",
+	"/api/v1/stations":             "stations",
+	"/api/v1/stations/":            "stations",
+	"/api/v1/models":               "models",
+	"/api/v1/models/":              "models",
+	"/api/v1/field-catalog":        "models",
+	"/api/v1/protocol-versions":    "models",
+	"/api/v1/protocol-versions/":   "models",
+	"/api/v1/dashboard":            "dashboard",
+	"/api/v1/dashboard/":           "dashboard",
+	"/api/v1/stats/":               "dashboard",
+	"/api/v1/notifications":        "notifications",
+	"/api/v1/notifications/":       "notifications",
+	"/api/v1/alert-rules":          "alert_rules",
+	"/api/v1/alert-rules/":         "alert_rules",
+	"/api/v1/work-orders":          "work_orders",
+	"/api/v1/work-orders/":         "work_orders",
+	"/api/v1/work-order-stats":     "work_orders",
 	"/api/v1/work-order-templates": "work_orders",
-	"/api/v1/firmwares":          "firmware",
-	"/api/v1/organizations":      "organizations",
-	"/api/v1/organizations/":     "organizations",
-	"/api/v1/invitations":        "organizations",
-	"/api/v1/invitations/":       "organizations",
-	"/api/v1/members":            "organizations",
-	"/api/v1/members/":           "organizations",
-	"/api/v1/invite":             "organizations",
-	"/api/v1/invite/":            "organizations",
+	"/api/v1/firmwares":            "firmware",
+	"/api/v1/organizations":        "organizations",
+	"/api/v1/organizations/":       "organizations",
+	"/api/v1/invitations":          "organizations",
+	"/api/v1/invitations/":         "organizations",
+	"/api/v1/members":              "organizations",
+	"/api/v1/members/":             "organizations",
+	"/api/v1/invite":               "organizations",
+	"/api/v1/invite/":              "organizations",
 }
 
 // These endpoints are intentionally available to every authenticated user.
-// Keep this list exact: an auth-prefixed endpoint that is not listed must not
-// silently bypass RBAC.
 var authenticatedOnlyPaths = map[string]struct{}{
 	"/api/v1/auth/logout":          {},
 	"/api/v1/auth/change-password": {},
@@ -324,10 +264,7 @@ func isAuthenticatedOnlyPath(path string) bool {
 	return ok
 }
 
-// appAllowedPaths 定义 APP 端接口白名单。
-// 这些接口已通过 JWT 认证保护（位于 user 组），对所有登录用户开放，不需要 RBAC 细粒度权限检查。
-// 在路由分组架构下，这些接口属于 user 组，会经过 RBAC 中间件，
-// 因此保留此白名单以确保 APP 端 OTA 等接口不被 RBAC resourceActionMap 误拦截。
+// appAllowedPaths defines APP-side endpoint whitelist.
 var appAllowedExactPaths = map[string]struct{}{
 	"/api/v1/ota/trigger":              {},
 	"/api/v1/ota/app/check":            {},
@@ -342,9 +279,6 @@ var appAllowedPrefixes = []string{
 	"/api/v1/ota/available-packages/",
 }
 
-// appAllowedMethodPaths 定义 APP 端按 HTTP 方法精确控制的白名单。
-// 与 appAllowedPaths 不同，此配置同时匹配路径前缀和 HTTP 方法，
-// 适用于只开放特定操作（如仅允许创建不允许删除）给普通用户的场景。
 var appAllowedMethodPaths = []struct {
 	prefix string
 	method string
@@ -376,6 +310,22 @@ func isAppAllowedPathWithMethod(path, method string) bool {
 	return false
 }
 
+// isUserActive verifies the user account is still valid (not deleted/banned).
+func (r *RBACMiddleware) isUserActive(ctx context.Context, userID string) bool {
+	if r.pg == nil {
+		return true // fail open when no DB configured (tests)
+	}
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil || uid <= 0 {
+		return false
+	}
+	var exists bool
+	err = r.pg.QueryRow(ctx,
+		"SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND status = 1 AND deleted_at IS NULL)",
+		uid).Scan(&exists)
+	return err == nil && exists
+}
+
 func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
@@ -401,17 +351,21 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 			return
 		}
 
-		// Authentication self-service is already protected by JWT and must remain
-		// available for logout even when the role store is degraded.
+		// System admins bypass all RBAC checks
+		if isSystemAdmin(c) {
+			c.Next()
+			return
+		}
+
+		// Authentication self-service endpoints
 		if isAuthenticatedOnlyPath(path) {
 			c.Next()
 			return
 		}
 
-		// APP endpoints do not require business RBAC, but still require an active
-		// canonical account in addition to a non-revoked session.
+		// APP endpoints do not require business RBAC, but still require an active account
 		if isAppAllowedPathWithMethod(path, c.Request.Method) {
-			if _, err := r.getUserRole(c.Request.Context(), userID); err != nil {
+			if !r.isUserActive(c.Request.Context(), userID) {
 				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "账号不可用"})
 				c.Abort()
 				return
@@ -421,10 +375,7 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		}
 
 		resource := resourceForPath(path)
-
 		if resource == "" {
-			// Every route in this middleware is already part of an authenticated
-			// route group. Missing policy is a configuration error, not permission.
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    403,
 				"message": "权限策略缺失，拒绝访问",
@@ -433,8 +384,8 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 			return
 		}
 
-		action := r.getActionForRequest(path, c.Request.Method)
-		if !r.hasPermission(userID, resource, action) {
+		permissionCode := r.buildPermissionCode(path, c.Request.Method, resource)
+		if !r.hasPermissionCode(c, permissionCode) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"code":    403,
 				"message": "权限不足，无法访问该资源",
@@ -455,9 +406,7 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 	}
 }
 
-// resourceForPath chooses the most specific matching prefix. Iterating a Go
-// map and taking the first match made overlapping routes such as ota/firmwares
-// nondeterministic.
+// resourceForPath chooses the most specific matching prefix.
 func resourceForPath(path string) string {
 	resource := ""
 	longest := 0
@@ -483,20 +432,18 @@ func pathPrefixMatches(path, prefix string) bool {
 	return strings.HasPrefix(path, prefix+"/")
 }
 
-func (r *RBACMiddleware) getActionForRequest(path, method string) string {
-	// The API protects the entire /admin group with one explicit admin:manage
-	// middleware. Use the same contract at the Gateway instead of requiring an
-	// additional method-derived permission for the same request.
+// buildPermissionCode constructs the permission code from path, method, and resource.
+// Format: "{resource}:{action}" (e.g., "devices:view", "admin:manage")
+func (r *RBACMiddleware) buildPermissionCode(path, method, resource string) string {
+	// Admin endpoints require "manage" action
 	if pathPrefixMatches(path, "/api/v1/admin/") {
-		return "manage"
+		return "admin:manage"
 	}
-	// OTA lifecycle commands are operational controls, not resource creation or
-	// ordinary edits.  Keep the Gateway action aligned with the API's explicit
-	// RequirePermission(..., "ota", "control") checks.
+	// OTA lifecycle commands use "control" action
 	if isOTAControlRequest(path, method) {
-		return "control"
+		return resource + ":control"
 	}
-	return actionForRequest(method, path)
+	return resource + ":" + actionForRequest(method, path)
 }
 
 func actionForRequest(method, path string) string {
@@ -576,8 +523,6 @@ func (r *RBACMiddleware) isUserSessionRevoked(ctx context.Context, userID, sessi
 		return false
 	}
 	if strings.TrimSpace(sessionID) == "" && strings.TrimSpace(issuedAt) == "" {
-		// RBAC unit tests and trusted internal calls may execute without the JWT
-		// middleware. Production JWT requests always carry both verified headers.
 		return false
 	}
 	if strings.TrimSpace(sessionID) == "" || strings.TrimSpace(issuedAt) == "" {
@@ -617,6 +562,8 @@ func directDeviceSN(path string) (string, bool) {
 	return parts[0], true
 }
 
+// hasDeviceAccess checks whether the user can access a specific device.
+// System admins already bypassed in RBACGuard; this is for non-admin users.
 func (r *RBACMiddleware) hasDeviceAccess(ctx context.Context, userID, sn string) bool {
 	if r.pg == nil || sn == "" {
 		return false
@@ -628,10 +575,22 @@ func (r *RBACMiddleware) hasDeviceAccess(ctx context.Context, userID, sn string)
 	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	var allowed bool
+	// Check device access through organization memberships and device ownership
 	err = r.pg.QueryRow(queryCtx, `
 		SELECT EXISTS (
-			SELECT 1 FROM users
-			WHERE id = $1 AND role = 0 AND deleted_at IS NULL
+			SELECT 1
+			FROM organization_memberships m
+			JOIN role_permission_grants pg
+			  ON pg.root_tenant_id = m.root_tenant_id
+			 AND pg.role_assignment_id IN (
+			    SELECT id FROM membership_role_assignments
+			    WHERE root_tenant_id = m.root_tenant_id
+			      AND organization_id = m.organization_id
+			      AND membership_id = m.id
+			 )
+			WHERE m.user_id = $1 AND m.deleted_at IS NULL
+			  AND pg.permission_code = 'devices:view'
+			  AND pg.data_scope IN ('organization_and_descendants', 'organization', 'assigned_resources')
 		) OR EXISTS (
 			SELECT 1 FROM v_user_device_access
 			WHERE user_id = $1 AND device_sn = $2
@@ -640,33 +599,12 @@ func (r *RBACMiddleware) hasDeviceAccess(ctx context.Context, userID, sn string)
 	return err == nil && allowed
 }
 
-func (r *RBACMiddleware) getActionFromMethod(method string) string {
-	switch method {
-	case "GET":
-		return "view"
-	case "POST":
-		return "create"
-	case "PUT", "PATCH":
-		return "edit"
-	case "DELETE":
-		return "delete"
-	default:
-		return "view"
-	}
-}
-
-func (r *RBACMiddleware) InvalidateUserCache(userID string) {
-	if r.rdb != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		r.rdb.Del(ctx, "gw:user_roles:"+userID)
-	}
-}
-
-func (r *RBACMiddleware) InvalidateRoleCache(role int) {
-	cacheKey := fmt.Sprintf("gw:role_perms:%d", role)
+// InvalidateUserPermissions clears the cached permissions for a user.
+// Called when authorization_version changes (role/permission updates).
+func (r *RBACMiddleware) InvalidateUserPermissions(userID, orgID, membershipID string) {
+	cacheKey := fmt.Sprintf("gw:user_perms:%s:%s:%s", userID, orgID, membershipID)
 	r.mu.Lock()
-	delete(r.roleCache, cacheKey)
+	delete(r.permCache, cacheKey)
 	r.mu.Unlock()
 
 	if r.rdb != nil {
@@ -674,6 +612,34 @@ func (r *RBACMiddleware) InvalidateRoleCache(role int) {
 		defer cancel()
 		r.rdb.Del(ctx, cacheKey)
 	}
+}
+
+// InvalidateUserCache is kept for backward compatibility with admin handlers.
+func (r *RBACMiddleware) InvalidateUserCache(userID string) {
+	// Wildcard delete all org/membership-scoped entries for this user
+	if r.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		pattern := fmt.Sprintf("gw:user_perms:%s:*", userID)
+		iter := r.rdb.Scan(ctx, 0, pattern, 100).Iterator()
+		for iter.Next(ctx) {
+			r.rdb.Del(ctx, iter.Val())
+		}
+	}
+	r.mu.Lock()
+	for k := range r.permCache {
+		if strings.HasPrefix(k, fmt.Sprintf("gw:user_perms:%s:", userID)) {
+			delete(r.permCache, k)
+		}
+	}
+	r.mu.Unlock()
+}
+
+// InvalidateRoleCache is kept for backward compatibility.
+// In the new system, role changes trigger authorization_version bumps which
+// invalidate per-user caches via InvalidateUserCache.
+func (r *RBACMiddleware) InvalidateRoleCache(role int) {
+	// No-op in the new system: permission changes are per-user, not per-role.
 }
 
 func ParseUserID(c *gin.Context) int64 {

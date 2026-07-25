@@ -40,7 +40,7 @@ type AccessTokenClaims struct {
 	SessionID            string `json:"session_id"`
 	AuthorizationVersion int64  `json:"authorization_version"`
 	Phone                string `json:"phone,omitempty"`
-	Role                 *int   `json:"role,omitempty"`
+	IsSystemAdmin        bool   `json:"is_system_admin,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -76,6 +76,7 @@ var exactUntrustedIdentityHeaders = map[string]struct{}{
 	"x-session-version":       {},
 	"x-session-id":            {},
 	"x-authorization-version": {},
+	"x-is-system-admin":          {},
 	"x-token-jti":             {},
 	"x-token-issued-at":       {},
 }
@@ -189,9 +190,9 @@ func validAccessTokenClaims(claims *AccessTokenClaims, config JWTAuthConfig) boo
 		claims.SessionVersion <= 0 || claims.AuthorizationVersion <= 0 {
 		return false
 	}
-	if claims.Role == nil || *claims.Role < 0 || *claims.Role > 5 {
-		return false
-	}
+	// IsSystemAdmin replaces the legacy role claim.  No numeric role
+	// validation is needed: the boolean is authoritative for super-admin
+	// bypass at the gateway.
 	if strings.TrimSpace(claims.SessionID) == "" {
 		return false
 	}
@@ -220,9 +221,7 @@ func injectTrustedIdentityHeaders(headers http.Header, claims *AccessTokenClaims
 	if claims.Phone != "" {
 		headers.Set("X-User-Phone", claims.Phone)
 	}
-	if claims.Role != nil {
-		headers.Set("X-User-Role", strconv.Itoa(*claims.Role))
-	}
+	headers.Set("X-Is-System-Admin", strconv.FormatBool(claims.IsSystemAdmin))
 }
 
 func abortInvalidToken(c *gin.Context) {

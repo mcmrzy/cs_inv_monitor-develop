@@ -101,7 +101,7 @@ func (h *ModelHandler) GetProtocolSchema(c *gin.Context) {
 }
 
 func (h *ModelHandler) UpdateFieldCapability(c *gin.Context) {
-	if middleware.GetRole(c) > 1 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}
@@ -123,7 +123,7 @@ func (h *ModelHandler) UpdateFieldCapability(c *gin.Context) {
 }
 
 func (h *ModelHandler) UpdateCommandCapability(c *gin.Context) {
-	if middleware.GetRole(c) > 1 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}
@@ -307,8 +307,8 @@ func (h *ModelHandler) GetDataPreview(c *gin.Context) {
 }
 
 func (h *ModelHandler) CreateModel(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -329,8 +329,8 @@ func (h *ModelHandler) CreateModel(c *gin.Context) {
 }
 
 func (h *ModelHandler) UpdateModel(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -357,8 +357,8 @@ func (h *ModelHandler) UpdateModel(c *gin.Context) {
 }
 
 func (h *ModelHandler) DeleteModel(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -396,8 +396,8 @@ func (h *ModelHandler) GetModelFields(c *gin.Context) {
 }
 
 func (h *ModelHandler) CreateField(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -425,8 +425,8 @@ func (h *ModelHandler) CreateField(c *gin.Context) {
 }
 
 func (h *ModelHandler) UpdateField(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -453,8 +453,8 @@ func (h *ModelHandler) UpdateField(c *gin.Context) {
 }
 
 func (h *ModelHandler) DeleteField(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -475,8 +475,8 @@ func (h *ModelHandler) DeleteField(c *gin.Context) {
 }
 
 func (h *ModelHandler) BatchUpdateFields(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -538,8 +538,8 @@ func (h *ModelHandler) GetProtocols(c *gin.Context) {
 }
 
 func (h *ModelHandler) CreateProtocol(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -567,8 +567,8 @@ func (h *ModelHandler) CreateProtocol(c *gin.Context) {
 }
 
 func (h *ModelHandler) UpdateProtocol(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
@@ -595,8 +595,8 @@ func (h *ModelHandler) UpdateProtocol(c *gin.Context) {
 }
 
 func (h *ModelHandler) DeleteProtocol(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 1 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "仅管理员可操作")
 		return
 	}
