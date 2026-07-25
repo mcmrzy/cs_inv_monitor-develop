@@ -5,8 +5,9 @@
  * 默认样式：无边框、圆角 12px、居中文字。
  */
 import React from 'react'
-import { Card, Statistic } from 'antd'
+import { Statistic } from 'antd'
 import type { StatisticProps } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 
 export interface StatisticCardProps extends StatisticProps {
   /** 卡片是否可悬浮提升，默认 true */
@@ -29,7 +30,7 @@ const StatisticCard: React.FC<StatisticCardProps> = ({
   ...statisticProps
 }) => {
   return (
-    <Card
+    <ProCard
       hoverable={hoverable}
       bordered={false}
       style={{
@@ -37,15 +38,13 @@ const StatisticCard: React.FC<StatisticCardProps> = ({
         background,
         ...(style ?? {}),
       }}
-      styles={{
-        body: {
-          padding: size === 'small' ? '12px 16px' : '20px 24px',
-        },
+      bodyStyle={{
+        padding: size === 'small' ? '12px 16px' : '20px 24px',
       }}
     >
       <Statistic {...statisticProps} />
       {children}
-    </Card>
+    </ProCard>
   )
 }
 

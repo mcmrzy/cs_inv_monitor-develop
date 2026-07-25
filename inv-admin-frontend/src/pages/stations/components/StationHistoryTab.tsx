@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Card, Select, DatePicker, Button, Table, Space } from 'antd'
+import { Row, Col, Select, DatePicker, Button, Space } from 'antd'
+import { ProTable, ProCard } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import { ReloadOutlined, DownloadOutlined } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+
 import dayjs from 'dayjs'
 import { deviceApi } from '@/services/deviceApi'
 import { safeNum } from '@/utils/format'
@@ -195,21 +197,22 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   }, [items])
 
   // 构建表格列
-  const columns: ColumnsType<any> = useMemo(() => {
+  const columns: ProColumns<any>[] = useMemo(() => {
     const timeCol = {
       title: t('common.time'),
       dataIndex: 'time',
       key: 'time',
       width: 180,
       fixed: 'left' as const,
-      render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm'),
+      render: (_: any, record: any) => formatInTimezone(record.time, timezone, 'YYYY-MM-DD HH:mm'),
     }
     const dataCols = visibleFields.map(field => ({
       title: FIELD_LABEL_KEYS[field] ? t(FIELD_LABEL_KEYS[field]) : field,
       dataIndex: field,
       key: field,
       width: 140,
-      render: (v: unknown) => {
+      render: (_: any, record: any) => {
+        const v = record[field]
         if (v === null || v === undefined || v === '') return '--'
         const n = safeNum(v)
         if (!Number.isFinite(n)) return '--'
@@ -245,7 +248,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
   return (
     <>
       {/* 工具栏 */}
-      <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }}>
+      <ProCard style={{ borderRadius: 12, marginBottom: 16 }}>
         <Row gutter={[12, 12]} align="middle">
           <Col>
             <Select
@@ -310,15 +313,17 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
             </Col>
           </Row>
         )}
-      </Card>
+      </ProCard>
 
       {/* 数据表格 */}
-      <Card bordered={false} style={{ borderRadius: 12 }}>
-        <Table
+      <ProCard style={{ borderRadius: 12 }}>
+        <ProTable
           columns={columns}
           dataSource={items}
           loading={isLoading}
           rowKey={(r: any) => r.id || r.time}
+          search={false}
+          options={{ density: true, reload: false, setting: true }}
           pagination={{
             current: page,
             pageSize,
@@ -330,7 +335,7 @@ const StationHistoryTab: React.FC<StationHistoryTabProps> = ({ stationId, timezo
           scroll={{ x: 1200 }}
           size="small"
         />
-      </Card>
+      </ProCard>
     </>
   )
 }

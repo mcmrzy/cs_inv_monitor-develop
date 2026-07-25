@@ -2,14 +2,15 @@ import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Card, Tag, Button, Space, Spin, Tabs, Table, Row, Col, Empty, Progress, Typography,
+  Tag, Button, Space, Spin, Tabs, Row, Col, Empty, Progress, Typography,
 } from 'antd'
+import { ProTable, ProCard } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import {
   ArrowLeftOutlined, DesktopOutlined, CheckCircleOutlined,
   SunOutlined, WarningOutlined, ThunderboltOutlined,
   ReloadOutlined, EditOutlined, CloudOutlined, HomeOutlined, TableOutlined,
 } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
 import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
 import { getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
@@ -348,13 +349,13 @@ const StationDetailPage: React.FC = () => {
   ]
 
   // 告警列表列定义
-  const alarmColumns: ColumnsType<AlarmItem> = [
+  const alarmColumns: ProColumns<AlarmItem>[] = [
     {
       title: t('common.time'),
       dataIndex: 'occurred_at',
       width: 160,
-      render: (v: string, r: AlarmItem) => {
-        const time = v || r.created_at
+      render: (_, r: AlarmItem) => {
+        const time = r.occurred_at || r.created_at
         return time ? formatInTimezone(time, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'
       },
     },
@@ -363,8 +364,8 @@ const StationDetailPage: React.FC = () => {
       title: t('station.alertLevel'),
       dataIndex: 'alarm_level',
       width: 80,
-      render: (v: number | string, record: any) => {
-        const cfg = getAlarmLevelDisplay(record.fault_code, v)
+      render: (_, record: AlarmItem) => {
+        const cfg = getAlarmLevelDisplay(record.fault_code, record.alarm_level)
         return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
       },
     },
@@ -372,9 +373,9 @@ const StationDetailPage: React.FC = () => {
       title: t('station.faultMessage'),
       dataIndex: 'fault_message',
       ellipsis: true,
-      render: (message: string, record: AlarmItem) => {
+      render: (_, record: AlarmItem) => {
         const key = getAlarmMessageI18nKey(record.fault_code)
-        return key ? t(key) : message
+        return key ? t(key) : record.fault_message
       },
     },
   ]
@@ -388,7 +389,7 @@ const StationDetailPage: React.FC = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 0 }}>
         {energyCards.map((card) => (
           <Col xs={24} sm={12} md={6} key={card.key}>
-            <Card bordered={false} style={{ borderRadius: 12, borderLeft: `4px solid ${card.color}`, height: '100%' }} bodyStyle={{ padding: '16px 20px' }}>
+            <ProCard style={{ borderRadius: 12, borderLeft: `4px solid ${card.color}`, height: '100%' }} bodyStyle={{ padding: '16px 20px' }}>
               <Row align="middle" gutter={12}>
                 <Col>
                   {ENERGY_CARD_ICONS[card.key]}
@@ -405,7 +406,7 @@ const StationDetailPage: React.FC = () => {
                   </Text>
                 </Col>
               </Row>
-            </Card>
+            </ProCard>
           </Col>
         ))}
       </Row>
@@ -414,7 +415,7 @@ const StationDetailPage: React.FC = () => {
       <Row gutter={[16, 16]}>
         {/* 左列：能量流图 */}
         <Col xs={24} lg={14}>
-          <Card bordered={false} style={{ borderRadius: 12, height: '100%' }} title={
+          <ProCard style={{ borderRadius: 12, height: '100%' }} title={
             <Space><ThunderboltOutlined /> {t('station.energyFlow')}</Space>
           } size="small">
             <EnergyFlowDiagram
@@ -424,13 +425,12 @@ const StationDetailPage: React.FC = () => {
               gridPower={aggregatedGrid}
               battSoc={avgSoc}
             />
-          </Card>
+          </ProCard>
         </Col>
 
         {/* 右列：系统详细信息 */}
         <Col xs={24} lg={10}>
-          <Card
-            bordered={false}
+          <ProCard
             style={{ borderRadius: 12, marginBottom: 16 }}
             title={<><ThunderboltOutlined /> {t('station.systemInfo')}</>}
             extra={<Text type="secondary" style={{ fontSize: 12 }}>{lastUpdateTime}</Text>}
@@ -528,7 +528,7 @@ const StationDetailPage: React.FC = () => {
                 </Col>
               </Row>
             </div>
-          </Card>
+          </ProCard>
         </Col>
       </Row>
 
@@ -538,22 +538,24 @@ const StationDetailPage: React.FC = () => {
           <SocialContribution totalEnergy={statsSummary?.total ?? station.total_generation ?? station.total_energy ?? 0} />
         </Col>
         <Col xs={24} lg={10}>
-          <Card bordered={false} style={{ borderRadius: 12 }} size="small" title={
+          <ProCard style={{ borderRadius: 12 }} size="small" title={
             <Space><WarningOutlined style={{ color: '#ff4d4f' }} /> {t('station.recentAlarms')}</Space>
           } extra={alarms.length > 5 && <a onClick={() => setActiveTab('overview')}>{t('station.viewAll')}</a>}>
             {recentAlarms.length > 0 ? (
-              <Table<AlarmItem>
+              <ProTable<AlarmItem>
                 columns={alarmColumns}
                 dataSource={recentAlarms}
                 rowKey="id"
                 size="small"
+                search={false}
+                options={false}
                 pagination={false}
                 scroll={{ x: 600 }}
               />
             ) : (
               <Empty description={t('station.noAlarms')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
             )}
-          </Card>
+          </ProCard>
         </Col>
       </Row>
     </div>
@@ -594,7 +596,7 @@ const StationDetailPage: React.FC = () => {
       </Row>
 
       {/* 四 Tab：概览 / 统计 / 关联设备 / 历史数据 */}
-      <Card bordered={false} style={{ borderRadius: 12 }}>
+      <ProCard style={{ borderRadius: 12 }}>
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
@@ -625,7 +627,7 @@ const StationDetailPage: React.FC = () => {
             },
           ]}
         />
-      </Card>
+      </ProCard>
     </div>
   )
 }

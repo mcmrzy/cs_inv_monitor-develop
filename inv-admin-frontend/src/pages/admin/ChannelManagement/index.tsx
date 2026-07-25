@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Tabs, Card, Typography } from 'antd'
+import { Tabs, Typography } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
 import { Role } from '@/types'
@@ -17,16 +18,16 @@ const ChannelManagement: React.FC = () => {
 
   if (user?.role !== Role.SUPER_ADMIN) {
     return (
-      <Card bordered={false} style={{ borderRadius: 12 }}>
+      <ProCard style={{ borderRadius: 12 }}>
         <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
           {t('channel.noPermission')}
         </div>
-      </Card>
+      </ProCard>
     )
   }
 
   return (
-    <Card bordered={false} style={{ borderRadius: 12 }}>
+    <ProCard style={{ borderRadius: 12 }}>
       <Tabs
         defaultActiveKey="organizations"
         items={[
@@ -57,7 +58,7 @@ const ChannelManagement: React.FC = () => {
           },
         ]}
       />
-    </Card>
+    </ProCard>
   )
 }
 

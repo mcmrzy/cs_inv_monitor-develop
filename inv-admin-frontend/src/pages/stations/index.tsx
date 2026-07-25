@@ -2,12 +2,14 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Table, Typography, Tag, Select, message, Space,
-  Drawer, Descriptions, Tabs, Statistic, Input, InputNumber, Button, Form, Modal, Empty, Spin, Grid,
+  Row, Col, Typography, Tag, Select, message, Space,
+  Drawer, Descriptions, Tabs, Statistic, Input, Button, Form, Modal, Empty, Spin, Grid,
   Tooltip, Radio, Alert,
 } from 'antd'
+import { ProTable, ProCard, ModalForm, ProFormText, ProFormDigit, ProFormSelect } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import Popconfirm from '@/components/LocalizedPopconfirm'
-import type { ColumnsType } from 'antd/es/table'
+
 import {
   ReloadOutlined, SwapOutlined, EyeOutlined, EditOutlined,
   ApartmentOutlined, DesktopOutlined, CheckCircleOutlined, ThunderboltOutlined,
@@ -136,7 +138,6 @@ const StationsPage: React.FC = () => {
   /* ---------- 创建电站弹窗 ---------- */
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [addForm] = Form.useForm()
-  const [addLoading, setAddLoading] = useState(false)
 
   /* ---------- 分配用户 ---------- */
   const [assignVisible, setAssignVisible] = useState(false)
@@ -328,32 +329,28 @@ const StationsPage: React.FC = () => {
     }
   }
 
-  const handleEditSave = async () => {
+  const handleEditSave = async (values: Record<string, unknown>) => {
     try {
-      const values = await editForm.validateFields()
       await api.put(`/stations/${currentStation!.id}`, values)
       messageApi.success(t('station.updateSuccess'))
-      setEditModalOpen(false)
       queryClient.invalidateQueries({ queryKey: ['stations'] })
       setCurrentStation({ ...currentStation!, ...values })
+      return true
     } catch {
       messageApi.error(t('station.updateFailed'))
+      return false
     }
   }
 
-  const handleCreate = async () => {
+  const handleCreate = async (values: Record<string, unknown>) => {
     try {
-      setAddLoading(true)
-      const values = await addForm.validateFields()
       await api.post('/stations', values)
       messageApi.success(t('station.addSuccess'))
-      setAddModalOpen(false)
-      addForm.resetFields()
       queryClient.invalidateQueries({ queryKey: ['stations'] })
+      return true
     } catch {
       messageApi.error(t('station.addFailed'))
-    } finally {
-      setAddLoading(false)
+      return false
     }
   }
 
@@ -475,7 +472,7 @@ const StationsPage: React.FC = () => {
 
   /* ---------- 电站表格列定义 ---------- */
 
-  const columns: ColumnsType<StationItem> = [
+  const columns: ProColumns<StationItem>[] = [
     { title: 'ID', dataIndex: 'id', width: 60 },
     { title: t('station.stationName'), dataIndex: 'name', width: 150 },
     {
@@ -489,37 +486,37 @@ const StationsPage: React.FC = () => {
       title: t('station.capacity_kW'),
       dataIndex: 'capacity',
       width: 90,
-      render: (v: number) => v ? `${v}` : '-',
+      render: (_, record: StationItem) => record.capacity ? `${record.capacity}` : '-',
     },
     {
       title: t('common.status'),
       dataIndex: 'status',
       width: 70,
-      render: (v: number) => (
-        <Tag color={v === 1 ? 'green' : 'red'}>{v === 1 ? t('station.normal') : t('station.stopped')}</Tag>
+      render: (_, record: StationItem) => (
+        <Tag color={record.status === 1 ? 'green' : 'red'}>{record.status === 1 ? t('station.normal') : t('station.stopped')}</Tag>
       ),
     },
     {
       title: t('station.deviceCount'),
       dataIndex: 'device_count',
       width: 80,
-      render: (v: number) => v ?? '-',
+      render: (_, record: StationItem) => record.device_count ?? '-',
     },
     {
       title: t('station.onlineCount'),
       dataIndex: 'online_count',
       width: 60,
-      render: (v: number) => (
-        <span style={{ color: '#52c41a', fontWeight: 600 }}>{v ?? '-'}</span>
+      render: (_, record: StationItem) => (
+        <span style={{ color: '#52c41a', fontWeight: 600 }}>{record.online_count ?? '-'}</span>
       ),
     },
     {
       title: t('station.faultCount'),
       dataIndex: 'fault_count',
       width: 60,
-      render: (v: number) => (
-        <span style={{ color: v && v > 0 ? '#ff4d4f' : undefined, fontWeight: v && v > 0 ? 600 : undefined }}>
-          {v ?? '-'}
+      render: (_, record: StationItem) => (
+        <span style={{ color: record.fault_count && record.fault_count > 0 ? '#ff4d4f' : undefined, fontWeight: record.fault_count && record.fault_count > 0 ? 600 : undefined }}>
+          {record.fault_count ?? '-'}
         </span>
       ),
     },
@@ -527,28 +524,28 @@ const StationsPage: React.FC = () => {
       title: t('station.todayGeneration'),
       dataIndex: 'today_generation',
       width: 110,
-      render: (v: number) => v != null ? v.toFixed(1) : '-',
+      render: (_, record: StationItem) => record.today_generation != null ? record.today_generation.toFixed(1) : '-',
     },
     {
       title: t('station.totalGeneration'),
       dataIndex: 'total_generation',
       width: 120,
-      render: (v: number) => v != null ? v.toLocaleString() : '-',
+      render: (_, record: StationItem) => record.total_generation != null ? record.total_generation.toLocaleString() : '-',
     },
     {
       title: t('station.createDate'),
       dataIndex: 'created_at',
       width: 110,
-      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD') : '-',
+      render: (_, record: StationItem) => record.created_at ? formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD') : '-',
     },
     ...(isAdmin ? [
       {
         title: t('station.ownerUserID'),
         dataIndex: 'user_id',
         width: 110,
-        render: (uid: number) => {
-          const u = users.find((x: any) => x.id === uid)
-          return u ? `${u.nickname || u.phone} (${uid})` : String(uid ?? '-')
+        render: (_: any, record: StationItem) => {
+          const u = users.find((x: any) => x.id === record.user_id)
+          return u ? `${u.nickname || u.phone} (${record.user_id})` : String(record.user_id ?? '-')
         },
       },
     ] : []),
@@ -616,35 +613,35 @@ const StationsPage: React.FC = () => {
 
   /* ---------- 设备表格列定义 ---------- */
 
-  const deviceColumns: ColumnsType<DeviceItem> = [
+  const deviceColumns: ProColumns<DeviceItem>[] = [
     { title: 'SN', dataIndex: 'sn', width: 160 },
     { title: t('common.model'), dataIndex: 'model', width: 120 },
     {
       title: t('common.status'),
       dataIndex: 'status',
       width: 80,
-      render: (v: number | string) => {
-        const s = DEVICE_STATUS_MAP[String(v)]
-        return s ? <Tag color={s.color}>{t(s.i18nKey)}</Tag> : <Tag>{v}</Tag>
+      render: (_: any, record: DeviceItem) => {
+        const s = DEVICE_STATUS_MAP[String(record.status)]
+        return s ? <Tag color={s.color}>{t(s.i18nKey)}</Tag> : <Tag>{record.status}</Tag>
       },
     },
     {
       title: t('station.ratedPower_W'),
       dataIndex: 'rated_power',
       width: 100,
-      render: (v: number) => v ?? '-',
+      render: (_: any, record: DeviceItem) => record.rated_power ?? '-',
     },
     {
       title: t('station.firmwareVersion'),
       dataIndex: 'firmware_arm',
       width: 100,
-      render: (v: string) => v || '-',
+      render: (_: any, record: DeviceItem) => record.firmware_arm || '-',
     },
     {
       title: t('station.lastComm'),
       dataIndex: 'last_online_at',
       width: 150,
-      render: (v: string, record: any) => formatInTimezone(v, record.timezone, 'YYYY-MM-DD HH:mm'),
+      render: (_: any, record: DeviceItem) => formatInTimezone(record.last_online_at, record.timezone, 'YYYY-MM-DD HH:mm'),
     },
     {
       title: t('station.realtimePower_W'),
@@ -702,13 +699,13 @@ const StationsPage: React.FC = () => {
 
   /* ---------- 告警表格列定义 ---------- */
 
-  const alarmColumns: ColumnsType<AlarmItem> = [
+  const alarmColumns: ProColumns<AlarmItem>[] = [
     {
       title: t('common.time'),
       dataIndex: 'occurred_at',
       width: 160,
-      render: (v: string, r: AlarmItem) => {
-        const time = v || r.created_at
+      render: (_: any, r: AlarmItem) => {
+        const time = r.occurred_at || r.created_at
         return time ? formatInTimezone(time, timezone, 'YYYY-MM-DD HH:mm:ss') : '-'
       },
     },
@@ -717,8 +714,8 @@ const StationsPage: React.FC = () => {
       title: t('station.alertLevel'),
       dataIndex: 'alarm_level',
       width: 80,
-      render: (v: number | string, record: any) => {
-        const cfg = getAlarmLevelDisplay(record.fault_code, v)
+      render: (_: any, record: AlarmItem) => {
+        const cfg = getAlarmLevelDisplay(record.fault_code, record.alarm_level)
         return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
       },
     },
@@ -727,16 +724,17 @@ const StationsPage: React.FC = () => {
       title: t('station.faultMessage'),
       dataIndex: 'fault_message',
       ellipsis: true,
-      render: (message: string, record: AlarmItem) => {
+      render: (_: any, record: AlarmItem) => {
         const key = getAlarmMessageI18nKey(record.fault_code)
-        return key ? t(key) : message
+        return key ? t(key) : record.fault_message
       },
     },
     {
       title: t('common.status'),
       dataIndex: 'status',
       width: 80,
-      render: (v: string) => {
+      render: (_: any, record: AlarmItem) => {
+        const v = record.status
         if (v === 'resolved' || v === 'handled') return <Tag color="green">{t('station.alarmHandled')}</Tag>
         if (v === 'active' || v === 'pending') return <Tag color="red">{t('station.alarmUnhandled')}</Tag>
         return <Tag>{v || '-'}</Tag>
@@ -846,12 +844,14 @@ const StationsPage: React.FC = () => {
           </Button>
         )}
       </Space>
-      <Table<DeviceItem>
+      <ProTable<DeviceItem>
         columns={deviceColumns}
         dataSource={filteredDevices}
         rowKey="id"
         loading={devicesLoading}
         size="small"
+        search={false}
+        options={{ density: true, setting: true }}
         pagination={{ pageSize: 10, showTotal: (total) => t('common.total', { total }) }}
         scroll={{ x: 800 }}
       />
@@ -907,10 +907,9 @@ const StationsPage: React.FC = () => {
             />
           </Col>
         </Row>
-        <Card
+        <ProCard
           title={t('station.genTrend30Days')}
           size="small"
-          bordered={false}
           style={{ borderRadius: 12 }}
           extra={
             <Radio.Group
@@ -930,7 +929,7 @@ const StationsPage: React.FC = () => {
           ) : (
             <Empty description={t('station.noGenData')} />
           )}
-        </Card>
+        </ProCard>
       </>
     )
   }
@@ -942,12 +941,14 @@ const StationsPage: React.FC = () => {
           {t('common.refresh')}
         </Button>
       </Space>
-      <Table<AlarmItem>
+      <ProTable<AlarmItem>
         columns={alarmColumns}
         dataSource={stationAlarms}
         rowKey="id"
         loading={alarmsLoading}
         size="small"
+        search={false}
+        options={{ density: true, setting: true }}
         pagination={{ pageSize: 10, showTotal: (total) => t('common.total', { total }) }}
         scroll={{ x: 700 }}
       />
@@ -1035,7 +1036,7 @@ const StationsPage: React.FC = () => {
       </Row>
 
       {/* 工具栏：视图切换 + 状态筛选 + 搜索 */}
-      <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} styles={{ body: { padding: '12px 16px' } }}>
+      <ProCard style={{ borderRadius: 12, marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           {/* 状态筛选按钮 */}
           <Space wrap>
@@ -1082,7 +1083,7 @@ const StationsPage: React.FC = () => {
             </Radio.Group>
           </Space>
         </div>
-      </Card>
+      </ProCard>
 
       {/* 电站列表 */}
       <Spin spinning={isLoading}>
@@ -1098,17 +1099,19 @@ const StationsPage: React.FC = () => {
             )}
           </Row>
         ) : (
-          <Card bordered={false} style={{ borderRadius: 12 }}>
-            <Table<StationItem>
+          <ProCard style={{ borderRadius: 12 }}>
+            <ProTable<StationItem>
               columns={columns}
               dataSource={filteredStations}
               rowKey="id"
               loading={isLoading}
               size="small"
+              search={false}
+              options={{ density: true, reload: () => refetch(), setting: true }}
               pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => t('common.total', { total }) }}
               scroll={{ x: 1200 }}
             />
-          </Card>
+          </ProCard>
         )}
       </Spin>
 
@@ -1136,91 +1139,64 @@ const StationsPage: React.FC = () => {
       </Drawer>
 
       {/* 编辑弹窗 */}
-      <Modal
+      <ModalForm
         title={t('station.editStation')}
         open={editModalOpen}
-        onCancel={() => setEditModalOpen(false)}
-        onOk={handleEditSave}
+        onOpenChange={(open) => { if (!open) setEditModalOpen(false) }}
+        form={editForm}
+        onFinish={handleEditSave}
+        layout="vertical"
         width={600}
-        destroyOnClose
+        modalProps={{ destroyOnClose: true, maskClosable: false }}
       >
-        <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="name" label={t('station.stationName')} rules={[{ required: true }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="capacity" label={t('station.capacity_kW')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="province" label={t('station.province')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="city" label={t('station.city')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="district" label={t('station.district')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="address" label={t('station.address')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="panel_count" label={t('station.panelCount')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="battery_capacity" label={t('station.batteryCapacity')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="status" label={t('common.status')}>
-                <Select
-                  options={[
-                    { value: 1, label: t('station.normal') },
-                    { value: 0, label: t('station.stopped') },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="timezone" label={t('station.timezone')}>
-                <Select
-                  showSearch
-                  placeholder={t('station.selectTimezone')}
-                  options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) }))}
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="contact_name" label={t('station.contact')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="contact_phone" label={t('station.contactPhone')}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText name="name" label={t('station.stationName')} rules={[{ required: true }]} />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit name="capacity" label={t('station.capacity_kW')} min={0} fieldProps={{ style: { width: '100%' } }} />
+          </Col>
+          <Col span={8}>
+            <ProFormText name="province" label={t('station.province')} />
+          </Col>
+          <Col span={8}>
+            <ProFormText name="city" label={t('station.city')} />
+          </Col>
+          <Col span={8}>
+            <ProFormText name="district" label={t('station.district')} />
+          </Col>
+          <Col span={24}>
+            <ProFormText name="address" label={t('station.address')} />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit name="panel_count" label={t('station.panelCount')} min={0} fieldProps={{ style: { width: '100%' } }} />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit name="battery_capacity" label={t('station.batteryCapacity')} min={0} fieldProps={{ style: { width: '100%' } }} />
+          </Col>
+          <Col span={8}>
+            <ProFormSelect name="status" label={t('common.status')} options={[
+              { value: 1, label: t('station.normal') },
+              { value: 0, label: t('station.stopped') },
+            ]} />
+          </Col>
+          <Col span={24}>
+            <ProFormSelect name="timezone" label={t('station.timezone')} fieldProps={{
+              showSearch: true,
+              placeholder: t('station.selectTimezone'),
+              options: TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) })),
+              filterOption: (input: string, option: { label?: string } | undefined) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+            }} />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="contact_name" label={t('station.contact')} />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="contact_phone" label={t('station.contactPhone')} />
+          </Col>
+        </Row>
+      </ModalForm>
 
       {/* 添加设备弹窗 */}
       <Modal
@@ -1247,87 +1223,63 @@ const StationsPage: React.FC = () => {
       </Modal>
 
       {/* 创建电站弹窗 */}
-      <Modal
+      <ModalForm
         title={t('station.addStationTitle')}
         open={addModalOpen}
-        onCancel={() => {
-          setAddModalOpen(false)
-          addForm.resetFields()
+        onOpenChange={(open) => {
+          if (!open) {
+            setAddModalOpen(false)
+            addForm.resetFields()
+          }
         }}
-        onOk={handleCreate}
-        confirmLoading={addLoading}
-        okText={t('common.confirm')}
-        cancelText={t('common.cancel')}
+        form={addForm}
+        onFinish={handleCreate}
+        layout="vertical"
         width={600}
-        destroyOnClose
+        modalProps={{ destroyOnClose: true, maskClosable: false }}
       >
-        <Form form={addForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="name" label={t('station.stationName')} rules={[{ required: true, message: t('station.stationName') }]}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="capacity" label={t('station.capacity_kW')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="province" label={t('station.province')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="city" label={t('station.city')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="district" label={t('station.district')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="address" label={t('station.address')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="panel_count" label={t('station.panelCount')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="battery_capacity" label={t('station.batteryCapacity')}>
-                <InputNumber style={{ width: '100%' }} min={0} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item name="timezone" label={t('station.timezone')}>
-                <Select
-                  showSearch
-                  placeholder={t('station.selectTimezone')}
-                  options={TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) }))}
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="contact_name" label={t('station.contact')}>
-                <Input />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="contact_phone" label={t('station.contactPhone')}>
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormText name="name" label={t('station.stationName')} rules={[{ required: true, message: t('station.stationName') }]} />
+          </Col>
+          <Col span={12}>
+            <ProFormDigit name="capacity" label={t('station.capacity_kW')} min={0} fieldProps={{ style: { width: '100%' } }} />
+          </Col>
+          <Col span={8}>
+            <ProFormText name="province" label={t('station.province')} />
+          </Col>
+          <Col span={8}>
+            <ProFormText name="city" label={t('station.city')} />
+          </Col>
+          <Col span={8}>
+            <ProFormText name="district" label={t('station.district')} />
+          </Col>
+          <Col span={24}>
+            <ProFormText name="address" label={t('station.address')} />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit name="panel_count" label={t('station.panelCount')} min={0} fieldProps={{ style: { width: '100%' } }} />
+          </Col>
+          <Col span={8}>
+            <ProFormDigit name="battery_capacity" label={t('station.batteryCapacity')} min={0} fieldProps={{ style: { width: '100%' } }} />
+          </Col>
+          <Col span={8}>
+            <ProFormSelect name="timezone" label={t('station.timezone')} fieldProps={{
+              showSearch: true,
+              placeholder: t('station.selectTimezone'),
+              options: TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) })),
+              filterOption: (input: string, option: { label?: string } | undefined) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
+            }} />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="contact_name" label={t('station.contact')} />
+          </Col>
+          <Col span={12}>
+            <ProFormText name="contact_phone" label={t('station.contactPhone')} />
+          </Col>
+        </Row>
+      </ModalForm>
     </div>
   )
 }

@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { Card, Row, Col, Statistic, Tag, Spin, Empty, Typography, Table, Space } from 'antd'
+import { Statistic, Tag, Spin, Empty, Typography, Space } from 'antd'
+import { ProCard, ProTable } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+
 import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
 import { formatInTimezone } from '@/utils/timezone'
@@ -51,10 +53,10 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
     ? <CheckCircleFilled style={{ color: '#52c41a', fontSize: 18 }} />
     : <CloseCircleFilled style={{ color: '#ff4d4f', fontSize: 18 }} />
 
-  const snapshotColumns: ColumnsType<{ key: string; desired: string; reported: string }> = [
-    { title: 'Key', dataIndex: 'key', key: 'key', width: 180, render: (v: string) => <Text code>{v}</Text> },
-    { title: t('deviceDetail.diagnostics.desired'), dataIndex: 'desired', key: 'desired', render: (v: string) => v || '-' },
-    { title: t('deviceDetail.diagnostics.reported'), dataIndex: 'reported', key: 'reported', render: (v: string) => v || '-' },
+  const snapshotColumns: ProColumns<{ key: string; desired: string; reported: string }>[] = [
+    { title: 'Key', dataIndex: 'key', key: 'key', width: 180, render: (_, record) => <Text code>{record.key}</Text> },
+    { title: t('deviceDetail.diagnostics.desired'), dataIndex: 'desired', key: 'desired', render: (_, record) => record.desired || '-' },
+    { title: t('deviceDetail.diagnostics.reported'), dataIndex: 'reported', key: 'reported', render: (_, record) => record.reported || '-' },
   ]
 
   const allKeys = Array.from(new Set([
@@ -79,77 +81,65 @@ const StatusTab: React.FC<StatusTabProps> = ({ sn }) => {
           style={{ marginBottom: 16 }}
         />
       )}
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Space>
-              {statusIcon(isOnline)}
-              <span>{t('deviceDetail.status.onlineStatus')}</span>
-            </Space>
-            <div style={{ marginTop: 8 }}>
-              <Tag color={isOnline ? 'green' : 'red'}>{isOnline ? t('admin.connected') : t('admin.disconnected')}</Tag>
+      <ProCard gutter={16} style={{ marginBottom: 16 }}>
+        <ProCard colSpan={6} size="small" bordered={false} style={{ borderRadius: 12 }}>
+          <Space>
+            {statusIcon(isOnline)}
+            <span>{t('deviceDetail.status.onlineStatus')}</span>
+          </Space>
+          <div style={{ marginTop: 8 }}>
+            <Tag color={isOnline ? 'green' : 'red'}>{isOnline ? t('admin.connected') : t('admin.disconnected')}</Tag>
+          </div>
+        </ProCard>
+        <ProCard colSpan={6} size="small" bordered={false} style={{ borderRadius: 12 }}>
+          <Statistic title={t('deviceDetail.status.workMode')} value={workMode} />
+        </ProCard>
+        <ProCard colSpan={6} size="small" bordered={false} style={{ borderRadius: 12 }}>
+          <Statistic title={t('deviceDetail.status.batterySoc')} value={batterySoc} suffix={typeof batterySoc === 'number' ? '%' : ''} />
+        </ProCard>
+        <ProCard colSpan={6} size="small" bordered={false} style={{ borderRadius: 12 }}>
+          <Statistic title={t('deviceDetail.status.syncStatus')} value={controlState?.sync_status ?? '-'} />
+          {controlState?.reported_at && (
+            <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
+              {t('deviceDetail.status.reportedAt')}: {formatInTimezone(controlState.reported_at, timezone, 'YYYY-MM-DD HH:mm:ss')}
             </div>
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.workMode')} value={workMode} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.batterySoc')} value={batterySoc} suffix={typeof batterySoc === 'number' ? '%' : ''} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.syncStatus')} value={controlState?.sync_status ?? '-'} />
-            {controlState?.reported_at && (
-              <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
-                {t('deviceDetail.status.reportedAt')}: {formatInTimezone(controlState.reported_at, timezone, 'YYYY-MM-DD HH:mm:ss')}
-              </div>
-            )}
-          </Card>
-        </Col>
-      </Row>
+          )}
+        </ProCard>
+      </ProCard>
 
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={8}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.powerOutput')} value={powerOutput} suffix="W" />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.powerInput')} value={powerInput} suffix="W" />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card size="small" bordered={false} style={{ borderRadius: 12 }}>
-            <Statistic title={t('deviceDetail.status.loadPower')} value={loadPower} suffix="W" />
-          </Card>
-        </Col>
-      </Row>
+      <ProCard gutter={16} style={{ marginBottom: 16 }}>
+        <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
+          <Statistic title={t('deviceDetail.status.powerOutput')} value={powerOutput} suffix="W" />
+        </ProCard>
+        <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
+          <Statistic title={t('deviceDetail.status.powerInput')} value={powerInput} suffix="W" />
+        </ProCard>
+        <ProCard colSpan={8} size="small" bordered={false} style={{ borderRadius: 12 }}>
+          <Statistic title={t('deviceDetail.status.loadPower')} value={loadPower} suffix="W" />
+        </ProCard>
+      </ProCard>
 
-      <Card
+      <ProCard
         title={t('deviceDetail.diagnostics.configSnapshot')}
         size="small"
         bordered={false}
         style={{ borderRadius: 12 }}
       >
         {snapshotData.length > 0 ? (
-          <Table
+          <ProTable
             rowKey="key"
             columns={snapshotColumns}
             dataSource={snapshotData}
             size="small"
+            search={false}
+            options={{ density: true, reload: false, setting: true }}
             pagination={false}
             scroll={{ y: 300 }}
           />
         ) : (
           <Empty description={t('deviceDetail.status.noData')} />
         )}
-      </Card>
+      </ProCard>
     </Spin>
   )
 }

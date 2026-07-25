@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Card, Table, Button, Input, Space, Modal, Form, Select, Switch,
+  Card, Button, Input, Space, Modal, Form, Select, Switch,
   Tag, message, Typography, InputNumber, Drawer,
   Empty, Collapse, Tabs, Tooltip, Badge, Descriptions, Divider,
 } from 'antd'
+import { ProTable } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import Popconfirm from '@/components/LocalizedPopconfirm'
-import type { ColumnsType } from 'antd/es/table'
 import {
   PlusOutlined, SettingOutlined, DeleteOutlined, EditOutlined,
   ThunderboltOutlined, ApiOutlined, EyeOutlined, EyeInvisibleOutlined,
@@ -336,15 +337,15 @@ const ModelsPage: React.FC = () => {
     })
   }
 
-  const modelColumns: ColumnsType<DeviceModelItem> = [
+  const modelColumns: ProColumns<DeviceModelItem>[] = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: t('models.modelCode'), dataIndex: 'model_code', key: 'model_code', width: 140 },
     { title: t('models.modelName'), dataIndex: 'model_name', key: 'model_name', width: 160 },
-    { title: t('models.manufacturer'), dataIndex: 'manufacturer', key: 'manufacturer', width: 120, render: (v: string) => v || '-' },
-    { title: t('models.category'), dataIndex: 'category', key: 'category', width: 100, render: (v: string) => <Tag>{v}</Tag> },
-    { title: t('models.ratedPower'), dataIndex: 'rated_power_kw', key: 'rated_power_kw', width: 100, render: (v: number) => v != null ? `${v} kW` : '-' },
-    { title: t('models.deviceCount'), dataIndex: 'device_count', key: 'device_count', width: 80, render: (v: number) => v ?? 0 },
-    { title: t('models.status'), dataIndex: 'is_active', key: 'is_active', width: 80, render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
+    { title: t('models.manufacturer'), dataIndex: 'manufacturer', key: 'manufacturer', width: 120, render: (_, record: DeviceModelItem) => record.manufacturer || '-' },
+    { title: t('models.category'), dataIndex: 'category', key: 'category', width: 100, render: (_, record: DeviceModelItem) => <Tag>{record.category}</Tag> },
+    { title: t('models.ratedPower'), dataIndex: 'rated_power_kw', key: 'rated_power_kw', width: 100, render: (_, record: DeviceModelItem) => record.rated_power_kw != null ? `${record.rated_power_kw} kW` : '-' },
+    { title: t('models.deviceCount'), dataIndex: 'device_count', key: 'device_count', width: 80, render: (_, record: DeviceModelItem) => record.device_count ?? 0 },
+    { title: t('models.status'), dataIndex: 'is_active', key: 'is_active', width: 80, render: (_, record: DeviceModelItem) => <Tag color={record.is_active ? 'green' : 'red'}>{record.is_active ? t('common.enabled') : t('common.disabled')}</Tag> },
     {
       title: t('common.operation'), key: 'actions', width: 200, fixed: 'right',
       render: (_, record) => (
@@ -359,11 +360,11 @@ const ModelsPage: React.FC = () => {
     },
   ]
 
-  const protocolColumns: ColumnsType<DeviceModelProtocolItem> = [
-    { title: t('models.topicPattern'), dataIndex: 'topic_pattern', key: 'topic_pattern', width: 200, render: (v: string) => <Text code>{v}</Text> },
-    { title: t('models.parseType'), dataIndex: 'parse_type', key: 'parse_type', width: 100, render: (v: string) => <Tag color="blue">{v}</Tag> },
-    { title: t('models.parseConfig'), dataIndex: 'parse_config', key: 'parse_config', width: 200, ellipsis: true, render: (v: any) => v && Object.keys(v).length > 0 ? <Text code style={{ fontSize: 11 }}>{JSON.stringify(v)}</Text> : '-' },
-    { title: t('models.status'), dataIndex: 'is_active', key: 'is_active', width: 80, render: (v: boolean) => <Tag color={v ? 'green' : 'default'}>{v ? t('common.enabled') : t('common.disabled')}</Tag> },
+  const protocolColumns: ProColumns<DeviceModelProtocolItem>[] = [
+    { title: t('models.topicPattern'), dataIndex: 'topic_pattern', key: 'topic_pattern', width: 200, render: (_: any, record: DeviceModelProtocolItem) => <Text code>{record.topic_pattern}</Text> },
+    { title: t('models.parseType'), dataIndex: 'parse_type', key: 'parse_type', width: 100, render: (_: any, record: DeviceModelProtocolItem) => <Tag color="blue">{record.parse_type}</Tag> },
+    { title: t('models.parseConfig'), dataIndex: 'parse_config', key: 'parse_config', width: 200, ellipsis: true, render: (_: any, record: DeviceModelProtocolItem) => record.parse_config && Object.keys(record.parse_config).length > 0 ? <Text code style={{ fontSize: 11 }}>{JSON.stringify(record.parse_config)}</Text> : '-' },
+    { title: t('models.status'), dataIndex: 'is_active', key: 'is_active', width: 80, render: (_: any, record: DeviceModelProtocolItem) => <Tag color={record.is_active ? 'green' : 'default'}>{record.is_active ? t('common.enabled') : t('common.disabled')}</Tag> },
     {
       title: t('common.operation'), key: 'actions', width: 120,
       render: (_, record) => (
@@ -412,18 +413,19 @@ const ModelsPage: React.FC = () => {
                   </Button>
                 ),
                 children: (
-                  <Table
+                  <ProTable
+                    search={false}
                     size="small"
                     rowKey="id"
                     dataSource={groupedFields[groupName]}
                     pagination={false}
                     columns={[
-                      { title: t('models.fieldId'), dataIndex: 'field_key', key: 'field_key', width: 180, render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text> },
+                      { title: t('models.fieldId'), dataIndex: 'field_key', key: 'field_key', width: 180, render: (_: any, record: DeviceModelFieldItem) => <Text code style={{ fontSize: 12 }}>{record.field_key}</Text> },
                       { title: t('models.displayName'), dataIndex: 'field_name', key: 'field_name', width: 120 },
-                      { title: t('models.type'), dataIndex: 'field_type', key: 'field_type', width: 80, render: (v: string) => <Tag>{v}</Tag> },
-                      { title: t('models.unit'), dataIndex: 'unit', key: 'unit', width: 60, render: (v: string) => v || '-' },
-                      { title: t('models.display'), dataIndex: 'is_show', key: 'is_show', width: 60, render: (v: boolean) => v ? <EyeOutlined style={{ color: '#52c41a' }} /> : <EyeInvisibleOutlined style={{ color: '#ccc' }} /> },
-                      { title: t('models.parseRule'), dataIndex: 'parse_rule', key: 'parse_rule', width: 120, ellipsis: true, render: (v: string) => v ? <Text code style={{ fontSize: 11 }}>{v}</Text> : '-' },
+                      { title: t('models.type'), dataIndex: 'field_type', key: 'field_type', width: 80, render: (_: any, record: DeviceModelFieldItem) => <Tag>{record.field_type}</Tag> },
+                      { title: t('models.unit'), dataIndex: 'unit', key: 'unit', width: 60, render: (_: any, record: DeviceModelFieldItem) => record.unit || '-' },
+                      { title: t('models.display'), dataIndex: 'is_show', key: 'is_show', width: 60, render: (_: any, record: DeviceModelFieldItem) => record.is_show ? <EyeOutlined style={{ color: '#52c41a' }} /> : <EyeInvisibleOutlined style={{ color: '#ccc' }} /> },
+                      { title: t('models.parseRule'), dataIndex: 'parse_rule', key: 'parse_rule', width: 120, ellipsis: true, render: (_: any, record: DeviceModelFieldItem) => record.parse_rule ? <Text code style={{ fontSize: 11 }}>{record.parse_rule}</Text> : '-' },
                       {
                         title: t('common.operation'), key: 'actions', width: 80,
                         render: (_, record) => (
@@ -468,18 +470,20 @@ const ModelsPage: React.FC = () => {
                   </Button>
                 ),
                 children: (
-                  <Table
+                  <ProTable
+                    search={false}
                     size="small"
                     rowKey="id"
                     dataSource={groupedFields[groupName]}
                     pagination={false}
                     columns={[
-                      { title: t('models.commandId'), dataIndex: 'field_key', key: 'field_key', width: 180, render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text> },
+                      { title: t('models.commandId'), dataIndex: 'field_key', key: 'field_key', width: 180, render: (_: any, record: DeviceModelFieldItem) => <Text code style={{ fontSize: 12 }}>{record.field_key}</Text> },
                       { title: t('models.displayName'), dataIndex: 'field_name', key: 'field_name', width: 120 },
-                      { title: t('models.paramType'), dataIndex: 'field_type', key: 'field_type', width: 80, render: (v: string) => <Tag>{v}</Tag> },
+                      { title: t('models.paramType'), dataIndex: 'field_type', key: 'field_type', width: 80, render: (_: any, record: DeviceModelFieldItem) => <Tag>{record.field_type}</Tag> },
                       {
                         title: t('models.controlParam'), dataIndex: 'control_params', key: 'control_params', width: 250,
-                        render: (v: any) => {
+                        render: (_: any, record: DeviceModelFieldItem) => {
+                          const v = record.control_params
                           if (!v || Object.keys(v).length === 0) return '-'
                           const parts = []
                           if (v.confirm) parts.push(t('models.needConfirmShort'))
@@ -545,7 +549,9 @@ const ModelsPage: React.FC = () => {
         bordered={false}
         style={{ borderRadius: 12 }}
       >
-        <Table rowKey="id" columns={modelColumns} dataSource={filteredModels} loading={isLoading} size="middle"
+        <ProTable rowKey="id" columns={modelColumns} dataSource={filteredModels} loading={isLoading} size="middle"
+          search={false}
+          options={{ density: true, reload: () => refetchModels(), setting: true }}
           pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => t('common.total', { total }) }}
           scroll={{ x: 1000 }}
           locale={{ emptyText: <Empty description={t('common.noData')} /> }} />
@@ -568,7 +574,8 @@ const ModelsPage: React.FC = () => {
             {
               key: 'fields',
               label: <span><EyeOutlined /> {t('models.monitorFields')}</span>,
-              children: <Table<ModelFieldCapability>
+              children: <ProTable<ModelFieldCapability>
+                search={false}
                 rowKey="id"
                 size="small"
                 pagination={false}
@@ -577,11 +584,11 @@ const ModelsPage: React.FC = () => {
                   { title: t('models.standardField'), dataIndex: 'field_key', width: 190 },
                   { title: t('models.group'), dataIndex: 'group_code', width: 100 },
                   { title: t('models.type'), dataIndex: 'field_type', width: 90 },
-                  { title: t('models.unit'), dataIndex: 'display_unit', width: 80, render: (v, r) => v || r.base_unit || '-' },
-                  { title: t('models.realtime'), dataIndex: 'show_realtime', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_realtime: checked } })} /> },
-                  { title: t('models.history'), dataIndex: 'show_history', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_history: checked } })} /> },
-                  { title: t('models.compare'), dataIndex: 'allow_compare', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_compare: checked } })} /> },
-                  { title: t('models.alert'), dataIndex: 'allow_alarm_rule', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_alarm_rule: checked } })} /> },
+                  { title: t('models.unit'), dataIndex: 'display_unit', width: 80, render: (_: any, r: ModelFieldCapability) => r.display_unit || r.base_unit || '-' },
+                  { title: t('models.realtime'), dataIndex: 'show_realtime', width: 70, render: (_: any, r: ModelFieldCapability) => <Switch size="small" checked={r.show_realtime} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_realtime: checked } })} /> },
+                  { title: t('models.history'), dataIndex: 'show_history', width: 70, render: (_: any, r: ModelFieldCapability) => <Switch size="small" checked={r.show_history} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { show_history: checked } })} /> },
+                  { title: t('models.compare'), dataIndex: 'allow_compare', width: 70, render: (_: any, r: ModelFieldCapability) => <Switch size="small" checked={r.allow_compare} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_compare: checked } })} /> },
+                  { title: t('models.alert'), dataIndex: 'allow_alarm_rule', width: 70, render: (_: any, r: ModelFieldCapability) => <Switch size="small" checked={r.allow_alarm_rule} onChange={checked => updateFieldCapabilityMut.mutate({ fieldKey: r.field_key, data: { allow_alarm_rule: checked } })} /> },
                 ]}
                 locale={{ emptyText: <Empty description={t('models.noFieldCapabilities')} /> }}
               />,
@@ -589,15 +596,16 @@ const ModelsPage: React.FC = () => {
             {
               key: 'commands',
               label: <span><ControlOutlined /> {t('models.controlCapabilities')}</span>,
-              children: <Table<ModelCommandCapability>
+              children: <ProTable<ModelCommandCapability>
+                search={false}
                 rowKey="id" size="small" pagination={false} dataSource={commandCapabilities}
                 columns={[
                   { title: t('models.commandCode'), dataIndex: 'command_code', width: 220 },
-                  { title: t('models.risk'), dataIndex: 'risk_level', width: 80, render: v => <Tag color={v === 3 ? 'red' : v === 2 ? 'orange' : 'blue'}>L{v}</Tag> },
-                  { title: t('models.timeout'), dataIndex: 'timeout_seconds', width: 90, render: v => `${v}s` },
-                  { title: t('models.onlineRequired'), dataIndex: 'requires_online', width: 90, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { requires_online: checked } })} /> },
-                  { title: t('common.enabled'), dataIndex: 'is_enabled', width: 70, render: (v, r) => <Switch size="small" checked={v} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { is_enabled: checked } })} /> },
-                  { title: t('models.parameterSchema'), dataIndex: 'parameter_schema', render: v => <Text code>{JSON.stringify(v)}</Text> },
+                  { title: t('models.risk'), dataIndex: 'risk_level', width: 80, render: (_: any, record: ModelCommandCapability) => <Tag color={record.risk_level === 3 ? 'red' : record.risk_level === 2 ? 'orange' : 'blue'}>L{record.risk_level}</Tag> },
+                  { title: t('models.timeout'), dataIndex: 'timeout_seconds', width: 90, render: (_: any, record: ModelCommandCapability) => `${record.timeout_seconds}s` },
+                  { title: t('models.onlineRequired'), dataIndex: 'requires_online', width: 90, render: (_: any, r: ModelCommandCapability) => <Switch size="small" checked={r.requires_online} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { requires_online: checked } })} /> },
+                  { title: t('common.enabled'), dataIndex: 'is_enabled', width: 70, render: (_: any, r: ModelCommandCapability) => <Switch size="small" checked={r.is_enabled} onChange={checked => updateCommandCapabilityMut.mutate({ commandCode: r.command_code, data: { is_enabled: checked } })} /> },
+                  { title: t('models.parameterSchema'), dataIndex: 'parameter_schema', render: (_: any, record: ModelCommandCapability) => <Text code>{JSON.stringify(record.parameter_schema)}</Text> },
                 ]}
               />,
             },
@@ -611,7 +619,7 @@ const ModelsPage: React.FC = () => {
                   <Descriptions.Item label={t('common.status')}><Tag color="green">{protocolSchema?.status ?? '-'}</Tag></Descriptions.Item>
                   <Descriptions.Item label="Schema Hash">{protocolSchema?.schema_hash ?? '-'}</Descriptions.Item>
                 </Descriptions>
-                <Table rowKey={(r: any) => `${r.group_code}-${r.field_index}`} size="small" pagination={false}
+                <ProTable rowKey={(r: any) => `${r.group_code}-${r.field_index}`} search={false} size="small" pagination={false}
                   dataSource={protocolSchema?.fields ?? []}
                   columns={[
                     { title: t('models.arrayGroup'), dataIndex: 'group_code', width: 90 },

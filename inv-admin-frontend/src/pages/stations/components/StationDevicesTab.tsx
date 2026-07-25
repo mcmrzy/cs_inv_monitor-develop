@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Card, Input, Select, Button, Tag, Space, Spin, Empty, Typography, Badge } from 'antd'
+import { Row, Col, Input, Select, Button, Tag, Space, Spin, Empty, Typography, Badge } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 import { SearchOutlined, ReloadOutlined, DesktopOutlined } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
@@ -125,9 +126,9 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
 
       <Spin spinning={isLoading}>
         {filteredDevices.length === 0 && !isLoading ? (
-          <Card bordered={false} style={{ borderRadius: 12, textAlign: 'center', padding: '48px 24px' }}>
+          <ProCard bordered={false} style={{ borderRadius: 12, textAlign: 'center', padding: '48px 24px' }}>
             <Empty description="暂无关联设备" />
-          </Card>
+          </ProCard>
         ) : (
           <Row gutter={[12, 12]}>
             {filteredDevices.map(dev => {
@@ -136,11 +137,11 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
               const fw = dev.firmware_version || dev.firmware_dsp || '-'
               return (
                 <Col xs={24} sm={12} md={8} key={dev.sn}>
-                  <Card
+                  <ProCard
                     hoverable
                     bordered={false}
                     style={{ borderRadius: 12, cursor: 'pointer', height: '100%' }}
-                    styles={{ body: { padding: '16px' } }}
+                    bodyStyle={{ padding: '16px' }}
                     onClick={() => setModalSn(dev.sn)}
                   >
                     <Row justify="space-between" align="middle" style={{ marginBottom: 8 }}>
@@ -169,7 +170,7 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
                         实时功率: {rtPower.toFixed(0)} W
                       </div>
                     )}
-                  </Card>
+                  </ProCard>
                 </Col>
               )
             })}

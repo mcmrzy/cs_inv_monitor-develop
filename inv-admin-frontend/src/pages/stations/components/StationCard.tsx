@@ -1,5 +1,6 @@
 import React from 'react'
-import { Card, Tag, Typography, Space, Progress } from 'antd'
+import { Tag, Typography, Space, Progress } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 import {
   CheckCircleOutlined, WarningOutlined, DesktopOutlined,
   ThunderboltOutlined, SunOutlined,
@@ -51,11 +52,11 @@ const StationCard: React.FC<StationCardProps> = ({ station, onClick }) => {
   const onlinePercent = deviceCount > 0 ? Math.round((onlineCount / deviceCount) * 100) : 0
 
   return (
-    <Card
+    <ProCard
       hoverable
       onClick={onClick}
       style={{ borderRadius: 12, height: '100%' }}
-      styles={{ body: { padding: '16px 20px' } }}
+      bodyStyle={{ padding: '16px 20px' }}
     >
       {/* Header: name + status */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -115,7 +116,7 @@ const StationCard: React.FC<StationCardProps> = ({ station, onClick }) => {
           </Text>
         )}
       </Space>
-    </Card>
+    </ProCard>
   )
 }
 

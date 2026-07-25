@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Card, Segmented, DatePicker, Button, Space, Spin, Statistic, Typography } from 'antd'
+import { Row, Col, Segmented, DatePicker, Button, Space, Spin, Statistic, Typography } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 import { LeftOutlined, RightOutlined } from '@ant-design/icons'
 import ReactECharts from '@/lib/echarts'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -332,25 +333,23 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
       </Row>
 
       {/* 能源概览 4 宫格 */}
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+      <ProCard gutter={[12, 12]} style={{ marginBottom: 16 }}>
         {ENERGY_CARDS.map(card => (
-          <Col xs={12} sm={6} key={card.key}>
-            <Card bordered={false} style={{ background: card.bg, borderRadius: 12 }} styles={{ body: { padding: '16px' } }}>
-              <Statistic
-                title={<span style={{ fontSize: 13 }}>{card.label}</span>}
-                value={energySummary[card.key as keyof typeof energySummary]}
-                precision={1}
-                suffix={card.unit}
-                valueStyle={{ color: card.color, fontWeight: 700, fontSize: 22 }}
-              />
-            </Card>
-          </Col>
+          <ProCard colSpan={{ xs: 12, sm: 6 }} key={card.key} bordered={false} style={{ background: card.bg, borderRadius: 12 }} bodyStyle={{ padding: '16px' }}>
+            <Statistic
+              title={<span style={{ fontSize: 13 }}>{card.label}</span>}
+              value={energySummary[card.key as keyof typeof energySummary]}
+              precision={1}
+              suffix={card.unit}
+              valueStyle={{ color: card.color, fontWeight: 700, fontSize: 22 }}
+            />
+          </ProCard>
         ))}
-      </Row>
+      </ProCard>
 
       {/* 功率折线图（仅日粒度，使用 energy-flow API） */}
       {period === 'day' && (
-        <Card
+        <ProCard
           bordered={false}
           style={{ borderRadius: 12, marginBottom: 16 }}
           title={t('station.powerTrend')}
@@ -378,25 +377,25 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
               <Text type="secondary">{t('station.noData')}</Text>
             </div>
           )}
-        </Card>
+        </ProCard>
       )}
 
       {/* 电量柱状图 */}
       {energyBarOption && (
-        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title="电量统计" size="small">
+        <ProCard bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title="电量统计" size="small">
           <ReactECharts option={energyBarOption} style={{ height: 320 }} />
-        </Card>
+        </ProCard>
       )}
 
       {/* 30日发电趋势折线图（新增） */}
       {trend30Option && (
-        <Card bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title={t('station.genTrend30Days')} size="small">
+        <ProCard bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title={t('station.genTrend30Days')} size="small">
           <ReactECharts option={trend30Option} style={{ height: 320 }} />
-        </Card>
+        </ProCard>
       )}
 
       {/* 电量概览柱状图 + Segmented 切换（新增） */}
-      <Card
+      <ProCard
         bordered={false}
         style={{ borderRadius: 12, marginBottom: 16 }}
         title={t('station.energyOverview')}
@@ -421,12 +420,12 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
             <Text type="secondary">{t('station.noData')}</Text>
           </div>
         )}
-      </Card>
+      </ProCard>
 
       {!isLoading && (!statsData || statsData.length === 0) && (
-        <Card bordered={false} style={{ borderRadius: 12, textAlign: 'center', padding: '48px 24px' }}>
+        <ProCard bordered={false} style={{ borderRadius: 12, textAlign: 'center', padding: '48px 24px' }}>
           <Text type="secondary">暂无统计数据</Text>
-        </Card>
+        </ProCard>
       )}
     </Spin>
   )

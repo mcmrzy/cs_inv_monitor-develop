@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { Card, Alert, Descriptions, Tag, Spin, Empty, Typography } from 'antd'
+import { Alert, Descriptions, Tag, Spin, Empty, Typography } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
@@ -35,7 +36,7 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
   return (
     <Spin spinning={isLoading}>
       {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
-      <Card
+      <ProCard
         title={t('deviceDetail.parallel.title')}
         bordered={false}
         style={{ marginBottom: 16, borderRadius: 12 }}
@@ -65,7 +66,7 @@ const ParallelTab: React.FC<ParallelTabProps> = ({ sn }) => {
             image={Empty.PRESENTED_IMAGE_SIMPLE}
           />
         )}
-      </Card>
+      </ProCard>
     </Spin>
   )
 }
