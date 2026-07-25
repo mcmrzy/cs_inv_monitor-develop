@@ -264,7 +264,7 @@ func (h *AlarmHandler) Delete(c *gin.Context) {
 
 func (h *AlarmHandler) ClearAll(c *gin.Context) {
 	// Only admin can clear all alarms
-	if middleware.GetRole(c) != 0 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}

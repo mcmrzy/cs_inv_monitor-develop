@@ -10,6 +10,7 @@ GO := go
 FLUTTER := flutter
 NPM := npm
 DOCKER_COMPOSE := docker compose --env-file deploy/.secrets/.env -f deploy/docker-compose.yml
+BIN_DIR := bin
 
 # ---------- 帮助（默认目标） ----------
 help: ## 显示所有可用命令
@@ -19,17 +20,20 @@ help: ## 显示所有可用命令
 
 # ==================== Go 服务 ====================
 
-build-api: ## 构建 business-api
-	cd business-api && $(GO) build -ldflags="-s -w" -o ../bin/inv-api-server ./cmd/main.go
+$(BIN_DIR): ## 确保 bin 输出目录存在
+	@mkdir -p $(BIN_DIR)
 
-build-device: ## 构建 device-communication
-	cd device-communication && $(GO) build -ldflags="-s -w" -o ../bin/inv-device-server ./cmd/main.go
+build-api: $(BIN_DIR) ## 构建 business-api
+	cd business-api && $(GO) build -ldflags="-s -w" -o ../$(BIN_DIR)/business-api ./cmd
 
-build-gateway: ## 构建 api-gateway
-	cd api-gateway && $(GO) build -ldflags="-s -w" -o ../bin/api-gateway ./main.go
+build-device: $(BIN_DIR) ## 构建 device-communication
+	cd device-communication && $(GO) build -ldflags="-s -w" -o ../$(BIN_DIR)/device-communication ./cmd
 
-build-bridge: ## 构建 mqtt-kafka-bridge
-	cd mqtt-kafka-bridge && $(GO) build -ldflags="-s -w" -o ../bin/mqtt-kafka-bridge ./main.go
+build-gateway: $(BIN_DIR) ## 构建 api-gateway
+	cd api-gateway && $(GO) build -ldflags="-s -w" -o ../$(BIN_DIR)/api-gateway ./main.go
+
+build-bridge: $(BIN_DIR) ## 构建 mqtt-kafka-bridge
+	cd mqtt-kafka-bridge && $(GO) build -ldflags="-s -w" -o ../$(BIN_DIR)/mqtt-kafka-bridge ./main.go
 
 build-go: build-api build-device build-gateway build-bridge ## 构建所有 Go 服务
 
@@ -102,16 +106,16 @@ docker-logs: ## 查看所有服务日志
 docker-build: ## 仅构建 Docker 镜像（不启动）
 	$(DOCKER_COMPOSE) build
 
-docker-restart: ## 重启指定服务 (SERVICE=inv-api-server)
+docker-restart: ## 重启指定服务 (SERVICE=business-api)
 	$(DOCKER_COMPOSE) restart $(SERVICE)
 
 # ==================== 本地开发 ====================
 
 run-api: ## 本地运行 API Server
-	cd business-api && $(GO) run ./cmd/main.go -config config.yaml
+	cd business-api && $(GO) run ./cmd -config config.yaml
 
 run-device: ## 本地运行 Device Server
-	cd device-communication && $(GO) run ./cmd/main.go -config config.yaml
+	cd device-communication && $(GO) run ./cmd -config config.yaml
 
 run-gateway: ## 本地运行 API Gateway
 	cd api-gateway && $(GO) run ./main.go -config config.yaml

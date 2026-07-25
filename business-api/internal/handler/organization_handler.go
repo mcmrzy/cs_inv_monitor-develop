@@ -87,7 +87,7 @@ func NewOrganizationHandler(db *pgxpool.Pool) *OrganizationHandler {
 // Create handles POST /api/v1/organizations - Create organization unit within tenant
 func (h *OrganizationHandler) Create(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 
 	var req CreateOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -95,8 +95,8 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Role validation: only non-enduser can create orgs (roles 0-4, not 5=enduser)
-	if role == 5 { // RoleEndUser
+	// Only system admins can create orgs during migration period
+	if !isSystemAdmin {
 		response.Error(c, 403, "end users cannot create organizations")
 		return
 	}
@@ -242,7 +242,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 // List handles GET /api/v1/organizations - List organizations with pagination and filters
 func (h *OrganizationHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize := getPageSize(c, 20)
@@ -273,8 +273,8 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Check super admin access
-	_ = role == 0 // RoleSuperAdmin
+	// System admin sees all organizations
+	_ = isSystemAdmin
 	
 	var totalCount int64
 	var orgs []OrganizationWithChildren

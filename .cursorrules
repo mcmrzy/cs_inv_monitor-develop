@@ -154,6 +154,12 @@ inv/{device_sn}/ota/progress # OTA 升级进度
 
 ## 构建与测试命令
 
+### 提交前验证清单（最小本地检查）
+```bash
+make build-go && make test-go && make vet-go
+```
+推送代码前必须全部通过。如涉及前端修改追加 `make type-check`，涉及移动端修改追加 `make analyze-app`。
+
 ### Go 服务
 ```bash
 cd business-api && go build -o inv-api-server ./cmd/main.go

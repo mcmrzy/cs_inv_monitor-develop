@@ -831,7 +831,7 @@ func (h *InternalHandler) ensureDeviceAccess(c *gin.Context, sn string) bool {
 		response.Forbidden(c, "device access denied")
 		return false
 	}
-	if middleware.GetRole(c) == 0 {
+	if middleware.GetIsSystemAdmin(c) {
 		return true
 	}
 	allowed, err := h.protocolStore().HasDeviceAccess(c.Request.Context(), middleware.GetUserID(c), sn)

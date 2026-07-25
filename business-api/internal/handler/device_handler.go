@@ -765,7 +765,7 @@ func (h *DeviceHandler) GetStatistics(c *gin.Context) {
 func (h *DeviceHandler) GetControlState(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	if middleware.GetRole(c) != 0 && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
+	if !middleware.GetIsSystemAdmin(c) && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
 		return
 	}
@@ -1098,7 +1098,7 @@ type AssignInstallerRequest struct {
 // AssignInstaller 分配设备给安装商
 func (h *DeviceHandler) AssignInstaller(c *gin.Context) {
 	// Only admin can assign installers
-	if middleware.GetRole(c) != 0 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}
@@ -1141,7 +1141,7 @@ type BatchAssignInstallerRequest struct {
 // BatchAssignInstaller 批量分配设备给安装商
 func (h *DeviceHandler) BatchAssignInstaller(c *gin.Context) {
 	// Only admin can batch assign installers
-	if middleware.GetRole(c) != 0 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}
@@ -1170,7 +1170,7 @@ func (h *DeviceHandler) BatchAssignInstaller(c *gin.Context) {
 // RemoveInstaller 移除设备的安装商分配
 func (h *DeviceHandler) RemoveInstaller(c *gin.Context) {
 	// Only admin can remove installers
-	if middleware.GetRole(c) != 0 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}

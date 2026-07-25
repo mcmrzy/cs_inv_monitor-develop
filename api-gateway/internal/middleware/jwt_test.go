@@ -45,7 +45,7 @@ func validAccessClaims() jwt.MapClaims {
 		"session_id":            "session-42",
 		"authorization_version": float64(5),
 		"phone":                 "13800001111",
-		"role":                  float64(1),
+		"is_system_admin":       true,
 		"sub":                   "42",
 		"iss":                   testIssuer,
 		"aud":                   testAudience,
@@ -223,7 +223,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 	router.GET("/api/v1/devices", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"user_id": c.GetHeader("X-User-ID"),
-			"role":    c.GetHeader("X-User-Role"),
+			"is_system_admin": c.GetHeader("X-Is-System-Admin"),
 			"phone":   c.GetHeader("X-User-Phone"),
 		})
 	})
@@ -241,7 +241,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 	var body map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &body)
 	assert.Equal(t, "42", body["user_id"])
-	assert.Equal(t, "1", body["role"])
+	assert.Equal(t, "true", body["is_system_admin"])
 	assert.Equal(t, "13800001111", body["phone"])
 }
 
@@ -369,7 +369,7 @@ func TestJWTAuth_ClaimsPropagation(t *testing.T) {
 	router.GET("/api/v1/stations", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"x-user-id":    c.GetHeader("X-User-ID"),
-			"x-user-role":  c.GetHeader("X-User-Role"),
+			"x-is-system-admin": c.GetHeader("X-Is-System-Admin"),
 			"x-user-phone": c.GetHeader("X-User-Phone"),
 			"x-user-sub":   c.GetHeader("X-User-Sub"),
 		})
@@ -377,7 +377,7 @@ func TestJWTAuth_ClaimsPropagation(t *testing.T) {
 
 	claims := defaultAccessClaims()
 	claims["user_id"] = float64(99)
-	claims["role"] = float64(0)
+	claims["is_system_admin"] = false
 	claims["phone"] = "13900000000"
 	claims["sub"] = "99"
 	token := makeToken(claims, testSecret)
@@ -392,7 +392,7 @@ func TestJWTAuth_ClaimsPropagation(t *testing.T) {
 	var body map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &body)
 	assert.Equal(t, "99", body["x-user-id"])
-	assert.Equal(t, "0", body["x-user-role"])
+	assert.Equal(t, "false", body["x-is-system-admin"])
 	assert.Equal(t, "13900000000", body["x-user-phone"])
 	assert.Equal(t, "99", body["x-user-sub"])
 }
