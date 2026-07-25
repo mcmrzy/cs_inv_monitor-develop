@@ -537,8 +537,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	// Generate JWT tokens for auto-login
-	userRole := newUser.Role
-	accessToken, refreshToken, err := h.jwtService.GenerateToken(newUser.ID, newUser.Phone, &userRole)
+	accessToken, refreshToken, err := h.jwtService.GenerateToken(newUser.ID, newUser.Phone, newUser.IsSystemAdmin)
 	if err != nil {
 		response.Error(c, 500, "生成令牌失败")
 		return

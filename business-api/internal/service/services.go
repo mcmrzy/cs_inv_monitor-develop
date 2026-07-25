@@ -126,12 +126,12 @@ func NewJWTService(jwtInstance *jwt.JWT, cache *redis.Client) *JWTService {
 	return &JWTService{jwt: jwtInstance, cache: cache}
 }
 
-func (s *JWTService) GenerateToken(userID int64, phone string, role *int) (string, string, error) {
-	return s.jwt.GenerateToken(userID, phone, role)
+func (s *JWTService) GenerateToken(userID int64, phone string, isSystemAdmin bool) (string, string, error) {
+	return s.jwt.GenerateToken(userID, phone, isSystemAdmin)
 }
 
-func (s *JWTService) GenerateTokenWithSessionVersion(userID int64, phone string, role *int, sessionVersion int64) (string, string, error) {
-	return s.jwt.GenerateTokenWithSessionVersion(userID, phone, role, sessionVersion)
+func (s *JWTService) GenerateTokenWithSessionVersion(userID int64, phone string, isSystemAdmin bool, sessionVersion int64) (string, string, error) {
+	return s.jwt.GenerateTokenWithSessionVersion(userID, phone, isSystemAdmin, sessionVersion)
 }
 
 func (s *JWTService) ParseToken(token string) (*jwt.Claims, error) {
@@ -150,12 +150,12 @@ func (s *JWTService) GenerateContextAccessToken(userID, rootTenantID, organizati
 	return s.jwt.GenerateContextAccessToken(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion)
 }
 
-func (s *JWTService) GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, phone string, role *int) (string, error) {
-	return s.jwt.GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, phone, role)
+func (s *JWTService) GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, phone string, isSystemAdmin bool) (string, error) {
+	return s.jwt.GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, phone, isSystemAdmin)
 }
 
-func (s *JWTService) GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, sessionID, phone string, role *int) (string, error) {
-	return s.jwt.GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, sessionID, phone, role)
+func (s *JWTService) GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, sessionID, phone string, isSystemAdmin bool) (string, error) {
+	return s.jwt.GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, sessionID, phone, isSystemAdmin)
 }
 
 func (s *JWTService) GenerateRefreshTokenWithVersion(userID, sessionVersion int64) (string, error) {

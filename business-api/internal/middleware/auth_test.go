@@ -52,18 +52,14 @@ func setupJWTService(t *testing.T) (*service.JWTService, *miniredis.Miniredis) {
 	return service.NewJWTService(jwtInstance, rdb), mr
 }
 
-func ptrInt(i int) *int {
-	return &i
-}
-
-func generateContextToken(t *testing.T, jwtSvc *service.JWTService, userID int64, phone string, role int) string {
+func generateContextToken(t *testing.T, jwtSvc *service.JWTService, userID int64, phone string, isSystemAdmin bool) string {
 	t.Helper()
 	refreshToken, err := jwtSvc.GenerateRefreshTokenWithVersion(userID, 1)
 	require.NoError(t, err)
 	refreshClaims, err := jwtSvc.ParseRefreshToken(refreshToken)
 	require.NoError(t, err)
 	require.NoError(t, jwtSvc.StoreRefreshToken(context.Background(), userID, refreshToken, time.Hour))
-	token, err := jwtSvc.GenerateContextAccessTokenForSession(userID, 100, 101, 102, 1, 1, 1, refreshClaims.SessionID, phone, &role)
+	token, err := jwtSvc.GenerateContextAccessTokenForSession(userID, 100, 101, 102, 1, 1, 1, refreshClaims.SessionID, phone, isSystemAdmin)
 	require.NoError(t, err)
 	return token
 }
@@ -82,7 +78,7 @@ func TestAuth_合法Token通过(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	accessToken := generateContextToken(t, jwtSvc, 42, "13800138000", 5)
+	accessToken := generateContextToken(t, jwtSvc, 42, "13800138000", false)
 
 	r := gin.New()
 	r.Use(Auth(jwtSvc))
@@ -144,7 +140,7 @@ func TestAuth_被拉黑的Token返回401(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", 5)
+	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", false)
 
 	// 解析 token 获取 JTI 并拉黑
 	claims, _ := jwtSvc.ParseToken(accessToken)
@@ -169,7 +165,7 @@ func TestAuth_从Cookie读取Token(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", 5)
+	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", false)
 
 	r := gin.New()
 	r.Use(Auth(jwtSvc))
@@ -188,7 +184,7 @@ func TestAuth_从Cookie读取Token(t *testing.T) {
 func TestAuthRejectsRevokedAndUnavailableAuthorizationContext(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
-	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", 5)
+	accessToken := generateContextToken(t, jwtSvc, 1, "13800138000", false)
 
 	for _, test := range []struct {
 		name      string
@@ -238,12 +234,12 @@ func TestOptionalAuth_合法Token注入用户信息(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	accessToken := generateContextToken(t, jwtSvc, 7, "13900139000", 1)
+	accessToken := generateContextToken(t, jwtSvc, 7, "13900139000", false)
 
 	r := gin.New()
 	r.Use(OptionalAuth(jwtSvc))
 	r.GET("/test", func(c *gin.Context) {
-		c.JSON(200, gin.H{"user_id": GetUserID(c), "role": GetRole(c)})
+		c.JSON(200, gin.H{"user_id": GetUserID(c), "is_system_admin": GetIsSystemAdmin(c)})
 	})
 
 	w := httptest.NewRecorder()
@@ -255,18 +251,18 @@ func TestOptionalAuth_合法Token注入用户信息(t *testing.T) {
 	var body map[string]interface{}
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
 	assert.Equal(t, float64(7), body["user_id"])
-	assert.Equal(t, float64(1), body["role"])
+	assert.Equal(t, false, body["is_system_admin"])
 }
 
-// ==================== RequireRole 中间件 ====================
+// ==================== RequireRole 中间件 (deprecated) ====================
 
-func TestRequireRole_允许同等角色(t *testing.T) {
+func TestRequireRole_系统管理员放行(t *testing.T) {
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Set("role", 1) // admin
+		c.Set("is_system_admin", true)
 		c.Next()
 	})
-	r.Use(RequireRole(1))
+	r.Use(RequireRole(0))
 	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
 
 	w := httptest.NewRecorder()
@@ -276,13 +272,13 @@ func TestRequireRole_允许同等角色(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
-func TestRequireRole_拒绝低权限角色(t *testing.T) {
+func TestRequireRole_非管理员拒绝(t *testing.T) {
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
-		c.Set("role", 5) // 普通用户
+		c.Set("is_system_admin", false)
 		c.Next()
 	})
-	r.Use(RequireRole(1)) // 需要 admin
+	r.Use(RequireRole(0)) // 仅系统管理员
 	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
 
 	w := httptest.NewRecorder()
@@ -294,7 +290,7 @@ func TestRequireRole_拒绝低权限角色(t *testing.T) {
 	assert.Contains(t, resp.Message, "permission denied")
 }
 
-func TestRequireRole_未认证返回401(t *testing.T) {
+func TestRequireRole_未认证返回403(t *testing.T) {
 	r := gin.New()
 	r.Use(RequireRole(1))
 	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
@@ -303,7 +299,7 @@ func TestRequireRole_未认证返回401(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/test", nil)
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, 401, w.Code)
+	assert.Equal(t, 403, w.Code)
 }
 
 // ==================== CORS 中间件 ====================
@@ -352,7 +348,7 @@ func TestAuth_RefreshToken不能作为AccessToken(t *testing.T) {
 	jwtSvc, mr := setupJWTService(t)
 	defer mr.Close()
 
-	_, refreshToken, err := jwtSvc.GenerateToken(1, "13800138000", ptrInt(5))
+	_, refreshToken, err := jwtSvc.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 	r := gin.New()
 	r.Use(Auth(jwtSvc))
@@ -481,7 +477,7 @@ func TestGetUserID_类型不匹配返回0(t *testing.T) {
 	assert.Equal(t, int64(0), got)
 }
 
-func TestGetRole_不存在返回无效角色(t *testing.T) {
+func TestGetRole_不存在返回非管理员(t *testing.T) {
 	r := gin.New()
 	var got int
 	r.GET("/test", func(c *gin.Context) {
@@ -492,7 +488,7 @@ func TestGetRole_不存在返回无效角色(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
 	r.ServeHTTP(w, req)
-	assert.Equal(t, -1, got)
+	assert.Equal(t, 5, got)
 }
 
 func TestGetPhone_不存在返回空(t *testing.T) {

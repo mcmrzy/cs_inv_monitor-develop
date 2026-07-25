@@ -1037,3 +1037,225 @@ func (h *AdminHandler) ResetUserPassword(c *gin.Context) {
 
 	response.SuccessWithMessage(c, "密码重置成功", nil)
 }
+
+// GetOperationStats returns aggregated operational statistics
+// @Summary Get operation stats
+// @Description Get user registration, login, email, push, device, command statistics
+// @Tags Admin
+// @Router /api/v1/admin/operation-stats [get]
+func (h *AdminHandler) GetOperationStats(c *gin.Context) {
+	ctx := c.Request.Context()
+	stats := gin.H{}
+
+	// 1. User registration stats
+	var todayNew, weekNew, monthNew int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND created_at >= CURRENT_DATE").Scan(&todayNew)
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND created_at >= CURRENT_DATE - INTERVAL '7 days'").Scan(&weekNew)
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND created_at >= CURRENT_DATE - INTERVAL '30 days'").Scan(&monthNew)
+
+	// Registration trend (last 7 days)
+	regRows, _ := h.db.Query(ctx, `
+		SELECT DATE(created_at) as d, COUNT(*) as cnt
+		FROM users WHERE deleted_at IS NULL AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+		GROUP BY DATE(created_at) ORDER BY d`)
+	regTrend := []gin.H{}
+	if regRows != nil {
+		defer regRows.Close()
+		for regRows.Next() {
+			var d string
+			var cnt int
+			regRows.Scan(&d, &cnt)
+			regTrend = append(regTrend, gin.H{"date": d, "count": cnt})
+		}
+	}
+
+	// 2. User login stats
+	var todayActive, todayLogins int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND last_login_at >= CURRENT_DATE").Scan(&todayActive)
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM audit_logs WHERE action = 'login' AND created_at >= CURRENT_DATE").Scan(&todayLogins)
+
+	// 3. Email sending stats
+	var emailToday, emailWeek int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM verification_codes WHERE created_at >= CURRENT_DATE").Scan(&emailToday)
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM verification_codes WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'").Scan(&emailWeek)
+	var alarmEmailToday int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM alarm_notifications WHERE notify_type = 'email' AND created_at >= CURRENT_DATE").Scan(&alarmEmailToday)
+	emailToday += alarmEmailToday
+
+	// Email by type
+	emailRows, _ := h.db.Query(ctx, `
+		SELECT type, COUNT(*) as cnt FROM verification_codes
+		WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+		GROUP BY type`)
+	emailByType := gin.H{}
+	if emailRows != nil {
+		defer emailRows.Close()
+		for emailRows.Next() {
+			var t string
+			var cnt int
+			emailRows.Scan(&t, &cnt)
+			emailByType[t] = cnt
+		}
+	}
+	var alarmEmailWeek int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM alarm_notifications WHERE notify_type = 'email' AND created_at >= CURRENT_DATE - INTERVAL '7 days'").Scan(&alarmEmailWeek)
+	emailWeek += alarmEmailWeek
+
+	// 4. APP push stats
+	var pushToday, pushWeek int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM notifications WHERE created_at >= CURRENT_DATE").Scan(&pushToday)
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM notifications WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'").Scan(&pushWeek)
+	var alarmPushToday, alarmPushWeek int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM alarm_notifications WHERE notify_type = 'push' AND created_at >= CURRENT_DATE").Scan(&alarmPushToday)
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM alarm_notifications WHERE notify_type = 'push' AND created_at >= CURRENT_DATE - INTERVAL '7 days'").Scan(&alarmPushWeek)
+	pushToday += alarmPushToday
+	pushWeek += alarmPushWeek
+
+	// Push by type
+	pushRows, _ := h.db.Query(ctx, `
+		SELECT notify_type, COUNT(*) as cnt FROM notifications
+		WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+		GROUP BY notify_type`)
+	pushByType := gin.H{}
+	if pushRows != nil {
+		defer pushRows.Close()
+		for pushRows.Next() {
+			var t string
+			var cnt int
+			pushRows.Scan(&t, &cnt)
+			pushByType[t] = cnt
+		}
+	}
+	pushByType["alarm"] = alarmPushWeek
+
+	// 5. Device online trend (last 7 days)
+	onlineRows, _ := h.db.Query(ctx, `
+		SELECT DATE(created_at) as d, COUNT(*) as cnt
+		FROM notifications WHERE notify_type = 'device_online'
+		AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+		GROUP BY DATE(created_at) ORDER BY d`)
+	onlineTrend := []gin.H{}
+	if onlineRows != nil {
+		defer onlineRows.Close()
+		for onlineRows.Next() {
+			var d string
+			var cnt int
+			onlineRows.Scan(&d, &cnt)
+			onlineTrend = append(onlineTrend, gin.H{"date": d, "count": cnt})
+		}
+	}
+
+	// Current device stats
+	var totalDevices, onlineDevices int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM devices WHERE deleted_at IS NULL").Scan(&totalDevices)
+	if h.rdb != nil {
+		cursor := uint64(0)
+		for {
+			k, nextCursor, _ := h.rdb.Scan(ctx, cursor, "device:heartbeat:*", 100).Result()
+			onlineDevices += len(k)
+			cursor = nextCursor
+			if cursor == 0 {
+				break
+			}
+		}
+	}
+
+	// 6. Command success rate (last 7 days)
+	cmdRows, _ := h.db.Query(ctx, `
+		SELECT DATE(created_at) as d,
+			COUNT(*) FILTER (WHERE status IN ('success','acknowledged')) as success,
+			COUNT(*) as total
+		FROM device_commands
+		WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
+		GROUP BY DATE(created_at) ORDER BY d`)
+	cmdTrend := []gin.H{}
+	if cmdRows != nil {
+		defer cmdRows.Close()
+		for cmdRows.Next() {
+			var d string
+			var success, total int
+			cmdRows.Scan(&d, &success, &total)
+			rate := 100.0
+			if total > 0 {
+				rate = float64(success) / float64(total) * 100.0
+			}
+			cmdTrend = append(cmdTrend, gin.H{"date": d, "success": success, "total": total, "rate": rate})
+		}
+	}
+
+	// Command failure reasons
+	failRows, _ := h.db.Query(ctx, `
+		SELECT status, COUNT(*) as cnt FROM device_commands
+		WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+		AND status NOT IN ('success','acknowledged','pending','queued','sent','executing')
+		GROUP BY status`)
+	cmdFailures := gin.H{}
+	if failRows != nil {
+		defer failRows.Close()
+		for failRows.Next() {
+			var s string
+			var cnt int
+			failRows.Scan(&s, &cnt)
+			cmdFailures[s] = cnt
+		}
+	}
+
+	// 7. User role distribution
+	roleRows, _ := h.db.Query(ctx, `
+		SELECT role, COUNT(*) as cnt FROM users
+		WHERE deleted_at IS NULL GROUP BY role ORDER BY role`)
+	roleDist := []gin.H{}
+	if roleRows != nil {
+		defer roleRows.Close()
+		for roleRows.Next() {
+			var role, cnt int
+			roleRows.Scan(&role, &cnt)
+			roleDist = append(roleDist, gin.H{"role": role, "count": cnt})
+		}
+	}
+
+	var tenantCount, stationCount int
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE role = 2 AND deleted_at IS NULL").Scan(&tenantCount)
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM stations").Scan(&stationCount)
+
+	stats["users"] = gin.H{
+		"today_new":          todayNew,
+		"week_new":           weekNew,
+		"month_new":          monthNew,
+		"registration_trend": regTrend,
+		"today_active":       todayActive,
+		"today_logins":       todayLogins,
+	}
+	stats["emails"] = gin.H{
+		"today":    emailToday,
+		"week":     emailWeek,
+		"by_type":  emailByType,
+	}
+	stats["pushes"] = gin.H{
+		"today":    pushToday,
+		"week":     pushWeek,
+		"by_type":  pushByType,
+	}
+	stats["devices"] = gin.H{
+		"total":          totalDevices,
+		"online":         onlineDevices,
+		"online_trend":   onlineTrend,
+		"connection_rate": func() string {
+			if totalDevices > 0 {
+				return fmt.Sprintf("%.1f", float64(onlineDevices)/float64(totalDevices)*100)
+			}
+			return "0"
+		}(),
+	}
+	stats["commands"] = gin.H{
+		"trend":          cmdTrend,
+		"failures":       cmdFailures,
+	}
+	stats["roles"] = gin.H{
+		"distribution":  roleDist,
+		"tenant_count":  tenantCount,
+		"station_count": stationCount,
+	}
+
+	response.Success(c, stats)
+}

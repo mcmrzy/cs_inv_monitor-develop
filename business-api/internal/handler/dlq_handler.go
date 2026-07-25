@@ -18,10 +18,13 @@ type DLQMessage struct {
 	ID            string                 `json:"id"`
 	ConsumerType  string                 `json:"consumer_type"` // bridge, device-server, api
 	OriginalTopic string                 `json:"original_topic"`
+	Topic         string                 `json:"topic"`              // alias for frontend
 	Key           string                 `json:"key"`
 	Value         interface{}            `json:"value"`
 	ErrorMessage  string                 `json:"error_message"`
 	FailedAt      time.Time              `json:"failed_at"`
+	CreatedAt     string                 `json:"created_at"`         // alias for frontend
+	PayloadSummary string                `json:"payload_summary"`     // summary for frontend
 	RetryCount    int                    `json:"retry_count"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
@@ -58,9 +61,9 @@ func NewDLQHandler(rdb *redis.Client) *DLQHandler {
 func (h *DLQHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Parse pagination parameters
+	// Parse pagination parameters (support both 'size' and 'page_size')
 	pageStr := c.DefaultQuery("page", "1")
-	sizeStr := c.DefaultQuery("size", "20")
+	sizeStr := c.DefaultQuery("size", c.DefaultQuery("page_size", "20"))
 	consumerType := c.Query("consumer_type")
 
 	page, err := strconv.Atoi(pageStr)
@@ -105,6 +108,17 @@ func (h *DLQHandler) List(c *gin.Context) {
 			msg.ConsumerType = ct
 			if msg.ID == "" {
 				msg.ID = fmt.Sprintf("%s-%d", ct, i)
+			}
+			// Populate frontend-friendly fields
+			msg.Topic = msg.OriginalTopic
+			msg.CreatedAt = msg.FailedAt.UTC().Format(time.RFC3339)
+			if msg.PayloadSummary == "" {
+				valBytes, _ := json.Marshal(msg.Value)
+				summary := string(valBytes)
+				if len(summary) > 100 {
+					summary = summary[:100] + "..."
+				}
+				msg.PayloadSummary = summary
 			}
 			allMessages = append(allMessages, msg)
 		}

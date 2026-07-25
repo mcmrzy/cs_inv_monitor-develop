@@ -1,6 +1,7 @@
 import React from 'react'
 import { Button, Space, Typography, Col, Tooltip } from 'antd'
 import { QuestionCircleOutlined, InfoCircleOutlined, LockOutlined } from '@ant-design/icons'
+import useTranslation from '@/hooks/useTranslation'
 
 const { Text } = Typography
 
@@ -81,8 +82,12 @@ interface SwitchFieldProps {
 }
 
 export const SwitchField: React.FC<SwitchFieldProps> = ({
-  label, checked, onChange, enableText = '启用', disableText = '禁用', tooltip, disabled,
-}) => (
+  label, checked, onChange, enableText, disableText, tooltip, disabled,
+}) => {
+  const { t } = useTranslation()
+  const _enableText = enableText ?? t('remote.enable')
+  const _disableText = disableText ?? t('remote.disable')
+  return (
   <Col span={12}>
     <div style={{ ...fieldRowStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       <Text style={{ ...labelStyle, marginBottom: 0, flexShrink: 0, marginRight: 12 }}>
@@ -101,7 +106,7 @@ export const SwitchField: React.FC<SwitchFieldProps> = ({
           disabled={disabled}
           style={checked ? { background: PRIMARY, borderColor: PRIMARY } : {}}
         >
-          {enableText}
+          {_enableText}
         </Button>
         <Button
           type={!checked ? 'primary' : 'default'}
@@ -110,12 +115,13 @@ export const SwitchField: React.FC<SwitchFieldProps> = ({
           disabled={disabled}
           style={!checked ? { background: '#999', borderColor: '#999' } : {}}
         >
-          {disableText}
+          {_disableText}
         </Button>
       </Space>
     </div>
   </Col>
-)
+  )
+}
 
 // SubGroupTitle - 简单子分组标题（无帮助内容）
 export const SubGroupTitle: React.FC<{ title: string; color?: string }> = ({ title, color = '#3b82f6' }) => (
@@ -129,7 +135,9 @@ export const SubGroupTitle: React.FC<{ title: string; color?: string }> = ({ tit
 )
 
 // SettingButton - 统一的蓝色设置按钮（disabled 时显示锁定图标 + 灰色）
-export const SettingButton: React.FC<{ onClick: () => void; loading?: boolean; disabled?: boolean }> = ({ onClick, loading, disabled }) => (
+export const SettingButton: React.FC<{ onClick: () => void; loading?: boolean; disabled?: boolean }> = ({ onClick, loading, disabled }) => {
+  const { t } = useTranslation()
+  return (
   <Button
     type="primary"
     size="small"
@@ -139,9 +147,10 @@ export const SettingButton: React.FC<{ onClick: () => void; loading?: boolean; d
     disabled={disabled}
     icon={disabled ? <LockOutlined /> : undefined}
   >
-    {disabled ? '已锁定' : '设置'}
+    {disabled ? t('remote.locked') : t('remote.setting')}
   </Button>
-)
+  )
+}
 
 // buildLabelMap - 从字段数组构建 fieldKey → 中文标签 映射
 export function buildLabelMap(...fieldArrays: { key: string; label: string }[][]) {
@@ -178,6 +187,7 @@ export const SubGroupHelp: React.FC<{
   hint?: string
   helpItems?: { label: string; value: string }[]
 }> = ({ title, color, hint, helpItems }) => {
+  const { t } = useTranslation()
   const tooltipContent = hint
     ? <span style={{ fontSize: 12 }}>{hint}</span>
     : helpItems
@@ -200,7 +210,7 @@ export const SubGroupHelp: React.FC<{
           {tooltipContent && (
             <Tooltip overlayStyle={{ maxWidth: 400 }} title={tooltipContent}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color, cursor: 'pointer' }}>
-                <InfoCircleOutlined /> 说明
+                <InfoCircleOutlined /> {t('remote.description')}
               </span>
             </Tooltip>
           )}

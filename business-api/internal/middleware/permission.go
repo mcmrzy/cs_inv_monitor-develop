@@ -104,6 +104,10 @@ type PermissionChecker interface {
 
 func RequirePermission(checker PermissionChecker, resource string, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if GetIsSystemAdmin(c) {
+			c.Next()
+			return
+		}
 		userID, exists := c.Get("user_id")
 		if !exists {
 			response.Forbidden(c, "unauthorized")
@@ -123,6 +127,10 @@ func RequirePermission(checker PermissionChecker, resource string, action string
 
 func AutoPermission(checker PermissionChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if GetIsSystemAdmin(c) {
+			c.Next()
+			return
+		}
 		userID, exists := c.Get("user_id")
 		if !exists {
 			response.Unauthorized(c, "unauthorized")

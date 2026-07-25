@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Row, Select, InputNumber, App } from 'antd'
+import useTranslation from '@/hooks/useTranslation'
 import { FieldRow, SwitchField, SettingButton } from './shared-styles'
 
 const { Option } = Select
@@ -10,6 +11,7 @@ interface Props {
 
 const PowerControlSection: React.FC<Props> = ({ deviceInfo }) => {
   const { message } = App.useApp()
+  const { t } = useTranslation()
 
   const [freqDeratingEnable, setFreqDeratingEnable] = useState(false)
   const [reactivePowerMode, setReactivePowerMode] = useState('fixed_pf')
@@ -34,117 +36,117 @@ const PowerControlSection: React.FC<Props> = ({ deviceInfo }) => {
   const [f3OverFreq, setF3OverFreq] = useState<number>(55)
 
   const handleSet = (fieldName: string) => {
-    message.success(`${fieldName} 指令已下发`)
+    message.success(t('remote.executeSuccess', { title: fieldName }))
   }
 
   return (
     <Row gutter={[16, 8]}>
-      <SwitchField label="过频降载使能" checked={freqDeratingEnable} onChange={(v) => { setFreqDeratingEnable(v); handleSet('过频降载使能') }} />
+      <SwitchField label={t('remote.overFreqDerating')} checked={freqDeratingEnable} onChange={(v) => { setFreqDeratingEnable(v); handleSet(t('remote.overFreqDerating')) }} />
 
-      <FieldRow label="无功输出模式">
+      <FieldRow label={t('remote.reactiveOutputMode')}>
         <Select value={reactivePowerMode} onChange={setReactivePowerMode} style={{ width: 140 }}>
-          <Option value="fixed_pf">固定功率因数</Option>
-          <Option value="fixed_q">固定无功功率</Option>
-          <Option value="volt_var">电压-无功曲线</Option>
-          <Option value="pf_p">功率因数-有功曲线</Option>
+          <Option value="fixed_pf">{t('remote.fixedPfOutput')}</Option>
+          <Option value="fixed_q">{t('remote.fixedReactivePower')}</Option>
+          <Option value="volt_var">{t('remote.voltVarCurve')}</Option>
+          <Option value="pf_p">{t('remote.pfPCurve')}</Option>
         </Select>
-        <SettingButton onClick={() => handleSet('无功输出模式')} />
+        <SettingButton onClick={() => handleSet(t('remote.reactiveOutputMode'))} />
       </FieldRow>
 
-      <FieldRow label="无功百分比设定值(%)" range="0~60">
+      <FieldRow label={`${t('remote.reactivePct')}(%)`} range="0~60">
         <InputNumber min={0} max={60} value={reactivePowerPercent} onChange={(v) => setReactivePowerPercent(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('无功百分比设定值')} />
+        <SettingButton onClick={() => handleSet(t('remote.reactivePct'))} />
       </FieldRow>
 
-      <FieldRow label="PF设定值" range="750~2000">
+      <FieldRow label={t('remote.pfSetting')} range="750~2000">
         <InputNumber min={750} max={2000} value={pfValue} onChange={(v) => setPfValue(v ?? 750)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('PF设定值')} />
+        <SettingButton onClick={() => handleSet(t('remote.pfSetting'))} />
       </FieldRow>
 
-      <FieldRow label="有功百分比设定值(%)" range="0~100">
+      <FieldRow label={`${t('remote.activePowerPct')}(%)`} range="0~100">
         <InputNumber min={0} max={100} value={activePowerPercent} onChange={(v) => setActivePowerPercent(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('有功百分比设定值')} />
+        <SettingButton onClick={() => handleSet(t('remote.activePowerPct'))} />
       </FieldRow>
 
-      <SwitchField label="电网软启动" checked={gridSoftStart} onChange={(v) => { setGridSoftStart(v); handleSet('电网软启动') }} />
+      <SwitchField label={t('remote.gridSoftStart')} checked={gridSoftStart} onChange={(v) => { setGridSoftStart(v); handleSet(t('remote.gridSoftStart')) }} />
 
-      <FieldRow label="市电保护等级">
+      <FieldRow label={t('remote.gridProtectionLevel')}>
         <Select value={gridProtectionLevel} onChange={setGridProtectionLevel} style={{ width: 140 }}>
-          <Option value="level1">1级保护</Option>
-          <Option value="level2">2级保护</Option>
-          <Option value="level3">3级保护</Option>
+          <Option value="level1">{t('remote.level1Protection')}</Option>
+          <Option value="level2">{t('remote.level2Protection')}</Option>
+          <Option value="level3">{t('remote.level3Protection')}</Option>
         </Select>
-        <SettingButton onClick={() => handleSet('市电保护等级')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridProtectionLevel'))} />
       </FieldRow>
 
-      <FieldRow label="电网电压1级欠压保护点(V)">
+      <FieldRow label={`${t('remote.gridVoltL1Under')}(V)`}>
         <InputNumber value={v1UnderVoltage} onChange={(v) => setV1UnderVoltage(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网电压1级欠压保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridVoltL1Under'))} />
       </FieldRow>
 
-      <FieldRow label="电网电压1级过压保护点(V)">
+      <FieldRow label={`${t('remote.gridVoltL1Over')}(V)`}>
         <InputNumber value={v1OverVoltage} onChange={(v) => setV1OverVoltage(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网电压1级过压保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridVoltL1Over'))} />
       </FieldRow>
 
-      <FieldRow label="电网频率1级欠频保护点(Hz)">
+      <FieldRow label={`${t('remote.gridFreqL1Under')}(Hz)`}>
         <InputNumber value={f1UnderFreq} onChange={(v) => setF1UnderFreq(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网频率1级欠频保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridFreqL1Under'))} />
       </FieldRow>
 
-      <FieldRow label="电网频率1级过频保护点(Hz)">
+      <FieldRow label={`${t('remote.gridFreqL1Over')}(Hz)`}>
         <InputNumber value={f1OverFreq} onChange={(v) => setF1OverFreq(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网频率1级过频保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridFreqL1Over'))} />
       </FieldRow>
 
-      <FieldRow label="电网电压滑动平均过压保护点(V)">
+      <FieldRow label={`${t('remote.gridVoltSlideAvgOver')}(V)`}>
         <InputNumber value={vMovingAvgOverVoltage} onChange={(v) => setVMovingAvgOverVoltage(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网电压滑动平均过压保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridVoltSlideAvgOver'))} />
       </FieldRow>
 
-      <FieldRow label="电网电压2级欠压保护点(V)">
+      <FieldRow label={`${t('remote.gridVoltL2Under')}(V)`}>
         <InputNumber value={v2UnderVoltage} onChange={(v) => setV2UnderVoltage(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网电压2级欠压保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridVoltL2Under'))} />
       </FieldRow>
 
-      <FieldRow label="电网电压2级过压保护点(V)">
+      <FieldRow label={`${t('remote.gridVoltL2Over')}(V)`}>
         <InputNumber value={v2OverVoltage} onChange={(v) => setV2OverVoltage(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网电压2级过压保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridVoltL2Over'))} />
       </FieldRow>
 
-      <FieldRow label="电网频率2级欠频保护点(Hz)">
+      <FieldRow label={`${t('remote.gridFreqL2Under')}(Hz)`}>
         <InputNumber value={f2UnderFreq} onChange={(v) => setF2UnderFreq(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网频率2级欠频保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridFreqL2Under'))} />
       </FieldRow>
 
-      <FieldRow label="电网频率2级过频保护点(Hz)">
+      <FieldRow label={`${t('remote.gridFreqL2Over')}(Hz)`}>
         <InputNumber value={f2OverFreq} onChange={(v) => setF2OverFreq(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网频率2级过频保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridFreqL2Over'))} />
       </FieldRow>
 
-      <FieldRow label="加载速率(%/min)" range="1~100">
+      <FieldRow label={`${t('remote.rampRate')}(%)`} range="1~100">
         <InputNumber min={1} max={100} value={rampRate} onChange={(v) => setRampRate(v ?? 1)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('加载速率')} />
+        <SettingButton onClick={() => handleSet(t('remote.rampRate'))} />
       </FieldRow>
 
-      <FieldRow label="电网电压3级欠压保护点(V)">
+      <FieldRow label={`${t('remote.gridVoltL3Under')}(V)`}>
         <InputNumber value={v3UnderVoltage} onChange={(v) => setV3UnderVoltage(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网电压3级欠压保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridVoltL3Under'))} />
       </FieldRow>
 
-      <FieldRow label="电网电压3级过压保护点(V)">
+      <FieldRow label={`${t('remote.gridVoltL3Over')}(V)`}>
         <InputNumber value={v3OverVoltage} onChange={(v) => setV3OverVoltage(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网电压3级过压保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridVoltL3Over'))} />
       </FieldRow>
 
-      <FieldRow label="电网频率3级欠频保护点(Hz)">
+      <FieldRow label={`${t('remote.gridFreqL3Under')}(Hz)`}>
         <InputNumber value={f3UnderFreq} onChange={(v) => setF3UnderFreq(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网频率3级欠频保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridFreqL3Under'))} />
       </FieldRow>
 
-      <FieldRow label="电网频率3级过频保护点(Hz)">
+      <FieldRow label={`${t('remote.gridFreqL3Over')}(Hz)`}>
         <InputNumber value={f3OverFreq} onChange={(v) => setF3OverFreq(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电网频率3级过频保护点')} />
+        <SettingButton onClick={() => handleSet(t('remote.gridFreqL3Over'))} />
       </FieldRow>
     </Row>
   )

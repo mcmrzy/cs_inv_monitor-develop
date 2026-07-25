@@ -1,20 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tabs, Card, Button, Tag, Select, Input, Space, Row, Col,
-  Statistic, Modal, Form, Switch, InputNumber, Tooltip,
+  Modal, Form, Switch, InputNumber,
   Checkbox, Spin, Typography, App, Empty,
 } from 'antd'
 import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import Popconfirm from '@/components/LocalizedPopconfirm'
 import {
-  ReloadOutlined, CheckCircleFilled, CloseCircleFilled, SyncOutlined,
-  DashboardOutlined, PlusOutlined, StopOutlined, CheckCircleOutlined,
+  ReloadOutlined, PlusOutlined, StopOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
 
-import dayjs from 'dayjs'
-import { adminApi, type SystemHealth, type Tenant } from '@/services/adminApi'
+import { adminApi, type Tenant } from '@/services/adminApi'
 import useAuthStore from '@/stores/authStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
@@ -22,30 +20,14 @@ import useTranslation from '@/hooks/useTranslation'
 import { Role } from '@/types'
 import { queryKeys } from '@/utils/queryKeys'
 import ChannelManagement from './ChannelManagement'
-import StatisticCard from '@/components/StatisticCard'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 
 const { Title, Text } = Typography
 
-function formatUptime(seconds: number, t: (key: string) => string): string {
-  const d = Math.floor(seconds / 86400)
-  const h = Math.floor((seconds % 86400) / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const parts: string[] = []
-  if (d > 0) parts.push(`${d}${t('admin.days')}`)
-  if (h > 0) parts.push(`${h}${t('admin.hours')}`)
-  parts.push(`${m}${t('admin.minutes')}`)
-  return parts.join(' ')
-}
-
-const statusIcon = (ok: boolean) => ok
-  ? <CheckCircleFilled style={{ color: '#52c41a', fontSize: 18 }} />
-  : <CloseCircleFilled style={{ color: '#ff4d4f', fontSize: 18 }} />
-
 const AdminPage: React.FC = () => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
-  const [activeTab, setActiveTab] = useState('health')
+  const [activeTab, setActiveTab] = useState('tenants')
 
   if (user?.role !== Role.SUPER_ADMIN) {
     return (
@@ -60,7 +42,6 @@ const AdminPage: React.FC = () => {
     <div>
       <Title level={4} style={{ marginBottom: 16 }}>{t('admin.title')}</Title>
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
-        { key: 'health', label: t('admin.systemHealth'), children: <HealthTab /> },
         { key: 'tenants', label: t('admin.tenantManage'), children: <TenantTab /> },
         { key: 'settings', label: t('admin.systemConfig'), children: <SettingsTab /> },
         { key: 'quotas', label: t('admin.systemQuota'), children: <QuotaTab /> },
@@ -68,44 +49,6 @@ const AdminPage: React.FC = () => {
         { key: 'api-overview', label: t('admin.apiOverview'), children: <APIOverviewTab onNavigateToPermissions={() => setActiveTab('permissions')} /> },
         { key: 'channels', label: t('channel.title'), children: <ChannelManagement /> },
       ]} />
-    </div>
-  )
-}
-
-const HealthTab: React.FC = () => {
-  const { t } = useTranslation()
-  const { message } = App.useApp()
-  const { timezone } = useTimezoneStore()
-  const { data: health, isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.admin.health(),
-    queryFn: () => adminApi.getSystemHealth().then((r) => r.data?.data ?? null as SystemHealth | null),
-    refetchInterval: 30000,
-  })
-
-  return (
-    <div>
-      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}><StatisticCard size="small" title={t('admin.uptime')} value={health ? formatUptime(health.uptime, t) : '-'} loading={isLoading} /></Col>
-        <Col span={6}><StatisticCard size="small" title={t('admin.memoryUsage')} value={health?.memoryUsage ?? 0} suffix="%" precision={1} loading={isLoading} /></Col>
-        <Col span={6}><StatisticCard size="small" title={t('admin.cpuUsage')} value={health?.cpuUsage ?? 0} suffix="%" precision={1} loading={isLoading} /></Col>
-        <Col span={6}><StatisticCard size="small" title={t('admin.systemVersion')} value={health?.version ?? '-'} loading={isLoading} /></Col>
-      </Row>
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        {[
-          { label: t('admin.database'), ok: health?.database },
-          { label: 'Redis', ok: health?.redis },
-          { label: 'MQTT Broker', ok: health?.mqtt },
-        ].map((svc) => (
-          <Col span={8} key={svc.label}>
-            <Card size="small" title={svc.label} bordered={false} style={{ borderRadius: 12 }}>
-              <Space>{health !== null && statusIcon(!!svc.ok)}<span>{svc.ok ? t('admin.connected') : t('admin.disconnected')}</span></Space>
-              {health && <div style={{ color: '#999', fontSize: 12, marginTop: 8 }}>{t('admin.lastCheck')}: {formatInTimezone(health.lastCheckAt, timezone, 'YYYY-MM-DD HH:mm:ss')}</div>}
-            </Card>
-          </Col>
-        ))}
-      </Row>
-      <Button icon={<SyncOutlined spin={isLoading} />} onClick={() => refetch()}>{t('admin.refreshStatus')}</Button>
     </div>
   )
 }

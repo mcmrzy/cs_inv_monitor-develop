@@ -44,7 +44,7 @@ func TestJWTSecurity_强密钥生成与验证(t *testing.T) {
 		Issuer:            "test-issuer",
 	})
 
-	token, refresh, err := jwtService.GenerateToken(1, "13800138000", j.PtrInt(5))
+	token, refresh, err := jwtService.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 	assert.NotEmpty(t, token)
 	assert.NotEmpty(t, refresh)
@@ -65,7 +65,7 @@ func TestJWTSecurity_篡改Payload应被拒绝(t *testing.T) {
 		Issuer:            "security-test",
 	})
 
-	token, _, err := jwtService.GenerateToken(1, "13800138000", j.PtrInt(5))
+	token, _, err := jwtService.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	// 篡改 token 中间部分（payload）
@@ -92,14 +92,14 @@ func TestJWTSecurity_篡改Signature应被拒绝(t *testing.T) {
 		Issuer:            "security-test",
 	})
 
-	token, _, err := jwtService.GenerateToken(1, "13800138000", j.PtrInt(5))
+	token, _, err := jwtService.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	parts := strings.Split(token, ".")
 	require.Len(t, parts, 3)
 
 	// 替换签名为另一个合法 token 的签名
-	otherToken, _, _ := jwtService.GenerateToken(999, "18600001111", j.PtrInt(0))
+	otherToken, _, _ := jwtService.GenerateToken(999, "18600001111", true)
 	otherParts := strings.Split(otherToken, ".")
 
 	forgedToken := parts[0] + "." + parts[1] + "." + otherParts[2]
@@ -117,7 +117,7 @@ func TestJWTSecurity_过期Token必须拒绝(t *testing.T) {
 		Issuer:            "security-test",
 	})
 
-	token, _, err := jwtService.GenerateToken(1, "13800138000", j.PtrInt(5))
+	token, _, err := jwtService.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	// 等待 token 过期
@@ -172,7 +172,7 @@ func TestJWTSecurity_不同密钥无法解析(t *testing.T) {
 		Issuer:            "service-2",
 	})
 
-	token, _, err := service1.GenerateToken(1, "13800138000", j.PtrInt(5))
+	token, _, err := service1.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	_, err = service2.ParseToken(token)
@@ -220,24 +220,21 @@ func TestJWTSecurity_角色值不可被篡改(t *testing.T) {
 	})
 
 	// 生成普通用户 token (role=5)
-	token, _, err := jwtService.GenerateToken(1, "13800138000", j.PtrInt(5))
+	token, _, err := jwtService.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
-	// 解析验证角色
+	// 解析验证 is_system_admin 标记
 	claims, err := jwtService.ParseToken(token)
 	require.NoError(t, err)
-	if claims.Role != nil {
-		assert.Equal(t, 5, *claims.Role, "角色应为生成时指定的值 5")
-	}
+	assert.False(t, claims.IsSystemAdmin, "普通用户 is_system_admin 应为 false")
 
-	// 手动构造 role=0（管理员）的 token 用同一密钥
-	adminToken, _, err := jwtService.GenerateToken(1, "13800138000", j.PtrInt(0))
+	// 手动构造 is_system_admin=true 的 token 用同一密钥
+	adminToken, _, err := jwtService.GenerateToken(1, "13800138000", true)
 	require.NoError(t, err)
 
 	adminClaims, err := jwtService.ParseToken(adminToken)
 	require.NoError(t, err)
-	require.NotNil(t, adminClaims.Role, "管理员 token 角色不应为 nil")
-	assert.Equal(t, 0, *adminClaims.Role, "管理员 token 角色为 0")
+	assert.True(t, adminClaims.IsSystemAdmin, "管理员 token is_system_admin 应为 true")
 
 	// 确保两个 token 不同
 	assert.NotEqual(t, token, adminToken, "不同角色的 token 应不同")

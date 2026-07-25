@@ -8,8 +8,8 @@
 
 | 服务 | 目录 | 端口 | 技术栈 | 职责 |
 |------|------|------|--------|------|
-| inv-api-server | `inv_api_server/` | 8080 | Go + Gin + PostgreSQL + Redis | 用户端 REST API（认证、设备、告警、OTA、RBAC） |
-| inv-device-server | `inv_device_server/` | 8081 | Go + Gin + MQTT + Kafka | 设备通信（MQTT 管理、数据解析、告警消费） |
+| inv-api-server | `business-api/` | 8080 | Go + Gin + PostgreSQL + Redis | 用户端 REST API（认证、设备、告警、OTA、RBAC） |
+| inv-device-server | `device-communication/` | 8081 | Go + Gin + MQTT + Kafka | 设备通信（MQTT 管理、数据解析、告警消费） |
 | api-gateway | `api-gateway/` | 80 | Go + Gin | 反向代理（JWT 校验、限流、RBAC 权限、请求转发） |
 | mqtt-kafka-bridge | `mqtt-kafka-bridge/` | 8080(webhook) | Go | EMQX Webhook → Kafka 消息转发 |
 | inv-admin-frontend | `inv-admin-frontend/` | 5173(dev) / 3000(prod) | React + TypeScript + Vite + Ant Design | 管理后台 Web UI |
@@ -26,7 +26,7 @@
 
 ## 目录结构约定
 
-### Go 服务（inv_api_server / inv_device_server）
+### Go 服务（business-api / device-communication）
 
 ```
 ├── cmd/main.go           # 入口（配置加载、依赖初始化、路由注册、优雅退出）
@@ -99,7 +99,7 @@ src/
 {"code": 400, "message": "参数错误"}
 ```
 
-**Go 端**：使用 `inv_api_server/pkg/response` 包的 `Success()` / `Error()` / `Page()` / `BadRequest()` 等方法。
+**Go 端**：使用 `business-api/pkg/response` 包的 `Success()` / `Error()` / `Page()` / `BadRequest()` 等方法。
 **前端**：`ApiResponse<T>` 接口定义在 `inv-admin-frontend/src/types/index.ts`。
 
 ---
@@ -156,10 +156,10 @@ inv/{device_sn}/ota/progress # OTA 升级进度
 
 ### Go 服务
 ```bash
-cd inv_api_server && go build -o inv-api-server ./cmd/main.go
-cd inv_api_server && go test ./... -v
-cd inv_api_server && go vet ./...
-cd inv_device_server && go build -o inv-device-server ./cmd/main.go
+cd business-api && go build -o inv-api-server ./cmd/main.go
+cd business-api && go test ./... -v
+cd business-api && go vet ./...
+cd device-communication && go build -o inv-device-server ./cmd/main.go
 cd api-gateway && go build -o api-gateway ./main.go
 cd mqtt-kafka-bridge && go build -o mqtt-kafka-bridge ./main.go
 ```

@@ -7,6 +7,7 @@ import { deviceApi } from '@/services/deviceApi'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone } from '@/utils/timezone'
+import useTranslation from '@/hooks/useTranslation'
 import DeviceRealtimeModal from './DeviceRealtimeModal'
 
 const { Text } = Typography
@@ -32,6 +33,7 @@ interface DeviceItem {
 }
 
 const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezone }) => {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined)
   const [modalSn, setModalSn] = useState<string | null>(null)
@@ -96,7 +98,7 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
         <Col>
           <Space>
             <Input
-              placeholder="搜索 SN / 型号"
+              placeholder={t('station.searchSN')}
               prefix={<SearchOutlined />}
               allowClear
               value={search}
@@ -105,29 +107,29 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
               size="small"
             />
             <Select
-              placeholder="状态"
+              placeholder={t('station.deviceStatus')}
               allowClear
               style={{ width: 120 }}
               size="small"
               value={statusFilter}
               onChange={v => setStatusFilter(v)}
               options={[
-                { label: '在线', value: '1' },
-                { label: '离线', value: '0' },
-                { label: '故障', value: '2' },
+                { label: t('station.onlineCount'), value: '1' },
+                { label: t('station.offline'), value: '0' },
+                { label: t('station.deviceFault'), value: '2' },
               ]}
             />
           </Space>
         </Col>
         <Col>
-          <Button icon={<ReloadOutlined />} size="small" onClick={() => refetch()}>刷新</Button>
+          <Button icon={<ReloadOutlined />} size="small" onClick={() => refetch()}>{t('station.refresh')}</Button>
         </Col>
       </Row>
 
       <Spin spinning={isLoading}>
         {filteredDevices.length === 0 && !isLoading ? (
           <ProCard bordered={false} style={{ borderRadius: 12, textAlign: 'center', padding: '48px 24px' }}>
-            <Empty description="暂无关联设备" />
+            <Empty description={t('station.noRelatedDevice')} />
           </ProCard>
         ) : (
           <Row gutter={[12, 12]}>
@@ -160,14 +162,14 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
                       {dev.rated_power != null && <Tag color="blue">{dev.rated_power}W</Tag>}
                     </div>
                     <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
-                      <DesktopOutlined /> 固件: {fw}
+                      <DesktopOutlined /> {t('station.firmwareLabel')}: {fw}
                     </div>
                     <div style={{ fontSize: 12, color: '#999' }}>
-                      最后在线: {formatInTimezone(dev.last_online_at, timezone, 'MM-DD HH:mm:ss')}
+                      {t('station.lastOnline')}: {formatInTimezone(dev.last_online_at, timezone, 'MM-DD HH:mm:ss')}
                     </div>
                     {rtPower !== null && (
                       <div style={{ marginTop: 8, fontSize: 13, color: '#1677ff', fontWeight: 600 }}>
-                        实时功率: {rtPower.toFixed(0)} W
+                        {t('station.realtimePower')}: {rtPower.toFixed(0)} W
                       </div>
                     )}
                   </ProCard>

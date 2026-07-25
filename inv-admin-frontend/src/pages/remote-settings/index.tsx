@@ -8,6 +8,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
+import useTranslation from '@/hooks/useTranslation'
 import DeviceSelector from './components/DeviceSelector'
 import GeneralSection from './components/GeneralSection'
 import ApplicationSection from './components/ApplicationSection'
@@ -32,6 +33,7 @@ const SectionHeader: React.FC<{ icon: React.ReactNode; title: string; color: str
 
 const RemoteSettingsPage: React.FC = () => {
   const { message } = App.useApp()
+  const { t } = useTranslation()
   const [selectedSn, setSelectedSn] = useState<string | null>(() => {
     return localStorage.getItem('remote-settings-device-sn')
   })
@@ -53,7 +55,7 @@ const RemoteSettingsPage: React.FC = () => {
 
   const handleRead = () => {
     setReading(true)
-    message.info('正在读取设备配置参数')
+    message.info(t('remote.readingConfig'))
     setTimeout(() => setReading(false), 1500)
   }
 
@@ -68,9 +70,9 @@ const RemoteSettingsPage: React.FC = () => {
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 4 }}>远程参数设置</Title>
+      <Title level={4} style={{ marginBottom: 4 }}>{t('remote.title')}</Title>
       <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
-        远程配置逆变器运行参数，支持实时下发与生效
+        {t('remote.pageDescription')}
       </Text>
 
       <DeviceSelector selectedSn={selectedSn} onDeviceChange={(sn) => {
@@ -92,7 +94,7 @@ const RemoteSettingsPage: React.FC = () => {
           >
             <Collapse.Panel
               key="general"
-              header={<SectionHeader icon={<SettingOutlined />} title="通用设置" color={SECTION_COLORS.general} />}
+              header={<SectionHeader icon={<SettingOutlined />} title={t('remote.generalSettings')} color={SECTION_COLORS.general} />}
               style={panelStyle(SECTION_COLORS.general)}
             >
               <GeneralSection deviceInfo={selectedDevice} />
@@ -100,7 +102,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="application"
-              header={<SectionHeader icon={<ThunderboltOutlined />} title="应用设置" color={SECTION_COLORS.application} />}
+              header={<SectionHeader icon={<ThunderboltOutlined />} title={t('remote.appSettings')} color={SECTION_COLORS.application} />}
               style={panelStyle(SECTION_COLORS.application)}
             >
               <ApplicationSection />
@@ -108,7 +110,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="gridConnection"
-              header={<SectionHeader icon={<ApiOutlined />} title="系统并网设置" color={SECTION_COLORS.gridConnection} />}
+              header={<SectionHeader icon={<ApiOutlined />} title={t('remote.gridSettings')} color={SECTION_COLORS.gridConnection} />}
               style={panelStyle(SECTION_COLORS.gridConnection)}
             >
               <GridConnectionSection deviceInfo={selectedDevice} />
@@ -116,7 +118,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="charge"
-              header={<SectionHeader icon={<ArrowUpOutlined />} title="充电设置" color={SECTION_COLORS.charge} />}
+              header={<SectionHeader icon={<ArrowUpOutlined />} title={t('remote.chargeSettings')} color={SECTION_COLORS.charge} />}
               style={panelStyle(SECTION_COLORS.charge)}
             >
               <ChargeSection />
@@ -124,7 +126,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="discharge"
-              header={<SectionHeader icon={<ArrowDownOutlined />} title="放电设置" color={SECTION_COLORS.discharge} />}
+              header={<SectionHeader icon={<ArrowDownOutlined />} title={t('remote.dischargeSettings')} color={SECTION_COLORS.discharge} />}
               style={panelStyle(SECTION_COLORS.discharge)}
             >
               <DischargeSection />
@@ -132,7 +134,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="other"
-              header={<SectionHeader icon={<ToolOutlined />} title="其他设置" color={SECTION_COLORS.other} />}
+              header={<SectionHeader icon={<ToolOutlined />} title={t('remote.otherSettings')} color={SECTION_COLORS.other} />}
               style={panelStyle(SECTION_COLORS.other)}
             >
               <OtherSection />
@@ -140,7 +142,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="battery"
-              header={<SectionHeader icon={<ExperimentOutlined />} title="电池" color={SECTION_COLORS.battery} />}
+              header={<SectionHeader icon={<ExperimentOutlined />} title={t('remote.battery')} color={SECTION_COLORS.battery} />}
               style={panelStyle(SECTION_COLORS.battery)}
             >
               <BatterySection />
@@ -148,7 +150,7 @@ const RemoteSettingsPage: React.FC = () => {
 
             <Collapse.Panel
               key="reset"
-              header={<SectionHeader icon={<ReloadOutlined />} title="重置操作" color={SECTION_COLORS.reset} />}
+              header={<SectionHeader icon={<ReloadOutlined />} title={t('remote.resetOps')} color={SECTION_COLORS.reset} />}
               style={panelStyle(SECTION_COLORS.reset)}
             >
               <ResetSection />
@@ -157,7 +159,7 @@ const RemoteSettingsPage: React.FC = () => {
         </div>
       ) : (
         <div style={{ borderRadius: 12, marginTop: 24, textAlign: 'center', padding: 48, background: '#fff' }}>
-          <Empty description="请选择设备" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description={t('remote.pleaseSelectDeviceFirst')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
         </div>
       )}
     </div>

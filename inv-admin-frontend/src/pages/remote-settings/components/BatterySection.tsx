@@ -1,19 +1,21 @@
 import React, { useState } from 'react'
 import { Row, Col, Checkbox, Button, App, Typography } from 'antd'
 import { PRIMARY, fieldRowStyle } from './shared-styles'
+import useTranslation from '@/hooks/useTranslation'
 
 const { Text } = Typography
 
 const BatterySection: React.FC = () => {
   const { message } = App.useApp()
+  const { t } = useTranslation()
   const [selectedModules, setSelectedModules] = useState<number[]>([])
 
   const handleRestart = () => {
     if (selectedModules.length === 0) {
-      message.warning('请至少选择一个电池模块')
+      message.warning(t('remote.selectModuleFirst'))
       return
     }
-    message.success(`正在重启电池模块: ${selectedModules.sort((a, b) => a - b).join(', ')}`)
+    message.success(t('remote.restartingModules', { modules: selectedModules.sort((a, b) => a - b).join(', ') }))
     setSelectedModules([])
   }
 
@@ -22,7 +24,7 @@ const BatterySection: React.FC = () => {
       <Col span={24}>
         <div style={fieldRowStyle}>
           <Text style={{ fontSize: 14, color: '#888', marginBottom: 8, display: 'block' }}>
-            选择需要重启的电池模块
+            {t('remote.selectModuleHint')}
           </Text>
         </div>
       </Col>
@@ -35,7 +37,7 @@ const BatterySection: React.FC = () => {
           <Row gutter={[8, 8]}>
             {Array.from({ length: 32 }, (_, i) => (
               <Col key={i} span={6}>
-                <Checkbox value={i}>模块 {i}</Checkbox>
+                <Checkbox value={i}>{t('remote.module')} {i}</Checkbox>
               </Col>
             ))}
           </Row>
@@ -49,7 +51,7 @@ const BatterySection: React.FC = () => {
           disabled={selectedModules.length === 0}
           style={{ minWidth: 140 }}
         >
-          重启电池模块 ({selectedModules.length})
+          {t('remote.restartBatteryModules', { count: selectedModules.length })}
         </Button>
       </Col>
     </Row>

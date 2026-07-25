@@ -48,7 +48,7 @@ type AuthorizationSessionContext struct {
 	AuthorizationVersion int64        `json:"authorization_version"`
 	SessionVersion       int64        `json:"session_version"`
 	Phone                string       `json:"-"`
-	LegacyRole           int          `json:"-"`
+	IsSystemAdmin        bool         `json:"-"`
 }
 
 func (c AuthorizationSessionContext) Valid() bool {

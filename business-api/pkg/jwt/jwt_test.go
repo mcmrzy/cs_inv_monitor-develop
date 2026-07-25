@@ -23,7 +23,7 @@ func newTestJWT(expireTime time.Duration) *JWT {
 func TestGenerateToken_成功生成Token对(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
-	accessToken, refreshToken, err := j.GenerateToken(1, "13800138000", ptrInt(5))
+	accessToken, refreshToken, err := j.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 	assert.NotEmpty(t, accessToken, "accessToken 不应为空")
 	assert.NotEmpty(t, refreshToken, "refreshToken 不应为空")
@@ -33,10 +33,10 @@ func TestGenerateToken_成功生成Token对(t *testing.T) {
 func TestGenerateToken_不同用户生成不同Token(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
-	token1, _, err := j.GenerateToken(1, "13800138000", ptrInt(5))
+	token1, _, err := j.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
-	token2, _, err := j.GenerateToken(2, "13900139000", ptrInt(1))
+	token2, _, err := j.GenerateToken(2, "13900139000", false)
 	require.NoError(t, err)
 
 	assert.NotEqual(t, token1, token2)
@@ -47,16 +47,14 @@ func TestGenerateToken_不同用户生成不同Token(t *testing.T) {
 func TestParseToken_正常解析(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
-	accessToken, _, err := j.GenerateToken(42, "13800138000", ptrInt(5))
+	accessToken, _, err := j.GenerateToken(42, "13800138000", false)
 	require.NoError(t, err)
 
 	claims, err := j.ParseToken(accessToken)
 	require.NoError(t, err)
 	assert.Equal(t, int64(42), claims.UserID)
 	assert.Equal(t, "13800138000", claims.Phone)
-	if claims.Role != nil {
-		assert.Equal(t, 5, *claims.Role)
-	}
+	assert.False(t, claims.IsSystemAdmin)
 	assert.Equal(t, "inv-api-server-test", claims.Issuer)
 }
 
@@ -85,7 +83,7 @@ func TestParseToken_过期Token返回错误(t *testing.T) {
 	// 使用极短过期时间
 	j := newTestJWT(1 * time.Millisecond)
 
-	accessToken, _, err := j.GenerateToken(1, "13800138000", ptrInt(5))
+	accessToken, _, err := j.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	// 等待 token 过期
@@ -104,7 +102,7 @@ func TestParseToken_不同Secret无法解析(t *testing.T) {
 		Issuer:     "other",
 	})
 
-	token, _, err := j1.GenerateToken(1, "13800138000", ptrInt(5))
+	token, _, err := j1.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	claims, err := j2.ParseToken(token)
@@ -117,7 +115,7 @@ func TestParseToken_不同Secret无法解析(t *testing.T) {
 func TestGetJTI_AccessToken使用RegisteredClaimsID(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
-	token, _, err := j.GenerateToken(1, "13800138000", ptrInt(5))
+	token, _, err := j.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	claims, err := j.ParseToken(token)
@@ -130,7 +128,7 @@ func TestGetJTI_AccessToken使用RegisteredClaimsID(t *testing.T) {
 func TestRefreshToken使用RegisteredClaimsID(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
-	refreshToken, err := j.GenerateRefreshToken(1, "13800138000", 5)
+	refreshToken, err := j.GenerateRefreshToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	claims, err := j.ParseRefreshToken(refreshToken)
@@ -143,7 +141,7 @@ func TestRefreshToken使用RegisteredClaimsID(t *testing.T) {
 func TestRefreshToken_正常刷新(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
-	token, _, err := j.GenerateToken(1, "13800138000", ptrInt(5))
+	token, _, err := j.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 
 	// 等待 1 秒确保时间戳不同（JWT 使用秒级精度）
@@ -159,9 +157,7 @@ func TestRefreshToken_正常刷新(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), claims.UserID)
 	assert.Equal(t, "13800138000", claims.Phone)
-	if claims.Role != nil {
-		assert.Equal(t, 5, *claims.Role)
-	}
+	assert.False(t, claims.IsSystemAdmin)
 }
 
 func TestRefreshToken_无效Token返回错误(t *testing.T) {
@@ -177,7 +173,7 @@ func TestRefreshToken_无效Token返回错误(t *testing.T) {
 func TestGenerateRefreshToken_独立生成(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
-	refreshToken, err := j.GenerateRefreshToken(1, "13800138000", 5)
+	refreshToken, err := j.GenerateRefreshToken(1, "13800138000", false)
 	require.NoError(t, err)
 	assert.NotEmpty(t, refreshToken)
 
@@ -192,7 +188,7 @@ func TestClaims_包含正确的时间声明(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 
 	before := time.Now().UTC()
-	token, _, err := j.GenerateToken(1, "13800138000", ptrInt(5))
+	token, _, err := j.GenerateToken(1, "13800138000", false)
 	require.NoError(t, err)
 	after := time.Now().UTC()
 
@@ -233,7 +229,7 @@ func TestAccessAndRefreshTokensAreNotInterchangeable(t *testing.T) {
 	j := newTestJWT(15 * time.Minute)
 	accessToken, err := j.GenerateContextAccessToken(42, 100, 101, 1001, 3, 7, 11)
 	require.NoError(t, err)
-	refreshToken, err := j.GenerateRefreshToken(42, "13800138000", 5)
+	refreshToken, err := j.GenerateRefreshToken(42, "13800138000", false)
 	require.NoError(t, err)
 
 	_, err = j.ParseAccessToken(refreshToken)

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import useTranslation from '@/hooks/useTranslation';
 
 interface EnergyFlowDiagramProps {
   pvPower: number;
@@ -35,12 +36,12 @@ const NODE_COLORS: Record<string, string> = {
   load: '#3B82F6',
 };
 
-const NODES: NodeConfig[] = [
-  { type: 'pv', x: 300, y: 85, color: NODE_COLORS.pv, label: '光伏', image: '/images/energy-flow/pv.jpg' },
-  { type: 'battery', x: 80, y: 275, color: NODE_COLORS.battery, label: '电池', image: '/images/energy-flow/battery.jpg' },
-  { type: 'inverter', x: 300, y: 275, color: NODE_COLORS.inverter, label: '逆变器', image: '/images/energy-flow/inverter.png' },
-  { type: 'grid', x: 520, y: 275, color: NODE_COLORS.grid, label: '电网', image: '/images/energy-flow/grid.jpg' },
-  { type: 'load', x: 300, y: 465, color: NODE_COLORS.load, label: '负载', image: '/images/energy-flow/load.jpg' },
+const getNodes = (t: (key: string) => string): NodeConfig[] => [
+  { type: 'pv', x: 300, y: 85, color: NODE_COLORS.pv, label: t('station.pv'), image: '/images/energy-flow/pv.jpg' },
+  { type: 'battery', x: 80, y: 275, color: NODE_COLORS.battery, label: t('station.battery'), image: '/images/energy-flow/battery.jpg' },
+  { type: 'inverter', x: 300, y: 275, color: NODE_COLORS.inverter, label: t('station.inverter'), image: '/images/energy-flow/inverter.png' },
+  { type: 'grid', x: 520, y: 275, color: NODE_COLORS.grid, label: t('station.grid'), image: '/images/energy-flow/grid.jpg' },
+  { type: 'load', x: 300, y: 465, color: NODE_COLORS.load, label: t('station.load'), image: '/images/energy-flow/load.jpg' },
 ];
 
 function formatPower(w: number): string {
@@ -340,6 +341,9 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
   gridPower,
   battSoc,
 }) => {
+  const { t } = useTranslation();
+  const NODES = useMemo(() => getNodes(t), [t]);
+
   const edges = useMemo(
     () => computeFlowEdges(pvPower, loadPower, battPower, gridPower),
     [pvPower, loadPower, battPower, gridPower],
