@@ -45,7 +45,7 @@ type rolePermissionQuerier interface {
 
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, region_id, parent_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, parent_id, status,
 			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`
@@ -56,7 +56,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &user.Nickname, &user.Avatar,
-		&user.Role, &regionID, &parentID, &user.Status, &user.Timezone, &lastLoginAt, &user.LastLoginIP,
+		&user.Role, &user.IsSystemAdmin, &regionID, &parentID, &user.Status, &user.Timezone, &lastLoginAt, &user.LastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -82,7 +82,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 
 func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, is_system_admin, region_id, status,
 			   last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE phone = $1 AND deleted_at IS NULL
 	`
@@ -94,7 +94,7 @@ func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.U
 
 	err := r.db.QueryRow(ctx, query, phone).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &nickname, &avatar,
-		&user.Role, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
+		&user.Role, &user.IsSystemAdmin, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -176,7 +176,7 @@ func (r *UserRepository) ListByParentID(ctx context.Context, parentID int64, pag
 	}
 
 	query := `
-		SELECT id, phone, COALESCE(email,''), COALESCE(nickname,''), COALESCE(avatar,''), role, region_id, parent_id, status,
+		SELECT id, phone, COALESCE(email,''), COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, parent_id, status,
 			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, created_at, updated_at
 		FROM users WHERE parent_id = $1 AND deleted_at IS NULL
 		ORDER BY id DESC LIMIT $2 OFFSET $3
@@ -195,7 +195,7 @@ func (r *UserRepository) ListByParentID(ctx context.Context, parentID int64, pag
 		var lastLoginAt sql.NullTime
 
 		if err := rows.Scan(&user.ID, &user.Phone, &user.Email, &user.Nickname, &user.Avatar,
-			&user.Role, &regionID, &pid, &user.Status, &user.Timezone, &lastLoginAt,
+			&user.Role, &user.IsSystemAdmin, &regionID, &pid, &user.Status, &user.Timezone, &lastLoginAt,
 			&user.CreatedAt, &user.UpdatedAt); err != nil {
 			continue
 		}
@@ -227,7 +227,7 @@ func (r *UserRepository) UpdateParentID(ctx context.Context, userID int64, paren
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, is_system_admin, region_id, status,
 			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE email = $1 AND deleted_at IS NULL
 	`
@@ -239,7 +239,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 	err := r.db.QueryRow(ctx, query, email).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &nickname, &avatar,
-		&user.Role, &regionID, &user.Status, &user.Timezone, &lastLoginAt, &lastLoginIP,
+		&user.Role, &user.IsSystemAdmin, &regionID, &user.Status, &user.Timezone, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -271,7 +271,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 func (r *UserRepository) GetByNickname(ctx context.Context, nickname string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, is_system_admin, region_id, status,
 			   last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE nickname = $1 AND deleted_at IS NULL LIMIT 1
 	`
@@ -283,7 +283,7 @@ func (r *UserRepository) GetByNickname(ctx context.Context, nickname string) (*m
 
 	err := r.db.QueryRow(ctx, query, nickname).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &n, &avatar,
-		&user.Role, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
+		&user.Role, &user.IsSystemAdmin, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -344,7 +344,7 @@ func (r *UserRepository) Delete(ctx context.Context, userID int64) error {
 
 func (r *UserRepository) ListAll(ctx context.Context) ([]model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, status,
 		       last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE deleted_at IS NULL ORDER BY id DESC
 	`
@@ -368,7 +368,7 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 	offset := (params.Page - 1) * params.PageSize
 
 	baseQuery := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, status,
 		       last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE deleted_at IS NULL
 	`
@@ -415,7 +415,7 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 		var regionID sql.NullInt64
 		var lastLoginAt sql.NullTime
 		err := rows.Scan(&user.ID, &user.Phone, &user.Email, &user.PasswordHash,
-			&user.Nickname, &user.Avatar, &user.Role, &regionID, &user.Status,
+			&user.Nickname, &user.Avatar, &user.Role, &user.IsSystemAdmin, &regionID, &user.Status,
 			&lastLoginAt, &user.LastLoginIP, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, err
@@ -503,7 +503,7 @@ func (r *UserRepository) queryUsers(ctx context.Context, query string) ([]model.
 		var regionID sql.NullInt64
 		var lastLoginAt sql.NullTime
 		err := rows.Scan(&user.ID, &user.Phone, &user.Email, &user.PasswordHash,
-			&user.Nickname, &user.Avatar, &user.Role, &regionID, &user.Status,
+			&user.Nickname, &user.Avatar, &user.Role, &user.IsSystemAdmin, &regionID, &user.Status,
 			&lastLoginAt, &user.LastLoginIP, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			continue

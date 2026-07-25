@@ -9,8 +9,8 @@ description: 光伏逆变器物联网监控平台(cs-inv-monitor)全栈开发规
 
 | 服务 | 目录 | 技术栈 | 职责 |
 |------|------|--------|------|
-| inv-api-server | `inv_api_server/` | Go + Gin + PostgreSQL + Redis | REST API 服务 |
-| inv-device-server | `inv_device_server/` | Go + Gin + MQTT + Kafka | 设备通信网关 |
+| inv-api-server | `business-api/` | Go + Gin + PostgreSQL + Redis | REST API 服务 |
+| inv-device-server | `device-communication/` | Go + Gin + MQTT + Kafka | 设备通信网关 |
 | api-gateway | `api-gateway/` | Go + Gin | API 网关（JWT/限流/RBAC） |
 | mqtt-kafka-bridge | `mqtt-kafka-bridge/` | Go | EMQX Webhook → Kafka |
 | inv-admin-frontend | `inv-admin-frontend/` | React + TS + Vite + AntD | 管理后台 |
@@ -140,13 +140,13 @@ if err := other(); err != nil {  // err 被遮蔽！
 每次修改 Go 代码后**必须**验证编译：
 
 ```bash
-cd inv_api_server && go build ./...
-cd inv_device_server && go build ./...
+cd business-api && go build ./...
+cd device-communication && go build ./...
 cd api-gateway && go build ./main.go
 cd mqtt-kafka-bridge && go build ./main.go
 ```
 
-**Go 路径**：`C:\Users\29538\sdk\go1.26.2\bin\go.exe`（如 `go` 不在 PATH 中）
+**Go 路径**：确保 `go` 在系统 PATH 中（使用 `go version` 验证）
 
 ---
 

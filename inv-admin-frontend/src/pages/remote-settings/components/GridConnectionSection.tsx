@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Row, Select, InputNumber, App } from 'antd'
-import { FieldRow, SwitchField, SettingButton, SubGroupHelp, displayLabel, buildLabelMap, buildDefaults } from './shared-styles'
+import useTranslation from '@/hooks/useTranslation'
+import { FieldRow, SwitchField, SettingButton, SubGroupHelp, buildDefaults } from './shared-styles'
 
 interface Props {
   deviceInfo: any
@@ -9,56 +10,55 @@ interface Props {
 // ==================== 字段元数据（单一数据源） ====================
 
 /** 并网字段定义 */
-const GRID_FIELDS: { key: string; label: string; unit?: string; range?: string; min?: number; max?: number; default: number }[] = [
-  { key: 'gridWaitTime', label: '并网等待时间', unit: 's', range: '30~600', min: 30, max: 600, default: 300 },
-  { key: 'reGridWaitTime', label: '重新并网等待时间', unit: 's', range: '0~600', min: 0, max: 600, default: 60 },
-  { key: 'gridVoltageUpper', label: '并网市电电压上限', unit: 'V', default: 264 },
-  { key: 'gridVoltageLower', label: '并网市电电压下限', unit: 'V', default: 176 },
-  { key: 'gridFreqUpper', label: '并网市电频率上限', unit: 'Hz', default: 55 },
-  { key: 'gridFreqLower', label: '并网市电频率下限', unit: 'Hz', default: 45 },
+const GRID_FIELDS: { key: string; labelKey: string; unit?: string; range?: string; min?: number; max?: number; default: number }[] = [
+  { key: 'gridWaitTime', labelKey: 'remote.gridWaitTime', unit: 's', range: '30~600', min: 30, max: 600, default: 300 },
+  { key: 'reGridWaitTime', labelKey: 'remote.gridReconnectWait', unit: 's', range: '0~600', min: 0, max: 600, default: 60 },
+  { key: 'gridVoltageUpper', labelKey: 'remote.gridVoltageUpper', unit: 'V', default: 264 },
+  { key: 'gridVoltageLower', labelKey: 'remote.gridVoltageLower', unit: 'V', default: 176 },
+  { key: 'gridFreqUpper', labelKey: 'remote.gridFreqUpper', unit: 'Hz', default: 55 },
+  { key: 'gridFreqLower', labelKey: 'remote.gridFreqLower', unit: 'Hz', default: 45 },
 ]
 
 /** 功率控制字段定义 */
-const POWER_CONTROL_FIELDS: { key: string; label: string; unit?: string; type: 'switch' | 'select' | 'input'; range?: string; min?: number; max?: number; default: number | boolean; tooltip?: string; helpValue?: string }[] = [
-  { key: 'freqDeratingEnable', label: '过频降载使能', type: 'switch', default: false, helpValue: '电网频率超过阈值时自动降低有功输出' },
-  { key: 'reactivePowerMode', label: '无功输出模式', type: 'select', default: 0, helpValue: '支持单位功率因数/固定PF/默认无功曲线/容性无功百分比/感性无功百分比/Q(V)曲线共6种模式' },
-  { key: 'reactivePowerPercent', label: '无功百分比设定值', unit: '%', type: 'input', range: '0~60', min: 0, max: 60, default: 0 },
-  { key: 'pfValue', label: 'PF设定值', type: 'input', range: '750~2000', min: 750, max: 2000, default: 1000, tooltip: '你可以设置750-1000达到超前，1750-2000达到滞后' },
-  { key: 'activePowerPercent', label: '有功百分比设定值', unit: '%', type: 'input', range: '0~100', min: 0, max: 100, default: 100 },
-  { key: 'gridSoftStart', label: '电网软启动', type: 'switch', default: false, helpValue: '并网时功率从零逐步上升至额定值，避免对电网产生冲击' },
+const POWER_CONTROL_FIELDS: { key: string; labelKey: string; unit?: string; type: 'switch' | 'select' | 'input'; range?: string; min?: number; max?: number; default: number | boolean; tooltipKey?: string; helpValueKey?: string }[] = [
+  { key: 'freqDeratingEnable', labelKey: 'remote.overFreqDerating', type: 'switch', default: false, helpValueKey: 'remote.freqDeratingHelp' },
+  { key: 'reactivePowerMode', labelKey: 'remote.reactiveOutputMode', type: 'select', default: 0, helpValueKey: 'remote.reactiveModeHelp' },
+  { key: 'reactivePowerPercent', labelKey: 'remote.reactivePct', unit: '%', type: 'input', range: '0~60', min: 0, max: 60, default: 0 },
+  { key: 'pfValue', labelKey: 'remote.pfSetting', type: 'input', range: '750~2000', min: 750, max: 2000, default: 1000, tooltipKey: 'remote.pfSettingTooltip' },
+  { key: 'activePowerPercent', labelKey: 'remote.activePowerPct', unit: '%', type: 'input', range: '0~100', min: 0, max: 100, default: 100 },
+  { key: 'gridSoftStart', labelKey: 'remote.gridSoftStart', type: 'switch', default: false, helpValueKey: 'remote.gridSoftStartHelp' },
 ]
 
 /** 无功输出模式下拉选项 */
 const REACTIVE_POWER_OPTIONS = [
-  { value: 0, label: '单位功率因数输出' },
-  { value: 1, label: '固定PF输出' },
-  { value: 2, label: '默认无功曲线输出' },
-  { value: 4, label: '容性无功百分比输出' },
-  { value: 5, label: '感性无功百分比输出' },
-  { value: 6, label: 'Q(V)曲线' },
+  { value: 0, labelKey: 'remote.unityPfOutput' },
+  { value: 1, labelKey: 'remote.fixedPfOutput' },
+  { value: 2, labelKey: 'remote.defaultReactiveCurve' },
+  { value: 4, labelKey: 'remote.capacitiveReactivePct' },
+  { value: 5, labelKey: 'remote.inductiveReactivePct' },
+  { value: 6, labelKey: 'remote.qvCurve' },
 ]
 
 /** 市电保护等级字段定义 */
-const PROTECTION_FIELDS: { key: string; label: string; unit?: string; range?: string; min?: number; max?: number; default: number }[] = [
-  { key: 'v1UnderVoltage', label: '电网电压1级欠压保护点', unit: 'V', default: 176 },
-  { key: 'v1OverVoltage', label: '电网电压1级过压保护点', unit: 'V', default: 264 },
-  { key: 'f1UnderFreq', label: '电网频率1级欠频保护点', unit: 'Hz', default: 45 },
-  { key: 'f1OverFreq', label: '电网频率1级过频保护点', unit: 'Hz', default: 55 },
-  { key: 'vMovingAvgOverVoltage', label: '电网电压滑动平均过压保护点', unit: 'V', default: 264 },
-  { key: 'v2UnderVoltage', label: '电网电压2级欠压保护点', unit: 'V', default: 176 },
-  { key: 'v2OverVoltage', label: '电网电压2级过压保护点', unit: 'V', default: 264 },
-  { key: 'f2UnderFreq', label: '电网频率2级欠频保护点', unit: 'Hz', default: 45 },
-  { key: 'f2OverFreq', label: '电网频率2级过频保护点', unit: 'Hz', default: 55 },
-  { key: 'rampRate', label: '加载速率', unit: '%/min', range: '1~100', min: 1, max: 100, default: 50 },
-  { key: 'v3UnderVoltage', label: '电网电压3级欠压保护点', unit: 'V', default: 176 },
-  { key: 'v3OverVoltage', label: '电网电压3级过压保护点', unit: 'V', default: 264 },
-  { key: 'f3UnderFreq', label: '电网频率3级欠频保护点', unit: 'Hz', default: 45 },
-  { key: 'f3OverFreq', label: '电网频率3级过频保护点', unit: 'Hz', default: 55 },
+const PROTECTION_FIELDS: { key: string; labelKey: string; unit?: string; range?: string; min?: number; max?: number; default: number }[] = [
+  { key: 'v1UnderVoltage', labelKey: 'remote.gridVoltL1Under', unit: 'V', default: 176 },
+  { key: 'v1OverVoltage', labelKey: 'remote.gridVoltL1Over', unit: 'V', default: 264 },
+  { key: 'f1UnderFreq', labelKey: 'remote.gridFreqL1Under', unit: 'Hz', default: 45 },
+  { key: 'f1OverFreq', labelKey: 'remote.gridFreqL1Over', unit: 'Hz', default: 55 },
+  { key: 'vMovingAvgOverVoltage', labelKey: 'remote.gridVoltSlideAvgOver', unit: 'V', default: 264 },
+  { key: 'v2UnderVoltage', labelKey: 'remote.gridVoltL2Under', unit: 'V', default: 176 },
+  { key: 'v2OverVoltage', labelKey: 'remote.gridVoltL2Over', unit: 'V', default: 264 },
+  { key: 'f2UnderFreq', labelKey: 'remote.gridFreqL2Under', unit: 'Hz', default: 45 },
+  { key: 'f2OverFreq', labelKey: 'remote.gridFreqL2Over', unit: 'Hz', default: 55 },
+  { key: 'rampRate', labelKey: 'remote.rampRate', unit: '%/min', range: '1~100', min: 1, max: 100, default: 50 },
+  { key: 'v3UnderVoltage', labelKey: 'remote.gridVoltL3Under', unit: 'V', default: 176 },
+  { key: 'v3OverVoltage', labelKey: 'remote.gridVoltL3Over', unit: 'V', default: 264 },
+  { key: 'f3UnderFreq', labelKey: 'remote.gridFreqL3Under', unit: 'Hz', default: 45 },
+  { key: 'f3OverFreq', labelKey: 'remote.gridFreqL3Over', unit: 'Hz', default: 55 },
 ]
 
 // ==================== 静态映射 ====================
 
-const LABEL_MAP = buildLabelMap(GRID_FIELDS, POWER_CONTROL_FIELDS, PROTECTION_FIELDS)
 const GRID_DEFAULTS = buildDefaults(GRID_FIELDS)
 const POWER_DEFAULTS = buildDefaults(POWER_CONTROL_FIELDS)
 const PROTECTION_DEFAULTS = buildDefaults(PROTECTION_FIELDS)
@@ -67,6 +67,7 @@ const PROTECTION_DEFAULTS = buildDefaults(PROTECTION_FIELDS)
 
 const GridConnectionSection: React.FC<Props> = ({ deviceInfo }) => {
   const { message } = App.useApp()
+  const { t } = useTranslation()
 
   // 并网 state
   const [gridState, setGridState] = useState<Record<string, number>>(GRID_DEFAULTS)
@@ -76,8 +77,10 @@ const GridConnectionSection: React.FC<Props> = ({ deviceInfo }) => {
   const [protectionState, setProtectionState] = useState<Record<string, number>>(PROTECTION_DEFAULTS)
 
   const handleSet = (fieldKey: string) => {
-    const label = LABEL_MAP[fieldKey]
-    message.success(`${label} 指令已下发`)
+    const allFields = [...GRID_FIELDS, ...POWER_CONTROL_FIELDS, ...PROTECTION_FIELDS]
+    const field = allFields.find((f) => f.key === fieldKey)
+    const label = field ? t(field.labelKey) : fieldKey
+    message.success(t('remote.executeSuccess', { title: label }))
   }
 
   const updateGrid = (key: string, val: number, fallback: number) => {
@@ -95,9 +98,9 @@ const GridConnectionSection: React.FC<Props> = ({ deviceInfo }) => {
   return (
     <Row gutter={[16, 8]}>
       {/* 并网 */}
-      <SubGroupHelp title="并网" color="#3b82f6" hint="设置并网等待时间、重新并网等待时间、并网市电电压/频率上下限" />
+      <SubGroupHelp title={t('remote.gridSettings')} color="#3b82f6" hint={t('remote.gridSectionHint')} />
       {GRID_FIELDS.map((f) => (
-        <FieldRow key={f.key} label={displayLabel(f)} range={f.range}>
+        <FieldRow key={f.key} label={f.unit ? `${t(f.labelKey)}(${f.unit})` : t(f.labelKey)} range={f.range}>
           <InputNumber
             min={f.min}
             max={f.max}
@@ -110,13 +113,13 @@ const GridConnectionSection: React.FC<Props> = ({ deviceInfo }) => {
       ))}
 
       {/* 功率控制 */}
-      <SubGroupHelp title="功率控制" color="#3b82f6" hint="设置过频降载使能、无功输出模式（6种）、无功百分比、PF设定值、有功百分比、电网软启动" />
+      <SubGroupHelp title={t('remoteSettings.tabPower')} color="#3b82f6" hint={t('remote.powerSectionHint')} />
       {POWER_CONTROL_FIELDS.map((f) => {
         if (f.type === 'switch') {
           return (
             <SwitchField
               key={f.key}
-              label={displayLabel(f)}
+              label={t(f.labelKey)}
               checked={powerState[f.key] as boolean}
               onChange={(v) => { updatePower(f.key, v, f.default); handleSet(f.key) }}
             />
@@ -124,14 +127,14 @@ const GridConnectionSection: React.FC<Props> = ({ deviceInfo }) => {
         }
         if (f.type === 'select') {
           return (
-            <FieldRow key={f.key} label={displayLabel(f)}>
+            <FieldRow key={f.key} label={t(f.labelKey)}>
               <Select
                 value={powerState[f.key] as number}
                 onChange={(v: number) => updatePower(f.key, v, f.default)}
                 style={{ width: 140 }}
               >
                 {REACTIVE_POWER_OPTIONS.map((opt) => (
-                  <Select.Option key={opt.value} value={opt.value}>{opt.label}</Select.Option>
+                  <Select.Option key={opt.value} value={opt.value}>{t(opt.labelKey)}</Select.Option>
                 ))}
               </Select>
               <SettingButton onClick={() => handleSet(f.key)} />
@@ -140,7 +143,7 @@ const GridConnectionSection: React.FC<Props> = ({ deviceInfo }) => {
         }
         // input
         return (
-          <FieldRow key={f.key} label={displayLabel(f)} range={f.range} tooltip={f.tooltip}>
+          <FieldRow key={f.key} label={f.unit ? `${t(f.labelKey)}(${f.unit})` : t(f.labelKey)} range={f.range} tooltip={f.tooltipKey ? t(f.tooltipKey) : undefined}>
             <InputNumber
               min={f.min}
               max={f.max}
@@ -154,9 +157,9 @@ const GridConnectionSection: React.FC<Props> = ({ deviceInfo }) => {
       })}
 
       {/* 市电保护等级 */}
-      <SubGroupHelp title="市电保护等级" color="#3b82f6" hint="设置1/2/3级电网电压欠压/过压保护点、频率欠频/过频保护点、滑动平均过压保护点、加载速率" />
+      <SubGroupHelp title={t('remote.gridProtectionLevel')} color="#3b82f6" hint={t('remote.protectionSectionHint')} />
       {PROTECTION_FIELDS.map((f) => (
-        <FieldRow key={f.key} label={displayLabel(f)} range={f.range}>
+        <FieldRow key={f.key} label={f.unit ? `${t(f.labelKey)}(${f.unit})` : t(f.labelKey)} range={f.range}>
           <InputNumber
             min={f.min}
             max={f.max}

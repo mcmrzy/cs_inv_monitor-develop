@@ -204,7 +204,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	deviceClaimTransferHandler := handler.NewDeviceClaimTransferHandler(db, permChecker, jwtService, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
 	
 	// Task 11 & 12: Pipeline health and DLQ handlers
-	pipelineHealthHandler := handler.NewPipelineHealthHandler(rdb)
+	pipelineHealthHandler := handler.NewPipelineHealthHandler(rdb, db)
 	dlqHandler := handler.NewDLQHandler(rdb)
 
 	heartbeatDone := make(chan struct{})
@@ -969,6 +969,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			adminGroup.PATCH("/tenants/:id", deps.AdminHandler.UpdateTenant)
 			adminGroup.POST("/tenants/:id/toggle", deps.AdminHandler.ToggleTenant)
 			adminGroup.GET("/metrics", deps.AdminHandler.GetMetrics)
+			adminGroup.GET("/operation-stats", deps.AdminHandler.GetOperationStats)
 		}
 
 		usersGroup := api.Group("/users").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))

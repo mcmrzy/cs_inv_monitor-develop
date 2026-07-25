@@ -9,6 +9,8 @@ import (
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -23,34 +25,62 @@ type PipelineHealthStatus struct {
 	Metrics        map[string]string `json:"metrics,omitempty"`
 }
 
+// ServiceHealth is the health status of a single service (frontend-friendly format)
+type ServiceHealth struct {
+	Status         string `json:"status"`
+	LastHeartbeat  string `json:"last_heartbeat"`
+	KafkaConnected bool   `json:"kafka_connected,omitempty"`
+	KafkaLag       int    `json:"kafka_lag,omitempty"`
+	Redis          string `json:"redis,omitempty"`
+	DbPoolActive   int    `json:"db_pool_active,omitempty"`
+}
+
+// PipelineServices groups service health by name
+type PipelineServices struct {
+	Bridge       ServiceHealth `json:"bridge"`
+	DeviceServer ServiceHealth `json:"device-server"`
+	API          ServiceHealth `json:"api"`
+}
+
+// PipelineSummary contains summary metrics
+type PipelineSummary struct {
+	OnlineDevices  int    `json:"online_devices"`
+	TotalDevices   int    `json:"total_devices"`
+	ConnectionRate string `json:"connection_rate"`
+}
+
 // PipelineHealthResponse is the aggregated response for pipeline health check
 type PipelineHealthResponse struct {
-	OverallStatus   string                    `json:"overall_status"` // ok, degraded, down
-	CheckTime       time.Time                 `json:"check_time"`
-	ServiceStatuses []PipelineHealthStatus    `json:"service_statuses"`
+	OverallStatus string           `json:"overall_status"` // ok, degraded, down
+	Services      PipelineServices `json:"services"`
+	Summary       PipelineSummary  `json:"summary"`
 }
 
 // PipelineMetricsResponse contains aggregated metrics for the data pipeline
 type PipelineMetricsResponse struct {
-	OnlineDeviceCount   int                     `json:"online_device_count"`
-	TotalDeviceCount    int                     `json:"total_device_count"`
-	MessageRate         float64                 `json:"message_rate"`          // messages per second
-	DLQPending          int                     `json:"dlq_pending"`           // total pending in all DLQs
-	AvgKafkaLag         float64                 `json:"avg_kafka_lag"`         // average lag across consumers
-	CommandSuccessRate  float64                 `json:"command_success_rate"`  // percentage (0-100)
-	SnapshotTime        time.Time               `json:"snapshot_time"`
-	AdditionalMetrics   map[string]interface{}  `json:"additional_metrics,omitempty"`
+	OnlineDeviceCount   int     `json:"online_device_count"`
+	TotalDeviceCount    int     `json:"total_device_count"`
+	MessageRate         float64 `json:"message_rate"`
+	DLQPending          int     `json:"dlq_pending"`
+	KafkaLag            float64 `json:"kafka_lag"`
+	CommandsSent        int     `json:"commands_sent"`
+	CommandsAcked       int     `json:"commands_acked"`
+	CommandsExpired     int     `json:"commands_expired"`
+	CommandsSuccessRate float64 `json:"commands_success_rate"`
+	SnapshotTime        time.Time `json:"snapshot_time"`
 }
 
 // PipelineHealthHandler handles pipeline health aggregation endpoints
 type PipelineHealthHandler struct {
 	rdb *redis.Client
+	db  *pgxpool.Pool
 }
 
 // NewPipelineHealthHandler creates a new PipelineHealthHandler instance
-func NewPipelineHealthHandler(rdb *redis.Client) *PipelineHealthHandler {
+func NewPipelineHealthHandler(rdb *redis.Client, db *pgxpool.Pool) *PipelineHealthHandler {
 	return &PipelineHealthHandler{
 		rdb: rdb,
+		db:  db,
 	}
 }
 
@@ -62,10 +92,6 @@ func NewPipelineHealthHandler(rdb *redis.Client) *PipelineHealthHandler {
 func (h *PipelineHealthHandler) GetPipelineHealth(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	var statuses []PipelineHealthStatus
-	hasDown := false
-	hasDegraded := false
-
 	// Check MQTT Bridge
 	bridgeStart := time.Now()
 	bridgeStatus := h.checkServiceHealth(ctx, "mqtt-bridge", "bridge", "pipeline:health:bridge")
@@ -74,7 +100,8 @@ func (h *PipelineHealthHandler) GetPipelineHealth(c *gin.Context) {
 		bridgeStatus.Metrics = make(map[string]string)
 	}
 	bridgeStatus.Metrics["response_time_ms"] = strconv.FormatInt(bridgeDuration, 10)
-	statuses = append(statuses, bridgeStatus)
+	hasDown := false
+	hasDegraded := false
 	if bridgeStatus.Status == "down" {
 		hasDown = true
 	} else if bridgeStatus.Status == "degraded" {
@@ -89,7 +116,6 @@ func (h *PipelineHealthHandler) GetPipelineHealth(c *gin.Context) {
 		deviceServerStatus.Metrics = make(map[string]string)
 	}
 	deviceServerStatus.Metrics["response_time_ms"] = strconv.FormatInt(deviceServerDuration, 10)
-	statuses = append(statuses, deviceServerStatus)
 	if deviceServerStatus.Status == "down" {
 		hasDown = true
 	} else if deviceServerStatus.Status == "degraded" {
@@ -104,7 +130,6 @@ func (h *PipelineHealthHandler) GetPipelineHealth(c *gin.Context) {
 		apiStatus.Metrics = make(map[string]string)
 	}
 	apiStatus.Metrics["response_time_ms"] = strconv.FormatInt(apiDuration, 10)
-	statuses = append(statuses, apiStatus)
 	if apiStatus.Status == "down" {
 		hasDown = true
 	} else if apiStatus.Status == "degraded" {
@@ -121,10 +146,39 @@ func (h *PipelineHealthHandler) GetPipelineHealth(c *gin.Context) {
 		overallStatus = "ok"
 	}
 
+	// Get device counts for summary
+	onlineCount, _ := h.getOnlineDeviceCount(ctx)
+	totalCount := h.getTotalDeviceCount(ctx)
+	connRate := "0%"
+	if totalCount > 0 {
+		connRate = fmt.Sprintf("%.1f%%", float64(onlineCount)/float64(totalCount)*100)
+	}
+
+	// Assemble services object
+	now := time.Now().UTC().Format(time.RFC3339)
+	services := PipelineServices{
+		Bridge: ServiceHealth{
+			Status:        bridgeStatus.Status,
+			LastHeartbeat: now,
+		},
+		DeviceServer: ServiceHealth{
+			Status:        deviceServerStatus.Status,
+			LastHeartbeat: now,
+		},
+		API: ServiceHealth{
+			Status:        apiStatus.Status,
+			LastHeartbeat: now,
+		},
+	}
+
 	response.Success(c, PipelineHealthResponse{
-		OverallStatus:   overallStatus,
-		CheckTime:       time.Now().UTC(),
-		ServiceStatuses: statuses,
+		OverallStatus: overallStatus,
+		Services:      services,
+		Summary: PipelineSummary{
+			OnlineDevices:  onlineCount,
+			TotalDevices:   totalCount,
+			ConnectionRate: connRate,
+		},
 	})
 }
 
@@ -195,7 +249,6 @@ func (h *PipelineHealthHandler) GetPipelineMetrics(c *gin.Context) {
 
 	metrics := &PipelineMetricsResponse{
 		SnapshotTime: time.Now().UTC(),
-		AdditionalMetrics: make(map[string]interface{}),
 	}
 
 	// Get online device count from active heartbeat keys
@@ -216,11 +269,11 @@ func (h *PipelineHealthHandler) GetPipelineMetrics(c *gin.Context) {
 	// Get DLQ pending count
 	metrics.DLQPending = h.getDLQPendingCount(ctx)
 
-	// Get average Kafka lag
-	metrics.AvgKafkaLag = h.getAverageKafkaLag(ctx)
+	// Get Kafka lag
+	metrics.KafkaLag = h.getAverageKafkaLag(ctx)
 
-	// Get command success rate
-	metrics.CommandSuccessRate = h.getCommandSuccessRate(ctx)
+	// Get command stats from database
+	h.getCommandStats(ctx, metrics)
 
 	response.Success(c, metrics)
 }
@@ -247,11 +300,16 @@ func (h *PipelineHealthHandler) getOnlineDeviceCount(ctx context.Context) (int, 
 }
 
 // getTotalDeviceCount gets the total number of devices from database
-// Note: In production, this should query PostgreSQL; returns 0 as placeholder
 func (h *PipelineHealthHandler) getTotalDeviceCount(ctx context.Context) int {
-	// This would normally query PostgreSQL device tables
-	// Placeholder implementation - needs DB connection injection
-	return 0
+	if h.db == nil {
+		return 0
+	}
+	var count int
+	err := h.db.QueryRow(ctx, "SELECT COUNT(*) FROM devices WHERE deleted_at IS NULL").Scan(&count)
+	if err != nil {
+		return 0
+	}
+	return count
 }
 
 // getMessageRate gets the current message rate (messages per second)
@@ -339,6 +397,64 @@ func (h *PipelineHealthHandler) getCommandSuccessRate(ctx context.Context) float
 	}
 
 	return float64(success) / float64(total) * 100.0
+}
+
+// getCommandStats queries device_commands table for command statistics
+func (h *PipelineHealthHandler) getCommandStats(ctx context.Context, m *PipelineMetricsResponse) {
+	if h.db == nil {
+		m.CommandsSuccessRate = h.getCommandSuccessRate(ctx)
+		return
+	}
+
+	// Count commands by status in last 24h
+	rows, err := h.db.Query(ctx, `
+		SELECT status, COUNT(*) as cnt
+		FROM device_commands
+		WHERE created_at >= NOW() - INTERVAL '24 hours'
+		GROUP BY status`)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			m.CommandsSuccessRate = 100.0
+		} else {
+			m.CommandsSuccessRate = h.getCommandSuccessRate(ctx)
+		}
+		return
+	}
+	defer rows.Close()
+
+	sent, acked, expired := 0, 0, 0
+	for rows.Next() {
+		var status string
+		var cnt int
+		if err := rows.Scan(&status, &cnt); err != nil {
+			continue
+		}
+		switch status {
+		case "success", "sent", "acknowledged", "queued", "pending", "executing":
+			sent += cnt
+			if status == "acknowledged" || status == "success" {
+				acked += cnt
+			}
+		case "failed":
+			sent += cnt
+		case "timeout":
+			sent += cnt
+		case "expired":
+			expired += cnt
+			sent += cnt
+		}
+	}
+
+	m.CommandsSent = sent
+	m.CommandsAcked = acked
+	m.CommandsExpired = expired
+
+	total := sent
+	if total == 0 {
+		m.CommandsSuccessRate = 100.0
+	} else {
+		m.CommandsSuccessRate = float64(acked) / float64(total) * 100.0
+	}
 }
 
 // PingRedis returns PONG if Redis is reachable

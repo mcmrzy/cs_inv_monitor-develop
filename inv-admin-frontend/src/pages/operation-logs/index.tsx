@@ -2,12 +2,12 @@ import { useState, useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Row, Col, Card, Table, Tabs, DatePicker, Select, Button, Tag,
-  Space, Typography, Timeline, Input, App,
+  Space, Typography, Input, App,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
   ReloadOutlined, DownloadOutlined, FileTextOutlined,
-  AlertOutlined, ToolOutlined, HistoryOutlined, CodeOutlined,
+  AlertOutlined, HistoryOutlined, CodeOutlined,
   SearchOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -55,17 +55,6 @@ interface CommandRecord {
   [key: string]: any
 }
 
-interface SystemEvent {
-  id: number
-  action: string
-  resource: string
-  resourceId: string
-  details: string
-  username: string
-  ipAddress: string
-  createdAt: string
-}
-
 /* ==================== 常量 ==================== */
 
 const ACTION_COLORS: Record<string, string> = {
@@ -87,8 +76,15 @@ const TAB_KEY_MAP: Record<string, string> = {
   all: 'operation',
   operation: 'operation',
   alarm: 'alarm',
-  system: 'system',
   command: 'command',
+}
+
+/* ==================== 辅助函数 ==================== */
+
+const formatDetail = (v: any): string => {
+  if (!v || (typeof v === 'object' && Object.keys(v).length === 0)) return ''
+  if (typeof v === 'string') return v
+  try { return JSON.stringify(v) } catch { return String(v) }
 }
 
 /* ==================== 主组件 ==================== */
@@ -136,7 +132,6 @@ const OperationLogsPage: React.FC = () => {
     { label: t('logs.all'), value: 'all' },
     { label: t('logs.operationLog'), value: 'operation' },
     { label: t('logs.alertLog'), value: 'alarm' },
-    { label: t('logs.systemLog'), value: 'system' },
     { label: t('logs.commandLog'), value: 'command' },
   ]
 
@@ -294,7 +289,7 @@ const OperationLogsPage: React.FC = () => {
       dataIndex: 'details',
       key: 'details',
       ellipsis: true,
-      render: (v: string) => v || '-',
+      render: (v: any) => formatDetail(v) || '-',
     },
     {
       title: t('logs.ipAddress'),
@@ -508,135 +503,6 @@ const OperationLogsPage: React.FC = () => {
   ]
 
   /* ============================================================
-   *  Tab 4: 系统日志 (Timeline)
-   * ============================================================ */
-
-  const [sysPage, setSysPage] = useState(1)
-  const [sysPageSize, setSysPageSize] = useState(20)
-
-  const sysQueryParams = {
-    page: sysPage,
-    pageSize: sysPageSize,
-    ...buildTimeParams(),
-    ...(userFilter ? { username: userFilter } : {}),
-  }
-
-  const { data: sysResult, isLoading: sysLoading, error: sysError, refetch: refetchSystemLogs } = useQuery({
-    queryKey: queryKeys.operationLogs.systemEvents(sysQueryParams),
-    queryFn: () => adminApi.getAuditLogs(sysQueryParams).then((res) => {
-      const d = res.data?.data ?? res.data ?? {}
-      const items = Array.isArray(d) ? d : (d?.items ?? d?.list ?? [])
-      return {
-        items: items as SystemEvent[],
-        total: d?.total ?? 0,
-      }
-    }),
-    enabled: activeTab === 'system',
-  })
-
-  const sysData = sysResult?.items ?? []
-  const sysTotal = sysResult?.total ?? 0
-
-  const handleExportSystem = () => {
-    exportToCsv(
-      sysData.map((r) => ({
-        [t('logs.time')]: formatInTimezone(r.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss'),
-        [t('logs.user')]: r.username,
-        [t('logs.operation')]: r.action,
-        [t('logs.resource')]: r.resource,
-        [t('logs.detail')]: r.details,
-        IP: r.ipAddress,
-      })),
-      'system_logs'
-    )
-  }
-
-  const sysTableColumns: ColumnsType<SystemEvent> = [
-    {
-      title: t('logs.time'),
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 170,
-      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    {
-      title: t('logs.user'),
-      dataIndex: 'username',
-      key: 'username',
-      width: 120,
-      render: (v: string) => v || '-',
-    },
-    {
-      title: t('logs.operation'),
-      dataIndex: 'action',
-      key: 'action',
-      width: 100,
-      render: (action: string) => {
-        const color = ACTION_COLORS[action] || 'default'
-        const label = ACTION_LABELS[action] || action
-        return <Tag color={color}>{label}</Tag>
-      },
-    },
-    {
-      title: t('logs.resource'),
-      dataIndex: 'resource',
-      key: 'resource',
-      width: 140,
-      ellipsis: true,
-    },
-    {
-      title: t('logs.detail'),
-      dataIndex: 'details',
-      key: 'details',
-      ellipsis: true,
-    },
-    {
-      title: 'IP',
-      dataIndex: 'ipAddress',
-      key: 'ipAddress',
-      width: 130,
-      render: (v: string) => <Text code>{v || '-'}</Text>,
-    },
-  ]
-
-  /* ---------- 渲染时间线视图 ---------- */
-
-  const renderSystemTimeline = () => {
-    if (sysLoading) return <div style={{ padding: 40, textAlign: 'center' }}>{t('common.loading')}</div>
-    if (sysData.length === 0) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>{t('logs.noSystemLogs')}</div>
-
-    return (
-      <Timeline
-        items={sysData.map((event) => {
-          const color = ACTION_COLORS[event.action] || 'gray'
-          return {
-            color,
-            children: (
-              <div>
-                <div style={{ marginBottom: 4 }}>
-                  <Tag color={color}>{ACTION_LABELS[event.action] || event.action}</Tag>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {event.username && <span>{event.username} · </span>}
-                    {formatInTimezone(event.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss')}
-                  </Text>
-                </div>
-                <Text>{event.details || `${event.resource}${event.resourceId ? ` #${event.resourceId}` : ''}`}</Text>
-                {event.ipAddress && (
-                  <div>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      IP: {event.ipAddress}
-                    </Text>
-                  </div>
-                )}
-              </div>
-            ),
-          }
-        })}
-      />
-    )
-  }
-
-  /* ============================================================
    *  Tab 配置
    * ============================================================ */
 
@@ -740,61 +606,6 @@ const OperationLogsPage: React.FC = () => {
         </>
       ),
     },
-    {
-      key: 'system',
-      label: <span><ToolOutlined /> {t('logs.systemLog')}</span>,
-      children: (
-        <>
-          <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }} size="small">
-            <Row justify="space-between" align="middle">
-              <Col>
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  {t('logs.systemEventTimeline')}
-                </Text>
-              </Col>
-              <Col>
-                <Space>
-                  <Button icon={<ReloadOutlined />} size="small" onClick={() => refetchSystemLogs()}>
-                    {t('logs.refresh')}
-                  </Button>
-                  <Button icon={<DownloadOutlined />} size="small" onClick={handleExportSystem}>
-                    {t('logs.exportCSV')}
-                  </Button>
-                </Space>
-              </Col>
-            </Row>
-          </Card>
-          <Row gutter={16}>
-            <Col xs={24} lg={10}>
-              <Card title={t('logs.timelineView')} size="small" bordered={false} style={{ minHeight: 400, borderRadius: 12 }}>
-                {renderSystemTimeline()}
-              </Card>
-            </Col>
-            <Col xs={24} lg={14}>
-              <Card title={t('logs.listView')} size="small" bordered={false} style={{ borderRadius: 12 }}>
-                <Table<SystemEvent>
-                  rowKey="id"
-                  columns={sysTableColumns}
-                  dataSource={sysData}
-                  loading={sysLoading}
-                  pagination={{
-                    current: sysPage,
-                    pageSize: sysPageSize,
-                    total: sysTotal,
-                    showSizeChanger: true,
-                    pageSizeOptions: ['10', '20', '50', '100'],
-                    showTotal: (total) => t('common.total', { total }),
-                    onChange: (p, ps) => { setSysPage(p); setSysPageSize(ps) },
-                  }}
-                  scroll={{ x: 800 }}
-                  size="small"
-                />
-              </Card>
-            </Col>
-          </Row>
-        </>
-      ),
-    },
   ]
 
   /* ---------- 过滤器变更时重置页码 ---------- */
@@ -803,14 +614,12 @@ const OperationLogsPage: React.FC = () => {
     setAuditPage(1)
     setAlarmPage(1)
     setCmdPage(1)
-    setSysPage(1)
   }
 
   const activeQueryState = {
     operation: { error: auditError, retry: refetchAudit },
     alarm: { error: alarmError, retry: refetchAlarms },
     command: { error: cmdError, retry: refetchCommands },
-    system: { error: sysError, retry: refetchSystemLogs },
   }[activeTab]
 
   return (

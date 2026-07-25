@@ -19,11 +19,11 @@ help: ## 显示所有可用命令
 
 # ==================== Go 服务 ====================
 
-build-api: ## 构建 inv_api_server
-	cd inv_api_server && $(GO) build -ldflags="-s -w" -o ../bin/inv-api-server ./cmd/main.go
+build-api: ## 构建 business-api
+	cd business-api && $(GO) build -ldflags="-s -w" -o ../bin/inv-api-server ./cmd/main.go
 
-build-device: ## 构建 inv_device_server
-	cd inv_device_server && $(GO) build -ldflags="-s -w" -o ../bin/inv-device-server ./cmd/main.go
+build-device: ## 构建 device-communication
+	cd device-communication && $(GO) build -ldflags="-s -w" -o ../bin/inv-device-server ./cmd/main.go
 
 build-gateway: ## 构建 api-gateway
 	cd api-gateway && $(GO) build -ldflags="-s -w" -o ../bin/api-gateway ./main.go
@@ -33,17 +33,17 @@ build-bridge: ## 构建 mqtt-kafka-bridge
 
 build-go: build-api build-device build-gateway build-bridge ## 构建所有 Go 服务
 
-test-api: ## 测试 inv_api_server
-	cd inv_api_server && $(GO) test ./... -v -count=1
+test-api: ## 测试 business-api
+	cd business-api && $(GO) test ./... -v -count=1
 
-test-device: ## 测试 inv_device_server
-	cd inv_device_server && $(GO) test ./... -v -count=1
+test-device: ## 测试 device-communication
+	cd device-communication && $(GO) test ./... -v -count=1
 
 test-go: test-api test-device ## 运行所有 Go 测试
 
 test-unit-go: ## 运行 Go 单元测试（含 race 检测和覆盖率）
-	cd inv_api_server && $(GO) test -race -cover -count=1 ./...
-	cd inv_device_server && $(GO) test -race -cover -count=1 ./...
+	cd business-api && $(GO) test -race -cover -count=1 ./...
+	cd device-communication && $(GO) test -race -cover -count=1 ./...
 	cd api-gateway && $(GO) test -race -cover -count=1 ./...
 	cd mqtt-kafka-bridge && $(GO) test -race -cover -count=1 ./...
 
@@ -52,14 +52,14 @@ test-generate-mocks: ## Mock 说明（手工维护）
 	@echo "如需自动生成，请安装 mockery: go install github.com/vektra/mockery/v2@latest"
 
 vet-go: ## Go vet 静态检查
-	cd inv_api_server && $(GO) vet ./...
-	cd inv_device_server && $(GO) vet ./...
+	cd business-api && $(GO) vet ./...
+	cd device-communication && $(GO) vet ./...
 	cd api-gateway && $(GO) vet ./...
 	cd mqtt-kafka-bridge && $(GO) vet ./...
 
 tidy: ## 所有 Go 模块 go mod tidy
-	cd inv_api_server && $(GO) mod tidy
-	cd inv_device_server && $(GO) mod tidy
+	cd business-api && $(GO) mod tidy
+	cd device-communication && $(GO) mod tidy
 	cd api-gateway && $(GO) mod tidy
 	cd mqtt-kafka-bridge && $(GO) mod tidy
 
@@ -108,10 +108,10 @@ docker-restart: ## 重启指定服务 (SERVICE=inv-api-server)
 # ==================== 本地开发 ====================
 
 run-api: ## 本地运行 API Server
-	cd inv_api_server && $(GO) run ./cmd/main.go -config config.yaml
+	cd business-api && $(GO) run ./cmd/main.go -config config.yaml
 
 run-device: ## 本地运行 Device Server
-	cd inv_device_server && $(GO) run ./cmd/main.go -config config.yaml
+	cd device-communication && $(GO) run ./cmd/main.go -config config.yaml
 
 run-gateway: ## 本地运行 API Gateway
 	cd api-gateway && $(GO) run ./main.go -config config.yaml
@@ -149,12 +149,12 @@ test-integration: ## 运行集成测试
 	cd tests/integration && $(GO) test -v -tags=integration -count=1 ./...
 
 test-security: ## 运行安全测试
-	cd inv_api_server && $(GO) test -v -count=1 ./tests/security/...
+	cd business-api && $(GO) test -v -count=1 ./tests/security/...
 
 test-load: ## 显示负载测试命令
 	@echo "Run k6 load tests manually:"
-	@echo "  k6 run inv_api_server/tests/load-test/api-stress.js"
-	@echo "  k6 run inv_api_server/tests/load-test/mqtt-stress.js"
+	@echo "  k6 run business-api/tests/load-test/api-stress.js"
+	@echo "  k6 run business-api/tests/load-test/mqtt-stress.js"
 
 test-coverage: test-unit ## 生成覆盖率报告
 	@echo "Coverage reports generated"

@@ -18,24 +18,24 @@ interface StationStatisticsTabProps {
   timezone: string
 }
 
-const PERIOD_OPTIONS = [
-  { label: '日', value: 'day' },
-  { label: '月', value: 'month' },
-  { label: '年', value: 'year' },
-]
-
-const ENERGY_CARDS = [
-  { key: 'daily_pv', label: 'PV 发电量', unit: 'kWh', color: '#f59e0b', bg: '#fffbeb' },
-  { key: 'daily_charge', label: '电池充电量', unit: 'kWh', color: '#22c55e', bg: '#f0fdf4' },
-  { key: 'daily_discharge', label: '电池放电量', unit: 'kWh', color: '#3b82f6', bg: '#eff6ff' },
-  { key: 'daily_load', label: '负载用电量', unit: 'kWh', color: '#ef4444', bg: '#fef2f2' },
-]
-
 const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, timezone }) => {
   const { t } = useTranslation()
   const [period, setPeriod] = useState<string>('day')
   const [currentDate, setCurrentDate] = useState<Dayjs>(dayjs().tz(timezone))
   const [flowDate, setFlowDate] = useState<string>(dayjs().tz(timezone).format('YYYY-MM-DD'))
+
+  const periodOptions = useMemo(() => [
+    { label: t('station.dayPeriod'), value: 'day' },
+    { label: t('station.monthPeriod'), value: 'month' },
+    { label: t('station.yearPeriod'), value: 'year' },
+  ], [t])
+
+  const energyCards = useMemo(() => [
+    { key: 'daily_pv', label: t('station.pvEnergy'), unit: 'kWh', color: '#f59e0b', bg: '#fffbeb' },
+    { key: 'daily_charge', label: t('station.battChargeEnergy'), unit: 'kWh', color: '#22c55e', bg: '#f0fdf4' },
+    { key: 'daily_discharge', label: t('station.battDischargeEnergy'), unit: 'kWh', color: '#3b82f6', bg: '#eff6ff' },
+    { key: 'daily_load', label: t('station.loadEnergy'), unit: 'kWh', color: '#ef4444', bg: '#fef2f2' },
+  ], [t])
 
   // 30日发电趋势
   const { data: trend30Res } = useQuery({
@@ -222,9 +222,9 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
     })
     const seriesConfig = [
       { name: 'PV', color: '#f59e0b', key: 'daily_pv', fallback: 'energy_produce' },
-      { name: '充电', color: '#22c55e', key: 'daily_charge', fallback: 'battery_charge' },
-      { name: '放电', color: '#3b82f6', key: 'daily_discharge', fallback: 'battery_discharge' },
-      { name: '负载', color: '#ef4444', key: 'daily_load', fallback: 'energy_consume' },
+      { name: t('station.charge'), color: '#22c55e', key: 'daily_charge', fallback: 'battery_charge' },
+      { name: t('station.discharge'), color: '#3b82f6', key: 'daily_discharge', fallback: 'battery_discharge' },
+      { name: t('station.load'), color: '#ef4444', key: 'daily_load', fallback: 'energy_consume' },
     ]
     return {
       tooltip: { trigger: 'axis' as const, axisPointer: { type: 'shadow' as const } },
@@ -243,7 +243,7 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
         barMaxWidth: 20,
       })),
     }
-  }, [statsData, period, timezone])
+  }, [statsData, period, timezone, t])
 
   // 30日发电趋势 ECharts 配置
   const trend30Option = useMemo(() => {
@@ -294,18 +294,18 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
     if (!categories.length) return null
     return {
       tooltip: { trigger: 'axis' as const, axisPointer: { type: 'shadow' as const } },
-      legend: { data: ['PV发电', '电池充电', '电池放电', '负载用电'], top: 0, itemGap: 16 },
+      legend: { data: [t('station.pvGeneration'), t('station.batteryCharge'), t('station.batteryDischarge'), t('station.loadUsage')], top: 0, itemGap: 16 },
       grid: { left: '3%', right: '4%', bottom: '12%', top: 45, containLabel: true },
       xAxis: { type: 'category' as const, data: categories, axisLabel: { fontSize: 11 } },
       yAxis: { type: 'value' as const, name: 'kWh' },
       series: [
-        { name: 'PV发电', type: 'bar' as const, data: pvData.map((v: any) => safeNum(v)), itemStyle: { color: '#f59e0b', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
-        { name: '电池充电', type: 'bar' as const, data: chargeData.map((v: any) => safeNum(v)), itemStyle: { color: '#22c55e', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
-        { name: '电池放电', type: 'bar' as const, data: dischargeData.map((v: any) => safeNum(v)), itemStyle: { color: '#3b82f6', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
-        { name: '负载用电', type: 'bar' as const, data: loadData.map((v: any) => safeNum(v)), itemStyle: { color: '#ef4444', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: t('station.pvGeneration'), type: 'bar' as const, data: pvData.map((v: any) => safeNum(v)), itemStyle: { color: '#f59e0b', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: t('station.batteryCharge'), type: 'bar' as const, data: chargeData.map((v: any) => safeNum(v)), itemStyle: { color: '#22c55e', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: t('station.batteryDischarge'), type: 'bar' as const, data: dischargeData.map((v: any) => safeNum(v)), itemStyle: { color: '#3b82f6', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: t('station.loadUsage'), type: 'bar' as const, data: loadData.map((v: any) => safeNum(v)), itemStyle: { color: '#ef4444', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
       ],
     }
-  }, [energyOverview])
+  }, [energyOverview, t])
 
   const dateFormat = period === 'day' ? 'YYYY-MM-DD' : period === 'month' ? 'YYYY-MM' : 'YYYY'
 
@@ -314,7 +314,7 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
       {/* 工具栏：时间粒度 + 日期导航 */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col>
-          <Segmented options={PERIOD_OPTIONS} value={period} onChange={v => setPeriod(v as string)} />
+          <Segmented options={periodOptions} value={period} onChange={v => setPeriod(v as string)} />
         </Col>
         <Col>
           <Space>
@@ -334,7 +334,7 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
 
       {/* 能源概览 4 宫格 */}
       <ProCard gutter={[12, 12]} style={{ marginBottom: 16 }}>
-        {ENERGY_CARDS.map(card => (
+        {energyCards.map(card => (
           <ProCard colSpan={{ xs: 12, sm: 6 }} key={card.key} bordered={false} style={{ background: card.bg, borderRadius: 12 }} bodyStyle={{ padding: '16px' }}>
             <Statistic
               title={<span style={{ fontSize: 13 }}>{card.label}</span>}
@@ -363,8 +363,8 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
                 style={{ width: 150 }}
                 size="small"
               />
-              <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).subtract(1, 'day').format('YYYY-MM-DD'))}>昨天</Button>
-              <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).format('YYYY-MM-DD'))}>今天</Button>
+              <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).subtract(1, 'day').format('YYYY-MM-DD'))}>{t('station.yesterday')}</Button>
+              <Button size="small" onClick={() => setFlowDate(dayjs().tz(timezone).format('YYYY-MM-DD'))}>{t('station.today')}</Button>
             </Space>
           }
         >
@@ -382,7 +382,7 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
 
       {/* 电量柱状图 */}
       {energyBarOption && (
-        <ProCard bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title="电量统计" size="small">
+        <ProCard bordered={false} style={{ borderRadius: 12, marginBottom: 16 }} title={t('station.energyStats')} size="small">
           <ReactECharts option={energyBarOption} style={{ height: 320 }} />
         </ProCard>
       )}
@@ -424,7 +424,7 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
 
       {!isLoading && (!statsData || statsData.length === 0) && (
         <ProCard bordered={false} style={{ borderRadius: 12, textAlign: 'center', padding: '48px 24px' }}>
-          <Text type="secondary">暂无统计数据</Text>
+          <Text type="secondary">{t('station.noStatsData')}</Text>
         </ProCard>
       )}
     </Spin>

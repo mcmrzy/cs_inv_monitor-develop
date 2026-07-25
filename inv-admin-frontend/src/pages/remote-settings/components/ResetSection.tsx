@@ -1,33 +1,35 @@
 import React from 'react'
 import { Button, Modal, App, Typography } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
+import useTranslation from '@/hooks/useTranslation'
 
 const { Text } = Typography
 
 const ResetSection: React.FC = () => {
   const { message } = App.useApp()
+  const { t } = useTranslation()
 
   return (
     <div>
       <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-        将所有系统设置恢复为出厂默认值，此操作不可撤销。
+        {t('remote.resetDescription')}
       </Text>
       <Button
         danger
         size="large"
         onClick={() => {
           Modal.confirm({
-            title: '确认恢复默认设置',
+            title: t('remote.resetConfirmTitle'),
             icon: <ExclamationCircleOutlined />,
-            content: '确定要将所有系统设置恢复为出厂默认值吗？此操作不可撤销。',
-            okText: '确认执行',
+            content: t('remote.resetConfirmContent'),
+            okText: t('remote.confirmExecute'),
             okType: 'danger',
-            cancelText: '取消',
-            onOk: () => message.success('恢复默认设置命令已发送'),
+            cancelText: t('remote.cancel'),
+            onOk: () => message.success(t('remote.resetCommandSent')),
           })
         }}
       >
-        系统设置恢复默认值
+        {t('remote.resetToDefault')}
       </Button>
     </div>
   )

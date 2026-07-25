@@ -64,7 +64,7 @@ func TestRevokeAllUserTokensInvalidatesIssuedSession(t *testing.T) {
 		Issuer:            "test",
 	})
 	service := NewJWTService(jwtInstance, rdb)
-	access, refresh, err := service.GenerateToken(9, "13800138000", ptrInt(5))
+	access, refresh, err := service.GenerateToken(9, "13800138000", false)
 	require.NoError(t, err)
 	claims, err := service.ParseToken(access)
 	require.NoError(t, err)
@@ -77,6 +77,3 @@ func TestRevokeAllUserTokensInvalidatesIssuedSession(t *testing.T) {
 	require.False(t, service.ValidateRefreshToken(t.Context(), 9, refresh))
 }
 
-func ptrInt(i int) *int {
-	return &i
-}

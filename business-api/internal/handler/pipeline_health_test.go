@@ -47,7 +47,7 @@ func (suite *PipelineHealthHandlerTestSuite) SetupSuite() {
 	})
 
 	// Create handler
-	suite.handler = NewPipelineHealthHandler(suite.rdb)
+	suite.handler = NewPipelineHealthHandler(suite.rdb, nil)
 
 	// Setup Gin router
 	gin.SetMode(gin.TestMode)
@@ -334,7 +334,7 @@ func TestPipelineHealth_StandaloneTests(t *testing.T) {
 		rdb := redis.NewClient(&redis.Options{Addr: s.Addr()})
 		defer rdb.Close()
 
-		handler := NewPipelineHealthHandler(rdb)
+		handler := NewPipelineHealthHandler(rdb, nil)
 		
 		count, err := handler.getOnlineDeviceCount(context.Background())
 		assert.NoError(t, err)
@@ -349,7 +349,7 @@ func TestPipelineHealth_StandaloneTests(t *testing.T) {
 		rdb := redis.NewClient(&redis.Options{Addr: s.Addr()})
 		defer rdb.Close()
 
-		handler := NewPipelineHealthHandler(rdb)
+		handler := NewPipelineHealthHandler(rdb, nil)
 		
 		// Add messages to different DLQs
 		rdb.LPush(context.Background(), "kafka:dlq:bridge", "msg1", "msg2", "msg3")
@@ -368,7 +368,7 @@ func TestPipelineHealth_StandaloneTests(t *testing.T) {
 		rdb := redis.NewClient(&redis.Options{Addr: s.Addr()})
 		defer rdb.Close()
 
-		handler := NewPipelineHealthHandler(rdb)
+		handler := NewPipelineHealthHandler(rdb, nil)
 		
 		lag := handler.getAverageKafkaLag(context.Background())
 		assert.Equal(t, 0.0, lag)
@@ -382,7 +382,7 @@ func TestPipelineHealth_StandaloneTests(t *testing.T) {
 		rdb := redis.NewClient(&redis.Options{Addr: s.Addr()})
 		defer rdb.Close()
 
-		handler := NewPipelineHealthHandler(rdb)
+		handler := NewPipelineHealthHandler(rdb, nil)
 		
 		rdb.Set(context.Background(), "kafka:lag:bridge-consumer", "10", 0)
 		rdb.Set(context.Background(), "kafka:lag:device-server-consumer", "20", 0)

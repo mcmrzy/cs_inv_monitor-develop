@@ -81,6 +81,7 @@ type authorizationContextResolver interface {
 	ResolveAuthorizationSessionContext(ctx context.Context, userID, organizationID int64) (model.AuthorizationSessionContext, error)
 	ResolveUserSessionVersion(ctx context.Context, userID int64) (int64, error)
 	ResolveDefaultSessionContext(ctx context.Context, userID int64) (model.AuthorizationSessionContext, error)
+	LoadAllPermissionCodes(ctx context.Context, actor model.ActorContext) ([]string, error)
 }
 
 func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService, rbacCache *service.RBACCache, captchaHandler *CaptchaHandler) *AuthHandler {
@@ -141,7 +142,7 @@ func (h *AuthHandler) generateLoginTokenPair(ctx context.Context, user *model.Us
 			AuthorizationVersion: 1,
 			SessionVersion:       sessionVersion,
 			Phone:                user.Phone,
-			LegacyRole:           user.Role,
+			IsSystemAdmin:        user.IsSystemAdmin,
 		}
 	}
 
@@ -151,12 +152,11 @@ func (h *AuthHandler) generateLoginTokenPair(ctx context.Context, user *model.Us
 		return loginTokenResult{}, fmt.Errorf("generate session id: %w", err)
 	}
 
-	rolePtr := jwt.PtrInt(resolved.LegacyRole)
 	accessToken, err := h.jwtService.GenerateContextAccessTokenForSession(
 		resolved.Actor.UserID, resolved.Actor.RootTenantID, resolved.Actor.OrganizationID,
 		resolved.Actor.MembershipID, resolved.Actor.MembershipVersion,
 		resolved.AuthorizationVersion, resolved.SessionVersion,
-		sessionID, resolved.Phone, rolePtr,
+		sessionID, resolved.Phone, resolved.IsSystemAdmin,
 	)
 	if err != nil {
 		return loginTokenResult{}, fmt.Errorf("generate access token: %w", err)
@@ -189,19 +189,19 @@ type LoginResponse struct {
 	User                 *model.User `json:"user"`
 	ExpiresIn            int64       `json:"expires_in"`
 	Permissions          []string    `json:"permissions"`
+	IsSystemAdmin        bool        `json:"is_system_admin"`
 	ActiveOrganizationID int64       `json:"active_organization_id,omitempty"`
 	RootTenantID         int64       `json:"root_tenant_id,omitempty"`
 	MembershipID         int64       `json:"membership_id,omitempty"`
 }
 
-// loadUserPermissions keeps every login and registration response on the same
-// RBAC contract.  Return an empty JSON array on an infrastructure error instead
-// of silently returning null; the gateway still performs the authoritative
-// permission check for every protected request.
-func (h *AuthHandler) loadUserPermissions(ctx context.Context, userID int64) []string {
+// loadUserPermissions loads the user's permission codes from the new
+// organization-based authorization system.  System admins receive a wildcard
+// permission; regular users get their granted permission_codes from the
+// membership role assignments.
+func (h *AuthHandler) loadUserPermissions(ctx context.Context, userID int64, tokenResult loginTokenResult) []string {
 	permissions := make([]string, 0)
 
-	// Look up user to get their role
 	user, err := h.userService.GetByID(ctx, userID)
 	if err != nil {
 		logger.Warn("Failed to load user for permissions",
@@ -209,14 +209,29 @@ func (h *AuthHandler) loadUserPermissions(ctx context.Context, userID int64) []s
 		return permissions
 	}
 
-	// Super-admin bypasses all permission checks, but still return full list for UI
-	loaded, err := h.userService.GetRolePermissions(ctx, int64(user.Role))
-	if err != nil {
-		logger.Warn("Failed to load role permissions for auth response",
-			zap.Int64("user_id", userID), zap.Int("role", user.Role), zap.Error(err))
+	// System admins bypass all permission checks.
+	if user.IsSystemAdmin {
+		return []string{"*"}
+	}
+
+	// Load permission codes from the organization-based authorization system.
+	if h.contextResolver == nil || tokenResult.ActiveOrganizationID <= 0 {
 		return permissions
 	}
-	return loaded
+	actor := model.ActorContext{
+		UserID:            userID,
+		RootTenantID:      tokenResult.RootTenantID,
+		OrganizationID:    tokenResult.ActiveOrganizationID,
+		MembershipID:      tokenResult.MembershipID,
+		MembershipVersion: 1,
+	}
+	codes, err := h.contextResolver.LoadAllPermissionCodes(ctx, actor)
+	if err != nil {
+		logger.Warn("Failed to load permission codes",
+			zap.Int64("user_id", userID), zap.Error(err))
+		return permissions
+	}
+	return codes
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -304,7 +319,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}()
 
 	// 获取用户权限列表
-	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 
 	// 设置 httpOnly cookie（同时返回 body 保持兼容）
 	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
@@ -316,6 +331,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		User:                 user,
 		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
 		Permissions:          permissions,
+		IsSystemAdmin:        user.IsSystemAdmin,
 		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
 		RootTenantID:         tokenResult.RootTenantID,
 		MembershipID:         tokenResult.MembershipID,
@@ -396,13 +412,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}()
 
 	user.PasswordHash = ""
-	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 	response.Success(c, LoginResponse{
 		AccessToken:          tokenResult.AccessToken,
 		RefreshToken:         tokenResult.RefreshToken,
 		User:                 user,
 		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
 		Permissions:          permissions,
+		IsSystemAdmin:        user.IsSystemAdmin,
 		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
 		RootTenantID:         tokenResult.RootTenantID,
 		MembershipID:         tokenResult.MembershipID,
@@ -747,12 +764,11 @@ func (h *AuthHandler) AuthorizationContext(c *gin.Context) {
 		return
 	}
 
-	legacyRole := resolved.LegacyRole
 	accessToken, err := h.jwtService.GenerateContextAccessTokenForSession(
 		resolved.Actor.UserID, resolved.Actor.RootTenantID, resolved.Actor.OrganizationID,
 		resolved.Actor.MembershipID, resolved.Actor.MembershipVersion,
 		resolved.AuthorizationVersion, resolved.SessionVersion,
-		refreshClaims.SessionID, resolved.Phone, &legacyRole,
+		refreshClaims.SessionID, resolved.Phone, resolved.IsSystemAdmin,
 	)
 	if err != nil {
 		response.Error(c, 500, "generate access token failed")
@@ -836,16 +852,15 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			AuthorizationVersion: 1,
 			SessionVersion:       currentSessionVersion,
 			Phone:                user.Phone,
-			LegacyRole:           user.Role,
+			IsSystemAdmin:        user.IsSystemAdmin,
 		}
 	}
 
-	rolePtr := jwt.PtrInt(resolved.LegacyRole)
 	newAccessToken, err := h.jwtService.GenerateContextAccessTokenForSession(
 		resolved.Actor.UserID, resolved.Actor.RootTenantID, resolved.Actor.OrganizationID,
 		resolved.Actor.MembershipID, resolved.Actor.MembershipVersion,
 		resolved.AuthorizationVersion, resolved.SessionVersion,
-		claims.SessionID, resolved.Phone, rolePtr,
+		claims.SessionID, resolved.Phone, resolved.IsSystemAdmin,
 	)
 	if err != nil {
 		response.Error(c, 500, "generate token failed")
@@ -1037,13 +1052,14 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 	}()
 
 	user.PasswordHash = ""
-	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 	response.Success(c, LoginResponse{
 		AccessToken:          tokenResult.AccessToken,
 		RefreshToken:         tokenResult.RefreshToken,
 		User:                 user,
 		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
 		Permissions:          permissions,
+		IsSystemAdmin:        user.IsSystemAdmin,
 		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
 		RootTenantID:         tokenResult.RootTenantID,
 		MembershipID:         tokenResult.MembershipID,
@@ -1125,13 +1141,14 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	}()
 
 	user.PasswordHash = ""
-	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 	response.Success(c, LoginResponse{
 		AccessToken:          tokenResult.AccessToken,
 		RefreshToken:         tokenResult.RefreshToken,
 		User:                 user,
 		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
 		Permissions:          permissions,
+		IsSystemAdmin:        user.IsSystemAdmin,
 		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
 		RootTenantID:         tokenResult.RootTenantID,
 		MembershipID:         tokenResult.MembershipID,
@@ -1199,7 +1216,7 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 		h.rbacCache.CacheUserPermissions(ctx, user.ID)
 	}()
 
-	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 
 	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
@@ -1210,6 +1227,7 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 		User:                 user,
 		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
 		Permissions:          permissions,
+		IsSystemAdmin:        user.IsSystemAdmin,
 		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
 		RootTenantID:         tokenResult.RootTenantID,
 		MembershipID:         tokenResult.MembershipID,
@@ -1281,7 +1299,7 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 		h.rbacCache.CacheUserPermissions(ctx, user.ID)
 	}()
 
-	permissions := h.loadUserPermissions(c.Request.Context(), user.ID)
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
 
 	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
 
@@ -1292,6 +1310,7 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 		User:                 user,
 		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
 		Permissions:          permissions,
+		IsSystemAdmin:        user.IsSystemAdmin,
 		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
 		RootTenantID:         tokenResult.RootTenantID,
 		MembershipID:         tokenResult.MembershipID,

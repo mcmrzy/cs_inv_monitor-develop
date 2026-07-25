@@ -20,8 +20,7 @@ const (
 )
 
 // AccessClaims binds an access token to one active organization membership.
-// Phone and Role are retained only for the legacy GenerateToken/ParseToken
-// compatibility path; authorization must use the organization context fields.
+// IsSystemAdmin replaces the legacy role=0 super-admin bypass.
 type AccessClaims struct {
 	TokenVersion         int64  `json:"token_version"`
 	UserID               int64  `json:"user_id"`
@@ -34,7 +33,7 @@ type AccessClaims struct {
 	SessionID            string `json:"session_id,omitempty"`
 	TokenType            string `json:"token_type"`
 	Phone                string `json:"phone,omitempty"`
-	Role                 *int   `json:"role,omitempty"` // Pointer type to distinguish unset vs role=0
+	IsSystemAdmin        bool   `json:"is_system_admin,omitempty"`
 	jwtlib.RegisteredClaims
 }
 
@@ -79,11 +78,11 @@ func NewJWT(config *JWTConfig) *JWT {
 // GenerateToken is the legacy, context-free login token pair generator.
 // Its access token is accepted only by ParseToken; ParseAccessToken rejects it
 // because it is not bound to an organization membership.
-func (j *JWT) GenerateToken(userID int64, phone string, role *int) (string, string, error) {
-	return j.GenerateTokenWithSessionVersion(userID, phone, role, 1)
+func (j *JWT) GenerateToken(userID int64, phone string, isSystemAdmin bool) (string, string, error) {
+	return j.GenerateTokenWithSessionVersion(userID, phone, isSystemAdmin, 1)
 }
 
-func (j *JWT) GenerateTokenWithSessionVersion(userID int64, phone string, role *int, sessionVersion int64) (string, string, error) {
+func (j *JWT) GenerateTokenWithSessionVersion(userID int64, phone string, isSystemAdmin bool, sessionVersion int64) (string, string, error) {
 	if sessionVersion <= 0 {
 		return "", "", errors.New("invalid session version")
 	}
@@ -94,10 +93,8 @@ func (j *JWT) GenerateTokenWithSessionVersion(userID int64, phone string, role *
 	now := time.Now().UTC()
 	claims := AccessClaims{
 		TokenVersion: 2, UserID: userID, Phone: phone, TokenType: TokenTypeAccess,
+		IsSystemAdmin: isSystemAdmin,
 		RegisteredClaims: j.registeredClaims(now, j.config.ExpireTime, j.config.AccessAudience, accessJTI, userID),
-	}
-	if role != nil {
-		claims.Role = role
 	}
 	accessToken, err := j.sign(claims)
 	if err != nil {
@@ -111,18 +108,22 @@ func (j *JWT) GenerateTokenWithSessionVersion(userID int64, phone string, role *
 }
 
 func (j *JWT) GenerateContextAccessToken(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64) (string, error) {
-	return j.GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, "", ptrInt(0))
-}
-
-func (j *JWT) GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, phone string, role *int) (string, error) {
 	sessionID, err := generateJTI()
 	if err != nil {
 		return "", err
 	}
-	return j.GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, sessionID, phone, role)
+	return j.GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, sessionID, "", false)
 }
 
-func (j *JWT) GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, sessionID, phone string, role *int) (string, error) {
+func (j *JWT) GenerateContextAccessTokenWithLegacy(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, phone string, isSystemAdmin bool) (string, error) {
+	sessionID, err := generateJTI()
+	if err != nil {
+		return "", err
+	}
+	return j.GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion, sessionID, phone, isSystemAdmin)
+}
+
+func (j *JWT) GenerateContextAccessTokenForSession(userID, rootTenantID, organizationID, membershipID, membershipVersion, authorizationVersion, sessionVersion int64, sessionID, phone string, isSystemAdmin bool) (string, error) {
 	if userID <= 0 || rootTenantID <= 0 || organizationID <= 0 || membershipID <= 0 || membershipVersion <= 0 || authorizationVersion <= 0 || sessionVersion <= 0 {
 		return "", errors.New("invalid access token context")
 	}
@@ -140,17 +141,15 @@ func (j *JWT) GenerateContextAccessTokenForSession(userID, rootTenantID, organiz
 		MembershipID: membershipID, MembershipVersion: membershipVersion,
 		AuthorizationVersion: authorizationVersion, SessionVersion: sessionVersion,
 		SessionID: sessionID, TokenType: TokenTypeAccess, Phone: phone,
+		IsSystemAdmin: isSystemAdmin,
 		RegisteredClaims: j.registeredClaims(now, j.config.ExpireTime, j.config.AccessAudience, jti, userID),
-	}
-	if role != nil {
-		claims.Role = role
 	}
 	return j.sign(claims)
 }
 
 // GenerateRefreshToken keeps the legacy parameters for source compatibility.
 // Phone and role are intentionally not embedded in the refresh token.
-func (j *JWT) GenerateRefreshToken(userID int64, _ string, _ int) (string, error) {
+func (j *JWT) GenerateRefreshToken(userID int64, _ string, _ bool) (string, error) {
 	return j.GenerateRefreshTokenWithVersion(userID, 1)
 }
 
@@ -189,15 +188,9 @@ func (j *JWT) registeredClaims(now time.Time, lifetime time.Duration, audience, 
 	}
 }
 
-// ptrInt returns a pointer to an int value.
-// Used to create *int for JWT claims with nullable role field.
-func ptrInt(i int) *int {
-	return &i
-}
-
-// PtrInt exports the ptrInt helper function for use outside the package.
-func PtrInt(i int) *int {
-	return ptrInt(i)
+// PtrBool returns a pointer to a bool value.
+func PtrBool(b bool) *bool {
+	return &b
 }
 
 func (j *JWT) sign(claims jwtlib.Claims) (string, error) {
@@ -238,10 +231,6 @@ func (j *JWT) parseAccessToken(tokenString string, requireContext bool) (*Access
 	}
 	if claims.TokenVersion != 2 {
 		return nil, errors.New("unsupported access token version")
-	}
-	// Validate role only if it's set (not nil)
-	if claims.Role != nil && (*claims.Role < 0 || *claims.Role > 5) {
-		return nil, errors.New("access token contains invalid legacy context")
 	}
 	if requireContext && (claims.RootTenantID <= 0 || claims.OrganizationID <= 0 || claims.MembershipID <= 0 ||
 		claims.MembershipVersion <= 0 || claims.AuthorizationVersion <= 0 || claims.SessionVersion <= 0 || claims.SessionID == "") {
@@ -302,11 +291,7 @@ func (j *JWT) RefreshToken(tokenString string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var rolePtr *int
-	if claims.Role != nil {
-		rolePtr = claims.Role
-	}
-	newToken, _, err := j.GenerateToken(claims.UserID, claims.Phone, rolePtr)
+	newToken, _, err := j.GenerateToken(claims.UserID, claims.Phone, claims.IsSystemAdmin)
 	return newToken, err
 }
 

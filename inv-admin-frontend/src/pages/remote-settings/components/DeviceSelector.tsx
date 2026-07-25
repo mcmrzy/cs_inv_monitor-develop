@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { deviceApi } from '@/services/deviceApi'
 import { queryKeys } from '@/utils/queryKeys'
 import api from '@/services/api'
+import useTranslation from '@/hooks/useTranslation'
 import type { DeviceItem } from '../types'
 
 const { Text } = Typography
@@ -25,6 +26,7 @@ const STATION_STORAGE_KEY = 'remote-settings-station-id'
 const DEVICE_STORAGE_KEY = 'remote-settings-device-sn'
 
 const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceChange, onRead, reading }) => {
+  const { t } = useTranslation()
   const [selectedStationId, setSelectedStationId] = useState<number | null>(() => {
     const saved = localStorage.getItem(STATION_STORAGE_KEY)
     return saved ? Number(saved) : null
@@ -88,15 +90,15 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
     <div style={{ marginBottom: 24 }}>
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>电站选择</Text>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>{t('remote.stationSelect')}</Text>
           <Select
             showSearch
             allowClear
-            placeholder="选择电站"
+            placeholder={t('remote.selectStation')}
             value={selectedStationId !== null ? stations.find(s => s.id === selectedStationId) ? `${selectedStationId}:${stations.find(s => s.id === selectedStationId)!.name}` : undefined : undefined}
             onChange={handleStationChange}
             loading={stationsLoading}
-            notFoundContent={stationsLoading ? <Spin size="small" /> : '暂无电站'}
+            notFoundContent={stationsLoading ? <Spin size="small" /> : t('remote.noStation')}
             style={{ minWidth: 240 }}
             filterOption={(input, option) =>
               (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
@@ -108,16 +110,16 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
           />
         </Col>
         <Col>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>设备选择</Text>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>{t('remote.deviceSelect')}</Text>
           <Select
             showSearch
             allowClear
-            placeholder={selectedStationId ? '选择设备 (SN)' : '请选择电站'}
+            placeholder={selectedStationId ? `${t('remote.selectDevice')} (SN)` : t('remote.selectStationFirst')}
             value={selectedSn}
             onChange={(v) => onDeviceChange(v ?? '')}
             loading={devicesLoading}
             disabled={selectedStationId === null}
-            notFoundContent={devicesLoading ? <Spin size="small" /> : '暂无设备'}
+            notFoundContent={devicesLoading ? <Spin size="small" /> : t('remote.noDevice')}
             style={{ minWidth: 280 }}
             filterOption={(input, option) =>
               (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
@@ -140,22 +142,22 @@ const DeviceSelector: React.FC<DeviceSelectorProps> = ({ selectedSn, onDeviceCha
                   <div style={{ fontWeight: 600 }}>{selectedDevice.sn}</div>
                 </Col>
                 <Col>
-                  <Text type="secondary" style={{ fontSize: 12 }}>在线状态</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{t('remote.onlineStatus')}</Text>
                   <div>
                     <Tag color={isOnline ? '#22c55e' : '#8c8c8c'}>
-                      {isOnline ? '在线' : '离线'}
+                      {isOnline ? t('remote.online') : t('remote.offline')}
                     </Tag>
                   </div>
                 </Col>
                 <Col>
-                  <Text type="secondary" style={{ fontSize: 12 }}>型号</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{t('remote.model')}</Text>
                   <div>{selectedDevice.model || selectedDevice.device_type || '-'}</div>
                 </Col>
               </Row>
             </Col>
             <Col>
               <Button type="primary" icon={<ReloadOutlined />} onClick={onRead} loading={reading}>
-                读取当前设置
+                {t('remote.readCurrent')}
               </Button>
             </Col>
           </Row>

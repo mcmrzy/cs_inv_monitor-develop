@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import { safeNum } from '@/utils/format'
+import useTranslation from '@/hooks/useTranslation'
 
 const { Text } = Typography
 
@@ -35,55 +36,55 @@ interface FieldDef {
   precision?: number
 }
 
-const GROUP_FIELDS: Record<string, { label: string; aliases: string[]; fields: FieldDef[] }> = {
+const getGroupFields = (t: (key: string) => string): Record<string, { label: string; aliases: string[]; fields: FieldDef[] }> => ({
   ac: {
-    label: '交流参数',
+    label: t('station.acParams'),
     aliases: ['ac', 'AC', 'ac_phase'],
     fields: [
-      { key: 'voltage', label: '电压', unit: 'V', precision: 1 },
-      { key: 'current', label: '电流', unit: 'A', precision: 2 },
-      { key: 'power', label: '功率', unit: 'W', precision: 0 },
-      { key: 'frequency', label: '频率', unit: 'Hz', precision: 2 },
-      { key: 'load_percent', label: '负载率', unit: '%', precision: 1 },
-      { key: 'power_factor', label: '功率因数', precision: 3 },
+      { key: 'voltage', label: t('station.voltage'), unit: 'V', precision: 1 },
+      { key: 'current', label: t('station.current'), unit: 'A', precision: 2 },
+      { key: 'power', label: t('station.power'), unit: 'W', precision: 0 },
+      { key: 'frequency', label: t('station.frequency'), unit: 'Hz', precision: 2 },
+      { key: 'load_percent', label: t('station.loadRate'), unit: '%', precision: 1 },
+      { key: 'power_factor', label: t('station.powerFactor'), precision: 3 },
     ],
   },
   batt: {
-    label: '电池参数',
+    label: t('station.batteryParams'),
     aliases: ['batt', 'battery', 'bat', 'BAT'],
     fields: [
       { key: 'soc', label: 'SOC', unit: '%', precision: 1 },
-      { key: 'voltage', label: '电压', unit: 'V', precision: 2 },
-      { key: 'current', label: '电流', unit: 'A', precision: 2 },
-      { key: 'power', label: '功率', unit: 'W', precision: 0 },
-      { key: 'temperature', label: '温度', unit: '°C', precision: 1 },
-      { key: 'cycle_count', label: '循环次数', precision: 0 },
-      { key: 'capacity', label: '容量', unit: '%', precision: 1 },
+      { key: 'voltage', label: t('station.voltage'), unit: 'V', precision: 2 },
+      { key: 'current', label: t('station.current'), unit: 'A', precision: 2 },
+      { key: 'power', label: t('station.power'), unit: 'W', precision: 0 },
+      { key: 'temperature', label: t('station.temperature'), unit: '°C', precision: 1 },
+      { key: 'cycle_count', label: t('station.cycleCount'), precision: 0 },
+      { key: 'capacity', label: t('station.capacity'), unit: '%', precision: 1 },
     ],
   },
   pv: {
-    label: '光伏参数',
+    label: t('station.pvParams'),
     aliases: ['pv', 'PV', 'solar'],
     fields: [
-      { key: 'pv1_voltage', label: 'PV1电压', unit: 'V', precision: 1 },
-      { key: 'pv2_voltage', label: 'PV2电压', unit: 'V', precision: 1 },
-      { key: 'pv1_power', label: 'PV1功率', unit: 'W', precision: 0 },
-      { key: 'pv2_power', label: 'PV2功率', unit: 'W', precision: 0 },
-      { key: 'pv_total_power', label: 'PV总功率', unit: 'W', precision: 0 },
+      { key: 'pv1_voltage', label: t('station.pv1Voltage'), unit: 'V', precision: 1 },
+      { key: 'pv2_voltage', label: t('station.pv2Voltage'), unit: 'V', precision: 1 },
+      { key: 'pv1_power', label: t('station.pv1Power'), unit: 'W', precision: 0 },
+      { key: 'pv2_power', label: t('station.pv2Power'), unit: 'W', precision: 0 },
+      { key: 'pv_total_power', label: t('station.pvTotalPower'), unit: 'W', precision: 0 },
     ],
   },
   sys: {
-    label: '系统状态',
+    label: t('station.systemStatus'),
     aliases: ['sys', 'system', 'SYS', 'inverter'],
     fields: [
-      { key: 'inverter_temp', label: '逆变器温度', unit: '°C', precision: 1 },
-      { key: 'efficiency', label: '效率', unit: '%', precision: 1 },
-      { key: 'run_status', label: '运行状态' },
-      { key: 'fault_code', label: '故障码' },
-      { key: 'total_run_time', label: '累计运行时间', unit: 'h', precision: 0 },
+      { key: 'inverter_temp', label: t('station.inverterTemp'), unit: '°C', precision: 1 },
+      { key: 'efficiency', label: t('station.efficiency'), unit: '%', precision: 1 },
+      { key: 'run_status', label: t('station.field_run_status') },
+      { key: 'fault_code', label: t('station.faultCode') },
+      { key: 'total_run_time', label: t('station.totalRunTime'), unit: 'h', precision: 0 },
     ],
   },
-}
+})
 
 const getNestedValue = (data: any, category: string, field: string): any => {
   if (!data) return undefined
@@ -107,6 +108,9 @@ const findGroupData = (data: any, aliases: string[]): Record<string, any> | null
 }
 
 const DeviceRealtimeModal: React.FC<DeviceRealtimeModalProps> = ({ open, deviceSn, onClose }) => {
+  const { t } = useTranslation()
+  const GROUP_FIELDS = useMemo(() => getGroupFields(t), [t])
+
   const { data: rtData, isLoading } = useQuery({
     queryKey: ['device-realtime-modal', deviceSn],
     queryFn: () => deviceApi.getRealtime(deviceSn!).then(res => {
@@ -121,7 +125,7 @@ const DeviceRealtimeModal: React.FC<DeviceRealtimeModalProps> = ({ open, deviceS
     if (!rtData) return []
     const result: { groupKey: string; label: string; fields: { def: FieldDef; value: any }[] }[] = []
 
-    for (const [groupKey, groupDef] of Object.entries(GROUP_FIELDS)) {
+    for (const [groupKey, groupDef] of Object.entries(GROUP_FIELDS) as [string, { label: string; aliases: string[]; fields: FieldDef[] }][]) {
       const groupData = findGroupData(rtData, groupDef.aliases)
       const fieldValues = groupDef.fields
         .map(def => {
@@ -138,14 +142,14 @@ const DeviceRealtimeModal: React.FC<DeviceRealtimeModalProps> = ({ open, deviceS
       }
     }
     return result
-  }, [rtData])
+  }, [rtData, GROUP_FIELDS])
 
   return (
     <Modal
       title={
         <span>
           <ThunderboltOutlined style={{ marginRight: 8 }} />
-          设备实时数据 {deviceSn && <Tag style={{ marginLeft: 8, fontFamily: 'monospace' }}>{deviceSn}</Tag>}
+          {t('station.deviceRealtimeData')} {deviceSn && <Tag style={{ marginLeft: 8, fontFamily: 'monospace' }}>{deviceSn}</Tag>}
         </span>
       }
       open={open}
@@ -156,7 +160,7 @@ const DeviceRealtimeModal: React.FC<DeviceRealtimeModalProps> = ({ open, deviceS
     >
       <Spin spinning={isLoading}>
         {groupedDisplay.length === 0 && !isLoading ? (
-          <Empty description="暂无实时数据" style={{ padding: '24px 0' }} />
+          <Empty description={t('station.noRealtimeData')} style={{ padding: '24px 0' }} />
         ) : (
           <Row gutter={[16, 16]}>
             {groupedDisplay.map((group, groupIdx) => {

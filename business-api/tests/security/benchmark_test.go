@@ -22,7 +22,7 @@ func BenchmarkJWT_GenerateToken(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, err := jwtService.GenerateToken(1, "13800138000", j.PtrInt(5))
+		_, _, err := jwtService.GenerateToken(1, "13800138000", false)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -37,7 +37,7 @@ func BenchmarkJWT_ParseToken(b *testing.B) {
 		Issuer:            "benchmark",
 	})
 
-	token, _, _ := jwtService.GenerateToken(1, "13800138000", j.PtrInt(5))
+	token, _, _ := jwtService.GenerateToken(1, "13800138000", false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -58,7 +58,7 @@ func BenchmarkJWT_GenerateAndParse(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		token, _, err := jwtService.GenerateToken(1, "13800138000", j.PtrInt(5))
+		token, _, err := jwtService.GenerateToken(1, "13800138000", false)
 		if err != nil {
 			b.Fatal(err)
 		}

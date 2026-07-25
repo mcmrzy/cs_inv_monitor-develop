@@ -58,7 +58,7 @@ func (r *AuthorizationRepository) ResolveAuthorizationSessionContext(ctx context
 	result.Actor.OrganizationID = organizationID
 	err := r.db.QueryRow(ctx, `
 		SELECT m.root_tenant_id,m.id,m.version,m.authorization_version,
-		       u.session_version,u.phone,u.role
+		       u.session_version,u.phone,u.is_system_admin
 		FROM organization_memberships m
 		JOIN organizations o
 		  ON o.root_tenant_id=m.root_tenant_id AND o.id=m.organization_id
@@ -77,7 +77,7 @@ func (r *AuthorizationRepository) ResolveAuthorizationSessionContext(ctx context
 	`, userID, organizationID).Scan(
 		&result.Actor.RootTenantID, &result.Actor.MembershipID,
 		&result.Actor.MembershipVersion, &result.AuthorizationVersion,
-		&result.SessionVersion, &result.Phone, &result.LegacyRole,
+		&result.SessionVersion, &result.Phone, &result.IsSystemAdmin,
 	)
 	return result, err
 }
@@ -101,7 +101,7 @@ func (r *AuthorizationRepository) ResolveDefaultSessionContext(ctx context.Conte
 	result.Actor.UserID = userID
 	err := r.db.QueryRow(ctx, `
 		SELECT m.root_tenant_id, m.organization_id, m.id, m.version, m.authorization_version,
-		       u.session_version, u.phone, u.role
+		       u.session_version, u.phone, u.is_system_admin
 		FROM organization_memberships m
 		JOIN organizations o
 		  ON o.root_tenant_id=m.root_tenant_id AND o.id=m.organization_id
@@ -123,7 +123,7 @@ func (r *AuthorizationRepository) ResolveDefaultSessionContext(ctx context.Conte
 		&result.Actor.RootTenantID, &result.Actor.OrganizationID,
 		&result.Actor.MembershipID, &result.Actor.MembershipVersion,
 		&result.AuthorizationVersion,
-		&result.SessionVersion, &result.Phone, &result.LegacyRole,
+		&result.SessionVersion, &result.Phone, &result.IsSystemAdmin,
 	)
 	return result, err
 }
@@ -398,4 +398,55 @@ func (r *AuthorizationRepository) OrganizationCoveredByGrant(ctx context.Context
 	`, actor.RootTenantID, targetOrganizationID, actor.OrganizationID, grant.PermissionCode,
 		actor.UserID, actor.MembershipID, actor.MembershipVersion, grant.ID, grant.RoleAssignmentID).Scan(&covered)
 	return covered, err
+}
+
+// LoadAllPermissionCodes returns every distinct permission_code granted to the
+// user through their active organization membership.  This is used by the login
+// and refresh flows to populate the permissions array in the response.
+func (r *AuthorizationRepository) LoadAllPermissionCodes(ctx context.Context, actor model.ActorContext) ([]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT pg.permission_code
+		FROM organization_memberships m
+		JOIN organizations o
+		  ON o.root_tenant_id=m.root_tenant_id AND o.id=m.organization_id
+		JOIN users u ON u.id=m.user_id
+		JOIN membership_role_assignments ra
+		  ON ra.root_tenant_id=m.root_tenant_id
+		 AND ra.organization_id=m.organization_id
+		 AND ra.membership_id=m.id
+		JOIN role_permission_grants pg
+		  ON pg.root_tenant_id=ra.root_tenant_id
+		 AND pg.organization_id=ra.organization_id
+		 AND pg.role_assignment_id=ra.id
+		WHERE m.root_tenant_id=$1 AND m.user_id=$2 AND m.organization_id=$3
+		  AND m.id=$4 AND m.version=$5
+		  AND m.status='active' AND (m.expires_at IS NULL OR m.expires_at > NOW())
+		  AND o.status='active' AND o.deleted_at IS NULL
+		  AND u.status=1 AND u.deleted_at IS NULL
+		  AND ra.status='active'
+		  AND NOT EXISTS (
+			SELECT 1 FROM organization_closure c
+			JOIN organizations ancestor
+			  ON ancestor.root_tenant_id=c.root_tenant_id AND ancestor.id=c.ancestor_id
+			WHERE c.root_tenant_id=m.root_tenant_id AND c.descendant_id=m.organization_id
+			  AND (ancestor.status<>'active' OR ancestor.deleted_at IS NOT NULL)
+		  )
+		ORDER BY pg.permission_code
+	`, actor.RootTenantID, actor.UserID, actor.OrganizationID, actor.MembershipID, actor.MembershipVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	codes := make([]string, 0)
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		codes = append(codes, code)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return codes, nil
 }

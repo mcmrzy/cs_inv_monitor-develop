@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { Row, Col, Select, InputNumber, Divider, App, Typography, Space, Tooltip } from 'antd'
 import { QuestionCircleOutlined } from '@ant-design/icons'
+import useTranslation from '@/hooks/useTranslation'
 import { FieldRow, SwitchField, SettingButton, SubGroupTitle, labelStyle, fieldRowStyle, SECTION_COLORS, disabledInputStyle } from './shared-styles'
 
 const { Text } = Typography
@@ -17,29 +18,33 @@ interface TimeRangeFieldProps {
   disabled?: boolean
 }
 
-const TimeRangeField: React.FC<TimeRangeFieldProps> = ({ label, h, m, onHChange, onMChange, onSet, tooltip, disabled }) => (
-  <Col span={24}>
-    <div style={fieldRowStyle}>
-      <Text style={labelStyle}>
-        {label}
-        {tooltip && (
-          <Tooltip title={tooltip} overlayStyle={{ maxWidth: 360 }}>
-            <QuestionCircleOutlined style={{ marginLeft: 4, color: '#bbb', cursor: 'help', fontSize: 13 }} />
-          </Tooltip>
-        )}
-      </Text>
-      <Space>
-        <InputNumber min={0} max={23} value={h} onChange={onHChange} style={{ width: 70, ...(disabled ? disabledInputStyle : {}) }} addonAfter="时" disabled={disabled} />
-        <Text>:</Text>
-        <InputNumber min={0} max={59} value={m} onChange={onMChange} style={{ width: 70, ...(disabled ? disabledInputStyle : {}) }} addonAfter="分" disabled={disabled} />
-        <SettingButton onClick={onSet} disabled={disabled} />
-      </Space>
-    </div>
-  </Col>
-)
+const TimeRangeField: React.FC<TimeRangeFieldProps> = ({ label, h, m, onHChange, onMChange, onSet, tooltip, disabled }) => {
+  const { t } = useTranslation()
+  return (
+    <Col span={24}>
+      <div style={fieldRowStyle}>
+        <Text style={labelStyle}>
+          {label}
+          {tooltip && (
+            <Tooltip title={tooltip} overlayStyle={{ maxWidth: 360 }}>
+              <QuestionCircleOutlined style={{ marginLeft: 4, color: '#bbb', cursor: 'help', fontSize: 13 }} />
+            </Tooltip>
+          )}
+        </Text>
+        <Space>
+          <InputNumber min={0} max={23} value={h} onChange={onHChange} style={{ width: 70, ...(disabled ? disabledInputStyle : {}) }} addonAfter={t('remote.hour')} disabled={disabled} />
+          <Text>:</Text>
+          <InputNumber min={0} max={59} value={m} onChange={onMChange} style={{ width: 70, ...(disabled ? disabledInputStyle : {}) }} addonAfter={t('remote.minute')} disabled={disabled} />
+          <SettingButton onClick={onSet} disabled={disabled} />
+        </Space>
+      </div>
+    </Col>
+  )
+}
 
 const ChargeSection: React.FC = () => {
   const { message } = App.useApp()
+  const { t } = useTranslation()
 
   // 顶层
   const [chargePowerPercent, setChargePowerPercent] = useState<number>(100)
@@ -94,7 +99,7 @@ const ChargeSection: React.FC = () => {
   const [systemChargePriorityPercent, setSystemChargePriorityPercent] = useState<number>(0)
 
   const handleSet = (fieldName: string) => {
-    message.success(`${fieldName} 指令已下发`)
+    message.success(t('remote.executeSuccess', { title: fieldName }))
   }
 
   // AC充电：设置时自动将不相关的值归零
@@ -134,8 +139,8 @@ const ChargeSection: React.FC = () => {
         setAcChargeEndSoc(0)
       }
     }
-    handleSet('AC充电控制依据')
-  }, [acChargeControl])
+    handleSet(t('remote.acChargeControl'))
+  }, [acChargeControl, t])
 
   // 发电机充电：设置时自动将不相关的值归零
   const handleGenTypeSet = useCallback(() => {
@@ -148,8 +153,8 @@ const ChargeSection: React.FC = () => {
       setGenChargeStartVoltage(0)
       setGenChargeEndVoltage(0)
     }
-    handleSet('发电机充电类型')
-  }, [genChargeType])
+    handleSet(t('remote.genChargeType'))
+  }, [genChargeType, t])
 
   const sectionColor = SECTION_COLORS.charge
 
@@ -166,169 +171,169 @@ const ChargeSection: React.FC = () => {
   return (
     <Row gutter={[16, 8]}>
       {/* 顶层字段 */}
-      <FieldRow label="充电功率百分比(%)" tooltip="设置充电功率百分比限制">
+      <FieldRow label={`${t('remote.chargePowerPct')}(%)`} tooltip={t('remote.chargePowerPctTooltip')}>
         <InputNumber min={0} max={100} value={chargePowerPercent} onChange={(v) => setChargePowerPercent(v ?? 100)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('充电功率百分比')} />
+        <SettingButton onClick={() => handleSet(t('remote.chargePowerPct'))} />
       </FieldRow>
 
       <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 主充电参数 */}
-      <SubGroupTitle title="主充电参数" color={sectionColor} />
+      <SubGroupTitle title={t('remote.mainChargeParams')} color={sectionColor} />
 
-      <FieldRow label="充电电流限制(Adc)" tooltip="根据电池要求进行设置，范围：0~110（单台）4480（并联）。">
+      <FieldRow label={`${t('remote.chargeCurrentLimitLabel')}(Adc)`} tooltip={t('remote.chargeCurrentLimitTooltip')}>
         <InputNumber min={0} max={110} step={0.1} value={chargeCurrent} onChange={(v) => setChargeCurrent(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('充电电流限制')} />
+        <SettingButton onClick={() => handleSet(t('remote.chargeCurrentLimitLabel'))} />
       </FieldRow>
 
       <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 铅酸充电参数 */}
-      <SubGroupTitle title="铅酸" color={sectionColor} />
+      <SubGroupTitle title={t('remote.leadAcid')} color={sectionColor} />
 
-      <FieldRow label="充电电压(V)" tooltip="根据电池要求进行设置，范围：50~59V。">
+      <FieldRow label={`${t('remote.chargeVoltageLabel')}(V)`} tooltip={t('remote.chargeVoltageTooltip')}>
         <InputNumber min={50} max={59} step={0.1} value={chargeVoltage} onChange={(v) => setChargeVoltage(v ?? 50)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('充电电压')} />
+        <SettingButton onClick={() => handleSet(t('remote.chargeVoltageLabel'))} />
       </FieldRow>
 
-      <FieldRow label="浮动电压(V)" tooltip="根据电池要求进行设置，范围：50~56V。1：使用铅酸电池时，必须设置低于充电电压。2：在铅酸模式下使用锂电池时，可以设置为等于或低于充电电压。">
+      <FieldRow label={`${t('remote.floatVoltage')}(V)`} tooltip={t('remote.floatVoltageTooltip')}>
         <InputNumber min={50} max={56} step={0.1} value={floatVoltage} onChange={(v) => setFloatVoltage(v ?? 50)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('浮动电压')} />
+        <SettingButton onClick={() => handleSet(t('remote.floatVoltage'))} />
       </FieldRow>
 
-      <FieldRow label="均衡电压(V)" tooltip="1：使用铅酸电池时，设置范围：50~59。2：在铅酸模式下使用锂电池时，输入 0。">
+      <FieldRow label={`${t('remote.equalizeVoltage')}(V)`} tooltip={t('remote.equalizeVoltageTooltip')}>
         <InputNumber min={0} max={59} step={0.1} value={equalVoltage} onChange={(v) => setEqualVoltage(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('均衡电压')} />
+        <SettingButton onClick={() => handleSet(t('remote.equalizeVoltage'))} />
       </FieldRow>
 
-      <FieldRow label="均衡周期(天)" tooltip="1：使用铅酸电池时，设置范围：0~365。2：在铅酸模式下使用锂电池时，输入 0。">
+      <FieldRow label={`${t('remote.equalizeCycle')}${t('remote.day')}`} tooltip={t('remote.equalizeCycleTooltip')}>
         <InputNumber min={0} max={365} value={equalCycle} onChange={(v) => setEqualCycle(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('均衡周期')} />
+        <SettingButton onClick={() => handleSet(t('remote.equalizeCycle'))} />
       </FieldRow>
 
-      <FieldRow label="均衡时间(小时)" tooltip="1：使用铅酸电池时，设置范围：0~24。2：在铅酸模式下使用锂电池时，输入 0。">
+      <FieldRow label={`${t('remote.equalizeTime')}${t('remote.hour')}`} tooltip={t('remote.equalizeTimeTooltip')}>
         <InputNumber min={0} max={24} value={equalTime} onChange={(v) => setEqualTime(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('均衡时间')} />
+        <SettingButton onClick={() => handleSet(t('remote.equalizeTime'))} />
       </FieldRow>
 
       <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 交流充电 */}
-      <SubGroupTitle title="交流充电" color={sectionColor} />
+      <SubGroupTitle title={t('remote.acCharge')} color={sectionColor} />
 
-      <FieldRow label="AC充电控制依据" tooltip="根据时间：设定一个优选的充电时间段给电池。根据SOC/电压：当SOC/电压下降到设定阈值时设定交流电充电电池。">
+      <FieldRow label={t('remote.acChargeControl')} tooltip={t('remote.acChargeControlTooltip')}>
         <Select value={acChargeControl} onChange={(v: number) => setAcChargeControl(v)} style={{ width: 180 }}>
-          <Option value={0}>禁用</Option>
-          <Option value={1}>时间</Option>
-          <Option value={2}>电池电压</Option>
-          <Option value={3}>电池SOC</Option>
-          <Option value={4}>电池电压+时间</Option>
-          <Option value={5}>电池SOC+时间</Option>
+          <Option value={0}>{t('remote.disable')}</Option>
+          <Option value={1}>{t('remote.time')}</Option>
+          <Option value={2}>{t('remote.batteryVoltage')}</Option>
+          <Option value={3}>{t('remote.batterySoc')}</Option>
+          <Option value={4}>{t('remote.batteryVoltageTime')}</Option>
+          <Option value={5}>{t('remote.batterySocTime')}</Option>
         </Select>
         <SettingButton onClick={handleAcControlSet} />
       </FieldRow>
 
-      <FieldRow label="交流充电电池电流(A)" tooltip="根据电池要求进行设置，范围：0~100A。">
+      <FieldRow label={`${t('remote.acChargeCurrent')}(A)`} tooltip={t('remote.acChargeCurrentTooltip')}>
         <InputNumber min={0} max={100} step={0.1} value={acChargeCurrent} onChange={(v) => setAcChargeCurrent(v ?? 0)} style={{ width: 140, ...(!acShowCurrent ? disabledInputStyle : {}) }} disabled={!acShowCurrent} />
-        <SettingButton onClick={() => handleSet('交流充电电池电流')} disabled={!acShowCurrent} />
+        <SettingButton onClick={() => handleSet(t('remote.acChargeCurrent'))} disabled={!acShowCurrent} />
       </FieldRow>
 
-      <FieldRow label="交流充电开始电池电压(V)" tooltip="根据电池要求进行设置，范围：38.4~52V。">
+      <FieldRow label={`${t('remote.acChargeStartVoltage')}(V)`} tooltip={t('remote.acChargeStartVoltageTooltip')}>
         <InputNumber min={0} max={52} step={0.1} value={acChargeStartVoltage} onChange={(v) => setAcChargeStartVoltage(v ?? 0)} style={{ width: 140, ...(!acShowVoltage ? disabledInputStyle : {}) }} disabled={!acShowVoltage} />
-        <SettingButton onClick={() => handleSet('交流充电开始电池电压')} disabled={!acShowVoltage} />
+        <SettingButton onClick={() => handleSet(t('remote.acChargeStartVoltage'))} disabled={!acShowVoltage} />
       </FieldRow>
 
-      <FieldRow label="交流充电结束电池电压(V)" tooltip="根据电池要求进行设置，范围：48~59V。">
+      <FieldRow label={`${t('remote.acChargeEndVoltage')}(V)`} tooltip={t('remote.acChargeEndVoltageTooltip')}>
         <InputNumber min={0} max={59} step={0.1} value={acChargeEndVoltage} onChange={(v) => setAcChargeEndVoltage(v ?? 0)} style={{ width: 140, ...(!acShowVoltage ? disabledInputStyle : {}) }} disabled={!acShowVoltage} />
-        <SettingButton onClick={() => handleSet('交流充电结束电池电压')} disabled={!acShowVoltage} />
+        <SettingButton onClick={() => handleSet(t('remote.acChargeEndVoltage'))} disabled={!acShowVoltage} />
       </FieldRow>
 
-      <FieldRow label="交流充电开始电池SOC(%)" tooltip="根据电池要求进行设置，范围：0~90%。">
+      <FieldRow label={`${t('remote.acChargeStartSoc')}(%)`} tooltip={t('remote.acChargeStartSocTooltip')}>
         <InputNumber min={0} max={90} value={acChargeStartSoc} onChange={(v) => setAcChargeStartSoc(v ?? 0)} style={{ width: 140, ...(!acShowSoc ? disabledInputStyle : {}) }} disabled={!acShowSoc} />
-        <SettingButton onClick={() => handleSet('交流充电开始电池SOC')} disabled={!acShowSoc} />
+        <SettingButton onClick={() => handleSet(t('remote.acChargeStartSoc'))} disabled={!acShowSoc} />
       </FieldRow>
 
-      <FieldRow label="交流充电结束电池SOC(%)" tooltip="根据电池要求进行设置，范围：20~100%。">
+      <FieldRow label={`${t('remote.acChargeEndSoc')}(%)`} tooltip={t('remote.acChargeEndSocTooltip')}>
         <InputNumber min={0} max={100} value={acChargeEndSoc} onChange={(v) => setAcChargeEndSoc(v ?? 0)} style={{ width: 140, ...(!acShowSoc ? disabledInputStyle : {}) }} disabled={!acShowSoc} />
-        <SettingButton onClick={() => handleSet('交流充电结束电池SOC')} disabled={!acShowSoc} />
+        <SettingButton onClick={() => handleSet(t('remote.acChargeEndSoc'))} disabled={!acShowSoc} />
       </FieldRow>
 
-      <SwitchField label="AC充电使能" checked={acChargeEnable} onChange={(v) => { setAcChargeEnable(v); handleSet('AC充电使能') }} enableText="启用" disableText="禁用" tooltip="启用交流充电功能" />
+      <SwitchField label={t('remote.acChargeEnable')} checked={acChargeEnable} onChange={(v) => { setAcChargeEnable(v); handleSet(t('remote.acChargeEnable')) }} enableText={t('remote.enable')} disableText={t('remote.disable')} tooltip={t('remote.acChargeEnableTooltip')} />
 
-      <TimeRangeField label="AC充电起始时间1" h={acStart1H} m={acStart1M} onHChange={(v) => setAcStart1H(v ?? 0)} onMChange={(v) => setAcStart1M(v ?? 0)} onSet={() => handleSet('AC充电起始时间1')} disabled={!acShowTime} />
-      <TimeRangeField label="AC充电结束时间1" h={acEnd1H} m={acEnd1M} onHChange={(v) => setAcEnd1H(v ?? 0)} onMChange={(v) => setAcEnd1M(v ?? 0)} onSet={() => handleSet('AC充电结束时间1')} disabled={!acShowTime} />
-      <TimeRangeField label="AC充电起始时间2" h={acStart2H} m={acStart2M} onHChange={(v) => setAcStart2H(v ?? 0)} onMChange={(v) => setAcStart2M(v ?? 0)} onSet={() => handleSet('AC充电起始时间2')} disabled={!acShowTime} />
-      <TimeRangeField label="AC充电结束时间2" h={acEnd2H} m={acEnd2M} onHChange={(v) => setAcEnd2H(v ?? 0)} onMChange={(v) => setAcEnd2M(v ?? 0)} onSet={() => handleSet('AC充电结束时间2')} disabled={!acShowTime} />
-      <TimeRangeField label="AC充电起始时间3" h={acStart3H} m={acStart3M} onHChange={(v) => setAcStart3H(v ?? 0)} onMChange={(v) => setAcStart3M(v ?? 0)} onSet={() => handleSet('AC充电起始时间3')} disabled={!acShowTime} />
-      <TimeRangeField label="AC充电结束时间3" h={acEnd3H} m={acEnd3M} onHChange={(v) => setAcEnd3H(v ?? 0)} onMChange={(v) => setAcEnd3M(v ?? 0)} onSet={() => handleSet('AC充电结束时间3')} disabled={!acShowTime} />
+      <TimeRangeField label={t('remote.acChargeStartTime1')} h={acStart1H} m={acStart1M} onHChange={(v) => setAcStart1H(v ?? 0)} onMChange={(v) => setAcStart1M(v ?? 0)} onSet={() => handleSet(t('remote.acChargeStartTime1'))} disabled={!acShowTime} />
+      <TimeRangeField label={t('remote.acChargeEndTime1')} h={acEnd1H} m={acEnd1M} onHChange={(v) => setAcEnd1H(v ?? 0)} onMChange={(v) => setAcEnd1M(v ?? 0)} onSet={() => handleSet(t('remote.acChargeEndTime1'))} disabled={!acShowTime} />
+      <TimeRangeField label={t('remote.acChargeStartTime2')} h={acStart2H} m={acStart2M} onHChange={(v) => setAcStart2H(v ?? 0)} onMChange={(v) => setAcStart2M(v ?? 0)} onSet={() => handleSet(t('remote.acChargeStartTime2'))} disabled={!acShowTime} />
+      <TimeRangeField label={t('remote.acChargeEndTime2')} h={acEnd2H} m={acEnd2M} onHChange={(v) => setAcEnd2H(v ?? 0)} onMChange={(v) => setAcEnd2M(v ?? 0)} onSet={() => handleSet(t('remote.acChargeEndTime2'))} disabled={!acShowTime} />
+      <TimeRangeField label={t('remote.acChargeStartTime3')} h={acStart3H} m={acStart3M} onHChange={(v) => setAcStart3H(v ?? 0)} onMChange={(v) => setAcStart3M(v ?? 0)} onSet={() => handleSet(t('remote.acChargeStartTime3'))} disabled={!acShowTime} />
+      <TimeRangeField label={t('remote.acChargeEndTime3')} h={acEnd3H} m={acEnd3M} onHChange={(v) => setAcEnd3H(v ?? 0)} onMChange={(v) => setAcEnd3M(v ?? 0)} onSet={() => handleSet(t('remote.acChargeEndTime3'))} disabled={!acShowTime} />
 
       <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 发电机充电 */}
-      <SubGroupTitle title="发电机充电" color={sectionColor} />
+      <SubGroupTitle title={t('remote.genCharge')} color={sectionColor} />
 
-      <FieldRow label="发电机充电类型" tooltip="根据电池电压或电池SOC设置发电机充电。">
+      <FieldRow label={t('remote.genChargeType')} tooltip={t('remote.genChargeTypeTooltip')}>
         <Select value={genChargeType} onChange={(v: number) => setGenChargeType(v)} style={{ width: 140 }}>
-          <Option value={0}>电池电压</Option>
-          <Option value={1}>电池SOC</Option>
+          <Option value={0}>{t('remote.batteryVoltage')}</Option>
+          <Option value={1}>{t('remote.batterySoc')}</Option>
         </Select>
         <SettingButton onClick={handleGenTypeSet} />
       </FieldRow>
 
-      <FieldRow label="发电机充电电池电流(A)" tooltip="设置发电机电池充电电流。范围为0-110安培。">
+      <FieldRow label={`${t('remote.genChargeCurrent')}(A)`} tooltip={t('remote.genChargeCurrentTooltip')}>
         <InputNumber min={0} max={110} step={0.1} value={genChargeCurrent} onChange={(v) => setGenChargeCurrent(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('发电机充电电池电流')} />
+        <SettingButton onClick={() => handleSet(t('remote.genChargeCurrent'))} />
       </FieldRow>
 
-      <FieldRow label="发电机充电开始电池电压(V)" tooltip="根据电池要求进行设置，范围：38.4~52V。">
+      <FieldRow label={`${t('remote.genChargeStartVoltage')}(V)`} tooltip={t('remote.genChargeStartVoltageTooltip')}>
         <InputNumber min={0} max={52} step={0.1} value={genChargeStartVoltage} onChange={(v) => setGenChargeStartVoltage(v ?? 0)} style={{ width: 140, ...(!genShowVoltage ? disabledInputStyle : {}) }} disabled={!genShowVoltage} />
-        <SettingButton onClick={() => handleSet('发电机充电开始电池电压')} disabled={!genShowVoltage} />
+        <SettingButton onClick={() => handleSet(t('remote.genChargeStartVoltage'))} disabled={!genShowVoltage} />
       </FieldRow>
 
-      <FieldRow label="发电机充电结束电池电压(V)" tooltip="根据电池要求进行设置，范围：48~59V。">
+      <FieldRow label={`${t('remote.genChargeEndVoltage')}(V)`} tooltip={t('remote.genChargeEndVoltageTooltip')}>
         <InputNumber min={0} max={59} step={0.1} value={genChargeEndVoltage} onChange={(v) => setGenChargeEndVoltage(v ?? 0)} style={{ width: 140, ...(!genShowVoltage ? disabledInputStyle : {}) }} disabled={!genShowVoltage} />
-        <SettingButton onClick={() => handleSet('发电机充电结束电池电压')} disabled={!genShowVoltage} />
+        <SettingButton onClick={() => handleSet(t('remote.genChargeEndVoltage'))} disabled={!genShowVoltage} />
       </FieldRow>
 
-      <FieldRow label="发电机充电开始电池SOC(%)" tooltip="根据电池要求进行设置，范围：0~90%。">
+      <FieldRow label={`${t('remote.genChargeStartSoc')}(%)`} tooltip={t('remote.genChargeStartSocTooltip')}>
         <InputNumber min={0} max={90} value={genChargeStartSoc} onChange={(v) => setGenChargeStartSoc(v ?? 0)} style={{ width: 140, ...(!genShowSoc ? disabledInputStyle : {}) }} disabled={!genShowSoc} />
-        <SettingButton onClick={() => handleSet('发电机充电开始电池SOC')} disabled={!genShowSoc} />
+        <SettingButton onClick={() => handleSet(t('remote.genChargeStartSoc'))} disabled={!genShowSoc} />
       </FieldRow>
 
-      <FieldRow label="发电机充电结束电池SOC(%)" tooltip="根据电池要求进行设置，范围：20~100%。">
+      <FieldRow label={`${t('remote.genChargeEndSoc')}(%)`} tooltip={t('remote.genChargeEndSocTooltip')}>
         <InputNumber min={0} max={100} value={genChargeEndSoc} onChange={(v) => setGenChargeEndSoc(v ?? 0)} style={{ width: 140, ...(!genShowSoc ? disabledInputStyle : {}) }} disabled={!genShowSoc} />
-        <SettingButton onClick={() => handleSet('发电机充电结束电池SOC')} disabled={!genShowSoc} />
+        <SettingButton onClick={() => handleSet(t('remote.genChargeEndSoc'))} disabled={!genShowSoc} />
       </FieldRow>
 
-      <FieldRow label="发电机额定功率(W)" tooltip="范围 0~7370（单台）65534（并联）。逆变器将限制功率为发电机总输入的 90% 以避免过载。">
+      <FieldRow label={`${t('remote.genRatedPower')}(W)`} tooltip={t('remote.genRatedPowerTooltip')}>
         <InputNumber min={0} max={7370} value={genRatedPower} onChange={(v) => setGenRatedPower(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('发电机额定功率')} />
+        <SettingButton onClick={() => handleSet(t('remote.genRatedPower'))} />
       </FieldRow>
 
-      <SwitchField label="发电机提升" checked={genBoost} onChange={(v) => { setGenBoost(v); handleSet('发电机提升') }} enableText="启用" disableText="禁用" />
+      <SwitchField label={t('remote.genBoost')} checked={genBoost} onChange={(v) => { setGenBoost(v); handleSet(t('remote.genBoost')) }} enableText={t('remote.enable')} disableText={t('remote.disable')} />
 
       <Col span={24}><Divider style={{ margin: '8px 0' }} /></Col>
 
       {/* 充电优先级 */}
-      <SubGroupTitle title="充电优先级" color={sectionColor} />
+      <SubGroupTitle title={t('remote.chargePriority')} color={sectionColor} />
 
-      <SwitchField label="电池充电优先" checked={batteryChargePriority} onChange={(v) => { setBatteryChargePriority(v); handleSet('电池充电优先') }} enableText="启用" disableText="禁用" tooltip="启用电池充电优先模式" />
+      <SwitchField label={t('remote.batteryChargePriority')} checked={batteryChargePriority} onChange={(v) => { setBatteryChargePriority(v); handleSet(t('remote.batteryChargePriority')) }} enableText={t('remote.enable')} disableText={t('remote.disable')} tooltip={t('remote.batteryChargePriorityTooltip')} />
 
-      <FieldRow label="电池充电优先百分比(%)" tooltip="电池充电优先功率百分比">
+      <FieldRow label={`${t('remote.batteryChargePriorityPct')}(%)`} tooltip={t('remote.batteryChargePriorityPctTooltip')}>
         <InputNumber min={0} max={100} value={batteryChargePriorityPercent} onChange={(v) => setBatteryChargePriorityPercent(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('电池充电优先百分比')} />
+        <SettingButton onClick={() => handleSet(t('remote.batteryChargePriorityPct'))} />
       </FieldRow>
 
-      <SwitchField label="系统充电优先级" checked={systemChargePriority} onChange={(v) => { setSystemChargePriority(v); handleSet('系统充电优先级') }} enableText="启用" disableText="禁用" tooltip="启用系统充电优先模式" />
+      <SwitchField label={t('remote.systemChargePriority')} checked={systemChargePriority} onChange={(v) => { setSystemChargePriority(v); handleSet(t('remote.systemChargePriority')) }} enableText={t('remote.enable')} disableText={t('remote.disable')} tooltip={t('remote.systemChargePriorityTooltip')} />
 
-      <FieldRow label="系统充电优先级百分比(%)" tooltip="设置系统充电优先功率百分比。">
+      <FieldRow label={`${t('remote.systemChargePriorityPct')}(%)`} tooltip={t('remote.systemChargePriorityPctTooltip')}>
         <InputNumber min={0} max={100} value={systemChargePriorityPercent} onChange={(v) => setSystemChargePriorityPercent(v ?? 0)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('系统充电优先级百分比')} />
+        <SettingButton onClick={() => handleSet(t('remote.systemChargePriorityPct'))} />
       </FieldRow>
 
-      <FieldRow label="系统充电SOC限值(%)" tooltip="系统充电SOC上限值">
+      <FieldRow label={`${t('remote.systemChargeSocLimit')}(%)`} tooltip={t('remote.systemChargeSocLimitTooltip')}>
         <InputNumber min={0} max={100} value={systemChargeSocLimit} onChange={(v) => setSystemChargeSocLimit(v ?? 100)} style={{ width: 140 }} />
-        <SettingButton onClick={() => handleSet('系统充电SOC限值')} />
+        <SettingButton onClick={() => handleSet(t('remote.systemChargeSocLimit'))} />
       </FieldRow>
     </Row>
   )

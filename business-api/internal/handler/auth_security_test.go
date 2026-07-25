@@ -38,6 +38,10 @@ func (f fakeAuthorizationContextResolver) ResolveDefaultSessionContext(context.C
 	return f.context, f.err
 }
 
+func (f fakeAuthorizationContextResolver) LoadAllPermissionCodes(context.Context, model.ActorContext) ([]string, error) {
+	return []string{}, nil
+}
+
 func TestRequireRefreshSwapRejectsReplay(t *testing.T) {
 	err := requireRefreshSwap(false, nil)
 	var appErr *apperr.AppError
@@ -82,7 +86,7 @@ func TestAuthorizationContextIssuesOrganizationBoundAccessAndRotatesRefresh(t *t
 		jwtService: jwtService,
 		contextResolver: fakeAuthorizationContextResolver{context: model.AuthorizationSessionContext{
 			Actor:                model.ActorContext{UserID: 7, RootTenantID: 100, OrganizationID: 101, MembershipID: 102, MembershipVersion: 4},
-			AuthorizationVersion: 5, SessionVersion: 3, Phone: "13800138000", LegacyRole: 5,
+			AuthorizationVersion: 5, SessionVersion: 3, Phone: "13800138000", IsSystemAdmin: false,
 		}},
 	}
 	router := gin.New()

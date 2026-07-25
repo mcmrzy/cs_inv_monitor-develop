@@ -7,7 +7,7 @@ export interface AuditLog {
   action: string
   resource: string
   resourceId: string
-  details: string
+  details: string | Record<string, any>
   ipAddress: string
   createdAt: string
 }
@@ -55,4 +55,5 @@ export const adminApi = {
   updateRolePermissions: (role: number, data: any) => api.put(`/admin/permissions/${role}`, data),
   togglePermission: (role: number, data: any) => api.post(`/admin/permissions/${role}/toggle`, data),
   getRouteGroups: () => api.get('/admin/route-groups', { expectedDataShape: 'object' }),
+  getOperationStats: () => api.get('/admin/operation-stats', { expectedDataShape: 'object' }),
 }

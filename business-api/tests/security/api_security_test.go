@@ -171,25 +171,25 @@ func TestAPISecurity_RequireRole防越权(t *testing.T) {
 }
 
 func TestAPISecurity_RequireRole多级权限(t *testing.T) {
+	// RequireRole is deprecated: it now checks is_system_admin.
+	// System admins bypass all checks; non-admins only pass when minRole >= 5.
 	testCases := []struct {
-		name       string
-		userRole   int
-		minRole    int
-		shouldPass bool
+		name          string
+		systemAdmin   bool
+		minRole       int
+		shouldPass    bool
 	}{
-		{"管理员访问管理接口", 0, 0, true},
-		{"管理员访问普通接口", 0, 5, true},
-		{"普通用户访问管理接口", 5, 0, false},
-		{"普通用户访问普通接口", 5, 5, true},
-		{"高级用户访问中级接口", 2, 3, true},
-		{"中级用户访问高级接口", 3, 2, false},
+		{"系统管理员访问管理接口", true, 0, true},
+		{"系统管理员访问普通接口", true, 5, true},
+		{"普通用户访问管理接口", false, 0, false},
+		{"普通用户访问普通接口", false, 5, true},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := gin.New()
 			r.Use(func(c *gin.Context) {
-				c.Set("role", tc.userRole)
+				c.Set("is_system_admin", tc.systemAdmin)
 				c.Next()
 			})
 			r.Use(middleware.RequireRole(tc.minRole))

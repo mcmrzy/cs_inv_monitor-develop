@@ -74,9 +74,7 @@ func Auth(jwtService *service.JWTService, validators ...AuthorizationContextVali
 
 		c.Set("user_id", claims.UserID)
 		c.Set("phone", claims.Phone)
-		if claims.Role != nil {
-			c.Set("role", *claims.Role)
-		}
+		c.Set("is_system_admin", claims.IsSystemAdmin)
 		c.Set("actor_context", model.ActorContext{
 			UserID: claims.UserID, RootTenantID: claims.RootTenantID,
 			OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,
@@ -116,9 +114,7 @@ func OptionalAuth(jwtService *service.JWTService, validators ...AuthorizationCon
 				if err == nil && contextValid && !jwtService.IsBlacklisted(c.Request.Context(), jti) {
 					c.Set("user_id", claims.UserID)
 					c.Set("phone", claims.Phone)
-					if claims.Role != nil {
-						c.Set("role", *claims.Role)
-					}
+					c.Set("is_system_admin", claims.IsSystemAdmin)
 					c.Set("actor_context", model.ActorContext{
 						UserID: claims.UserID, RootTenantID: claims.RootTenantID,
 						OrganizationID: claims.OrganizationID, MembershipID: claims.MembershipID,
@@ -130,31 +126,6 @@ func OptionalAuth(jwtService *service.JWTService, validators ...AuthorizationCon
 				}
 			}
 		}
-		c.Next()
-	}
-}
-
-func RequireRole(minRole int) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		role, exists := c.Get("role")
-		if !exists {
-			response.Unauthorized(c, "unauthorized")
-			c.Abort()
-			return
-		}
-
-		userRole, ok := role.(int)
-		if !ok {
-			response.Forbidden(c, "invalid role type")
-			c.Abort()
-			return
-		}
-		if userRole > minRole {
-			response.Forbidden(c, "permission denied")
-			c.Abort()
-			return
-		}
-
 		c.Next()
 	}
 }
@@ -171,16 +142,51 @@ func GetUserID(c *gin.Context) int64 {
 	return id
 }
 
-func GetRole(c *gin.Context) int {
-	v, exists := c.Get("role")
+// GetIsSystemAdmin returns true if the authenticated user is a system admin.
+func GetIsSystemAdmin(c *gin.Context) bool {
+	v, exists := c.Get("is_system_admin")
 	if !exists {
-		return -1
+		return false
 	}
-	r, ok := v.(int)
+	b, ok := v.(bool)
+	return ok && b
+}
+
+// GetRole is deprecated. During the migration from the legacy role system to
+// the organization-based permission system, it returns 0 for system admins and
+// 5 (end-user) for all other users.  Handlers should migrate to RequirePermission
+// or GetIsSystemAdmin as part of Phase 4.
+func GetRole(c *gin.Context) int {
+	if GetIsSystemAdmin(c) {
+		return 0
+	}
+	return 5
+}
+
+// RequireRole is deprecated. During the migration it acts as a system-admin
+// gate.  Handlers should migrate to RequirePermission as part of Phase 4.
+func RequireRole(minRole int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if GetIsSystemAdmin(c) || GetRole(c) <= minRole {
+			c.Next()
+			return
+		}
+		response.Forbidden(c, "permission denied")
+		c.Abort()
+	}
+}
+
+// GetActorContext extracts the ActorContext from the gin context.
+func GetActorContext(c *gin.Context) model.ActorContext {
+	v, exists := c.Get("actor_context")
+	if !exists {
+		return model.ActorContext{}
+	}
+	actor, ok := v.(model.ActorContext)
 	if !ok {
-		return -1
+		return model.ActorContext{}
 	}
-	return r
+	return actor
 }
 
 // GetPhone 从上下文获取用户手机号
