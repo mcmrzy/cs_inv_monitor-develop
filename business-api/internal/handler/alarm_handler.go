@@ -19,9 +19,20 @@ func NewAlarmHandler(alarmService *service.AlarmService) *AlarmHandler {
 	return &AlarmHandler{alarmService: alarmService}
 }
 
+// mapRoleFromSystemAdmin converts the boolean is_system_admin flag to the
+// legacy role integer that the repository layer still expects.
+// System admin → 0 (super admin), non-admin → 5 (end user).
+// This is a temporary bridge during the permission system migration.
+func mapRoleFromSystemAdmin(isSystemAdmin bool) int {
+	if isSystemAdmin {
+		return 0
+	}
+	return 5
+}
+
 func (h *AlarmHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	stationIDStr := c.Query("station_id")
@@ -59,7 +70,7 @@ func (h *AlarmHandler) List(c *gin.Context) {
 		Keyword:    keyword,
 		Page:       page,
 		PageSize:   pageSize,
-		Role:       role,
+		Role:       mapRoleFromSystemAdmin(isSystemAdmin),
 	}
 
 	alarms, total, err := h.alarmService.List(c.Request.Context(), params)
@@ -73,7 +84,7 @@ func (h *AlarmHandler) List(c *gin.Context) {
 
 func (h *AlarmHandler) GetByID(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.Error(c, 400, "invalid alarm id")
@@ -92,7 +103,7 @@ func (h *AlarmHandler) GetByID(c *gin.Context) {
 	}
 
 	// 管理员可以查看任何告警，普通用户只能查看自己的
-	if role > 1 && alarm.UserID != userID {
+	if !isSystemAdmin && alarm.UserID != userID {
 		response.Error(c, 403, "permission denied")
 		return
 	}
@@ -102,7 +113,7 @@ func (h *AlarmHandler) GetByID(c *gin.Context) {
 
 func (h *AlarmHandler) MarkHandled(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.Error(c, 400, "invalid alarm id")
@@ -121,7 +132,7 @@ func (h *AlarmHandler) MarkHandled(c *gin.Context) {
 	}
 
 	// 管理员可以处理任何告警，普通用户只能处理自己的
-	if role > 1 && alarm.UserID != userID {
+	if !isSystemAdmin && alarm.UserID != userID {
 		response.Error(c, 403, "permission denied")
 		return
 	}
@@ -155,9 +166,9 @@ func (h *AlarmHandler) MarkRead(c *gin.Context) {
 
 func (h *AlarmHandler) GetStats(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 
-	stats, err := h.alarmService.GetStats(c.Request.Context(), userID, role)
+	stats, err := h.alarmService.GetStats(c.Request.Context(), userID, mapRoleFromSystemAdmin(isSystemAdmin))
 	if err != nil {
 		response.Error(c, 500, "get stats failed")
 		return
@@ -169,7 +180,7 @@ func (h *AlarmHandler) GetStats(c *gin.Context) {
 // Acknowledge 处理告警（前端 POST /alerts/:id/acknowledge 映射到此）
 func (h *AlarmHandler) Acknowledge(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.Error(c, 400, "invalid alarm id")
@@ -185,7 +196,7 @@ func (h *AlarmHandler) Acknowledge(c *gin.Context) {
 		response.Error(c, 404, "alarm not found")
 		return
 	}
-	if role > 1 && alarm.UserID != userID {
+	if !isSystemAdmin && alarm.UserID != userID {
 		response.Error(c, 403, "permission denied")
 		return
 	}
@@ -201,7 +212,7 @@ func (h *AlarmHandler) Acknowledge(c *gin.Context) {
 // Ignore 忽略告警（前端 POST /alerts/:id/ignore 映射到此）
 func (h *AlarmHandler) Ignore(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.Error(c, 400, "invalid alarm id")
@@ -217,7 +228,7 @@ func (h *AlarmHandler) Ignore(c *gin.Context) {
 		response.Error(c, 404, "alarm not found")
 		return
 	}
-	if role > 1 && alarm.UserID != userID {
+	if !isSystemAdmin && alarm.UserID != userID {
 		response.Error(c, 403, "permission denied")
 		return
 	}
@@ -232,7 +243,7 @@ func (h *AlarmHandler) Ignore(c *gin.Context) {
 
 func (h *AlarmHandler) Delete(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 	alarmID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.Error(c, 400, "invalid alarm id")
@@ -249,7 +260,7 @@ func (h *AlarmHandler) Delete(c *gin.Context) {
 		response.Error(c, 404, "alarm not found")
 		return
 	}
-	if role > 1 && alarm.UserID != userID {
+	if !isSystemAdmin && alarm.UserID != userID {
 		response.Error(c, 403, "permission denied")
 		return
 	}

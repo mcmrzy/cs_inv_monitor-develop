@@ -277,11 +277,11 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 	const notifyType = "system_announcement"
 	const deviceSN = "system"
 	adminID := middleware.GetUserID(c)
-	actorRole := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 
 	switch {
 	case req.Target == "all":
-		if actorRole != service.RoleSuperAdmin {
+		if !isSystemAdmin {
 			response.Error(c, 403, "only super administrators can broadcast to all users")
 			return
 		}
@@ -300,14 +300,13 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 			response.Error(c, 400, "invalid station target")
 			return
 		}
-		if actorRole != service.RoleSuperAdmin {
+		if !isSystemAdmin {
 			var allowed bool
 			err = h.db.QueryRow(ctx, `
 				SELECT EXISTS(
 					SELECT 1 FROM stations s
 					JOIN users actor ON actor.id = $1 AND actor.deleted_at IS NULL
 					WHERE s.id = $2 AND s.deleted_at IS NULL
-					  AND actor.role BETWEEN 1 AND 3
 					  AND s.user_id IN (
 						SELECT descendant_id FROM v_user_hierarchy WHERE ancestor_id = actor.id
 					  )
@@ -357,7 +356,7 @@ func (h *NotificationHandler) PushAnnouncement(c *gin.Context) {
 			response.Error(c, 400, "target user not found or disabled")
 			return
 		}
-		if actorRole != service.RoleSuperAdmin {
+		if !isSystemAdmin {
 			var allowed bool
 			err = h.db.QueryRow(ctx, `SELECT EXISTS(
 				SELECT 1 FROM v_user_hierarchy h

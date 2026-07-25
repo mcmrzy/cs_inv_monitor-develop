@@ -66,7 +66,7 @@ func validateAlertRuleValues(name string, level int, conditions []map[string]int
 }
 
 func (h *AlertRuleHandler) canTarget(c *gin.Context, deviceSN *string, stationID *int64) (bool, error) {
-	if middleware.GetRole(c) == service.RoleSuperAdmin {
+	if middleware.GetIsSystemAdmin(c) {
 		return true, nil
 	}
 	userID := middleware.GetUserID(c)
@@ -96,7 +96,7 @@ func (h *AlertRuleHandler) List(c *gin.Context) {
 	defer cancel()
 
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	role := mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c))
 	scope := alertRuleDataScope("r", role, 1)
 	var total int64
 	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM alert_rules r WHERE `+scope, userID).Scan(&total); err != nil {
@@ -131,7 +131,7 @@ func (h *AlertRuleHandler) GetByID(c *gin.Context) {
 		return
 	}
 	var raw []byte
-	err := h.db.QueryRow(c.Request.Context(), `SELECT to_jsonb(r) FROM alert_rules r WHERE id=$1 AND `+alertRuleDataScope("r", middleware.GetRole(c), 2), id, middleware.GetUserID(c)).Scan(&raw)
+	err := h.db.QueryRow(c.Request.Context(), `SELECT to_jsonb(r) FROM alert_rules r WHERE id=$1 AND `+alertRuleDataScope("r", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2), id, middleware.GetUserID(c)).Scan(&raw)
 	if err == pgx.ErrNoRows {
 		response.Error(c, 404, "alert rule not found")
 		return
@@ -218,7 +218,7 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 			notification_channels=CASE WHEN jsonb_array_length($8::jsonb)>0 THEN $8::jsonb ELSE notification_channels END,
 			cooldown_minutes=CASE WHEN $9>0 THEN $9 ELSE cooldown_minutes END,
 			enabled=COALESCE($10,enabled), updated_at=NOW()
-		WHERE id=$1 AND `+alertRuleDataScope("alert_rules", middleware.GetRole(c), 11), id, req.Name, req.Type, req.StationID, req.DeviceSN, conditions,
+		WHERE id=$1 AND `+alertRuleDataScope("alert_rules", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 11), id, req.Name, req.Type, req.StationID, req.DeviceSN, conditions,
 		req.Severity, channels, req.CooldownMinutes, req.Enabled, middleware.GetUserID(c))
 	if err != nil {
 		response.Error(c, 500, "update alert rule failed")

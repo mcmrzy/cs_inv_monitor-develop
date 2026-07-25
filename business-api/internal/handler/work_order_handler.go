@@ -83,7 +83,7 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 	}
 	status, priority := c.Query("status"), c.Query("priority")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	role := mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c))
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
@@ -121,7 +121,7 @@ func (h *WorkOrderHandler) GetByID(c *gin.Context) {
 		'timeline',COALESCE((SELECT jsonb_agg(jsonb_build_object('status',e.status,'operator',COALESCE(u.nickname,u.phone,u.email,''),'timestamp',e.created_at,'remark',e.remark) ORDER BY e.created_at) FROM work_order_events e LEFT JOIN users u ON u.id=e.operator_id WHERE e.work_order_id=w.id),'[]'::jsonb),
 		'attachments',COALESCE((SELECT jsonb_agg(jsonb_build_object('name',x.file_name,'url',x.file_url,'type',x.mime_type,'uploadedAt',x.created_at) ORDER BY x.created_at) FROM work_order_attachments x WHERE x.work_order_id=w.id),'[]'::jsonb))
 		FROM work_orders w LEFT JOIN users c ON c.id=w.creator_id LEFT JOIN users a ON a.id=w.assigned_to
-		WHERE w.id::text=$1 AND `+workOrderDataScope("w", middleware.GetRole(c), 2), id, middleware.GetUserID(c)).Scan(&raw)
+		WHERE w.id::text=$1 AND `+workOrderDataScope("w", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2), id, middleware.GetUserID(c)).Scan(&raw)
 	if err == pgx.ErrNoRows {
 		response.Error(c, 404, "work order not found")
 		return
@@ -140,7 +140,7 @@ func (h *WorkOrderHandler) GetByID(c *gin.Context) {
 
 func (h *WorkOrderHandler) GetStatistics(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	role := mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c))
 	var open, inProgress, resolved, closed int64
 	err := h.db.QueryRow(c.Request.Context(), `SELECT
 		COUNT(*) FILTER(WHERE status='open'),COUNT(*) FILTER(WHERE status='in_progress'),
@@ -201,7 +201,7 @@ func (h *WorkOrderHandler) Update(c *gin.Context) {
 		resolution=COALESCE(NULLIF($8,''),resolution),updated_at=NOW(),
 		resolved_at=CASE WHEN $4='resolved' THEN NOW() ELSE resolved_at END,
 		closed_at=CASE WHEN $4='closed' THEN NOW() ELSE closed_at END,
-		lock_version=lock_version+1 WHERE id::text=$1 AND `+workOrderDataScope("work_orders", middleware.GetRole(c), 9)+`
+		lock_version=lock_version+1 WHERE id::text=$1 AND `+workOrderDataScope("work_orders", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 9)+`
 		AND ($10::bigint IS NULL OR lock_version=$10)`,
 		c.Param("id"), req.Title, req.Description, req.Status, req.Priority, req.DeviceSN, req.AssignedTo, req.Resolution, middleware.GetUserID(c), req.ExpectedVersion)
 	if err != nil {
@@ -224,7 +224,7 @@ func (h *WorkOrderHandler) Escalate(c *gin.Context) {
 		priority=CASE priority WHEN 'low' THEN 'medium' WHEN 'medium' THEN 'high' ELSE 'urgent' END,
 		escalated_count=escalated_count+1,sla_overdue_count=sla_overdue_count+1,updated_at=NOW()
 		escalated_at=NOW(),lock_version=lock_version+1
-		WHERE id::text=$1 AND status NOT IN('resolved','closed') AND `+workOrderDataScope("work_orders", middleware.GetRole(c), 2)+`
+		WHERE id::text=$1 AND status NOT IN('resolved','closed') AND `+workOrderDataScope("work_orders", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2)+`
 		RETURNING status`, c.Param("id"), middleware.GetUserID(c)).Scan(&status)
 	if err == pgx.ErrNoRows {
 		response.Error(c, 400, "work order cannot be escalated")
@@ -240,7 +240,7 @@ func (h *WorkOrderHandler) Escalate(c *gin.Context) {
 
 func (h *WorkOrderHandler) UploadAttachments(c *gin.Context) {
 	var allowed bool
-	if err := h.db.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM work_orders w WHERE w.id::text=$1 AND `+workOrderDataScope("w", middleware.GetRole(c), 2)+`)`, c.Param("id"), middleware.GetUserID(c)).Scan(&allowed); err != nil {
+	if err := h.db.QueryRow(c.Request.Context(), `SELECT EXISTS(SELECT 1 FROM work_orders w WHERE w.id::text=$1 AND `+workOrderDataScope("w", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2)+`)`, c.Param("id"), middleware.GetUserID(c)).Scan(&allowed); err != nil {
 		response.Error(c, 500, "validate work order scope failed")
 		return
 	}
@@ -308,7 +308,7 @@ func (h *WorkOrderHandler) DownloadAttachment(c *gin.Context) {
 		SELECT attachment.file_url, attachment.mime_type, attachment.file_name
 		FROM work_order_attachments attachment
 		JOIN work_orders w ON w.id=attachment.work_order_id
-		WHERE w.id::text=$1 AND attachment.id::text=$2 AND `+workOrderDataScope("w", middleware.GetRole(c), 3),
+		WHERE w.id::text=$1 AND attachment.id::text=$2 AND `+workOrderDataScope("w", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 3),
 		c.Param("id"), c.Param("attachmentId"), middleware.GetUserID(c)).Scan(&fileURL, &mimeType, &fileName)
 	if err == pgx.ErrNoRows {
 		response.Error(c, 404, "attachment not found")
@@ -340,7 +340,7 @@ func (h *WorkOrderHandler) Delete(c *gin.Context) {
 		}
 		rows.Close()
 	}
-	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM work_orders WHERE id::text=$1 AND `+workOrderDataScope("work_orders", middleware.GetRole(c), 2), c.Param("id"), middleware.GetUserID(c))
+	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM work_orders WHERE id::text=$1 AND `+workOrderDataScope("work_orders", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2), c.Param("id"), middleware.GetUserID(c))
 	if err != nil {
 		response.Error(c, 500, "delete work order failed")
 		return

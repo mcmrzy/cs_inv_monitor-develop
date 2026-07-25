@@ -56,7 +56,7 @@ func (h *WeatherHandler) GetStationWeather(c *gin.Context) {
 		response.Error(c, 403, "permission denied")
 		return
 	}
-	if middleware.GetRole(c) != service.RoleSuperAdmin {
+	if !middleware.GetIsSystemAdmin(c) {
 		allowed, accessErr := h.stationService.HasAccess(c.Request.Context(), middleware.GetUserID(c), stationID)
 		if accessErr != nil {
 			response.Error(c, 500, "check station permission failed")

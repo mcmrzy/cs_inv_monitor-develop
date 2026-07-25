@@ -36,7 +36,7 @@ func NewStationHandler(stationService *service.StationService, deviceService *se
 }
 
 func (h *StationHandler) canAccessStation(c *gin.Context, stationID int64) (bool, error) {
-	if middleware.GetRole(c) == service.RoleSuperAdmin {
+	if middleware.GetIsSystemAdmin(c) {
 		return true, nil
 	}
 	return h.stationService.HasAccess(c.Request.Context(), middleware.GetUserID(c), stationID)
@@ -271,7 +271,7 @@ func (h *StationHandler) Delete(c *gin.Context) {
 
 func (h *StationHandler) Assign(c *gin.Context) {
 	actorID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 
 	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -318,13 +318,13 @@ func (h *StationHandler) Assign(c *gin.Context) {
 		response.Error(c, 400, "target user not found or disabled")
 		return
 	}
-	if role != service.RoleSuperAdmin {
+	if !isSystemAdmin {
 		inScope, scopeErr := h.userService.IsUserInScope(c.Request.Context(), actorID, req.UserID)
 		if scopeErr != nil {
 			response.Error(c, 500, "check user scope failed")
 			return
 		}
-		if !inScope || !service.CanManageRole(role, targetUser.Role) {
+		if !inScope {
 			response.Error(c, 403, "target user is outside your management scope")
 			return
 		}
@@ -434,8 +434,7 @@ func (h *StationHandler) GetByID(c *gin.Context) {
 
 func (h *StationHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize := getPageSize(c, 20)
@@ -537,8 +536,7 @@ type StationSummary struct {
 
 func (h *StationHandler) GetSummary(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	var stations []*model.Station
 	var total int64

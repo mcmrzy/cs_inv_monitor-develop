@@ -22,7 +22,7 @@ import (
 
 const protocolRouteJWTSecret = "protocol-route-test-secret"
 
-func signedProtocolRouteToken(t *testing.T, userID, role int) string {
+func signedProtocolRouteToken(t *testing.T, userID int, isSystemAdmin bool) string {
 	t.Helper()
 	now := time.Now().UTC()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
@@ -32,11 +32,12 @@ func signedProtocolRouteToken(t *testing.T, userID, role int) string {
 		"membership_version": 1, "session_version": 1,
 		"session_id":            "route-session",
 		"authorization_version": 1,
-		"role":                  role, "sub": strconv.Itoa(userID),
-		"iss": middleware.DefaultJWTIssuer, "aud": middleware.DefaultAccessAudience,
-		"jti": fmt.Sprintf("route-%d-%d", userID, role),
-		"iat": now.Add(-time.Minute).Unix(), "nbf": now.Add(-time.Minute).Unix(),
-		"exp": now.Add(time.Hour).Unix(),
+		"is_system_admin":       isSystemAdmin,
+		"sub":                   strconv.Itoa(userID),
+		"iss":                   middleware.DefaultJWTIssuer, "aud": middleware.DefaultAccessAudience,
+		"jti":                   fmt.Sprintf("route-%d-%v", userID, isSystemAdmin),
+		"iat":                   now.Add(-time.Minute).Unix(), "nbf": now.Add(-time.Minute).Unix(),
+		"exp":                   now.Add(time.Hour).Unix(),
 	})
 	signed, err := token.SignedString([]byte(protocolRouteJWTSecret))
 	require.NoError(t, err)
@@ -73,6 +74,11 @@ func performGatewayRequest(t *testing.T, engine http.Handler, path, token string
 	return resp.StatusCode, string(body)
 }
 
+// userPermsCacheKey builds the Redis cache key used by the new RBAC middleware.
+func userPermsCacheKey(userID int) string {
+	return fmt.Sprintf("gw:user_perms:%d:101:102", userID)
+}
+
 func TestDeviceProtocolReadRoutesRequireJWTAndDevicesView(t *testing.T) {
 	paths := []string{
 		"/api/v1/devices/INV001/alarm-events",
@@ -105,22 +111,22 @@ func TestDeviceProtocolReadRoutesRequireJWTAndDevicesView(t *testing.T) {
 			})
 
 			t.Run("missing devices view", func(t *testing.T) {
-				mr.Set("gw:user_roles:42", "5")
-				mr.Set("gw:role_perms:5", "[]")
-				status, _ := performGatewayRequest(t, engine, path, signedProtocolRouteToken(t, 42, 5))
+				mr.Set(userPermsCacheKey(42), "[]")
+				status, _ := performGatewayRequest(t, engine, path, signedProtocolRouteToken(t, 42, false))
 				assert.Equal(t, http.StatusForbidden, status)
 				assert.EqualValues(t, 0, backendHits.Load())
 			})
 
 			t.Run("devices view proxies to API", func(t *testing.T) {
-				perms, err := json.Marshal([]middleware.PermissionEntry{{Resource: "devices", Action: "view"}})
+				perms, err := json.Marshal([]middleware.PermissionEntry{
+					{PermissionCode: "devices:view", DataScope: "organization"},
+				})
 				require.NoError(t, err)
-				mr.Set("gw:role_perms:5", string(perms))
-				mr.Set("gw:user_roles:42", "5")
+				mr.Set(userPermsCacheKey(42), string(perms))
 				// Use a new middleware instance so the previous negative memory cache
 				// cannot influence this independent authorization case.
 				engine = Setup(protocolRouteConfig(backend.URL, middleware.NewRBACMiddleware(rdb, nil, 300)))
-				status, body := performGatewayRequest(t, engine, path, signedProtocolRouteToken(t, 42, 5))
+				status, body := performGatewayRequest(t, engine, path, signedProtocolRouteToken(t, 42, false))
 				assert.Equal(t, http.StatusOK, status)
 				assert.JSONEq(t, `{"source":"api","ok":true}`, body)
 				assert.EqualValues(t, 1, backendHits.Load())
@@ -129,7 +135,7 @@ func TestDeviceProtocolReadRoutesRequireJWTAndDevicesView(t *testing.T) {
 	}
 }
 
-func TestDeviceProtocolReadRoute_RoleZeroAndAPIObjectDenial(t *testing.T) {
+func TestDeviceProtocolReadRoute_SystemAdminBypassAndAPIObjectDenial(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Query().Get("foreign") == "1" {
@@ -148,20 +154,20 @@ func TestDeviceProtocolReadRoute_RoleZeroAndAPIObjectDenial(t *testing.T) {
 	defer rdb.Close()
 	engine := Setup(protocolRouteConfig(backend.URL, middleware.NewRBACMiddleware(rdb, nil, 300)))
 
-	t.Run("explicit role zero retains bypass", func(t *testing.T) {
-		mr.Set("gw:user_roles:1", "0")
-		status, _ := performGatewayRequest(t, engine, "/api/v1/devices/INV001/three-phase", signedProtocolRouteToken(t, 1, 0))
+	t.Run("system admin bypasses RBAC", func(t *testing.T) {
+		status, _ := performGatewayRequest(t, engine, "/api/v1/devices/INV001/three-phase", signedProtocolRouteToken(t, 1, true))
 		assert.Equal(t, http.StatusOK, status)
 	})
 
 	t.Run("foreign object denial comes from API", func(t *testing.T) {
-		perms, err := json.Marshal([]middleware.PermissionEntry{{Resource: "devices", Action: "view"}})
+		perms, err := json.Marshal([]middleware.PermissionEntry{
+			{PermissionCode: "devices:view", DataScope: "organization"},
+		})
 		require.NoError(t, err)
-		mr.Set("gw:role_perms:5", string(perms))
-		mr.Set("gw:user_roles:42", "5")
+		mr.Set(userPermsCacheKey(42), string(perms))
 		engine = Setup(protocolRouteConfig(backend.URL, middleware.NewRBACMiddleware(rdb, nil, 300)))
 
-		status, body := performGatewayRequest(t, engine, "/api/v1/devices/FOREIGN/alarm-events?foreign=1", signedProtocolRouteToken(t, 42, 5))
+		status, body := performGatewayRequest(t, engine, "/api/v1/devices/FOREIGN/alarm-events?foreign=1", signedProtocolRouteToken(t, 42, false))
 		assert.Equal(t, http.StatusForbidden, status)
 		assert.JSONEq(t, `{"code":403,"message":"device not owned"}`, body)
 	})

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -10,11 +11,13 @@ import (
 	"inv-api-server/internal/job"
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
+	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 // ==================== Request/Response Models (lines 1-140) ====================
@@ -270,12 +273,12 @@ func (h *MemberLifecycleHandler) invalidateAuthCache(rootTenantID int64, orgID i
 	for _, pattern := range patterns {
 		keys, err := h.rdb.Keys(ctx, pattern).Result()
 		if err != nil {
-			log.Printf("[invalidateAuthCache] keys lookup failed: %v", err)
+			logger.Error("invalidateAuthCache keys lookup failed", zap.Error(err))
 			continue
 		}
 		if len(keys) > 0 {
 			if err := h.rdb.Del(ctx, keys...).Err(); err != nil {
-				log.Printf("[invalidateAuthCache] del keys failed: %v", err)
+				logger.Error("invalidateAuthCache del keys failed", zap.Error(err))
 			}
 		}
 	}
@@ -283,30 +286,73 @@ func (h *MemberLifecycleHandler) invalidateAuthCache(rootTenantID int64, orgID i
 
 // canManageMembership checks if user has permission to manage specific membership
 func (h *MemberLifecycleHandler) canManageMembership(ctx context.Context, userID int64, orgID int64) (bool, error) {
-	// TODO: Implement with permChecker when service layer is integrated
-	// For now, check if user has admin/superadmin role
-	var role int
-	err := h.db.QueryRow(ctx, `SELECT role FROM users WHERE id = $1`, userID).Scan(&role)
+	// Check if user is a system admin (bypasses all permission checks)
+	var isSystemAdmin bool
+	err := h.db.QueryRow(ctx, `SELECT is_system_admin FROM users WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&isSystemAdmin)
 	if err != nil {
 		return false, err
 	}
-	// Roles 0-3 are considered managers (superadmin, manufacturer, agent, distributor)
-	return role >= 0 && role <= 3, nil
+	if isSystemAdmin {
+		return true, nil
+	}
+
+	// Check organization-level manage_members permission via role_permission_grants.
+	// A user is allowed to manage members if they hold an active membership in the
+	// target organization with either a "members:manage" permission grant or an
+	// "org_admin" role assignment.
+	var allowed bool
+	err = h.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM organization_memberships om
+			JOIN membership_role_assignments mra
+				ON mra.root_tenant_id = om.root_tenant_id
+				AND mra.organization_id = om.organization_id
+				AND mra.membership_id = om.id
+				AND mra.status = 'active'
+			LEFT JOIN role_permission_grants rpg
+				ON rpg.role_assignment_id = mra.id
+				AND rpg.permission_code = 'members:manage'
+			WHERE om.user_id = $1
+				AND om.organization_id = $2
+				AND om.status = 'active'
+				AND (rpg.id IS NOT NULL OR mra.role_code = 'org_admin')
+		)
+	`, userID, orgID).Scan(&allowed)
+	if err != nil {
+		return false, err
+	}
+
+	return allowed, nil
 }
 
-// auditLog emits async audit logging events
+// auditLog emits async audit logging events to the audit_logs table
 func (h *MemberLifecycleHandler) auditLog(userID int64, action string, orgID int64, details map[string]interface{}) {
 	go func() {
+		if h.db == nil {
+			logger.Warn("Audit db not available, skipping", zap.Int64("user_id", userID), zap.String("action", action), zap.Int64("org_id", orgID))
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
-		_ = ctx
-		_ = action
-		_ = orgID
-		_ = details
-		// TODO: Integrate with existing audit logging system
-		// Example: h.auditLog.Create(ctx, userID, action, orgID, details)
-		log.Printf("[Audit] user=%d action=%s org=%d details=%v", userID, action, orgID, details)
+
+		var detailJSON []byte
+		if details != nil {
+			var err error
+			detailJSON, err = json.Marshal(details)
+			if err != nil {
+				logger.Error("Audit failed to marshal details", zap.Error(err))
+				return
+			}
+		}
+
+		query := `INSERT INTO audit_logs (operator_id, action, resource_type, resource_id, detail, created_at)
+		          VALUES ($1, $2, $3, $4, $5, NOW())`
+		_, err := h.db.Exec(ctx, query, userID, action, "membership", orgID, detailJSON)
+		if err != nil {
+			logger.Error("Audit failed to write audit log", zap.Error(err))
+		}
 	}()
 }
 
@@ -385,7 +431,7 @@ func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 	// Check quota before adding
 	usage, err := h.checkQuota(ctx, tenantID)
 	if err != nil {
-		log.Printf("[AddMember] quota check failed: %v", err)
+		logger.Error("AddMember quota check failed", zap.Error(err))
 		response.Error(c, 500, "检查配额失败")
 		return
 	}
@@ -989,7 +1035,7 @@ func (h *MemberLifecycleHandler) ListTransfers(c *gin.Context) {
 		ORDER BY created_at DESC
 	`, userID)
 	if err != nil {
-		log.Printf("[ListTransfers] query failed: %v", err)
+		logger.Error("ListTransfers query failed", zap.Error(err))
 		// Return empty list if no delayed-transfer table exists yet
 		response.Page(c, []PendingTransferInfo{}, 0, 1, 10)
 		return
@@ -1003,7 +1049,7 @@ func (h *MemberLifecycleHandler) ListTransfers(c *gin.Context) {
 			&t.ID, &t.MembershipID, &t.FromOrgID, &t.ToOrgID,
 			&t.InitiatorID, &t.Status, &t.Reason, &t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
-			log.Printf("[ListTransfers] scan error: %v", err)
+			logger.Error("ListTransfers scan error", zap.Error(err))
 			continue
 		}
 		transfers = append(transfers, t)
@@ -1054,7 +1100,7 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 	// Check quota
 	_, err = h.checkQuota(ctx, tenantID)
 	if err != nil {
-		log.Printf("[BulkAdd] quota check failed: %v", err)
+		logger.Error("BulkAdd quota check failed", zap.Error(err))
 		response.Error(c, 500, "检查配额失败")
 		return
 	}
@@ -1071,7 +1117,7 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 
 	// Store job in Redis
 	if err := h.jobStore.CreateJob(ctx, bulkJob); err != nil {
-		log.Printf("[BulkAdd] failed to create job: %v", err)
+		logger.Error("BulkAdd failed to create job", zap.Error(err))
 		response.Error(c, 500, "创建批量任务失败")
 		return
 	}
@@ -1079,7 +1125,7 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 	// Enqueue job for processing (in production, this would send to Kafka)
 	go func() {
 		if err := bulkJob.WithRetry(job.MaxRetries); err != nil {
-			log.Printf("[BulkAdd] job %s failed: %v", bulkJob.JobID, err)
+			logger.Error("BulkAdd job failed", zap.String("job_id", bulkJob.JobID), zap.Error(err))
 		}
 
 		// Invalidate cache after job completion
@@ -1119,7 +1165,7 @@ func (h *MemberLifecycleHandler) processBulkAddSync(c *gin.Context, userID, tena
 		// Validate user exists
 		_, err := h.getUserByID(ctx, uid)
 		if err != nil {
-			log.Printf("[BulkAdd] user %d not found: %v", uid, err)
+			logger.Error("BulkAdd user not found", zap.Int64("uid", uid), zap.Error(err))
 			continue
 		}
 
@@ -1214,7 +1260,7 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 
 	// Store job in Redis
 	if err := h.jobStore.CreateJob(ctx, bulkJob); err != nil {
-		log.Printf("[BulkTransfer] failed to create job: %v", err)
+		logger.Error("BulkTransfer failed to create job", zap.Error(err))
 		response.Error(c, 500, "创建批量转移任务失败")
 		return
 	}
@@ -1223,7 +1269,7 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 	sourceOrgID := memberships[0].OrganizationID
 	go func() {
 		if err := bulkJob.WithRetry(job.MaxRetries); err != nil {
-			log.Printf("[BulkTransfer] job %s failed: %v", bulkJob.JobID, err)
+			logger.Error("BulkTransfer job failed", zap.String("job_id", bulkJob.JobID), zap.Error(err))
 		}
 
 		// Invalidate caches after completion

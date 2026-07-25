@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"sort"
 	"strconv"
@@ -14,12 +13,14 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 	"inv-api-server/pkg/timezone"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/xuri/excelize/v2"
+	"go.uber.org/zap"
 )
 
 var deviceSNRegex = regexp.MustCompile(`^[A-Z0-9-]{8,64}$`)
@@ -42,8 +43,7 @@ func NewDeviceHandler(deviceService *service.DeviceService, alarmService *servic
 
 func (h *DeviceHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
@@ -106,8 +106,7 @@ func (h *DeviceHandler) List(c *gin.Context) {
 func (h *DeviceHandler) GetDetail(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
@@ -194,8 +193,7 @@ func (h *DeviceHandler) GetDetail(c *gin.Context) {
 func (h *DeviceHandler) GetRealtimeData(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -290,8 +288,7 @@ func (h *DeviceHandler) Bind(c *gin.Context) {
 func (h *DeviceHandler) Unbind(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
@@ -320,8 +317,7 @@ func (h *DeviceHandler) Unbind(c *gin.Context) {
 func (h *DeviceHandler) RequestUnbind(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
@@ -365,8 +361,7 @@ type ControlRequest struct {
 func (h *DeviceHandler) Control(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	// 步骤1前置：RBAC devices:control + 数据归属检查（兼容现有中间件层）
 	if !isAdmin && !h.deviceService.HasControlPermission(c.Request.Context(), userID, sn) {
@@ -383,7 +378,7 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 	// 9步校验链：ValidateAndPrepareCommand 集成步骤1-8（身份/型号/参数/关系/状态/BMS限制/拓扑/风险确认）
 	prepared, err := h.deviceService.ValidateAndPrepareCommand(c.Request.Context(), userID, sn, req.Command, req.Params)
 	if err != nil {
-		log.Printf("[Control] validate and prepare failed: sn=%s, cmd=%s, err=%v", sn, req.Command, err)
+		logger.Error("Control validate and prepare failed", zap.String("sn", sn), zap.String("cmd", req.Command), zap.Error(err))
 		// 处理 CommandError 类型，返回拒绝码
 		var cmdErr *service.CommandError
 		if errors.As(err, &cmdErr) {
@@ -402,7 +397,7 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 	// 步骤9：发送已校验的命令
 	taskID, err := h.deviceService.SendPreparedCommand(c.Request.Context(), sn, prepared)
 	if err != nil {
-		log.Printf("[Control] send prepared command failed: sn=%s, cmd=%s, err=%v", sn, req.Command, err)
+		logger.Error("Control send prepared command failed", zap.String("sn", sn), zap.String("cmd", req.Command), zap.Error(err))
 		var cmdErr *service.CommandError
 		if errors.As(err, &cmdErr) {
 			c.JSON(cmdErr.StatusCode, gin.H{
@@ -423,8 +418,7 @@ func (h *DeviceHandler) Control(c *gin.Context) {
 func (h *DeviceHandler) GetControlFields(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -444,8 +438,7 @@ func (h *DeviceHandler) GetControlFields(c *gin.Context) {
 func (h *DeviceHandler) GetControlCapabilities(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -474,8 +467,8 @@ type CreateDeviceRequest struct {
 
 // Create creates a new device. Only admin and installer (role <= 4) can create devices.
 func (h *DeviceHandler) Create(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role > 4 {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
 		response.Error(c, 403, "permission denied")
 		return
 	}
@@ -531,8 +524,7 @@ type UpdateDeviceRequest struct {
 func (h *DeviceHandler) Update(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	// Ownership check: non-admin users can only update their own devices
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
@@ -564,8 +556,7 @@ func (h *DeviceHandler) Update(c *gin.Context) {
 func (h *DeviceHandler) GetHistory(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -590,8 +581,7 @@ func (h *DeviceHandler) GetHistory(c *gin.Context) {
 func (h *DeviceHandler) GetAlarms(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -628,8 +618,7 @@ type AddDeviceRequest struct {
 
 func (h *DeviceHandler) AddToStation(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	var req AddDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -676,8 +665,7 @@ func (h *DeviceHandler) AddToStation(c *gin.Context) {
 
 func (h *DeviceHandler) RemoveFromStation(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	sn := c.Param("sn")
 	if sn == "" {
@@ -723,8 +711,7 @@ func (h *DeviceHandler) ScanLocal(c *gin.Context) {
 func (h *DeviceHandler) GetStatistics(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -784,8 +771,7 @@ func (h *DeviceHandler) GetControlState(c *gin.Context) {
 func (h *DeviceHandler) GetCommands(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -813,8 +799,7 @@ func (h *DeviceHandler) GetCommands(c *gin.Context) {
 // BatchControl 批量发送控制命令
 func (h *DeviceHandler) BatchControl(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	var req struct {
 		SNs     []string               `json:"sns" binding:"required"`
@@ -871,8 +856,7 @@ func (h *DeviceHandler) BatchControl(c *gin.Context) {
 func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -921,7 +905,7 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 
 	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
 	if err != nil {
-		log.Printf("[GetTelemetry] error: sn=%s, err=%v", sn, err)
+		logger.Error("GetTelemetry failed", zap.String("sn", sn), zap.Error(err))
 		response.Error(c, 500, "获取遥测数据失败")
 		return
 	}
@@ -952,8 +936,7 @@ func (h *DeviceHandler) GetTelemetry(c *gin.Context) {
 func (h *DeviceHandler) GetLifecycleHistory(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -971,7 +954,7 @@ func (h *DeviceHandler) GetLifecycleHistory(c *gin.Context) {
 
 	items, total, err := h.deviceService.GetLifecycleHistory(c.Request.Context(), sn, page, pageSize)
 	if err != nil {
-		log.Printf("[GetLifecycleHistory] error: sn=%s, err=%v", sn, err)
+		logger.Error("GetLifecycleHistory failed", zap.String("sn", sn), zap.Error(err))
 		response.Error(c, 500, "获取生命周期历史失败")
 		return
 	}
@@ -980,8 +963,7 @@ func (h *DeviceHandler) GetLifecycleHistory(c *gin.Context) {
 }
 
 func (h *DeviceHandler) GetUnbindRequests(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role != 0 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}
@@ -1005,8 +987,7 @@ func (h *DeviceHandler) GetUnbindRequests(c *gin.Context) {
 }
 
 func (h *DeviceHandler) ApproveUnbind(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role != 0 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}
@@ -1024,7 +1005,7 @@ func (h *DeviceHandler) ApproveUnbind(c *gin.Context) {
 	c.ShouldBindJSON(&req)
 
 	if err := h.deviceService.ApproveUnbind(c.Request.Context(), id, userID, req.Comment); err != nil {
-		log.Printf("[ApproveUnbind] error: id=%d, err=%v", id, err)
+		logger.Error("ApproveUnbind failed", zap.Int64("id", id), zap.Error(err))
 		response.Error(c, 500, "操作失败，请稍后重试")
 		return
 	}
@@ -1033,8 +1014,7 @@ func (h *DeviceHandler) ApproveUnbind(c *gin.Context) {
 }
 
 func (h *DeviceHandler) RejectUnbind(c *gin.Context) {
-	role := middleware.GetRole(c)
-	if role != 0 {
+	if !middleware.GetIsSystemAdmin(c) {
 		response.Error(c, 403, "admin only")
 		return
 	}
@@ -1052,7 +1032,7 @@ func (h *DeviceHandler) RejectUnbind(c *gin.Context) {
 	c.ShouldBindJSON(&req)
 
 	if err := h.deviceService.RejectUnbind(c.Request.Context(), id, userID, req.Comment); err != nil {
-		log.Printf("[RejectUnbind] error: id=%d, err=%v", id, err)
+		logger.Error("RejectUnbind failed", zap.Int64("id", id), zap.Error(err))
 		response.Error(c, 500, "操作失败，请稍后重试")
 		return
 	}
@@ -1063,8 +1043,7 @@ func (h *DeviceHandler) RejectUnbind(c *gin.Context) {
 func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	device, err := h.deviceService.GetBySN(c.Request.Context(), sn)
 	if err != nil {
@@ -1312,7 +1291,7 @@ func (h *DeviceHandler) ImportExcel(c *gin.Context) {
 		successCount++
 	}
 
-	log.Printf("[ImportExcel] userID=%d, success=%d, failed=%d", userID, successCount, failedCount)
+	logger.Info("ImportExcel completed", zap.Int64("user_id", userID), zap.Int("success", successCount), zap.Int("failed", failedCount))
 
 	response.Success(c, gin.H{
 		"success": successCount,
@@ -1326,8 +1305,7 @@ func (h *DeviceHandler) ImportExcel(c *gin.Context) {
 func (h *DeviceHandler) ExportTelemetry(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -1356,7 +1334,7 @@ func (h *DeviceHandler) ExportTelemetry(c *gin.Context) {
 
 	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
 	if err != nil {
-		log.Printf("[ExportTelemetry] error: sn=%s, err=%v", sn, err)
+		logger.Error("ExportTelemetry failed", zap.String("sn", sn), zap.Error(err))
 		response.Error(c, 500, "获取遥测数据失败")
 		return
 	}
@@ -1401,8 +1379,7 @@ func (h *DeviceHandler) ExportTelemetry(c *gin.Context) {
 func (h *DeviceHandler) ExportTelemetryExcel(c *gin.Context) {
 	sn := c.Param("sn")
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
-	isAdmin := role == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if !isAdmin && !h.deviceService.HasPermission(c.Request.Context(), userID, sn) {
 		response.Error(c, 403, "permission denied")
@@ -1431,7 +1408,7 @@ func (h *DeviceHandler) ExportTelemetryExcel(c *gin.Context) {
 
 	data, err := h.deviceService.GetTelemetryData(c.Request.Context(), sn, startTime, endTime, granularity)
 	if err != nil {
-		log.Printf("[ExportTelemetryExcel] error: sn=%s, err=%v", sn, err)
+		logger.Error("ExportTelemetryExcel failed", zap.String("sn", sn), zap.Error(err))
 		response.Error(c, 500, "获取遥测数据失败")
 		return
 	}
@@ -1477,6 +1454,6 @@ func (h *DeviceHandler) ExportTelemetryExcel(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=telemetry_%s.xlsx", sn))
 
 	if err := f.Write(c.Writer); err != nil {
-		log.Printf("[ExportTelemetryExcel] write error: sn=%s, err=%v", sn, err)
+		logger.Error("ExportTelemetryExcel write failed", zap.String("sn", sn), zap.Error(err))
 	}
 }

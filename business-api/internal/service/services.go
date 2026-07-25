@@ -76,6 +76,7 @@ func (s *UserService) GetByNickname(ctx context.Context, nickname string) (*mode
 	return s.repo.GetByNickname(ctx, nickname)
 }
 
+// Deprecated: Use AuthorizationRepository.LoadAllPermissionCodes instead. Will be removed in Phase 8.
 // GetRolePermissions returns allowed permission strings ("resource:action") for a role.
 func (s *UserService) GetRolePermissions(ctx context.Context, role int64) ([]string, error) {
 	entries, err := s.repo.GetRolePermissions(ctx, role)

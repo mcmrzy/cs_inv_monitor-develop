@@ -520,8 +520,7 @@ func (h *DeviceClaimTransferHandler) RequestTransfer(c *gin.Context) {
 // GET /api/v1/devices/transfers/list
 func (h *DeviceClaimTransferHandler) ListTransfers(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	userRole := middleware.GetRole(c)
-	isAdmin := userRole == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	// Status filter
 	statusFilter := c.Query("status")
@@ -810,8 +809,7 @@ func (h *DeviceClaimTransferHandler) CancelTransfer(c *gin.Context) {
 	}
 
 	// Only requester can cancel, or admin can cancel any
-	userRole := middleware.GetRole(c)
-	isAdmin := userRole == 0
+	isAdmin := middleware.GetIsSystemAdmin(c)
 
 	if transfer.Status != "pending" {
 		response.Error(c, 409, "转移请求当前状态为 "+transfer.Status)

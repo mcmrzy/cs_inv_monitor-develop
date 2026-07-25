@@ -8,6 +8,14 @@ import api from '@/services/api'
 import type { User } from '@/types'
 import SliderCaptchaModal from '@/components/SliderCaptcha/SliderCaptchaModal'
 
+// Maps the backend user object (snake_case is_system_admin) to the frontend User type.
+function mapBackendUser(raw: Record<string, unknown>): User {
+  return {
+    ...(raw as unknown as User),
+    isSystemAdmin: Boolean(raw.is_system_admin ?? raw.isSystemAdmin ?? (raw.role === 0)),
+  }
+}
+
 // 登录背景图片（放在public目录，不需要import）
 const loginBackgrounds = [
   '/images/login/login-bg-1.jpg',
@@ -193,7 +201,7 @@ const LoginPage: React.FC = () => {
       }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
-      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', data.user, data.permissions ?? [])
+      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mapBackendUser(data.user as unknown as Record<string, unknown>), data.permissions ?? [])
       message.success(t.successLogin)
       navigate('/dashboard', { replace: true })
     } catch (err: any) {
@@ -250,7 +258,7 @@ const LoginPage: React.FC = () => {
       if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errLogin)); return }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
-      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', data.user, data.permissions ?? [])
+      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mapBackendUser(data.user as unknown as Record<string, unknown>), data.permissions ?? [])
       message.success(t.successLogin)
       navigate('/dashboard', { replace: true })
     } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errLogin)) }
@@ -266,7 +274,7 @@ const LoginPage: React.FC = () => {
       if (d?.code !== undefined && d.code !== 0) { showError(localizeAuthError(d, t.errLogin)); return }
       const data = (d?.data ?? d) as { token?: string; accessToken?: string; access_token?: string; refresh_token?: string; refreshToken?: string; permissions?: string[]; user: User }
       if (!data.user) { showError(t.errLogin); return }
-      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', data.user, data.permissions ?? [])
+      login(data.token ?? data.accessToken ?? data.access_token ?? '', data.refresh_token ?? data.refreshToken ?? '', mapBackendUser(data.user as unknown as Record<string, unknown>), data.permissions ?? [])
       message.success(t.successLogin)
       navigate('/dashboard', { replace: true })
     } catch (err: any) { showError(localizeAuthError(err?.response?.data, t.errLogin)) }

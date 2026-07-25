@@ -149,7 +149,7 @@ func (h *InvitationHandler) SetAuthorizationContextValidator(resolver middleware
 // POST /api/v1/invitations/create
 func (h *InvitationHandler) Create(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	role := middleware.GetRole(c)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 
 	var req CreateInvitationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -157,9 +157,8 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Role validation: only non-endusers can create invitations
-	// RoleSuperAdmin=0 is allowed; RoleEndUser=5 and out-of-range values are rejected.
-	if role == service.RoleEndUser || role < 0 || role > 5 {
+	// Only system admins can create invitations during migration period
+	if !isSystemAdmin {
 		response.Error(c, 403, "end users cannot create invitations")
 		return
 	}
@@ -186,9 +185,9 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	}
 
 	// Verify user has permission to create invitations in this organization
-	// Super-admin (0) and admin (1) bypass permission check; org_admin (2+) need explicit permission
+	// System admins bypass permission check; others need explicit permission
 	hasPerm := h.permChecker.CheckPermission(userID, "organizations", "invite")
-	if !hasPerm && role >= 2 {
+	if !hasPerm && !isSystemAdmin {
 		response.Error(c, 403, "insufficient permissions to create invitations")
 		return
 	}
@@ -646,24 +645,25 @@ func convertInvitationItems(items []repository.ListInvitationsResponseItem) []In
 	return result
 }
 
-// loadUserPermissions loads user permissions from role_permissions table
+// loadUserPermissions loads user permissions from the new organization-based permission system.
+// Falls back to empty list if the repository is unavailable.
 func loadUserPermissions(c *gin.Context, userRepo *repository.UserRepository, userID int64) []string {
 	permissions := make([]string, 0)
 	if userRepo == nil {
 		return permissions
 	}
 	user, err := userRepo.GetByID(c.Request.Context(), userID)
-	if err != nil {
-		logger.Warn("Failed to load user for permissions", zap.Int64("user_id", userID), zap.Error(err))
+	if err != nil || user == nil {
+		if err != nil {
+			logger.Warn("Failed to load user for permissions", zap.Int64("user_id", userID), zap.Error(err))
+		}
 		return permissions
 	}
-	entries, err := userRepo.GetRolePermissions(c.Request.Context(), int64(user.Role))
-	if err != nil {
-		logger.Warn("Failed to load role permissions", zap.Int64("user_id", userID), zap.Int("role", user.Role), zap.Error(err))
-		return permissions
+	// In the new system, system admins have all permissions
+	if user.IsSystemAdmin {
+		return []string{"*"}
 	}
-	for _, e := range entries {
-		permissions = append(permissions, e.Resource+":"+e.Action)
-	}
+	// For non-admin users, return empty list during migration period
+	// (full permission loading is handled by AuthorizationRepository.LoadAllPermissionCodes)
 	return permissions
 }
