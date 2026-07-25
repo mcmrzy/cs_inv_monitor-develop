@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Table, Button, Tag, Space, Modal, Form, Input, Select, InputNumber, Row, Col, App, Empty,
+  Button, Tag, Space, Modal, Form, Input, Select, InputNumber, Row, Col, App, Empty,
 } from 'antd'
+import { ProTable } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import { PlusOutlined, CopyOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+
 import dayjs from 'dayjs'
 import { channelApi, type Invitation } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
@@ -77,27 +79,27 @@ const InvitationManager: React.FC<Props> = ({ selectedOrgId }) => {
     })
   }
 
-  const columns: ColumnsType<Invitation> = [
+  const columns: ProColumns<Invitation>[] = [
     { title: t('channel.invite.email'), dataIndex: 'email', width: 200, ellipsis: true },
     {
       title: t('channel.invite.role'), dataIndex: 'role_name', width: 100,
-      render: (role: string) => <Tag color="blue">{role}</Tag>,
+      render: (_, record: Invitation) => <Tag color="blue">{record.role_name}</Tag>,
     },
     {
       title: t('channel.invite.status'), dataIndex: 'status', width: 100,
-      render: (status: string) => (
-        <Tag color={STATUS_COLORS[status] ?? 'default'}>
-          {t(`channel.invite.status.${status}`)}
+      render: (_, record: Invitation) => (
+        <Tag color={STATUS_COLORS[record.status] ?? 'default'}>
+          {t(`channel.invite.status.${record.status}`)}
         </Tag>
       ),
     },
     {
       title: t('channel.invite.expiresAt'), dataIndex: 'expires_at', width: 170,
-      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm') : '-',
+      render: (_, record: Invitation) => record.expires_at ? formatInTimezone(record.expires_at, timezone, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: t('channel.invite.createdAt'), dataIndex: 'created_at', width: 170,
-      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm') : '-',
+      render: (_, record: Invitation) => record.created_at ? formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: t('common.actions'), key: 'actions', width: 220,
@@ -159,12 +161,14 @@ const InvitationManager: React.FC<Props> = ({ selectedOrgId }) => {
         </Col>
       </Row>
 
-      <Table<Invitation>
+      <ProTable<Invitation>
         rowKey="id"
         columns={columns}
         dataSource={listRes?.items ?? []}
         loading={isLoading}
         size="middle"
+        search={false}
+        options={{ density: true, reload: () => refetch(), setting: true }}
         locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         pagination={{
           current: page,

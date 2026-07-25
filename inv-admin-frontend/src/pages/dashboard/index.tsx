@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Table, Space, Tag, Typography,
+  Row, Col, Space, Tag, Typography,
   Segmented, Empty, Grid, Badge, Button, DatePicker, Spin,
 } from 'antd'
+import { ProCard, ProTable } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import {
   DashboardOutlined, WifiOutlined, ExclamationCircleOutlined, ThunderboltOutlined,
   LineChartOutlined, PercentageOutlined, BarChartOutlined,
@@ -19,7 +21,6 @@ import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
-import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import dayjsTimezone from 'dayjs/plugin/timezone'
 
@@ -322,32 +323,32 @@ const DashboardPage: React.FC = () => {
     }
   }, [rankingData])
 
-  const alertColumns: ColumnsType<AlertItem> = [
+  const alertColumns: ProColumns<AlertItem>[] = [
     { title: t('dash.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140, ellipsis: true },
     {
       title: t('dash.alertLevel'), dataIndex: 'alarm_level', key: 'alarm_level', width: 80,
-      render: (level: number | string, record: any) => {
-        const cfg = getAlarmLevelDisplay(record.fault_code, level)
+      render: (_: any, record: AlertItem) => {
+        const cfg = getAlarmLevelDisplay(record.fault_code, record.alarm_level)
         return <Tag color={cfg.color}>{cfg.i18nKey ? t(cfg.i18nKey) : cfg.label}</Tag>
       },
     },
     {
       title: t('dash.faultMessage'), dataIndex: 'fault_message', key: 'fault_message', ellipsis: true,
-      render: (message: string, record: AlertItem) => {
+      render: (_: any, record: AlertItem) => {
         const key = getAlarmMessageI18nKey(record.fault_code)
-        return key ? t(key) : message
+        return key ? t(key) : record.fault_message
       },
     },
     {
       title: t('common.time'), dataIndex: 'occurred_at', key: 'occurred_at', width: 150,
-      render: (v: string) => v ? formatInTimezone(v, timezone, 'MM-DD HH:mm:ss') : '-',
+      render: (_: any, record: AlertItem) => record.occurred_at ? formatInTimezone(record.occurred_at, timezone, 'MM-DD HH:mm:ss') : '-',
     },
   ]
 
   const renderOverview = () => (
     <>
       {/* Hero 卡片 */}
-      <Row gutter={[16, 16]}>
+      <ProCard gutter={[16, 16]}>
         {[
           { title: t('dash.deviceTotal'), value: totalDevices, icon: <DashboardOutlined />, gradient: HERO_GRADIENTS[0] },
           { title: t('dash.deviceOnline'), value: onlineCount, icon: <WifiOutlined />, gradient: HERO_GRADIENTS[2] },
@@ -356,60 +357,54 @@ const DashboardPage: React.FC = () => {
           { title: t('dash.totalGeneration'), value: safeNum(stats.totalEnergy), suffix: 'kWh', icon: <LineChartOutlined />, gradient: HERO_GRADIENTS[4] },
           { title: t('dash.onlineRate'), value: onlineRate, suffix: '%', icon: <PercentageOutlined />, gradient: HERO_GRADIENTS[5] },
         ].map((item, idx) => (
-          <Col xs={12} sm={8} lg={4} key={idx}>
-            <Card
-              bordered={false}
-              style={{ background: item.gradient, borderRadius: 12 }}
-              styles={{ body: { padding: isMobile ? '12px 10px' : '20px 16px' } }}
-            >
-              <div style={{ color: '#fff', fontSize: 13, opacity: 0.9, marginBottom: 8 }}>
-                {item.icon} {item.title}
-              </div>
-              <div style={{ color: '#fff', fontSize: isMobile ? 22 : 28, fontWeight: 700, lineHeight: 1 }}>
-                {statsLoading ? '-' : safeNum(item.value).toLocaleString()}
-                {item.suffix && <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 4 }}>{item.suffix}</span>}
-              </div>
-            </Card>
-          </Col>
+          <ProCard colSpan={{ xs: 12, sm: 8, lg: 4 }} key={idx}
+            bordered={false}
+            style={{ background: item.gradient, borderRadius: 12 }}
+            bodyStyle={{ padding: isMobile ? '12px 10px' : '20px 16px' }}
+          >
+            <div style={{ color: '#fff', fontSize: 13, opacity: 0.9, marginBottom: 8 }}>
+              {item.icon} {item.title}
+            </div>
+            <div style={{ color: '#fff', fontSize: isMobile ? 22 : 28, fontWeight: 700, lineHeight: 1 }}>
+              {statsLoading ? '-' : safeNum(item.value).toLocaleString()}
+              {item.suffix && <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 4 }}>{item.suffix}</span>}
+            </div>
+          </ProCard>
         ))}
-      </Row>
+      </ProCard>
 
       {/* 30日发电趋势 + 设备状态 */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={16}>
-          <Card bordered={false} style={{ borderRadius: 12 }}
-            title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
-          >
-            {trend30DaysData.length > 0 ? (
-              <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
-            ) : (
-              <Empty description={t('dash.noEnergyData')} />
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card bordered={false} title={t('dash.deviceStatus')} loading={distLoading}
-            style={{ borderRadius: 12 }}
-            styles={{ body: { padding: '12px 16px' } }}
-          >
-            <ReactECharts option={pieOption} style={{ height: 260 }} />
-            <Row gutter={16} style={{ textAlign: 'center', marginTop: 4 }}>
-              {[
-                { label: t('common.online'), value: onlineCount, color: '#52c41a' },
-                { label: t('common.offline'), value: offlineCount, color: '#d9d9d9' },
-                { label: t('common.fault'), value: faultCount, color: '#ff4d4f' },
-              ].map((i) => (
-                <Col span={8} key={i.label}>
-                  <Badge color={i.color} text={<Text strong>{i.label} {i.value}</Text>} />
-                </Col>
-              ))}
-            </Row>
-          </Card>
-        </Col>
-      </Row>
+      <ProCard gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <ProCard colSpan={{ xs: 24, lg: 16 }} bordered={false} style={{ borderRadius: 12 }}
+          title={<Space><LineChartOutlined style={{ color: '#fa8c16' }} /><span>{t('station.genTrend30Days')}</span></Space>}
+        >
+          {trend30DaysData.length > 0 ? (
+            <ReactECharts option={trend30DaysOption} style={{ height: 300 }} />
+          ) : (
+            <Empty description={t('dash.noEnergyData')} />
+          )}
+        </ProCard>
+        <ProCard colSpan={{ xs: 24, lg: 8 }} bordered={false} title={t('dash.deviceStatus')} loading={distLoading}
+          style={{ borderRadius: 12 }}
+          bodyStyle={{ padding: '12px 16px' }}
+        >
+          <ReactECharts option={pieOption} style={{ height: 260 }} />
+          <Row gutter={16} style={{ textAlign: 'center', marginTop: 4 }}>
+            {[
+              { label: t('common.online'), value: onlineCount, color: '#52c41a' },
+              { label: t('common.offline'), value: offlineCount, color: '#d9d9d9' },
+              { label: t('common.fault'), value: faultCount, color: '#ff4d4f' },
+            ].map((i) => (
+              <Col span={8} key={i.label}>
+                <Badge color={i.color} text={<Text strong>{i.label} {i.value}</Text>} />
+              </Col>
+            ))}
+          </Row>
+        </ProCard>
+      </ProCard>
 
       {/* 功率趋势 */}
-      <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
+      <ProCard bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
         title={<Space><LineChartOutlined style={{ color: '#1677ff' }} /><span>{t('dash.powerTrend')}</span></Space>}
         extra={
           <Space>
@@ -426,10 +421,10 @@ const DashboardPage: React.FC = () => {
         ) : (
           <Empty description={t('dash.noEnergyData')} />
         )}
-      </Card>
+      </ProCard>
 
       {/* 电量概览 */}
-      <Card bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
+      <ProCard bordered={false} style={{ borderRadius: 12, marginTop: 16 }}
         title={<Space><BarChartOutlined style={{ color: '#722ed1' }} /><span>{t('dash.energyOverview')}</span></Space>}
         extra={
           <Segmented size="small" value={energyOverviewPeriod} onChange={(v) => setEnergyOverviewPeriod(v as string)}
@@ -449,59 +444,53 @@ const DashboardPage: React.FC = () => {
         ) : (
           <Empty description={t('dash.noEnergyData')} />
         )}
-      </Card>
+      </ProCard>
 
       {/* 电站排行 + 近期告警 */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={10}>
-          <Card bordered={false} style={{ borderRadius: 12 }}
-            title={t('dash.stationRank')}
-            extra={
-              <Segmented size="small" value={rankingPeriod} onChange={(v) => setRankingPeriod(v as string)}
-                options={[
-                  { label: t('dash.today'), value: 'today' },
-                  { label: t('dash.thisWeek'), value: 'week' },
-                  { label: t('dash.thisMonth'), value: 'month' },
-                ]}
-              />
-            }
-          >
-            {rankingData && rankingData.length > 0 ? (
-              <ReactECharts option={rankingOption} style={{ height: 300 }} />
-            ) : (
-              <Empty description={t('dash.noStationData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={14}>
-          <Card bordered={false} title={t('dash.recentAlerts')} style={{ borderRadius: 12 }}
-            extra={<a onClick={() => navigate('/alerts')}>{t('common.viewAll')}</a>}
-          >
-            <Table columns={alertColumns} dataSource={recentAlerts.slice(0, 6)} rowKey="id"
-              pagination={false} size="small" scroll={{ x: 500 }} />
-          </Card>
-        </Col>
-      </Row>
+      <ProCard gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <ProCard colSpan={{ xs: 24, lg: 10 }} bordered={false} style={{ borderRadius: 12 }}
+          title={t('dash.stationRank')}
+          extra={
+            <Segmented size="small" value={rankingPeriod} onChange={(v) => setRankingPeriod(v as string)}
+              options={[
+                { label: t('dash.today'), value: 'today' },
+                { label: t('dash.thisWeek'), value: 'week' },
+                { label: t('dash.thisMonth'), value: 'month' },
+              ]}
+            />
+          }
+        >
+          {rankingData && rankingData.length > 0 ? (
+            <ReactECharts option={rankingOption} style={{ height: 300 }} />
+          ) : (
+            <Empty description={t('dash.noStationData')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </ProCard>
+        <ProCard colSpan={{ xs: 24, lg: 14 }} bordered={false} title={t('dash.recentAlerts')} style={{ borderRadius: 12 }}
+          extra={<a onClick={() => navigate('/alerts')}>{t('common.viewAll')}</a>}
+        >
+          <ProTable columns={alertColumns} dataSource={recentAlerts.slice(0, 6)} rowKey="id"
+            pagination={false} size="small" scroll={{ x: 500 }} search={false} toolBarRender={false} />
+        </ProCard>
+      </ProCard>
 
       {/* 快捷入口 */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+      <ProCard gutter={[16, 16]} style={{ marginTop: 16 }}>
         {[
           { title: t('dash.entryDevices'), desc: t('dash.entryDevicesDesc'), icon: <DesktopOutlined style={{ fontSize: 28 }} />, color: '#1677ff', path: '/devices' },
           { title: t('dash.entryAnalytics'), desc: t('dash.entryAnalyticsDesc'), icon: <BarChartOutlined style={{ fontSize: 28 }} />, color: '#722ed1', path: '/monitoring' },
           { title: t('dash.entryAlerts'), desc: t('dash.entryAlertsDesc'), icon: <ExclamationCircleOutlined style={{ fontSize: 28 }} />, color: '#fa541c', path: '/alerts' },
         ].map((item) => (
-          <Col xs={24} sm={8} key={item.path}>
-            <Card hoverable bordered={false} style={{ borderRadius: 12, textAlign: 'center' }}
-              onClick={() => navigate(item.path)}
-            >
-              <div style={{ color: item.color, marginBottom: 8 }}>{item.icon}</div>
-              <Text strong style={{ fontSize: 15 }}>{item.title}</Text>
-              <br />
-              <Text type="secondary" style={{ fontSize: 12 }}>{item.desc}</Text>
-            </Card>
-          </Col>
+          <ProCard colSpan={{ xs: 24, sm: 8 }} key={item.path} hoverable bordered={false} style={{ borderRadius: 12, textAlign: 'center' }}
+            onClick={() => navigate(item.path)}
+          >
+            <div style={{ color: item.color, marginBottom: 8 }}>{item.icon}</div>
+            <Text strong style={{ fontSize: 15 }}>{item.title}</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 12 }}>{item.desc}</Text>
+          </ProCard>
         ))}
-      </Row>
+      </ProCard>
     </>
   )
 

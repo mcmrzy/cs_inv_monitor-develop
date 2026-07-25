@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Table, Button, Tag, Space, Modal, Input, Row, Col, App, Empty, Alert,
+  Button, Tag, Space, Modal, Input, Row, Col, App, Empty, Alert,
 } from 'antd'
+import { ProTable } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+
 import dayjs from 'dayjs'
 import { channelApi, type TransferRequest } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
@@ -106,12 +108,12 @@ const TransferApprovals: React.FC = () => {
     }
   }
 
-  const columns: ColumnsType<TransferRequest> = [
+  const columns: ProColumns<TransferRequest>[] = [
     {
       title: t('channel.transfer.resourceType'), dataIndex: 'resource_type', width: 90,
-      render: (type: string) => (
-        <Tag color={type === 'device' ? 'blue' : 'green'}>
-          {t(`channel.transfer.resourceType.${type}`)}
+      render: (_, record: TransferRequest) => (
+        <Tag color={record.resource_type === 'device' ? 'blue' : 'green'}>
+          {t(`channel.transfer.resourceType.${record.resource_type}`)}
         </Tag>
       ),
     },
@@ -121,15 +123,15 @@ const TransferApprovals: React.FC = () => {
     { title: t('channel.transfer.reason'), dataIndex: 'reason', width: 200, ellipsis: true },
     {
       title: t('channel.transfer.status'), dataIndex: 'status', width: 90,
-      render: (status: string) => (
-        <Tag color={STATUS_COLORS[status] ?? 'default'}>
-          {t(`channel.transfer.status.${status}`)}
+      render: (_, record: TransferRequest) => (
+        <Tag color={STATUS_COLORS[record.status] ?? 'default'}>
+          {t(`channel.transfer.status.${record.status}`)}
         </Tag>
       ),
     },
     {
       title: t('channel.transfer.createdAt'), dataIndex: 'created_at', width: 170,
-      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm') : '-',
+      render: (_, record: TransferRequest) => record.created_at ? formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: t('common.actions'), key: 'actions', width: 180,
@@ -192,12 +194,14 @@ const TransferApprovals: React.FC = () => {
         </Col>
       </Row>
 
-      <Table<TransferRequest>
+      <ProTable<TransferRequest>
         rowKey="id"
         columns={columns}
         dataSource={listRes?.items ?? []}
         loading={isLoading}
         size="middle"
+        search={false}
+        options={{ density: true, reload: () => refetch(), setting: true }}
         locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         rowSelection={{
           selectedRowKeys,

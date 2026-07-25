@@ -1,5 +1,6 @@
 import React from 'react'
-import { Row, Col, Card, Statistic } from 'antd'
+import { Statistic } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 import { safeNum } from '@/utils/format'
 import useTranslation from '@/hooks/useTranslation'
 
@@ -49,21 +50,19 @@ const SocialContribution: React.FC<SocialContributionProps> = ({ totalEnergy }) 
   ]
 
   return (
-    <Row gutter={[16, 16]}>
+    <ProCard gutter={[16, 16]}>
       {cards.map((card) => (
-        <Col xs={24} sm={8} key={card.title}>
-          <Card bordered={false} style={{ borderRadius: 12, background: card.bg }} styles={{ body: { padding: '16px' } }}>
-            <Statistic
-              title={<span style={{ fontSize: 13 }}>{card.icon} {card.title}</span>}
-              value={card.value}
-              suffix={card.suffix}
-              precision={card.value >= 100 ? 0 : 1}
-              valueStyle={{ color: card.color, fontWeight: 700, fontSize: 22 }}
-            />
-          </Card>
-        </Col>
+        <ProCard colSpan={{ xs: 24, sm: 8 }} key={card.title} bordered={false} style={{ borderRadius: 12, background: card.bg }} bodyStyle={{ padding: '16px' }}>
+          <Statistic
+            title={<span style={{ fontSize: 13 }}>{card.icon} {card.title}</span>}
+            value={card.value}
+            suffix={card.suffix}
+            precision={card.value >= 100 ? 0 : 1}
+            valueStyle={{ color: card.color, fontWeight: 700, fontSize: 22 }}
+          />
+        </ProCard>
       ))}
-    </Row>
+    </ProCard>
   )
 }
 

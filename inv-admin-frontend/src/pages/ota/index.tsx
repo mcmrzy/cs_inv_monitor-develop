@@ -2,8 +2,6 @@ import React, { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tabs,
-  Card,
-  Table,
   Button,
   Modal,
   Form,
@@ -56,7 +54,8 @@ import {
   AppstoreOutlined,
   DesktopOutlined,
 } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+import type { ProColumns } from '@ant-design/pro-components'
+import { ProTable, ProCard } from '@ant-design/pro-components'
 import type { UploadProps } from 'antd'
 import dayjs from 'dayjs'
 import { otaApi } from '@/services/otaApi'
@@ -362,10 +361,10 @@ const UpgradeTasksTab: React.FC = () => {
   const tasksTotal = tasksRes?.total ?? 0
 
   // 任务列表列
-  const columns: ColumnsType<UpgradeTask> = [
+  const columns: ProColumns<UpgradeTask>[] = [
     {
       title: t('ota.taskName'), dataIndex: 'name', key: 'name', width: 160, ellipsis: true,
-      render: (val: string, record: UpgradeTask) => val || `#${record.id}`,
+      render: (_, record: UpgradeTask) => record.name || `#${record.id}`,
     },
     {
       title: t('ota.upgradeType'), key: 'task_type', width: 90,
@@ -475,7 +474,7 @@ const UpgradeTasksTab: React.FC = () => {
   ]
 
   // 设备升级详情列
-  const detailColumns: ColumnsType<DeviceUpgrade> = [
+  const detailColumns: ProColumns<DeviceUpgrade>[] = [
     { title: 'SN', dataIndex: 'device_sn', key: 'device_sn', width: 140 },
     {
       title: t('ota.currentFirmware'), key: 'current_firmware', width: 180,
@@ -490,15 +489,15 @@ const UpgradeTasksTab: React.FC = () => {
     { title: t('ota.targetVersion'), dataIndex: 'firmware_version', key: 'firmware_version', width: 100 },
     {
       title: t('common.status'), dataIndex: 'status', key: 'status', width: 100,
-      render: (s: string) => { const c = UPGRADE_STATUS_MAP[s]; return <Tag color={c?.color || '#d9d9d9'}>{c ? t(c.i18nKey) : s}</Tag> },
+      render: (_: any, record: DeviceUpgrade) => { const s = record.status; const c = UPGRADE_STATUS_MAP[s]; return <Tag color={c?.color || '#d9d9d9'}>{c ? t(c.i18nKey) : s}</Tag> },
     },
     {
       title: t('ota.progress'), dataIndex: 'progress', key: 'progress', width: 150,
-      render: (val: number) => <Progress percent={val} size="small" />,
+      render: (_: any, record: DeviceUpgrade) => <Progress percent={record.progress} size="small" />,
     },
     {
       title: t('ota.errorInfo'), dataIndex: 'error_message', key: 'error_message', ellipsis: true,
-      render: (val: string) => val || '-',
+      render: (_: any, record: DeviceUpgrade) => record.error_message || '-',
     },
   ]
 
@@ -517,29 +516,29 @@ const UpgradeTasksTab: React.FC = () => {
       {/* 统计卡片 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={6}>
-          <Card bordered={false} style={{ borderRadius: 12 }}>
+          <ProCard style={{ borderRadius: 12 }}>
             <Statistic title={t('ota.statPending')} value={stats?.pending ?? 0} prefix={<ClockCircleOutlined />} valueStyle={{ color: '#1677ff' }} />
-          </Card>
+          </ProCard>
         </Col>
         <Col span={6}>
-          <Card bordered={false} style={{ borderRadius: 12 }}>
+          <ProCard style={{ borderRadius: 12 }}>
             <Statistic title={t('ota.statRunning')} value={stats?.running ?? 0} prefix={<RocketOutlined />} valueStyle={{ color: '#fa8c16' }} />
-          </Card>
+          </ProCard>
         </Col>
         <Col span={6}>
-          <Card bordered={false} style={{ borderRadius: 12 }}>
+          <ProCard style={{ borderRadius: 12 }}>
             <Statistic title={t('ota.statCompletedToday')} value={stats?.completed_today ?? 0} prefix={<CheckCircleOutlined />} valueStyle={{ color: '#52c41a' }} />
-          </Card>
+          </ProCard>
         </Col>
         <Col span={6}>
-          <Card bordered={false} style={{ borderRadius: 12 }}>
+          <ProCard style={{ borderRadius: 12 }}>
             <Statistic title={t('ota.statFailed')} value={stats?.failed ?? 0} prefix={<CloseCircleOutlined />} valueStyle={{ color: '#ff4d4f' }} />
-          </Card>
+          </ProCard>
         </Col>
       </Row>
 
       {/* 工具栏 */}
-      <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
+      <ProCard style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
           <Col>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
@@ -566,15 +565,17 @@ const UpgradeTasksTab: React.FC = () => {
           </Col>
           <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
         </Row>
-      </Card>
+      </ProCard>
 
       {/* 任务列表 */}
-      <Table<UpgradeTask>
+      <ProTable<UpgradeTask>
         rowKey="id"
         columns={columns}
         dataSource={tasksData}
         loading={isLoading}
         size="small"
+        search={false}
+        options={{ density: true, reload: () => refetch(), setting: true }}
         scroll={{ x: 1200 }}
         pagination={{
           current: page, pageSize, total: tasksTotal, showSizeChanger: true,
@@ -672,9 +673,10 @@ const UpgradeTasksTab: React.FC = () => {
                 {t('ota.selectAll')}
               </Checkbox>
             </div>
-            <Table<Device>
+            <ProTable<Device>
               rowKey="sn"
               size="small"
+              search={false}
               rowSelection={{
                 selectedRowKeys: selectedDeviceSns,
                 onChange: (keys) => setSelectedDeviceSns(keys as string[]),
@@ -683,7 +685,7 @@ const UpgradeTasksTab: React.FC = () => {
               columns={[
                 { title: 'SN', dataIndex: 'sn', key: 'sn', width: 140 },
                 { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
-                { title: t('ota.currentVersion'), dataIndex: 'firmwareVersion', key: 'firmwareVersion', width: 120, render: (v: string) => v || '-' },
+                { title: t('ota.currentVersion'), dataIndex: 'firmwareVersion', key: 'firmwareVersion', width: 120, render: (_: any, record: Device) => record.firmwareVersion || '-' },
               ]}
               pagination={{ pageSize: 8, size: 'small' }}
               scroll={{ y: 350 }}
@@ -756,12 +758,13 @@ const UpgradeTasksTab: React.FC = () => {
         destroyOnClose
         extra={<Button icon={<ReloadOutlined />} size="small" onClick={() => queryClient.invalidateQueries({ queryKey: queryKeys.ota.taskDevices(detailTaskId ?? 0) })} />}
       >
-        <Table<DeviceUpgrade>
+        <ProTable<DeviceUpgrade>
           rowKey={(r) => `${r.device_sn}-${r.firmware_id}`}
           columns={detailColumns}
           dataSource={taskDevices}
           loading={devicesLoading}
           size="small"
+          search={false}
           scroll={{ x: 900 }}
           pagination={false}
         />
@@ -959,22 +962,22 @@ const FirmwareTab: React.FC = () => {
         : null
   const firmwareTotal = firmwareRes?.total ?? 0
 
-  const columns: ColumnsType<Firmware> = [
+  const columns: ProColumns<Firmware>[] = [
     { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 120 },
     {
       title: t('ota.targetChip'), dataIndex: 'target_chip', key: 'target_chip', width: 90,
-      render: (val: string) => {
+      render: (_, record: Firmware) => {
         const chipMap: Record<string, { label: string; color: string }> = { esp: { label: 'ESP', color: 'green' }, arm: { label: 'ARM', color: 'blue' }, dsp: { label: 'DSP', color: 'orange' }, bms: { label: 'BMS', color: 'purple' } }
-        const chip = chipMap[val] || { label: val || '-', color: 'default' }
+        const chip = chipMap[record.target_chip] || { label: record.target_chip || '-', color: 'default' }
         return <Tag color={chip.color}>{chip.label}</Tag>
       },
     },
     { title: t('ota.subVersion'), dataIndex: 'version', key: 'version', width: 100 },
     { title: '安全版本', dataIndex: 'security_version', key: 'security_version', width: 90 },
-    { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (size: number) => formatFileSize(size) },
-    { title: 'MD5', dataIndex: 'file_md5', key: 'file_md5', width: 180, ellipsis: true, render: (val: string) => <Tooltip title={val}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span></Tooltip> },
-    { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (val: string) => <Tooltip title={val}><span>{val || '-'}</span></Tooltip> },
-    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (val: string) => formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm:ss') },
+    { title: t('ota.fileSize'), dataIndex: 'file_size', key: 'file_size', width: 100, render: (_: any, record: Firmware) => formatFileSize(record.fileSize) },
+    { title: 'MD5', dataIndex: 'file_md5', key: 'file_md5', width: 180, ellipsis: true, render: (_: any, record: Firmware) => <Tooltip title={record.fileMd5}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.fileMd5}</span></Tooltip> },
+    { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (_, record: Firmware) => <Tooltip title={record.changelog}><span>{record.changelog || '-'}</span></Tooltip> },
+    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 170, render: (_: any, record: Firmware) => formatInTimezone(record.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.operation'), key: 'action', width: 140,
       render: (_: any, record: Firmware) => (
@@ -995,7 +998,7 @@ const FirmwareTab: React.FC = () => {
   return (
     <div>
       {queryFailure && <QueryErrorAlert error={queryFailure.error} onRetry={() => { void queryFailure.retry() }} style={{ marginBottom: 16 }} />}
-      <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
+      <ProCard style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
           <Col><Button type="primary" icon={<UploadOutlined />} onClick={() => setUploadOpen(true)}>{t('ota.uploadFirmware')}</Button></Col>
           <Col>
@@ -1010,8 +1013,10 @@ const FirmwareTab: React.FC = () => {
           </Col>
           <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
         </Row>
-      </Card>
-      <Table<Firmware> rowKey="id" columns={columns} dataSource={firmwareData} loading={isLoading} size="middle"
+      </ProCard>
+      <ProTable<Firmware> rowKey="id" columns={columns} dataSource={firmwareData} loading={isLoading} size="middle"
+        search={false}
+        options={{ density: true, reload: () => refetch(), setting: true }}
         pagination={{ current: page, pageSize, total: firmwareTotal, showSizeChanger: true, showTotal: (total) => t('common.total', { total }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
 
       <Modal title={t('ota.uploadFirmwareTitle')} open={uploadOpen}
@@ -1083,9 +1088,10 @@ const FirmwareTab: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label={t('ota.versionName')}>{fwDevicesTarget.version}</Descriptions.Item>
             </Descriptions>
-            <Table
+            <ProTable
               rowKey="sn"
               size="small"
+              search={false}
               loading={fwDevicesLoading}
               dataSource={fwDevices}
               pagination={{ pageSize: 10 }}
@@ -1093,11 +1099,11 @@ const FirmwareTab: React.FC = () => {
               columns={[
                 { title: t('common.deviceSN'), dataIndex: 'sn', key: 'sn', width: 140 },
                 { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
-                { title: t('ota.mainVersion'), dataIndex: 'main_version', key: 'main_version', width: 120, render: (v: string) => v || '-' },
-                { title: 'ARM', dataIndex: 'firmware_arm', key: 'firmware_arm', width: 110, render: (v: string) => v || '-' },
-                { title: 'ESP', dataIndex: 'firmware_esp', key: 'firmware_esp', width: 110, render: (v: string) => v || '-' },
-                { title: 'DSP', dataIndex: 'firmware_dsp', key: 'firmware_dsp', width: 110, render: (v: string) => v || '-' },
-                { title: 'BMS', dataIndex: 'firmware_bms', key: 'firmware_bms', width: 110, render: (v: string) => v || '-' },
+                { title: t('ota.mainVersion'), dataIndex: 'main_version', key: 'main_version', width: 120, render: (_: any, record: any) => record.main_version || '-' },
+                { title: 'ARM', dataIndex: 'firmware_arm', key: 'firmware_arm', width: 110, render: (_: any, record: any) => record.firmware_arm || '-' },
+                { title: 'ESP', dataIndex: 'firmware_esp', key: 'firmware_esp', width: 110, render: (_: any, record: any) => record.firmware_esp || '-' },
+                { title: 'DSP', dataIndex: 'firmware_dsp', key: 'firmware_dsp', width: 110, render: (_: any, record: any) => record.firmware_dsp || '-' },
+                { title: 'BMS', dataIndex: 'firmware_bms', key: 'firmware_bms', width: 110, render: (_: any, record: any) => record.firmware_bms || '-' },
               ]}
             />
           </div>
@@ -1244,11 +1250,11 @@ const PackagesTab: React.FC = () => {
   const selectedModel = Form.useWatch('model', createForm)
   const filteredFirmware = selectedModel ? firmwareList.filter((f: Firmware) => f.model === selectedModel) : firmwareList
 
-  const columns: ColumnsType<UpgradePackage> = [
-    { title: t('ota.packageVersion'), dataIndex: 'main_version', key: 'main_version', width: 140, render: (v: string) => <Tag color="blue">{v}</Tag> },
+  const columns: ProColumns<UpgradePackage>[] = [
+    { title: t('ota.packageVersion'), dataIndex: 'main_version', key: 'main_version', width: 140, render: (_, record: UpgradePackage) => <Tag color="blue">{record.main_version}</Tag> },
     { 
       title: t('ota.userVersion'), dataIndex: 'user_version', key: 'user_version', width: 110,
-      render: (v: string) => v ? <Tag color="cyan">{v}</Tag> : <span style={{ color: '#bbb' }}>{t('ota.autoGenerated')}</span>,
+      render: (_, record: UpgradePackage) => record.user_version ? <Tag color="cyan">{record.user_version}</Tag> : <span style={{ color: '#bbb' }}>{t('ota.autoGenerated')}</span>,
     },
     { title: t('ota.model'), dataIndex: 'model', key: 'model', width: 100 },
     {
@@ -1275,7 +1281,7 @@ const PackagesTab: React.FC = () => {
         return typeMap[record.rollout_type || ''] || (record.rollout_type || '-')
       },
     },
-    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm') : '-' },
+    { title: t('ota.uploadTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (_, record: UpgradePackage) => record.created_at ? formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm') : '-' },
     {
       title: t('ota.action'), key: 'action', width: 300,
       render: (_: any, record: UpgradePackage) => (
@@ -1325,7 +1331,7 @@ const PackagesTab: React.FC = () => {
   return (
     <div>
       {queryFailure && <QueryErrorAlert error={queryFailure.error} onRetry={() => { void queryFailure.retry() }} style={{ marginBottom: 16 }} />}
-      <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
+      <ProCard style={{ marginBottom: 16 }} bodyStyle={{ padding: '12px 16px' }}>
         <Row justify="space-between" align="middle">
           <Col><Space>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>{t('ota.createPackage')}</Button>
@@ -1336,8 +1342,10 @@ const PackagesTab: React.FC = () => {
               options={modelList.map((m: any) => ({ label: m.model_name || m.model_code, value: m.model_code }))} />
           </Col>
         </Row>
-      </Card>
-      <Table<UpgradePackage> dataSource={packages} columns={columns} rowKey="id" loading={isLoading} scroll={{ x: 1200 }}
+      </ProCard>
+      <ProTable<UpgradePackage> dataSource={packages} columns={columns} rowKey="id" loading={isLoading} scroll={{ x: 1200 }}
+        search={false}
+        options={{ density: true, reload: () => invalidate(), setting: true }}
         pagination={{ pageSize: 20 }} locale={{ emptyText: <Empty description={t('ota.noPackages')} /> }} />
 
       <Modal title={t('ota.createPackage')} open={createOpen} onOk={handleCreate}
@@ -1392,22 +1400,24 @@ const PackagesTab: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label={t('ota.model')}>{pkgDevicesTarget.model}</Descriptions.Item>
             </Descriptions>
-            <Table<DeviceUpgrade>
+            <ProTable<DeviceUpgrade>
               rowKey={(r) => `${r.device_sn}-${r.id}`}
               size="small"
+              search={false}
               loading={pkgDevicesLoading}
               dataSource={pkgDevices}
               pagination={{ pageSize: 10 }}
               locale={{ emptyText: <Empty description={t('ota.noInstalledPackageDevices')} /> }}
               columns={[
                 { title: t('common.deviceSN'), dataIndex: 'device_sn', key: 'device_sn', width: 140 },
-                { title: t('ota.model'), dataIndex: 'device_model', key: 'device_model', width: 100, render: (v: string) => v || '-' },
+                { title: t('ota.model'), dataIndex: 'device_model', key: 'device_model', width: 100, render: (_: any, record: DeviceUpgrade) => record.device_model || '-' },
                 {
                   title: t('ota.installStatus'),
                   dataIndex: 'status',
                   key: 'status',
                   width: 100,
-                  render: (s: string) => {
+                  render: (_: any, record: DeviceUpgrade) => {
+                    const s = record.status
                     const statusMap: Record<string, { label: string; color: string }> = {
                       success: { label: t('ota.success'), color: 'success' },
                       pending: { label: t('ota.taskStatusPending'), color: 'processing' },
@@ -1425,7 +1435,7 @@ const PackagesTab: React.FC = () => {
                   dataIndex: 'created_at',
                   key: 'created_at',
                   width: 170,
-                  render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
+                  render: (_: any, record: DeviceUpgrade) => record.created_at ? formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm:ss') : '-',
                 },
               ]}
             />
@@ -1553,25 +1563,25 @@ const AppVersionTab: React.FC = () => {
 
   const ROLLOUT_MARKS: Record<number, string> = { 0: '0%', 10: '10%', 25: '25%', 50: '50%', 75: '75%', 100: '100%' }
 
-  const columns: ColumnsType<any> = [
+  const columns: ProColumns<any>[] = [
     {
       title: t('ota.platform'), dataIndex: 'platform', key: 'platform', width: 90,
-      render: (val: string) => <Tag icon={val === 'ios' ? <AppleOutlined /> : <AndroidOutlined />} color={val === 'ios' ? '#000' : '#52c41a'}>{val === 'ios' ? 'iOS' : 'Android'}</Tag>,
+      render: (_, record: any) => <Tag icon={record.platform === 'ios' ? <AppleOutlined /> : <AndroidOutlined />} color={record.platform === 'ios' ? '#000' : '#52c41a'}>{record.platform === 'ios' ? 'iOS' : 'Android'}</Tag>,
     },
-    { title: t('ota.versionCode'), dataIndex: 'version_code', key: 'version_code', width: 80, render: (val: number) => <Tag color="blue">{val}</Tag> },
+    { title: t('ota.versionCode'), dataIndex: 'version_code', key: 'version_code', width: 80, render: (_, record: any) => <Tag color="blue">{record.version_code}</Tag> },
     { title: t('ota.versionName'), dataIndex: 'version_name', key: 'version_name', width: 100 },
-    { title: t('ota.downloadUrl'), dataIndex: 'download_url', key: 'download_url', ellipsis: true, render: (val: string) => <Tooltip title={val}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val || '-'}</span></Tooltip> },
-    { title: t('ota.forceUpdate'), dataIndex: 'is_force', key: 'is_force', width: 80, render: (val: boolean) => val ? <Tag color="red">{t('ota.force')}</Tag> : <Tag>{t('common.no')}</Tag> },
+    { title: t('ota.downloadUrl'), dataIndex: 'download_url', key: 'download_url', ellipsis: true, render: (_, record: any) => <Tooltip title={record.download_url}><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{record.download_url || '-'}</span></Tooltip> },
+    { title: t('ota.forceUpdate'), dataIndex: 'is_force', key: 'is_force', width: 80, render: (_, record: any) => record.is_force ? <Tag color="red">{t('ota.force')}</Tag> : <Tag>{t('common.no')}</Tag> },
     {
       title: t('ota.rolloutPercent'), dataIndex: 'rollout_percentage', key: 'rollout_percentage', width: 120,
-      render: (val: number, record: any) => {
+      render: (_, record: any) => {
         if (record.is_rolled_back) return <Tag color="red">{t('ota.rolledBack')}</Tag>
-        const pct = val ?? 100
+        const pct = record.rollout_percentage ?? 100
         return <Space><Progress percent={pct} size="small" style={{ width: 60 }} /><span style={{ fontSize: 12 }}>{pct}%</span></Space>
       },
     },
-    { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (val: string) => <Tooltip title={val}><span>{val || '-'}</span></Tooltip> },
-    { title: t('ota.publishTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (val: string) => val ? formatInTimezone(val, timezone, 'YYYY-MM-DD HH:mm') : '-' },
+    { title: t('ota.changelog'), dataIndex: 'changelog', key: 'changelog', ellipsis: true, render: (_, record: any) => <Tooltip title={record.changelog}><span>{record.changelog || '-'}</span></Tooltip> },
+    { title: t('ota.publishTime'), dataIndex: 'created_at', key: 'created_at', width: 150, render: (_, record: any) => record.created_at ? formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm') : '-' },
     {
       title: t('common.operation'), key: 'action', width: 200,
       render: (_: any, record: any) => (
@@ -1599,7 +1609,7 @@ const AppVersionTab: React.FC = () => {
   return (
     <div>
       {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
-      <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
+      <ProCard style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
           <Col><Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>{t('ota.publishVersion')}</Button></Col>
           <Col>
@@ -1608,8 +1618,11 @@ const AppVersionTab: React.FC = () => {
           </Col>
           <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
         </Row>
-      </Card>
-      <Table rowKey="id" columns={columns} dataSource={versionData} loading={isLoading} size="middle" pagination={false} />
+      </ProCard>
+      <ProTable rowKey="id" columns={columns} dataSource={versionData} loading={isLoading} size="middle"
+        search={false}
+        options={{ density: true, reload: () => refetch(), setting: true }}
+        pagination={false} />
 
       <Modal title={t('ota.publishAppVersion')} open={createOpen} onCancel={() => { setCreateOpen(false); form.resetFields() }}
         onOk={handleCreate} confirmLoading={createMutation.isPending} destroyOnClose width={560}>

@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Tabs, Card, Table, Button, Tag, Select, Input, Space, Row, Col,
+  Tabs, Card, Button, Tag, Select, Input, Space, Row, Col,
   Statistic, Modal, Form, Switch, InputNumber, Tooltip,
   Checkbox, Spin, Typography, App, Empty,
 } from 'antd'
+import { ProTable } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import Popconfirm from '@/components/LocalizedPopconfirm'
 import {
   ReloadOutlined, CheckCircleFilled, CloseCircleFilled, SyncOutlined,
   DashboardOutlined, PlusOutlined, StopOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+
 import dayjs from 'dayjs'
 import { adminApi, type SystemHealth, type Tenant } from '@/services/adminApi'
 import useAuthStore from '@/stores/authStore'
@@ -240,15 +242,15 @@ const TenantTab: React.FC = () => {
     onError: () => { message.error(t('admin.operationFailed')) },
   })
 
-  const columns: ColumnsType<Tenant> = [
+  const columns: ProColumns<Tenant>[] = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     { title: t('admin.tenantName'), dataIndex: 'nickname', key: 'nickname', width: 150 },
     { title: t('admin.tenantPhone'), dataIndex: 'phone', key: 'phone', width: 140 },
     { title: t('admin.tenantEmail'), dataIndex: 'email', key: 'email', width: 180, ellipsis: true },
-    { title: t('admin.tenantStatus'), dataIndex: 'status', key: 'status', width: 80, render: (s: number) => s === 1 ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag color="red">{t('common.disabled')}</Tag> },
-    { title: t('admin.subUsers'), dataIndex: 'subUserCount', key: 'subUserCount', width: 80, render: (c: number, r: Tenant) => <span>{c}{r.userLimit ? ` / ${r.userLimit}` : ''}</span> },
-    { title: t('admin.tenantDevices'), dataIndex: 'deviceCount', key: 'deviceCount', width: 80, render: (c: number, r: Tenant) => <span>{c}{r.deviceLimit ? ` / ${r.deviceLimit}` : ''}</span> },
-    { title: t('common.createdAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (v: string) => formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm:ss') },
+    { title: t('admin.tenantStatus'), dataIndex: 'status', key: 'status', width: 80, render: (_, record: Tenant) => record.status === 1 ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag color="red">{t('common.disabled')}</Tag> },
+    { title: t('admin.subUsers'), dataIndex: 'subUserCount', key: 'subUserCount', width: 80, render: (_, r: Tenant) => <span>{r.subUserCount}{r.userLimit ? ` / ${r.userLimit}` : ''}</span> },
+    { title: t('admin.tenantDevices'), dataIndex: 'deviceCount', key: 'deviceCount', width: 80, render: (_, r: Tenant) => <span>{r.deviceCount}{r.deviceLimit ? ` / ${r.deviceLimit}` : ''}</span> },
+    { title: t('common.createdAt'), dataIndex: 'createdAt', key: 'createdAt', width: 170, render: (_, record: Tenant) => formatInTimezone(record.createdAt, timezone, 'YYYY-MM-DD HH:mm:ss') },
     {
       title: t('common.actions'), key: 'actions', width: 180,
       render: (_: unknown, record: Tenant) => (
@@ -272,7 +274,9 @@ const TenantTab: React.FC = () => {
         </Row>
       </Card>
 
-      <Table<Tenant> rowKey="id" columns={columns} dataSource={listRes?.items ?? []} loading={isLoading} size="middle"
+      <ProTable<Tenant> rowKey="id" columns={columns} dataSource={listRes?.items ?? []} loading={isLoading} size="middle"
+        search={false}
+        options={{ density: true, reload: () => refetch(), setting: true }}
         locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         pagination={{ current: page, pageSize, total: listRes?.total ?? 0, showSizeChanger: true, showTotal: (tt) => t('common.total', { total: tt }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
 

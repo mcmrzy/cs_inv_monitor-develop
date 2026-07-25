@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Row, Col, Card, Input, Typography, Space, Spin, Empty, Grid, Segmented, Statistic } from 'antd'
+import { Row, Col, Input, Typography, Space, Spin, Empty, Grid, Segmented, Statistic } from 'antd'
+import { ProCard } from '@ant-design/pro-components'
 import {
   SearchOutlined, ReloadOutlined, ApartmentOutlined,
   DesktopOutlined, CheckCircleOutlined, WarningOutlined,
@@ -234,49 +235,41 @@ const MonitoringPage: React.FC = () => {
       </div>
 
       {/* 汇总统计 */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-        <Col xs={12} sm={6}>
-          <Card size="small" style={{ borderRadius: 10 }}>
-            <Statistic
-              title={t('station.stationTotal')}
-              value={summaryData.totalStations}
-              prefix={<ApartmentOutlined />}
-              valueStyle={{ color: '#1677ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" style={{ borderRadius: 10 }}>
-            <Statistic
-              title={t('station.deviceTotal')}
-              value={summaryData.totalDevices}
-              prefix={<DesktopOutlined />}
-              valueStyle={{ color: '#1677ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" style={{ borderRadius: 10 }}>
-            <Statistic
-              title={t('station.deviceOnline')}
-              value={summaryData.onlineDevices}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={6}>
-          <Card size="small" style={{ borderRadius: 10 }}>
-            <Statistic
-              title={t('station.todayGen_kWh')}
-              value={summaryData.todayGeneration}
-              precision={1}
-              prefix={<SunOutlined />}
-              valueStyle={{ color: '#fa8c16' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <ProCard gutter={[16, 16]} style={{ marginBottom: 20 }}>
+        <ProCard colSpan={{ xs: 12, sm: 6 }} size="small" style={{ borderRadius: 10 }}>
+          <Statistic
+            title={t('station.stationTotal')}
+            value={summaryData.totalStations}
+            prefix={<ApartmentOutlined />}
+            valueStyle={{ color: '#1677ff' }}
+          />
+        </ProCard>
+        <ProCard colSpan={{ xs: 12, sm: 6 }} size="small" style={{ borderRadius: 10 }}>
+          <Statistic
+            title={t('station.deviceTotal')}
+            value={summaryData.totalDevices}
+            prefix={<DesktopOutlined />}
+            valueStyle={{ color: '#1677ff' }}
+          />
+        </ProCard>
+        <ProCard colSpan={{ xs: 12, sm: 6 }} size="small" style={{ borderRadius: 10 }}>
+          <Statistic
+            title={t('station.deviceOnline')}
+            value={summaryData.onlineDevices}
+            prefix={<CheckCircleOutlined />}
+            valueStyle={{ color: '#52c41a' }}
+          />
+        </ProCard>
+        <ProCard colSpan={{ xs: 12, sm: 6 }} size="small" style={{ borderRadius: 10 }}>
+          <Statistic
+            title={t('station.todayGen_kWh')}
+            value={summaryData.todayGeneration}
+            precision={1}
+            prefix={<SunOutlined />}
+            valueStyle={{ color: '#fa8c16' }}
+          />
+        </ProCard>
+      </ProCard>
 
       {/* 状态筛选 */}
       <div style={{ marginBottom: 16 }}>

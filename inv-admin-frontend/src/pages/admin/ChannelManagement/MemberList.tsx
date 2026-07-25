@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Table, Button, Tag, Space, Modal, Form, Input, Select, Row, Col, App, Empty, Alert,
+  Button, Tag, Space, Modal, Form, Input, Select, Row, Col, App, Empty, Alert,
 } from 'antd'
+import { ProTable } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+
 import dayjs from 'dayjs'
 import { channelApi, type OrgMember } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
@@ -72,24 +74,24 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
     onError: (err: any) => message.error(err?.response?.data?.message || t('admin.operationFailed')),
   })
 
-  const columns: ColumnsType<OrgMember> = [
+  const columns: ProColumns<OrgMember>[] = [
     { title: t('channel.member.email'), dataIndex: 'email', width: 200, ellipsis: true },
     { title: t('channel.member.phone'), dataIndex: 'phone', width: 130 },
     {
       title: t('channel.member.role'), dataIndex: 'role', width: 100,
-      render: (role: string) => <Tag color="blue">{role}</Tag>,
+      render: (_, record: OrgMember) => <Tag color="blue">{record.role}</Tag>,
     },
     {
       title: t('channel.member.status'), dataIndex: 'status', width: 90,
-      render: (status: string) => (
-        <Tag color={status === 'active' ? 'success' : 'default'}>
-          {t(`channel.member.status.${status}`)}
+      render: (_, record: OrgMember) => (
+        <Tag color={record.status === 'active' ? 'success' : 'default'}>
+          {t(`channel.member.status.${record.status}`)}
         </Tag>
       ),
     },
     {
       title: t('channel.member.joinedAt'), dataIndex: 'joined_at', width: 170,
-      render: (v: string) => v ? formatInTimezone(v, timezone, 'YYYY-MM-DD HH:mm') : '-',
+      render: (_, record: OrgMember) => record.joined_at ? formatInTimezone(record.joined_at, timezone, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: t('common.actions'), key: 'actions', width: 200,
@@ -150,12 +152,14 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
         </Col>
       </Row>
 
-      <Table<OrgMember>
+      <ProTable<OrgMember>
         rowKey="id"
         columns={columns}
         dataSource={listRes?.items ?? []}
         loading={isLoading}
         size="middle"
+        search={false}
+        options={{ density: true, reload: () => refetch(), setting: true }}
         locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         pagination={{
           current: page,

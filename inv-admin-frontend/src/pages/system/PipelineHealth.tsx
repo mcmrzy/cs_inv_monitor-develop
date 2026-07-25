@@ -1,9 +1,11 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Row, Col, Card, Table, Progress, Typography, Statistic,
+  Row, Col, Progress, Typography, Statistic,
   Button, Space, Tag, Badge, message, Tooltip, Alert,
 } from 'antd'
+import { ProTable, ProCard } from '@ant-design/pro-components'
+import type { ProColumns } from '@ant-design/pro-components'
 import {
   ReloadOutlined,
   CheckCircleOutlined,
@@ -17,7 +19,7 @@ import {
   RedoOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
+
 import {
   getPipelineHealth,
   getPipelineMetrics,
@@ -170,7 +172,7 @@ const PipelineHealthPage: React.FC = () => {
   const cmdExpired = metrics?.commands_expired ?? 0
 
   /* ---------- DLQ 表格列 ---------- */
-  const dlqColumns: ColumnsType<DLQItem> = [
+  const dlqColumns: ProColumns<DLQItem>[] = [
     {
       title: 'ID',
       dataIndex: 'id',
@@ -181,7 +183,7 @@ const PipelineHealthPage: React.FC = () => {
       title: '消费者类型',
       dataIndex: 'consumer_type',
       width: 120,
-      render: (val: string) => <Tag>{val}</Tag>,
+      render: (_, record: DLQItem) => <Tag>{record.consumer_type}</Tag>,
     },
     {
       title: 'Topic',
@@ -192,9 +194,9 @@ const PipelineHealthPage: React.FC = () => {
       title: '消息内容',
       dataIndex: 'payload_summary',
       ellipsis: true,
-      render: (val: string) => (
-        <Tooltip title={val}>
-          <Text style={{ maxWidth: 240 }} ellipsis>{val}</Text>
+      render: (_, record: DLQItem) => (
+        <Tooltip title={record.payload_summary}>
+          <Text style={{ maxWidth: 240 }} ellipsis>{record.payload_summary}</Text>
         </Tooltip>
       ),
     },
@@ -203,7 +205,7 @@ const PipelineHealthPage: React.FC = () => {
       dataIndex: 'error_message',
       width: 180,
       ellipsis: true,
-      render: (val: string) => <Text type="danger">{val}</Text>,
+      render: (_, record: DLQItem) => <Text type="danger">{record.error_message}</Text>,
     },
     {
       title: '重试次数',
@@ -270,7 +272,7 @@ const PipelineHealthPage: React.FC = () => {
       )}
 
       {/* 1. 管道状态总览 */}
-      <Card title="管道状态总览" style={{ marginBottom: 24 }} loading={healthLoading}>
+      <ProCard title="管道状态总览" style={{ marginBottom: 24 }} loading={healthLoading}>
         <Row gutter={16}>
           <Col xs={12} sm={6}>
             <StatusIndicator
@@ -315,13 +317,13 @@ const PipelineHealthPage: React.FC = () => {
             </div>
           </Col>
         </Row>
-      </Card>
+      </ProCard>
 
       {/* 2-4: 指标卡片行 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         {/* 2. 设备连接率 */}
         <Col xs={24} md={8}>
-          <Card title="设备连接率">
+          <ProCard title="设备连接率">
             <Progress
               percent={connectionRate}
               strokeColor={connectionRateColor(connectionRate)}
@@ -333,12 +335,12 @@ const PipelineHealthPage: React.FC = () => {
                 在线 <Text strong>{onlineDevices}</Text> / 总计 <Text strong>{totalDevices}</Text>
               </Text>
             </div>
-          </Card>
+          </ProCard>
         </Col>
 
         {/* 3. 消息吞吐量 */}
         <Col xs={24} md={8}>
-          <Card title="消息吞吐量">
+          <ProCard title="消息吞吐量">
             <Statistic
               value={messageRate}
               precision={1}
@@ -352,12 +354,12 @@ const PipelineHealthPage: React.FC = () => {
                 text={sseConnected ? 'SSE 实时推送中' : '等待数据...'}
               />
             </div>
-          </Card>
+          </ProCard>
         </Col>
 
         {/* 5. Kafka 消费延迟 */}
         <Col xs={24} md={8}>
-          <Card title="Kafka 消费延迟">
+          <ProCard title="Kafka 消费延迟">
             <Statistic
               value={kafkaLag}
               valueStyle={{ color: lagColor(kafkaLag) }}
@@ -368,14 +370,14 @@ const PipelineHealthPage: React.FC = () => {
                 {kafkaLag < 100 ? '正常' : kafkaLag <= 1000 ? '消费略有延迟' : '消费严重滞后'}
               </Text>
             </div>
-          </Card>
+          </ProCard>
         </Col>
       </Row>
 
       {/* 6. 命令投递 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} md={12}>
-          <Card title="命令投递成功率">
+          <ProCard title="命令投递成功率">
             <Progress
               type="dashboard"
               percent={cmdSuccessRate}
@@ -387,12 +389,12 @@ const PipelineHealthPage: React.FC = () => {
                 超时: <Text type={cmdExpired > 0 ? 'danger' : 'secondary'}>{cmdExpired}</Text>
               </Text>
             </div>
-          </Card>
+          </ProCard>
         </Col>
 
         {/* DLQ 积压统计 */}
         <Col xs={24} md={12}>
-          <Card title="DLQ 积压">
+          <ProCard title="DLQ 积压">
             <Statistic
               value={dlqPending}
               valueStyle={{
@@ -412,12 +414,12 @@ const PipelineHealthPage: React.FC = () => {
                   : '严重积压，请尽快处理'}
               </Text>
             </div>
-          </Card>
+          </ProCard>
         </Col>
       </Row>
 
       {/* 4. DLQ 管理表格 */}
-      <Card
+      <ProCard
         title="DLQ 消息管理"
         extra={
           <Button size="small" icon={<ReloadOutlined />} onClick={() => refetchDlq()}>
@@ -425,11 +427,13 @@ const PipelineHealthPage: React.FC = () => {
           </Button>
         }
       >
-        <Table<DLQItem>
+        <ProTable<DLQItem>
           rowKey="id"
           columns={dlqColumns}
           dataSource={dlqData?.items ?? []}
           loading={dlqLoading}
+          search={false}
+          options={{ density: true, reload: () => refetchDlq(), setting: true }}
           pagination={{
             current: dlqPage,
             pageSize: 20,
@@ -440,7 +444,7 @@ const PipelineHealthPage: React.FC = () => {
           }}
           locale={{ emptyText: '暂无 DLQ 消息' }}
         />
-      </Card>
+      </ProCard>
     </div>
   )
 }
