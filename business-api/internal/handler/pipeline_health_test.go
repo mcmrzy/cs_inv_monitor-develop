@@ -93,9 +93,9 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_AllOK() {
 	suite.Equal("ok", overallStatus)
 
 	// Verify we have 3 service statuses
-	serviceStatuses, ok := result["service_statuses"].([]interface{})
+	services, ok := result["services"].(map[string]interface{})
 	suite.True(ok)
-	suite.Len(serviceStatuses, 3)
+	suite.Len(services, 3)
 }
 
 // TestPipelineHealth_DegradedWhenServiceDown tests when one or more services are degraded/down
@@ -196,7 +196,7 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealth_PipelineMetrics(
 	suite.Equal(float64(3), dlqPending) // 2 from bridge + 1 from device-server
 
 	// Verify command success rate
-	successRate, ok := result["command_success_rate"].(float64)
+	successRate, ok := result["commands_success_rate"].(float64)
 	suite.True(ok)
 	suite.Equal(float64(95.0), successRate) // 950/(950+50)*100
 }
@@ -278,15 +278,14 @@ func (suite *PipelineHealthHandlerTestSuite) TestPipelineHealthResponseStructure
 
 	// Verify required fields are present
 	suite.Equal("ok", result.OverallStatus)
-	suite.NotZero(result.CheckTime)
-	suite.Len(result.ServiceStatuses, 3)
+	suite.NotEmpty(result.Services.Bridge.Status)
+	suite.NotEmpty(result.Services.DeviceServer.Status)
+	suite.NotEmpty(result.Services.API.Status)
 
 	// Verify each service has required fields
-	for _, status := range result.ServiceStatuses {
-		suite.NotEmpty(status.ServiceName)
-		suite.NotEmpty(status.ServiceType)
-		suite.Contains([]string{"ok", "degraded", "down"}, status.Status)
-		suite.NotZero(status.LastCheckTime)
+	for _, status := range []ServiceHealth{result.Services.Bridge, result.Services.DeviceServer, result.Services.API} {
+		suite.NotEmpty(status.Status)
+		suite.NotEmpty(status.LastHeartbeat)
 	}
 }
 

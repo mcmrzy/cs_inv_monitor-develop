@@ -233,7 +233,7 @@ func TestProtocolQueriesRejectCrossTenantDevice(t *testing.T) {
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", int64(1001))
-		c.Set("role", 3)
+		c.Set("is_system_admin", false)
 		c.Next()
 	})
 	r.GET("/devices/:sn/alarm-events", h.GetAlarmEvents)
@@ -264,7 +264,7 @@ func TestProtocolQueryAccessDatabaseErrorIsExplicit(t *testing.T) {
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", int64(1001))
-		c.Set("role", 3)
+		c.Set("is_system_admin", false)
 		c.Next()
 	})
 	r.GET("/devices/:sn/parallel-state", h.GetParallelState)
@@ -286,7 +286,7 @@ func TestProtocolQueryRoleZeroBypassesObjectAccessCheck(t *testing.T) {
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", int64(1))
-		c.Set("role", 0)
+		c.Set("is_system_admin", true)
 		c.Next()
 	})
 	r.GET("/access", func(c *gin.Context) {
@@ -301,7 +301,7 @@ func TestProtocolQueryRoleZeroBypassesObjectAccessCheck(t *testing.T) {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
 	if store.accessChecks != 0 {
-		t.Fatalf("role 0 should bypass object lookup, checks=%d", store.accessChecks)
+		t.Fatalf("system admin should bypass object lookup, checks=%d", store.accessChecks)
 	}
 }
 
@@ -367,7 +367,7 @@ func parallelQueryRouter(h *InternalHandler) *gin.Engine {
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", int64(1))
-		c.Set("role", 0)
+		c.Set("is_system_admin", true)
 		c.Next()
 	})
 	r.GET("/devices/:sn/parallel-state", h.GetParallelState)

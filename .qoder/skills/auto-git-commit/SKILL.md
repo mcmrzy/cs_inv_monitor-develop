@@ -72,21 +72,34 @@ git commit -m "<提交信息>"
 
 > **门控**：执行 cherry-pick 前，先向用户确认："是否将提交 `<hash>` cherry-pick 合并到主项目 develop 分支？"用户确认后再继续；用户拒绝则跳过步骤 5 和 6。
 
-当前环境是 worktree（detached HEAD），需要将刚提交的变更 cherry-pick 到主项目的 develop 分支：
+当前环境可能是 worktree（detached HEAD），需要将刚提交的变更 cherry-pick 到主项目的 develop 分支。
 
 ```bash
-# 5.1 进入主项目目录
-# 主项目路径: D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop
+# 5.1 动态发现主项目根目录
+# 优先使用 git rev-parse 获取主工作树的根目录（非 worktree 的 .git 目录所在）
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
+if [ -z "$PROJECT_ROOT" ]; then
+  # 回退：如果 git rev-parse 失败（例如不在 git 仓库中），尝试从 GIT_DIR 推导
+  GIT_DIR=$(git rev-parse --git-dir 2>/dev/null || echo "")
+  if [ -n "$GIT_DIR" ]; then
+    PROJECT_ROOT=$(cd "$(dirname "$GIT_DIR")" && pwd)
+  else
+    echo "错误：无法发现主项目路径，请手动设置 PROJECT_ROOT 环境变量"
+    exit 1
+  fi
+fi
+echo "主项目路径: $PROJECT_ROOT"
 
-cd D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop
+# 5.2 进入主项目目录
+cd "$PROJECT_ROOT"
 
-# 5.2 暂存主项目未提交的改动（避免冲突）
+# 5.3 暂存主项目未提交的改动（避免冲突）
 git stash push -m "temp: stash before cherry-pick"
 
-# 5.3 Cherry-pick worktree 的提交到 develop
+# 5.4 Cherry-pick worktree 的提交到 develop
 git cherry-pick <commit_hash>
 
-# 5.4 恢复之前暂存的改动
+# 5.5 恢复之前暂存的改动
 git stash pop
 ```
 
@@ -101,7 +114,9 @@ git stash pop
 合并完成后，在主项目目录下重新构建并启动 Docker 服务：
 
 ```bash
-cd D:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop
+# 复用步骤 5 发现的 PROJECT_ROOT（若未设置则重新发现）
+PROJECT_ROOT=${PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}
+cd "$PROJECT_ROOT"
 
 # 使用 Makefile 一键编译部署
 make docker-up
@@ -159,5 +174,6 @@ fix: 修复预下载固件404问题
 - 提交后输出提交 hash 和提交信息供用户确认
 - 合并到主项目后输出主项目的新 commit hash
 - Docker 部署完成后输出各服务的运行状态
-- 如果当前不在 worktree 环境（直接在主项目目录工作），跳过步骤 5，直接在主项目提交即可
+- 如果当前不在 worktree 环境（直接在主项目目录工作），`git rev-parse --show-toplevel` 返回的就是当前目录，跳过步骤 5 的 cherry-pick，直接在主项目提交即可
+- 路径发现优先级：`git rev-parse --show-toplevel` → `git rev-parse --git-dir` 推导 → `PROJECT_ROOT` 环境变量回退
 - Docker 部署仅在代码变更影响运行时（Go/Flutter/Frontend/配置）时执行；纯文档变更（README、docs/）可跳过部署步骤

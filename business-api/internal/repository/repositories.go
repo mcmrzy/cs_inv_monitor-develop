@@ -442,6 +442,7 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 	}, nil
 }
 
+// Deprecated: Use organization-based role assignments instead. Will be removed in Phase 8.
 func (r *UserRepository) UpdateRole(ctx context.Context, userID int64, role int) error {
 	_, err := r.db.Exec(ctx, "UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2", role, userID)
 	if err == nil {
@@ -450,6 +451,7 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID int64, role int)
 	return err
 }
 
+// Deprecated: Use organization-based role assignments instead. Will be removed in Phase 8.
 // UpdateRoleWithTx updates a user's role within a transaction
 func (r *UserRepository) UpdateRoleWithTx(ctx context.Context, tx pgx.Tx, userID int64, role int) error {
 	_, err := tx.Exec(ctx, "UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2", role, userID)
@@ -464,6 +466,7 @@ func (r *UserRepository) UpdateStatus(ctx context.Context, userID int64, status 
 	return err
 }
 
+// Deprecated: Use role_permission_grants instead. Will be removed in Phase 8.
 func (r *UserRepository) UpsertPermission(ctx context.Context, role int, resource string, action string, isAllowed bool) error {
 	_, err := r.db.Exec(ctx, `
 		INSERT INTO role_permissions (role, resource, action, is_allowed, updated_at)
@@ -541,6 +544,7 @@ type PermissionEntry struct {
 	Action   string `json:"action"`
 }
 
+// Deprecated: Use AuthorizationRepository.LoadAllPermissionCodes instead. Will be removed in Phase 8.
 func (r *UserRepository) GetRolePermissions(ctx context.Context, roleID int64) ([]PermissionEntry, error) {
 	rows, err := r.roleDB.Query(ctx, `
 		SELECT resource, action

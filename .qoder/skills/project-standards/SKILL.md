@@ -7,14 +7,9 @@ description: 光伏逆变器物联网监控平台(cs-inv-monitor)全栈开发规
 
 ## 系统架构概览
 
-| 服务 | 目录 | 技术栈 | 职责 |
-|------|------|--------|------|
-| inv-api-server | `business-api/` | Go + Gin + PostgreSQL + Redis | REST API 服务 |
-| inv-device-server | `device-communication/` | Go + Gin + MQTT + Kafka | 设备通信网关 |
-| api-gateway | `api-gateway/` | Go + Gin | API 网关（JWT/限流/RBAC） |
-| mqtt-kafka-bridge | `mqtt-kafka-bridge/` | Go | EMQX Webhook → Kafka |
-| inv-admin-frontend | `inv-admin-frontend/` | React + TS + Vite + AntD | 管理后台 |
-| inv_app | `inv_app/` | Flutter + Dart | 移动 App |
+> 参见 [AGENTS.md §子系统](../../AGENTS.md#子系统) 获取完整子系统表、基础设施和 MQTT 主题格式。
+
+本 Skill 聚焦于**编辑时深度指引**（编码规范、错误处理模式、安全规范）。项目路由级信息（子系统、构建命令、变更边界、OTA 体系等）以 AGENTS.md 为单一事实来源。
 
 ---
 
@@ -22,17 +17,9 @@ description: 光伏逆变器物联网监控平台(cs-inv-monitor)全栈开发规
 
 ### 分层架构（严格遵守）
 
-```
-cmd/main.go          → 入口：配置加载、DI、路由、优雅退出
-internal/handler/    → HTTP 层：解析请求、调用 Service、返回响应
-internal/service/    → 业务逻辑层：编排、校验、事务
-internal/repository/ → 数据访问层：纯 SQL 查询，不含业务逻辑
-internal/model/      → 数据模型（struct 对应数据库表）
-internal/middleware/  → JWT、RBAC、CORS、限流
-pkg/                 → 可复用公共包（apperr/response/logger/jwt/sn/timezone）
-```
+> 目录树结构参见 [AGENTS.md §目录结构约定](../../AGENTS.md#目录结构约定)。
 
-**关键规则**：
+**关键规则**（超出 AGENTS.md 的编辑时深度指引）：
 - Handler 只做请求解析和响应返回，**不写业务逻辑**
 - Repository 只做数据访问，**不打印日志**（由上层决定）
 - Service 返回 `error`，使用 `fmt.Errorf("context: %w", err)` 包装
@@ -107,15 +94,14 @@ import (
 
 ### 命名约定
 
+> 参见 [AGENTS.md §命名约定](../../AGENTS.md#命名约定) 获取完整命名约定表（Go/TypeScript/Dart/数据库/API 路径）。
+>
+> 以下为本 Skill 补充的 Go 端额外约定：
+
 | 场景 | 规范 | 示例 |
 |------|------|------|
-| struct 字段 | PascalCase | `FirmwareArm` |
-| JSON tag | snake_case | `"firmware_arm"` |
-| 数据库列 | snake_case | `created_at` |
-| 文件名 | snake_case | `ota_handler.go` |
 | 变量/函数 | camelCase | `getUserByID` |
 | 常量 | PascalCase | `MaxPageSize` |
-| API 路径 | kebab-case | `/api/v1/upgrade-packages` |
 
 ### 变量作用域安全
 
@@ -154,9 +140,10 @@ cd mqtt-kafka-bridge && go build ./main.go
 
 ### 认证与权限
 
-- **JWT Bearer Token**：所有受保护路由必须校验 `Authorization` Header
-- **角色**：0=超级管理员, 1=代理商, 2=安装商, 3=终端用户
-- **内部调用**：服务间通信使用 `X-Internal-Key` Header
+> 基础认证模型（JWT/角色/多租户/RBAC/内部调用）参见 [AGENTS.md §认证与权限](../../AGENTS.md#认证与权限)。
+>
+> 以下为编辑时的安全深度指引：
+
 - **密码**：必须使用 `bcrypt` 哈希，禁止明文存储
 - **Token 存储**：前端使用 httpOnly cookie（防 XSS）
 
@@ -259,7 +246,7 @@ src/
 
 每次代码变更后，按顺序检查：
 
-1. **编译**：`使用docker`（Go）/ `使用docker`（TS）/ `flutter analyze`（Dart）
+1. **编译**：`make build-go` 或 `go build ./...`（Go）/ `make type-check` 或 `npx tsc --noEmit`（TS）/ `flutter analyze --no-fatal-infos`（Dart）
 2. **错误处理**：所有 Handler 错误使用 `apperr` + `response.HandleError`
 3. **输入校验**：用户输入均已校验
 4. **SQL 安全**：无字符串拼接 SQL

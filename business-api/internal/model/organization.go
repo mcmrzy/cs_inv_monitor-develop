@@ -45,6 +45,9 @@ type OrganizationMembership struct {
 	Status         string     `json:"status"`
 	Version        int64      `json:"version"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	JoinedAt       time.Time  `json:"joined_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at,omitempty"`
+	UpdatedAt      time.Time  `json:"updated_at,omitempty"`
 }
 
 type MembershipRoleAssignment struct {

@@ -13,7 +13,11 @@ export interface User {
   email: string
   nickname: string
   avatar: string
-  role: Role
+  isSystemAdmin: boolean
+  /** @deprecated Use isSystemAdmin instead. Retained for backward compat during migration. */
+  role?: number
+  organizationId?: number
+  rootTenantId?: number
   parentId?: string
   regionId?: string
   status: number

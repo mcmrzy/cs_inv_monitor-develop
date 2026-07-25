@@ -3,45 +3,39 @@ package handler
 import (
 	"strings"
 	"testing"
-
-	"inv-api-server/internal/service"
 )
 
 func TestNotificationDataScopeByRole(t *testing.T) {
-	if got := notificationDataScope("n", service.RoleSuperAdmin, 1); got != "1=1" {
+	if got := notificationDataScope("n", true, 1); got != "1=1" {
 		t.Fatalf("super administrator scope = %q", got)
 	}
-	for _, role := range []int{service.RoleGeneralAgent, service.RoleAgent, service.RoleDealer, service.RoleInstaller, service.RoleEndUser} {
-		got := notificationDataScope("n", role, 3)
-		if !strings.Contains(got, "n.user_id = $3") || !strings.Contains(got, "v_user_device_access") {
-			t.Fatalf("role %d notification scope is incomplete: %s", role, got)
-		}
+	got := notificationDataScope("n", false, 3)
+	if !strings.Contains(got, "n.user_id = $3") || !strings.Contains(got, "v_user_device_access") {
+		t.Fatalf("non-admin notification scope is incomplete: %s", got)
 	}
 }
 
 func TestNotificationMutationScopeNeverUsesSharedDeviceAccess(t *testing.T) {
-	if got := notificationMutationScope("n", service.RoleSuperAdmin, 1); got != "1=1" {
+	if got := notificationMutationScope("n", true, 1); got != "1=1" {
 		t.Fatalf("super administrator mutation scope = %q", got)
 	}
-	for _, role := range []int{service.RoleGeneralAgent, service.RoleAgent, service.RoleDealer, service.RoleInstaller, service.RoleEndUser} {
-		got := notificationMutationScope("n", role, 3)
-		if got != "n.user_id = $3" {
-			t.Fatalf("role %d must only mutate its own notifications, got %s", role, got)
-		}
-		if strings.Contains(got, "v_user_device_access") {
-			t.Fatalf("role %d mutation scope must not inherit shared device visibility", role)
-		}
+	got := notificationMutationScope("n", false, 3)
+	if got != "n.user_id = $3" {
+		t.Fatalf("non-admin must only mutate its own notifications, got %s", got)
+	}
+	if strings.Contains(got, "v_user_device_access") {
+		t.Fatalf("non-admin mutation scope must not inherit shared device visibility")
 	}
 }
 
 func TestAlertRuleDataScopeSeparatesBranches(t *testing.T) {
-	for _, role := range []int{service.RoleGeneralAgent, service.RoleAgent, service.RoleDealer} {
+	for _, role := range []int{1, 2, 3} {
 		got := alertRuleDataScope("r", role, 2)
 		if !strings.Contains(got, "v_user_hierarchy") || !strings.Contains(got, "ancestor_id = $2") {
 			t.Fatalf("role %d must be restricted to descendants: %s", role, got)
 		}
 	}
-	for _, role := range []int{service.RoleInstaller, service.RoleEndUser} {
+	for _, role := range []int{4, 5} {
 		if got := alertRuleDataScope("r", role, 2); got != "r.created_by = $2" {
 			t.Fatalf("role %d must only see own rules: %s", role, got)
 		}

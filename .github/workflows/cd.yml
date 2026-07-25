@@ -132,40 +132,100 @@ jobs:
           script: |
             cd /opt/inv-mqtt/deploy
 
-            # 设置镜像 tag（先移除旧的 IMAGE_TAG 行再追加）
+            # ---------- 保存当前 IMAGE_TAG 用于回滚 ----------
+            PREV_IMAGE_TAG=$(grep '^IMAGE_TAG=' .env.prod 2>/dev/null | cut -d= -f2 || true)
+            echo "=== 部署信息 ==="
+            echo "当前 IMAGE_TAG: ${PREV_IMAGE_TAG:-none}"
+            echo "目标 IMAGE_TAG: ${{ env.DEPLOY_SHA }}"
+
+            # ---------- 设置新镜像 tag ----------
             sed -i '/^IMAGE_TAG=/d' .env.prod
             echo "IMAGE_TAG=${{ env.DEPLOY_SHA }}" >> .env.prod
 
-            # 登录 ghcr.io
+            # ---------- 登录 ghcr.io ----------
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # 拉取新镜像
+            # ---------- 拉取新镜像 ----------
             docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 
-            # 更新容器
+            # ---------- 更新容器 ----------
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans --wait --wait-timeout 180
 
-            # 清理旧镜像
+            # ---------- 保留最近 N 个镜像 tag，清理旧镜像 ----------
+            KEEP_COUNT=3
+            REGISTRY_OWNER="${{ github.repository_owner }}"
+            for svc in inv-device-server inv-api-server api-gateway inv-admin-frontend; do
+              echo "=== 清理 ${svc} 旧镜像（保留最近 ${KEEP_COUNT} 个 tag）==="
+              docker images "ghcr.io/${REGISTRY_OWNER}/${svc}" --format '{{.Tag}}' \
+                | grep -v '^latest$' \
+                | tail -n +$((KEEP_COUNT + 1)) \
+                | while read -r old_tag; do
+                  echo "  移除旧镜像: ghcr.io/${REGISTRY_OWNER}/${svc}:${old_tag}"
+                  docker rmi "ghcr.io/${REGISTRY_OWNER}/${svc}:${old_tag}" 2>/dev/null || true
+                done
+            done
+            # 清理悬空镜像
             docker image prune -f
 
-            # 健康检查
-            echo "=== 服务状态 ==="
-            docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+            # ---------- 健康检查函数 ----------
+            health_check() {
+              echo "=== 服务状态 ==="
+              docker compose -f docker-compose.prod.yml --env-file .env.prod ps
 
-            sleep 10
+              sleep 10
 
-            if curl -sf http://127.0.0.1/health > /dev/null 2>&1; then
-              echo "✅ API Gateway 正常"
+              local failed=0
+
+              if curl -sf http://127.0.0.1/health > /dev/null 2>&1; then
+                echo "✅ API Gateway 正常"
+              else
+                echo "❌ API Gateway 异常"
+                failed=1
+              fi
+
+              if docker ps --format "{{.Names}}" | grep -q inv-admin-frontend && docker inspect -f "{{.State.Running}}" inv-admin-frontend | grep -q true; then
+                echo "✅ Admin Frontend 正常"
+              else
+                echo "❌ Admin Frontend 异常"
+                failed=1
+              fi
+
+              return $failed
+            }
+
+            # ---------- 执行健康检查 ----------
+            if health_check; then
+              echo "🎉 部署成功完成！"
             else
-              echo "❌ API Gateway 异常"
-              exit 1
-            fi
+              echo "⚠️ 健康检查失败，开始自动回滚..."
 
-            if docker ps --format "{{.Names}}" | grep -q inv-admin-frontend && docker inspect -f "{{.State.Running}}" inv-admin-frontend | grep -q true; then
-              echo "✅ Admin Frontend 正常"
-            else
-              echo "❌ Admin Frontend 异常"
-              exit 1
-            fi
+              # 检查是否有可用的前一版本
+              if [ -z "$PREV_IMAGE_TAG" ] || [ "$PREV_IMAGE_TAG" = "CHANGE_ME_GIT_COMMIT_SHA" ]; then
+                echo "❌ 没有可用的前一版本镜像，无法回滚，需要人工介入！"
+                exit 1
+              fi
 
-            echo "🎉 部署成功完成！"
+              # 回滚到前一版本
+              echo "回滚到 IMAGE_TAG=$PREV_IMAGE_TAG"
+              sed -i '/^IMAGE_TAG=/d' .env.prod
+              echo "IMAGE_TAG=$PREV_IMAGE_TAG" >> .env.prod
+
+              # 拉取前一版本镜像
+              if ! docker compose -f docker-compose.prod.yml --env-file .env.prod pull; then
+                echo "❌ 无法拉取前一版本镜像，回滚失败！需要人工介入！"
+                exit 1
+              fi
+
+              # 用前一版本重启服务
+              docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --remove-orphans --wait --wait-timeout 180
+
+              # 回滚后健康检查
+              if health_check; then
+                echo "✅ 回滚成功，服务已恢复到前一版本 ($PREV_IMAGE_TAG)"
+                echo "⚠️ 本次部署已回滚，请检查新版本问题后重新部署"
+                exit 1
+              else
+                echo "❌ 回滚后健康检查仍然失败！需要人工介入！"
+                exit 1
+              fi
+            fi
