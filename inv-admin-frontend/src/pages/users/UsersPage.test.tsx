@@ -35,10 +35,10 @@ describe('UsersPage', () => {
       expect(screen.getByText('13800000001')).toBeInTheDocument()
     })
 
-    // Role names appear in tabs and table tags, so use getAllByText
+    // Nicknames appear in the table
     expect(screen.getAllByText('超级管理员').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('管理员').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('安装商').length).toBeGreaterThan(0)
+    // Role tags: system admin shows "系统管理员", others show "成员"
+    expect(screen.getAllByText('系统管理员').length).toBeGreaterThan(0)
   })
 
   it('should show role tags', async () => {
@@ -56,15 +56,13 @@ describe('UsersPage', () => {
   it('should render role filter tabs', async () => {
     renderAsAdmin(<UsersPage />)
 
-    // Wait for tabs
+    // Wait for tabs - new org-based system has 2 tabs: 全部用户 + 系统管理员
     await waitFor(() => {
       const tabs = document.querySelectorAll('.ant-tabs-tab')
-      expect(tabs).toHaveLength(7)
+      expect(tabs).toHaveLength(2)
     })
-    expect(screen.getByRole('tab', { name: '运营商' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '经销商' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '安装商' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '终端用户' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '全部用户' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '系统管理员' })).toBeInTheDocument()
   })
 
   it('should show add user button for admin', async () => {

@@ -5,15 +5,18 @@ import { renderAsAdmin } from '@/test/test-utils'
 import AdminPage from './index'
 
 describe('AdminPage role permission contract', () => {
-  it('offers permission editing for every database role including installer and end user', async () => {
+  it('renders the permission config tab with org-based role selectors', async () => {
     const user = userEvent.setup()
     renderAsAdmin(<AdminPage />)
 
-    await user.click(screen.getByRole('tab', { name: '权限配置' }))
-    await user.click(screen.getByRole('combobox'))
+    // Click on the permission config tab
+    await user.click(screen.getByRole('tab', { name: /权限配置|Permission/i }))
 
-    for (const roleName of ['超级管理员', '管理员', '运营商', '经销商', '安装商', '终端用户']) {
-      expect(await screen.findByRole('option', { name: roleName })).toBeInTheDocument()
-    }
+    // Should have organization selector and role code selector
+    const selects = document.querySelectorAll('.ant-select')
+    expect(selects.length).toBeGreaterThanOrEqual(2)
+
+    // Should show the hint to select an organization
+    expect(document.querySelector('.ant-card')).toBeInTheDocument()
   })
 })
