@@ -14,8 +14,6 @@ import dayjs from 'dayjs'
 import { userApi } from '@/services/userApi'
 import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
-import { Role } from '@/types'
-import { ROLE_MAP, ROLE_COLORS, ROLE_I18N_KEY } from '@/utils/constants'
 import { queryKeys } from '@/utils/queryKeys'
 import type { User } from '@/types'
 import { formatInTimezone } from '@/utils/timezone'
@@ -28,46 +26,18 @@ interface UserRecord {
   id: string
   phone: string
   nickname: string
-  role: number
+  is_system_admin?: boolean
+  /** @deprecated */
+  role?: number
   status: number
   parent_id?: string | null
   created_at: string
 }
 
-const ROLE_TO_NUMERIC: Record<Role, number> = {
-  [Role.SUPER_ADMIN]: 0,
-  [Role.ADMIN]: 1,
-  [Role.OPERATOR]: 2,
-  [Role.DEALER]: 3,
-  [Role.INSTALLER]: 4,
-  [Role.END_USER]: 5,
-}
-const ROLE_ORDER: Record<string, number> = {
-  [Role.SUPER_ADMIN]: 0,
-  [Role.ADMIN]: 1,
-  [Role.OPERATOR]: 2,
-  [Role.DEALER]: 3,
-  [Role.INSTALLER]: 4,
-  [Role.END_USER]: 5,
-}
-
-
-function canManageUser(currentRole: Role | undefined, targetRole: Role): boolean {
-  if (currentRole === undefined) return false
-  if (currentRole === Role.SUPER_ADMIN) return true
-  return (ROLE_ORDER[currentRole] ?? 99) < (ROLE_ORDER[targetRole] ?? 99)
-}
-
-function getAssignableRoles(currentRole: Role | undefined): Role[] {
-  if (currentRole === undefined) return []
-  switch (currentRole) {
-    case Role.SUPER_ADMIN: return [Role.SUPER_ADMIN, Role.ADMIN, Role.OPERATOR, Role.DEALER, Role.INSTALLER, Role.END_USER]
-    case Role.ADMIN: return [Role.OPERATOR, Role.DEALER, Role.INSTALLER, Role.END_USER]
-    case Role.OPERATOR: return [Role.DEALER, Role.INSTALLER, Role.END_USER]
-    case Role.DEALER: return [Role.INSTALLER, Role.END_USER]
-    case Role.INSTALLER: return [Role.END_USER]
-    default: return []
-  }
+// In the new permission system, only system admins can manage users.
+// Role-based hierarchy is replaced by organization membership.
+function canManageUser(isSystemAdmin: boolean | undefined): boolean {
+  return isSystemAdmin === true
 }
 
 const UsersPage: React.FC = () => {
@@ -79,7 +49,7 @@ const UsersPage: React.FC = () => {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [keyword, setKeyword] = useState<string>()
-  const [roleFilter, setRoleFilter] = useState<number>()
+  const [adminFilter, setAdminFilter] = useState<boolean | undefined>()
   const [statusFilter, setStatusFilter] = useState<number>()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
@@ -97,7 +67,7 @@ const UsersPage: React.FC = () => {
     2: { label: t('user.locked'), color: '#fa8c16' },
   }
 
-  const queryParams = { page, page_size: pageSize, keyword: keyword || undefined, role: roleFilter, status: statusFilter }
+  const queryParams = { page, page_size: pageSize, keyword: keyword || undefined, status: statusFilter }
 
   const { data: listRes, isLoading, error: listError, refetch } = useQuery({
     queryKey: queryKeys.users.list(queryParams),
@@ -148,16 +118,15 @@ const UsersPage: React.FC = () => {
     onError: () => { message.error(t('user.resetPwdFailed')) },
   })
 
-  const assignableRoles = getAssignableRoles(currentUser?.role)
+  const canManage = canManageUser(currentUser?.isSystemAdmin)
 
-  // 获取可选的上级用户列表（角色等级高于当前创建的用户）
+  // 获取可选的上级用户列表
   const { data: parentUsers, error: parentUsersError, refetch: refetchParentUsers } = useQuery({
     queryKey: ['users', 'parents', currentUser?.id],
     queryFn: () => userApi.list({ page_size: 100, status: 1 }).then((r) => {
       const d = (r.data?.data ?? r.data) as { items?: User[]; total?: number }
       const items = d?.items ?? []
-      // 过滤出角色等级高于当前用户的用户（排除自己）
-      return items.filter((u: User) => u.id !== currentUser?.id && (ROLE_ORDER[u.role] ?? 99) < (ROLE_ORDER[currentUser?.role ?? ''] ?? 99))
+      return items.filter((u: User) => u.id !== currentUser?.id)
     }),
     enabled: modalOpen,
   })
@@ -165,7 +134,7 @@ const UsersPage: React.FC = () => {
   const openAdd = () => { setEditingUser(null); form.resetFields(); setModalOpen(true) }
   const openEdit = (record: User) => {
     setEditingUser(record)
-    form.setFieldsValue({ phone: record.phone, email: record.email, nickname: record.nickname, role: record.role })
+    form.setFieldsValue({ phone: record.phone, email: record.email, nickname: record.nickname })
     setModalOpen(true)
   }
 
@@ -173,7 +142,7 @@ const UsersPage: React.FC = () => {
     try {
       const values = await form.validateFields()
       if (editingUser) {
-        updateMutation.mutate({ id: editingUser.id, data: { phone: values.phone, email: values.email, nickname: values.nickname, role: values.role } })
+        updateMutation.mutate({ id: editingUser.id, data: { phone: values.phone, email: values.email, nickname: values.nickname } })
       } else {
         if (!values.password) { message.warning(t('user.pleaseInputPassword')); return }
         createMutation.mutate(values)
@@ -194,10 +163,11 @@ const UsersPage: React.FC = () => {
     { title: t('user.email'), dataIndex: 'email', key: 'email', width: 180, ellipsis: true },
     { title: t('user.nickname'), dataIndex: 'nickname', key: 'nickname', width: 120 },
     {
-      title: t('user.role'), dataIndex: 'role', key: 'role', width: 110,
-      render: (role: any) => {
-        const key = typeof role === 'number' ? String(role) : role
-        return <Tag color={ROLE_COLORS[key] || '#d9d9d9'}>{ROLE_I18N_KEY[key] ? t(ROLE_I18N_KEY[key]) : ROLE_MAP[key] || key}</Tag>
+      title: t('user.role'), key: 'role', width: 110,
+      render: (_: any, record: User) => {
+        const raw = record as unknown as UserRecord
+        if (raw.is_system_admin) return <Tag color='#eb2f96'>{t('header.systemAdmin')}</Tag>
+        return <Tag color='#1677ff'>{t('header.member')}</Tag>
       },
     },
     {
@@ -212,9 +182,9 @@ const UsersPage: React.FC = () => {
     {
       title: t('common.operation'), key: 'action', width: 280,
       render: (_: any, record: User) => {
-        const canManage = canManageUser(currentUser?.role, record.role)
-        const isSuperAdmin = currentUser?.role === Role.SUPER_ADMIN
-        const canViewChildren = record.role !== Role.END_USER && canManage
+        const canManage = canManageUser(currentUser?.isSystemAdmin)
+        const isSuperAdmin = currentUser?.isSystemAdmin
+        const canViewChildren = canManage
         return (
           <Space>
             {canViewChildren && <Button type="link" size="small" onClick={() => { setSelectedUserId(record.id); setSelectedUserName(record.nickname || record.phone); setChildrenDrawerOpen(true) }}>{t('user.children')}</Button>}
@@ -239,21 +209,16 @@ const UsersPage: React.FC = () => {
   const data = listRes?.items ?? []
   const total = listRes?.total ?? 0
 
-  const roleTabs = [
+  const adminTabs = [
     { key: 'all', label: t('user.allUsers') },
-    { key: '0', label: t('user.superAdmin') },
-    { key: '1', label: t('user.admin') },
-    { key: '2', label: t('user.operator') },
-    { key: '3', label: t('user.dealer') },
-    { key: '4', label: t('user.installer') },
-    { key: '5', label: t('user.endUser') },
+    { key: 'admin', label: t('header.systemAdmin') },
   ]
 
   const handleTabChange = (key: string) => {
     if (key === 'all') {
-      setRoleFilter(undefined)
+      setAdminFilter(undefined)
     } else {
-      setRoleFilter(Number(key))
+      setAdminFilter(true)
     }
     setPage(1)
   }
@@ -276,7 +241,7 @@ const UsersPage: React.FC = () => {
       <Title level={4} style={{ marginBottom: 16 }}>
         <TeamOutlined style={{ marginRight: 8 }} />{t('user.title')}
       </Title>
-      <Tabs activeKey={roleFilter !== undefined ? String(roleFilter) : 'all'} onChange={handleTabChange} items={roleTabs} style={{ marginBottom: 16 }} />
+      <Tabs activeKey={adminFilter === true ? 'admin' : 'all'} onChange={handleTabChange} items={adminTabs} style={{ marginBottom: 16 }} />
       <Card bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row gutter={16} align="middle">
           <Col>
@@ -284,24 +249,12 @@ const UsersPage: React.FC = () => {
               value={keyword} onChange={(e) => setKeyword(e.target.value)} onSearch={() => { setPage(1); refetch() }} />
           </Col>
           <Col>
-            <Select allowClear placeholder={t('user.filterRole')} style={{ width: 140 }}
-              value={roleFilter} onChange={(val) => { setRoleFilter(val); setPage(1) }}
-              options={[
-                { label: t('user.superAdmin'), value: Role.SUPER_ADMIN },
-                { label: t('user.admin'), value: Role.ADMIN },
-                { label: t('user.operator'), value: Role.OPERATOR },
-                { label: t('user.dealer'), value: Role.DEALER },
-                { label: t('user.installer'), value: Role.INSTALLER },
-                { label: t('user.endUser'), value: Role.END_USER },
-              ]} />
-          </Col>
-          <Col>
             <Select allowClear placeholder={t('user.filterStatus')} style={{ width: 120 }}
               value={statusFilter} onChange={(val) => { setStatusFilter(val); setPage(1) }}
               options={Object.entries(STATUS_MAP).map(([k, v]) => ({ label: v.label, value: Number(k) }))} />
           </Col>
           <Col><Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button></Col>
-          {assignableRoles.length > 0 && (
+          {canManage && (
             <Col><Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>{t('user.addUser')}</Button></Col>
           )}
         </Row>
@@ -318,16 +271,13 @@ const UsersPage: React.FC = () => {
           <Form.Item name="phone" label={t('user.phone')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.phone') }]}><Input placeholder={t('common.pleaseInput') + t('user.phone')} /></Form.Item>
           <Form.Item name="email" label={t('user.email')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.email') }, { type: 'email', message: t('user.emailFormatError') }]}><Input placeholder={t('common.pleaseInput') + t('user.email')} /></Form.Item>
           <Form.Item name="nickname" label={t('user.nickname')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.nickname') }]}><Input placeholder={t('common.pleaseInput') + t('user.nickname')} /></Form.Item>
-          <Form.Item name="role" label={t('user.role')} rules={[{ required: true, message: t('common.pleaseSelect') + t('user.role') }]}>
-            <Select placeholder={t('common.pleaseSelect') + t('user.role')} options={assignableRoles.map((r) => ({ label: t(ROLE_I18N_KEY[ROLE_TO_NUMERIC[r]]), value: ROLE_TO_NUMERIC[r] }))} />
-          </Form.Item>
           {!editingUser && parentUsers && parentUsers.length > 0 && (
             <Form.Item name="parentId" label={t('user.parentUser')}>
               <Select
                 allowClear
                 placeholder={t('user.selectParent')}
                 options={parentUsers.map((u) => ({
-                  label: `${u.nickname || u.phone} (${ROLE_I18N_KEY[String(u.role)] ? t(ROLE_I18N_KEY[String(u.role)]) : ROLE_MAP[String(u.role)] || u.role})`,
+                  label: u.nickname || u.phone,
                   value: u.id,
                 }))}
               />
@@ -375,10 +325,11 @@ const UsersPage: React.FC = () => {
               { title: t('user.phone'), dataIndex: 'phone', key: 'phone', width: 130 },
               { title: t('user.nickname'), dataIndex: 'nickname', key: 'nickname', width: 120 },
               {
-                title: t('user.role'), dataIndex: 'role', key: 'role', width: 110,
-                render: (role: any) => {
-                  const key = typeof role === 'number' ? String(role) : role
-                  return <Tag color={ROLE_COLORS[key] || '#d9d9d9'}>{ROLE_I18N_KEY[key] ? t(ROLE_I18N_KEY[key]) : ROLE_MAP[key] || key}</Tag>
+                title: t('user.role'), key: 'role', width: 110,
+                render: (_: any, record: User) => {
+                  const raw = record as unknown as UserRecord
+                  if (raw.is_system_admin) return <Tag color='#eb2f96'>{t('header.systemAdmin')}</Tag>
+                  return <Tag color='#1677ff'>{t('header.member')}</Tag>
                 },
               },
               {

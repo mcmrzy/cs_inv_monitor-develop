@@ -11,7 +11,6 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
-import { Role } from '@/types'
 
 const LoginPage = lazyWithRetry(() => import('@/pages/login'))
 const UnauthorizedPage = lazyWithRetry(() => import('@/pages/unauthorized'))
@@ -36,11 +35,10 @@ const SystemMonitorPage = lazyWithRetry(() => import('@/pages/system/SystemMonit
 
 const RoleRedirect: React.FC = () => {
   const user = useAuthStore((s) => s.user)
-  if (user?.role === Role.INSTALLER) {
+  const hasPermission = useAuthStore((s) => s.hasPermission)
+  // Non-admin users without dashboard permission go to devices page
+  if (!user?.isSystemAdmin && !hasPermission('dashboard:view') && !hasPermission('admin:manage')) {
     return <Navigate to="/devices" replace />
-  }
-  if (user?.role === Role.END_USER) {
-    return <Navigate to="/dashboard" replace />
   }
   return <Navigate to="/dashboard" replace />
 }

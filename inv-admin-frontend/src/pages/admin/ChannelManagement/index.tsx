@@ -3,7 +3,6 @@ import { Tabs, Typography } from 'antd'
 import { ProCard } from '@ant-design/pro-components'
 import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
-import { Role } from '@/types'
 import OrganizationTree from './OrganizationTree'
 import MemberList from './MemberList'
 import InvitationManager from './InvitationManager'
@@ -16,7 +15,7 @@ const ChannelManagement: React.FC = () => {
   const { user } = useAuthStore()
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
 
-  if (user?.role !== Role.SUPER_ADMIN) {
+  if (!user?.isSystemAdmin) {
     return (
       <ProCard style={{ borderRadius: 12 }}>
         <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>

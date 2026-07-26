@@ -1259,3 +1259,285 @@ func (h *AdminHandler) GetOperationStats(c *gin.Context) {
 
 	response.Success(c, stats)
 }
+
+// ── Organization-based role permission management ──
+
+// Available role codes defined by the membership_role_assignments CHECK constraint.
+var availableRoleCodes = []string{
+	"org_admin", "channel_manager", "operator", "installer",
+	"after_sales", "viewer", "finance", "api_client",
+}
+
+// ListOrgRoles returns the distinct role_codes that exist in an organization.
+func (h *AdminHandler) ListOrgRoles(c *gin.Context) {
+	orgID := parseID(c.Param("orgId"))
+	if orgID <= 0 {
+		response.Error(c, 400, "invalid organization id")
+		return
+	}
+	ctx := c.Request.Context()
+
+	rows, err := h.db.Query(ctx, `
+		SELECT DISTINCT ra.role_code
+		FROM membership_role_assignments ra
+		WHERE ra.organization_id = $1 AND ra.status = 'active'
+		ORDER BY ra.role_code
+	`, orgID)
+	if err != nil {
+		response.Error(c, 500, "查询组织角色失败")
+		return
+	}
+	defer rows.Close()
+
+	activeRoles := make([]string, 0)
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			continue
+		}
+		activeRoles = append(activeRoles, code)
+	}
+
+	type roleInfo struct {
+		RoleCode string `json:"role_code"`
+		Active   bool   `json:"active"`
+	}
+	result := make([]roleInfo, 0, len(availableRoleCodes))
+	activeSet := make(map[string]bool)
+	for _, r := range activeRoles {
+		activeSet[r] = true
+	}
+	for _, code := range availableRoleCodes {
+		result = append(result, roleInfo{RoleCode: code, Active: activeSet[code]})
+	}
+
+	response.Success(c, result)
+}
+
+// ListOrgRolePermissions returns all permission grants for a role_code in an organization.
+func (h *AdminHandler) ListOrgRolePermissions(c *gin.Context) {
+	orgID := parseID(c.Param("orgId"))
+	if orgID <= 0 {
+		response.Error(c, 400, "invalid organization id")
+		return
+	}
+	roleCode := c.Param("roleCode")
+	if roleCode == "" {
+		response.Error(c, 400, "missing role_code")
+		return
+	}
+	ctx := c.Request.Context()
+
+	type permGrant struct {
+		PermissionCode string `json:"permission_code"`
+		DataScope      string `json:"data_scope"`
+	}
+
+	rows, err := h.db.Query(ctx, `
+		SELECT DISTINCT pg.permission_code, pg.data_scope
+		FROM role_permission_grants pg
+		JOIN membership_role_assignments ra
+		  ON ra.id = pg.role_assignment_id
+		 AND ra.root_tenant_id = pg.root_tenant_id
+		 AND ra.organization_id = pg.organization_id
+		WHERE pg.organization_id = $1
+		  AND ra.role_code = $2
+		  AND ra.status = 'active'
+		ORDER BY pg.permission_code
+	`, orgID, roleCode)
+	if err != nil {
+		response.Error(c, 500, "查询权限失败")
+		return
+	}
+	defer rows.Close()
+
+	grants := make([]permGrant, 0)
+	for rows.Next() {
+		var g permGrant
+		if err := rows.Scan(&g.PermissionCode, &g.DataScope); err != nil {
+			continue
+		}
+		grants = append(grants, g)
+	}
+
+	response.Success(c, grants)
+}
+
+// UpdateOrgRolePermissionsRequest defines the payload for updating org role permissions.
+type UpdateOrgRolePermissionsRequest struct {
+	Permissions []struct {
+		PermissionCode string `json:"permission_code"`
+		DataScope      string `json:"data_scope"`
+		IsAllowed      bool   `json:"is_allowed"`
+	} `json:"permissions"`
+}
+
+// UpdateOrgRolePermissions updates permission grants for a role_code across all
+// role assignments in an organization.
+func (h *AdminHandler) UpdateOrgRolePermissions(c *gin.Context) {
+	orgID := parseID(c.Param("orgId"))
+	if orgID <= 0 {
+		response.Error(c, 400, "invalid organization id")
+		return
+	}
+	roleCode := c.Param("roleCode")
+	if roleCode == "" {
+		response.Error(c, 400, "missing role_code")
+		return
+	}
+
+	var req UpdateOrgRolePermissionsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	rows, err := h.db.Query(ctx, `
+		SELECT ra.root_tenant_id, ra.organization_id, ra.id
+		FROM membership_role_assignments ra
+		WHERE ra.organization_id = $1 AND ra.role_code = $2 AND ra.status = 'active'
+	`, orgID, roleCode)
+	if err != nil {
+		response.Error(c, 500, "查询角色分配失败")
+		return
+	}
+
+	type roleAssignment struct {
+		RootTenantID int64
+		ID           int64
+	}
+	assignments := make([]roleAssignment, 0)
+	for rows.Next() {
+		var ra roleAssignment
+		if err := rows.Scan(&ra.RootTenantID, &ra.ID); err != nil {
+			continue
+		}
+		assignments = append(assignments, ra)
+	}
+	rows.Close()
+
+	if len(assignments) == 0 {
+		response.Error(c, 404, "该组织下没有此角色的活动分配")
+		return
+	}
+
+	desiredPerms := make(map[string]string)
+	for _, p := range req.Permissions {
+		if p.IsAllowed {
+			scope := p.DataScope
+			if scope == "" {
+				scope = "organization_and_descendants"
+			}
+			desiredPerms[p.PermissionCode] = scope
+		}
+	}
+
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		response.Error(c, 500, "事务开启失败")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	desiredKeys := make([]string, 0, len(desiredPerms))
+	for k := range desiredPerms {
+		desiredKeys = append(desiredKeys, k)
+	}
+
+	for _, ra := range assignments {
+		_, err := tx.Exec(ctx, `
+			DELETE FROM role_permission_grants
+			WHERE root_tenant_id = $1 AND organization_id = $2 AND role_assignment_id = $3
+			  AND permission_code <> ALL($4::text[])
+		`, ra.RootTenantID, orgID, ra.ID, desiredKeys)
+		if err != nil {
+			response.Error(c, 500, "删除权限失败")
+			return
+		}
+
+		for permCode, dataScope := range desiredPerms {
+			_, err := tx.Exec(ctx, `
+				INSERT INTO role_permission_grants (root_tenant_id, organization_id, role_assignment_id, permission_code, data_scope, scope_definition)
+				VALUES ($1, $2, $3, $4, $5, '{}'::jsonb)
+				ON CONFLICT (role_assignment_id, permission_code)
+				DO UPDATE SET data_scope = EXCLUDED.data_scope, updated_at = NOW()
+			`, ra.RootTenantID, orgID, ra.ID, permCode, dataScope)
+			if err != nil {
+				response.Error(c, 500, "更新权限失败")
+				return
+			}
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE organization_memberships m
+		SET authorization_version = authorization_version + 1
+		WHERE m.organization_id = $1
+		  AND m.id IN (
+			SELECT ra.membership_id FROM membership_role_assignments ra
+			WHERE ra.organization_id = $1 AND ra.role_code = $2 AND ra.status = 'active'
+		)
+	`, orgID, roleCode)
+	if err != nil {
+		response.Error(c, 500, "更新授权版本失败")
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		response.Error(c, 500, "提交事务失败")
+		return
+	}
+
+	response.SuccessWithMessage(c, "权限配置保存成功", nil)
+}
+
+// ListAllPermissionCodes returns all distinct permission codes defined in the system.
+func (h *AdminHandler) ListAllPermissionCodes(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	rows, err := h.db.Query(ctx, `
+		SELECT DISTINCT permission_code FROM (
+			SELECT permission_code FROM role_permission_grants
+			UNION ALL
+			VALUES
+				('devices:view'), ('devices:create'), ('devices:edit'), ('devices:delete'), ('devices:export'),
+				('devices:control'), ('devices:manage'), ('devices:transfer'),
+				('device_control:basic'), ('device_control:disruptive'),
+				('device_configure:battery'), ('device_configure:ac_input'), ('device_configure:parallel'),
+				('device_service:diagnostics'), ('device_service:factory'),
+				('users:view'), ('users:create'), ('users:edit'), ('users:delete'), ('users:manage'),
+				('alerts:view'), ('alerts:manage'),
+				('alert_rules:view'), ('alert_rules:create'), ('alert_rules:edit'), ('alert_rules:delete'),
+				('work_orders:view'), ('work_orders:create'), ('work_orders:edit'), ('work_orders:manage'),
+				('firmware:view'), ('firmware:create'), ('firmware:delete'),
+				('ota:view'), ('ota:create'), ('ota:control'), ('ota:delete'),
+				('dashboard:view'), ('dashboard:export'),
+				('stations:view'), ('stations:create'), ('stations:edit'), ('stations:manage'),
+				('models:view'), ('models:manage'),
+				('parallel:view'), ('parallel:create'), ('parallel:control'),
+				('audit:view'),
+				('admin:view'), ('admin:manage'),
+				('organizations:view'), ('organizations:manage'), ('organizations:invite'),
+				('organizations:manage_members'),
+		) AS t(permission_code)
+		ORDER BY permission_code
+	`)
+	if err != nil {
+		response.Error(c, 500, "查询权限码失败")
+		return
+	}
+	defer rows.Close()
+
+	codes := make([]string, 0)
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			continue
+		}
+		codes = append(codes, code)
+	}
+
+	response.Success(c, codes)
+}

@@ -24,7 +24,7 @@ import { commandApi } from '@/services/commandApi'
 import { modelApi } from '@/services/modelApi'
 import { userApi } from '@/services/userApi'
 import useAuthStore from '@/stores/authStore'
-import { Role, type CommandCapability, type ParameterSchema, type SchemaArg } from '@/types'
+import { type CommandCapability, type ParameterSchema, type SchemaArg } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import StatusBadge from '@/components/StatusBadge'
@@ -231,14 +231,14 @@ const DevicesPage: React.FC = () => {
     hardware_replace: t('dev.hardwareReplace'),
   }
 
-  const { user } = useAuthStore()
+  const { user, hasPermission } = useAuthStore()
   const [messageApi, contextHolder] = message.useMessage()
   const screens = Grid.useBreakpoint()
-  const isEndUser = user?.role === Role.END_USER
-  const isInstaller = user?.role === Role.INSTALLER
-  const isSuperAdmin = user?.role === Role.SUPER_ADMIN
-  const isAdmin = user?.role === Role.ADMIN
-  const canDirectUnbind = isSuperAdmin || isAdmin
+  const isSuperAdmin = user?.isSystemAdmin
+  const isAdmin = isSuperAdmin || hasPermission('devices:manage')
+  const isEndUser = !isAdmin
+  const isInstaller = !isAdmin
+  const canDirectUnbind = isAdmin
 
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
@@ -602,7 +602,7 @@ const DevicesPage: React.FC = () => {
   const { data: installersRes, error: installersError, refetch: refetchInstallers } = useQuery({
     queryKey: ['users', 'installers'],
     queryFn: () =>
-      userApi.list({ role: Role.INSTALLER, pageSize: 100 }).then((res) => {
+      userApi.list({ role: 4, pageSize: 100 }).then((res) => {
         const d = res.data?.data ?? res.data
         const items = Array.isArray(d) ? d : (d?.items ?? [])
         return items as Array<{ id: number; nickname: string; phone: string }>

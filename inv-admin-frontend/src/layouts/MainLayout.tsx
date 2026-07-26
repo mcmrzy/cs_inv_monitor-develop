@@ -18,8 +18,6 @@ import useAuthStore from '@/stores/authStore'
 import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
-import { ROLE_MAP, ROLE_COLORS, ROLE_I18N_KEY } from '@/utils/constants'
-import { Role } from '@/types'
 import api from '@/services/api'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
 
@@ -85,7 +83,7 @@ const MainLayout: React.FC = () => {
     if (!screens.md) { setMobileCollapsed(true) } else { setMobileCollapsed(false) }
   }, [screens.md])
 
-  const isAdminRole = user && (user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN)
+  const isAdminRole = user && (user.isSystemAdmin || hasPermission('admin:manage'))
 
   // Build ProLayout route config with permission filtering
   const routeConfig = useMemo((): ProLayoutProps['route'] => {
@@ -260,7 +258,7 @@ const MainLayout: React.FC = () => {
             suffixIcon={<ClockCircleOutlined />}
           />,
           user && (
-            <Badge key="role" color={ROLE_COLORS[user.role]} text={<Typography.Text style={{ fontSize: 12 }}>{ROLE_I18N_KEY[user.role] ? t(ROLE_I18N_KEY[user.role]) : ROLE_MAP[user.role] || user.role}</Typography.Text>} />
+            <Badge key="role" color={user.isSystemAdmin ? '#eb2f96' : '#1677ff'} text={<Typography.Text style={{ fontSize: 12 }}>{user.isSystemAdmin ? t('header.systemAdmin') : (hasPermission('admin:manage') ? t('header.orgAdmin') : t('header.member'))}</Typography.Text>} />
           ),
         ]}
         avatarProps={{

@@ -17,14 +17,20 @@ class NavItem {
 }
 
 class RoleService {
-  static const int roleSuperAdmin = 0;
-  static const int roleGeneralAgent = 1;
-  static const int roleAgent = 2;
-  static const int roleDealer = 3;
-  static const int roleInstaller = 4;
-  static const int roleEndUser = 5;
+  /// Default permission code constants for the new organization-based system.
+  static const String permDevicesView = 'devices:view';
+  static const String permDevicesManage = 'devices:manage';
+  static const String permDeviceControl = 'device_control:basic';
+  static const String permOtaManage = 'ota:manage';
+  static const String permStatisticsView = 'statistics:view';
+  static const String permAlarmsView = 'alarms:view';
+  static const String permAdminManage = 'admin:manage';
 
-  static List<NavItem> getNavItems(int role, {List<String>? labels}) {
+  static List<NavItem> getNavItems(
+    bool isSystemAdmin, {
+    List<String>? permissions,
+    List<String>? labels,
+  }) {
     final l =
         labels ?? const ['Home', 'Overview', 'Device', 'Alarm', 'Profile'];
     return [
@@ -61,46 +67,37 @@ class RoleService {
     ];
   }
 
-  static bool hasOtaAccess(int role) {
-    return role >= roleSuperAdmin && role <= roleEndUser;
+  static bool hasPermission(
+    bool isSystemAdmin,
+    List<String> permissions,
+    String code,
+  ) {
+    if (isSystemAdmin) return true;
+    return permissions.contains(code);
   }
 
-  static bool hasStatisticsAccess(int role) {
-    return role >= roleSuperAdmin && role <= roleEndUser;
+  static bool hasOtaAccess(bool isSystemAdmin, List<String> permissions) {
+    return hasPermission(isSystemAdmin, permissions, permOtaManage) ||
+        hasPermission(isSystemAdmin, permissions, permDevicesManage);
   }
 
-  static bool canManageDevices(int role) {
-    return role >= roleSuperAdmin && role <= roleEndUser;
+  static bool hasStatisticsAccess(bool isSystemAdmin, List<String> permissions) {
+    return hasPermission(isSystemAdmin, permissions, permStatisticsView);
   }
 
-  static bool isInstaller(int role) {
-    return role == roleInstaller;
+  static bool canManageDevices(bool isSystemAdmin, List<String> permissions) {
+    return hasPermission(isSystemAdmin, permissions, permDevicesManage);
   }
 
-  static bool isAgent(int role) {
-    return role >= roleGeneralAgent && role <= roleDealer;
+  static bool canControlDevices(bool isSystemAdmin, List<String> permissions) {
+    return hasPermission(isSystemAdmin, permissions, permDeviceControl);
   }
 
-  static bool isEndUser(int role) {
-    return role == roleEndUser;
-  }
-
-  static String getRoleName(int role) {
-    switch (role) {
-      case roleSuperAdmin:
-        return 'Admin';
-      case roleGeneralAgent:
-        return 'General Agent';
-      case roleAgent:
-        return 'Agent';
-      case roleDealer:
-        return 'Dealer';
-      case roleInstaller:
-        return 'Installer';
-      case roleEndUser:
-        return 'User';
-      default:
-        return 'User';
+  static String getRoleName(bool isSystemAdmin, [List<String>? permissions]) {
+    if (isSystemAdmin) return 'System Admin';
+    if (permissions != null && permissions.contains(permAdminManage)) {
+      return 'Org Admin';
     }
+    return 'Member';
   }
 }

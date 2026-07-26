@@ -1,3 +1,4 @@
+/** @deprecated The old numeric role enum is retained for backward-compatible test mocks only. New code must use isSystemAdmin + permission codes. */
 export enum Role {
   SUPER_ADMIN = 0,
   ADMIN = 1,
@@ -5,6 +6,12 @@ export enum Role {
   DEALER = 3,
   INSTALLER = 4,
   END_USER = 5,
+}
+
+/** A single permission grant returned by the backend. */
+export interface Permission {
+  code: string
+  scope: string
 }
 
 export interface User {

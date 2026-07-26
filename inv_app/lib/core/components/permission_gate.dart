@@ -36,8 +36,11 @@ extension PermissionLevelExtension on PermissionLevel {
   }
 }
 
-/// 权限检查器
+/// 权限检查器 (基于新组织权限体系)
 class PermChecker {
+  /// 构建 permission_code，如 'devices:view'
+  static String _permCode(String resource, String action) => '$resource:$action';
+
   /// 检查用户对某个资源的某个操作是否有权限
   static bool has(
     BuildContext context,
@@ -48,10 +51,8 @@ class PermChecker {
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return false;
 
-    final userRole = authState.role;
-
-    // 超级管理员（role=1）拥有所有权限
-    if (userRole == 1) return true;
+    // 系统超级管理员绕过所有权限检查
+    if (authState.isSystemAdmin) return true;
 
     // 获取当前组织上下文
     final orgStore = context.read<OrganizationContextStore>();
@@ -61,50 +62,9 @@ class PermChecker {
       return false;
     }
 
-    // 组织所有者或管理员拥有该组织的完整权限
-    if (orgStore.hasActiveOrg && orgStore.isOrgOwner(orgStore.activeOrgId!)) {
-      return _checkRolePermission(userRole, resource, action);
-    }
-
-    // 普通成员权限限制
-    return _checkMemberPermission(userRole, resource, action);
-  }
-
-  /// 检查角色级别的权限
-  static bool _checkRolePermission(int role, String resource, String action) {
-    // 超级管理员
-    if (role == 1) return true;
-
-    // 管理员（role=2）
-    if (role == 2) {
-      // 管理员可以管理大多数资源
-      return !_isSystemAdminOnly(resource);
-    }
-
-    // 普通用户（role=3）只能查看
-    if (action == 'view') return true;
-    return false;
-  }
-
-  /// 检查普通成员的权限
-  static bool _checkMemberPermission(int role, String resource, String action) {
-    // 普通成员只能执行基本的查看和操作
-    if (role < 2) {
-      if (resource == 'device' && action == 'control') {
-        return true; // 可以控制自己名下的设备
-      }
-      if (resource == 'alert' && action == 'view') {
-        return true; // 可以查看告警
-      }
-      return false;
-    }
-    return true;
-  }
-
-  /// 是否是仅限系统管理员的操作
-  static bool _isSystemAdminOnly(String resource) {
-    // 系统级管理操作仅超级管理员可执行
-    return resource == 'system' || resource == 'user';
+    // 基于 permission_code 检查
+    final code = _permCode(resource, action);
+    return authState.permissions.contains(code);
   }
 
   /// 获取用户的权限等级
@@ -114,9 +74,13 @@ class PermChecker {
       return PermissionLevel.view;
     }
 
-    final role = authState.role;
-    if (role == 1) return PermissionLevel.admin;
-    if (role == 2) return PermissionLevel.manage;
+    if (authState.isSystemAdmin) return PermissionLevel.admin;
+    if (authState.permissions.contains('admin:manage')) {
+      return PermissionLevel.manage;
+    }
+    if (authState.permissions.any((p) => p.endsWith(':manage'))) {
+      return PermissionLevel.control;
+    }
     return PermissionLevel.view;
   }
 }
@@ -192,16 +156,18 @@ class OrganizationPermissionGate extends StatelessWidget {
   }
 }
 
-/// 角色守卫组件
-/// 只有特定角色的用户才能看到
+/// 权限守卫组件
+/// 只有拥有指定权限的用户才能看到
 class RoleGuard extends StatelessWidget {
-  final List<int> allowedRoles;
+  final List<String> requiredPermissions;
+  final bool requireSystemAdmin;
   final Widget child;
   final Widget? placeholder;
 
   const RoleGuard({
     super.key,
-    required this.allowedRoles,
+    this.requiredPermissions = const [],
+    this.requireSystemAdmin = false,
     required this.child,
     this.placeholder,
   });
@@ -213,11 +179,20 @@ class RoleGuard extends StatelessWidget {
       return placeholder ?? const SizedBox.shrink();
     }
 
-    if (allowedRoles.contains(authState.role)) {
-      return child;
+    if (requireSystemAdmin && !authState.isSystemAdmin) {
+      return placeholder ?? const SizedBox.shrink();
     }
 
-    return placeholder ?? const SizedBox.shrink();
+    if (requiredPermissions.isNotEmpty && !authState.isSystemAdmin) {
+      final hasAll = requiredPermissions.every(
+        (p) => authState.permissions.contains(p),
+      );
+      if (!hasAll) {
+        return placeholder ?? const SizedBox.shrink();
+      }
+    }
+
+    return child;
   }
 }
 

@@ -715,14 +715,18 @@ class BottomNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final authState = context.watch<AuthBloc>().state;
 
-    final role = authState is AuthAuthenticated
-        ? authState.role
-        : RoleService.roleEndUser;
+    final isSystemAdmin = authState is AuthAuthenticated
+        ? authState.isSystemAdmin
+        : false;
+    final permissions = authState is AuthAuthenticated
+        ? authState.permissions
+        : <String>[];
 
     final l10n = AppLocalizations.of(context)!;
 
     final navItems = RoleService.getNavItems(
-      role,
+      isSystemAdmin,
+      permissions: permissions,
       labels: [
         l10n.navHome,
         l10n.navOverview,

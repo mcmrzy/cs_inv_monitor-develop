@@ -14,18 +14,20 @@ class AuthLoading extends AuthState {}
 class AuthAuthenticated extends AuthState {
   final int userId;
   final String phone;
-  final int role;
+  final bool isSystemAdmin;
+  final List<String> permissions;
   final User? user;
 
   const AuthAuthenticated({
     required this.userId,
     required this.phone,
-    required this.role,
+    this.isSystemAdmin = false,
+    this.permissions = const [],
     this.user,
   });
 
   @override
-  List<Object?> get props => [userId, phone, role, user];
+  List<Object?> get props => [userId, phone, isSystemAdmin, permissions, user];
 }
 
 class AuthUnauthenticated extends AuthState {}

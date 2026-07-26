@@ -14,7 +14,7 @@ import 'package:inv_app/core/errors/failures.dart';
 ///
 /// ```dart
 /// final user = createTestUser();
-/// final admin = createTestUser(role: 0);
+/// final admin = createTestUser(isSystemAdmin: true);
 /// ```
 User createTestUser({
   int id = 1,
@@ -22,7 +22,8 @@ User createTestUser({
   String? email = 'test@example.com',
   String? nickname = 'Test User',
   String? avatar,
-  int role = 3,
+  bool isSystemAdmin = false,
+  List<String> permissions = const [],
   int status = 1,
   DateTime? lastLoginAt,
   DateTime? createdAt,
@@ -34,7 +35,8 @@ User createTestUser({
     email: email,
     nickname: nickname,
     avatar: avatar,
-    role: role,
+    isSystemAdmin: isSystemAdmin,
+    permissions: permissions,
     status: status,
     lastLoginAt: lastLoginAt,
     createdAt: createdAt ?? DateTime(2024, 1, 1),

@@ -6,7 +6,6 @@
  */
 
 import type { User, Device, Firmware, Alert, WorkOrder, UpgradeTask, PaginatedResponse } from '@/types'
-import { Role } from '@/types'
 
 /** 超级管理员用户 */
 export const mockAdminUser: User = {
@@ -15,7 +14,8 @@ export const mockAdminUser: User = {
   email: 'admin@example.com',
   nickname: '超级管理员',
   avatar: '',
-  role: Role.SUPER_ADMIN,
+  isSystemAdmin: true,
+  role: 0,
   status: 1,
   timezone: 'Asia/Shanghai',
   lastLoginAt: '2026-01-01T00:00:00Z',
@@ -29,7 +29,8 @@ export const mockManagerUser: User = {
   email: 'manager@example.com',
   nickname: '测试管理员',
   avatar: '',
-  role: Role.ADMIN,
+  isSystemAdmin: false,
+  role: 1,
   status: 1,
   timezone: 'Asia/Shanghai',
   lastLoginAt: '2026-01-01T00:00:00Z',
@@ -43,7 +44,8 @@ export const mockInstallerUser: User = {
   email: 'installer@example.com',
   nickname: '测试安装商',
   avatar: '',
-  role: Role.INSTALLER,
+  isSystemAdmin: false,
+  role: 4,
   parentId: '2',
   status: 1,
   timezone: 'Asia/Shanghai',
@@ -58,7 +60,8 @@ export const mockEndUser: User = {
   email: 'user@example.com',
   nickname: '测试终端用户',
   avatar: '',
-  role: Role.END_USER,
+  isSystemAdmin: false,
+  role: 5,
   parentId: '3',
   status: 1,
   timezone: 'Asia/Shanghai',

@@ -28,15 +28,15 @@ void main() {
       expect(user.id, 1);
       expect(user.phone, '13800138000');
       expect(user.email, 'test@example.com');
-      expect(user.role, 3);
+      expect(user.isSystemAdmin, isFalse);
       expect(user.status, 1);
     });
 
     test('createTestUser allows overrides', () {
-      final user = createTestUser(id: 42, phone: '111', role: 0);
+      final user = createTestUser(id: 42, phone: '111', isSystemAdmin: true);
       expect(user.id, 42);
       expect(user.phone, '111');
-      expect(user.role, 0);
+      expect(user.isSystemAdmin, isTrue);
     });
 
     test('createTestLoginResponse returns valid LoginResponse', () {
@@ -47,9 +47,9 @@ void main() {
     });
 
     test('createTestLoginResponse allows custom user', () {
-      final admin = createTestUser(role: 0);
+      final admin = createTestUser(isSystemAdmin: true);
       final response = createTestLoginResponse(user: admin);
-      expect(response.user.role, 0);
+      expect(response.user.isSystemAdmin, isTrue);
     });
 
     test('failure factories return correct types', () {

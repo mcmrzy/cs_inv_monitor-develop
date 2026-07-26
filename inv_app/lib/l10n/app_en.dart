@@ -227,8 +227,6 @@ const Map<String, String> en = {
 
   // Roles
   'role_admin': 'Admin',
-  'role_agent': 'Agent',
-  'role_installer': 'Installer',
   'role_user': 'User',
   'overview': 'Overview',
 

@@ -79,6 +79,9 @@ export const queryKeys = {
     tenants: (params?: Record<string, any>) => ['admin', 'tenants', params] as const,
     config: () => ['admin', 'config'] as const,
     permissions: (role: number) => ['admin', 'permissions', role] as const,
+    orgRoles: (orgId: number) => ['admin', 'org-roles', orgId] as const,
+    orgRolePermissions: (orgId: number, roleCode: string) => ['admin', 'org-permissions', orgId, roleCode] as const,
+    permissionCodes: () => ['admin', 'permission-codes'] as const,
   },
   dashboard: {
     statistics: () => ['dashboard', 'statistics'] as const,

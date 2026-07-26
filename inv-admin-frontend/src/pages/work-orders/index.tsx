@@ -16,7 +16,6 @@ import dayjs from 'dayjs'
 import { workOrderApi, type WorkOrderDetail, type WorkOrderTemplate } from '@/services/workOrderApi'
 import { deviceApi } from '@/services/deviceApi'
 import useAuthStore from '@/stores/authStore'
-import { Role } from '@/types'
 import useTranslation from '@/hooks/useTranslation'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import { queryKeys } from '@/utils/queryKeys'
@@ -47,9 +46,9 @@ const WorkOrdersPage: React.FC = () => {
   const { message } = App.useApp()
   const { t } = useTranslation()
   const { timezone } = useTimezoneStore()
-  const { user } = useAuthStore()
-  const isEndUser = user?.role === Role.END_USER
-  const isInstaller = user?.role === Role.INSTALLER
+  const { user, hasPermission } = useAuthStore()
+  const isEndUser = !user?.isSystemAdmin && !hasPermission('work_orders:manage')
+  const isInstaller = !user?.isSystemAdmin && !hasPermission('work_orders:manage')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [statusFilter, setStatusFilter] = useState<string>()

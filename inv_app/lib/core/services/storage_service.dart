@@ -22,6 +22,14 @@ abstract class StorageService {
   Future<void> saveUserRole(int role);
   Future<void> deleteUserRole();
 
+  Future<bool?> getIsSystemAdmin();
+  Future<void> saveIsSystemAdmin(bool value);
+  Future<void> deleteIsSystemAdmin();
+
+  Future<List<String>> getPermissions();
+  Future<void> savePermissions(List<String> permissions);
+  Future<void> deletePermissions();
+
   Future<bool> getRememberPassword();
   Future<void> saveRememberPassword(bool value);
 
@@ -92,6 +100,8 @@ class StorageServiceImpl implements StorageService {
   static const String _keyUserId = 'user_id';
   static const String _keyUserPhone = 'user_phone';
   static const String _keyUserRole = 'user_role';
+  static const String _keyIsSystemAdmin = 'is_system_admin';
+  static const String _keyPermissions = 'user_permissions';
   static const String _keyRememberPassword = 'remember_password';
   static const String _keySavedPhone = 'saved_phone';
   static const String _keySavedPassword = 'saved_password';
@@ -185,6 +195,37 @@ class StorageServiceImpl implements StorageService {
   @override
   Future<void> deleteUserRole() async {
     await _sharedPreferences.remove(_keyUserRole);
+  }
+
+  @override
+  Future<bool?> getIsSystemAdmin() async {
+    return _sharedPreferences.getBool(_keyIsSystemAdmin);
+  }
+
+  @override
+  Future<void> saveIsSystemAdmin(bool value) async {
+    await _sharedPreferences.setBool(_keyIsSystemAdmin, value);
+  }
+
+  @override
+  Future<void> deleteIsSystemAdmin() async {
+    await _sharedPreferences.remove(_keyIsSystemAdmin);
+  }
+
+  @override
+  Future<List<String>> getPermissions() async {
+    final raw = _sharedPreferences.getStringList(_keyPermissions);
+    return raw ?? [];
+  }
+
+  @override
+  Future<void> savePermissions(List<String> permissions) async {
+    await _sharedPreferences.setStringList(_keyPermissions, permissions);
+  }
+
+  @override
+  Future<void> deletePermissions() async {
+    await _sharedPreferences.remove(_keyPermissions);
   }
 
   @override
