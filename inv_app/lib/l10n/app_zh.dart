@@ -227,8 +227,6 @@ const Map<String, String> zh = {
 
   // 角色
   'role_admin': '超级管理员',
-  'role_agent': '代理商',
-  'role_installer': '安装商',
   'role_user': '用户',
   'overview': '概览',
 

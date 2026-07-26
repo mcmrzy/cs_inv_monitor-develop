@@ -2,15 +2,16 @@ package handler
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
 	"inv-api-server/internal/middleware"
+	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"github.com/xuri/excelize/v2"
+	"go.uber.org/zap"
 )
 
 // BindDeviceRequest represents the JSON body for device binding.
@@ -188,7 +189,7 @@ func (h *DeviceHandler) ApproveUnbind(c *gin.Context) {
 	c.ShouldBindJSON(&req)
 
 	if err := h.deviceService.ApproveUnbind(c.Request.Context(), id, userID, req.Comment); err != nil {
-		log.Printf("[ApproveUnbind] error: id=%d, err=%v", id, err)
+		logger.Error("ApproveUnbind failed", zap.Int64("id", id), zap.Error(err))
 		response.Error(c, 500, "操作失败，请稍后重试")
 		return
 	}
@@ -216,7 +217,7 @@ func (h *DeviceHandler) RejectUnbind(c *gin.Context) {
 	c.ShouldBindJSON(&req)
 
 	if err := h.deviceService.RejectUnbind(c.Request.Context(), id, userID, req.Comment); err != nil {
-		log.Printf("[RejectUnbind] error: id=%d, err=%v", id, err)
+		logger.Error("RejectUnbind failed", zap.Int64("id", id), zap.Error(err))
 		response.Error(c, 500, "操作失败，请稍后重试")
 		return
 	}
@@ -341,7 +342,7 @@ func (h *DeviceHandler) ImportExcel(c *gin.Context) {
 		successCount++
 	}
 
-	log.Printf("[ImportExcel] userID=%d, success=%d, failed=%d", userID, successCount, failedCount)
+	logger.Info("ImportExcel completed", zap.Int64("user_id", userID), zap.Int("success", successCount), zap.Int("failed", failedCount))
 
 	response.Success(c, gin.H{
 		"success": successCount,

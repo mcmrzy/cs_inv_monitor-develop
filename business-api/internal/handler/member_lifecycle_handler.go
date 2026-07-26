@@ -2,41 +2,34 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"log"
+	"errors"
 	"strconv"
 	"time"
 
-	"inv-api-server/internal/job"
 	"inv-api-server/internal/middleware"
-	"inv-api-server/internal/model"
-	"inv-api-server/pkg/logger"
+	"inv-api-server/internal/service"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
-	"go.uber.org/zap"
 )
 
-// ==================== Request/Response Models (lines 1-140) ====================
+// ==================== Request/Response Models ====================
 
 // AddMemberRequest represents a request to add an existing user to an organization
 type AddMemberRequest struct {
-	UserID           int64   `json:"user_id" binding:"required"`
-	OrganizationID   int64   `json:"organization_id" binding:"required"`
-	MembershipType   string  `json:"membership_type" default:"full"`
-	RoleIDs          []int   `json:"role_ids"`
-	ExpiresAt        *time.Time `json:"expires_at"`
+	UserID         int64      `json:"user_id" binding:"required"`
+	OrganizationID int64      `json:"organization_id" binding:"required"`
+	MembershipType string     `json:"membership_type" default:"full"`
+	RoleIDs        []int      `json:"role_ids"`
+	ExpiresAt      *time.Time `json:"expires_at"`
 }
 
 // UpdateMembershipRequest represents a request to update membership details
 type UpdateMembershipRequest struct {
-	RoleIDs          *[]int `json:"role_ids"`
-	Status           *string `json:"status"`
-	ExpiresAt        *time.Time `json:"expires_at"`
-	MembershipType   *string `json:"membership_type"`
+	RoleIDs        *[]int     `json:"role_ids"`
+	Status         *string    `json:"status"`
+	ExpiresAt      *time.Time `json:"expires_at"`
+	MembershipType *string    `json:"membership_type"`
 }
 
 // RemoveMemberRequest represents a request to remove a member
@@ -56,18 +49,12 @@ type TransferInitiateRequest struct {
 	Reason        string  `json:"reason"`
 }
 
-// TransferApprovalRequest represents a request to accept/reject transfer
-type TransferApprovalRequest struct {
-	Approved bool   `json:"approved" binding:"required"`
-	Reason   string `json:"reason"` // required if rejected
-}
-
 // BulkAddRequest represents a bulk add operation request
 type BulkAddRequest struct {
-	UserIDs        []int64 `json:"user_ids" binding:"required,min=1,max=100"`
-	OrganizationID int64   `json:"organization_id" binding:"required"`
-	MembershipType string  `json:"membership_type" default:"full"`
-	RoleIDs        []int   `json:"role_ids"`
+	UserIDs        []int64    `json:"user_ids" binding:"required,min=1,max=100"`
+	OrganizationID int64      `json:"organization_id" binding:"required"`
+	MembershipType string     `json:"membership_type" default:"full"`
+	RoleIDs        []int      `json:"role_ids"`
 	ExpiresAt      *time.Time `json:"expires_at"`
 }
 
@@ -78,432 +65,99 @@ type BulkTransferRequest struct {
 	Reason        string  `json:"reason"`
 }
 
-// PendingTransferInfo represents a pending transfer record
-type PendingTransferInfo struct {
-	ID            int64     `json:"id"`
-	MembershipID  int64     `json:"membership_id"`
-	UserID        int64     `json:"user_id"`
-	FromOrgID     int64     `json:"from_org_id"`
-	ToOrgID       int64     `json:"to_org_id"`
-	InitiatorID   int64     `json:"initiator_id"`
-	Status        string    `json:"status"` // initiated/accepted/rejected/cancelled/completed
-	Reason        string    `json:"reason"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+// TransferApprovalRequest represents a request to accept/reject transfer
+type TransferApprovalRequest struct {
+	Approved bool   `json:"approved" binding:"required"`
+	Reason   string `json:"reason"` // required if rejected
 }
 
 // MemberLifecycleResponse is a common response structure
 type MemberLifecycleResponse struct {
-	Message         string                 `json:"message"`
-	OrganizationID  int64                  `json:"organization_id,omitempty"`
-	UserID          int64                  `json:"user_id,omitempty"`
-	MembershipID    int64                  `json:"membership_id,omitempty"`
-	TransferredCount int                   `json:"transferred_count,omitempty"`
-	PendingTransfers []PendingTransferInfo `json:"pending_transfers,omitempty"`
+	Message          string `json:"message"`
+	OrganizationID   int64  `json:"organization_id,omitempty"`
+	UserID           int64  `json:"user_id,omitempty"`
+	MembershipID     int64  `json:"membership_id,omitempty"`
+	TransferredCount int    `json:"transferred_count,omitempty"`
 }
 
-// ==================== Handler Struct (lines 142-160) ====================
+// ==================== Service Interface ====================
+
+// MemberLifecycleServiceInterface defines the service operations used by the handler.
+// This interface enables unit testing with mock service implementations.
+// The concrete *service.MemberLifecycleService satisfies this interface.
+type MemberLifecycleServiceInterface interface {
+	AddMember(ctx context.Context, actorUserID int64, tenantID int64, req service.AddMemberParams) (*service.AddMemberResult, error)
+	UpdateMembership(ctx context.Context, actorUserID int64, tenantID int64, membershipID int64, req service.UpdateMembershipParams) error
+	RemoveMember(ctx context.Context, actorUserID int64, membershipID int64, reason string) error
+	DeactivateMember(ctx context.Context, actorUserID int64, membershipID int64, reason string) error
+	ReactivateMember(ctx context.Context, actorUserID int64, membershipID int64) error
+	TransferInitiate(ctx context.Context, actorUserID int64, membershipIDs []int64, targetOrgID int64, reason string) (*service.TransferResult, error)
+	TransferAccept(ctx context.Context, actorUserID int64, transferID int64) error
+	TransferReject(ctx context.Context, actorUserID int64, transferID int64, reason string) error
+	ListTransfers(ctx context.Context, userID int64) ([]service.PendingTransferInfo, error)
+	BulkAdd(ctx context.Context, actorUserID int64, tenantID int64, req service.BulkAddParams) (*service.BulkAddResult, error)
+	BulkTransfer(ctx context.Context, actorUserID int64, req service.BulkTransferParams) (*service.BulkTransferResult, error)
+}
+
+// ==================== Handler Struct ====================
 
 // MemberLifecycleHandler handles member lifecycle operations
 type MemberLifecycleHandler struct {
-	db          *pgxpool.Pool
-	rdb         *redis.Client
-	permChecker interface{} // Will be available when service layer is integrated
-	jobStore    *job.JobStore
+	svc MemberLifecycleServiceInterface
 }
 
 // NewMemberLifecycleHandler creates a new member lifecycle handler instance
-func NewMemberLifecycleHandler(db *pgxpool.Pool, rdb *redis.Client, jobStore *job.JobStore) *MemberLifecycleHandler {
-	return &MemberLifecycleHandler{
-		db:          db,
-		rdb:         rdb,
-		permChecker: nil,
-		jobStore:    jobStore,
-	}
+func NewMemberLifecycleHandler(svc MemberLifecycleServiceInterface) *MemberLifecycleHandler {
+	return &MemberLifecycleHandler{svc: svc}
 }
 
-// ==================== Helper Methods (lines 652-780) ====================
-
-// getUserByID fetches user details by ID
-func (h *MemberLifecycleHandler) getUserByID(ctx context.Context, userID int64) (*model.User, error) {
-	var user model.User
-	err := h.db.QueryRow(ctx, `
-		SELECT id, phone, email, password_hash, role, status, created_at, updated_at
-		FROM users WHERE id = $1 AND deleted_at IS NULL
-	`, userID).Scan(
-		&user.ID, &user.Phone, &user.Email, &user.PasswordHash,
-		&user.Role, &user.Status,
-		&user.CreatedAt, &user.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
+// handleServiceError maps a service error to an HTTP response
+func handleServiceError(c *gin.Context, err error) {
+	var svcErr *service.MemberServiceError
+	if errors.As(err, &svcErr) {
+		response.Error(c, svcErr.Code, svcErr.Message)
+		return
 	}
-	return &user, nil
+	response.Error(c, 500, "内部服务器错误")
 }
 
-// getOrgByID fetches organization details by ID
-func (h *MemberLifecycleHandler) getOrgByID(ctx context.Context, orgID int64) (*model.Organization, error) {
-	var org model.Organization
-	err := h.db.QueryRow(ctx, `
-		SELECT id, root_tenant_id, parent_id, org_type, COALESCE(code, ''), name,
-		       status, version, created_at, updated_at
-		FROM organizations WHERE id = $1 AND deleted_at IS NULL
-	`, orgID).Scan(
-		&org.ID, &org.RootTenantID, &org.ParentID, &org.Type,
-		&org.Code, &org.Name, &org.Status, &org.Version,
-		&org.CreatedAt, &org.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &org, nil
-}
-
-// getMembershipByID fetches membership details by ID
-func (h *MemberLifecycleHandler) getMembershipByID(ctx context.Context, membershipID int64) (*OrganizationMembership, error) {
-	var membership OrganizationMembership
-	err := h.db.QueryRow(ctx, `
-		SELECT id, root_tenant_id, organization_id, user_id,
-		       status, expires_at, created_at, updated_at
-		FROM organization_memberships WHERE id = $1
-	`, membershipID).Scan(
-		&membership.ID, &membership.RootTenantID, &membership.OrganizationID,
-		&membership.UserID, &membership.Status, &membership.ExpiresAt,
-		&membership.CreatedAt, &membership.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &membership, nil
-}
-
-// getMembershipsByIDList fetches multiple memberships by IDs
-func (h *MemberLifecycleHandler) getMembershipsByIDList(ctx context.Context, membershipIDs []int64) ([]*OrganizationMembership, error) {
-	if len(membershipIDs) == 0 {
-		return []*OrganizationMembership{}, nil
-	}
-
-	rows, err := h.db.Query(ctx, `
-		SELECT id, root_tenant_id, organization_id, user_id,
-		       status, expires_at, created_at, updated_at
-		FROM organization_memberships 
-		WHERE id = ANY($1)
-	`, membershipIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var memberships []*OrganizationMembership
-	for rows.Next() {
-		var m OrganizationMembership
-		if err := rows.Scan(
-			&m.ID, &m.RootTenantID, &m.OrganizationID, &m.UserID,
-			&m.Status, &m.ExpiresAt, &m.CreatedAt, &m.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		memberships = append(memberships, &m)
-	}
-
-	return memberships, nil
-}
-
-// checkQuota checks tenant capacity quota before adding members
-func (h *MemberLifecycleHandler) checkQuota(ctx context.Context, rootTenantID int64) (*TenantQuotaUsage, error) {
-	usage := &TenantQuotaUsage{}
-
-	// Get tenant quota limits from organization_quotas (root org, resource_type='members')
-	var userLimit int64
-	err := h.db.QueryRow(ctx, `
-		SELECT quota_limit FROM organization_quotas
-		WHERE root_tenant_id = $1 AND organization_id = $1 AND resource_type = 'members'
-	`, rootTenantID).Scan(&userLimit)
-	if err != nil {
-		// No quota configured = unlimited
-		usage.UserLimit = -1
-	} else {
-		usage.UserLimit = userLimit
-	}
-
-	// Count current members
-	err = h.db.QueryRow(ctx, `
-		SELECT COUNT(DISTINCT user_id) FROM organization_memberships 
-		WHERE root_tenant_id = $1 AND status = 'active'
-	`, rootTenantID).Scan(&usage.UserCount)
-	if err != nil {
-		return nil, err
-	}
-
-	return usage, nil
-}
-
-// getExistingMembership checks if a membership already exists
-func (h *MemberLifecycleHandler) getExistingMembership(ctx context.Context, userID int64, orgID int64) (*OrganizationMembership, error) {
-	var membership OrganizationMembership
-	err := h.db.QueryRow(ctx, `
-		SELECT id, root_tenant_id, organization_id, user_id,
-		       status, version, expires_at, joined_at, created_at, updated_at
-		FROM organization_memberships 
-		WHERE user_id = $1 AND organization_id = $2 AND status = 'active'
-	`, userID, orgID).Scan(
-		&membership.ID, &membership.RootTenantID, &membership.OrganizationID,
-		&membership.UserID, &membership.Status, &membership.Version,
-		&membership.ExpiresAt, &membership.JoinedAt, &membership.CreatedAt,
-		&membership.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &membership, nil
-}
-
-// invalidateAuthCache invalidates Redis authorization cache for a membership change
-func (h *MemberLifecycleHandler) invalidateAuthCache(rootTenantID int64, orgID int64) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Invalidate cache patterns related to this org and tenant
-	patterns := []string{
-		fmt.Sprintf("auth_perms:%d:*", rootTenantID),
-		fmt.Sprintf("membership:*:%d", orgID),
-		fmt.Sprintf("tenant:%d:auth_version", rootTenantID),
-	}
-
-	for _, pattern := range patterns {
-		keys, err := h.rdb.Keys(ctx, pattern).Result()
-		if err != nil {
-			logger.Error("invalidateAuthCache keys lookup failed", zap.Error(err))
-			continue
-		}
-		if len(keys) > 0 {
-			if err := h.rdb.Del(ctx, keys...).Err(); err != nil {
-				logger.Error("invalidateAuthCache del keys failed", zap.Error(err))
-			}
-		}
-	}
-}
-
-// canManageMembership checks if user has permission to manage specific membership
-func (h *MemberLifecycleHandler) canManageMembership(ctx context.Context, userID int64, orgID int64) (bool, error) {
-	// Check if user is a system admin (bypasses all permission checks)
-	var isSystemAdmin bool
-	err := h.db.QueryRow(ctx, `SELECT is_system_admin FROM users WHERE id = $1 AND deleted_at IS NULL`, userID).Scan(&isSystemAdmin)
-	if err != nil {
-		return false, err
-	}
-	if isSystemAdmin {
-		return true, nil
-	}
-
-	// Check organization-level manage_members permission via role_permission_grants.
-	// A user is allowed to manage members if they hold an active membership in the
-	// target organization with either a "members:manage" permission grant or an
-	// "org_admin" role assignment.
-	var allowed bool
-	err = h.db.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1
-			FROM organization_memberships om
-			JOIN membership_role_assignments mra
-				ON mra.root_tenant_id = om.root_tenant_id
-				AND mra.organization_id = om.organization_id
-				AND mra.membership_id = om.id
-				AND mra.status = 'active'
-			LEFT JOIN role_permission_grants rpg
-				ON rpg.role_assignment_id = mra.id
-				AND rpg.permission_code = 'members:manage'
-			WHERE om.user_id = $1
-				AND om.organization_id = $2
-				AND om.status = 'active'
-				AND (rpg.id IS NOT NULL OR mra.role_code = 'org_admin')
-		)
-	`, userID, orgID).Scan(&allowed)
-	if err != nil {
-		return false, err
-	}
-
-	return allowed, nil
-}
-
-// auditLog emits async audit logging events to the audit_logs table
-func (h *MemberLifecycleHandler) auditLog(userID int64, action string, orgID int64, details map[string]interface{}) {
-	go func() {
-		if h.db == nil {
-			logger.Warn("Audit db not available, skipping", zap.Int64("user_id", userID), zap.String("action", action), zap.Int64("org_id", orgID))
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		var detailJSON []byte
-		if details != nil {
-			var err error
-			detailJSON, err = json.Marshal(details)
-			if err != nil {
-				logger.Error("Audit failed to marshal details", zap.Error(err))
-				return
-			}
-		}
-
-		query := `INSERT INTO audit_logs (operator_id, action, resource_type, resource_id, detail, created_at)
-		          VALUES ($1, $2, $3, $4, $5, NOW())`
-		_, err := h.db.Exec(ctx, query, userID, action, "membership", orgID, detailJSON)
-		if err != nil {
-			logger.Error("Audit failed to write audit log", zap.Error(err))
-		}
-	}()
-}
-
-// OrganizationMembership represents the organization_memberships table structure
-type OrganizationMembership struct {
-	ID             int64      `json:"id"`
-	RootTenantID   int64      `json:"root_tenant_id"`
-	OrganizationID int64      `json:"organization_id"`
-	UserID         int64      `json:"user_id"`
-	Status         string     `json:"status"`
-	Version        int64      `json:"version"`
-	ExpiresAt      *time.Time `json:"expires_at"`
-	JoinedAt       time.Time  `json:"joined_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-}
-
-// TenantQuotaUsage represents tenant capacity usage information
-type TenantQuotaUsage struct {
-	UserCount int64
-	UserLimit int64 // -1 means unlimited
-}
-
-// ==================== Add Member Endpoint (lines 172-300) ====================
+// ==================== Add Member Endpoint ====================
 
 // AddMember handles POST /api/v1/members/add - Add existing user to organization
 func (h *MemberLifecycleHandler) AddMember(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	
+
 	var req AddMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "invalid request")
 		return
 	}
 
-	// Validate membership request fields
 	if req.MembershipType == "" {
 		req.MembershipType = "full"
 	}
 
-	ctx := c.Request.Context()
-
-	// Validate target user exists
-	targetUser, err := h.getUserByID(ctx, req.UserID)
-	if err != nil || targetUser == nil {
-		response.Error(c, 404, "用户不存在")
-		return
-	}
-
-	// Validate target organization exists and belongs to same tenant as user
-	targetOrg, err := h.getOrgByID(ctx, req.OrganizationID)
-	if err != nil || targetOrg == nil {
-		response.Error(c, 404, "组织不存在")
-		return
-	}
-
-	// Tenant isolation check: user must be active
-	if targetUser == nil {
-		response.Error(c, 404, "用户不存在")
-		return
-	}
-
-	// Get root_tenant_id from actor context
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
 		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
-	// Tenant isolation: org must belong to the same tenant as the caller
-	if targetOrg.RootTenantID != tenantID {
-		response.Error(c, 403, "无权操作此组织")
-		return
-	}
-
-	// Check quota before adding
-	usage, err := h.checkQuota(ctx, tenantID)
-	if err != nil {
-		logger.Error("AddMember quota check failed", zap.Error(err))
-		response.Error(c, 500, "检查配额失败")
-		return
-	}
-	if usage.UserLimit > 0 && usage.UserCount >= usage.UserLimit {
-		response.Error(c, 409, "已达用户数上限，无法添加新成员")
-		return
-	}
-
-	// Check if already a member with active status
-	existing, _ := h.getExistingMembership(ctx, req.UserID, req.OrganizationID)
-	if existing != nil && existing.Status == "active" {
-		response.Error(c, 409, "该用户已是此组织活跃成员")
-		return
-	}
-
-	tx, err := h.db.Begin(ctx)
-	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	// Insert membership record (soft-deletable: reuse old ID or create new)
-	if existing != nil && existing.Status != "active" {
-		// Reactivate existing membership
-		result, err := tx.Exec(ctx, `
-			UPDATE organization_memberships 
-			SET status = 'active', 
-			    expires_at = COALESCE($3, expires_at),
-			    updated_at = NOW()
-			WHERE id = $1
-		`, existing.ID, req.ExpiresAt)
-		if err != nil {
-			response.Error(c, 409, "更新成员关系失败")
-			return
-		}
-		if result.RowsAffected() == 0 {
-			response.Error(c, 404, "原成员记录已失效")
-			return
-		}
-	} else {
-		// Create new membership
-		_, err := tx.Exec(ctx, `
-			INSERT INTO organization_memberships 
-				(root_tenant_id, organization_id, user_id, status, expires_at)
-			VALUES ($1, $2, $3, 'active', $4)
-		`, tenantID, req.OrganizationID, req.UserID, req.ExpiresAt)
-		if err != nil {
-			response.Error(c, 409, "添加成员失败：约束冲突")
-			return
-		}
-	}
-
-	// Invalidate authorization cache
-	h.invalidateAuthCache(tenantID, req.OrganizationID)
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "保存成员记录失败")
-		return
-	}
-
-	// Async audit logging
-	h.auditLog(userID, "member.add", req.OrganizationID, map[string]interface{}{
-		"user_id":          req.UserID,
-		"membership_type":  req.MembershipType,
-		"new_member_count": usage.UserCount + 1,
+	result, err := h.svc.AddMember(c.Request.Context(), userID, tenantID, service.AddMemberParams{
+		UserID:         req.UserID,
+		OrganizationID: req.OrganizationID,
+		MembershipType: req.MembershipType,
+		ExpiresAt:      req.ExpiresAt,
 	})
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
 
 	response.Success(c, MemberLifecycleResponse{
 		Message:        "成员添加成功",
-		OrganizationID: req.OrganizationID,
-		UserID:         req.UserID,
+		OrganizationID: result.OrganizationID,
+		UserID:         result.UserID,
 	})
 }
 
@@ -524,74 +178,20 @@ func (h *MemberLifecycleHandler) UpdateMembership(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	// Fetch current membership
-	membership, err := h.getMembershipByID(ctx, membershipID)
-	if err != nil || membership == nil {
-		response.Error(c, 404, "成员关系不存在")
-		return
-	}
-
-	// Verify ownership/access
-	orgTenantID := middleware.GetRootTenantID(c)
-	if orgTenantID == 0 {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
 		response.Error(c, 403, "tenant context missing")
 		return
 	}
-	if membership.RootTenantID != orgTenantID {
-		response.Error(c, 403, "无权访问此组织成员关系")
-		return
-	}
 
-	tx, err := h.db.Begin(ctx)
-	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	// Build dynamic update query
-	query := `UPDATE organization_memberships SET updated_at = NOW()`
-	params := []interface{}{membershipID}
-
-	if req.Status != nil {
-		validStatus := map[string]bool{"active": true, "inactive": true, "suspended": true}
-		if !validStatus[*req.Status] {
-			tx.Rollback(ctx)
-			response.Error(c, 400, "无效的状态值")
-			return
-		}
-		query += `, status = $` + fmt.Sprintf("%d", len(params)+1)
-		params = append(params, *req.Status)
-	}
-	if req.ExpiresAt != nil {
-		query += `, expires_at = $` + fmt.Sprintf("%d", len(params)+1)
-		params = append(params, *req.ExpiresAt)
-	}
-	query += ` WHERE id = $` + fmt.Sprintf("%d", len(params)+1)
-	params = append(params, membershipID)
-
-	_, err = tx.Exec(ctx, query, params...)
-	if err != nil {
-		response.Error(c, 500, "更新成员信息失败")
-		return
-	}
-
-	h.invalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
-	
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "保存更新失败")
-		return
-	}
-
-	h.auditLog(userID, "member.update", membership.OrganizationID, map[string]interface{}{
-		"membership_id": membershipID,
-		"changed_fields": map[string]interface{}{
-			"status":     req.Status,
-			"expires_at": req.ExpiresAt,
-		},
+	err = h.svc.UpdateMembership(c.Request.Context(), userID, tenantID, membershipID, service.UpdateMembershipParams{
+		Status:    req.Status,
+		ExpiresAt: req.ExpiresAt,
 	})
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
 
 	response.SuccessWithMessage(c, "成员信息已更新", gin.H{
 		"membership_id": membershipID,
@@ -615,52 +215,14 @@ func (h *MemberLifecycleHandler) RemoveMember(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	membership, err := h.getMembershipByID(ctx, membershipID)
-	if err != nil || membership == nil {
-		response.Error(c, 404, "成员关系不存在")
-		return
-	}
-
-	// Soft delete only: set status='inactive'
-	tx, err := h.db.Begin(ctx)
+	err = h.svc.RemoveMember(c.Request.Context(), userID, membershipID, req.Reason)
 	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
+		handleServiceError(c, err)
 		return
 	}
-	defer tx.Rollback(ctx)
-
-	result, err := tx.Exec(ctx, `
-		UPDATE organization_memberships 
-		SET status = 'revoked', updated_at = NOW()
-		WHERE id = $1 AND status = 'active'
-	`, membershipID)
-	if err != nil {
-		response.Error(c, 500, "删除成员失败")
-		return
-	}
-	if result.RowsAffected() == 0 {
-		response.Error(c, 404, "成员记录已不存在或已删除")
-		return
-	}
-
-	h.invalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "保存更改失败")
-		return
-	}
-
-	h.auditLog(userID, "member.remove", membership.OrganizationID, map[string]interface{}{
-		"membership_id": membershipID,
-		"user_id":       membership.UserID,
-		"reason":        req.Reason,
-	})
 
 	response.SuccessWithMessage(c, "成员已从组织中移除", gin.H{
 		"membership_id": membershipID,
-		"user_id":       membership.UserID,
 	})
 }
 
@@ -681,52 +243,11 @@ func (h *MemberLifecycleHandler) DeactivateMember(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	membership, err := h.getMembershipByID(ctx, membershipID)
-	if err != nil || membership == nil {
-		response.Error(c, 404, "成员关系不存在")
-		return
-	}
-
-	if membership.Status != "active" {
-		response.Error(c, 409, "成员已经是非活跃状态")
-		return
-	}
-
-	tx, err := h.db.Begin(ctx)
+	err = h.svc.DeactivateMember(c.Request.Context(), userID, membershipID, req.Reason)
 	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
+		handleServiceError(c, err)
 		return
 	}
-	defer tx.Rollback(ctx)
-
-	result, err := tx.Exec(ctx, `
-		UPDATE organization_memberships 
-		SET status = 'inactive', updated_at = NOW()
-		WHERE id = $1 AND status = 'active'
-	`, membershipID)
-	if err != nil {
-		response.Error(c, 500, "停用成员失败")
-		return
-	}
-	if result.RowsAffected() == 0 {
-		response.Error(c, 409, "成员状态未改变")
-		return
-	}
-
-	h.invalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "保存停用失败")
-		return
-	}
-
-	h.auditLog(userID, "member.deactivate", membership.OrganizationID, map[string]interface{}{
-		"membership_id": membershipID,
-		"user_id":       membership.UserID,
-		"reason":        req.Reason,
-	})
 
 	response.SuccessWithMessage(c, "成员已停用", gin.H{
 		"membership_id": membershipID,
@@ -742,58 +263,18 @@ func (h *MemberLifecycleHandler) ReactivateMember(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	membership, err := h.getMembershipByID(ctx, membershipID)
-	if err != nil || membership == nil {
-		response.Error(c, 404, "成员关系不存在")
-		return
-	}
-
-	if membership.Status == "active" {
-		response.Error(c, 409, "成员已经是活跃状态")
-		return
-	}
-
-	tx, err := h.db.Begin(ctx)
+	err = h.svc.ReactivateMember(c.Request.Context(), userID, membershipID)
 	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
+		handleServiceError(c, err)
 		return
 	}
-	defer tx.Rollback(ctx)
-
-	result, err := tx.Exec(ctx, `
-		UPDATE organization_memberships 
-		SET status = 'active', updated_at = NOW()
-		WHERE id = $1 AND status IN ('inactive', 'suspended')
-	`, membershipID)
-	if err != nil {
-		response.Error(c, 500, "恢复成员失败")
-		return
-	}
-	if result.RowsAffected() == 0 {
-		response.Error(c, 409, "成员状态未改变")
-		return
-	}
-
-	h.invalidateAuthCache(membership.RootTenantID, membership.OrganizationID)
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "保存恢复失败")
-		return
-	}
-
-	h.auditLog(userID, "member.reactivate", membership.OrganizationID, map[string]interface{}{
-		"membership_id": membershipID,
-		"user_id":       membership.UserID,
-	})
 
 	response.SuccessWithMessage(c, "成员已恢复活跃", gin.H{
 		"membership_id": membershipID,
 	})
 }
 
-// ==================== Transfer Flow Implementation (lines 302-650) ====================
+// ==================== Transfer Flow ====================
 
 // TransferInitiate handles POST /api/v1/members/transfer/initiate - Initiate transfer to different org
 func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
@@ -805,110 +286,20 @@ func (h *MemberLifecycleHandler) TransferInitiate(c *gin.Context) {
 		return
 	}
 
-	if len(req.MembershipIDs) == 0 {
-		response.Error(c, 400, "请选择要转移的成员")
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	// Fetch all memberships
-	memberships, err := h.getMembershipsByIDList(ctx, req.MembershipIDs)
-	if err != nil || len(memberships) == 0 {
-		response.Error(c, 404, "未找到有效的成员关系")
-		return
-	}
-
-	// Validate all memberships belong to same root_tenant
-	rootTenantID := memberships[0].RootTenantID
-	sourceOrgID := memberships[0].OrganizationID
-
-	for _, m := range memberships {
-		if m.RootTenantID != rootTenantID {
-			response.Error(c, 409, "跨租户批量转移不支持，请确保所有成员属于同一租户")
-			return
-		}
-		if m.Status != "active" {
-			response.Error(c, 400, fmt.Sprintf("成员 ID=%d 不是活跃状态", m.ID))
-			return
-		}
-	}
-
-	// Verify target org exists and belongs to same tenant
-	targetOrg, err := h.getOrgByID(ctx, req.TargetOrgID)
-	if err != nil || targetOrg == nil {
-		response.Error(c, 404, "目标组织不存在")
-		return
-	}
-	if targetOrg.RootTenantID != rootTenantID {
-		response.Error(c, 403, "目标组织不在同一租户下")
-		return
-	}
-
-	tx, err := h.db.Begin(ctx)
+	result, err := h.svc.TransferInitiate(c.Request.Context(), userID, req.MembershipIDs, req.TargetOrgID, req.Reason)
 	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
+		handleServiceError(c, err)
 		return
 	}
-	defer tx.Rollback(ctx)
-
-	_ = time.Now()
-
-	// Transfer each membership
-	transferredCount := 0
-	for _, membership := range memberships {
-		// Delete old membership
-		_, err := tx.Exec(ctx, `
-			DELETE FROM organization_memberships WHERE id = $1
-		`, membership.ID)
-		if err != nil {
-			response.Error(c, 500, "移除旧成员关系失败")
-			return
-		}
-
-		// Create new membership in target org using saved user_id and expires_at
-		result, err := tx.Exec(ctx, `
-			INSERT INTO organization_memberships 
-				(root_tenant_id, organization_id, user_id, status, expires_at, created_at, updated_at)
-			VALUES ($1, $2, $3, 'active', $4, NOW(), NOW())
-		`, targetOrg.RootTenantID, targetOrg.ID, membership.UserID, membership.ExpiresAt)
-		if err != nil {
-			response.Error(c, 500, "添加到目标组织失败")
-			return
-		}
-		if result.RowsAffected() > 0 {
-			transferredCount++
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "提交成员转移失败")
-		return
-	}
-
-	// Invalidate authorization caches for both orgs
-	go func() {
-		h.invalidateAuthCache(rootTenantID, sourceOrgID)
-		h.invalidateAuthCache(rootTenantID, targetOrg.ID)
-	}()
-
-	h.auditLog(userID, "member.transfer.initiate", targetOrg.ID, map[string]interface{}{
-		"source_org_id":     sourceOrgID,
-		"target_org_id":     targetOrg.ID,
-		"transferred_users": membershipIDsToUserIDs(memberships),
-		"count":             transferredCount,
-		"reason":            req.Reason,
-	})
 
 	response.Success(c, MemberLifecycleResponse{
-		Message:        "成员转移完成",
-		OrganizationID: targetOrg.ID,
-		TransferredCount: transferredCount,
+		Message:          "成员转移完成",
+		OrganizationID:   result.OrganizationID,
+		TransferredCount: result.TransferredCount,
 	})
 }
 
 // TransferAccept handles POST /api/v1/members/transfer/accept - Accept transfer request
-// Note: In current implementation, transfers are immediate, not delayed approval-based
 func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -926,35 +317,12 @@ func (h *MemberLifecycleHandler) TransferAccept(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	// Look up the transfer request
-	var transferStatus string
-	err := h.db.QueryRow(ctx, `
-		SELECT status FROM member_transfer_requests
-		WHERE id = $1
-	`, req.TransferID).Scan(&transferStatus)
+	err := h.svc.TransferAccept(c.Request.Context(), userID, req.TransferID)
 	if err != nil {
-		response.Error(c, 404, "转移请求不存在")
-		return
-	}
-	if transferStatus != "initiated" {
-		response.Error(c, 400, "转移请求状态不允许接受")
+		handleServiceError(c, err)
 		return
 	}
 
-	// Mark transfer as accepted
-	_, err = h.db.Exec(ctx, `
-		UPDATE member_transfer_requests
-		SET status = 'accepted', updated_at = NOW()
-		WHERE id = $1
-	`, req.TransferID)
-	if err != nil {
-		response.Error(c, 500, "更新转移请求失败")
-		return
-	}
-
-	_ = userID
 	response.SuccessWithMessage(c, "转移请求已接受", map[string]interface{}{
 		"transfer_id": req.TransferID,
 		"status":      "accepted",
@@ -980,40 +348,12 @@ func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
 		return
 	}
 
-	if req.Reason == "" {
-		response.Error(c, 400, "拒绝转移必须提供原因")
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	// Look up the transfer request
-	var transferStatus string
-	err := h.db.QueryRow(ctx, `
-		SELECT status FROM member_transfer_requests
-		WHERE id = $1
-	`, req.TransferID).Scan(&transferStatus)
+	err := h.svc.TransferReject(c.Request.Context(), userID, req.TransferID, req.Reason)
 	if err != nil {
-		response.Error(c, 404, "转移请求不存在")
-		return
-	}
-	if transferStatus != "initiated" {
-		response.Error(c, 400, "转移请求状态不允许拒绝")
+		handleServiceError(c, err)
 		return
 	}
 
-	// Mark transfer as rejected
-	_, err = h.db.Exec(ctx, `
-		UPDATE member_transfer_requests
-		SET status = 'rejected', reason = $2, updated_at = NOW()
-		WHERE id = $1
-	`, req.TransferID, req.Reason)
-	if err != nil {
-		response.Error(c, 500, "更新转移请求失败")
-		return
-	}
-
-	_ = userID
 	response.SuccessWithMessage(c, "转移请求已拒绝", map[string]interface{}{
 		"transfer_id": req.TransferID,
 		"reason":      req.Reason,
@@ -1023,36 +363,15 @@ func (h *MemberLifecycleHandler) TransferReject(c *gin.Context) {
 // ListTransfers handles GET /api/v1/members/transfers/list - List pending transfers
 func (h *MemberLifecycleHandler) ListTransfers(c *gin.Context) {
 	userID := middleware.GetUserID(c)
-	ctx := c.Request.Context()
 
-	// Query pending transfers for the authenticated user
-	// This would require a transfers table in delayed-approval model
-	rows, err := h.db.Query(ctx, `
-		SELECT id, membership_id, from_org_id, to_org_id, initiator_id, 
-		       status, reason, created_at, updated_at
-		FROM pending_transfers
-		WHERE user_id = $1 AND status = 'initiated'
-		ORDER BY created_at DESC
-	`, userID)
+	transfers, err := h.svc.ListTransfers(c.Request.Context(), userID)
 	if err != nil {
-		logger.Error("ListTransfers query failed", zap.Error(err))
-		// Return empty list if no delayed-transfer table exists yet
-		response.Page(c, []PendingTransferInfo{}, 0, 1, 10)
+		handleServiceError(c, err)
 		return
 	}
-	defer rows.Close()
 
-	var transfers []PendingTransferInfo
-	for rows.Next() {
-		var t PendingTransferInfo
-		if err := rows.Scan(
-			&t.ID, &t.MembershipID, &t.FromOrgID, &t.ToOrgID,
-			&t.InitiatorID, &t.Status, &t.Reason, &t.CreatedAt, &t.UpdatedAt,
-		); err != nil {
-			logger.Error("ListTransfers scan error", zap.Error(err))
-			continue
-		}
-		transfers = append(transfers, t)
+	if transfers == nil {
+		transfers = []service.PendingTransferInfo{}
 	}
 
 	response.Page(c, transfers, int64(len(transfers)), 1, 10)
@@ -1070,146 +389,38 @@ func (h *MemberLifecycleHandler) BulkAdd(c *gin.Context) {
 		return
 	}
 
-	// Validate membership type
-	validTypes := map[string]bool{"full": true, "read_only": true, "billing": true, "guest": true}
-	if !validTypes[req.MembershipType] {
-		req.MembershipType = "full"
-	}
-
-	ctx := c.Request.Context()
-
-	// Validate target organization
-	targetOrg, err := h.getOrgByID(ctx, req.OrganizationID)
-	if err != nil || targetOrg == nil {
-		response.Error(c, 404, "组织不存在")
-		return
-	}
-
-	// Get root_tenant_id from actor context
 	tenantID := middleware.GetRootTenantID(c)
 	if tenantID == 0 {
 		response.Error(c, 403, "tenant context missing")
 		return
 	}
 
-	if targetOrg.RootTenantID != tenantID {
-		response.Error(c, 403, "组织不属于当前租户范围")
-		return
-	}
-
-	// Check quota
-	_, err = h.checkQuota(ctx, tenantID)
+	result, err := h.svc.BulkAdd(c.Request.Context(), userID, tenantID, service.BulkAddParams{
+		UserIDs:        req.UserIDs,
+		OrganizationID: req.OrganizationID,
+		MembershipType: req.MembershipType,
+		ExpiresAt:      req.ExpiresAt,
+	})
 	if err != nil {
-		logger.Error("BulkAdd quota check failed", zap.Error(err))
-		response.Error(c, 500, "检查配额失败")
+		handleServiceError(c, err)
 		return
 	}
 
-	// For small batches (<10 items), process synchronously
-	if len(req.UserIDs) < 10 {
-		h.processBulkAddSync(c, userID, tenantID, req)
-		return
-	}
-
-	// For larger batches, create background job
-	bulkJob := job.CreateBulkAddJob(userID, req.OrganizationID, req.UserIDs, req.RoleIDs)
-	bulkJob.TotalItems = len(req.UserIDs)
-
-	// Store job in Redis
-	if err := h.jobStore.CreateJob(ctx, bulkJob); err != nil {
-		logger.Error("BulkAdd failed to create job", zap.Error(err))
-		response.Error(c, 500, "创建批量任务失败")
-		return
-	}
-
-	// Enqueue job for processing (in production, this would send to Kafka)
-	go func() {
-		if err := bulkJob.WithRetry(job.MaxRetries); err != nil {
-			logger.Error("BulkAdd job failed", zap.String("job_id", bulkJob.JobID), zap.Error(err))
-		}
-
-		// Invalidate cache after job completion
-		h.invalidateAuthCache(tenantID, req.OrganizationID)
-
-		// Audit log
-		h.auditLog(userID, "member.bulk_add", req.OrganizationID, map[string]interface{}{
-			"user_ids":        req.UserIDs,
-			"total_requested": len(req.UserIDs),
-			"job_id":          bulkJob.JobID,
+	if result.IsAsync {
+		response.Success(c, map[string]interface{}{
+			"message":     "批量添加任务已创建，正在后台处理",
+			"job_id":      result.JobID,
+			"status_url":  result.StatusURL,
+			"ws_url":      result.WSURL,
+			"total_items": result.TotalItems,
 		})
-	}()
-
-	// Return async response with job tracking info
-	response.Success(c, map[string]interface{}{
-		"message":     "批量添加任务已创建，正在后台处理",
-		"job_id":      bulkJob.JobID,
-		"status_url":  fmt.Sprintf("/api/v1/jobs/%s/status", bulkJob.JobID),
-		"ws_url":      fmt.Sprintf("/ws/jobs/%s/progress?user_id=%d", bulkJob.JobID, userID),
-		"total_items": len(req.UserIDs),
-	})
-}
-
-// processBulkAddSync handles small batch operations synchronously
-func (h *MemberLifecycleHandler) processBulkAddSync(c *gin.Context, userID, tenantID int64, req BulkAddRequest) {
-	ctx := c.Request.Context()
-
-	tx, err := h.db.Begin(ctx)
-	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
 		return
 	}
-	defer tx.Rollback(ctx)
-
-	addedCount := 0
-	for _, uid := range req.UserIDs {
-		// Validate user exists
-		_, err := h.getUserByID(ctx, uid)
-		if err != nil {
-			logger.Error("BulkAdd user not found", zap.Int64("uid", uid), zap.Error(err))
-			continue
-		}
-
-		// Skip if already active member
-		existing, _ := h.getExistingMembership(ctx, uid, req.OrganizationID)
-		if existing != nil && existing.Status == "active" {
-			continue
-		}
-
-		// Insert or reactivate
-		if existing != nil && existing.Status != "active" {
-			_, _ = tx.Exec(ctx, `
-				UPDATE organization_memberships 
-				SET status = 'active', expires_at = $3, updated_at = NOW()
-				WHERE id = $1
-			`, existing.ID, req.ExpiresAt)
-		} else {
-			result, err := tx.Exec(ctx, `
-				INSERT INTO organization_memberships 
-					(root_tenant_id, organization_id, user_id, status, expires_at)
-				VALUES ($1, $2, $3, 'active', $4)
-			`, tenantID, req.OrganizationID, uid, req.ExpiresAt)
-			if err == nil && result.RowsAffected() > 0 {
-				addedCount++
-			}
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "批量添加失败")
-		return
-	}
-
-	h.invalidateAuthCache(tenantID, req.OrganizationID)
-	h.auditLog(userID, "member.bulk_add", req.OrganizationID, map[string]interface{}{
-		"user_ids":        req.UserIDs,
-		"added_count":     addedCount,
-		"total_requested": len(req.UserIDs),
-	})
 
 	response.Success(c, MemberLifecycleResponse{
 		Message:          "批量添加完成",
-		OrganizationID:   req.OrganizationID,
-		TransferredCount: addedCount,
+		OrganizationID:   result.OrganizationID,
+		TransferredCount: result.AddedCount,
 	})
 }
 
@@ -1223,138 +434,30 @@ func (h *MemberLifecycleHandler) BulkTransfer(c *gin.Context) {
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	// Fetch memberships
-	memberships, err := h.getMembershipsByIDList(ctx, req.MembershipIDs)
-	if err != nil || len(memberships) == 0 {
-		response.Error(c, 404, "未找到有效成员")
-		return
-	}
-
-	// Validate same tenant
-	rootTenantID := memberships[0].RootTenantID
-	for _, m := range memberships {
-		if m.RootTenantID != rootTenantID {
-			response.Error(c, 409, "跨租户批量转移不支持")
-			return
-		}
-	}
-
-	// Validate target org
-	targetOrg, err := h.getOrgByID(ctx, req.TargetOrgID)
-	if err != nil || targetOrg.RootTenantID != rootTenantID {
-		response.Error(c, 403, "目标组织不在同一租户下")
-		return
-	}
-
-	// For small batches (<10 items), process synchronously
-	if len(req.MembershipIDs) < 10 {
-		h.processBulkTransferSync(c, userID, rootTenantID, targetOrg, memberships, req.Reason)
-		return
-	}
-
-	// For larger batches, create background job
-	bulkJob := job.CreateBulkTransferJob(userID, req.MembershipIDs, req.TargetOrgID)
-	bulkJob.TotalItems = len(req.MembershipIDs)
-
-	// Store job in Redis
-	if err := h.jobStore.CreateJob(ctx, bulkJob); err != nil {
-		logger.Error("BulkTransfer failed to create job", zap.Error(err))
-		response.Error(c, 500, "创建批量转移任务失败")
-		return
-	}
-
-	// Enqueue job for processing
-	sourceOrgID := memberships[0].OrganizationID
-	go func() {
-		if err := bulkJob.WithRetry(job.MaxRetries); err != nil {
-			logger.Error("BulkTransfer job failed", zap.String("job_id", bulkJob.JobID), zap.Error(err))
-		}
-
-		// Invalidate caches after completion
-		go func() {
-			h.invalidateAuthCache(rootTenantID, sourceOrgID)
-			h.invalidateAuthCache(rootTenantID, targetOrg.ID)
-		}()
-
-		// Audit log
-		h.auditLog(userID, "member.bulk_transfer", targetOrg.ID, map[string]interface{}{
-			"membership_ids":    req.MembershipIDs,
-			"target_org_id":     req.TargetOrgID,
-			"total_transferred": len(req.MembershipIDs),
-			"job_id":            bulkJob.JobID,
-			"reason":            req.Reason,
-		})
-	}()
-
-	// Return async response with job tracking info
-	response.Success(c, map[string]interface{}{
-		"message":     "批量转移任务已创建，正在后台处理",
-		"job_id":      bulkJob.JobID,
-		"status_url":  fmt.Sprintf("/api/v1/jobs/%s/status", bulkJob.JobID),
-		"ws_url":      fmt.Sprintf("/ws/jobs/%s/progress?user_id=%d", bulkJob.JobID, userID),
-		"total_items": len(req.MembershipIDs),
+	result, err := h.svc.BulkTransfer(c.Request.Context(), userID, service.BulkTransferParams{
+		MembershipIDs: req.MembershipIDs,
+		TargetOrgID:   req.TargetOrgID,
+		Reason:        req.Reason,
 	})
-}
-
-// processBulkTransferSync handles small batch transfer operations synchronously
-func (h *MemberLifecycleHandler) processBulkTransferSync(c *gin.Context, userID, rootTenantID int64, targetOrg *model.Organization, memberships []*OrganizationMembership, reason string) {
-	ctx := c.Request.Context()
-
-	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	transferredCount := 0
-	for _, membership := range memberships {
-		// Delete old
-		_, err := tx.Exec(ctx, `DELETE FROM organization_memberships WHERE id = $1`, membership.ID)
-		if err != nil {
-			continue
-		}
-
-		// Insert new in target org using saved user_id and expires_at
-		result, err := tx.Exec(ctx, `
-			INSERT INTO organization_memberships 
-				(root_tenant_id, organization_id, user_id, status, expires_at)
-			VALUES ($1, $2, $3, 'active', $4)
-		`, targetOrg.RootTenantID, targetOrg.ID, membership.UserID, membership.ExpiresAt)
-		if err == nil && result.RowsAffected() > 0 {
-			transferredCount++
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "批量转移失败")
+		handleServiceError(c, err)
 		return
 	}
 
-	go func() {
-		h.invalidateAuthCache(rootTenantID, memberships[0].OrganizationID)
-		h.invalidateAuthCache(rootTenantID, targetOrg.ID)
-	}()
-
-	h.auditLog(userID, "member.bulk_transfer", targetOrg.ID, map[string]interface{}{
-		"transferred_count": transferredCount,
-		"source_orgs":       membershipIDsToUserIDs(memberships),
-	})
+	if result.IsAsync {
+		response.Success(c, map[string]interface{}{
+			"message":     "批量转移任务已创建，正在后台处理",
+			"job_id":      result.JobID,
+			"status_url":  result.StatusURL,
+			"ws_url":      result.WSURL,
+			"total_items": result.TotalItems,
+		})
+		return
+	}
 
 	response.Success(c, MemberLifecycleResponse{
 		Message:          "批量转移完成",
-		OrganizationID:   targetOrg.ID,
-		TransferredCount: transferredCount,
+		OrganizationID:   result.OrganizationID,
+		TransferredCount: result.TransferredCount,
 	})
-}
-
-// Helper function to extract user IDs from memberships
-func membershipIDsToUserIDs(memberships []*OrganizationMembership) []int64 {
-	userIDs := make([]int64, len(memberships))
-	for i, m := range memberships {
-		userIDs[i] = m.UserID
-	}
-	return userIDs
 }

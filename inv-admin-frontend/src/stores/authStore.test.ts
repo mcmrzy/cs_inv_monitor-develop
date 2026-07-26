@@ -9,6 +9,7 @@ const mockUser: User = {
   email: 'admin@csergy.com',
   nickname: 'Admin',
   avatar: '',
+  isSystemAdmin: true,
   role: Role.SUPER_ADMIN,
   status: 1,
   timezone: 'Asia/Shanghai',

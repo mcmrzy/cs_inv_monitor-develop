@@ -236,7 +236,7 @@ func (h *AlertRuleHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM alert_rules WHERE id=$1 AND `+alertRuleDataScope("alert_rules", middleware.GetRole(c), 2), id, middleware.GetUserID(c))
+	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM alert_rules WHERE id=$1 AND `+alertRuleDataScope("alert_rules", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2), id, middleware.GetUserID(c))
 	if err != nil {
 		response.Error(c, 500, "delete alert rule failed")
 		return

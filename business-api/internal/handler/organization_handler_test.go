@@ -52,7 +52,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_Success() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100) // Non-enduser role
+	setAuthClaimsInContext(c, 1, true, 100) // Non-enduser role
 
 	// Act
 	suite.callCreate(c)
@@ -70,7 +70,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_InvalidType() 
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callCreate(c)
@@ -88,7 +88,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_EnduserForbidd
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
-	setAuthClaimsInContext(c, 1, 5, 100) // Enduser role
+	setAuthClaimsInContext(c, 1, false, 100) // Enduser role
 
 	// Act
 	suite.callCreate(c)
@@ -106,7 +106,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_InvalidRequest
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callCreate(c)
@@ -126,7 +126,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_WithParentID()
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callCreate(c)
@@ -146,7 +146,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_ParentNotFound
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callCreate(c)
@@ -166,7 +166,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_ParentWrongTen
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callCreate(c)
@@ -185,7 +185,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_MissingTenantC
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
 	c.Set("user_id", 1)
-	c.Set("role", 1)
+	c.Set("is_system_admin", true)
 	// Missing root_tenant_id
 
 	// Act
@@ -203,7 +203,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_MissingTenantC
 func (suite *OrganizationHandlerTestSuite) TestListOrganizations_Success() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations?page=1&page_size=20", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callList(c)
@@ -216,7 +216,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_Success() {
 func (suite *OrganizationHandlerTestSuite) TestListOrganizations_WithTypeFilter() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations?type=agent", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callList(c)
@@ -229,7 +229,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_WithTypeFilter(
 func (suite *OrganizationHandlerTestSuite) TestListOrganizations_WithStatusFilter() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations?status=active", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callList(c)
@@ -242,7 +242,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_WithStatusFilte
 func (suite *OrganizationHandlerTestSuite) TestListOrganizations_PaginationDefaults() {
 	// Arrange - no pagination params
 	c, w := createTestGinContext("/api/v1/organizations", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callList(c)
@@ -256,7 +256,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_MissingTenantCo
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations", "GET", nil)
 	c.Set("user_id", 1)
-	c.Set("role", 1)
+	c.Set("is_system_admin", true)
 	// Missing root_tenant_id
 
 	// Act
@@ -270,7 +270,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_MissingTenantCo
 func (suite *OrganizationHandlerTestSuite) TestListOrganizations_SuperAdmin() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations", "GET", nil)
-	setAuthClaimsInContext(c, 1, 0, 100) // Super admin role
+	setAuthClaimsInContext(c, 1, true, 100) // Super admin
 
 	// Act
 	suite.callList(c)
@@ -287,7 +287,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_SuperAdmin() {
 func (suite *OrganizationHandlerTestSuite) TestGetOrganization_Success() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/1", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -301,7 +301,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_Success() {
 func (suite *OrganizationHandlerTestSuite) TestGetOrganization_InvalidID() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/abc", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
@@ -315,7 +315,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_InvalidID() {
 func (suite *OrganizationHandlerTestSuite) TestGetOrganization_NotFound() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/99999", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
@@ -329,7 +329,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_NotFound() {
 func (suite *OrganizationHandlerTestSuite) TestGetOrganization_AccessDenied() {
 	// Arrange - org exists but belongs to different tenant
 	c, w := createTestGinContext("/api/v1/organizations/1", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -343,7 +343,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_AccessDenied() {
 func (suite *OrganizationHandlerTestSuite) TestGetOrganization_WithChildren() {
 	// Arrange - org has child organizations
 	c, w := createTestGinContext("/api/v1/organizations/1", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -358,7 +358,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetOrganization_MissingTenantCont
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/1", "GET", nil)
 	c.Set("user_id", 1)
-	c.Set("role", 1)
+	c.Set("is_system_admin", true)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -380,7 +380,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_Success() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1", "PUT", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -398,7 +398,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_InvalidID() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/abc", "PUT", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
@@ -416,7 +416,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_InvalidRequest
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1", "PUT", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -434,7 +434,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_NotFound() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/99999", "PUT", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
@@ -452,7 +452,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_TenantScopeVio
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1", "PUT", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -471,7 +471,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_MissingTenantC
 
 	c, w := createTestGinContext("/api/v1/organizations/1", "PUT", req)
 	c.Set("user_id", 1)
-	c.Set("role", 1)
+	c.Set("is_system_admin", true)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -489,7 +489,7 @@ func (suite *OrganizationHandlerTestSuite) TestUpdateOrganization_MissingTenantC
 func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_Success() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/1", "DELETE", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -503,7 +503,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_Success() {
 func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_InvalidID() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/abc", "DELETE", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
@@ -517,7 +517,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_InvalidID() {
 func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_HasChildren() {
 	// Arrange - org has child organizations
 	c, w := createTestGinContext("/api/v1/organizations/1", "DELETE", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -531,7 +531,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_HasChildren() 
 func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_NotFound() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/99999", "DELETE", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
@@ -545,7 +545,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_NotFound() {
 func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_AlreadyDeleted() {
 	// Arrange - soft deleted org
 	c, w := createTestGinContext("/api/v1/organizations/1", "DELETE", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -560,7 +560,7 @@ func (suite *OrganizationHandlerTestSuite) TestDeleteOrganization_MissingTenantC
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/1", "DELETE", nil)
 	c.Set("user_id", 1)
-	c.Set("role", 1)
+	c.Set("is_system_admin", true)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -582,7 +582,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_Success() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/move", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -600,7 +600,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_InvalidID() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/abc/move", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
@@ -618,7 +618,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_CircularReferenc
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/move", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -636,7 +636,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_ParentNotFound()
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/move", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -654,7 +654,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_OrgNotInTenant()
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/move", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -672,7 +672,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_InvalidRequest()
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/move", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -691,7 +691,7 @@ func (suite *OrganizationHandlerTestSuite) TestMoveOrganization_MissingTenantCon
 
 	c, w := createTestGinContext("/api/v1/organizations/1/move", "POST", req)
 	c.Set("user_id", 1)
-	c.Set("role", 1)
+	c.Set("is_system_admin", true)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -713,7 +713,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_Success_Active() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/status", "PATCH", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -731,7 +731,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_Success_Disabled() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/status", "PATCH", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -749,7 +749,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_InvalidID() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/abc/status", "PATCH", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
@@ -767,7 +767,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_InvalidStatusValue()
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/status", "PATCH", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -785,7 +785,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_InvalidRequest() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/status", "PATCH", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -803,7 +803,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_NotFound() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/99999/status", "PATCH", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
@@ -821,7 +821,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_SameStatus() {
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations/1/status", "PATCH", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -840,7 +840,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_MissingTenantContext
 
 	c, w := createTestGinContext("/api/v1/organizations/1/status", "PATCH", req)
 	c.Set("user_id", 1)
-	c.Set("role", 1)
+	c.Set("is_system_admin", true)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -858,7 +858,7 @@ func (suite *OrganizationHandlerTestSuite) TestToggleStatus_MissingTenantContext
 func (suite *OrganizationHandlerTestSuite) TestGetTree_Success() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/1/tree", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -872,7 +872,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_Success() {
 func (suite *OrganizationHandlerTestSuite) TestGetTree_InvalidID() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/abc/tree", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "abc"}}
 
 	// Act
@@ -886,7 +886,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_InvalidID() {
 func (suite *OrganizationHandlerTestSuite) TestGetTree_NotFound() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/99999/tree", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "99999"}}
 
 	// Act
@@ -900,7 +900,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_NotFound() {
 func (suite *OrganizationHandlerTestSuite) TestGetTree_AccessDenied() {
 	// Arrange - org exists but belongs to different tenant
 	c, w := createTestGinContext("/api/v1/organizations/1/tree", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -914,7 +914,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_AccessDenied() {
 func (suite *OrganizationHandlerTestSuite) TestGetTree_LeafNode() {
 	// Arrange - org has no children
 	c, w := createTestGinContext("/api/v1/organizations/1/tree", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -928,7 +928,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_LeafNode() {
 func (suite *OrganizationHandlerTestSuite) TestGetTree_DeepHierarchy() {
 	// Arrange - org has multiple levels of descendants
 	c, w := createTestGinContext("/api/v1/organizations/1/tree", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -943,7 +943,7 @@ func (suite *OrganizationHandlerTestSuite) TestGetTree_MissingTenantContext() {
 	// Arrange
 	c, w := createTestGinContext("/api/v1/organizations/1/tree", "GET", nil)
 	c.Set("user_id", 1)
-	c.Set("role", 1)
+	c.Set("is_system_admin", true)
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 
 	// Act
@@ -966,7 +966,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_DuplicateName(
 	}
 
 	c, w := createTestGinContext("/api/v1/organizations", "POST", req)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callCreate(c)
@@ -979,7 +979,7 @@ func (suite *OrganizationHandlerTestSuite) TestCreateOrganization_DuplicateName(
 func (suite *OrganizationHandlerTestSuite) TestListOrganizations_EmptyResult() {
 	// Arrange - no organizations match criteria
 	c, w := createTestGinContext("/api/v1/organizations?status=inactive", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callList(c)
@@ -992,7 +992,7 @@ func (suite *OrganizationHandlerTestSuite) TestListOrganizations_EmptyResult() {
 func (suite *OrganizationHandlerTestSuite) TestListOrganizations_InvalidPageSize() {
 	// Arrange - pageSize > 100 should be capped
 	c, w := createTestGinContext("/api/v1/organizations?page_size=200", "GET", nil)
-	setAuthClaimsInContext(c, 1, 1, 100)
+	setAuthClaimsInContext(c, 1, true, 100)
 
 	// Act
 	suite.callList(c)

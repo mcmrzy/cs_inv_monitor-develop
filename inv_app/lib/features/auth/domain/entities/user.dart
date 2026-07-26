@@ -4,7 +4,8 @@ class User {
   final String? email;
   final String? nickname;
   final String? avatar;
-  final int role;
+  final bool isSystemAdmin;
+  final List<String> permissions;
   final int status;
   final DateTime? lastLoginAt;
   final DateTime createdAt;
@@ -16,7 +17,8 @@ class User {
     this.email,
     this.nickname,
     this.avatar,
-    required this.role,
+    this.isSystemAdmin = false,
+    this.permissions = const [],
     required this.status,
     this.lastLoginAt,
     required this.createdAt,
@@ -24,16 +26,18 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
-    // API 可能返回 role 为 int（旧格式）或 Map（新格式，含 role_id/role_key 等）
-    final roleRaw = json['role'];
-    final int roleId;
-    if (roleRaw is Map<String, dynamic>) {
-      roleId = (roleRaw['role_id'] as num?)?.toInt() ?? 0;
-    } else {
-      roleId = (roleRaw as num?)?.toInt() ?? 0;
+    final isSystemAdmin = json['is_system_admin'] == true ||
+        json['isSystemAdmin'] == true ||
+        (json['role'] is num && json['role'] == 0);
+
+    final permissionsRaw = json['permissions'];
+    final List<String> perms = [];
+    if (permissionsRaw is List) {
+      for (final p in permissionsRaw) {
+        if (p is String) perms.add(p);
+      }
     }
 
-    // status 同理，兼容 Map 和 int
     final statusRaw = json['status'];
     final int statusVal;
     if (statusRaw is Map<String, dynamic>) {
@@ -50,7 +54,8 @@ class User {
       email: json['email'] as String?,
       nickname: json['nickname'] as String?,
       avatar: json['avatar'] as String?,
-      role: roleId,
+      isSystemAdmin: isSystemAdmin,
+      permissions: perms,
       status: statusVal,
       lastLoginAt: json['last_login_at'] != null
           ? DateTime.tryParse(json['last_login_at'].toString())
@@ -71,7 +76,8 @@ class User {
       'email': email,
       'nickname': nickname,
       'avatar': avatar,
-      'role': role,
+      'is_system_admin': isSystemAdmin,
+      'permissions': permissions,
       'status': status,
       'last_login_at': lastLoginAt?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
@@ -80,16 +86,13 @@ class User {
   }
 
   String get roleName {
-    switch (role) {
-      case 0:
-        return 'Admin';
-      case 1:
-        return 'Agent';
-      case 2:
-        return 'Installer';
-      default:
-        return 'User';
-    }
+    if (isSystemAdmin) return 'System Admin';
+    return 'Member';
+  }
+
+  bool hasPermission(String code) {
+    if (isSystemAdmin) return true;
+    return permissions.contains(code);
   }
 }
 
@@ -98,16 +101,25 @@ class LoginResponse {
   final String? refreshToken;
   final User user;
   final DateTime expireAt;
+  final List<String> permissions;
 
   const LoginResponse({
     required this.token,
     this.refreshToken,
     required this.user,
     required this.expireAt,
+    this.permissions = const [],
   });
 
   factory LoginResponse.fromJson(Map<String, dynamic> json) {
     final expiresIn = (json['expires_in'] as num?)?.toInt();
+    final permsRaw = json['permissions'];
+    final List<String> perms = [];
+    if (permsRaw is List) {
+      for (final p in permsRaw) {
+        if (p is String) perms.add(p);
+      }
+    }
     return LoginResponse(
       token: (json['access_token'] ?? json['token'] ?? json['accessToken'])
               as String? ??
@@ -118,6 +130,7 @@ class LoginResponse {
           ? DateTime.tryParse(json['expire_at'].toString()) ??
               DateTime.now().add(Duration(seconds: expiresIn ?? 7200))
           : DateTime.now().add(Duration(seconds: expiresIn ?? 7200)),
+      permissions: perms,
     );
   }
 }

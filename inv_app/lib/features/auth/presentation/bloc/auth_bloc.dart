@@ -75,7 +75,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     if (token != null && userId != null) {
       String phone = await storageService.getUserPhone() ?? '';
-      int role = await storageService.getUserRole() ?? 3;
+      bool isSystemAdmin = await storageService.getIsSystemAdmin() ?? false;
+      List<String> permissions = await storageService.getPermissions();
       User? user;
 
       try {
@@ -85,7 +86,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           (u) {
             user = u;
             phone = u.phone;
-            role = u.role;
+            isSystemAdmin = u.isSystemAdmin;
+            permissions = u.permissions;
           },
         );
       } catch (_) {}
@@ -94,7 +96,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         AuthAuthenticated(
           userId: userId,
           phone: phone,
-          role: role,
+          isSystemAdmin: isSystemAdmin,
+          permissions: permissions,
           user: user,
         ),
       );
@@ -128,7 +131,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserPhone(response.user.phone);
-        await storageService.saveUserRole(response.user.role);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
 
         if (event.rememberPassword) {
           await storageService.saveRememberPassword(true);
@@ -144,7 +148,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           AuthAuthenticated(
             userId: response.user.id,
             phone: response.user.phone,
-            role: response.user.role,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
             user: response.user,
           ),
         );
@@ -182,13 +187,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserPhone(response.user.phone);
-        await storageService.saveUserRole(response.user.role);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
 
         emit(
           AuthAuthenticated(
             userId: response.user.id,
             phone: response.user.phone,
-            role: response.user.role,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
             user: response.user,
           ),
         );
@@ -210,7 +217,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await storageService.deleteRefreshToken();
     await storageService.deleteUserId();
     await storageService.deleteUserPhone();
-    await storageService.deleteUserRole();
+    await storageService.deleteIsSystemAdmin();
+    await storageService.deletePermissions();
 
     mqttService.disconnect();
     jpushService.unbindUser();
@@ -290,7 +298,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             AuthAuthenticated(
               userId: currentState.userId,
               phone: currentState.phone,
-              role: currentState.role,
+              isSystemAdmin: currentState.isSystemAdmin,
+              permissions: currentState.permissions,
               user: currentState.user,
             ),
           );
@@ -321,7 +330,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserPhone(response.user.phone);
-        await storageService.saveUserRole(response.user.role);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
 
         if (event.rememberPassword) {
           await storageService.saveRememberPassword(true);
@@ -337,7 +347,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           AuthAuthenticated(
             userId: response.user.id,
             phone: response.user.phone,
-            role: response.user.role,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
             user: response.user,
           ),
         );
@@ -376,13 +387,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await storageService.saveRefreshToken(response.refreshToken!);
         }
         await storageService.saveUserId(response.user.id);
-        await storageService.saveUserRole(response.user.role);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
 
         emit(
           AuthAuthenticated(
             userId: response.user.id,
             phone: response.user.phone,
-            role: response.user.role,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
             user: response.user,
           ),
         );
@@ -443,13 +456,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserPhone(response.user.phone);
-        await storageService.saveUserRole(response.user.role);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
 
         emit(
           AuthAuthenticated(
             userId: response.user.id,
             phone: response.user.phone,
-            role: response.user.role,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
             user: response.user,
           ),
         );
@@ -483,13 +498,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
         await storageService.saveUserId(response.user.id);
         await storageService.saveUserPhone(response.user.phone);
-        await storageService.saveUserRole(response.user.role);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
 
         emit(
           AuthAuthenticated(
             userId: response.user.id,
             phone: response.user.phone,
-            role: response.user.role,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
             user: response.user,
           ),
         );

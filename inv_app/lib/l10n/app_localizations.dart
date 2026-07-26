@@ -320,8 +320,6 @@ class AppLocalizations {
 
   // 角色
   String get roleAdmin => _localizedStrings['role_admin']!;
-  String get roleAgent => _localizedStrings['role_agent']!;
-  String get roleInstaller => _localizedStrings['role_installer']!;
   String get roleUser => _localizedStrings['role_user']!;
   String get overview => _localizedStrings['overview']!;
 

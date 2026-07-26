@@ -1,17 +1,4 @@
 
-export const ROLE_MAP: Record<string, string> = {
-  0: '超级管理员',
-  1: '管理员',
-  2: '运营商',
-  3: '经销商',
-  4: '安装商',
-  5: '终端用户',
-}
-
-export const ROLE_I18N_KEY: Record<string, string> = {
-  0: 'user.superAdmin', 1: 'user.admin', 2: 'user.operator',
-  3: 'user.dealer', 4: 'user.installer', 5: 'user.endUser',
-}
 
 export const DEVICE_STATUS_MAP: Record<string, { label: string; color: string; i18nKey: string }> = {
   0: { label: '离线', color: '#d9d9d9', i18nKey: 'common.offline' },
@@ -123,15 +110,6 @@ export const TASK_STATUS_MAP: Record<string, { label: string; color: string }> =
   completed: { label: '已完成', color: '#52c41a' },
   failed: { label: '失败', color: '#ff4d4f' },
   cancelled: { label: '已取消', color: '#faad14' },
-}
-
-export const ROLE_COLORS: Record<string, string> = {
-  0: '#eb2f96',
-  1: '#722ed1',
-  2: '#13c2c2',
-  3: '#fa8c16',
-  4: '#1677ff',
-  5: '#52c41a',
 }
 
 export const CHART_COLORS = ['#1677ff', '#52c41a', '#fa8c16', '#722ed1', '#eb2f96', '#13c2c2']

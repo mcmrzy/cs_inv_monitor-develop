@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"inv-api-server/internal/model"
+	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -60,17 +61,23 @@ func createTestGinContext(path string, method string, body interface{}) (*gin.Co
 	return c, w
 }
 
-// setAuthClaimsInContext sets fake auth claims in gin context
-func setAuthClaimsInContext(c *gin.Context, userID int64, role int, rootTenantID int64) {
+// setAuthClaimsInContext sets auth claims in gin context using the correct middleware keys.
+// isSystemAdmin maps to the "is_system_admin" bool key.
+// rootTenantID is embedded in an "actor_context" model.ActorContext value.
+func setAuthClaimsInContext(c *gin.Context, userID int64, isSystemAdmin bool, rootTenantID int64) {
 	c.Set("user_id", userID)
-	c.Set("role", role)
-	c.Set("root_tenant_id", rootTenantID)
+	c.Set("is_system_admin", isSystemAdmin)
+	c.Set("actor_context", model.ActorContext{
+		UserID:       userID,
+		RootTenantID: rootTenantID,
+	})
 }
 
-// setRoleOnlyInContext sets only the role in context (no user_id)
-func setRoleOnlyInContext(c *gin.Context, role int) {
-	gin.SetMode(gin.TestMode)
-	c.Set("role", role)
+// setAuthWithoutTenant sets user_id and is_system_admin but omits actor_context,
+// causing GetRootTenantID to return 0 (tenant context missing).
+func setAuthWithoutTenant(c *gin.Context, userID int64, isSystemAdmin bool) {
+	c.Set("user_id", userID)
+	c.Set("is_system_admin", isSystemAdmin)
 }
 
 // ============================================================================
@@ -79,22 +86,33 @@ func setRoleOnlyInContext(c *gin.Context, role int) {
 
 // assertHTTPError asserts that the response is an HTTP error with expected status and message
 func assertHTTPError(t *testing.T, w *httptest.ResponseRecorder, statusCode int, containsMsg string) {
+	t.Helper()
 	assert.Equal(t, statusCode, w.Code, "Expected HTTP status %d, got %d", statusCode, w.Code)
-	
-	if statusCode >= 400 {
-		var resp map[string]interface{}
-		err := decodeJSON(w, &resp)
-		assert.NoError(t, err, "Response should be valid JSON")
-		
-		if containsMsg != "" {
-			assert.Contains(t, w.Body.String(), containsMsg, "Response should contain message: %s", containsMsg)
-		}
+	if statusCode >= 400 && containsMsg != "" {
+		assert.Contains(t, w.Body.String(), containsMsg, "Response should contain message: %s", containsMsg)
 	}
 }
 
 // assertSuccess asserts that the response is successful
 func assertSuccess(t *testing.T, w *httptest.ResponseRecorder) {
+	t.Helper()
 	assert.Equal(t, http.StatusOK, w.Code, "Expected OK status, got %d", w.Code)
+}
+
+// assertBizResponse asserts the response has HTTP 200 and the expected business code.
+// response.Error and response.Success always return HTTP 200; the business code is in the JSON body.
+// For success, expectedCode should be 0. For errors, use the handler's business code (400, 403, 404, 409, etc.).
+// If containsMsg is non-empty, the response message must contain it.
+func assertBizResponse(t *testing.T, w *httptest.ResponseRecorder, expectedCode int, containsMsg string) {
+	t.Helper()
+	assert.Equal(t, http.StatusOK, w.Code, "Expected HTTP 200 for response.Error/Success")
+	var resp response.Response
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(t, err, "Response should be valid JSON")
+	assert.Equal(t, expectedCode, resp.Code, "Expected business code %d, got %d (body: %s)", expectedCode, resp.Code, w.Body.String())
+	if containsMsg != "" {
+		assert.Contains(t, resp.Message, containsMsg, "Response message should contain: %s", containsMsg)
+	}
 }
 
 // ============================================================================

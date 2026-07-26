@@ -12,12 +12,12 @@ import {
   ReloadOutlined, PlusOutlined, StopOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
 
-import { adminApi, type Tenant } from '@/services/adminApi'
+import { adminApi, type Tenant, type OrgPermissionGrant } from '@/services/adminApi'
+import { channelApi, type Organization } from '@/services/channelApi'
 import useAuthStore from '@/stores/authStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
 import useTranslation from '@/hooks/useTranslation'
-import { Role } from '@/types'
 import { queryKeys } from '@/utils/queryKeys'
 import ChannelManagement from './ChannelManagement'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
@@ -27,9 +27,9 @@ const { Title, Text } = Typography
 const AdminPage: React.FC = () => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
-  const [activeTab, setActiveTab] = useState('tenants')
+  const [activeTab, setActiveTab] = useState('channels')
 
-  if (user?.role !== Role.SUPER_ADMIN) {
+  if (!user?.isSystemAdmin) {
     return (
       <Card bordered={false} style={{ borderRadius: 12 }}>
         <Title level={4}>{t('admin.title')}</Title>
@@ -42,12 +42,11 @@ const AdminPage: React.FC = () => {
     <div>
       <Title level={4} style={{ marginBottom: 16 }}>{t('admin.title')}</Title>
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
-        { key: 'tenants', label: t('admin.tenantManage'), children: <TenantTab /> },
+        { key: 'channels', label: t('channel.title'), children: <ChannelManagement /> },
         { key: 'settings', label: t('admin.systemConfig'), children: <SettingsTab /> },
         { key: 'quotas', label: t('admin.systemQuota'), children: <QuotaTab /> },
         { key: 'permissions', label: t('admin.permissionConfig'), children: <PermissionTab /> },
         { key: 'api-overview', label: t('admin.apiOverview'), children: <APIOverviewTab onNavigateToPermissions={() => setActiveTab('permissions')} /> },
-        { key: 'channels', label: t('channel.title'), children: <ChannelManagement /> },
       ]} />
     </div>
   )
@@ -333,36 +332,63 @@ const ALL_PERMISSION_DEFS = [
   { resource: 'audit', action: 'view', label: 'admin.perm.audit.view' },
   { resource: 'admin', action: 'view', label: 'admin.perm.admin.view' }, { resource: 'admin', action: 'manage', label: 'admin.perm.admin.manage' },
 ]
-const ROLE_TABS = [
-  { key: '0', label: 'admin.superAdminRole' },
-  { key: '1', label: 'admin.adminRole' },
-  { key: '2', label: 'admin.operatorRole' },
-  { key: '3', label: 'admin.dealerRole' },
-  { key: '4', label: 'admin.installerRole' },
-  { key: '5', label: 'admin.endUserRole' },
+const ROLE_CODE_TABS = [
+  { key: 'org_admin', label: 'admin.role.orgAdmin' },
+  { key: 'channel_manager', label: 'admin.role.channelManager' },
+  { key: 'operator', label: 'admin.role.operator' },
+  { key: 'installer', label: 'admin.role.installer' },
+  { key: 'after_sales', label: 'admin.role.afterSales' },
+  { key: 'viewer', label: 'admin.role.viewer' },
+  { key: 'finance', label: 'admin.role.finance' },
+  { key: 'api_client', label: 'admin.role.apiClient' },
 ]
 
 const PermissionTab: React.FC = () => {
   const { t } = useTranslation()
   const { message } = App.useApp()
-  const [selectedRole, setSelectedRole] = useState<string>('1')
+  const queryClient = useQueryClient()
+  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
+  const [selectedRoleCode, setSelectedRoleCode] = useState<string>('org_admin')
   const [permissions, setPermissions] = useState<Record<string, Set<string>>>({})
   const [originalPermissions, setOriginalPermissions] = useState<Record<string, Set<string>>>({})
   const [saving, setSaving] = useState(false)
 
+  // Load organization list
+  const { data: orgs, isLoading: orgsLoading } = useQuery({
+    queryKey: queryKeys.channels.organizations(),
+    queryFn: () => channelApi.getOrganizations().then((r) => {
+      const data = (r.data?.data ?? r.data) as Organization[]
+      return Array.isArray(data) ? data : []
+    }),
+  })
+
+  // Flatten orgs for the selector
+  const flatOrgs: { id: number; name: string; type: string }[] = []
+  const collectOrgs = (list: Organization[]) => {
+    for (const org of list) {
+      flatOrgs.push({ id: org.id, name: org.name, type: org.type })
+      if (org.children) collectOrgs(org.children)
+    }
+  }
+  if (orgs) collectOrgs(orgs)
+
+  // Load permission grants for selected org + role_code
   const { isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.admin.permissions(Number(selectedRole)),
-    queryFn: () => adminApi.getRolePermissions(Number(selectedRole)).then((r) => {
-      const items = (r.data?.data ?? r.data ?? []) as { resource: string; action: string; is_allowed: boolean }[]
+    queryKey: queryKeys.admin.orgRolePermissions(selectedOrgId ?? 0, selectedRoleCode),
+    queryFn: () => adminApi.getOrgRolePermissions(selectedOrgId!, selectedRoleCode).then((r) => {
+      const items = (r.data?.data ?? r.data ?? []) as OrgPermissionGrant[]
       const permSet: Record<string, Set<string>> = {}
       for (const item of items) {
-        if (!permSet[item.resource]) permSet[item.resource] = new Set()
-        if (item.is_allowed) permSet[item.resource].add(item.action)
+        const [resource, action] = item.permission_code.split(':')
+        if (!resource || !action) continue
+        if (!permSet[resource]) permSet[resource] = new Set()
+        permSet[resource].add(action)
       }
       setPermissions(permSet)
       setOriginalPermissions(structuredClone(permSet))
       return permSet
     }),
+    enabled: !!selectedOrgId,
   })
 
   const handleToggle = (resource: string, action: string, checked: boolean) => {
@@ -386,12 +412,18 @@ const PermissionTab: React.FC = () => {
   }
 
   const handleSave = async () => {
-    const permList = ALL_PERMISSION_DEFS.map((def) => ({ ...def, is_allowed: permissions[def.resource]?.has(def.action) ?? false }))
+    if (!selectedOrgId) return
+    const permList = ALL_PERMISSION_DEFS.map((def) => ({
+      permission_code: `${def.resource}:${def.action}`,
+      data_scope: 'organization_and_descendants',
+      is_allowed: permissions[def.resource]?.has(def.action) ?? false,
+    }))
     setSaving(true)
     try {
-      await adminApi.updateRolePermissions(Number(selectedRole), { permissions: permList })
+      await adminApi.updateOrgRolePermissions(selectedOrgId, selectedRoleCode, { permissions: permList })
       message.success(t('admin.permissionSaveSuccess'))
       setOriginalPermissions(structuredClone(permissions))
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.orgRolePermissions(selectedOrgId, selectedRoleCode) })
     } catch { message.error(t('admin.permissionSaveFailed')) }
     finally { setSaving(false) }
   }
@@ -404,23 +436,33 @@ const PermissionTab: React.FC = () => {
 
   return (
     <div>
-      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
       <Card size="small" bordered={false} style={{ marginBottom: 16, borderRadius: 12 }}>
         <Row justify="space-between" align="middle">
           <Col>
             <Space>
-              <span style={{ fontWeight: 500 }}>{t('admin.selectRole')}：</span>
-              <Select value={selectedRole} virtual={false} onChange={(val) => {
-                if (hasChanged()) Modal.confirm({ title: t('admin.unsavedChanges'), content: t('admin.unsavedHint'), onOk: () => setSelectedRole(val) })
-                else setSelectedRole(val)
-              }} style={{ width: 160 }} options={ROLE_TABS.map((r) => ({ label: t(r.label), value: r.key }))} />
+              <span style={{ fontWeight: 500 }}>{t('admin.selectOrganization')}:</span>
+              <Select
+                loading={orgsLoading}
+                placeholder={t('admin.selectOrganization')}
+                style={{ width: 240 }}
+                value={selectedOrgId ?? undefined}
+                onChange={(val) => { setSelectedOrgId(val) }}
+                options={flatOrgs.map((o) => ({ label: `${o.name} (${o.type})`, value: o.id }))}
+                showSearch
+                optionFilterProp="label"
+              />
+              <span style={{ fontWeight: 500 }}>{t('admin.selectRole')}:</span>
+              <Select value={selectedRoleCode} virtual={false} onChange={(val) => {
+                if (hasChanged()) Modal.confirm({ title: t('admin.unsavedChanges'), content: t('admin.unsavedHint'), onOk: () => setSelectedRoleCode(val) })
+                else setSelectedRoleCode(val)
+              }} style={{ width: 180 }} options={ROLE_CODE_TABS.map((r) => ({ label: t(r.label), value: r.key }))} />
             </Space>
           </Col>
-          <Col><Button type="primary" onClick={handleSave} loading={saving} disabled={!hasChanged()}>{t('admin.savePermissions')}</Button></Col>
+          <Col><Button type="primary" onClick={handleSave} loading={saving} disabled={!selectedOrgId || !hasChanged()}>{t('admin.savePermissions')}</Button></Col>
         </Row>
       </Card>
-      {selectedRole === '0' ? (
-        <Card bordered={false} style={{ borderRadius: 12 }}><div style={{ textAlign: 'center', padding: 24, color: '#999', fontSize: 16 }}>{t('admin.superAdminHint')}</div></Card>
+      {!selectedOrgId ? (
+        <Card bordered={false} style={{ borderRadius: 12 }}><div style={{ textAlign: 'center', padding: 24, color: '#999', fontSize: 16 }}>{t('admin.selectOrgHint')}</div></Card>
       ) : (
         <Spin spinning={isLoading}>
           <Row gutter={[16, 16]}>

@@ -2,12 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   parseFaultCode,
   getAlarmLevelDisplay,
-  ROLE_MAP,
   DEVICE_STATUS_MAP,
   ALARM_LEVEL_MAP,
   ALARM_CODE_LEVEL,
   ALARM_CODE_MESSAGE,
-  ROLE_COLORS,
 } from './constants'
 
 describe('parseFaultCode', () => {
@@ -67,15 +65,6 @@ describe('getAlarmLevelDisplay', () => {
 })
 
 describe('Constants maps', () => {
-  it('ROLE_MAP should cover the complete database role contract', () => {
-    expect(ROLE_MAP['0']).toBe('超级管理员')
-    expect(ROLE_MAP['1']).toBe('管理员')
-    expect(ROLE_MAP['2']).toBe('运营商')
-    expect(ROLE_MAP['3']).toBe('经销商')
-    expect(ROLE_MAP['4']).toBe('安装商')
-    expect(ROLE_MAP['5']).toBe('终端用户')
-  })
-
   it('DEVICE_STATUS_MAP should cover numeric and string statuses', () => {
     expect(DEVICE_STATUS_MAP['0'].label).toBe('离线')
     expect(DEVICE_STATUS_MAP['1'].label).toBe('在线')
@@ -102,7 +91,4 @@ describe('Constants maps', () => {
     expect(ALARM_CODE_MESSAGE[1]).toBe('逆变器过温保护')
   })
 
-  it('ROLE_COLORS should have one color for every database role', () => {
-    expect(Object.keys(ROLE_COLORS)).toEqual(['0', '1', '2', '3', '4', '5'])
-  })
 })

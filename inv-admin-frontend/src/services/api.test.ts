@@ -31,7 +31,7 @@ describe('Request Interceptor - Token Injection', () => {
   it('should add Authorization header when token exists', async () => {
     useAuthStore.getState().login('test-token', 'refresh', {
       id: '1', phone: '', email: '', nickname: '', avatar: '',
-      role: 0, status: 1, timezone: '', lastLoginAt: '', createdAt: '',
+      isSystemAdmin: true, role: 0, status: 1, timezone: '', lastLoginAt: '', createdAt: '',
     })
 
     server.use(
@@ -66,7 +66,7 @@ describe('Response Interceptor - 401 Token Refresh', () => {
   it('should attempt token refresh on 401 response', async () => {
     useAuthStore.getState().login('expired-token', 'valid-refresh', {
       id: '1', phone: '', email: '', nickname: '', avatar: '',
-      role: 0, status: 1, timezone: '', lastLoginAt: '', createdAt: '',
+      isSystemAdmin: true, role: 0, status: 1, timezone: '', lastLoginAt: '', createdAt: '',
     })
 
     let requestCount = 0
@@ -95,7 +95,7 @@ describe('Response Interceptor - 401 Token Refresh', () => {
   it('should redirect to login when refresh fails', async () => {
     useAuthStore.getState().login('expired-token', 'bad-refresh', {
       id: '1', phone: '', email: '', nickname: '', avatar: '',
-      role: 0, status: 1, timezone: '', lastLoginAt: '', createdAt: '',
+      isSystemAdmin: true, role: 0, status: 1, timezone: '', lastLoginAt: '', createdAt: '',
     })
 
     server.use(

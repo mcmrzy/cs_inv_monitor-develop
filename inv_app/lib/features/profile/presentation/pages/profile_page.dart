@@ -48,16 +48,16 @@ class _ProfilePageState extends State<ProfilePage> {
         },
         builder: (context, state) {
           String phone = '';
-          int role = 5;
+          bool isSystemAdmin = false;
           if (state is AuthAuthenticated) {
             phone = state.phone;
-            role = state.role;
+            isSystemAdmin = state.isSystemAdmin;
           }
           final isLoading = state is AuthLoading || state is AuthInitial;
 
           return ListView(
             children: [
-              _buildHeader(phone, role, isLoading, l10n),
+              _buildHeader(phone, isSystemAdmin, isLoading, l10n),
               _buildMenuSection(context),
               _buildLogoutButton(context, l10n),
             ],
@@ -69,21 +69,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildHeader(
     String phone,
-    int role,
+    bool isSystemAdmin,
     bool isLoading,
     AppLocalizations l10n,
   ) {
-    String roleText;
-    switch (role) {
-      case 0:
-        roleText = l10n.roleAdmin;
-      case 1:
-        roleText = l10n.roleAgent;
-      case 2:
-        roleText = l10n.roleInstaller;
-      default:
-        roleText = l10n.roleUser;
-    }
+    final roleText = isSystemAdmin ? l10n.roleAdmin : l10n.roleUser;
 
     final displayName = phone.isNotEmpty ? phone : l10n.loggedIn;
 

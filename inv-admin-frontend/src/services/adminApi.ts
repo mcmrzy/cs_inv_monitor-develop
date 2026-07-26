@@ -37,6 +37,16 @@ export interface Tenant {
   lastLoginAt: string
 }
 
+export interface OrgRoleInfo {
+  role_code: string
+  active: boolean
+}
+
+export interface OrgPermissionGrant {
+  permission_code: string
+  data_scope: string
+}
+
 export const adminApi = {
   getAuditLogs: (params?: any) => api.get('/admin/logs', { params, expectedDataShape: 'page' }),
   exportAuditLogs: (params?: any) => api.get('/admin/logs/export', { params, responseType: 'blob' }),
@@ -44,16 +54,25 @@ export const adminApi = {
   getSystemConfig: () => api.get('/admin/system-config', { expectedDataShape: 'object' }),
   updateSystemConfig: (data: any) => api.patch('/admin/system-config', data),
 
+  // Tenant management (legacy, will be deprecated in favor of organization APIs)
   getTenants: (params?: any) => api.get('/admin/tenants', { params, expectedDataShape: 'page' }),
   createTenant: (data: any) => api.post('/admin/tenants', data),
   updateTenant: (id: number, data: any) => api.patch(`/admin/tenants/${id}`, data),
   toggleTenant: (id: number) => api.post(`/admin/tenants/${id}/toggle`),
   getMetrics: () => api.get('/admin/metrics', { expectedDataShape: 'object' }),
 
+  // Legacy role-based permissions (deprecated)
   getAllPermissions: () => api.get('/admin/permissions', { expectedDataShape: 'array' }),
   getRolePermissions: (role: number) => api.get(`/admin/permissions/${role}`, { expectedDataShape: 'array' }),
   updateRolePermissions: (role: number, data: any) => api.put(`/admin/permissions/${role}`, data),
   togglePermission: (role: number, data: any) => api.post(`/admin/permissions/${role}/toggle`, data),
   getRouteGroups: () => api.get('/admin/route-groups', { expectedDataShape: 'object' }),
   getOperationStats: () => api.get('/admin/operation-stats', { expectedDataShape: 'object' }),
+
+  // Organization-based role permission management (new)
+  getAllPermissionCodes: () => api.get('/admin/permission-codes', { expectedDataShape: 'array' }),
+  getOrgRoles: (orgId: number) => api.get(`/admin/organizations/${orgId}/roles`, { expectedDataShape: 'array' }),
+  getOrgRolePermissions: (orgId: number, roleCode: string) => api.get(`/admin/organizations/${orgId}/role-permissions/${roleCode}`, { expectedDataShape: 'array' }),
+  updateOrgRolePermissions: (orgId: number, roleCode: string, data: { permissions: { permission_code: string; data_scope: string; is_allowed: boolean }[] }) =>
+    api.put(`/admin/organizations/${orgId}/role-permissions/${roleCode}`, data),
 }

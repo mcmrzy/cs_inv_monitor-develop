@@ -200,7 +200,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 
 	organizationHandler := handler.NewOrganizationHandler(db)
 	jobStore := job.NewJobStore(rdb)
-	memberLifecycleHandler := handler.NewMemberLifecycleHandler(db, rdb, jobStore)
+	memberLifecycleRepo := repository.NewMemberLifecycleRepository(db, rdb, userRepo)
+	memberLifecycleService := service.NewMemberLifecycleService(memberLifecycleRepo, jobStore)
+	memberLifecycleHandler := handler.NewMemberLifecycleHandler(memberLifecycleService)
 	deviceClaimTransferHandler := handler.NewDeviceClaimTransferHandler(db, permChecker, jwtService, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
 	
 	// Task 11 & 12: Pipeline health and DLQ handlers
@@ -947,14 +949,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		{
 			adminGroup.GET("/users", deps.AdminHandler.ListUsers)
 			adminGroup.GET("/users/:id", deps.AdminHandler.GetUser)
-			adminGroup.PUT("/users/:id/role", deps.AdminHandler.UpdateUserRole)
 			adminGroup.PUT("/users/:id/toggle", deps.AdminHandler.ToggleUserStatus)
-
-			adminGroup.GET("/permissions", deps.AdminHandler.ListRolePermissions)
-			adminGroup.PUT("/permissions", deps.AdminHandler.UpdatePermission)
-			adminGroup.GET("/permissions/:role", deps.AdminHandler.ListRolePermissions)
-			adminGroup.PUT("/permissions/:role", deps.AdminHandler.UpdateRolePermissions)
-			adminGroup.POST("/permissions/:role/toggle", deps.AdminHandler.TogglePermission)
 
 			adminGroup.GET("/models", deps.AdminHandler.ListAllModels)
 
@@ -964,12 +959,15 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			adminGroup.GET("/system-config", deps.AdminHandler.GetSystemConfig)
 			adminGroup.PATCH("/system-config", deps.AdminHandler.UpdateSystemConfig)
 			adminGroup.POST("/push-announcement", deps.NotificationHandler.PushAnnouncement)
-			adminGroup.GET("/tenants", deps.AdminHandler.ListTenants)
-			adminGroup.POST("/tenants", deps.AdminHandler.CreateTenant)
-			adminGroup.PATCH("/tenants/:id", deps.AdminHandler.UpdateTenant)
-			adminGroup.POST("/tenants/:id/toggle", deps.AdminHandler.ToggleTenant)
+
 			adminGroup.GET("/metrics", deps.AdminHandler.GetMetrics)
 			adminGroup.GET("/operation-stats", deps.AdminHandler.GetOperationStats)
+
+			// Organization-based role permission management
+			adminGroup.GET("/permission-codes", deps.AdminHandler.ListAllPermissionCodes)
+			adminGroup.GET("/organizations/:orgId/roles", deps.AdminHandler.ListOrgRoles)
+			adminGroup.GET("/organizations/:orgId/role-permissions/:roleCode", deps.AdminHandler.ListOrgRolePermissions)
+			adminGroup.PUT("/organizations/:orgId/role-permissions/:roleCode", deps.AdminHandler.UpdateOrgRolePermissions)
 		}
 
 		usersGroup := api.Group("/users").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
@@ -978,9 +976,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			usersGroup.GET("/:id", deps.AdminHandler.GetUser)
 			usersGroup.PATCH("/:id", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUser)
 			usersGroup.GET("/:id/children", deps.AdminHandler.GetUserChildren)
-			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
-			usersGroup.PUT("/:id/parent", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserParent)
 			usersGroup.PUT("/:id/password", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ResetUserPassword)
 		}
 

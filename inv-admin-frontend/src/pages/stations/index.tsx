@@ -21,7 +21,6 @@ import dayjs from 'dayjs'
 import api from '@/services/api'
 import { deviceApi } from '@/services/deviceApi'
 import useAuthStore from '@/stores/authStore'
-import { Role } from '@/types'
 import { ALARM_LEVEL_MAP, DEVICE_STATUS_MAP, getAlarmLevelDisplay, getAlarmMessageI18nKey } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
 import { formatInTimezone, TIMEZONE_LIST, getTimezoneLabel } from '@/utils/timezone'
@@ -124,7 +123,7 @@ const StationsPage: React.FC = () => {
   const { t } = useTranslation()
   const { lang } = useLocaleStore()
   const { timezone } = useTimezoneStore()
-  const isAdmin = user && (user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN)
+  const isAdmin = user && (user.isSystemAdmin || hasPermission('stations:manage'))
 
   /* ---------- 详情抽屉 ---------- */
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -147,7 +146,7 @@ const StationsPage: React.FC = () => {
   /* ---------- 添加设备弹窗 ---------- */
   const [addDeviceModalOpen, setAddDeviceModalOpen] = useState(false)
   const [addDeviceSn, setAddDeviceSn] = useState('')
-  const isSuperAdmin = user?.role === Role.SUPER_ADMIN
+  const isSuperAdmin = user?.isSystemAdmin
 
   /* ---------- 设备筛选 ---------- */
   const [deviceKeyword, setDeviceKeyword] = useState('')
