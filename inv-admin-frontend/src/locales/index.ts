@@ -20,6 +20,7 @@ import protocol from './protocol'
 import deviceDetail from './deviceDetail'
 import channels from './channels'
 import system from './system'
+import bulk from './bulk'
 
 const merge = (...objs: Record<string, string>[]) => Object.assign({}, ...objs)
 
@@ -46,6 +47,7 @@ const locales: Record<Lang, Record<string, string>> = {
     deviceDetail.zh,
     channels.zh,
     system.zh,
+    bulk.zh,
   ),
   en: merge(
     common.en,
@@ -69,6 +71,7 @@ const locales: Record<Lang, Record<string, string>> = {
     deviceDetail.en,
     channels.en,
     system.en,
+    bulk.en,
   ),
 }
 

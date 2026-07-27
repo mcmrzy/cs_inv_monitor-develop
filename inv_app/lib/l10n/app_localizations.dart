@@ -292,6 +292,19 @@ class AppLocalizations {
   String get notificationSettings =>
       _localizedStrings['notification_settings']!;
   String get deviceShare => _localizedStrings['device_share']!;
+  String get editProfile => _localizedStrings['edit_profile']!;
+  String get uploadSuccess => _localizedStrings['upload_success']!;
+  String get uploadFailed => _localizedStrings['upload_failed']!;
+  String get imageOnly => _localizedStrings['image_only']!;
+  String get sizeLimit => _localizedStrings['size_limit']!;
+  String get changeAvatar => _localizedStrings['change_avatar']!;
+  String get personalInfo => _localizedStrings['personal_info']!;
+  String get locationInfo => _localizedStrings['location_info']!;
+  String get aboutMe => _localizedStrings['about_me']!;
+  String get nickname => _localizedStrings['nickname']!;
+  String get country => _localizedStrings['country']!;
+  String get region => _localizedStrings['region']!;
+  String get bio => _localizedStrings['bio']!;
 
   // 设置
   String get languageSwitch => _localizedStrings['language_switch']!;

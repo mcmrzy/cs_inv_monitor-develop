@@ -60,6 +60,8 @@ import 'package:inv_app/features/profile/presentation/pages/settings_page.dart';
 
 import 'package:inv_app/features/profile/presentation/pages/change_password_page.dart';
 
+import 'package:inv_app/features/profile/presentation/pages/edit_profile_page.dart';
+
 import 'package:inv_app/features/profile/presentation/pages/about_page.dart';
 
 import 'package:inv_app/features/profile/presentation/pages/notify_settings_page.dart';
@@ -296,6 +298,12 @@ class AppRouter {
         name: 'changePassword',
         pageBuilder: (context, state) =>
             _slidePage(state, const ChangePasswordPage()),
+      ),
+      GoRoute(
+        path: '/edit-profile',
+        name: 'editProfile',
+        pageBuilder: (context, state) =>
+            _slidePage(state, const EditProfilePage()),
       ),
       GoRoute(
         path: '/about',

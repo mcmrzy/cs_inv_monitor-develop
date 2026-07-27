@@ -382,7 +382,7 @@ const LoginPage: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '16px 24px' }}>
             <Dropdown menu={langMenu} placement="bottomRight">
               <Button type="text" icon={<GlobalOutlined style={{ fontSize: 18 }} />} style={{ color: '#64748b', fontSize: 15, height: 40, padding: '0 14px' }}>
-                {lang === 'zh' ? '中文' : 'English'}
+                {lang === 'zh' ? 'English' : '中文'}
               </Button>
             </Dropdown>
           </div>

@@ -6,7 +6,7 @@ import useTranslation from '@/hooks/useTranslation'
 const { Text } = Typography
 
 const ResetSection: React.FC = () => {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { t } = useTranslation()
 
   return (
@@ -18,7 +18,7 @@ const ResetSection: React.FC = () => {
         danger
         size="large"
         onClick={() => {
-          Modal.confirm({
+          modal.confirm({
             title: t('remote.resetConfirmTitle'),
             icon: <ExclamationCircleOutlined />,
             content: t('remote.resetConfirmContent'),

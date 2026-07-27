@@ -7,7 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -64,14 +64,14 @@ class _StationDetailPageState extends State<StationDetailPage>
     context
         .read<StationBloc>()
         .add(StationDetailRequested(stationId: widget.stationId));
-    final mqtt = getIt<MQTTService>();
-    _statusSub = mqtt.statusStream.listen((_) {
+    final realtimeService = getIt<RealtimeDataService>();
+    _statusSub = realtimeService.statusStream.listen((_) {
       if (!mounted) return;
       context
           .read<StationBloc>()
           .add(StationDetailRequested(stationId: widget.stationId));
     });
-    _alarmSub = mqtt.alarmStream.listen((_) {
+    _alarmSub = realtimeService.alarmStream.listen((_) {
       if (!mounted) return;
       context
           .read<StationBloc>()
@@ -195,15 +195,15 @@ class _StationDetailPageState extends State<StationDetailPage>
     }
     _mqttActive = true;
 
-    final mqtt = getIt<MQTTService>();
+    final realtimeService = getIt<RealtimeDataService>();
     for (final d in devices) {
       final sn = d['sn'] as String?;
       if (sn == null || sn.isEmpty || _mqttSubscribed.contains(sn)) continue;
       _mqttSubscribed.add(sn);
-      mqtt.subscribeDeviceTopics(sn);
+      realtimeService.startPolling(sn);
     }
 
-    _mqttSub = mqtt.realtimeDataStream.listen(_onMQTTData);
+    _mqttSub = realtimeService.realtimeDataStream.listen(_onMQTTData);
   }
 
   void _onMQTTData(InverterRealtime data) {
@@ -218,9 +218,9 @@ class _StationDetailPageState extends State<StationDetailPage>
     var hasAc = false;
     var hasBatt = false;
 
-    final mqtt = getIt<MQTTService>();
+    final realtimeService = getIt<RealtimeDataService>();
     for (final sn in _mqttSubscribed) {
-      final rt = mqtt.getLatestData(sn);
+      final rt = realtimeService.getLatestData(sn);
       if (rt == null) continue;
       if (rt.pv != null) {
         pvSum += rt.pv!.pvPower;

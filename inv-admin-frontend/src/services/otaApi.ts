@@ -3,15 +3,15 @@ import type { PublishPackageRequest } from '@/types'
 
 export const otaApi = {
   // 固件管理
-  listFirmware: (params?: any) => api.get('/firmwares', { params, expectedDataShape: 'array' }),
-  getFirmwares: (params?: any) => api.get('/firmwares', { params, expectedDataShape: 'array' }),
+  listFirmware: (params?: any) => api.get('/ota/firmware', { params, expectedDataShape: 'array' }),
+  getFirmwares: (params?: any) => api.get('/ota/firmware', { params, expectedDataShape: 'array' }),
   uploadFirmware: (formData: FormData) =>
-    api.post('/firmwares', formData, {
+    api.post('/ota/firmware', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  createFirmware: (data: any) => api.post('/firmwares', data),
-  deleteFirmware: (id: string | number) => api.delete(`/firmwares/${id}`),
-  getAllFirmware: () => api.get('/firmwares', { params: { page_size: 9999 }, expectedDataShape: 'array' }),
+  createFirmware: (data: any) => api.post('/ota/firmware', data),
+  deleteFirmware: (id: string | number) => api.delete(`/ota/firmware/${id}`),
+  getAllFirmware: () => api.get('/ota/firmware', { params: { page_size: 9999 }, expectedDataShape: 'array' }),
 
   // 升级管理（替代旧 /tasks）
   getUpgradeDashboard: (params?: any) => api.get('/ota/upgrades/dashboard', { params, expectedDataShape: 'object' }),

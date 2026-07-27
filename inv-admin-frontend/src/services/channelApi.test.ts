@@ -1,0 +1,259 @@
+import { describe, it, expect } from 'vitest'
+import { http, HttpResponse } from 'msw'
+import { server } from '@/test/mocks/server'
+import { channelApi } from './channelApi'
+
+const mockOrganizations = [
+  { id: 1, name: 'Test Org 1', type: 'distributor', status: 'active', member_count: 10 },
+  { id: 2, name: 'Test Org 2', type: 'installer', status: 'active', member_count: 5 },
+]
+
+const mockMembers = {
+  items: [
+    { id: 1, user_id: 101, organization_id: 1, role: 'admin', status: 'active', email: 'admin@test.com' },
+    { id: 2, user_id: 102, organization_id: 1, role: 'member', status: 'active', email: 'member@test.com' },
+  ],
+  total: 2,
+  page: 1,
+  page_size: 20,
+}
+
+const mockInvitations = {
+  items: [
+    { id: 1, organization_id: 1, email: 'invite@test.com', role_name: 'member', status: 'pending' },
+  ],
+  total: 1,
+  page: 1,
+  page_size: 20,
+}
+
+describe('channelApi', () => {
+  describe('Organization Management', () => {
+    it('getOrganizations should return organization list', async () => {
+      server.use(
+        http.get('/api/v1/organizations', () => {
+          return HttpResponse.json({ code: 0, data: mockOrganizations })
+        }),
+      )
+      const res = await channelApi.getOrganizations()
+      const data = res.data?.data ?? res.data
+      expect(data).toHaveLength(2)
+    })
+
+    it('getOrganization should return single organization', async () => {
+      server.use(
+        http.get('/api/v1/organizations/:id', ({ params }) => {
+          const org = mockOrganizations.find((o) => o.id === Number(params.id))
+          return HttpResponse.json({ code: 0, data: org })
+        }),
+      )
+      const res = await channelApi.getOrganization(1)
+      expect(res.data.code).toBe(0)
+    })
+
+    it('createOrganization should create new organization', async () => {
+      server.use(
+        http.post('/api/v1/organizations', async ({ request }) => {
+          const body = (await request.json()) as any
+          return HttpResponse.json({ code: 0, data: { id: 3, ...body } })
+        }),
+      )
+      const res = await channelApi.createOrganization({ name: 'New Org', type: 'dealer' })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('updateOrganization should update organization', async () => {
+      server.use(
+        http.put('/api/v1/organizations/:id', async ({ request }) => {
+          const body = (await request.json()) as any
+          return HttpResponse.json({ code: 0, data: { id: 1, ...body } })
+        }),
+      )
+      const res = await channelApi.updateOrganization(1, { name: 'Updated Org' })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('deleteOrganization should delete organization', async () => {
+      server.use(
+        http.delete('/api/v1/organizations/:id', () => {
+          return HttpResponse.json({ code: 0, message: 'deleted' })
+        }),
+      )
+      const res = await channelApi.deleteOrganization(1)
+      expect(res.data.code).toBe(0)
+    })
+
+    it('toggleOrganization should use PATCH /organizations/:id/status', async () => {
+      let requestMethod = ''
+      let requestPath = ''
+      server.use(
+        http.patch('/api/v1/organizations/:id/status', ({ request, params }) => {
+          requestMethod = request.method
+          requestPath = `/api/v1/organizations/${params.id}/status`
+          return HttpResponse.json({ code: 0, data: { id: params.id, status: 'disabled' } })
+        }),
+      )
+      const res = await channelApi.toggleOrganization(1)
+      expect(requestMethod).toBe('PATCH')
+      expect(requestPath).toBe('/api/v1/organizations/1/status')
+      expect(res.data.code).toBe(0)
+    })
+  })
+
+  describe('Member Management', () => {
+    it('getOrganizationMembers should return member list', async () => {
+      server.use(
+        http.get('/api/v1/organizations/:id/members', () => {
+          return HttpResponse.json({ code: 0, data: mockMembers })
+        }),
+      )
+      const res = await channelApi.getOrganizationMembers(1, { page: 1 })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('addMember should add member to organization', async () => {
+      server.use(
+        http.post('/api/v1/members/add', async ({ request }) => {
+          const body = (await request.json()) as any
+          return HttpResponse.json({ code: 0, data: { id: 3, ...body } })
+        }),
+      )
+      const res = await channelApi.addMember({ organization_id: 1, email: 'new@test.com', role: 'member' })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('removeMember should call DELETE /members/memberships/:id/remove', async () => {
+      let requestMethod = ''
+      let requestPath = ''
+      server.use(
+        http.delete('/api/v1/members/memberships/:id/remove', ({ request, params }) => {
+          requestMethod = request.method
+          requestPath = `/api/v1/members/memberships/${params.id}/remove`
+          return HttpResponse.json({ code: 0, message: 'removed' })
+        }),
+      )
+      const res = await channelApi.removeMember(1)
+      expect(requestMethod).toBe('DELETE')
+      expect(requestPath).toBe('/api/v1/members/memberships/1/remove')
+      expect(res.data.code).toBe(0)
+    })
+
+    it('updateMemberRole should call PUT /members/memberships/:id/role', async () => {
+      let requestMethod = ''
+      let requestPath = ''
+      let requestBody: any = null
+      server.use(
+        http.put('/api/v1/members/memberships/:id/role', async ({ request, params }) => {
+          requestMethod = request.method
+          requestPath = `/api/v1/members/memberships/${params.id}/role`
+          requestBody = await request.json()
+          return HttpResponse.json({ code: 0, message: 'updated' })
+        }),
+      )
+      const res = await channelApi.updateMemberRole(1, 'admin')
+      expect(requestMethod).toBe('PUT')
+      expect(requestPath).toBe('/api/v1/members/memberships/1/role')
+      expect(requestBody).toEqual({ role: 'admin' })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('reactivateMember should use PATCH /members/memberships/:id/reactivate', async () => {
+      let requestMethod = ''
+      let requestPath = ''
+      server.use(
+        http.patch('/api/v1/members/memberships/:id/reactivate', ({ request, params }) => {
+          requestMethod = request.method
+          requestPath = `/api/v1/members/memberships/${params.id}/reactivate`
+          return HttpResponse.json({ code: 0, data: { id: params.id, status: 'active' } })
+        }),
+      )
+      const res = await channelApi.reactivateMember(2)
+      expect(requestMethod).toBe('PATCH')
+      expect(requestPath).toBe('/api/v1/members/memberships/2/reactivate')
+      expect(res.data.code).toBe(0)
+    })
+  })
+
+  describe('Invitation Management', () => {
+    it('getInvitations should return invitation list', async () => {
+      server.use(
+        http.get('/api/v1/invitations/list', () => {
+          return HttpResponse.json({ code: 0, data: mockInvitations })
+        }),
+      )
+      const res = await channelApi.getInvitations({ page: 1 })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('sendInvitation should create invitation', async () => {
+      server.use(
+        http.post('/api/v1/invitations/create', async ({ request }) => {
+          const body = (await request.json()) as any
+          return HttpResponse.json({ code: 0, data: { id: 2, ...body, status: 'pending' } })
+        }),
+      )
+      const res = await channelApi.sendInvitation({ organization_id: 1, email: 'new@test.com', role_name: 'member' })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('revokeInvitation should revoke invitation', async () => {
+      server.use(
+        http.delete('/api/v1/invitations/:id/revoke', () => {
+          return HttpResponse.json({ code: 0, message: 'revoked' })
+        }),
+      )
+      const res = await channelApi.revokeInvitation(1)
+      expect(res.data.code).toBe(0)
+    })
+
+    it('resendInvitation should resend invitation', async () => {
+      server.use(
+        http.post('/api/v1/invitations/:id/resend', () => {
+          return HttpResponse.json({ code: 0, message: 'resent' })
+        }),
+      )
+      const res = await channelApi.resendInvitation(1)
+      expect(res.data.code).toBe(0)
+    })
+  })
+
+  describe('Transfer Management', () => {
+    it('getTransferRequests should return transfer list', async () => {
+      server.use(
+        http.get('/api/v1/members/transfers/list', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              items: [{ id: 1, resource_type: 'device', status: 'pending' }],
+              total: 1,
+              page: 1,
+              page_size: 20,
+            },
+          })
+        }),
+      )
+      const res = await channelApi.getTransferRequests({ page: 1 })
+      expect(res.data.code).toBe(0)
+    })
+
+    it('approveTransfer should approve transfer', async () => {
+      server.use(
+        http.post('/api/v1/members/transfer/accept', () => {
+          return HttpResponse.json({ code: 0, message: 'approved' })
+        }),
+      )
+      const res = await channelApi.approveTransfer(1)
+      expect(res.data.code).toBe(0)
+    })
+
+    it('rejectTransfer should reject transfer', async () => {
+      server.use(
+        http.post('/api/v1/members/transfer/reject', () => {
+          return HttpResponse.json({ code: 0, message: 'rejected' })
+        }),
+      )
+      const res = await channelApi.rejectTransfer(1, 'Not authorized')
+      expect(res.data.code).toBe(0)
+    })
+  })
+})

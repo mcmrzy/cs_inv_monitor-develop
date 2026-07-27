@@ -31,6 +31,9 @@ export interface User {
   timezone: string
   lastLoginAt: string
   createdAt: string
+  country?: string
+  region_name?: string
+  bio?: string
 }
 
 export interface Device {

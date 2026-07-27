@@ -23,10 +23,11 @@ redis:
   db: 0
 
 mqtt:
-  port: 1883
-  client_id: CSKJ-INV-SERVER-DEVICE
-  username: ""
-  password: ""
+  broker: broker.jiuxiaoyw.online
+  port: 8883
+  client_id: CSKJ-INV-DEVICE-SERVER
+  username: CSKJ-INV-DEVICE-SERVER
+  password: CSKJINVDEVICESERVER
   qos: 1
   # TLS mode — choose exactly one (see MQTTConfig docs in internal/config/config.go):
   #   1. tls_skip_verify=true  → skip ALL certificate verification (DEV/TEST ONLY).

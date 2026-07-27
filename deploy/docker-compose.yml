@@ -2,10 +2,7 @@ version: "3.8"
 
 services:
   postgres:
-    build:
-      context: ..
-      dockerfile: deploy/postgres/Dockerfile
-    image: inv-postgres-tls:2.28.2-pg18
+    image: timescale/timescaledb:latest-pg18
     container_name: inv-postgres
     restart: unless-stopped
     environment:
@@ -20,7 +17,7 @@ services:
     expose:
       - "5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_NAME:-inv_mqtt}"]
       interval: 5s
@@ -84,6 +81,7 @@ services:
       JPUSH_DEDUP_TTL: ${JPUSH_DEDUP_TTL:-120}
     volumes:
       - firmware_data:/data/firmware
+      - uploads_data:/data/uploads  # 头像上传文件持久化存储
       - ../database:/app/database:ro  # 挂载数据库迁移文件，启动时自动执行
     ports:
       - "8081:8080"  # 固件下载专用端口，绕过Gateway避免传输卡顿
@@ -120,7 +118,8 @@ services:
       MQTT_PASSWORD: ${MQTT_PASSWORD}
       MQTT_TLS_INSECURE: ${MQTT_TLS_INSECURE:-false}
       MQTT_CERT_SHA256: ${MQTT_CERT_SHA256}
-      KAFKA_BROKER: jiuxiaoyw.online:9092
+      KAFKA_BROKER: ${KAFKA_BROKERS:-broker.jiuxiaoyw.online:9092}
+      KAFKA_ENABLED: "true"
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}
     expose:
@@ -176,7 +175,7 @@ services:
     container_name: inv-mqtt-bridge
     restart: unless-stopped
     environment:
-      KAFKA_BROKERS: jiuxiaoyw.online:9092
+      KAFKA_BROKERS: ${KAFKA_BROKERS:-broker.jiuxiaoyw.online:9092}
       KAFKA_TELEMETRY_TOPIC: inv-telemetry
       KAFKA_ALARM_TOPIC: inv-alerts
       EMQX_TOKEN: ${EMQX_WEBHOOK_TOKEN:-}
@@ -220,3 +219,4 @@ volumes:
   pg_data:
   redis_data:
   firmware_data:
+  uploads_data:

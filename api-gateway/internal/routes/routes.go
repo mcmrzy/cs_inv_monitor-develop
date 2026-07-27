@@ -170,6 +170,11 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/work-orders", p.Handler())
 	userGroup.Any("/api/v1/work-order-stats", p.Handler())
 	userGroup.Any("/api/v1/work-order-templates", p.Handler())
+	userGroup.Any("/api/v1/upload/*action", p.Handler())
+	
+	// System — 系统健康与管道监控（需登录）
+	userGroup.Any("/api/v1/system/*action", p.Handler())
+	userGroup.Any("/api/v1/system", p.Handler())
 
 	// Channel Platform — 渠道平台管理（组织、邀请、成员、设备认领转移）
 	userGroup.Any("/api/v1/organizations/*action", p.Handler())
@@ -200,6 +205,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	adminGroup.Any("/api/v1/admin/logs/*action", p.Handler())
 	adminGroup.Any("/api/v1/admin/system-health", p.Handler())
 	adminGroup.Any("/api/v1/admin/system-config", p.Handler())
+	adminGroup.Any("/api/v1/admin/operation-stats", p.Handler())
 	adminGroup.Any("/api/v1/admin/tenants", p.Handler())
 	adminGroup.Any("/api/v1/admin/tenants/*action", p.Handler())
 	adminGroup.Any("/api/v1/admin/metrics", p.Handler())

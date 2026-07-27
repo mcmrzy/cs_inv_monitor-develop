@@ -1,8 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import dayjs from 'dayjs'
+import 'dayjs/locale/zh-cn'
 import App from './App'
 import './global.css'
+
+// 设置dayjs默认locale为中文
+dayjs.locale('zh-cn')
 
 const queryClient = new QueryClient({
   defaultOptions: {

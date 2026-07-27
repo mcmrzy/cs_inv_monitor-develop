@@ -98,8 +98,8 @@ func (s *UserService) UpdatePassword(ctx context.Context, userID int64, password
 	return s.repo.UpdatePassword(ctx, userID, passwordHash)
 }
 
-func (s *UserService) UpdateProfile(ctx context.Context, userID int64, nickname, avatar, timezone string) error {
-	return s.repo.UpdateProfile(ctx, userID, nickname, avatar, timezone)
+func (s *UserService) UpdateProfile(ctx context.Context, userID int64, nickname, avatar, timezone, country, regionName, bio string) error {
+	return s.repo.UpdateProfile(ctx, userID, nickname, avatar, timezone, country, regionName, bio)
 }
 
 func (s *UserService) UpdateLoginInfo(ctx context.Context, userID int64, ip string) error {

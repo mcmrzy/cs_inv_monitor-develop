@@ -76,7 +76,8 @@ const WorkOrdersPage: React.FC = () => {
 
   const deviceOptions = useMemo(() => {
     const d = devicesRes?.data?.data ?? devicesRes?.data ?? []
-    const items = Array.isArray(d) ? d : (d?.items ?? [])
+    const rawDeviceItems = Array.isArray(d) ? d : (d?.items ?? [])
+    const items = Array.isArray(rawDeviceItems) ? rawDeviceItems : []
     return items.map((device: any) => ({
       value: device.sn,
       label: `${device.sn} (${device.model || '-'})`,
@@ -109,7 +110,8 @@ const WorkOrdersPage: React.FC = () => {
   const { data: listRes, isLoading, error: listError, refetch } = useQuery({
     queryKey: queryKeys.workOrders.list(queryParams),
     queryFn: () => workOrderApi.list(queryParams).then((r) => {
-      let items = r.data?.data?.items ?? []
+      const rawItems = r.data?.data?.items
+      let items = Array.isArray(rawItems) ? rawItems : []
       if (slaFilter) {
         items = items.filter((item: WorkOrder) => getSlaStatus(item.sla_deadline, item.status) === slaFilter)
       }
@@ -218,7 +220,9 @@ const WorkOrdersPage: React.FC = () => {
   const renderKanban = () => (
     <Row gutter={16} style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
       {KANBAN_COLUMNS.map((status) => {
-        const items = (listRes?.items ?? []).filter((d: WorkOrder) => d.status === status)
+        const rawKanbanItems = listRes?.items
+        const kanbanItems = Array.isArray(rawKanbanItems) ? rawKanbanItems : []
+        const items = kanbanItems.filter((d: WorkOrder) => d.status === status)
         const cfg = WO_STATUS_MAP[status]
         return (
           <Col key={status} style={{ minWidth: 280, maxWidth: 350 }}>
@@ -243,7 +247,8 @@ const WorkOrdersPage: React.FC = () => {
     </Row>
   )
 
-  const data = listRes?.items ?? []
+  const rawItems = listRes?.items
+  const data = Array.isArray(rawItems) ? rawItems : []
   const total = listRes?.total ?? 0
 
   const queryFailure = [

@@ -46,7 +46,7 @@ type rolePermissionQuerier interface {
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
 		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, parent_id, status,
-			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
+			   COALESCE(timezone,'Asia/Shanghai'), COALESCE(country,''), COALESCE(region_name,''), COALESCE(bio,''), last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`
 
@@ -56,7 +56,8 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &user.Nickname, &user.Avatar,
-		&user.Role, &user.IsSystemAdmin, &regionID, &parentID, &user.Status, &user.Timezone, &lastLoginAt, &user.LastLoginIP,
+		&user.Role, &user.IsSystemAdmin, &regionID, &parentID, &user.Status, &user.Timezone,
+		&user.Country, &user.RegionName, &user.Bio, &lastLoginAt, &user.LastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -319,14 +320,9 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID int64, passw
 	return err
 }
 
-func (r *UserRepository) UpdateProfile(ctx context.Context, userID int64, nickname, avatar, tz string) error {
-	if tz != "" {
-		query := `UPDATE users SET nickname = $1, avatar = $2, timezone = $3, updated_at = NOW() WHERE id = $4`
-		_, err := r.db.Exec(ctx, query, nickname, avatar, tz, userID)
-		return err
-	}
-	query := `UPDATE users SET nickname = $1, avatar = $2, updated_at = NOW() WHERE id = $3`
-	_, err := r.db.Exec(ctx, query, nickname, avatar, userID)
+func (r *UserRepository) UpdateProfile(ctx context.Context, userID int64, nickname, avatar, tz, country, regionName, bio string) error {
+	query := `UPDATE users SET nickname = $1, avatar = $2, timezone = $3, country = $4, region_name = $5, bio = $6, updated_at = NOW() WHERE id = $7`
+	_, err := r.db.Exec(ctx, query, nickname, avatar, tz, country, regionName, bio, userID)
 	return err
 }
 
@@ -2350,7 +2346,7 @@ func (r *DeviceRepository) GetLifecycleHistory(ctx context.Context, sn string, p
 	var total int64
 	countQuery := `SELECT COUNT(*) FROM device_lifecycle WHERE device_sn = $1`
 	if err := r.db.QueryRow(ctx, countQuery, sn).Scan(&total); err != nil {
-		return nil, 0, err
+		return []map[string]interface{}{}, 0, err
 	}
 
 	offset := (page - 1) * pageSize
@@ -2364,7 +2360,7 @@ func (r *DeviceRepository) GetLifecycleHistory(ctx context.Context, sn string, p
 
 	rows, err := r.db.Query(ctx, query, sn, pageSize, offset)
 	if err != nil {
-		return nil, 0, err
+		return []map[string]interface{}{}, 0, err
 	}
 	defer rows.Close()
 
@@ -2378,7 +2374,7 @@ func (r *DeviceRepository) GetLifecycleHistory(ctx context.Context, sn string, p
 		var createdAt time.Time
 
 		if err := rows.Scan(&id, &deviceSN, &eventType, &description, &triggeredBy, &metadata, &createdAt); err != nil {
-			return nil, 0, err
+			return []map[string]interface{}{}, 0, err
 		}
 
 		item := map[string]interface{}{

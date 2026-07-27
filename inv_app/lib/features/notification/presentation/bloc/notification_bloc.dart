@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/features/device/domain/repositories/device_repository.dart';
@@ -110,7 +110,7 @@ class SystemNotification {
 
 class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   final DeviceRepository deviceRepository;
-  final MQTTService? mqttService;
+  final RealtimeDataService? realtimeDataService;
   final NotificationRemoteDataSource? notificationDataSource;
   static const _localNotifKey = 'local_notifications'; // 仅存储OTA/APP更新等本地通知
   static const _maxNotifications = 100;
@@ -122,7 +122,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
 
   NotificationBloc({
     required this.deviceRepository,
-    this.mqttService,
+    this.realtimeDataService,
     this.notificationDataSource,
   }) : super(NotificationInitial()) {
     on<SystemNotificationsRequested>(_onSystemNotificationsRequested);
@@ -134,7 +134,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
 
   void _subscribeToMqtt() {
     // 监听设备实时数据流，触发刷新（后端已自动插入通知）
-    _realtimeSub = mqttService?.realtimeDataStream.listen((rt) {
+    _realtimeSub = realtimeDataService?.realtimeDataStream.listen((rt) {
       add(
         _MqttStatusUpdate(
           deviceSn: rt.deviceSN,
@@ -144,14 +144,11 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     });
 
     // 监听告警，触发通知列表刷新
-    _alarmSub = mqttService?.alarmStream.listen((_) {
+    _alarmSub = realtimeDataService?.alarmStream.listen((_) {
       _debouncedRefresh();
     });
 
-    // 监听 OTA 通知（仍然本地生成）
-    _otaSub = mqttService?.otaNotificationStream.listen((ota) {
-      _addOtaNotification(ota);
-    });
+    // OTA 通知通过 JPush 推送，不再需要本地监听
   }
 
   void _debouncedRefresh() {

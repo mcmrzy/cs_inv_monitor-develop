@@ -149,12 +149,8 @@ func (m *DeviceStateManager) PublishHealthPing(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			payload := map[string]interface{}{
-				"status": "alive",
-				"ts":     time.Now().UTC().Unix(),
-			}
-			payloadBytes, _ := json.Marshal(payload)
-			_ = m.rdb.Publish(ctx, "pipeline:health:device-server", payloadBytes).Err()
+			// Use SET instead of PUBLISH for health check (pipeline_health reads via GET)
+			_ = m.rdb.Set(ctx, "pipeline:health:device-server", "ok", 60*time.Second).Err()
 		}
 	}
 }
@@ -392,7 +388,14 @@ func (m *DeviceStateManager) executeStateChange(ctx context.Context, sn string, 
 			payload[k] = v
 		}
 	}
-	return m.postInternal("/api/v1/internal/device-status", payload)
+	err := m.postInternal("/api/v1/internal/device-status", payload)
+	if err != nil {
+		logger.Error("postInternal failed",
+			zap.String("sn", sn),
+			zap.Error(err),
+		)
+	}
+	return err
 }
 
 // postInternal 调用内部 API
@@ -675,6 +678,7 @@ func (m *DeviceStateManager) scanHeartbeatKeys(ctx context.Context) []string {
 
 // RebuildOnlineSet scans all existing heartbeat keys and rebuilds the online set.
 // Should be called on service startup to ensure the set is in sync with heartbeat keys.
+// Also syncs device state to Redis and notifies API Server for each online device.
 func (m *DeviceStateManager) RebuildOnlineSet(ctx context.Context) error {
 	if m.rdb == nil {
 		return nil
@@ -697,6 +701,22 @@ func (m *DeviceStateManager) RebuildOnlineSet(ctx context.Context) error {
 		return err
 	}
 	logger.Info("Online set rebuilt via DeviceStateManager", zap.Int("device_count", len(sns)))
+
+	// Sync each online device's state to Redis and notify API Server
+	// This ensures database is in sync after device-server restart
+	for _, sn := range sns {
+		// Set Redis state to Online
+		stateKey := fmt.Sprintf("device:state:%s", sn)
+		m.rdb.Set(ctx, stateKey, int(StateOnline), 0)
+		m.stateCache.Store(sn, StateOnline)
+
+		// Notify API Server to update database
+		if err := m.executeStateChange(ctx, sn, StateOnline, nil); err != nil {
+			logger.Warn("Failed to sync device online state to API Server on rebuild",
+				zap.String("sn", sn), zap.Error(err))
+		}
+	}
+
 	return nil
 }
 

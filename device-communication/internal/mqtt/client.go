@@ -390,12 +390,12 @@ func (c *Client) Connect(ctx context.Context) error {
 			logger.Info("MQTT connected (command channel only)")
 			if _, err := cm.Subscribe(ctx, &paho.Subscribe{
 				Subscriptions: []paho.SubscribeOptions{
-					{Topic: "$share/inv-group/cs_inv/#", QoS: 1},
+					{Topic: "cs_inv/#", QoS: 1},
 				},
 			}); err != nil {
 				logger.Error("Failed to subscribe to topic", zap.Error(err))
 			} else {
-				logger.Info("Subscribed to $share/inv-group/cs_inv/#")
+				logger.Info("Subscribed to cs_inv/#")
 			}
 		},
 		OnConnectError: func(err error) {
@@ -408,6 +408,8 @@ func (c *Client) Connect(ctx context.Context) error {
 				func(pr paho.PublishReceived) (bool, error) {
 					topic := pr.Packet.Topic
 					sn := extractSN(topic)
+
+					
 
 					// 设备状态主题（LWT 离线/上线消息）
 					if isDeviceStatusTopic(topic) {

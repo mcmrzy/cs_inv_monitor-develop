@@ -5,7 +5,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/features/alarm/domain/repositories/alarm_repository.dart';
 
 part 'alarm_event.dart';
@@ -14,24 +14,25 @@ part 'alarm_state.dart';
 class AlarmBloc extends Bloc<AlarmEvent, AlarmState> {
   final AlarmRepository repository;
   final DataCacheService? dataCacheService;
-  final MQTTService? mqttService;
+  final RealtimeDataService? realtimeDataService;
   StreamSubscription<dynamic>? _alarmSub;
 
   AlarmBloc({
     required this.repository,
     this.dataCacheService,
-    this.mqttService,
+    this.realtimeDataService,
   }) : super(AlarmInitial()) {
     on<AlarmListRequested>(_onListRequested);
     on<AlarmDetailRequested>(_onDetailRequested);
     on<AlarmMarkReadRequested>(_onMarkReadRequested);
     on<AlarmMqttReceived>(_onMqttAlarmReceived);
-    _subscribeToMqttAlarms();
+    _subscribeToAlarms();
   }
 
-  void _subscribeToMqttAlarms() {
-    _alarmSub = mqttService?.alarmStream.listen((_) {
-      // MQTT 告警到达时，自动刷新告警列表
+  void _subscribeToAlarms() {
+    // 监听 RealtimeDataService 的告警流
+    _alarmSub = realtimeDataService?.alarmStream.listen((_) {
+      // 告警到达时，自动刷新告警列表
       add(const AlarmListRequested());
     });
   }

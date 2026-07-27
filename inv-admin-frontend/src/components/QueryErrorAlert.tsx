@@ -13,11 +13,19 @@ export function formatQueryError(error: unknown): string {
   const detail = axiosError.response?.data?.message
     || (error instanceof Error ? error.message : '')
 
+  // 优先显示业务错误码（非0表示业务错误）
   if (businessCode !== undefined && businessCode !== 0) {
     return `API ${businessCode}${detail ? ` · ${detail}` : ''}`
   }
-  if (status) return `HTTP ${status}${detail ? ` · ${detail}` : ''}`
-  return detail || String(error || '')
+  
+  // 如果有 HTTP 状态码且不是 200，显示 HTTP 错误
+  if (status && status !== 200) return `HTTP ${status}${detail ? ` · ${detail}` : ''}`
+  
+  // 如果有详细错误信息，显示它
+  if (detail && detail !== 'success') return detail
+  
+  // 最后显示错误对象字符串
+  return String(error || '')
 }
 
 interface QueryErrorAlertProps {

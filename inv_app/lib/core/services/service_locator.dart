@@ -8,6 +8,7 @@ import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/api_service.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/notification_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
@@ -288,6 +289,13 @@ class ServiceLocator {
       dispose: (service) => (service as MQTTServiceImpl).dispose(),
     );
 
+    // RealtimeDataService: 通过 API 轮询获取实时数据，替代 MQTT 直连
+    // 保留 MQTTService 用于本地 OTA 场景
+    getIt.registerLazySingleton<RealtimeDataService>(
+      () => RealtimeDataServiceImpl(),
+      dispose: (service) => (service as RealtimeDataServiceImpl).dispose(),
+    );
+
     getIt.registerLazySingleton<NotificationService>(
       () => NotificationService(),
     );
@@ -434,7 +442,6 @@ class ServiceLocator {
         wechatLoginUseCase: getIt(),
         googleLoginUseCase: getIt(),
         storageService: getIt(),
-        mqttService: getIt(),
         jpushService: getIt(),
       ),
     );
@@ -451,6 +458,7 @@ class ServiceLocator {
       () => DeviceBloc(
         repository: getIt(),
         mqttService: getIt(),
+        realtimeDataService: getIt(),
         localCommunicationService: getIt(),
         connectionModeService: getIt(),
         offlineCacheService: getIt(),
@@ -462,14 +470,14 @@ class ServiceLocator {
       () => AlarmBloc(
         repository: getIt(),
         dataCacheService: getIt(),
-        mqttService: getIt(),
+        realtimeDataService: getIt(),
       ),
     );
 
     getIt.registerFactory(
       () => NotificationBloc(
         deviceRepository: getIt(),
-        mqttService: getIt(),
+        realtimeDataService: getIt(),
         notificationDataSource: getIt(),
       ),
     );

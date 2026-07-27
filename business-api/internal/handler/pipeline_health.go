@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -204,8 +205,21 @@ func (h *PipelineHealthHandler) checkServiceHealth(ctx context.Context, serviceN
 		}
 	}
 
-	switch val {
-	case "ok":
+	// Handle both simple status strings and JSON payloads
+	// Simple: "ok", "degraded", "down"
+	// JSON: {"status": "alive", "ts": 1234567890}
+	statusVal := val
+	if len(val) > 0 && val[0] == '{' {
+		var payload map[string]interface{}
+		if json.Unmarshal([]byte(val), &payload) == nil {
+			if s, ok := payload["status"]; ok {
+				statusVal = fmt.Sprintf("%v", s)
+			}
+		}
+	}
+
+	switch statusVal {
+	case "ok", "alive":
 		return PipelineHealthStatus{
 			ServiceName:   serviceName,
 			ServiceType:   serviceType,
@@ -234,7 +248,7 @@ func (h *PipelineHealthHandler) checkServiceHealth(ctx context.Context, serviceN
 			ServiceType:   serviceType,
 			Status:        "degraded",
 			LastCheckTime: time.Now().UTC(),
-			Message:       fmt.Sprintf("unexpected status: %s", val),
+			Message:       fmt.Sprintf("unexpected status: %s", statusVal),
 		}
 	}
 }

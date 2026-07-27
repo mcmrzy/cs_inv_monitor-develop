@@ -14,7 +14,10 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
+
+	"go.uber.org/zap"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -84,12 +87,18 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 	status, priority := c.Query("status"), c.Query("priority")
 	userID := middleware.GetUserID(c)
 	role := mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c))
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
 	filter := workOrderDataScope("w", role, 1) + ` AND ($2='' OR w.status=$2) AND ($3='' OR w.priority=$3)`
 	var total int64
 	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM work_orders w WHERE `+filter, userID, status, priority).Scan(&total); err != nil {
+		logger.Error("list work orders count failed",
+			zap.Int64("user_id", userID),
+			zap.Int("role", role),
+			zap.String("status", status),
+			zap.String("priority", priority),
+			zap.Error(err))
 		response.Error(c, 500, "list work orders failed")
 		return
 	}
@@ -98,12 +107,23 @@ func (h *WorkOrderHandler) List(c *gin.Context) {
 		WHERE `+filter+` ORDER BY w.created_at DESC LIMIT $4 OFFSET $5`,
 		userID, status, priority, pageSize, (page-1)*pageSize)
 	if err != nil {
+		logger.Error("list work orders query failed",
+			zap.Int64("user_id", userID),
+			zap.Int("role", role),
+			zap.String("status", status),
+			zap.String("priority", priority),
+			zap.Int("page", page),
+			zap.Int("page_size", pageSize),
+			zap.Error(err))
 		response.Error(c, 500, "list work orders failed")
 		return
 	}
 	defer rows.Close()
 	items, err := scanJSONMaps(rows)
 	if err != nil {
+		logger.Error("decode work orders failed",
+			zap.Int64("user_id", userID),
+			zap.Error(err))
 		response.Error(c, 500, "decode work orders failed")
 		return
 	}
@@ -222,7 +242,7 @@ func (h *WorkOrderHandler) Escalate(c *gin.Context) {
 	var status string
 	err := h.db.QueryRow(c.Request.Context(), `UPDATE work_orders SET
 		priority=CASE priority WHEN 'low' THEN 'medium' WHEN 'medium' THEN 'high' ELSE 'urgent' END,
-		escalated_count=escalated_count+1,sla_overdue_count=sla_overdue_count+1,updated_at=NOW()
+		escalated_count=escalated_count+1,sla_overdue_count=sla_overdue_count+1,updated_at=NOW(),
 		escalated_at=NOW(),lock_version=lock_version+1
 		WHERE id::text=$1 AND status NOT IN('resolved','closed') AND `+workOrderDataScope("work_orders", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2)+`
 		RETURNING status`, c.Param("id"), middleware.GetUserID(c)).Scan(&status)

@@ -77,7 +77,7 @@ export const channelApi = {
     api.post(`/organizations/${id}/move`, { parent_id: parentId }),
 
   toggleOrganization: (id: number) =>
-    api.post(`/organizations/${id}/toggle`),
+    api.patch(`/organizations/${id}/status`),
 
   // ── Members ──
   getOrganizationMembers: (orgId: number, params?: any) =>
@@ -87,13 +87,13 @@ export const channelApi = {
     api.post('/members/add', data),
 
   removeMember: (membershipId: number) =>
-    api.delete(`/memberships/${membershipId}/remove`),
+    api.delete(`/members/memberships/${membershipId}/remove`),
 
   updateMemberRole: (membershipId: number, role: string) =>
-    api.put(`/memberships/${membershipId}/role`, { role }),
+    api.put(`/members/memberships/${membershipId}/role`, { role }),
 
   reactivateMember: (membershipId: number) =>
-    api.post(`/memberships/${membershipId}/reactivate`),
+    api.patch(`/members/memberships/${membershipId}/reactivate`),
 
   // ── Invitations ──
   getInvitations: (params?: any) =>

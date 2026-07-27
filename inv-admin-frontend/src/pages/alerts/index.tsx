@@ -223,7 +223,8 @@ const AlertsPage: React.FC = () => {
   }
 
   const renderSnapshot = (snapshotType: 'before' | 'after') => {
-    const snapshot = eventDetailQuery.data?.snapshots.find((item) => item.snapshot_type === snapshotType)
+    const snapshots = eventDetailQuery.data?.snapshots
+    const snapshot = Array.isArray(snapshots) ? snapshots.find((item) => item.snapshot_type === snapshotType) : undefined
     const raw = snapshot?.raw_snapshot
     const missing = raw?.missing === true
     const label = snapshotType === 'before' ? t('alert.snapshotBefore') : t('alert.snapshotAfter')

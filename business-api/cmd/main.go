@@ -208,6 +208,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	// Task 11 & 12: Pipeline health and DLQ handlers
 	pipelineHealthHandler := handler.NewPipelineHealthHandler(rdb, db)
 	dlqHandler := handler.NewDLQHandler(rdb)
+	uploadHandler := handler.NewUploadHandler(cfg.Backends.ServerURL)
 
 	heartbeatDone := make(chan struct{})
 	defer close(heartbeatDone)
@@ -215,6 +216,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	go runHeartbeatExpiryListener(rdb, deviceRepo, heartbeatDone)
 	// 鍏滃簳锛氭瘡 5 鍒嗛挓鍏ㄩ噺鎵弿涓€娆★紝澶勭悊鐩戝惉鍣ㄥ彲鑳介仐婕忕殑鎯呭喌
 	go runHeartbeatCheck(deviceRepo, heartbeatDone)
+
+	// Pipeline health ping: write API server status to Redis every 30s
+	go runPipelineHealthPing(rdb, heartbeatDone)
 
 	// OTA 鍗囩骇瓒呮椂娓呯悊锛氭瘡 5 鍒嗛挓鎵弿鍗′綇鐨勫崌绾ц褰曞苟鏇存柊鍏宠仈浠诲姟缁熻
 	go runOTATimeoutCleanup(db, heartbeatDone)
@@ -251,6 +255,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		InvitationHandler:             invitationHandler,
 		PipelineHealthHandler:         pipelineHealthHandler,
 		DLQHandler:                    dlqHandler,
+		UploadHandler:                 uploadHandler,
 		AuthorizationContextValidator: authorizationRepo,
 	})
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
@@ -678,6 +683,7 @@ type RouterDeps struct {
 	InvitationHandler             *handler.InvitationHandler
 	PipelineHealthHandler         *handler.PipelineHealthHandler
 	DLQHandler                    *handler.DLQHandler
+	UploadHandler                 *handler.UploadHandler
 	AuthorizationContextValidator middleware.AuthorizationContextValidator
 }
 
@@ -942,6 +948,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/work-orders/:id/attachments", deps.WorkOrderHandler.UploadAttachments)
 			auth.GET("/work-orders/:id/attachments/:attachmentId", deps.WorkOrderHandler.DownloadAttachment)
 			auth.DELETE("/work-orders/:id", deps.WorkOrderHandler.Delete)
+
+			// 文件上传
+			auth.POST("/upload/avatar", deps.UploadHandler.UploadAvatar)
 		}
 
 		requireAdmin := middleware.RequirePermission(deps.PermChecker, "admin", "manage")
@@ -1116,6 +1125,11 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		}
 	}
 
+	// Static file serving for uploads
+	uploadDir := "/data/uploads"
+	os.MkdirAll(uploadDir, 0755)
+	router.Static("/uploads", uploadDir)
+
 	return router
 }
 
@@ -1209,4 +1223,28 @@ func setupRouterMinimal(cfg *config.Config) *gin.Engine {
 	})
 
 	return router
+}
+
+// runPipelineHealthPing writes the API server health status to Redis every 30 seconds
+func runPipelineHealthPing(rdb *redis.Client, done chan struct{}) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Wait for Redis connection to be ready
+	time.Sleep(2 * time.Second)
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	logger.Info("Pipeline health ping started for API server")
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			if err := rdb.Set(ctx, "pipeline:health:api", "ok", 60*time.Second).Err(); err != nil {
+				logger.Warn("Failed to write pipeline health ping", zap.Error(err))
+			}
+		}
+	}
 }

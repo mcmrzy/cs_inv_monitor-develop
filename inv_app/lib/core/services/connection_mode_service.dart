@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'package:inv_app/core/services/storage_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
-import 'package:inv_app/core/services/service_locator.dart';
 
 enum ConnectionMode { remote, local }
 
@@ -33,13 +31,7 @@ class ConnectionModeService {
     _currentMode = ConnectionMode.remote;
     _modeController.add(_currentMode);
     await _storageService.saveIsLocalMode(false);
-
-    try {
-      final mqtt = getIt<MQTTService>();
-      if (!mqtt.isConnected) {
-        await mqtt.reconnect();
-      }
-    } catch (_) {}
+    // 使用 API 轮询，无需重连 MQTT
   }
 
   Future<void> switchToLocal() async {

@@ -54,7 +54,7 @@ const AdminPage: React.FC = () => {
 
 const SettingsTab: React.FC = () => {
   const { t } = useTranslation()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const [form] = Form.useForm()
 
   const { isLoading, error, refetch } = useQuery({

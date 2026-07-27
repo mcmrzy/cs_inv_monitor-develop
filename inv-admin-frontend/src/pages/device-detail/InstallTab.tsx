@@ -32,7 +32,8 @@ const InstallTab: React.FC<InstallTabProps> = ({ sn }) => {
     queryFn: () => deviceApi.getBatteryProfiles().then((r) => r.data?.data ?? []),
   })
 
-  const profiles: BatteryProfile[] = (profilesRes as BatteryProfile[]) ?? []
+  const rawProfiles = profilesRes as BatteryProfile[]
+  const profiles: BatteryProfile[] = Array.isArray(rawProfiles) ? rawProfiles : []
 
   const { isLoading: configLoading, error: configError, refetch: refetchConfig } = useQuery({
     queryKey: queryKeys.devices.batteryConfig(sn),

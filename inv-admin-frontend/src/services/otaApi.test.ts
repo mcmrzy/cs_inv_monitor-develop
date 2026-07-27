@@ -15,7 +15,7 @@ describe('otaApi', () => {
     it('getAllFirmware should request with large page_size', async () => {
       let requestedPageSize: string | null = null
       server.use(
-        http.get('/api/v1/firmwares', ({ request }) => {
+        http.get('/api/v1/ota/firmware', ({ request }) => {
           const url = new URL(request.url)
           requestedPageSize = url.searchParams.get('page_size')
           return HttpResponse.json({
@@ -36,7 +36,7 @@ describe('otaApi', () => {
 
     it('uploadFirmware should post form data', async () => {
       server.use(
-        http.post('/api/v1/firmwares', ({ request }) => {
+        http.post('/api/v1/ota/firmware', ({ request }) => {
           const contentType = request.headers.get('content-type') || ''
           return HttpResponse.json({
             code: 0,

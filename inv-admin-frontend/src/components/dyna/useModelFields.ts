@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { DeviceModelItem, DeviceModelFieldItem } from '@/services/modelApi'
 import { modelApi } from '@/services/modelApi'
+import useTranslation from '@/hooks/useTranslation'
 
 export interface ModelFieldsCache {
   modelId: number
@@ -11,6 +12,7 @@ export interface ModelFieldsCache {
 }
 
 export function useModelFields(deviceModel: string | undefined, modelId?: number) {
+  const { t } = useTranslation()
   const [cache, setCache] = useState<ModelFieldsCache | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,7 +68,7 @@ export function useModelFields(deviceModel: string | undefined, modelId?: number
         controlFields,
       })
     } catch {
-      setError('获取型号字段配置失败')
+      setError(t('models.loadFieldConfigFailed'))
       setCache(null)
     } finally {
       setLoading(false)
