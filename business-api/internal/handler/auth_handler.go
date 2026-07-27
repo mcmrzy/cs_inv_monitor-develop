@@ -656,9 +656,12 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 }
 
 type UpdateProfileRequest struct {
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
-	Timezone string `json:"timezone"`
+	Nickname   string `json:"nickname"`
+	Avatar     string `json:"avatar"`
+	Timezone   string `json:"timezone"`
+	Country    string `json:"country"`
+	RegionName string `json:"region_name"`
+	Bio        string `json:"bio"`
 }
 
 func (h *AuthHandler) UpdateProfile(c *gin.Context) {
@@ -678,7 +681,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		}
 	}
 
-	if err := h.userService.UpdateProfile(c.Request.Context(), userID, req.Nickname, req.Avatar, req.Timezone); err != nil {
+	if err := h.userService.UpdateProfile(c.Request.Context(), userID, req.Nickname, req.Avatar, req.Timezone, req.Country, req.RegionName, req.Bio); err != nil {
 		response.Error(c, 500, "update profile failed")
 		return
 	}

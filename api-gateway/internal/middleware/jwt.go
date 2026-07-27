@@ -136,6 +136,12 @@ func JWTAuthWithConfig(config JWTAuthConfig) gin.HandlerFunc {
 		}
 
 		authHeader := c.GetHeader("Authorization")
+		// 支持SSE场景：从URL查询参数获取token（EventSource不支持自定义Header）
+		if authHeader == "" {
+			if token := c.Query("token"); token != "" {
+				authHeader = "Bearer " + token
+			}
+		}
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "missing Authorization header"})
 			c.Abort()

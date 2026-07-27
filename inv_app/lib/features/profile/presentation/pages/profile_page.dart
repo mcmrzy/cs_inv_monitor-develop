@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:inv_app/features/profile/data/avatar_upload_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -14,12 +18,64 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final ImagePicker _picker = ImagePicker();
+  bool _isUploadingAvatar = false;
+  String? _avatarUrl;
+
   @override
   void initState() {
     super.initState();
     final state = context.read<AuthBloc>().state;
     if (state is! AuthAuthenticated && state is! AuthLoading) {
       context.read<AuthBloc>().add(AuthCheckRequested());
+    }
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 85,
+      );
+
+      if (image == null) return;
+
+      setState(() {
+        _isUploadingAvatar = true;
+      });
+
+      final apiClient = context.read<ApiClient>();
+      final avatarService = AvatarUploadService(apiClient);
+      final url = await avatarService.uploadAvatar(File(image.path));
+
+      setState(() {
+        _avatarUrl = url;
+        _isUploadingAvatar = false;
+      });
+
+      // 更新用户信息
+      if (mounted) {
+        context.read<AuthBloc>().add(AuthUpdateProfileRequested(
+          avatar: url,
+        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.uploadSuccess)),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingAvatar = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: AppColors.errorLight,
+          ),
+        );
+      }
     }
   }
 
@@ -86,17 +142,69 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 56.w,
-            height: 56.w,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(16.r),
-            ),
-            child: Icon(
-              Icons.person_rounded,
-              size: 28.sp,
-              color: AppColors.primary,
+          GestureDetector(
+            onTap: _isUploadingAvatar ? null : _pickAndUploadAvatar,
+            child: Stack(
+              children: [
+                Container(
+                  width: 56.w,
+                  height: 56.w,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16.r),
+                    image: _avatarUrl != null
+                        ? DecorationImage(
+                            image: NetworkImage(_avatarUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: _avatarUrl == null
+                      ? Icon(
+                          Icons.person_rounded,
+                          size: 28.sp,
+                          color: AppColors.primary,
+                        )
+                      : null,
+                ),
+                if (_isUploadingAvatar)
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(16.r),
+                      ),
+                      child: Center(
+                        child: SizedBox(
+                          width: 24.w,
+                          height: 24.w,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.w,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 20.w,
+                    height: 20.w,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2.w),
+                    ),
+                    child: Icon(
+                      Icons.camera_alt,
+                      size: 12.w,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           SizedBox(width: 16.w),
@@ -165,6 +273,11 @@ class _ProfilePageState extends State<ProfilePage> {
         Icons.notifications_outlined,
         l10n.messageNotifySettings,
         () => context.push('/notify-settings')
+      ),
+      (
+        Icons.person_outline,
+        l10n.editProfile,
+        () => context.push('/edit-profile')
       ),
       (
         Icons.settings_outlined,

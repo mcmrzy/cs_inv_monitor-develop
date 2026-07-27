@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select,
+  Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select, Cascader, Modal, Input, Space,
 } from 'antd'
 import { ProLayout, ModalForm, ProFormText, ProFormSelect } from '@ant-design/pro-components'
 import type { ProLayoutProps } from '@ant-design/pro-components'
@@ -20,6 +20,8 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import api from '@/services/api'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
+import UploadAvatar from '@/components/UploadAvatar'
+import regionData from '@/utils/regionData'
 
 interface RouteMenuItem {
   path: string
@@ -66,6 +68,13 @@ const MainLayout: React.FC = () => {
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileForm] = Form.useForm()
+  const [timezoneModalOpen, setTimezoneModalOpen] = useState(false)
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false)
+  const [emailModalOpen, setEmailModalOpen] = useState(false)
+  const [phoneForm] = Form.useForm()
+  const [emailForm] = Form.useForm()
+  const [codeSending, setCodeSending] = useState(false)
+  const [codeCountdown, setCodeCountdown] = useState(0)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout, hasPermission } = useAuthStore()
@@ -103,15 +112,37 @@ const MainLayout: React.FC = () => {
   const handleOpenProfile = () => {
     profileForm.setFieldsValue({
       nickname: user?.nickname || '',
-      timezone: user?.timezone || 'Asia/Shanghai',
+      avatar: user?.avatar || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      region: user?.country ? [user.country, user.region_name || ''] : [],
     })
     setProfileModalOpen(true)
   }
 
-  const handleUpdateProfile = async (values: { nickname: string; timezone: string }) => {
+  const handleUpdateProfile = async (values: {
+    nickname: string
+    avatar: string
+    email?: string
+    region?: string[]
+  }) => {
     setProfileLoading(true)
     try {
-      const res = await api.put('/auth/profile', values)
+      // 将region数组转换为country和region_name
+      const submitValues: Record<string, unknown> = {
+        nickname: values.nickname,
+        avatar: values.avatar,
+        email: values.email,
+      }
+      if (values.region && values.region.length >= 2) {
+        submitValues.country = values.region[0]
+        submitValues.region_name = values.region[1]
+      } else if (values.region && values.region.length === 1) {
+        submitValues.country = values.region[0]
+        submitValues.region_name = ''
+      }
+      
+      const res = await api.put('/auth/profile', submitValues)
       const responseData = res.data as Record<string, unknown>
       if (responseData?.code !== undefined && responseData.code !== 0) {
         message.error((responseData.message as string) || t('msg.profileUpdateFailed'))
@@ -120,9 +151,15 @@ const MainLayout: React.FC = () => {
       message.success(t('msg.profileUpdated'))
       setProfileModalOpen(false)
       if (user) {
-        const updatedUser = { ...user, nickname: values.nickname, timezone: values.timezone }
+        const updatedUser = {
+          ...user,
+          nickname: values.nickname,
+          avatar: values.avatar,
+          email: values.email || user.email,
+          country: (submitValues.country as string) || user.country,
+          region_name: (submitValues.region_name as string) || user.region_name,
+        }
         useAuthStore.setState({ user: updatedUser })
-        fetchTimezone()
       }
     } catch {
       message.error(t('msg.profileUpdateFailed'))
@@ -156,6 +193,10 @@ const MainLayout: React.FC = () => {
   const userMenuItemsDropdown = [
     { key: 'profile', icon: <UserOutlined />, label: t('header.profile'), onClick: handleOpenProfile },
     { key: 'change-password', icon: <LockOutlined />, label: t('header.changePassword'), onClick: () => setPasswordModalOpen(true) },
+    { type: 'divider' as const },
+    { key: 'lang', icon: <GlobalOutlined />, label: lang === 'zh' ? 'English' : '中文', onClick: () => setLang(lang === 'zh' ? 'en' : 'zh') },
+    { key: 'timezone', icon: <ClockCircleOutlined />, label: t('header.timezone'), onClick: () => setTimezoneModalOpen(true) },
+    { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: t('header.logout'), danger: true, onClick: handleLogout },
   ]
 
@@ -205,8 +246,8 @@ const MainLayout: React.FC = () => {
   return (
     <>
       <ProLayout
-        title={siderCollapsed ? 'C' : '辰烁科技 | CSERGY'}
-        logo="/csergylogo.png"
+        title={false}
+        logo={<img src="/csergylogo.png" alt="logo" style={{ height: 48, width: 'auto' }} />}
         layout="mix"
         fixSiderbar
         fixedHeader
@@ -238,25 +279,6 @@ const MainLayout: React.FC = () => {
           <a onClick={(e) => { e.preventDefault(); if (item.path) navigate(item.path) }}>{dom}</a>
         )}
         actionsRender={() => [
-          <Dropdown key="lang" menu={{ items: langMenuItems, onClick: ({ key }) => setLang(key as 'zh' | 'en') }} placement="bottomRight">
-            <Button type="text" icon={<GlobalOutlined />} style={{ fontSize: 14, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {lang === 'zh' ? '中文' : 'EN'}
-            </Button>
-          </Dropdown>,
-          <Select
-            key="tz"
-            showSearch
-            value={currentTimezone}
-            options={timezoneOptions}
-            onChange={(val) => handleTimezoneChange(val)}
-            filterOption={(input, option) =>
-              (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
-            }
-            style={{ width: isMobile ? 100 : 140 }}
-            popupMatchSelectWidth={false}
-            variant="borderless"
-            suffixIcon={<ClockCircleOutlined />}
-          />,
           user && (
             <Badge key="role" color={user.isSystemAdmin ? '#eb2f96' : '#1677ff'} text={<Typography.Text style={{ fontSize: 12 }}>{user.isSystemAdmin ? t('header.systemAdmin') : (hasPermission('admin:manage') ? t('header.orgAdmin') : t('header.member'))}</Typography.Text>} />
           ),
@@ -345,11 +367,79 @@ const MainLayout: React.FC = () => {
           searchConfig: { submitText: t('modal.save'), resetText: t('modal.cancel') },
         }}
       >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
+          <UploadAvatar
+            value={profileForm.getFieldValue('avatar')}
+            onChange={(url) => profileForm.setFieldsValue({ avatar: url })}
+            size={100}
+          />
+        </div>
         <ProFormText
           name="nickname"
           label={t('modal.nickname')}
           fieldProps={{ prefix: <UserOutlined />, placeholder: t('modal.nicknamePlaceholder') }}
         />
+        <Form.Item label={t('modal.phone')}>
+          <Space>
+            <Input
+              value={user?.phone || ''}
+              disabled
+              style={{ width: 280 }}
+              placeholder={t('modal.phonePlaceholder')}
+            />
+            <Button onClick={() => setPhoneModalOpen(true)}>{t('modal.change')}</Button>
+          </Space>
+        </Form.Item>
+        <Form.Item label={t('modal.email')}>
+          <Space>
+            <Input
+              value={user?.email || ''}
+              disabled
+              style={{ width: 280 }}
+              placeholder={t('modal.emailPlaceholder')}
+            />
+            <Button onClick={() => setEmailModalOpen(true)}>{t('modal.change')}</Button>
+          </Space>
+        </Form.Item>
+        <Form.Item
+          name="region"
+          label={t('modal.region')}
+        >
+          <Cascader
+            options={regionData}
+            placeholder={t('modal.regionPlaceholder')}
+            changeOnSelect
+            showSearch={{
+              filter: (inputValue, path) =>
+                path.some((option) =>
+                  (option.label as string).toLowerCase().includes(inputValue.toLowerCase())
+                ),
+            }}
+          />
+        </Form.Item>
+      </ModalForm>
+
+      <ModalForm
+        title={t('header.timezone')}
+        open={timezoneModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTimezoneModalOpen(false)
+          }
+        }}
+        form={Form.useForm()[0]}
+        onFinish={async (values) => {
+          await handleTimezoneChange(values.timezone)
+          setTimezoneModalOpen(false)
+          return true
+        }}
+        layout="vertical"
+        modalProps={{ destroyOnClose: true, maskClosable: false }}
+        submitter={{
+          searchConfig: { submitText: t('modal.save'), resetText: t('modal.cancel') },
+        }}
+        initialValues={{ timezone: currentTimezone }}
+      >
         <ProFormSelect
           name="timezone"
           label={t('modal.timezone')}
@@ -357,12 +447,141 @@ const MainLayout: React.FC = () => {
           fieldProps={{
             showSearch: true,
             placeholder: t('modal.timezonePlaceholder'),
-            options: TIMEZONE_LIST.map(tz => ({ value: tz.id, label: getTimezoneLabel(tz.id, lang) })),
+            options: timezoneOptions,
             filterOption: (input: string, option: { label?: string } | undefined) =>
               (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
           }}
         />
       </ModalForm>
+
+      {/* 手机号更改弹窗 */}
+      <Modal
+        title={t('modal.changePhone')}
+        open={phoneModalOpen}
+        onCancel={() => {
+          setPhoneModalOpen(false)
+          phoneForm.resetFields()
+        }}
+        onOk={async () => {
+          try {
+            const values = await phoneForm.validateFields()
+            // TODO: 调用发送验证码和更改手机号API
+            message.success(t('msg.phoneChanged'))
+            setPhoneModalOpen(false)
+            phoneForm.resetFields()
+          } catch (error) {
+            // 验证失败
+          }
+        }}
+        destroyOnClose
+        maskClosable={false}
+      >
+        <Form form={phoneForm} layout="vertical">
+          <Form.Item
+            name="newPhone"
+            label={t('modal.newPhone')}
+            rules={[{ required: true, message: t('msg.newPhoneRequired') }]}
+          >
+            <Input placeholder={t('modal.newPhonePlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            name="phoneCode"
+            label={t('modal.verifyCode')}
+            rules={[{ required: true, message: t('msg.codeRequired') }]}
+          >
+            <Space>
+              <Input placeholder={t('modal.codePlaceholder')} style={{ width: 200 }} />
+              <Button
+                onClick={() => {
+                  // TODO: 调用发送验证码API
+                  setCodeSending(true)
+                  setCodeCountdown(60)
+                  const timer = setInterval(() => {
+                    setCodeCountdown((prev) => {
+                      if (prev <= 1) {
+                        clearInterval(timer)
+                        setCodeSending(false)
+                        return 0
+                      }
+                      return prev - 1
+                    })
+                  }, 1000)
+                }}
+                disabled={codeSending}
+                loading={codeSending}
+              >
+                {codeSending ? `${codeCountdown}s` : t('modal.sendCode')}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 邮箱更改弹窗 */}
+      <Modal
+        title={t('modal.changeEmail')}
+        open={emailModalOpen}
+        onCancel={() => {
+          setEmailModalOpen(false)
+          emailForm.resetFields()
+        }}
+        onOk={async () => {
+          try {
+            const values = await emailForm.validateFields()
+            // TODO: 调用发送验证码和更改邮箱API
+            message.success(t('msg.emailChanged'))
+            setEmailModalOpen(false)
+            emailForm.resetFields()
+          } catch (error) {
+            // 验证失败
+          }
+        }}
+        destroyOnClose
+        maskClosable={false}
+      >
+        <Form form={emailForm} layout="vertical">
+          <Form.Item
+            name="newEmail"
+            label={t('modal.newEmail')}
+            rules={[
+              { required: true, message: t('msg.newEmailRequired') },
+              { type: 'email', message: t('msg.invalidEmail') },
+            ]}
+          >
+            <Input placeholder={t('modal.newEmailPlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            name="emailCode"
+            label={t('modal.verifyCode')}
+            rules={[{ required: true, message: t('msg.codeRequired') }]}
+          >
+            <Space>
+              <Input placeholder={t('modal.codePlaceholder')} style={{ width: 200 }} />
+              <Button
+                onClick={() => {
+                  // TODO: 调用发送验证码API
+                  setCodeSending(true)
+                  setCodeCountdown(60)
+                  const timer = setInterval(() => {
+                    setCodeCountdown((prev) => {
+                      if (prev <= 1) {
+                        clearInterval(timer)
+                        setCodeSending(false)
+                        return 0
+                      }
+                      return prev - 1
+                    })
+                  }, 1000)
+                }}
+                disabled={codeSending}
+                loading={codeSending}
+              >
+                {codeSending ? `${codeCountdown}s` : t('modal.sendCode')}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   )
 }

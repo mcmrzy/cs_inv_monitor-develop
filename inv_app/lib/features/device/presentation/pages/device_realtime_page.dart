@@ -6,7 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
@@ -163,8 +163,8 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
 
   void _listenOnlineStatus() {
     try {
-      final mqtt = getIt<MQTTService>();
-      _statusSub = mqtt.statusStream
+      final realtimeService = getIt<RealtimeDataService>();
+      _statusSub = realtimeService.statusStream
           .where((status) => true) // 接收所有状态更新
           .listen((status) {
         if (mounted) {
@@ -192,7 +192,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     _statusSub?.cancel();
     _realtimeSub?.cancel();
     try {
-      getIt<MQTTService>().unsubscribeDeviceTopics(widget.sn);
+      getIt<RealtimeDataService>().stopPolling(widget.sn);
     } catch (_) {}
     super.dispose();
   }
@@ -278,12 +278,12 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     }
   }
 
-  /// 订阅 MQTT 实时数据流，本地直连场景下替代云端 API 获取实时数据
+  /// 订阅实时数据流，通过 API 轮询获取实时数据
   void _subscribeMqttData() {
     try {
-      final mqtt = getIt<MQTTService>();
-      mqtt.subscribeDeviceTopics(widget.sn);
-      _realtimeSub = mqtt.realtimeDataStream
+      final realtimeService = getIt<RealtimeDataService>();
+      realtimeService.startPolling(widget.sn);
+      _realtimeSub = realtimeService.realtimeDataStream
           .where((rt) => rt.deviceSN == widget.sn)
           .listen((rt) {
         if (mounted) {

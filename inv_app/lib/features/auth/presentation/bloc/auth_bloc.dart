@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/services/storage_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
+
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/features/auth/domain/entities/user.dart';
 import 'package:inv_app/features/auth/domain/usecases/login.dart';
@@ -25,9 +25,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final WechatLoginUseCase wechatLoginUseCase;
   final GoogleLoginUseCase googleLoginUseCase;
   final StorageService storageService;
-  final MQTTService mqttService;
   final JPushService jpushService;
-  bool _mqttConnecting = false;
 
   AuthBloc({
     required this.loginUseCase,
@@ -45,7 +43,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.wechatLoginUseCase,
     required this.googleLoginUseCase,
     required this.storageService,
-    required this.mqttService,
     required this.jpushService,
   }) : super(AuthInitial()) {
     on<AuthCheckRequested>(_onAuthCheckRequested);
@@ -102,7 +99,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ),
       );
 
-      _connectMQTT(phone.isNotEmpty ? phone : 'user_$userId');
       jpushService.bindUser(userId);
     } else {
       emit(AuthUnauthenticated());
@@ -155,11 +151,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(
-          response.user.phone.isNotEmpty
-              ? response.user.phone
-              : 'user_${response.user.id}',
-        );
       },
     );
   }
@@ -401,11 +392,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(
-          response.user.phone.isNotEmpty
-              ? response.user.phone
-              : 'user_${response.user.id}',
-        );
       },
     );
   }
@@ -470,11 +456,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(
-          response.user.phone.isNotEmpty
-              ? response.user.phone
-              : 'user_${response.user.id}',
-        );
       },
     );
   }
@@ -512,30 +493,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(
-          response.user.phone.isNotEmpty
-              ? response.user.phone
-              : 'user_${response.user.id}',
-        );
       },
     );
-  }
-
-  void _connectMQTT(String clientId) async {
-    if (_mqttConnecting) return;
-    _mqttConnecting = true;
-    try {
-      final token = await storageService.getToken();
-      if (token == null) {
-        return;
-      }
-      await mqttService.connect(
-        clientId,
-        username: clientId,
-        password: token,
-      );
-    } finally {
-      _mqttConnecting = false;
-    }
   }
 }

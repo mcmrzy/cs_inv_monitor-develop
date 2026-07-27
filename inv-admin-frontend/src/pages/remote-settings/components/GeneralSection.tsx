@@ -12,7 +12,7 @@ interface Props {
 
 const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
   const { t } = useTranslation()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
 
   /* ── 下拉选项常量 (移到组件内以使用 t()) ── */
   const METER_TYPE_OPTIONS = [
@@ -270,7 +270,7 @@ const GeneralSection: React.FC<Props> = ({ deviceInfo }) => {
             danger
             size="small"
             onClick={() => {
-              Modal.confirm({
+              modal.confirm({
                 title: t('remote.confirmRestartInverter'),
                 icon: <ExclamationCircleOutlined />,
                 content: t('remote.restartConfirmContent'),

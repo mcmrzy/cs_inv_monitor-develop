@@ -218,7 +218,7 @@ export const handlers = [
   }),
 
   /** 固件列表 */
-  http.get(`${API_BASE}/firmwares`, () => {
+  http.get(`${API_BASE}/ota/firmware`, () => {
     return HttpResponse.json({
       code: 0,
       message: 'success',
@@ -227,12 +227,12 @@ export const handlers = [
   }),
 
   /** 上传固件 */
-  http.post(`${API_BASE}/firmwares`, async () => {
+  http.post(`${API_BASE}/ota/firmware`, async () => {
     return HttpResponse.json({ code: 0, message: 'success', data: null })
   }),
 
   /** 删除固件 */
-  http.delete(`${API_BASE}/firmwares/:id`, () => {
+  http.delete(`${API_BASE}/ota/firmware/:id`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: null })
   }),
 
@@ -557,5 +557,23 @@ export const handlers = [
   /** 时区配置 */
   http.get(`${API_BASE}/auth/timezone`, () => {
     return HttpResponse.json({ code: 0, message: 'success', data: { timezone: 'Asia/Shanghai' } })
+  }),
+
+  /** 组织成员管理 */
+  http.delete(`${API_BASE}/members/memberships/:id/remove`, () => {
+    return HttpResponse.json({ code: 0, message: 'success', data: null })
+  }),
+
+  http.put(`${API_BASE}/members/memberships/:id/role`, async () => {
+    return HttpResponse.json({ code: 0, message: 'success', data: null })
+  }),
+
+  http.patch(`${API_BASE}/members/memberships/:id/reactivate`, () => {
+    return HttpResponse.json({ code: 0, message: 'success', data: null })
+  }),
+
+  /** 组织切换状态 */
+  http.patch(`${API_BASE}/organizations/:id/status`, () => {
+    return HttpResponse.json({ code: 0, message: 'success', data: null })
   }),
 ]

@@ -18,6 +18,9 @@ type User struct {
 	ParentID       *int64     `json:"parent_id"`
 	Status       int        `json:"status"`
 	Timezone     string     `json:"timezone"`
+	Country      string     `json:"country"`
+	RegionName   string     `json:"region_name"`
+	Bio          string     `json:"bio"`
 	LastLoginAt  *time.Time `json:"last_login_at"`
 	LastLoginIP  string     `json:"last_login_ip"`
 	CreatedAt    time.Time  `json:"created_at"`

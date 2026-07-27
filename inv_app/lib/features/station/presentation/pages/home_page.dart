@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -42,13 +42,13 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     context.read<StationBloc>().add(StationSummaryRequested());
-    final mqtt = getIt<MQTTService>();
-    _statusSub = mqtt.statusStream.listen((_) {
+    final realtimeService = getIt<RealtimeDataService>();
+    _statusSub = realtimeService.statusStream.listen((_) {
       if (mounted) {
         context.read<StationBloc>().add(StationSummaryRequested());
       }
     });
-    _alarmSub = mqtt.alarmStream.listen((_) {
+    _alarmSub = realtimeService.alarmStream.listen((_) {
       if (mounted) {
         context.read<StationBloc>().add(StationSummaryRequested());
       }

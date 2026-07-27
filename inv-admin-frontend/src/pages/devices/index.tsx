@@ -233,6 +233,7 @@ const DevicesPage: React.FC = () => {
 
   const { user, hasPermission } = useAuthStore()
   const [messageApi, contextHolder] = message.useMessage()
+  const [modal, modalContextHolder] = Modal.useModal()
   const screens = Grid.useBreakpoint()
   const isSuperAdmin = user?.isSystemAdmin
   const isAdmin = isSuperAdmin || hasPermission('devices:manage')
@@ -828,7 +829,7 @@ const DevicesPage: React.FC = () => {
 
   const handleUnbind = (record: DeviceRecord) => {
     if (canDirectUnbind) {
-      Modal.confirm({
+      modal.confirm({
         title: t('dev.unbindConfirm'),
         content: t('dev.unbindDevice') + ` ${record.sn}？`,
         okText: t('common.confirm'),
@@ -991,7 +992,7 @@ const DevicesPage: React.FC = () => {
       icon: <LinkOutlined />,
       danger: true,
       onClick: () => {
-        Modal.confirm({
+        modal.confirm({
           title: t('dev.batchUnbind'),
           content: t('dev.confirmBatchUnbind', { count: selectedRowKeys.length }),
           okText: t('common.confirm'),
@@ -1014,7 +1015,7 @@ const DevicesPage: React.FC = () => {
       icon: <DeleteOutlined />,
       danger: true,
       onClick: () => {
-        Modal.confirm({
+        modal.confirm({
           title: t('dev.batchDelete'),
           content: t('dev.confirmBatchDelete', { count: selectedRowKeys.length }),
           okText: t('dev.confirmBatchDeleteBtn'),
@@ -1049,7 +1050,7 @@ const DevicesPage: React.FC = () => {
           messageApi.warning(t('dev.selectDevicesFirst'))
           return
         }
-        Modal.confirm({
+        modal.confirm({
           title: t('dev.batchControlTitle'),
           content: (
             <div>
@@ -1667,7 +1668,7 @@ const DevicesPage: React.FC = () => {
                             if (inputType === 'number') {
                               // 数值输入弹窗
                               let numValue = params.min ?? 0;
-                              Modal.confirm({
+                              modal.confirm({
                                 title: label,
                                 width: 400,
                                 content: (
@@ -1687,7 +1688,7 @@ const DevicesPage: React.FC = () => {
                                 onOk: () => executeCommand({ value: numValue }),
                               });
                             } else if (needConfirm) {
-                              Modal.confirm({
+                              modal.confirm({
                                 title: label,
                                 content: confirmMsg,
                                 onOk: () => executeCommand(),
@@ -1915,6 +1916,7 @@ const DevicesPage: React.FC = () => {
   return (
     <div>
       {contextHolder}
+      {modalContextHolder}
 
       {devicesError && (
         <Alert

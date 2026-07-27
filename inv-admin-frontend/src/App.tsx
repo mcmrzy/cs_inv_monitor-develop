@@ -3,8 +3,10 @@ import type { History } from '@remix-run/router'
 import { Suspense, useEffect, useState } from 'react'
 import lazyWithRetry from '@/utils/lazyWithRetry'
 import { ConfigProvider, App as AntApp, Spin } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
-import enUS from 'antd/locale/en_US'
+import zhCN from 'antd/es/locale/zh_CN'
+import enUS from 'antd/es/locale/en_US'
+import dayjs from 'dayjs'
+import 'dayjs/locale/zh-cn'
 import MainLayout from '@/layouts/MainLayout'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import ErrorBoundary from '@/components/ErrorBoundary'
@@ -111,6 +113,11 @@ const App: React.FC<{ history?: History }> = ({ history }) => {
   useEffect(() => {
     fetchTimezone()
   }, [fetchTimezone])
+
+  // 根据语言设置dayjs locale
+  useEffect(() => {
+    dayjs.locale(lang === 'zh' ? 'zh-cn' : 'en')
+  }, [lang])
 
   return (
     <ConfigProvider

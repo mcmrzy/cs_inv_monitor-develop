@@ -21,6 +21,7 @@ import {
 } from '@ant-design/icons';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useQuery } from '@tanstack/react-query';
+import useTranslation from '@/hooks/useTranslation';
 
 const { Title, Text } = Typography;
 
@@ -58,6 +59,7 @@ export function BulkOperationProgress({
   onComplete, 
   onError 
 }: BulkOperationProgressProps) {
+  const { t } = useTranslation();
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
   const wsRef = useRef<WebSocket | null>(null);
@@ -98,10 +100,10 @@ export function BulkOperationProgress({
           } : null);
           
           if (data.data.status === 'completed') {
-            message.success('批量操作已完成！');
+            message.success(t('bulk.operationCompleted'));
             onComplete?.(data.data);
           } else if (data.data.status === 'failed') {
-            message.error('批量操作失败');
+            message.error(t('bulk.operationFailed'));
             onError?.(data.data.error_message || 'Unknown error');
           }
         }
@@ -152,11 +154,11 @@ export function BulkOperationProgress({
     if (!jobStatus) return null;
 
     const statusMap = {
-      pending: { color: 'default', icon: <ClockCircleOutlined />, text: '等待中' },
-      processing: { color: 'processing', icon: <SyncOutlined spin />, text: '处理中' },
-      completed: { color: 'success', icon: <CheckCircleOutlined />, text: '已完成' },
-      failed: { color: 'error', icon: <CloseCircleOutlined />, text: '失败' },
-      cancelled: { color: 'warning', icon: <CloseCircleOutlined />, text: '已取消' },
+      pending: { color: 'default', icon: <ClockCircleOutlined />, text: t('bulk.pending') },
+      processing: { color: 'processing', icon: <SyncOutlined spin />, text: t('bulk.processing') },
+      completed: { color: 'success', icon: <CheckCircleOutlined />, text: t('bulk.completed') },
+      failed: { color: 'error', icon: <CloseCircleOutlined />, text: t('bulk.failed') },
+      cancelled: { color: 'warning', icon: <CloseCircleOutlined />, text: t('bulk.cancelled') },
     };
 
     const config = statusMap[jobStatus.status];
@@ -178,11 +180,21 @@ export function BulkOperationProgress({
     return new Date(timestamp * 1000).toLocaleString('zh-CN');
   };
 
+  const getJobTypeName = (jobType: string): string => {
+    const typeMap: Record<string, string> = {
+      bulk_add_members: t('bulk.bulkAddMembers'),
+      bulk_transfer_members: t('bulk.bulkTransferMembers'),
+      bulk_export: t('bulk.bulkExport'),
+      bulk_import: t('bulk.bulkImport'),
+    };
+    return typeMap[jobType] || jobType;
+  };
+
   if (isLoading) {
     return (
       <Card>
         <div style={{ textAlign: 'center', padding: '40px' }}>
-          <Spin size="large" tip="加载作业状态..." />
+          <Spin size="large" tip={t('bulk.loadingStatus')} />
         </div>
       </Card>
     );
@@ -193,8 +205,8 @@ export function BulkOperationProgress({
       <Card>
         <Result
           status="error"
-          title="加载作业信息失败"
-          subTitle="无法获取作业状态，请检查作业是否存在或已过期"
+          title={t('bulk.loadFailed')}
+          subTitle={t('bulk.loadFailedDesc')}
           extra={[
             <Button 
               key="retry" 
@@ -202,7 +214,7 @@ export function BulkOperationProgress({
               icon={<ReloadOutlined />}
               onClick={() => window.location.reload()}
             >
-              重试
+              {t('common.retry')}
             </Button>,
           ]}
         />
@@ -215,11 +227,11 @@ export function BulkOperationProgress({
       title={
         <Space>
           <Title level={5} style={{ margin: 0 }}>
-            批量操作进度
+            {t('bulk.progress')}
           </Title>
           {getStatusTag()}
           {connectionStatus === 'disconnected' && (
-            <Tag color="warning">连接已断开</Tag>
+            <Tag color="warning">{t('bulk.connectionLost')}</Tag>
           )}
         </Space>
       }
@@ -238,37 +250,37 @@ export function BulkOperationProgress({
               format={() => `${jobStatus.processed} / ${jobStatus.total}`}
             />
             <Text type="secondary" style={{ fontSize: '14px' }}>
-              {percentage}% 完成
+              {percentage}% {t('bulk.complete')}
             </Text>
           </div>
 
           {/* Job Details */}
           <Descriptions column={2} size="small" bordered>
-            <Descriptions.Item label="作业ID">
+            <Descriptions.Item label={t('bulk.jobId')}>
               <Text code>{jobStatus.job_id}</Text>
             </Descriptions.Item>
-            <Descriptions.Item label="作业类型">
+            <Descriptions.Item label={t('bulk.jobType')}>
               {getJobTypeName(jobStatus.job_type)}
             </Descriptions.Item>
-            <Descriptions.Item label="总数量">
+            <Descriptions.Item label={t('bulk.total')}>
               {jobStatus.total}
             </Descriptions.Item>
-            <Descriptions.Item label="已处理">
+            <Descriptions.Item label={t('bulk.processed')}>
               {jobStatus.processed}
             </Descriptions.Item>
-            <Descriptions.Item label="创建时间">
+            <Descriptions.Item label={t('bulk.createdAt')}>
               {formatTime(jobStatus.created_at)}
             </Descriptions.Item>
-            <Descriptions.Item label="更新时间">
+            <Descriptions.Item label={t('bulk.updatedAt')}>
               {formatTime(jobStatus.updated_at)}
             </Descriptions.Item>
             {jobStatus.completed_at && (
-              <Descriptions.Item label="完成时间" span={2}>
+              <Descriptions.Item label={t('bulk.completedAt')} span={2}>
                 {formatTime(jobStatus.completed_at)}
               </Descriptions.Item>
             )}
             {jobStatus.retry_count > 0 && (
-              <Descriptions.Item label="重试次数">
+              <Descriptions.Item label={t('bulk.retryCount')}>
                 <Tag color="orange">{jobStatus.retry_count}</Tag>
               </Descriptions.Item>
             )}
@@ -278,7 +290,7 @@ export function BulkOperationProgress({
           {jobStatus.error_message && (
             <div>
               <Text type="danger" strong>
-                错误信息：
+                {t('bulk.errorMessage')}
               </Text>
               <Text type="secondary" style={{ marginLeft: '8px' }}>
                 {jobStatus.error_message}
@@ -294,14 +306,14 @@ export function BulkOperationProgress({
                 onClick={() => window.location.reload()}
                 icon={<ReloadOutlined />}
               >
-                刷新列表
+                {t('common.refreshList')}
               </Button>
               {jobStatus.status === 'failed' && (
                 <Button 
                   danger
-                  onClick={() => message.info('请联系管理员重试')}
+                  onClick={() => message.info(t('bulk.contactAdmin'))}
                 >
-                  联系支持
+                  {t('bulk.contactSupport')}
                 </Button>
               )}
             </Space>
@@ -327,19 +339,12 @@ function getCurrentUserId(): string {
   return '0';
 }
 
-// Helper function to get job type display name
-function getJobTypeName(jobType: string): string {
-  const typeMap: Record<string, string> = {
-    bulk_add_members: '批量添加成员',
-    bulk_transfer_members: '批量转移成员',
-    bulk_export: '批量导出',
-    bulk_import: '批量导入',
-  };
-  return typeMap[jobType] || jobType;
-}
+// Helper function to get job type display name (moved inside component to use t)
+// function getJobTypeName is now defined inside BulkOperationProgress
 
 // Hook for bulk operations with progress tracking
 export function useBulkOperation() {
+  const { t } = useTranslation();
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -364,7 +369,7 @@ export function useBulkOperation() {
       const jobId = result.job_id;
       
       setCurrentJobId(jobId);
-      message.success(`任务已创建，正在后台处理`);
+      message.success(t('bulk.taskCreated'));
       
       return jobId;
     } finally {

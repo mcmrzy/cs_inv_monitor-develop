@@ -75,7 +75,7 @@ const InvitationManager: React.FC<Props> = ({ selectedOrgId }) => {
     navigator.clipboard.writeText(link).then(() => {
       message.success(t('channel.invite.linkCopied'))
     }).catch(() => {
-      message.error('Failed to copy')
+      message.error(t('channel.invite.copyFailed'))
     })
   }
 

@@ -332,6 +332,24 @@ COMMENT ON VIEW v_user_device_access IS
 --   已由 device_telemetry_3min 超表 + TimescaleDB 连续聚合替代
 
 -- ============================================
+-- 4.5 设备生命周期事件表
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS device_lifecycle (
+    id BIGSERIAL PRIMARY KEY,
+    device_sn VARCHAR(50) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    description TEXT,
+    triggered_by BIGINT,
+    metadata JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_lifecycle_sn ON device_lifecycle(device_sn);
+CREATE INDEX IF NOT EXISTS idx_device_lifecycle_type ON device_lifecycle(event_type);
+CREATE INDEX IF NOT EXISTS idx_device_lifecycle_sn_time ON device_lifecycle(device_sn, created_at DESC);
+
+-- ============================================
 -- 5. 时序遥测数据表
 -- ============================================
 

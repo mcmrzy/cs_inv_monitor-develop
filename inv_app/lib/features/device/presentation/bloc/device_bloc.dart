@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:async';
 import 'package:inv_app/core/errors/failures.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
@@ -17,7 +18,8 @@ part 'device_state.dart';
 
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final DeviceRepository repository;
-  final MQTTService mqttService;
+  final MQTTService mqttService; // 保留用于本地 OTA
+  final RealtimeDataService realtimeDataService; // 新增：用于远程实时数据
   final LocalCommunicationService? localCommunicationService;
   final ConnectionModeService? connectionModeService;
   final OfflineCacheService? offlineCacheService;
@@ -32,6 +34,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   DeviceBloc({
     required this.repository,
     required this.mqttService,
+    required this.realtimeDataService,
     this.localCommunicationService,
     this.connectionModeService,
     this.offlineCacheService,
@@ -60,7 +63,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     _localPollTimer?.cancel();
     _connectionMonitor.dispose();
     if (_activeSN != null) {
-      mqttService.unsubscribeDeviceTopics(_activeSN!);
+      realtimeDataService.stopPolling(_activeSN!);
     }
     return super.close();
   }
@@ -143,28 +146,22 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   Future<void> _startMQTTRealtime(String sn) async {
     _mqttSub?.cancel();
     _mqttSub = null;
-    if (_activeSN != null && mqttService.isConnected) {
-      mqttService.unsubscribeDeviceTopics(_activeSN!);
+    
+    // 停止之前的设备轮询
+    if (_activeSN != null) {
+      realtimeDataService.stopPolling(_activeSN!);
     }
     _activeSN = sn;
 
-    _mqttSub = mqttService.realtimeDataStream.listen((rt) {
+    // 使用 API 轮询替代 MQTT 直连
+    _mqttSub = realtimeDataService.realtimeDataStream.listen((rt) {
       if (!isClosed && sn == rt.deviceSN) {
         add(DeviceRealtimeWSUpdate(rt));
       }
     });
 
-    if (!mqttService.isConnected) {
-      try {
-        await mqttService.waitForConnection(
-          timeout: const Duration(seconds: 10),
-        );
-      } catch (e) {
-        return;
-      }
-    }
-
-    mqttService.subscribeDeviceTopics(sn);
+    // 启动 API 轮询（每 3 秒）
+    realtimeDataService.startPolling(sn);
   }
 
   void _onMQTTUpdate(
@@ -304,7 +301,7 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
     _mqttSub?.cancel();
     _mqttSub = null;
     if (_activeSN != null) {
-      mqttService.unsubscribeDeviceTopics(_activeSN!);
+      realtimeDataService.stopPolling(_activeSN!);
       _activeSN = null;
     }
   }

@@ -471,6 +471,9 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("REDIS_ADDR"); v != "" {
 		cfg.Redis.Addr = v
 	}
+	if v := os.Getenv("REDIS_PASSWORD"); v != "" {
+		cfg.Redis.Password = v
+	}
 }
 
 // ---------------------------------------------------------------------------
