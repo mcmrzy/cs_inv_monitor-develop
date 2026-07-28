@@ -120,6 +120,7 @@ services:
       MQTT_CERT_SHA256: ${MQTT_CERT_SHA256}
       KAFKA_BROKER: ${KAFKA_BROKERS:-broker.jiuxiaoyw.online:9092}
       KAFKA_ENABLED: "true"
+      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-inv-device-server-parser-local}
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: ${INTERNAL_KEY}
     expose:

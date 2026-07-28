@@ -22,6 +22,72 @@ function matchesExpectedShape(value: unknown, expected: ExpectedDataShape): bool
     && typeof value.total === 'number'
 }
 
+/** 解析 JWT token 获取过期时间（秒级时间戳） */
+function parseJwtExp(token: string): number | null {
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    const decoded = JSON.parse(atob(payload))
+    return decoded.exp ?? null
+  } catch {
+    return null
+  }
+}
+
+// Token 刷新状态管理
+let isRefreshing = false
+let refreshSubscribers: Array<(token: string) => void> = []
+let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null
+
+function subscribeTokenRefresh(cb: (token: string) => void) {
+  refreshSubscribers.push(cb)
+}
+
+function onTokenRefreshed(newToken: string) {
+  refreshSubscribers.forEach(cb => cb(newToken))
+  refreshSubscribers = []
+}
+
+/** 设置主动定时刷新：在 token 过期前 2 分钟自动刷新 */
+scheduleProactiveRefresh()
+
+function scheduleProactiveRefresh() {
+  if (proactiveRefreshTimer) {
+    clearTimeout(proactiveRefreshTimer)
+    proactiveRefreshTimer = null
+  }
+  const token = useAuthStore.getState().token
+  if (!token) return
+  const exp = parseJwtExp(token)
+  if (!exp) return
+  const now = Math.floor(Date.now() / 1000)
+  const refreshIn = (exp - now - 120) * 1000 // 提前 2 分钟刷新
+  if (refreshIn <= 0) {
+    // token 已过期或即将过期，立即刷新
+    doRefreshToken()
+    return
+  }
+  proactiveRefreshTimer = setTimeout(() => doRefreshToken(), refreshIn)
+}
+
+async function doRefreshToken(): Promise<string | null> {
+  const refreshToken = useAuthStore.getState().refreshToken
+  if (!refreshToken) return null
+  try {
+    const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+    const data = res.data?.data ?? res.data
+    const newToken = data?.token ?? data?.access_token
+    if (newToken) {
+      useAuthStore.getState().refreshAuth(newToken, data.refresh_token ?? '')
+      scheduleProactiveRefresh() // 重新调度下次刷新
+      return newToken
+    }
+  } catch {
+    // 刷新失败
+  }
+  return null
+}
+
 const api = axios.create({
   baseURL: '/api/v1',
   timeout: 15000,
@@ -100,27 +166,42 @@ api.interceptors.response.use(
     const originalRequest = error.config
     if (error.response?.status === 401 && !originalRequest._retry && window.location.pathname !== '/login') {
       originalRequest._retry = true
-      const refreshToken = useAuthStore.getState().refreshToken
-      if (refreshToken) {
-        try {
-          const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
-          const data = res.data?.data ?? res.data
-          const token = data?.token ?? data?.access_token
-          if (token) {
-            useAuthStore.getState().refreshAuth(token, data.refresh_token ?? '')
-            originalRequest.headers.Authorization = `Bearer ${token}`
-            return api(originalRequest)
-          }
-        } catch {
-          // refresh failed, fall through to logout
-        }
+
+      // 如果正在刷新中，将请求加入队列等待
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          subscribeTokenRefresh((newToken: string) => {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`
+            resolve(api(originalRequest))
+          })
+        })
       }
+
+      isRefreshing = true
+      const newToken = await doRefreshToken()
+      isRefreshing = false
+
+      if (newToken) {
+        // 通知所有等待的请求
+        onTokenRefreshed(newToken)
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        return api(originalRequest)
+      }
+
+      // 刷新失败，跳转登录页
       useAuthStore.getState().logout()
       window.location.href = '/login'
     }
     return Promise.reject(error)
   },
 )
+
+// 监听 authStore 变化，token 变更时重新调度主动刷新
+useAuthStore.subscribe((state, prevState) => {
+  if (state.token !== prevState.token) {
+    scheduleProactiveRefresh()
+  }
+})
 
 export const authApi = {
   login: (data: { account: string; password: string }) =>

@@ -294,6 +294,7 @@ class AppColors {
 
   // Surface colors (light mode)
   static const Color divider = Color(0xFFE5E7EB);
+  static const Color border = Color(0xFFE5E7EB);
   static const Color background = Color(0xFFF7F8FA);
   static const Color surfaceHover = Color(0xFFF3F4F6);
 

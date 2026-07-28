@@ -205,9 +205,16 @@ func main() {
 		// 共享的 WaitGroup 用于 Kafka 消费者优雅关闭
 		var kafkaWG sync.WaitGroup
 
-		protocolParser := service.NewProtocolParser(
-			cfg.Kafka.Brokers, cfg.Kafka.TelemetryTopic, "inv-device-server-parser",
-			deviceRepo, metaRepo, rdb, hub, cfg.Backends.APIServer, cfg.Backends.InternalKey)
+		// 支持通过配置文件指定消费者组 ID，默认为 inv-device-server-parser
+		consumerGroup := cfg.Kafka.ConsumerGroup
+		if consumerGroup == "" {
+			consumerGroup = "inv-device-server-parser"
+		}
+
+		protocolParser := service.NewProtocolParserWithWorkers(
+			cfg.Kafka.Brokers, cfg.Kafka.TelemetryTopic, consumerGroup,
+			deviceRepo, metaRepo, rdb, hub, cfg.Backends.APIServer, cfg.Backends.InternalKey,
+			cfg.Kafka.WorkerCount)
 		// 注入共享的状态管理器实例，确保 MQTT 层和 Kafka 消费层使用同一状态机
 		protocolParser.SetStateManager(stateManager)
 		protocolParser.SetWaitGroup(&kafkaWG)

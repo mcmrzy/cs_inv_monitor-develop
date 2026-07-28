@@ -19,6 +19,7 @@ import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/notification_service.dart';
+import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
@@ -65,6 +66,10 @@ class MockStorageService extends Mock implements StorageService {}
 /// Mock implementation of [MQTTService] for testing MQTT interactions
 /// without a real broker connection.
 class MockMQTTService extends Mock implements MQTTService {}
+
+/// Mock implementation of [RealtimeDataService] for testing remote
+/// real-time data service without a real backend connection.
+class MockRealtimeDataService extends Mock implements RealtimeDataService {}
 
 /// Mock implementation of [LocaleService] for testing locale switching.
 class MockLocaleService extends Mock implements LocaleService {}

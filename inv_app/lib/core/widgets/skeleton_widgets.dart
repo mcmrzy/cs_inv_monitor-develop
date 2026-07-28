@@ -458,6 +458,204 @@ class SkeletonDeviceRealtime extends StatelessWidget {
   }
 }
 
+/// 设备控制页骨架屏：模拟 TabBar + 内容区域
+class SkeletonDeviceControl extends StatelessWidget {
+  const SkeletonDeviceControl({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerSkeleton(
+      child: Column(
+        children: [
+          // TabBar 骨架
+          Container(
+            color: Colors.white,
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 6.h,
+              bottom: 8.h,
+            ),
+            child: Row(
+              children: List.generate(
+                4,
+                (_) => Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w),
+                    child: SkeletonBox(width: 60.w, height: 30.h, borderRadius: 8),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 12.h),
+          // 内容区域骨架
+          Expanded(
+            child: ListView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 40.h),
+              itemCount: 4,
+              itemBuilder: (_, i) => Padding(
+                padding: EdgeInsets.only(bottom: 12.h),
+                child: Container(
+                  padding: EdgeInsets.all(16.w),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14.r),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonBox(width: 120.w, height: 16.h),
+                      SizedBox(height: 12.h),
+                      Row(
+                        children: [
+                          SkeletonBox(width: 80.w, height: 14.h),
+                          const Spacer(),
+                          SkeletonBox(width: 60.w, height: 14.h),
+                        ],
+                      ),
+                      SizedBox(height: 8.h),
+                      Row(
+                        children: [
+                          SkeletonBox(width: 80.w, height: 14.h),
+                          const Spacer(),
+                          SkeletonBox(width: 60.w, height: 14.h),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// OTA页面骨架屏
+class SkeletonOtaPage extends StatelessWidget {
+  const SkeletonOtaPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerSkeleton(
+      child: ListView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 40.h),
+        itemCount: 3,
+        itemBuilder: (_, i) => Padding(
+          padding: EdgeInsets.only(bottom: 12.h),
+          child: Container(
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    SkeletonBox(width: 40.w, height: 40.w, borderRadius: 8),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SkeletonBox(width: 150.w, height: 16.h),
+                          SizedBox(height: 6.h),
+                          SkeletonBox(width: 100.w, height: 12.h),
+                        ],
+                      ),
+                    ),
+                    SkeletonBox(width: 70.w, height: 28.h, borderRadius: 8),
+                  ],
+                ),
+                SizedBox(height: 12.h),
+                SkeletonBox(height: 8.h, borderRadius: 4),
+                SizedBox(height: 8.h),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    SkeletonBox(width: 80.w, height: 12.h),
+                    SkeletonBox(width: 60.w, height: 12.h),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 设置页面骨架屏
+class SkeletonSettingsPage extends StatelessWidget {
+  const SkeletonSettingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerSkeleton(
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 40.h),
+        children: [
+          // 用户信息卡片
+          Container(
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14.r),
+            ),
+            child: Row(
+              children: [
+                SkeletonBox(width: 56.w, height: 56.w, borderRadius: 28),
+                SizedBox(width: 14.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonBox(width: 120.w, height: 18.h),
+                      SizedBox(height: 6.h),
+                      SkeletonBox(width: 180.w, height: 13.h),
+                    ],
+                  ),
+                ),
+                SkeletonBox(width: 16.w, height: 16.w, borderRadius: 4),
+              ],
+            ),
+          ),
+          SizedBox(height: 16.h),
+          // 设置列表
+          ...List.generate(
+            6,
+            (_) => Padding(
+              padding: EdgeInsets.only(bottom: 2.h),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(4.r),
+                ),
+                child: Row(
+                  children: [
+                    SkeletonBox(width: 22.w, height: 22.w, borderRadius: 6),
+                    SizedBox(width: 14.w),
+                    Expanded(child: SkeletonBox(width: 100.w, height: 15.h)),
+                    SkeletonBox(width: 16.w, height: 16.w, borderRadius: 4),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 离线数据指示条：显示正在使用缓存数据
 class OfflineDataBanner extends StatelessWidget {
   final VoidCallback? onRetry;

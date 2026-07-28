@@ -8,7 +8,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:inv_app/features/notification/presentation/bloc/notification_bloc.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 
@@ -48,7 +47,7 @@ void main() {
 
   late NotificationBloc notificationBloc;
   late MockDeviceRepository mockDeviceRepository;
-  late MockMQTTService mockMQTTService;
+  late MockRealtimeDataService mockRealtimeDataService;
   late MockNotificationRemoteDataSource mockNotificationDataSource;
   late MockStorageService mockStorageService;
   late MockAppUpdateService mockAppUpdateService;
@@ -60,18 +59,16 @@ void main() {
 
   setUp(() {
     mockDeviceRepository = MockDeviceRepository();
-    mockMQTTService = MockMQTTService();
+    mockRealtimeDataService = MockRealtimeDataService();
     mockNotificationDataSource = MockNotificationRemoteDataSource();
     mockStorageService = MockStorageService();
     mockAppUpdateService = MockAppUpdateService();
 
-    // Default MQTT stubs
-    when(() => mockMQTTService.realtimeDataStream)
+    // Default RealtimeDataService stubs
+    when(() => mockRealtimeDataService.realtimeDataStream)
         .thenAnswer((_) => const Stream<InverterRealtime>.empty());
-    when(() => mockMQTTService.alarmStream)
+    when(() => mockRealtimeDataService.alarmStream)
         .thenAnswer((_) => const Stream<AlarmData>.empty());
-    when(() => mockMQTTService.otaNotificationStream)
-        .thenAnswer((_) => const Stream<OTANotification>.empty());
 
     // Register getIt dependencies used by NotificationBloc
     getIt.registerFactory<StorageService>(() => mockStorageService);
@@ -79,7 +76,7 @@ void main() {
 
     notificationBloc = NotificationBloc(
       deviceRepository: mockDeviceRepository,
-      mqttService: mockMQTTService,
+      realtimeDataService: mockRealtimeDataService,
       notificationDataSource: mockNotificationDataSource,
     );
   });

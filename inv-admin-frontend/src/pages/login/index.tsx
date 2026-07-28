@@ -44,7 +44,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     welcome: '欢迎回来', createAcc: '创建账号', resetPwd: '重置密码',
     welcomeSub: '登录您的账户以继续', createSub: '注册新账户开始使用', resetSub: '通过邮箱重置密码',
     login: '密码登录', loginByCode: '验证码登录', register: '注册', reset: '重置密码',
-    account: '手机号 / 邮箱', password: '密码', remember: '记住我', forgot: '忘记密码？',
+    account: '手机号 / 邮箱', password: '密码', remember: '记住账号', forgot: '忘记密码？',
     submitLogin: '登 录', noAccount: '还没有账号？', goRegister: '立即注册',
     phone: '手机号', email: '邮箱', code: '验证码', sendCode: '发送验证码', resendCode: 's 后重发',
     phoneCodeLogin: '手机号验证码登录', emailCodeLogin: '邮箱验证码登录',
@@ -76,7 +76,7 @@ const i18n: Record<Lang, Record<string, string>> = {
     welcome: 'Welcome Back', createAcc: 'Create Account', resetPwd: 'Reset Password',
     welcomeSub: 'Sign in to your account', createSub: 'Register a new account', resetSub: 'Reset via email',
     login: 'Password Login', loginByCode: 'Code Login', register: 'Register', reset: 'Reset',
-    account: 'Phone / Email', password: 'Password', remember: 'Remember me', forgot: 'Forgot password?',
+    account: 'Phone / Email', password: 'Password', remember: 'Remember account', forgot: 'Forgot password?',
     submitLogin: 'Sign In', noAccount: "Don't have an account? ", goRegister: 'Register',
     phone: 'Phone', email: 'Email', code: 'Verification Code', sendCode: 'Send Code', resendCode: 's',
     phoneCodeLogin: 'Phone Code Login', emailCodeLogin: 'Email Code Login',
@@ -116,6 +116,15 @@ const LoginPage: React.FC = () => {
   const { message } = App.useApp()
   const [registerForm] = Form.useForm()
   const [resetForm] = Form.useForm()
+  const [loginForm] = Form.useForm()
+
+  // 从 localStorage 读取保存的账号并自动填充
+  useEffect(() => {
+    const savedAccount = localStorage.getItem('remembered_account')
+    if (savedAccount) {
+      loginForm.setFieldsValue({ account: savedAccount, remember: true })
+    }
+  }, [loginForm])
 
   const t = i18n[lang]
   const localizeAuthError = (payload: any, fallback: string) => {
@@ -223,8 +232,14 @@ const LoginPage: React.FC = () => {
   }
 
   // 登录按钮点击
-  const onLogin = async (values: { account: string; password: string }) => {
+  const onLogin = async (values: { account: string; password: string; remember?: boolean }) => {
     await performLogin(values)
+    // 登录成功后保存账号（performLogin 成功会 navigate，所以这里只在未跳转时执行）
+    if (values.remember) {
+      localStorage.setItem('remembered_account', values.account)
+    } else {
+      localStorage.removeItem('remembered_account')
+    }
   }
 
   const onRegister = async (values: { phone: string; email: string; password: string; nickname: string; code: string }) => {
@@ -420,7 +435,7 @@ const LoginPage: React.FC = () => {
 
               {/* Login */}
               {activeTab === 'login' && (
-                <Form name="login" onFinish={onLogin} size="large">
+                <Form form={loginForm} name="login" onFinish={onLogin} size="large" initialValues={{ remember: true }}>
                   <Form.Item name="account" rules={[{ required: true, message: lang === 'zh' ? '请输入手机号或邮箱' : 'Phone or email required' }]}>
                     <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder={t.account} style={inputStyle} />
                   </Form.Item>

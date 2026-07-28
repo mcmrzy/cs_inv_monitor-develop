@@ -409,7 +409,11 @@ func (c *Client) Connect(ctx context.Context) error {
 					topic := pr.Packet.Topic
 					sn := extractSN(topic)
 
-					
+					// Debug: log received MQTT messages
+					logger.Info("MQTT message received",
+						zap.String("topic", topic),
+						zap.String("sn", sn),
+						zap.Int("payload_len", len(pr.Packet.Payload)))
 
 					// 设备状态主题（LWT 离线/上线消息）
 					if isDeviceStatusTopic(topic) {

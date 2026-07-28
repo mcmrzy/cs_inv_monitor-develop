@@ -4,6 +4,9 @@ class User {
   final String? email;
   final String? nickname;
   final String? avatar;
+  final String? country;
+  final String? region;
+  final String? bio;
   final bool isSystemAdmin;
   final List<String> permissions;
   final int status;
@@ -17,6 +20,9 @@ class User {
     this.email,
     this.nickname,
     this.avatar,
+    this.country,
+    this.region,
+    this.bio,
     this.isSystemAdmin = false,
     this.permissions = const [],
     required this.status,
@@ -54,6 +60,9 @@ class User {
       email: json['email'] as String?,
       nickname: json['nickname'] as String?,
       avatar: json['avatar'] as String?,
+      country: json['country'] as String?,
+      region: json['region'] as String?,
+      bio: json['bio'] as String?,
       isSystemAdmin: isSystemAdmin,
       permissions: perms,
       status: statusVal,
@@ -76,6 +85,9 @@ class User {
       'email': email,
       'nickname': nickname,
       'avatar': avatar,
+      'country': country,
+      'region': region,
+      'bio': bio,
       'is_system_admin': isSystemAdmin,
       'permissions': permissions,
       'status': status,

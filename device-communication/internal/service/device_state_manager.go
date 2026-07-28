@@ -169,6 +169,13 @@ func (m *DeviceStateManager) HandleStateChange(ctx context.Context, req *StateCh
 			zap.Int("current", int(currentState)),
 			zap.Int("event", int(req.Event)),
 			zap.Int("target", int(targetState)))
+		// 特殊处理：设备已经是Online状态，收到OnlineReport事件时
+		// 仍然通知API Server更新数据库（刷新last_online_at）
+		if currentState == StateOnline && req.Event == EventOnlineReport {
+			logger.Info("Device already online, refreshing last_online_at via API Server",
+				zap.String("sn", req.SN))
+			return m.executeStateChange(ctx, req.SN, StateOnline, req.Metadata)
+		}
 		return nil
 	}
 
@@ -740,6 +747,7 @@ func (m *DeviceStateManager) StartOnlineSetReconciler(ctx context.Context) {
 }
 
 // reconcileOnlineSet removes stale SNs from the online set whose heartbeat keys no longer exist.
+// Also notifies API Server to update device status to offline.
 func (m *DeviceStateManager) reconcileOnlineSet(ctx context.Context) {
 	setSNs, err := m.rdb.SMembers(ctx, "device:online_set").Result()
 	if err != nil {
@@ -752,9 +760,11 @@ func (m *DeviceStateManager) reconcileOnlineSet(ctx context.Context) {
 
 	// Check which SNs in the set no longer have a heartbeat key
 	var stale []interface{}
+	var staleSNs []string
 	for _, sn := range setSNs {
 		if m.rdb.Exists(ctx, "device:heartbeat:"+sn).Val() == 0 {
 			stale = append(stale, sn)
+			staleSNs = append(staleSNs, sn)
 		}
 	}
 	if len(stale) > 0 {
@@ -762,6 +772,20 @@ func (m *DeviceStateManager) reconcileOnlineSet(ctx context.Context) {
 		logger.Info("Reconciled online set via DeviceStateManager",
 			zap.Int("stale_removed", len(stale)),
 			zap.Int("remaining", len(setSNs)-len(stale)))
+
+		// Notify API Server to update each stale device to offline
+		for _, sn := range staleSNs {
+			// Update Redis state to offline
+			stateKey := fmt.Sprintf("device:state:%s", sn)
+			m.rdb.Set(ctx, stateKey, int(StateOffline), 0)
+			m.stateCache.Store(sn, StateOffline)
+
+			// Notify API Server
+			if err := m.executeStateChange(ctx, sn, StateOffline, nil); err != nil {
+				logger.Warn("Failed to sync device offline state to API Server during reconciliation",
+					zap.String("sn", sn), zap.Error(err))
+			}
+		}
 	}
 }
 

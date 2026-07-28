@@ -93,15 +93,20 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, void>> updateProfile({
     String? nickname,
     String? avatar,
+    String? email,
+    String? country,
+    String? regionName,
+    String? bio,
     String? timezone,
   }) async {
-    final data = <String, dynamic>{
-      'nickname': nickname,
-      'avatar': avatar,
-    };
-    if (timezone != null) {
-      data['timezone'] = timezone;
-    }
+    final data = <String, dynamic>{};
+    if (nickname != null) data['nickname'] = nickname;
+    if (avatar != null) data['avatar'] = avatar;
+    if (email != null) data['email'] = email;
+    if (country != null) data['country'] = country;
+    if (regionName != null) data['region'] = regionName;
+    if (bio != null) data['bio'] = bio;
+    if (timezone != null) data['timezone'] = timezone;
     return apiService.put(
       '/auth/profile',
       data: data,

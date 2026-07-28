@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -291,7 +292,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.systemSettings)),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const SkeletonSettingsPage(),
       );
     }
 

@@ -17,11 +17,13 @@ void main() {
   late DeviceBloc deviceBloc;
   late MockDeviceRepository mockDeviceRepository;
   late MockMQTTService mockMQTTService;
+  late MockRealtimeDataService mockRealtimeDataService;
   late MockDataCacheService mockDataCacheService;
 
   setUp(() {
     mockDeviceRepository = MockDeviceRepository();
     mockMQTTService = MockMQTTService();
+    mockRealtimeDataService = MockRealtimeDataService();
     mockDataCacheService = MockDataCacheService();
 
     // Default MQTT stubs
@@ -37,6 +39,7 @@ void main() {
     deviceBloc = DeviceBloc(
       repository: mockDeviceRepository,
       mqttService: mockMQTTService,
+      realtimeDataService: mockRealtimeDataService,
       dataCacheService: mockDataCacheService,
     );
   });

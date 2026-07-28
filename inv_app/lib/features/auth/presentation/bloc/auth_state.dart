@@ -26,6 +26,14 @@ class AuthAuthenticated extends AuthState {
     this.user,
   });
 
+  // Convenience getters that delegate to the user object
+  String? get nickname => user?.nickname;
+  String? get email => user?.email;
+  String? get country => user?.country;
+  String? get regionName => user?.region;
+  String? get bio => user?.bio;
+  String? get avatar => user?.avatar;
+
   @override
   List<Object?> get props => [userId, phone, isSystemAdmin, permissions, user];
 }

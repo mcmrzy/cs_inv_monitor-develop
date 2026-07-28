@@ -200,8 +200,9 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   Future<void> _fetchDeviceDetail() async {
     try {
       final dio = getIt<Dio>();
+      // API 路径: /devices/by-sn/:sn
       final res = await dio
-          .get('/devices/${widget.sn}')
+          .get('/devices/by-sn/${widget.sn}')
           .timeout(const Duration(seconds: 5));
       if (res.statusCode == 200 && mounted) {
         final data = unwrapApiResponse<Map<String, dynamic>>(

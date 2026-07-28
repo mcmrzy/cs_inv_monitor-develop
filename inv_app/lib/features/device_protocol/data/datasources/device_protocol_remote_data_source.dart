@@ -29,14 +29,14 @@ class DeviceProtocolRemoteDataSourceImpl
     int pageSize = 20,
   }) {
     return dio.get<dynamic>(
-      '/devices/$sn/alarm-events',
+      '/devices/by-sn/$sn/alarm-events',
       queryParameters: {'page': page, 'page_size': pageSize},
     );
   }
 
   @override
   Future<Response<dynamic>> getParallelState(String sn) {
-    return dio.get<dynamic>('/devices/$sn/parallel-state');
+    return dio.get<dynamic>('/devices/by-sn/$sn/parallel-state');
   }
 
   @override
@@ -46,7 +46,7 @@ class DeviceProtocolRemoteDataSourceImpl
     int pageSize = 20,
   }) {
     return dio.get<dynamic>(
-      '/devices/$sn/three-phase',
+      '/devices/by-sn/$sn/three-phase',
       queryParameters: {'page': page, 'page_size': pageSize},
     );
   }

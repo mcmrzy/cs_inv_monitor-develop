@@ -265,6 +265,18 @@ class AppRouter {
             _slidePage(state, const LocalModePage()),
       ),
       GoRoute(
+        path: '/local-ota',
+        name: 'localOta',
+        pageBuilder: (context, state) {
+          final sn = state.uri.queryParameters['sn'] ?? '';
+          final ip = state.uri.queryParameters['ip'] ?? '';
+          return _slidePage(
+            state,
+            LocalOTAPage(deviceSN: sn, deviceIP: ip),
+          );
+        },
+      ),
+      GoRoute(
         path: '/add-device',
         name: 'addDevice',
         pageBuilder: (context, state) {
@@ -429,8 +441,13 @@ class _MainShellState extends State<MainShell> {
     if (!_hasCheckedUpdate) {
       _hasCheckedUpdate = true;
 
+      // 延迟检查更新，避免阻塞页面加载
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _autoCheckUpdate();
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) {
+            _autoCheckUpdate();
+          }
+        });
       });
     }
   }

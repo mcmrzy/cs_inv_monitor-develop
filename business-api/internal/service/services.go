@@ -106,6 +106,14 @@ func (s *UserService) UpdateLoginInfo(ctx context.Context, userID int64, ip stri
 	return s.repo.UpdateLoginInfo(ctx, userID, ip)
 }
 
+func (s *UserService) UpdatePhone(ctx context.Context, userID int64, phone string) error {
+	return s.repo.UpdatePhone(ctx, userID, phone)
+}
+
+func (s *UserService) UpdateEmail(ctx context.Context, userID int64, email string) error {
+	return s.repo.UpdateEmail(ctx, userID, email)
+}
+
 func (s *UserService) LogAudit(ctx context.Context, operatorID int64, operatorName, action, resourceType, resourceID, detail, ip string) {
 	s.repo.LogAudit(ctx, operatorID, operatorName, action, resourceType, resourceID, detail, ip)
 }

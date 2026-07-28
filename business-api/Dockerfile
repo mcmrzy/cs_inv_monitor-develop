@@ -18,8 +18,8 @@ COPY --from=builder /app/inv-api-server ./main
 COPY business-api/config.docker.yaml ./config.yaml
 COPY database ./database
 RUN addgroup -S app && adduser -S -G app app && \
-    mkdir -p /data/firmware /app/logs && \
-    chown -R app:app /data/firmware /app/logs
+    mkdir -p /data/firmware /data/uploads/avatars /app/logs && \
+    chown -R app:app /data/firmware /data/uploads /app/logs
 
 ENV TZ=UTC
 

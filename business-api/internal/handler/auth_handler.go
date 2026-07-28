@@ -1319,3 +1319,233 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 		MembershipID:         tokenResult.MembershipID,
 	})
 }
+
+// ==================== 更改手机号/邮箱 ====================
+
+// SendPhoneChangeCode 发送更改手机号验证码（已登录用户）
+// POST /api/v1/auth/send-phone-code
+type SendPhoneChangeCodeRequest struct {
+	Phone string `json:"phone" binding:"required"`
+}
+
+func (h *AuthHandler) SendPhoneChangeCode(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID <= 0 {
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req SendPhoneChangeCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	if len(req.Phone) < 5 {
+		response.Error(c, 400, "invalid phone number")
+		return
+	}
+
+	// 检查手机号是否已被其他用户使用
+	existingUser, err := h.userService.GetByPhone(c.Request.Context(), req.Phone)
+	if err != nil {
+		response.Error(c, 500, "system error")
+		return
+	}
+	if existingUser != nil && existingUser.ID != userID {
+		response.Error(c, 4009, "该手机号已被其他账户使用")
+		return
+	}
+
+	// IP 级频率限制
+	ipLimitKey := fmt.Sprintf("send_code_ip:%s", c.ClientIP())
+	ipCount, _ := h.userService.Cache().Get(c.Request.Context(), ipLimitKey).Int()
+	if ipCount >= 10 {
+		response.Error(c, 4029, "发送验证码过于频繁，请稍后再试")
+		return
+	}
+
+	if err := h.smsService.SendCode(c.Request.Context(), req.Phone, "change_phone"); err != nil {
+		logger.Warn("send phone change code failed", zap.String("phone", req.Phone), zap.Error(err))
+		response.Error(c, 4006, "verification code delivery failed")
+		return
+	}
+
+	h.userService.Cache().Incr(c.Request.Context(), ipLimitKey)
+	h.userService.Cache().Expire(c.Request.Context(), ipLimitKey, 1*time.Hour)
+
+	response.SuccessWithMessage(c, "code sent", nil)
+}
+
+// SendEmailChangeCode 发送更改邮箱验证码（已登录用户）
+// POST /api/v1/auth/send-email-change-code
+type SendEmailChangeCodeRequest struct {
+	Email string `json:"email" binding:"required"`
+}
+
+func (h *AuthHandler) SendEmailChangeCode(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID <= 0 {
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req SendEmailChangeCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	if !emailRegex.MatchString(req.Email) {
+		response.Error(c, 4008, "invalid email format")
+		return
+	}
+
+	// 检查邮箱是否已被其他用户使用
+	existingUser, err := h.userService.GetByEmail(c.Request.Context(), req.Email)
+	if err != nil {
+		response.Error(c, 500, "system error")
+		return
+	}
+	if existingUser != nil && existingUser.ID != userID {
+		response.Error(c, 4009, "该邮箱已被其他账户使用")
+		return
+	}
+
+	// IP 级频率限制
+	ipLimitKey := fmt.Sprintf("send_code_ip:%s", c.ClientIP())
+	ipCount, _ := h.userService.Cache().Get(c.Request.Context(), ipLimitKey).Int()
+	if ipCount >= 10 {
+		response.Error(c, 4029, "发送验证码过于频繁，请稍后再试")
+		return
+	}
+
+	if err := h.emailService.SendCode(c.Request.Context(), req.Email, "change_email"); err != nil {
+		logger.Warn("send email change code failed", zap.String("email", req.Email), zap.Error(err))
+		response.Error(c, 4010, "verification code delivery failed")
+		return
+	}
+
+	h.userService.Cache().Incr(c.Request.Context(), ipLimitKey)
+	h.userService.Cache().Expire(c.Request.Context(), ipLimitKey, 1*time.Hour)
+
+	response.SuccessWithMessage(c, "code sent", nil)
+}
+
+// ChangePhone 更改手机号
+// PUT /api/v1/auth/change-phone
+type ChangePhoneRequest struct {
+	NewPhone string `json:"new_phone" binding:"required"`
+	Code     string `json:"code" binding:"required"`
+}
+
+func (h *AuthHandler) ChangePhone(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID <= 0 {
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req ChangePhoneRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	if len(req.NewPhone) < 5 {
+		response.Error(c, 400, "invalid phone number")
+		return
+	}
+
+	// 验证验证码
+	if !h.smsService.VerifyCode(c.Request.Context(), req.NewPhone, req.Code, "change_phone") {
+		response.Error(c, 4005, "验证码错误或已过期")
+		return
+	}
+
+	// 检查手机号是否已被其他用户使用
+	existingUser, err := h.userService.GetByPhone(c.Request.Context(), req.NewPhone)
+	if err != nil {
+		response.Error(c, 500, "system error")
+		return
+	}
+	if existingUser != nil && existingUser.ID != userID {
+		response.Error(c, 4009, "该手机号已被其他账户使用")
+		return
+	}
+
+	// 更新手机号
+	if err := h.userService.UpdatePhone(c.Request.Context(), userID, req.NewPhone); err != nil {
+		logger.Error("update phone failed", zap.Int64("userID", userID), zap.Error(err))
+		response.Error(c, 500, "更新手机号失败")
+		return
+	}
+
+	// 记录审计日志
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		h.userService.LogAudit(ctx, userID, "", "change_phone", "auth", "", "{}", c.ClientIP())
+	}()
+
+	response.SuccessWithMessage(c, "手机号更改成功", nil)
+}
+
+// ChangeEmail 更改邮箱
+// PUT /api/v1/auth/change-email
+type ChangeEmailRequest struct {
+	NewEmail string `json:"new_email" binding:"required"`
+	Code     string `json:"code" binding:"required"`
+}
+
+func (h *AuthHandler) ChangeEmail(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID <= 0 {
+		response.Error(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req ChangeEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	if !emailRegex.MatchString(req.NewEmail) {
+		response.Error(c, 4008, "invalid email format")
+		return
+	}
+
+	// 验证验证码
+	if !h.emailService.VerifyCode(c.Request.Context(), req.NewEmail, req.Code, "change_email") {
+		response.Error(c, 4005, "验证码错误或已过期")
+		return
+	}
+
+	// 检查邮箱是否已被其他用户使用
+	existingUser, err := h.userService.GetByEmail(c.Request.Context(), req.NewEmail)
+	if err != nil {
+		response.Error(c, 500, "system error")
+		return
+	}
+	if existingUser != nil && existingUser.ID != userID {
+		response.Error(c, 4009, "该邮箱已被其他账户使用")
+		return
+	}
+
+	// 更新邮箱
+	if err := h.userService.UpdateEmail(c.Request.Context(), userID, req.NewEmail); err != nil {
+		logger.Error("update email failed", zap.Int64("userID", userID), zap.Error(err))
+		response.Error(c, 500, "更新邮箱失败")
+		return
+	}
+
+	// 记录审计日志
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		h.userService.LogAudit(ctx, userID, "", "change_email", "auth", "", "{}", c.ClientIP())
+	}()
+
+	response.SuccessWithMessage(c, "邮箱更改成功", nil)
+}

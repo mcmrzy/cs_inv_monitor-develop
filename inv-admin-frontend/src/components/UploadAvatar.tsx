@@ -11,21 +11,90 @@ interface UploadAvatarProps {
   size?: number
 }
 
+const MAX_SIZE = 2 * 1024 * 1024 // 2MB
+
+/** 压缩图片文件到目标大小以内 */
+function compressImage(file: File, maxSize: number = MAX_SIZE): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let { width, height } = img
+      // 如果图片尺寸过大，先缩小到合理范围
+      const maxDim = 1024
+      if (width > maxDim || height > maxDim) {
+        const ratio = Math.min(maxDim / width, maxDim / height)
+        width = Math.round(width * ratio)
+        height = Math.round(height * ratio)
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, width, height)
+
+      // 从0.9质量开始尝试
+      let quality = 0.9
+      const tryCompress = (): void => {
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('compress failed'))
+              return
+            }
+            if (blob.size <= maxSize || quality <= 0.3) {
+              const compressed = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              })
+              resolve(compressed)
+            } else {
+              quality -= 0.15
+              tryCompress()
+            }
+          },
+          'image/jpeg',
+          quality,
+        )
+      }
+      tryCompress()
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('load image failed'))
+    }
+    img.src = url
+  })
+}
+
 const UploadAvatar: React.FC<UploadAvatarProps> = ({ value, onChange, size = 100 }) => {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
+  const [localUrl, setLocalUrl] = useState<string | undefined>(value)
   const token = useAuthStore((state) => state.token)
 
-  const beforeUpload: UploadProps['beforeUpload'] = (file) => {
+  // 同步外部value变化
+  React.useEffect(() => {
+    setLocalUrl(value)
+  }, [value])
+
+  const beforeUpload: UploadProps['beforeUpload'] = async (file) => {
     const isImage = file.type.startsWith('image/')
     if (!isImage) {
       message.error(t('upload.imageOnly'))
-      return false
+      return Upload.LIST_IGNORE
     }
-    const isLt2M = file.size / 1024 / 1024 < 2
-    if (!isLt2M) {
-      message.error(t('upload.sizeLimit'))
-      return false
+    // 超过2MB自动压缩
+    if (file.size > MAX_SIZE) {
+      try {
+        const compressed = await compressImage(file)
+        // 返回压缩后的文件替代原文件上传
+        return compressed
+      } catch {
+        message.error(t('upload.failed'))
+        return Upload.LIST_IGNORE
+      }
     }
     return true
   }
@@ -39,6 +108,7 @@ const UploadAvatar: React.FC<UploadAvatarProps> = ({ value, onChange, size = 100
       setLoading(false)
       const response = info.file.response
       if (response?.code === 0 && response?.data?.url) {
+        setLocalUrl(response.data.url)
         onChange?.(response.data.url)
         message.success(t('upload.success'))
       } else {
@@ -73,7 +143,7 @@ const UploadAvatar: React.FC<UploadAvatarProps> = ({ value, onChange, size = 100
         <Spin spinning={loading}>
           <Avatar
             size={size}
-            src={value || undefined}
+            src={localUrl || undefined}
             icon={<UserOutlined />}
             style={{
               border: '2px solid #d9d9d9',

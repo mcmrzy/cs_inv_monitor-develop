@@ -332,6 +332,18 @@ func (r *UserRepository) UpdateLoginInfo(ctx context.Context, userID int64, ip s
 	return err
 }
 
+func (r *UserRepository) UpdatePhone(ctx context.Context, userID int64, phone string) error {
+	query := `UPDATE users SET phone = $1, updated_at = NOW() WHERE id = $2`
+	_, err := r.db.Exec(ctx, query, phone, userID)
+	return err
+}
+
+func (r *UserRepository) UpdateEmail(ctx context.Context, userID int64, email string) error {
+	query := `UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2`
+	_, err := r.db.Exec(ctx, query, email, userID)
+	return err
+}
+
 func (r *UserRepository) Delete(ctx context.Context, userID int64) error {
 	query := `UPDATE users SET deleted_at = NOW() WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, userID)

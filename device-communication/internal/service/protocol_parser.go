@@ -42,7 +42,142 @@ type ProtocolParser struct {
 	parseEngine  *ParseRuleEngine
 	stateManager *DeviceStateManager // 集中式状态管理器
 	wg           *sync.WaitGroup     // graceful shutdown WaitGroup
+	workerCount  int                 // number of concurrent Kafka consumers
+	registry     *DeviceRegistry     // async device registration queue
 
+}
+
+// DeviceRegistry handles asynchronous device registration via a buffered channel.
+type DeviceRegistry struct {
+	infoCh    chan *internalDeviceInfoRequest
+	retryCh   chan *internalDeviceInfoRequest
+	httpClient *http.Client
+	apiServer  string
+	internalKey string
+	maxRetries int
+	baseBackoff time.Duration
+}
+
+type internalDeviceInfoRequest struct {
+	SN              string  `json:"sn"`
+	Model           string  `json:"model"`
+	Manufacturer    string  `json:"manufacturer"`
+	FirmwareARM     string  `json:"firmware_arm"`
+	FirmwareESP     string  `json:"firmware_esp"`
+	FirmwareDSP     string  `json:"firmware_dsp"`
+	FirmwareBMS     string  `json:"firmware_bms"`
+	Type            string  `json:"type"`
+	RatedPower      float64 `json:"rated_power"`
+	RatedVoltage    float64 `json:"rated_voltage"`
+	RatedFreq       float64 `json:"rated_freq"`
+	BatteryVoltage  float64 `json:"battery_voltage"`
+	BatteryType     string  `json:"battery_type"`
+	CellCount       int     `json:"cell_count"`
+	TempSensorCount int     `json:"temp_sensor_count"`
+	RetryCount      int     `json:"-"` // internal field for retry tracking
+}
+
+// NewDeviceRegistry creates a new async device registry with buffered channels.
+func NewDeviceRegistry(apiServer, internalKey string) *DeviceRegistry {
+	return &DeviceRegistry{
+		infoCh:     make(chan *internalDeviceInfoRequest, 1000),
+		retryCh:    make(chan *internalDeviceInfoRequest, 500),
+		httpClient: &http.Client{Timeout: 5 * time.Second},
+		apiServer:  strings.TrimRight(apiServer, "/"),
+		internalKey: internalKey,
+		maxRetries: 3,
+		baseBackoff: 100 * time.Millisecond,
+	}
+}
+
+// Start launches background goroutines for processing registration requests.
+func (r *DeviceRegistry) Start(ctx context.Context) {
+	go r.processMainQueue(ctx)
+	go r.processRetryQueue(ctx)
+}
+
+// Enqueue adds a device info request to the async queue.
+func (r *DeviceRegistry) Enqueue(info *internalDeviceInfoRequest) {
+	select {
+	case r.infoCh <- info:
+		logger.Debug("Device info enqueued", zap.String("sn", info.SN))
+	default:
+		logger.Warn("Device registry queue full, dropping request", zap.String("sn", info.SN))
+	}
+}
+
+func (r *DeviceRegistry) processMainQueue(ctx context.Context) {
+	logger.Info("Device registry main queue started")
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Device registry main queue stopped")
+			return
+		case info := <-r.infoCh:
+			r.processRegistration(info)
+		}
+	}
+}
+
+func (r *DeviceRegistry) processRetryQueue(ctx context.Context) {
+	logger.Info("Device registry retry queue started")
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Info("Device registry retry queue stopped")
+			return
+		case info := <-r.retryCh:
+			// Exponential backoff before retry
+			time.Sleep(r.baseBackoff * time.Duration(math.Pow(2, float64(info.RetryCount))))
+			r.processRegistration(info)
+		}
+	}
+}
+
+func (r *DeviceRegistry) processRegistration(info *internalDeviceInfoRequest) {
+	if err := r.postDeviceInfo(info); err != nil {
+		logger.Warn("Device registration failed",
+			zap.String("sn", info.SN),
+			zap.Error(err),
+			zap.Int("retry_count", info.RetryCount))
+		if info.RetryCount < r.maxRetries {
+			info.RetryCount++
+			select {
+			case r.retryCh <- info:
+			default:
+				logger.Error("Retry queue full, dropping request", zap.String("sn", info.SN))
+			}
+		} else {
+			logger.Error("Max retries exceeded for device registration", zap.String("sn", info.SN))
+		}
+	} else {
+		logger.Info("Device registered successfully", zap.String("sn", info.SN))
+	}
+}
+
+func (r *DeviceRegistry) postDeviceInfo(info *internalDeviceInfoRequest) error {
+	body, err := json.Marshal(info)
+	if err != nil {
+		return fmt.Errorf("marshal error: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", r.apiServer+"/api/v1/internal/device-info", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request error: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Key", r.internalKey)
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("http error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 type RawMessage struct {
@@ -62,6 +197,24 @@ func NewProtocolParser(
 	apiServer string,
 	internalKey string,
 ) *ProtocolParser {
+	return NewProtocolParserWithWorkers(brokers, topic, groupID, repo, metaRepo, rdb, hub, apiServer, internalKey, 1)
+}
+
+// NewProtocolParserWithWorkers creates a ProtocolParser with configurable number of concurrent Kafka consumers.
+// workerCount controls how many goroutines consume messages in parallel (default 1).
+func NewProtocolParserWithWorkers(
+	brokers []string, topic string, groupID string,
+	repo *repository.DeviceRepository,
+	metaRepo *repository.MetadataRepository,
+	rdb *redis.Client,
+	hub *mqtt.Hub,
+	apiServer string,
+	internalKey string,
+	workerCount int,
+) *ProtocolParser {
+	if workerCount < 1 {
+		workerCount = 1
+	}
 	parser := &ProtocolParser{
 		consumer: kafka.NewReader(kafka.ReaderConfig{
 			Brokers:  brokers,
@@ -88,6 +241,8 @@ func NewProtocolParser(
 		snModelCache: make(map[string]int32),
 		parseEngine:  NewParseRuleEngine(),
 		stateManager: NewDeviceStateManager(rdb, apiServer, internalKey),
+		workerCount:  workerCount,
+		registry:     NewDeviceRegistry(apiServer, internalKey),
 	}
 	if repo != nil {
 		parser.ingestErrors = repo
@@ -111,7 +266,16 @@ func (p *ProtocolParser) SetWaitGroup(wg *sync.WaitGroup) {
 }
 
 func (p *ProtocolParser) Start(ctx context.Context) {
-	go runOrderedKafkaConsumerWithRetry(ctx, "protocol-parser", p.consumer, p.processKafkaMessage, DefaultMaxRetries, DefaultBaseBackoff, nil, nil, p.wg)
+	// Start multiple concurrent Kafka consumers based on workerCount
+	logger.Info("Starting protocol parser workers", zap.Int("worker_count", p.workerCount))
+	for i := 0; i < p.workerCount; i++ {
+		workerName := fmt.Sprintf("protocol-parser-%d", i)
+		go runOrderedKafkaConsumerWithRetry(ctx, workerName, p.consumer, p.processKafkaMessage, DefaultMaxRetries, DefaultBaseBackoff, nil, nil, p.wg)
+	}
+	// Start async device registry
+	if p.registry != nil {
+		p.registry.Start(ctx)
+	}
 	go p.refreshModelCache(ctx)
 }
 
@@ -166,11 +330,21 @@ func (p *ProtocolParser) getModelID(ctx context.Context, sn string) int32 {
 }
 
 func (p *ProtocolParser) processKafkaMessage(ctx context.Context, message kafka.Message) error {
+	// Debug: log Kafka message consumption
+	logger.Info("Kafka message consumed",
+		zap.String("topic", message.Topic),
+		zap.Int("partition", message.Partition),
+		zap.Int64("offset", message.Offset),
+		zap.Int("value_len", len(message.Value)))
+
 	var raw RawMessage
 	if err := json.Unmarshal(message.Value, &raw); err != nil {
 		return p.isolatePermanentMessage(ctx, "", message.Topic, message.Value,
 			"INVALID_BRIDGE_JSON", fmt.Errorf("decode bridge message: %w", err))
 	}
+	logger.Info("Kafka message parsed",
+		zap.String("sn", raw.SN),
+		zap.String("msg_type", raw.MsgType))
 	if strings.TrimSpace(raw.SN) == "" {
 		return p.isolatePermanentMessage(ctx, "", message.Topic, message.Value,
 			"MISSING_DEVICE_SN", fmt.Errorf("bridge message is missing device sn"))
@@ -459,8 +633,30 @@ func (p *ProtocolParser) handleInfo(ctx context.Context, raw *RawMessage) error 
 	}
 	info.SN = raw.SN
 
-	if err := p.postInternal("/api/v1/internal/device-info", info); err != nil {
-		return err
+	// Use async device registry for non-blocking registration
+	if p.registry != nil {
+		p.registry.Enqueue(&internalDeviceInfoRequest{
+			SN:              info.SN,
+			Model:           info.Model,
+			Manufacturer:    info.Manufacturer,
+			FirmwareARM:     info.FirmwareARM,
+			FirmwareESP:     info.FirmwareESP,
+			FirmwareDSP:     info.FirmwareDSP,
+			FirmwareBMS:     info.FirmwareBMS,
+			Type:            info.Type,
+			RatedPower:      float64(info.RatedPower),
+			RatedVoltage:    float64(info.RatedVoltage),
+			RatedFreq:       info.RatedFreq,
+			BatteryVoltage:  info.BatteryVoltage,
+			BatteryType:     info.BatteryType,
+			CellCount:       info.CellCount,
+			TempSensorCount: info.TempSensorCount,
+		})
+	} else {
+		// Fallback to synchronous registration if registry not initialized
+		if err := p.postInternal("/api/v1/internal/device-info", info); err != nil {
+			return err
+		}
 	}
 
 	// 同步更新 Redis 缓存中的 info 数据，保持与数据库一致

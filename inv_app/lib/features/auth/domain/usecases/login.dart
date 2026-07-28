@@ -105,11 +105,19 @@ class UpdateProfileUseCase {
   Future<Either<Failure, void>> call({
     String? nickname,
     String? avatar,
+    String? email,
+    String? country,
+    String? regionName,
+    String? bio,
     String? timezone,
   }) {
     return repository.updateProfile(
       nickname: nickname,
       avatar: avatar,
+      email: email,
+      country: country,
+      regionName: regionName,
+      bio: bio,
       timezone: timezone,
     );
   }

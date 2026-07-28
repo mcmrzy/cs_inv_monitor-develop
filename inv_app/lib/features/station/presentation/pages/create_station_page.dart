@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/data/china_regions.dart';
+import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -19,20 +20,25 @@ class _CreateStationPageState extends State<CreateStationPage> {
   final _nameCtl = TextEditingController();
   final _detailCtl = TextEditingController();
 
+  String _country = '中国';
   String? _province;
   String? _city;
   String? _district;
   bool _submitting = false;
 
   List<String> get _provinces {
-    final list = chinaRegions.keys.toList();
-    list.sort();
-    return list;
+    if (_country == '中国') {
+      final list = chinaRegions.keys.toList();
+      list.sort();
+      return list;
+    }
+    return globalRegions[_country] ?? [];
   }
 
   String get _addressText {
     final buf = StringBuffer();
-    if (_province != null) buf.write(_province!);
+    if (_country != '中国') buf.write(_country);
+    if (_province != null) buf.write(' $_province');
     if (_city != null) buf.write(' $_city');
     if (_district != null) buf.write(' $_district');
     final detail = _detailCtl.text.trim();
@@ -53,13 +59,15 @@ class _CreateStationPageState extends State<CreateStationPage> {
       _showErr(l10n.pleaseSelectProvince);
       return;
     }
-    if (_city == null) {
-      _showErr(l10n.pleaseSelectCity);
-      return;
-    }
-    if (_district == null) {
-      _showErr(l10n.pleaseSelectDistrict);
-      return;
+    if (_country == '中国') {
+      if (_city == null) {
+        _showErr(l10n.pleaseSelectCity);
+        return;
+      }
+      if (_district == null) {
+        _showErr(l10n.pleaseSelectDistrict);
+        return;
+      }
     }
     if (!_formKey.currentState!.validate()) return;
 
@@ -68,9 +76,10 @@ class _CreateStationPageState extends State<CreateStationPage> {
           StationCreateRequested(
             data: {
               'name': _nameCtl.text.trim(),
+              'country': _country,
               'province': _province,
-              'city': _city,
-              'district': _district,
+              'city': _city ?? '',
+              'district': _district ?? '',
               'address': _addressText,
             },
           ),
@@ -96,20 +105,24 @@ class _CreateStationPageState extends State<CreateStationPage> {
       _RegionPickerRoute(
         provinces: _provinces,
         citiesFn: (p) {
+          if (_country != '中国') return [];
           final m = chinaRegions[p];
           if (m == null) return [];
           final list = m.keys.toList();
           list.sort();
           return list;
         },
-        districtsFn: (p, c) => chinaRegions[p]?[c] ?? [],
+        districtsFn: (p, c) {
+          if (_country != '中国') return [];
+          return chinaRegions[p]?[c] ?? [];
+        },
       ),
     );
     if (result != null) {
       setState(() {
         _province = result['province'];
-        _city = result['city'];
-        _district = result['district'];
+        _city = result['city']?.isNotEmpty == true ? result['city'] : null;
+        _district = result['district']?.isNotEmpty == true ? result['district'] : null;
       });
     }
   }
@@ -198,11 +211,54 @@ class _CreateStationPageState extends State<CreateStationPage> {
                   SizedBox(height: 16.h),
                   _buildSection(
                     icon: Icons.location_on_outlined,
-                    title: AppLocalizations.of(context)!.region,
+                    title: AppLocalizations.of(context)!.stationRegion,
                     subtitle:
                         AppLocalizations.of(context)!.selectInstallLocation,
                     child: Column(
                       children: [
+                        // 国家选择下拉框
+                        DropdownButtonFormField<String>(
+                          value: _country,
+                          items: countries
+                              .map((c) => DropdownMenuItem(
+                                    value: c['name'],
+                                    child: Text(c['name']!),
+                                  ))
+                              .toList(),
+                          onChanged: (val) {
+                            if (val == null || val == _country) return;
+                            setState(() {
+                              _country = val;
+                              _province = null;
+                              _city = null;
+                              _district = null;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.of(context)!.selectRegion,
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFB),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 14.w, vertical: 13.h),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFFE5E7EB)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.r),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFFE5E7EB)),
+                            ),
+                          ),
+                          icon: Icon(Icons.keyboard_arrow_down_rounded,
+                              size: 20.sp, color: AppColors.textHint),
+                          style: TextStyle(
+                              fontSize: 14.sp, color: AppColors.textPrimary),
+                          borderRadius: BorderRadius.circular(12.r),
+                          isExpanded: true,
+                        ),
+                        SizedBox(height: 12.h),
                         GestureDetector(
                           onTap: _openRegionPicker,
                           child: Container(
@@ -506,10 +562,15 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
   @override
   void initState() {
     super.initState();
-    _cities = widget.citiesFn(widget.provinces[0]);
-    _districts = _cities.isNotEmpty
-        ? widget.districtsFn(widget.provinces[0], _cities[0])
-        : [];
+    if (widget.provinces.isEmpty) {
+      _cities = [];
+      _districts = [];
+    } else {
+      _cities = widget.citiesFn(widget.provinces[0]);
+      _districts = _cities.isNotEmpty
+          ? widget.districtsFn(widget.provinces[0], _cities[0])
+          : [];
+    }
     _provCtrl = FixedExtentScrollController();
     _cityCtrl = FixedExtentScrollController();
     _distCtrl = FixedExtentScrollController();
@@ -559,6 +620,7 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
   }
 
   void _confirm() {
+    if (widget.provinces.isEmpty) return;
     final prov = widget.provinces[_provIdx];
     String? city;
     String? dist;
@@ -568,9 +630,8 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
     if (_districts.isNotEmpty && _distIdx < _districts.length) {
       dist = _districts[_distIdx];
     }
-    if (city == null) return;
     Navigator.of(context)
-        .pop({'province': prov, 'city': city, 'district': dist ?? ''});
+        .pop({'province': prov, 'city': city ?? '', 'district': dist ?? ''});
   }
 
   @override
@@ -700,56 +761,70 @@ class _RegionPickerPageState extends State<_RegionPickerPage> {
           ),
         ),
         Expanded(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: Column(
+          child: items.isEmpty
+              ? Center(
+                  child: Text(
+                    '—',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                )
+              : Stack(
                   children: [
-                    const Spacer(),
-                    Container(
-                      height: _itemH,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.06),
-                        border: const Border.symmetric(
-                          horizontal: BorderSide(color: Color(0xFFE5E7EB)),
-                        ),
+                    Positioned.fill(
+                      child: Column(
+                        children: [
+                          const Spacer(),
+                          Container(
+                            height: _itemH,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.06),
+                              border: const Border.symmetric(
+                                horizontal:
+                                    BorderSide(color: Color(0xFFE5E7EB)),
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                        ],
                       ),
                     ),
-                    const Spacer(),
+                    ListWheelScrollView.useDelegate(
+                      controller: ctrl,
+                      itemExtent: _itemH,
+                      diameterRatio: 1.2,
+                      overAndUnderCenterOpacity: 0.4,
+                      onSelectedItemChanged: onChange,
+                      childDelegate: ListWheelChildBuilderDelegate(
+                        builder: (_, i) {
+                          if (i < 0 || i >= items.length) {
+                            return const SizedBox();
+                          }
+                          final selected = i == idx;
+                          return Center(
+                            child: Text(
+                              items[i],
+                              style: TextStyle(
+                                fontSize: 15.sp,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: selected
+                                    ? AppColors.textPrimary
+                                    : AppColors.textHint,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        },
+                        childCount: items.length,
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              ListWheelScrollView.useDelegate(
-                controller: ctrl,
-                itemExtent: _itemH,
-                diameterRatio: 1.2,
-                overAndUnderCenterOpacity: 0.4,
-                onSelectedItemChanged: onChange,
-                childDelegate: ListWheelChildBuilderDelegate(
-                  builder: (_, i) {
-                    if (i < 0 || i >= items.length) return const SizedBox();
-                    final selected = i == idx;
-                    return Center(
-                      child: Text(
-                        items[i],
-                        style: TextStyle(
-                          fontSize: 15.sp,
-                          fontWeight:
-                              selected ? FontWeight.w600 : FontWeight.normal,
-                          color: selected
-                              ? AppColors.textPrimary
-                              : AppColors.textHint,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  },
-                  childCount: items.isEmpty ? 1 : items.length,
-                ),
-              ),
-            ],
-          ),
         ),
       ],
     );

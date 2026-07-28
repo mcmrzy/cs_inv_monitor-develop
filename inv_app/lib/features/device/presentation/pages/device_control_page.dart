@@ -7,6 +7,7 @@ import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/entities/device_model_field.dart';
 import 'package:inv_app/core/utils/api_response.dart';
 import 'package:inv_app/core/utils/energy_schedule.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -102,7 +103,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
     try {
       final fieldsRes =
-          await dio.get('/devices/${widget.deviceSN}/control-fields');
+          await dio.get('/devices/by-sn/${widget.deviceSN}/control-fields');
       final fieldsData = unwrapApiResponse<List<dynamic>>(
         fieldsRes.data,
         validate: (data) => data is List,
@@ -118,7 +119,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
     try {
       final capsRes =
-          await dio.get('/devices/${widget.deviceSN}/control-capabilities');
+          await dio.get('/devices/by-sn/${widget.deviceSN}/control-capabilities');
       final capsData = unwrapApiResponse<List<dynamic>>(
         capsRes.data,
         validate: (data) => data is List,
@@ -138,7 +139,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     }
 
     try {
-      final deviceRes = await dio.get('/devices/${widget.deviceSN}');
+      final deviceRes = await dio.get('/devices/by-sn/${widget.deviceSN}');
       final deviceData = unwrapApiResponse<Map<String, dynamic>>(
         deviceRes.data,
         validate: (data) => data is Map<String, dynamic>,
@@ -163,7 +164,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   Future<bool> _fetchRealtimeData() async {
     final dio = getIt<Dio>();
     try {
-      final res = await dio.get('/devices/${widget.deviceSN}/realtime');
+      final res = await dio.get('/devices/by-sn/${widget.deviceSN}/realtime');
       final data = unwrapApiResponse<Map<String, dynamic>>(
         res.data,
         validate: (value) => value is Map<String, dynamic>,
@@ -189,7 +190,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     final dio = getIt<Dio>();
     var success = true;
     try {
-      final res = await dio.get('/devices/${widget.deviceSN}/energy-schedule');
+      final res = await dio.get('/devices/by-sn/${widget.deviceSN}/energy-schedule');
       final data = unwrapApiResponse<Map<String, dynamic>>(
         res.data,
         validate: isEnergySchedulePayload,
@@ -210,7 +211,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
 
     try {
       final res =
-          await dio.get('/devices/${widget.deviceSN}/control-overrides');
+          await dio.get('/devices/by-sn/${widget.deviceSN}/control-overrides');
       final data = unwrapApiResponse<dynamic>(
         res.data,
         validate: _isListOrPage,
@@ -232,7 +233,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   Future<bool> _fetchControlState() async {
     final dio = getIt<Dio>();
     try {
-      final res = await dio.get('/devices/${widget.deviceSN}/control-state');
+      final res = await dio.get('/devices/by-sn/${widget.deviceSN}/control-state');
       final data = unwrapApiResponse<Map<String, dynamic>>(
         res.data,
         validate: (value) => value is Map<String, dynamic>,
@@ -268,7 +269,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     final dio = getIt<Dio>();
     try {
       final res = await dio.get(
-        '/devices/${widget.deviceSN}/commands',
+        '/devices/by-sn/${widget.deviceSN}/commands',
         queryParameters: {'page_size': 20},
       );
       final data = unwrapApiResponse<dynamic>(
@@ -303,7 +304,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     try {
       final dio = getIt<Dio>();
       final response = await dio.post(
-        '/devices/${widget.deviceSN}/control',
+        '/devices/by-sn/${widget.deviceSN}/control',
         data: {
           'command': commandCode,
           'params': params ?? {},
@@ -393,7 +394,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
       try {
         final dio = getIt<Dio>();
         final response = await dio.get(
-          '/devices/${widget.deviceSN}/commands',
+          '/devices/by-sn/${widget.deviceSN}/commands',
           queryParameters: {'task_id': taskID, 'page_size': 50},
         );
 
@@ -527,7 +528,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const SkeletonDeviceControl()
           : Column(
               children: [
                 if (_failedSectionCount > 0)
@@ -1626,7 +1627,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
         periods.add(updatedPeriod);
       }
       final response = await dio.put(
-        '/devices/${widget.deviceSN}/energy-schedule',
+        '/devices/by-sn/${widget.deviceSN}/energy-schedule',
         data: {
           'timezone': _energyScheduleTimezone,
           'enabled': _energyScheduleEnabled,
@@ -1680,7 +1681,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
     try {
       final periods = removeSchedulePeriod(_energySchedule, slot);
       final response = await dio.put(
-        '/devices/${widget.deviceSN}/energy-schedule',
+        '/devices/by-sn/${widget.deviceSN}/energy-schedule',
         data: {
           'timezone': _energyScheduleTimezone,
           'enabled': _energyScheduleEnabled,

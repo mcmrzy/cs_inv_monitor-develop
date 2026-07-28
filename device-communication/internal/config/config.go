@@ -77,6 +77,8 @@ type KafkaConfig struct {
 	TelemetryTopic string   `mapstructure:"telemetry_topic"`
 	AlarmTopic     string   `mapstructure:"alarm_topic"`
 	CommandTopic   string   `mapstructure:"command_topic"`
+	ConsumerGroup  string   `mapstructure:"consumer_group"` // 消费者组 ID，支持多实例环境隔离
+	WorkerCount    int      `mapstructure:"worker_count"`   // 并发消费者数量，默认 1
 }
 
 type BackendsConfig struct {
@@ -132,6 +134,7 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("kafka.telemetry_topic", "inv-telemetry")
 	viper.SetDefault("kafka.alarm_topic", "inv-alerts")
 	viper.SetDefault("kafka.command_topic", "inv-commands")
+	viper.SetDefault("kafka.worker_count", 1)
 
 	viper.BindEnv("database.host", "DB_HOST")
 	viper.BindEnv("database.port", "DB_PORT")
@@ -158,6 +161,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("kafka.telemetry_topic", "KAFKA_TELEMETRY_TOPIC")
 	viper.BindEnv("kafka.alarm_topic", "KAFKA_ALARM_TOPIC")
 	viper.BindEnv("kafka.command_topic", "KAFKA_COMMAND_TOPIC")
+	viper.BindEnv("kafka.consumer_group", "KAFKA_CONSUMER_GROUP")
 
 	// 将单个 broker 字符串转换为数组
 	if broker := viper.GetString("kafka.brokers"); broker != "" {
@@ -174,6 +178,16 @@ func Load(configPath string) (*Config, error) {
 
 	if err := viper.ReadConfig(strings.NewReader(string(data))); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	// Re-apply environment variables after ReadConfig to ensure env vars
+	// take precedence over config file values (viper.ReadConfig overwrites
+	// previously bound env vars if the config file contains the key).
+	if v := os.Getenv("INTERNAL_KEY"); v != "" {
+		viper.Set("backends.internal_key", v)
+	}
+	if v := os.Getenv("API_SERVER_URL"); v != "" {
+		viper.Set("backends.api_server", v)
 	}
 
 	var config Config
