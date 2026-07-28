@@ -124,6 +124,11 @@ func (r *ModelRepository) GetProtocolSchema(ctx context.Context, modelID int64) 
 	return result, nil
 }
 
+func (r *ModelRepository) SoftRetireModel(ctx context.Context, id int64) error {
+	_, err := r.db.Exec(ctx, `UPDATE device_models SET lifecycle_status='retired',is_active=false,updated_at=NOW(),lock_version=lock_version+1 WHERE id=$1`, id)
+	return err
+}
+
 func (r *ModelRepository) RetireModel(ctx context.Context, id int64) error {
 	// 先检查是否有设备关联到这个型号
 	var deviceCount int64
