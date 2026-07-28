@@ -25,7 +25,6 @@ interface NodeConfig {
   color: string;
   label: string;
   image: string;
-  textSide?: 'left' | 'right'; // for right-category nodes: which side to place power text
   posCategory?: 'top' | 'right' | 'bottom';
 }
 
@@ -89,7 +88,7 @@ function computeFlowEdges(
   // 3. Inverter → Battery (curve, left-upper) — charging via inverter
   edges.push({
     id: 'inv-batt',
-    path: 'M 250 260 Q 170 250 130 255',
+    path: 'M 250 265 L 130 265',
     color: NODE_COLORS.battery,
     active: battPower > 0,
     power: battPower > 0 ? battPower : 0,
@@ -99,7 +98,7 @@ function computeFlowEdges(
   // 4. Battery → Inverter (curve, left-lower) — discharging via inverter
   edges.push({
     id: 'batt-inv',
-    path: 'M 130 295 Q 170 305 250 295',
+    path: 'M 130 285 L 250 285',
     color: NODE_COLORS.battery,
     active: battPower < 0,
     power: battPower < 0 ? Math.abs(battPower) : 0,
@@ -142,10 +141,6 @@ const svgAnimations = `
     stroke-dasharray: 4 8;
     opacity: 0.15;
   }
-  @keyframes arrowPulse {
-    0%, 100% { opacity: 0.3; }
-    50% { opacity: 1; }
-  }
 `;
 
 const FlowNode: React.FC<{
@@ -160,17 +155,15 @@ const FlowNode: React.FC<{
   // Position category: 'top' = text above image (battery/grid), 'bottom' = text below image (inverter), 'right' = text right of image (pv/load)
   const posCategory: 'top' | 'right' | 'bottom' = type === 'inverter' ? 'bottom'
     : (type === 'battery' || type === 'grid' ? 'top' : 'right');
-  const imgLeft = x - imgSize / 2;  // x - 50
 
   // Image edges
   const imgTop = y - imgSize / 2;   // y - 50
   const imgBottom = y + imgSize / 2; // y + 50
   const imgRight = x + imgSize / 2; // x + 50
 
-  // Tight gaps: text baseline/edge hugging image with minimal clearance
+  // Gaps
   const topGap = 5;   // px between text baseline and image top edge
   const bottomGap = 5; // px between image bottom edge and text baseline
-  const rightGap = 2; // px between image right edge and text start
 
   return (
     <g>
