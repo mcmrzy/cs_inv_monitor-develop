@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/data/china_regions.dart';
+import 'package:inv_app/core/data/continents_data.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/network/api_client.dart';
@@ -974,42 +975,44 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
   }
 
-  /// 显示地区选择器（参考创建电站页面的UI风格）
-  void _showRegionPicker(AppLocalizations l10n) {
-    // 解析已有的数据
-    String? existingCountry = _countryController.text.isNotEmpty ? _countryController.text : null;
-    String? existingProvince;
-    String? existingCity;
+  /// 显示地区选择器（两步选择流程：洲+国家 -> 省/市）
+  Future<void> _showRegionPicker(AppLocalizations l10n) async {
+    // 第一步：选择洲+国家
+    final countryResult = await Navigator.push<Map<String, String>>(
+      context,
+      _ContinentCountryPickerRoute(),
+    );
+    if (countryResult == null || !mounted) return;
 
-    final existingRegion = _regionController.text;
-    if (existingRegion.isNotEmpty) {
-      final parts = existingRegion.split(' ');
-      if (parts.isNotEmpty) existingProvince = parts[0];
-      if (parts.length > 1) existingCity = parts[1];
-    }
+    final selectedCountry = countryResult['country'] ?? '中国';
 
-    Navigator.push<Map<String, String>>(
+    // 第二步：选择省/市（两级选择器，顶部有"不限"选项）
+    final regionResult = await Navigator.push<Map<String, String>>(
       context,
       _ProfileRegionPickerRoute(
-        initialCountry: existingCountry,
-        initialProvince: existingProvince,
-        initialCity: existingCity,
+        country: selectedCountry,
       ),
-    ).then((result) {
-      if (result != null) {
-        setState(() {
-          _countryController.text = result['country'] ?? '';
-          final regionParts = <String>[];
-          if (result['province'] != null && result['province']!.isNotEmpty) {
-            regionParts.add(result['province']!);
-          }
-          if (result['city'] != null && result['city']!.isNotEmpty) {
-            regionParts.add(result['city']!);
-          }
-          _regionController.text = regionParts.join(' ');
-        });
-      }
-    });
+    );
+
+    if (regionResult != null) {
+      setState(() {
+        _countryController.text = selectedCountry;
+        final regionParts = <String>[];
+        if (regionResult['province'] != null && regionResult['province']!.isNotEmpty) {
+          regionParts.add(regionResult['province']!);
+        }
+        if (regionResult['city'] != null && regionResult['city']!.isNotEmpty) {
+          regionParts.add(regionResult['city']!);
+        }
+        _regionController.text = regionParts.join(' ');
+      });
+    } else {
+      // 用户在第二步取消，只设置国家
+      setState(() {
+        _countryController.text = selectedCountry;
+        _regionController.text = '';
+      });
+    }
   }
 
   @override
@@ -1372,21 +1375,290 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 }
 
+class _ContinentCountryPickerRoute extends PageRouteBuilder<Map<String, String>> {
+  _ContinentCountryPickerRoute()
+      : super(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const _ContinentCountryPickerPage(),
+          opaque: false,
+          barrierColor: Colors.black54,
+          transitionDuration: const Duration(milliseconds: 250),
+          reverseTransitionDuration: const Duration(milliseconds: 200),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+                      .animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ),
+              ),
+              child: child,
+            );
+          },
+        );
+}
+
+class _ContinentCountryPickerPage extends StatefulWidget {
+  const _ContinentCountryPickerPage();
+
+  @override
+  State<_ContinentCountryPickerPage> createState() =>
+      _ContinentCountryPickerPageState();
+}
+
+class _ContinentCountryPickerPageState
+    extends State<_ContinentCountryPickerPage> {
+  late FixedExtentScrollController _continentCtrl;
+  late FixedExtentScrollController _countryCtrl;
+  int _continentIdx = 0;
+  int _countryIdx = 0;
+
+  static const _itemH = 44.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _continentCtrl = FixedExtentScrollController();
+    _countryCtrl = FixedExtentScrollController();
+  }
+
+  @override
+  void dispose() {
+    _continentCtrl.dispose();
+    _countryCtrl.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, String>> get _currentCountries {
+    if (continents.isEmpty) return [];
+    return List<Map<String, String>>.from(
+        continents[_continentIdx]['countries'] as List,
+    );
+  }
+
+  void _onContinentChanged(int idx) {
+    if (idx == _continentIdx) return;
+    setState(() {
+      _continentIdx = idx;
+      _countryIdx = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _countryCtrl.jumpToItem(0);
+    });
+  }
+
+  void _onCountryChanged(int idx) {
+    setState(() => _countryIdx = idx);
+  }
+
+  void _confirm() {
+    final countries = _currentCountries;
+    if (countries.isEmpty) return;
+    final country = countries[_countryIdx];
+    Navigator.of(context).pop({'country': country['name']!});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Column(
+        children: [
+          const Spacer(),
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: AppColors.surfaceHover),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          AppLocalizations.of(context)!.cancel,
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            color: AppColors.textHint,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        AppLocalizations.of(context)!.selectRegion,
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _confirm,
+                        child: Text(
+                          AppLocalizations.of(context)!.confirm,
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: _itemH * 7,
+                  child: Row(
+                    children: [
+                      // 左列：洲列表
+                      Expanded(
+                        flex: 3,
+                        child: _buildColumn(
+                          continents.map((c) => c['name'] as String).toList(),
+                          _continentCtrl,
+                          _continentIdx,
+                          _onContinentChanged,
+                          colLabel: '洲',
+                        ),
+                      ),
+                      Container(width: 1, color: AppColors.surfaceHover),
+                      // 右列：国家列表
+                      Expanded(
+                        flex: 4,
+                        child: _buildColumn(
+                          _currentCountries
+                              .map((c) => c['name']!)
+                              .toList(),
+                          _countryCtrl,
+                          _countryIdx,
+                          _onCountryChanged,
+                          colLabel: AppLocalizations.of(context)!.country,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColumn(
+    List<String> items,
+    FixedExtentScrollController ctrl,
+    int idx,
+    ValueChanged<int> onChange, {
+    String colLabel = '',
+  }) {
+    return Column(
+      children: [
+        Container(
+          height: _itemH,
+          color: const Color(0xFFF8FAFB),
+          alignment: Alignment.center,
+          child: Text(
+            colLabel,
+            style: TextStyle(
+              fontSize: 12.sp,
+              color: AppColors.textHint,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: items.isEmpty
+              ? Center(
+                  child: Text(
+                    '—',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                )
+              : Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Column(
+                        children: [
+                          const Spacer(),
+                          Container(
+                            height: _itemH,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.06),
+                              border: const Border.symmetric(
+                                horizontal:
+                                    BorderSide(color: Color(0xFFE5E7EB)),
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                        ],
+                      ),
+                    ),
+                    ListWheelScrollView.useDelegate(
+                      controller: ctrl,
+                      itemExtent: _itemH,
+                      diameterRatio: 1.2,
+                      overAndUnderCenterOpacity: 0.4,
+                      onSelectedItemChanged: onChange,
+                      childDelegate: ListWheelChildBuilderDelegate(
+                        builder: (_, i) {
+                          if (i < 0 || i >= items.length) {
+                            return const SizedBox();
+                          }
+                          final selected = i == idx;
+                          return Center(
+                            child: Text(
+                              items[i],
+                              style: TextStyle(
+                                fontSize: 15.sp,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: selected
+                                    ? AppColors.textPrimary
+                                    : AppColors.textHint,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        },
+                        childCount: items.length,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+}
+
 class _ProfileRegionPickerRoute extends PageRouteBuilder<Map<String, String>> {
-  final String? initialCountry;
-  final String? initialProvince;
-  final String? initialCity;
+  final String country;
 
   _ProfileRegionPickerRoute({
-    this.initialCountry,
-    this.initialProvince,
-    this.initialCity,
+    required this.country,
   }) : super(
           pageBuilder: (context, animation, secondaryAnimation) =>
               _ProfileRegionPickerPage(
-            initialCountry: initialCountry,
-            initialProvince: initialProvince,
-            initialCity: initialCity,
+            country: country,
           ),
           opaque: false,
           barrierColor: Colors.black54,
@@ -1409,14 +1681,10 @@ class _ProfileRegionPickerRoute extends PageRouteBuilder<Map<String, String>> {
 }
 
 class _ProfileRegionPickerPage extends StatefulWidget {
-  final String? initialCountry;
-  final String? initialProvince;
-  final String? initialCity;
+  final String country;
 
   const _ProfileRegionPickerPage({
-    this.initialCountry,
-    this.initialProvince,
-    this.initialCity,
+    required this.country,
   });
 
   @override
@@ -1424,11 +1692,9 @@ class _ProfileRegionPickerPage extends StatefulWidget {
 }
 
 class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
-  late FixedExtentScrollController _countryCtrl;
   late FixedExtentScrollController _provCtrl;
   late FixedExtentScrollController _cityCtrl;
 
-  int _countryIdx = 0;
   int _provIdx = 0;
   int _cityIdx = 0;
 
@@ -1443,77 +1709,40 @@ class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
   void initState() {
     super.initState();
     
-    // 初始化国家索引
-    if (widget.initialCountry != null) {
-      final idx = countries.indexWhere((c) => c['name'] == widget.initialCountry);
-      _countryIdx = idx >= 0 ? idx : 0;
-    }
-    
     // 初始化省份列表
-    final countryName = countries[_countryIdx]['name'];
-    if (countryName == '中国') {
-      _provinces = chinaRegions.keys.toList()..sort();
+    if (widget.country == '中国') {
+      _provinces = ['不限', ...chinaRegions.keys.toList()..sort()];
     } else {
-      _provinces = (countryName != null ? globalRegions[countryName] : null) ?? [];
-    }
-    
-    // 初始化省份索引
-    if (widget.initialProvince != null && _provinces.isNotEmpty) {
-      final idx = _provinces.indexOf(widget.initialProvince!);
-      _provIdx = idx >= 0 ? idx : 0;
+      _provinces = ['不限', ...(globalRegions[widget.country] ?? [])];
     }
     
     // 初始化城市/区列表
     _cities = _getDistrictsForProvince(
-        countryName, _provinces.isNotEmpty ? _provinces[_provIdx] : null);
+        widget.country, _provinces.length > 1 ? _provinces[1] : null);
     
-    // 初始化城市索引
-    if (widget.initialCity != null && _cities.isNotEmpty) {
-      final idx = _cities.indexOf(widget.initialCity!);
-      _cityIdx = idx >= 0 ? idx : 0;
-    }
-    
-    _countryCtrl = FixedExtentScrollController(initialItem: _countryIdx);
     _provCtrl = FixedExtentScrollController(initialItem: _provIdx);
     _cityCtrl = FixedExtentScrollController(initialItem: _cityIdx);
   }
 
   @override
   void dispose() {
-    _countryCtrl.dispose();
     _provCtrl.dispose();
     _cityCtrl.dispose();
     super.dispose();
-  }
-
-  void _onCountryChanged(int idx) {
-    if (idx == _countryIdx) return;
-    setState(() {
-      _countryIdx = idx;
-      final countryName = countries[idx]['name'];
-      if (countryName == '中国') {
-        _provinces = chinaRegions.keys.toList()..sort();
-      } else {
-        _provinces = (countryName != null ? globalRegions[countryName] : null) ?? [];
-      }
-      _provIdx = 0;
-      _cities = _getDistrictsForProvince(
-          countryName, _provinces.isNotEmpty ? _provinces[0] : null);
-      _cityIdx = 0;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _provCtrl.jumpToItem(0);
-      _cityCtrl.jumpToItem(0);
-    });
   }
 
   void _onProvChanged(int idx) {
     if (idx == _provIdx) return;
     setState(() {
       _provIdx = idx;
-      final countryName = countries[_countryIdx]['name'];
-      _cities = _getDistrictsForProvince(countryName, _provinces[idx]);
-      _cityIdx = 0;
+      if (idx == 0) {
+        // 选择"不限"，清空城市列表
+        _cities = [];
+        _cityIdx = 0;
+      } else {
+        _cities = _getDistrictsForProvince(widget.country, _provinces[idx]);
+        _cityIdx = 0;
+      }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _cityCtrl.jumpToItem(0);
@@ -1525,7 +1754,7 @@ class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
   }
 
   List<String> _getDistrictsForProvince(String? countryName, String? province) {
-    if (province == null || countryName == null) return [];
+    if (province == null || countryName == null || province == '不限') return [];
     if (countryName == '中国') {
       final cityMap = chinaRegions[province];
       if (cityMap == null) return [];
@@ -1542,17 +1771,24 @@ class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
   void _confirm() {
     if (_isNavigating) return;
     _isNavigating = true;
-    final countryName = countries[_countryIdx]['name'];
+    
     String? province;
     String? city;
-    if (_provinces.isNotEmpty && _provIdx < _provinces.length) {
-      province = _provinces[_provIdx];
+    
+    // 如果选择"不限"，返回空字符串
+    if (_provIdx == 0) {
+      province = '';
+      city = '';
+    } else {
+      if (_provinces.isNotEmpty && _provIdx < _provinces.length) {
+        province = _provinces[_provIdx];
+      }
+      if (_cities.isNotEmpty && _cityIdx < _cities.length) {
+        city = _cities[_cityIdx];
+      }
     }
-    if (_cities.isNotEmpty && _cityIdx < _cities.length) {
-      city = _cities[_cityIdx];
-    }
+    
     Navigator.of(context).pop({
-      'country': countryName,
       'province': province ?? '',
       'city': city ?? '',
     });
@@ -1625,17 +1861,6 @@ class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
                   height: _itemH * 7,
                   child: Row(
                     children: [
-                      Expanded(
-                        flex: 3,
-                        child: _buildColumn(
-                          countries.map((c) => c['name']!).toList(),
-                          _countryCtrl,
-                          _countryIdx,
-                          _onCountryChanged,
-                          colLabel: '国家',
-                        ),
-                      ),
-                      Container(width: 1, color: AppColors.surfaceHover),
                       Expanded(
                         flex: 3,
                         child: _buildColumn(
