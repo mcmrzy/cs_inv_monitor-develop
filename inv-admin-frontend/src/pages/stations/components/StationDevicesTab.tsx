@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Row, Col, Input, Select, Button, Tag, Space, Spin, Empty, Typography, Badge } from 'antd'
 import { ProCard } from '@ant-design/pro-components'
-import { SearchOutlined, ReloadOutlined, DesktopOutlined } from '@ant-design/icons'
+import { SearchOutlined, ReloadOutlined, DesktopOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { deviceApi } from '@/services/deviceApi'
 import { DEVICE_STATUS_MAP } from '@/utils/constants'
 import { safeNum } from '@/utils/format'
@@ -86,6 +86,27 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
     return safeNum(acPower || pvPower) || null
   }
 
+  const getDailyEnergy = (sn: string): number | null => {
+    const rt = realtimeData?.[sn]
+    if (!rt) return null
+    const dailyPV = safeNum(rt?.daily_pv ?? rt?.daily_energy ?? rt?.today_energy ?? 0)
+    return dailyPV > 0 ? dailyPV : null
+  }
+
+  const getDeviceType = (model: string): 'inv' | 'collector' | 'battery' => {
+    const m = (model ?? '').toLowerCase()
+    const sn = ''
+    if (m.includes('battery') || m.includes('bms') || m.includes('储能') || sn.includes('batt')) return 'battery'
+    if (m.includes('collect') || m.includes('采集') || m.includes('daq') || sn.includes('col')) return 'collector'
+    return 'inv'
+  }
+
+  const deviceTypeConfig = {
+    inv: { label: t('station.deviceTypeInverter'), color: 'purple' },
+    collector: { label: t('station.deviceTypeCollector'), color: 'cyan' },
+    battery: { label: t('station.deviceTypeStorage'), color: 'green' },
+  }
+
   const getStatusCfg = (status: number | string) => {
     const key = String(status)
     return DEVICE_STATUS_MAP[key] ?? DEVICE_STATUS_MAP['0']
@@ -136,13 +157,16 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
             {filteredDevices.map(dev => {
               const statusCfg = getStatusCfg(dev.status)
               const rtPower = getRealtimePower(dev.sn)
+              const dailyEnergy = getDailyEnergy(dev.sn)
+              const devType = getDeviceType(dev.model ?? '')
+              const typeCfg = deviceTypeConfig[devType]
+              const isOnline = dev.status === 1 || dev.status === 'online'
               const fw = dev.firmware_version || dev.firmware_dsp || '-'
               return (
                 <Col xs={24} sm={12} md={8} key={dev.sn}>
                   <ProCard
                     hoverable
-                    bordered={false}
-                    style={{ borderRadius: 12, cursor: 'pointer', height: '100%' }}
+                    style={{ borderRadius: 12, cursor: 'pointer', height: '100%', border: '1px solid #e8e8e8' }}
                     bodyStyle={{ padding: '16px' }}
                     onClick={() => setModalSn(dev.sn)}
                   >
@@ -157,21 +181,36 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
                         <Tag color={statusCfg.color} style={{ marginLeft: 4 }}>{statusCfg.label}</Tag>
                       </Col>
                     </Row>
-                    <div style={{ marginBottom: 4 }}>
+                    <div style={{ marginBottom: 6 }}>
+                      <Tag color={typeCfg.color}>{typeCfg.label}</Tag>
                       <Tag>{dev.model || '-'}</Tag>
                       {dev.rated_power != null && <Tag color="blue">{dev.rated_power}W</Tag>}
                     </div>
                     <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
                       <DesktopOutlined /> {t('station.firmwareLabel')}: {fw}
                     </div>
-                    <div style={{ fontSize: 12, color: '#999' }}>
+                    <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
                       {t('station.lastOnline')}: {formatInTimezone(dev.last_online_at, timezone, 'MM-DD HH:mm:ss')}
                     </div>
-                    {rtPower !== null && (
-                      <div style={{ marginTop: 8, fontSize: 13, color: '#1677ff', fontWeight: 600 }}>
-                        {t('station.realtimePower')}: {rtPower.toFixed(0)} W
-                      </div>
-                    )}
+                    <div style={{ marginTop: 8, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+                      <Row gutter={8}>
+                        <Col span={12}>
+                          <div style={{ fontSize: 11, color: '#999' }}>{t('station.realtimePower')}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: isOnline ? '#1677ff' : '#bbb' }}>
+                            <ThunderboltOutlined style={{ marginRight: 4, fontSize: 12 }} />
+                            {isOnline ? (rtPower !== null ? `${rtPower.toFixed(0)} W` : '0 W') : '--'}
+                          </div>
+                        </Col>
+                        {devType === 'inv' && (
+                          <Col span={12}>
+                            <div style={{ fontSize: 11, color: '#999' }}>{t('station.dailyGeneration')}</div>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: dailyEnergy !== null ? '#f59e0b' : '#bbb' }}>
+                              {dailyEnergy !== null ? `${dailyEnergy.toFixed(2)} kWh` : '--'}
+                            </div>
+                          </Col>
+                        )}
+                      </Row>
+                    </div>
                   </ProCard>
                 </Col>
               )

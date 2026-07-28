@@ -55,7 +55,7 @@ const StationCard: React.FC<StationCardProps> = ({ station, onClick }) => {
     <ProCard
       hoverable
       onClick={onClick}
-      style={{ borderRadius: 12, height: '100%' }}
+      style={{ borderRadius: 12, height: '100%', border: '1px solid #e8e8e8' }}
       bodyStyle={{ padding: '16px 20px' }}
     >
       {/* Header: name + status */}

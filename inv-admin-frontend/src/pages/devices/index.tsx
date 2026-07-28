@@ -1084,6 +1084,19 @@ const DevicesPage: React.FC = () => {
     },
   ]
 
+  const getDeviceType = (model: string): 'inv' | 'collector' | 'battery' => {
+    const m = (model ?? '').toLowerCase()
+    if (m.includes('battery') || m.includes('bms') || m.includes('储能')) return 'battery'
+    if (m.includes('collect') || m.includes('采集') || m.includes('daq')) return 'collector'
+    return 'inv'
+  }
+
+  const deviceTypeConfig = {
+    inv: { label: t('station.deviceTypeInverter'), color: 'purple' },
+    collector: { label: t('station.deviceTypeCollector'), color: 'cyan' },
+    battery: { label: t('station.deviceTypeStorage'), color: 'green' },
+  }
+
   const columns: ColumnsType<DeviceRecord> = [
     {
       title: t('dev.deviceSN'),
@@ -1103,6 +1116,17 @@ const DevicesPage: React.FC = () => {
       key: 'model',
       width: 120,
       responsive: ['sm'],
+    },
+    {
+      title: t('station.deviceType'),
+      key: 'device_type',
+      width: 90,
+      responsive: ['sm'],
+      render: (_: any, record: any) => {
+        const devType = getDeviceType(record.model ?? '')
+        const cfg = deviceTypeConfig[devType]
+        return <Tag color={cfg.color}>{cfg.label}</Tag>
+      },
     },
     {
       title: t('dev.ratedPower'),
@@ -1327,7 +1351,7 @@ const DevicesPage: React.FC = () => {
       <Row gutter={[12, 12]}>
         {ac && (
           <Col span={24}>
-            <Card size="small" title={t('dev.acSide')} style={{ background: '#fafafa' }}>
+            <Card size="small" title={t('dev.acSide')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
               <Row gutter={[12, 8]}>
                 <Col span={8}>
                   <Text type="secondary">{t('dev.voltage')}</Text>
@@ -1360,7 +1384,7 @@ const DevicesPage: React.FC = () => {
         )}
         {pv && (
           <Col span={24}>
-            <Card size="small" title={t('dev.pvSide')} style={{ background: '#fafafa' }}>
+            <Card size="small" title={t('dev.pvSide')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
               <Row gutter={[12, 8]}>
                 <Col span={8}>
                   <Text type="secondary">{t('dev.voltage')}</Text>
@@ -1383,7 +1407,7 @@ const DevicesPage: React.FC = () => {
         )}
         {battery && (
           <Col span={24}>
-            <Card size="small" title={t('dev.battery')} style={{ background: '#fafafa' }}>
+            <Card size="small" title={t('dev.battery')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
               <Row gutter={[12, 8]}>
                 <Col span={6}>
                   <Text type="secondary">SOC</Text>
@@ -1411,7 +1435,7 @@ const DevicesPage: React.FC = () => {
         )}
         {system && (
           <Col span={24}>
-            <Card size="small" title={t('dev.systemInfo')} style={{ background: '#fafafa' }}>
+            <Card size="small" title={t('dev.systemInfo')} style={{ background: '#f7f8fa', borderColor: '#e8e8e8' }}>
               <Row gutter={[12, 8]}>
                 <Col span={6}>
                   <Text type="secondary">{t('dev.workStatus')}</Text>
@@ -1738,7 +1762,7 @@ const DevicesPage: React.FC = () => {
             </div>
 
             {selectedCommand && selectedCommand.params.length > 0 && (
-              <Card size="small" style={{ marginBottom: 12, background: '#fafafa' }}>
+              <Card size="small" style={{ marginBottom: 12, background: '#f7f8fa', borderColor: '#e8e8e8' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {selectedCommand.params.map((param) => (
                     <div key={param.name}>
