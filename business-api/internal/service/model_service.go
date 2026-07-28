@@ -199,6 +199,14 @@ func (s *ModelService) UpdateModel(ctx context.Context, id int64, req *UpdateMod
 	return err
 }
 
+func (s *ModelService) RetireModel(ctx context.Context, id int64) error {
+	err := s.modelRepo.SoftRetireModel(ctx, id)
+	if err == nil {
+		s.InvalidateModelCache(ctx, id)
+	}
+	return err
+}
+
 func (s *ModelService) DeleteModel(ctx context.Context, id int64) error {
 	err := s.modelRepo.RetireModel(ctx, id)
 	if err == nil {
