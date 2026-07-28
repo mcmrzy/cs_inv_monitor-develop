@@ -397,7 +397,11 @@ const ModelRegistryWorkspace: React.FC = () => {
         <Form.Item name="model_name" label={t('models.modelName')} rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="manufacturer" label={t('models.manufacturer')}><Input /></Form.Item>
         <Space size="middle" style={{ display: 'flex' }}>
-          <Form.Item name="category" label={t('models.category')} rules={[{ required: true }]}><Select style={{ width: 180 }} options={[{ value: 'inverter', label: t('models.registry.offGridInverter') }]} /></Form.Item>
+          <Form.Item name="category" label={t('models.category')} rules={[{ required: true }]}><Select style={{ width: 180 }} options={[
+                      { value: 'inverter', label: t('models.inverter') },
+                      { value: 'battery', label: t('station.deviceTypeStorage') },
+                      { value: 'meter', label: t('models.meter') },
+                    ]} /></Form.Item>
           <Form.Item name="rated_power_kw" label={t('models.ratedPower_kW')}><InputNumber min={0} precision={2} /></Form.Item>
         </Space>
         <Form.Item name="description" label={t('models.registry.notes')}><Input.TextArea rows={3} /></Form.Item>

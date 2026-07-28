@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import {
@@ -32,6 +32,7 @@ import StatisticCard from '@/components/StatisticCard'
 import StationCard from './components/StationCard'
 import RegionPicker from '@/components/RegionPicker'
 import regionData from '@/utils/regionData'
+import LocationPicker, { LocationPickerRef, LatLng } from '@/components/LocationPicker'
 
 const { Title, Text } = Typography
 
@@ -135,10 +136,14 @@ const StationsPage: React.FC = () => {
   /* ---------- 编辑弹窗 ---------- */
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editForm] = Form.useForm()
+  const editMapRef = useRef<LocationPickerRef>(null)
+  const [editLocation, setEditLocation] = useState<LatLng | undefined>(undefined)
 
   /* ---------- 创建电站弹窗 ---------- */
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [addForm] = Form.useForm()
+  const addMapRef = useRef<LocationPickerRef>(null)
+  const [addLocation, setAddLocation] = useState<LatLng | undefined>(undefined)
 
   /* ---------- 分配用户 ---------- */
   const [assignVisible, setAssignVisible] = useState(false)
@@ -170,6 +175,29 @@ const StationsPage: React.FC = () => {
 
   /* ---------- 趋势图时间范围 ---------- */
   const [trendRange, setTrendRange] = useState<7 | 30>(30)
+
+  /* ---------- 地理编码辅助 ---------- */
+  const geocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const geocodeAddress = useCallback(async (province: string, city: string, district: string, address: string, country: string, mapRef: React.RefObject<LocationPickerRef | null>) => {
+    const fullAddr = [address, district, city, province].filter(Boolean).join(' ')
+    if (!fullAddr) return
+    try {
+      const res = await api.get('/geocode', { params: { address: fullAddr, country } })
+      const data = res.data?.data
+      if (data?.lat && data?.lng) {
+        mapRef.current?.flyTo([data.lat, data.lng], 14)
+        mapRef.current?.setPosition({ lat: data.lat, lng: data.lng })
+      }
+    } catch { /* ignore geocode failure */ }
+  }, [])
+
+  const triggerGeocode = useCallback((province: string, city: string, district: string, address: string, country: string, mapRef: React.RefObject<LocationPickerRef | null>) => {
+    if (geocodeTimerRef.current) clearTimeout(geocodeTimerRef.current)
+    geocodeTimerRef.current = setTimeout(() => {
+      geocodeAddress(province, city, district, address, country, mapRef)
+    }, 800)
+  }, [geocodeAddress])
 
   /* ---------- 数据获取 ---------- */
 
@@ -334,10 +362,15 @@ const StationsPage: React.FC = () => {
 
   const handleEditSave = async (values: Record<string, unknown>) => {
     try {
+      if (editLocation && editLocation.lat !== 0) {
+        values.latitude = editLocation.lat
+        values.longitude = editLocation.lng
+      }
       await api.put(`/stations/${currentStation!.id}`, values)
       messageApi.success(t('station.updateSuccess'))
       queryClient.invalidateQueries({ queryKey: ['stations'] })
       setCurrentStation({ ...currentStation!, ...values })
+      setEditLocation(undefined)
       return true
     } catch {
       messageApi.error(t('station.updateFailed'))
@@ -347,9 +380,14 @@ const StationsPage: React.FC = () => {
 
   const handleCreate = async (values: Record<string, unknown>) => {
     try {
+      if (addLocation && addLocation.lat !== 0) {
+        values.latitude = addLocation.lat
+        values.longitude = addLocation.lng
+      }
       await api.post('/stations', values)
       messageApi.success(t('station.addSuccess'))
       queryClient.invalidateQueries({ queryKey: ['stations'] })
+      setAddLocation(undefined)
       return true
     } catch {
       messageApi.error(t('station.addFailed'))
@@ -598,6 +636,9 @@ const StationsPage: React.FC = () => {
               timezone: record.timezone || 'Asia/Shanghai',
             })
             setCurrentStation(record)
+            const lat = record.latitude ? Number(record.latitude) : 0
+            const lng = record.longitude ? Number(record.longitude) : 0
+            setEditLocation(lat !== 0 || lng !== 0 ? { lat, lng } : undefined)
             setEditModalOpen(true)
           }}><EditOutlined /> {t('common.edit')}</a>
           <Popconfirm
@@ -767,6 +808,9 @@ const StationsPage: React.FC = () => {
                   status: station.status,
                   timezone: station.timezone || 'Asia/Shanghai',
                 })
+                const sLat = station.latitude ? Number(station.latitude) : 0
+                const sLng = station.longitude ? Number(station.longitude) : 0
+                setEditLocation(sLat !== 0 || sLng !== 0 ? { lat: sLat, lng: sLng } : undefined)
                 setEditModalOpen(true)
               }}
             >
@@ -1139,11 +1183,11 @@ const StationsPage: React.FC = () => {
       <ModalForm
         title={t('station.editStation')}
         open={editModalOpen}
-        onOpenChange={(open) => { if (!open) setEditModalOpen(false) }}
+        onOpenChange={(open) => { if (!open) { setEditModalOpen(false); setEditLocation(undefined) } }}
         form={editForm}
         onFinish={handleEditSave}
         layout="vertical"
-        width={600}
+        width={720}
         modalProps={{ destroyOnClose: true, maskClosable: false }}
       >
         <Row gutter={16}>
@@ -1164,12 +1208,29 @@ const StationsPage: React.FC = () => {
                     city: region[1] || '',
                     district: region[2] || ''
                   })
+                  triggerGeocode(region[0] || '', region[1] || '', region[2] || '', editForm.getFieldValue('address') || '', '', editMapRef)
                 }}
               />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <ProFormText name="address" label={t('station.address')} />
+            <ProFormText name="address" label={t('station.address')} fieldProps={{
+              onChange: () => {
+                const v = editForm.getFieldsValue()
+                triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', '', editMapRef)
+              }
+            }} />
+          </Col>
+          <Col span={24}>
+            <Form.Item label={t('station.mapSelectLocation') || 'Select on map'}>
+              <LocationPicker
+                ref={editMapRef}
+                value={editLocation}
+                onChange={setEditLocation}
+                initialCenter={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? [editLocation.lat, editLocation.lng] : [30, 110]}
+                initialZoom={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? 14 : 4}
+              />
+            </Form.Item>
           </Col>
           <Col span={8}>
             <ProFormDigit name="panel_count" label={t('station.panelCount')} min={0} fieldProps={{ style: { width: '100%' } }} />
@@ -1233,12 +1294,13 @@ const StationsPage: React.FC = () => {
           if (!open) {
             setAddModalOpen(false)
             addForm.resetFields()
+            setAddLocation(undefined)
           }
         }}
         form={addForm}
         onFinish={handleCreate}
         layout="vertical"
-        width={600}
+        width={720}
         modalProps={{ destroyOnClose: true, maskClosable: false }}
       >
         <Row gutter={16}>
@@ -1259,12 +1321,27 @@ const StationsPage: React.FC = () => {
                     city: region[1] || '',
                     district: region[2] || ''
                   })
+                  triggerGeocode(region[0] || '', region[1] || '', region[2] || '', addForm.getFieldValue('address') || '', '', addMapRef)
                 }}
               />
             </Form.Item>
           </Col>
           <Col span={24}>
-            <ProFormText name="address" label={t('station.address')} />
+            <ProFormText name="address" label={t('station.address')} fieldProps={{
+              onChange: () => {
+                const v = addForm.getFieldsValue()
+                triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', '', addMapRef)
+              }
+            }} />
+          </Col>
+          <Col span={24}>
+            <Form.Item label={t('station.mapSelectLocation') || 'Select on map'}>
+              <LocationPicker
+                ref={addMapRef}
+                value={addLocation}
+                onChange={setAddLocation}
+              />
+            </Form.Item>
           </Col>
           <Col span={8}>
             <ProFormDigit name="panel_count" label={t('station.panelCount')} min={0} fieldProps={{ style: { width: '100%' } }} />

@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS device_models (
     model_code      VARCHAR(50) NOT NULL UNIQUE,
     model_name      VARCHAR(100) NOT NULL,     -- 显示名称如 "5000TL 逆变器"
     manufacturer    VARCHAR(50),                -- 制造商
-    category        VARCHAR(20) NOT NULL DEFAULT 'inverter',  -- inverter/battery/meter/hybrid
+    category        VARCHAR(20) NOT NULL DEFAULT 'inverter',  -- inverter/battery/meter
     rated_power_kw  DECIMAL(8,2) DEFAULT 0,    -- 额定功率 kW
     data_fields     JSONB NOT NULL DEFAULT '{}',  -- 该型号的标准字段定义
     field_mapping   JSONB NOT NULL DEFAULT '{}',  -- MQTT字段→标准字段映射

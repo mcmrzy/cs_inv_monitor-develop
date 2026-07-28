@@ -1084,10 +1084,9 @@ const DevicesPage: React.FC = () => {
     },
   ]
 
-  const getDeviceType = (model: string): 'inv' | 'collector' | 'battery' => {
-    const m = (model ?? '').toLowerCase()
-    if (m.includes('battery') || m.includes('bms') || m.includes('储能')) return 'battery'
-    if (m.includes('collect') || m.includes('采集') || m.includes('daq')) return 'collector'
+  const getCategoryType = (category: string): 'inv' | 'collector' | 'battery' => {
+    if (category === 'battery') return 'battery'
+    if (category === 'meter') return 'collector'
     return 'inv'
   }
 
@@ -1126,7 +1125,7 @@ const DevicesPage: React.FC = () => {
         if (!record.model_id || record.model_id === 0) {
           return <Tag color="orange">未绑定型号</Tag>
         }
-        const devType = getDeviceType(record.model ?? '')
+        const devType = getCategoryType(record.model_category ?? '')
         const cfg = deviceTypeConfig[devType]
         return <Tag color={cfg.color}>{cfg.label}</Tag>
       },

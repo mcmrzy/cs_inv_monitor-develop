@@ -106,10 +106,8 @@ const ModelsPage: React.FC = () => {
 
   const CATEGORY_OPTIONS = [
     { label: t('models.inverter'), value: 'inverter' },
-    { label: t('models.energyStorage'), value: 'storage' },
-    { label: t('models.chargingPile'), value: 'charger' },
+    { label: t('station.deviceTypeStorage'), value: 'battery' },
     { label: t('models.meter'), value: 'meter' },
-    { label: t('models.hybrid'), value: 'hybrid' },
   ]
 
   const INPUT_TYPE_OPTIONS = [

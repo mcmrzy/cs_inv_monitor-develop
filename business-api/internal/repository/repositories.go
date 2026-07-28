@@ -829,7 +829,7 @@ type DeviceRepository struct {
 // deviceListSelectColumns mirrors the Device scan order used by both list
 // methods. Nullable database columns are normalized because Device deliberately
 // exposes scalar JSON fields rather than sql.Null* implementation details.
-const deviceListSelectColumns = `d.id, d.sn, COALESCE(d.model, ''), COALESCE(d.model_id, 0), COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+const deviceListSelectColumns = `d.id, d.sn, COALESCE(d.model, ''), COALESCE(d.model_id, 0), COALESCE(dm.category, ''), COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
 	COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 	COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 	COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
@@ -888,7 +888,7 @@ func (r *DeviceRepository) GetAllowedDeviceSNs(ctx context.Context, userID int64
 
 func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Device, error) {
 	query := `
-		SELECT d.id, d.sn, d.model, COALESCE(d.model_id, 0), COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
+		SELECT d.id, d.sn, d.model, COALESCE(d.model_id, 0), COALESCE(dm.category, ''), COALESCE(d.manufacturer,''), COALESCE(d.firmware_arm,''), COALESCE(d.firmware_esp,''),
 			   COALESCE(d.firmware_dsp,''), COALESCE(d.firmware_bms,''), COALESCE(d.main_version,''),
 			   COALESCE(d.device_type,''), COALESCE(d.rated_power,0), COALESCE(d.rated_voltage,0), COALESCE(d.rated_freq,0),
 			   COALESCE(d.battery_voltage,0), COALESCE(d.battery_type,''), COALESCE(d.cell_count,0),
@@ -896,6 +896,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 			   COALESCE(rd.total_active_power, 0), COALESCE(rd.daily_energy, 0),
 			   d.last_online_at, d.created_at, d.updated_at
 		FROM devices d
+		LEFT JOIN device_models dm ON d.model_id = dm.id
 		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
 		WHERE d.sn = $1 AND d.deleted_at IS NULL
 	`
@@ -905,7 +906,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 	var lastOnlineAt sql.NullTime
 
 	err := r.db.QueryRow(ctx, query, sn).Scan(
-		&device.ID, &device.SN, &device.Model, &device.ModelID, &device.Manufacturer,
+		&device.ID, &device.SN, &device.Model, &device.ModelID, &device.ModelCategory, &device.Manufacturer,
 		&device.FirmwareArm, &device.FirmwareEsp,
 		&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 		&device.DeviceType,
@@ -939,7 +940,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 
 	allowedSNsSubquery := `(SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)`
 
-	baseQuery := fmt.Sprintf(` FROM devices d LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
+	baseQuery := fmt.Sprintf(` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
 	args := []interface{}{userID}
 	argIdx := 2
 
@@ -989,7 +990,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
-			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.Manufacturer,
+			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.ModelCategory, &device.Manufacturer,
 			&device.FirmwareArm, &device.FirmwareEsp,
 			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 			&device.DeviceType,
@@ -1018,7 +1019,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error) {
 	offset := (page - 1) * pageSize
 
-	baseQuery := ` FROM devices d LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
+	baseQuery := ` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
 	args := []interface{}{}
 	argIdx := 1
 
@@ -1068,7 +1069,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
-			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.Manufacturer,
+			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.ModelCategory, &device.Manufacturer,
 			&device.FirmwareArm, &device.FirmwareEsp,
 			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 			&device.DeviceType,
@@ -1097,6 +1098,7 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) ([]*model.Device, error) {
 	query := `SELECT ` + deviceListSelectColumns + `
 		FROM devices d
+		LEFT JOIN device_models dm ON d.model_id = dm.id
 		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
 		LEFT JOIN stations s ON s.id = d.station_id
 		WHERE d.station_id = $1 AND d.deleted_at IS NULL
@@ -1114,7 +1116,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 		var stationID sql.NullInt64
 		var lastOnlineAt sql.NullTime
 		if err := rows.Scan(
-			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.Manufacturer,
+			&device.ID, &device.SN, &device.Model, &device.ModelID, &device.ModelCategory, &device.Manufacturer,
 			&device.FirmwareArm, &device.FirmwareEsp,
 			&device.FirmwareDSP, &device.FirmwareBMS, &device.MainVersion,
 			&device.DeviceType,

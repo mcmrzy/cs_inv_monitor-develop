@@ -22,6 +22,7 @@ interface DeviceItem {
   sn: string
   model: string
   model_id?: number
+  model_category?: string
   rated_power?: number
   status: number | string
   last_online_at?: string
@@ -93,11 +94,9 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
     return dailyPV > 0 ? dailyPV : null
   }
 
-  const getDeviceType = (model: string): 'inv' | 'collector' | 'battery' => {
-    const m = (model ?? '').toLowerCase()
-    const sn = ''
-    if (m.includes('battery') || m.includes('bms') || m.includes('储能') || sn.includes('batt')) return 'battery'
-    if (m.includes('collect') || m.includes('采集') || m.includes('daq') || sn.includes('col')) return 'collector'
+  const getCategoryType = (category: string): 'inv' | 'collector' | 'battery' => {
+    if (category === 'battery') return 'battery'
+    if (category === 'meter') return 'collector'
     return 'inv'
   }
 
@@ -158,7 +157,7 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
               const statusCfg = getStatusCfg(dev.status)
               const rtPower = getRealtimePower(dev.sn)
               const dailyEnergy = getDailyEnergy(dev.sn)
-              const devType = getDeviceType(dev.model ?? '')
+              const devType = getCategoryType(dev.model_category ?? '')
               const typeCfg = deviceTypeConfig[devType]
               const isOnline = dev.status === 1 || dev.status === 'online'
               const fw = dev.firmware_version || dev.firmware_dsp || '-'
