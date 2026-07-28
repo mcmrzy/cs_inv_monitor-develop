@@ -43,12 +43,12 @@ const KPIPanel: React.FC<KPIPanelProps> = ({
         <div className="bs-kpi-grid">
           <div className="bs-kpi-card">
             <div className="bs-kpi-icon" style={{ color: '#00d4ff' }}><ThunderboltOutlined /></div>
-            <div className="bs-kpi-value" style={{ color: '#00d4ff' }}>{todayEnergy.toLocaleString()}</div>
+            <div className="bs-kpi-value" style={{ color: '#00d4ff' }}>{Number(todayEnergy).toFixed(1)}</div>
             <div className="bs-kpi-label">{t('bigScreen.todayEnergy')} (kWh)</div>
           </div>
           <div className="bs-kpi-card">
             <div className="bs-kpi-icon" style={{ color: '#4facfe' }}><DashboardOutlined /></div>
-            <div className="bs-kpi-value" style={{ color: '#4facfe' }}>{totalCapacity.toLocaleString()}</div>
+            <div className="bs-kpi-value" style={{ color: '#4facfe' }}>{Number(totalCapacity).toLocaleString()}</div>
             <div className="bs-kpi-label">{t('bigScreen.totalCapacity')} (kW)</div>
           </div>
           <div className="bs-kpi-card">

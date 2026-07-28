@@ -41,6 +41,14 @@ const TrendPanel: React.FC<TrendPanelProps> = ({
       backgroundColor: 'rgba(0, 20, 40, 0.9)',
       borderColor: '#00d4ff',
       textStyle: { color: '#fff' },
+      formatter: (params: any) => {
+        const list = Array.isArray(params) ? params : [params]
+        let html = `<div style="font-weight:600;margin-bottom:4px">${list[0].axisValue}</div>`
+        list.forEach((p: any) => {
+          html += `<div>${p.marker} ${p.seriesName}: ${Number(p.value).toFixed(2)} kWh</div>`
+        })
+        return html
+      },
     },
     grid: {
       top: 30,
@@ -66,7 +74,7 @@ const TrendPanel: React.FC<TrendPanelProps> = ({
       {
         name: t('bigScreen.energy'),
         type: 'bar',
-        data: trendData.map((d) => d.energy),
+        data: trendData.map((d) => parseFloat(Number(d.energy).toFixed(2))),
         barWidth: '50%',
         itemStyle: {
           color: {
@@ -83,7 +91,7 @@ const TrendPanel: React.FC<TrendPanelProps> = ({
       {
         name: t('bigScreen.load'),
         type: 'line',
-        data: trendData.map((d) => d.loadEnergy ?? 0),
+        data: trendData.map((d) => parseFloat(Number(d.loadEnergy ?? 0).toFixed(2))),
         smooth: true,
         symbol: 'none',
         lineStyle: { color: '#00ff88', width: 2 },
