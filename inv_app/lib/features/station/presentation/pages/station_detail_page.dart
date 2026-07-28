@@ -410,6 +410,7 @@ class _StationDetailPageState extends State<StationDetailPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Material(
                 color: Colors.transparent,
@@ -438,47 +439,59 @@ class _StationDetailPageState extends State<StationDetailPage>
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
-                decoration: BoxDecoration(
-                  color: online
-                      ? const Color(0xFFECFDF5)
-                      : Colors.white.withValues(alpha: 0.8),
-                  borderRadius: BorderRadius.circular(6.r),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 3,
-                      offset: const Offset(0, 1),
+              // 右上角：在线状态 + 设备选择器
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // 在线状态
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                    decoration: BoxDecoration(
+                      color: online
+                          ? const Color(0xFFECFDF5)
+                          : Colors.white.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(6.r),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 3,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
                     ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: online
+                                ? AppColors.successLight
+                                : AppColors.textHint,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        SizedBox(width: 4.w),
+                        Text(
+                          online ? l10n.online : l10n.offline,
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w500,
+                            color: online
+                                ? AppColors.successLight
+                                : AppColors.textHint,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 设备选择器（仅在多个设备时显示）
+                  if ((_cachedState?.devices ?? []).length > 1) ...[
+                    SizedBox(height: 4.h),
+                    _buildDeviceSelector(),
                   ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: online
-                            ? AppColors.successLight
-                            : AppColors.textHint,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    SizedBox(width: 4.w),
-                    Text(
-                      online ? l10n.online : l10n.offline,
-                      style: TextStyle(
-                        fontSize: 11.sp,
-                        fontWeight: FontWeight.w500,
-                        color: online
-                            ? AppColors.successLight
-                            : AppColors.textHint,
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ],
           ),
@@ -496,10 +509,6 @@ class _StationDetailPageState extends State<StationDetailPage>
               ),
             ],
           ),
-          if ((_cachedState?.devices ?? []).length > 1) ...[
-            SizedBox(height: 6.h),
-            _buildDeviceSelector(),
-          ],
         ],
       ),
     );
@@ -508,74 +517,76 @@ class _StationDetailPageState extends State<StationDetailPage>
   Widget _buildDeviceSelector() {
     final l10n = AppLocalizations.of(context)!;
     final devices = _cachedState?.devices ?? [];
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        height: 30.h,
-        padding: EdgeInsets.symmetric(horizontal: 8.w),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.85),
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(6.r),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: devices.any((d) => d['sn'] == _selectedDeviceSn)
+              ? _selectedDeviceSn
+              : 'all',
+          isDense: true,
+          icon: Icon(
+            Icons.arrow_drop_down,
+            size: 18.sp,
+            color: AppColors.primary,
+          ),
+          style: TextStyle(fontSize: 11.sp, color: AppColors.textPrimary),
+          dropdownColor: Colors.white,
           borderRadius: BorderRadius.circular(8.r),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: devices.any((d) => d['sn'] == _selectedDeviceSn)
-                ? _selectedDeviceSn
-                : 'all',
-            isDense: true,
-            icon: Icon(
-              Icons.arrow_drop_down,
-              size: 18.sp,
-              color: AppColors.primary,
-            ),
-            style: TextStyle(fontSize: 11.sp, color: AppColors.textPrimary),
-            dropdownColor: Colors.white,
-            borderRadius: BorderRadius.circular(8.r),
-            items: [
-              DropdownMenuItem(
-                value: 'all',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.devices, size: 14.sp, color: AppColors.primary),
-                    SizedBox(width: 4.w),
-                    Text(l10n.allDevices, style: TextStyle(fontSize: 11.sp)),
-                  ],
-                ),
+          items: [
+            DropdownMenuItem(
+              value: 'all',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.devices, size: 14.sp, color: AppColors.primary),
+                  SizedBox(width: 4.w),
+                  Text(l10n.allDevices, style: TextStyle(fontSize: 11.sp)),
+                ],
               ),
-              ...devices.map((d) => DropdownMenuItem(
-                    value: d['sn'] as String,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.memory,
-                          size: 14.sp,
-                          color: AppColors.textSecondary,
+            ),
+            ...devices.map((d) => DropdownMenuItem(
+                  value: d['sn'] as String,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.memory,
+                        size: 14.sp,
+                        color: AppColors.textSecondary,
+                      ),
+                      SizedBox(width: 4.w),
+                      Flexible(
+                        child: Text(
+                          d['sn'] as String? ?? '',
+                          style: TextStyle(fontSize: 11.sp),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        SizedBox(width: 4.w),
-                        Flexible(
-                          child: Text(
-                            d['sn'] as String? ?? '',
-                            style: TextStyle(fontSize: 11.sp),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            onChanged: (val) {
-              if (val != null) {
-                setState(() {
-                  _selectedDeviceSn = val;
-                });
-                _recalcMqttAggregation();
-              }
-            },
-          ),
+              ),
+            ],
+          onChanged: (val) {
+            if (val != null) {
+              setState(() {
+                _selectedDeviceSn = val;
+              });
+              _recalcMqttAggregation();
+            }
+          },
         ),
       ),
     );

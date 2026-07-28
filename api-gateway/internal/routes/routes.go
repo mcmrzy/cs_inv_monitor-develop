@@ -150,6 +150,8 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 
 	userGroup.Any("/api/v1/stations/*action", p.Handler())
 	userGroup.Any("/api/v1/stations", p.Handler())
+	userGroup.Any("/api/v1/geocode/*action", p.Handler())
+	userGroup.Any("/api/v1/geocode", p.Handler())
 	userGroup.Any("/api/v1/devices/*action", p.Handler())
 	userGroup.Any("/api/v1/devices", p.Handler())
 	userGroup.Any("/api/v1/alarms/*action", p.Handler())

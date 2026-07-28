@@ -35,6 +35,11 @@ const defaultIcon = L.icon({
   shadowSize: [41, 41],
 })
 
+/* Helper: validate coordinates */
+function isValidLatLng(pos: { lat: number; lng: number } | null | undefined): pos is LatLng {
+  return !!pos && typeof pos.lat === 'number' && typeof pos.lng === 'number' && !isNaN(pos.lat) && !isNaN(pos.lng)
+}
+
 /* Click handler component */
 function MapClickHandler({ onPositionChange }: { onPositionChange: (pos: LatLng) => void }) {
   useMapEvents({
@@ -50,7 +55,14 @@ function FlyToController({ target, zoom }: { target: [number, number] | null; zo
   const map = useMap()
   useEffect(() => {
     if (target) {
-      map.flyTo(target, zoom, { duration: 1.5 })
+      const lat = Number(target[0])
+      const lng = Number(target[1])
+      const z = Number(zoom)
+      if (!isNaN(lat) && !isNaN(lng) && !isNaN(z) && isFinite(lat) && isFinite(lng)) {
+        try {
+          map.flyTo([lat, lng], z, { duration: 1.5 })
+        } catch { /* ignore leaflet internal errors */ }
+      }
     }
   }, [map, target, zoom])
   return null
@@ -61,23 +73,25 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
     const mapRef = useRef<L.Map | null>(null)
     const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null)
     const [flyZoom, setFlyZoom] = useState(initialZoom)
-    const [position, setPosition] = useState<LatLng | null>(value ?? null)
+    const [position, setPosition] = useState<LatLng | null>(null)
 
     // Sync external value
     useEffect(() => {
-      if (value && (value.lat !== 0 || value.lng !== 0)) {
+      if (isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0)) {
         setPosition(value)
       }
     }, [value])
 
     useImperativeHandle(ref, () => ({
       flyTo: (center: [number, number], zoom = 12) => {
+        if (!center || isNaN(center[0]) || isNaN(center[1])) return
         setFlyTarget(center)
         setFlyZoom(zoom)
         // Reset target after animation to allow re-flying to same location
         setTimeout(() => setFlyTarget(null), 2000)
       },
       setPosition: (pos: LatLng) => {
+        if (!isValidLatLng(pos)) return
         setPosition(pos)
         onChange?.(pos)
       },
@@ -132,8 +146,8 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
           </a>
         </div>
         <MapContainer
-          center={value && (value.lat !== 0 || value.lng !== 0) ? [value.lat, value.lng] : initialCenter}
-          zoom={value && (value.lat !== 0 || value.lng !== 0) ? 14 : initialZoom}
+          center={isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0) ? [value.lat, value.lng] : initialCenter}
+          zoom={isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0) ? 14 : initialZoom}
           style={{ width: '100%', height: typeof height === 'number' ? `${height}px` : height }}
           ref={(instance) => {
             mapRef.current = instance
@@ -145,7 +159,7 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
           />
           <MapClickHandler onPositionChange={handlePositionChange} />
           <FlyToController target={flyTarget} zoom={flyZoom} />
-          {position && position.lat !== 0 && (
+          {isValidLatLng(position) && position.lat !== 0 && (
             <Marker position={[position.lat, position.lng]} icon={defaultIcon} />
           )}
         </MapContainer>
