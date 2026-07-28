@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Tag, Button, Space, Spin, Tabs, Row, Col, Empty, Progress, Typography,
+  Tag, Button, Space, Spin, Tabs, Row, Col, Empty, Progress, Typography, Select,
 } from 'antd'
 import { ProTable, ProCard } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
@@ -114,6 +114,7 @@ const StationDetailPage: React.FC = () => {
   const { lang } = useLocaleStore()
   const { timezone } = useTimezoneStore()
   const [activeTab, setActiveTab] = useState('overview')
+  const [selectedDeviceSn, setSelectedDeviceSn] = useState<string>('all')
 
   const { data: station, isLoading: stationLoading, refetch: refetchStation } = useQuery({
     queryKey: ['station', id],
@@ -194,7 +195,14 @@ const StationDetailPage: React.FC = () => {
   // 从设备实时数据聚合能量值 + 实时功率（normalizeRealtimeData 展平后同时存在扁平和嵌套字段）
   // NOTE: useMemo 必须在条件早返回之前调用，否则违反 React Hooks 规则导致 #310 无限渲染
   const deviceEnergy = useMemo(() => {
-    const rtList = Object.values(realtimeData ?? {})
+    // 根据 selectedDeviceSn 决定取单台设备还是聚合全部
+    let rtList: any[] = []
+    if (selectedDeviceSn === 'all') {
+      rtList = Object.values(realtimeData ?? {})
+    } else {
+      const singleRt = realtimeData?.[selectedDeviceSn]
+      if (singleRt) rtList = [singleRt]
+    }
     if (rtList.length === 0) return null
     let dailyPv = 0, totalPv = 0
     let dailyDischarge = 0, totalDischarge = 0
@@ -225,7 +233,7 @@ const StationDetailPage: React.FC = () => {
       pvPower, loadPower, battPower, gridPower: gridPowerSum,
       battSoc: socCount > 0 ? battSoc / socCount : 0,
     }
-  }, [realtimeData])
+  }, [realtimeData, selectedDeviceSn])
 
   if (stationLoading) {
     return (
@@ -283,7 +291,7 @@ const StationDetailPage: React.FC = () => {
   const pvPower2 = safeNum(firstDeviceRt?.pv2_power ?? firstDeviceRt?.pv?.pv2_power)
   const pvVoltage2 = safeNum(firstDeviceRt?.pv2_voltage ?? firstDeviceRt?.pv?.pv2_voltage)
   const battVoltage = safeNum(firstDeviceRt?.battery_voltage ?? firstDeviceRt?.battery?.voltage ?? firstDeviceRt?.batt?.voltage)
-  const battCurrent = safeNum(firstDeviceRt?.battery_current ?? firstDeviceRt?.battery?.current ?? firstDeviceRt?.batt?.current ?? firstDeviceRt?.current)
+  const battCurrent = safeNum(firstDeviceRt?.battery_current ?? firstDeviceRt?.batt_current ?? firstDeviceRt?.battery?.current ?? firstDeviceRt?.batt?.current)
   // 电网电压/频率：仅使用 meter_/grid_ 前缀字段，不使用 ac_voltage/ac_frequency（那是逆变器输出）
   const gridVoltage = safeNum(firstDeviceRt?.meter_voltage ?? firstDeviceRt?.grid_voltage)
   const gridFreq = safeNum(firstDeviceRt?.meter_frequency ?? firstDeviceRt?.grid_frequency)
@@ -417,6 +425,16 @@ const StationDetailPage: React.FC = () => {
         <Col xs={24} lg={14}>
           <ProCard style={{ borderRadius: 12, height: '100%' }} title={
             <Space><ThunderboltOutlined /> {t('station.energyFlow')}</Space>
+          } extra={
+            <Select
+              value={selectedDeviceSn}
+              onChange={setSelectedDeviceSn}
+              style={{ width: 160 }}
+              size="small"
+              options={[
+                { value: 'all', label: t('station.allDevices') || '全部设备' }, ...devices.map((d: any) => ({ value: d.sn, label: d.sn }))
+              ]}
+            />
           } size="small">
             <EnergyFlowDiagram
               pvPower={aggregatedPv}
@@ -486,7 +504,7 @@ const StationDetailPage: React.FC = () => {
                 </Col>
                 <Col span={8}>
                   <Text type="secondary">{t('station.current')}:</Text>{' '}
-                  <Text strong>{battCurrent > 0 ? `${battCurrent.toFixed(1)} A` : '--'}</Text>
+                  <Text strong>{battCurrent !== 0 ? `${battCurrent.toFixed(1)} A` : '--'}</Text>
                 </Col>
               </Row>
             </div>
