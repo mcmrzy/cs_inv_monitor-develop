@@ -1,45 +1,78 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Modal, Input } from 'antd';
 import { EnvironmentOutlined } from '@ant-design/icons';
-
-interface RegionOption {
-  value: string;
-  label: string;
-  children?: RegionOption[];
-}
+import continentsData, { ContinentOption } from '../utils/continentsData';
+import regionData, { RegionOption } from '../utils/regionData';
 
 interface RegionPickerProps {
   value?: string[];
   onChange?: (value: string[]) => void;
-  options: RegionOption[];
   placeholder?: string;
   style?: React.CSSProperties;
+  mode?: 'station' | 'profile'; // station: 三级, profile: 两级 + "不限"
 }
 
 const RegionPicker: React.FC<RegionPickerProps> = ({
   value = [],
   onChange,
-  options,
   placeholder = '请选择国家/地区',
   style,
+  mode = 'station',
 }) => {
   const [visible, setVisible] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<string>(value[0] || '');
+  const [step, setStep] = useState<'country' | 'region'>('country');
+  
+  // 第一步：洲+国家选择
+  const [selectedContinentIdx, setSelectedContinentIdx] = useState(0);
+  const [selectedCountryIdx, setSelectedCountryIdx] = useState(0);
+  
+  // 第二步：省/市(/区) 选择
   const [selectedRegion, setSelectedRegion] = useState<string>(value[1] || '');
   const [selectedCity, setSelectedCity] = useState<string>(value[2] || '');
+  
+  // 滚动位置
+  const [continentScrollTop, setContinentScrollTop] = useState(0);
   const [countryScrollTop, setCountryScrollTop] = useState(0);
   const [regionScrollTop, setRegionScrollTop] = useState(0);
   const [cityScrollTop, setCityScrollTop] = useState(0);
-
+  
+  const continentRef = useRef<HTMLDivElement>(null);
   const countryRef = useRef<HTMLDivElement>(null);
   const regionRef = useRef<HTMLDivElement>(null);
   const cityRef = useRef<HTMLDivElement>(null);
-
-  // 获取选中的标签
+  
+  // 当前洲的国家列表
+  const currentCountries = useMemo(() => {
+    if (continentsData.length === 0) return [];
+    return continentsData[selectedContinentIdx]?.countries || [];
+  }, [selectedContinentIdx]);
+  
+  // 当前选中的国家名
+  const selectedCountry = useMemo(() => {
+    if (currentCountries.length === 0) return '';
+    return currentCountries[selectedCountryIdx]?.name || '';
+  }, [currentCountries, selectedCountryIdx]);
+  
+  // 从 regionData 获取当前国家的省份数据
+  const currentRegions = useMemo(() => {
+    if (!selectedCountry) return [];
+    const countryData = regionData.find(r => r.value === selectedCountry);
+    return countryData?.children || [];
+  }, [selectedCountry]);
+  
+  // 当前省份的城市列表
+  const currentCities = useMemo(() => {
+    if (!selectedRegion || selectedRegion === '不限') return [];
+    const region = currentRegions.find(r => r.value === selectedRegion);
+    return region?.children || [];
+  }, [currentRegions, selectedRegion]);
+  
+  // 获取显示文本
   const getDisplayText = () => {
     if (value.length === 0) return placeholder;
+    if (value[0] === '不限' || value[0] === '') return '不限';
     
-    const country = options.find(c => c.value === value[0]);
+    const country = regionData.find(c => c.value === value[0]);
     if (!country) return placeholder;
     
     let text = country.label;
@@ -47,7 +80,7 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
       const region = country.children.find(r => r.value === value[1]);
       if (region) {
         text += ' / ' + region.label;
-        if (value.length > 2 && region.children) {
+        if (value.length > 2 && region.children && mode === 'station') {
           const city = region.children.find(c => c.value === value[2]);
           if (city) {
             text += ' / ' + city.label;
@@ -57,7 +90,7 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
     }
     return text;
   };
-
+  
   // 滚动到选中项
   const scrollToSelected = (ref: React.RefObject<HTMLDivElement>, index: number) => {
     if (ref.current) {
@@ -67,62 +100,245 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
       ref.current.scrollTop = Math.max(0, scrollPosition);
     }
   };
-
-  // 打开弹窗时滚动到选中项
+  
+  // 打开弹窗时初始化状态
   useEffect(() => {
     if (visible) {
-      const countryIndex = options.findIndex(c => c.value === selectedCountry);
-      if (countryIndex >= 0) {
-        setTimeout(() => scrollToSelected(countryRef, countryIndex), 100);
-      }
-
-      if (selectedCountry) {
-        const country = options.find(c => c.value === selectedCountry);
-        if (country?.children) {
-          const regionIndex = country.children.findIndex(r => r.value === selectedRegion);
-          if (regionIndex >= 0) {
-            setTimeout(() => scrollToSelected(regionRef, regionIndex), 100);
+      // 根据 value 初始化选中状态
+      if (value.length > 0 && value[0]) {
+        // 查找国家所在的洲
+        for (let i = 0; i < continentsData.length; i++) {
+          const continent = continentsData[i];
+          const countryIdx = continent.countries.findIndex(c => c.name === value[0]);
+          if (countryIdx >= 0) {
+            setSelectedContinentIdx(i);
+            setSelectedCountryIdx(countryIdx);
+            break;
           }
         }
+        setSelectedRegion(value[1] || '');
+        setSelectedCity(value[2] || '');
+        setStep('region');
+      } else {
+        setStep('country');
       }
+      
+      // 滚动到选中项
+      setTimeout(() => {
+        if (step === 'country') {
+          scrollToSelected(continentRef, selectedContinentIdx);
+          scrollToSelected(countryRef, selectedCountryIdx);
+        } else {
+          const regionIdx = currentRegions.findIndex(r => r.value === selectedRegion);
+          if (regionIdx >= 0) {
+            scrollToSelected(regionRef, regionIdx);
+          }
+        }
+      }, 100);
     }
-  }, [visible, selectedCountry, selectedRegion, options]);
-
-  const handleCountrySelect = (country: RegionOption) => {
-    setSelectedCountry(country.value);
-    setSelectedRegion('');
-    setSelectedCity('');
+  }, [visible]);
+  
+  // 洲变化
+  const handleContinentSelect = (idx: number) => {
+    setSelectedContinentIdx(idx);
+    setSelectedCountryIdx(0);
+    // 滚动国家列表到顶部
+    if (countryRef.current) {
+      countryRef.current.scrollTop = 0;
+    }
   };
-
+  
+  // 国家变化
+  const handleCountrySelect = (idx: number) => {
+    setSelectedCountryIdx(idx);
+  };
+  
+  // 省份变化
   const handleRegionSelect = (region: RegionOption) => {
     setSelectedRegion(region.value);
     setSelectedCity('');
   };
-
+  
+  // 城市变化
   const handleCitySelect = (city: RegionOption) => {
     setSelectedCity(city.value);
   };
-
+  
+  // 进入第二步
+  const handleNextStep = () => {
+    if (!selectedCountry) return;
+    setSelectedRegion('');
+    setSelectedCity('');
+    setStep('region');
+    // 滚动省份列表到顶部
+    if (regionRef.current) {
+      regionRef.current.scrollTop = 0;
+    }
+  };
+  
+  // 返回第一步
+  const handleBackStep = () => {
+    setStep('country');
+  };
+  
+  // 确认选择
   const handleConfirm = () => {
-    const result = [selectedCountry, selectedRegion, selectedCity].filter(Boolean);
+    if (step === 'country') {
+      // 第一步：选择国家后进入第二步
+      handleNextStep();
+      return;
+    }
+    
+    // 第二步：确认选择
+    let result: string[];
+    if (selectedRegion === '不限' || selectedRegion === '') {
+      result = [selectedCountry];
+    } else {
+      const parts = [selectedCountry, selectedRegion];
+      if (selectedCity && mode === 'station') {
+        parts.push(selectedCity);
+      }
+      result = parts;
+    }
     onChange?.(result);
     setVisible(false);
   };
-
+  
+  // 取消选择
   const handleCancel = () => {
     // 恢复原值
-    setSelectedCountry(value[0] || '');
-    setSelectedRegion(value[1] || '');
-    setSelectedCity(value[2] || '');
+    if (value.length > 0 && value[0]) {
+      for (let i = 0; i < continentsData.length; i++) {
+        const continent = continentsData[i];
+        const countryIdx = continent.countries.findIndex(c => c.name === value[0]);
+        if (countryIdx >= 0) {
+          setSelectedContinentIdx(i);
+          setSelectedCountryIdx(countryIdx);
+          break;
+        }
+      }
+      setSelectedRegion(value[1] || '');
+      setSelectedCity(value[2] || '');
+      setStep('region');
+    } else {
+      setStep('country');
+    }
     setVisible(false);
   };
-
-  // 获取当前国家的地区列表
-  const currentRegions = options.find(c => c.value === selectedCountry)?.children || [];
   
-  // 获取当前地区的城市列表
-  const currentCities = currentRegions.find(r => r.value === selectedRegion)?.children || [];
-
+  // 渲染第一步：洲+国家选择
+  const renderCountryStep = () => (
+    <div style={styles.container}>
+      {/* 洲列表 */}
+      <div style={styles.column}>
+        <div style={styles.columnHeader}>洲</div>
+        <div
+          ref={continentRef}
+          style={styles.scrollContainer}
+          onScroll={(e) => setContinentScrollTop(e.currentTarget.scrollTop)}
+        >
+          {continentsData.map((continent, idx) => (
+            <div
+              key={continent.name}
+              style={{
+                ...styles.item,
+                ...(selectedContinentIdx === idx ? styles.selectedItem : {}),
+              }}
+              onClick={() => handleContinentSelect(idx)}
+            >
+              {continent.name}
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* 国家列表 */}
+      <div style={styles.column}>
+        <div style={styles.columnHeader}>国家</div>
+        <div
+          ref={countryRef}
+          style={styles.scrollContainer}
+          onScroll={(e) => setCountryScrollTop(e.currentTarget.scrollTop)}
+        >
+          {currentCountries.map((country, idx) => (
+            <div
+              key={country.code}
+              style={{
+                ...styles.item,
+                ...(selectedCountryIdx === idx ? styles.selectedItem : {}),
+              }}
+              onClick={() => handleCountrySelect(idx)}
+            >
+              {country.name}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+  
+  // 渲染第二步：省/市(/区) 选择
+  const renderRegionStep = () => {
+    const isProfile = mode === 'profile';
+    
+    // 个人信息模式：添加"不限"选项
+    const regionsWithUnlimited = isProfile
+      ? [{ value: '不限', label: '不限' }, ...currentRegions]
+      : currentRegions;
+    
+    return (
+      <div style={styles.container}>
+        {/* 省份列表 */}
+        <div style={styles.column}>
+          <div style={styles.columnHeader}>省份/州</div>
+          <div
+            ref={regionRef}
+            style={styles.scrollContainer}
+            onScroll={(e) => setRegionScrollTop(e.currentTarget.scrollTop)}
+          >
+            {regionsWithUnlimited.map((region) => (
+              <div
+                key={region.value}
+                style={{
+                  ...styles.item,
+                  ...(selectedRegion === region.value ? styles.selectedItem : {}),
+                }}
+                onClick={() => handleRegionSelect(region)}
+              >
+                {region.label}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* 城市列表（仅 station 模式） */}
+        {mode === 'station' && currentCities.length > 0 && (
+          <div style={styles.column}>
+            <div style={styles.columnHeader}>城市</div>
+            <div
+              ref={cityRef}
+              style={styles.scrollContainer}
+              onScroll={(e) => setCityScrollTop(e.currentTarget.scrollTop)}
+            >
+              {currentCities.map((city) => (
+                <div
+                  key={city.value}
+                  style={{
+                    ...styles.item,
+                    ...(selectedCity === city.value ? styles.selectedItem : {}),
+                  }}
+                  onClick={() => handleCitySelect(city)}
+                >
+                  {city.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+  
   return (
     <>
       <Input
@@ -135,85 +351,23 @@ const RegionPicker: React.FC<RegionPickerProps> = ({
       />
       
       <Modal
-        title="选择国家/地区"
+        title={
+          step === 'country'
+            ? '选择洲和国家'
+            : `选择地区 - ${selectedCountry}`
+        }
         open={visible}
         onOk={handleConfirm}
         onCancel={handleCancel}
-        width={480}
-        okText="确认"
-        cancelText="取消"
+        width={step === 'country' ? 480 : (mode === 'station' && currentCities.length > 0 ? 560 : 400)}
+        okText={step === 'country' ? '下一步' : '确认'}
+        cancelText={step === 'region' ? '返回' : '取消'}
+        afterClose={() => {
+          // 关闭后重置状态
+          setStep('country');
+        }}
       >
-        <div style={styles.container}>
-          {/* 国家滚轮 */}
-          <div style={styles.column}>
-            <div style={styles.columnHeader}>国家</div>
-            <div
-              ref={countryRef}
-              style={styles.scrollContainer}
-            >
-              {options.map((country) => (
-                <div
-                  key={country.value}
-                  style={{
-                    ...styles.item,
-                    ...(selectedCountry === country.value ? styles.selectedItem : {}),
-                  }}
-                  onClick={() => handleCountrySelect(country)}
-                >
-                  {country.label}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 地区滚轮 */}
-          {currentRegions.length > 0 && (
-            <div style={styles.column}>
-              <div style={styles.columnHeader}>省份/地区</div>
-              <div
-                ref={regionRef}
-                style={styles.scrollContainer}
-              >
-                {currentRegions.map((region) => (
-                  <div
-                    key={region.value}
-                    style={{
-                      ...styles.item,
-                      ...(selectedRegion === region.value ? styles.selectedItem : {}),
-                    }}
-                    onClick={() => handleRegionSelect(region)}
-                  >
-                    {region.label}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 城市滚轮 */}
-          {currentCities.length > 0 && (
-            <div style={styles.column}>
-              <div style={styles.columnHeader}>城市</div>
-              <div
-                ref={cityRef}
-                style={styles.scrollContainer}
-              >
-                {currentCities.map((city) => (
-                  <div
-                    key={city.value}
-                    style={{
-                      ...styles.item,
-                      ...(selectedCity === city.value ? styles.selectedItem : {}),
-                    }}
-                    onClick={() => handleCitySelect(city)}
-                  >
-                    {city.label}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        {step === 'country' ? renderCountryStep() : renderRegionStep()}
       </Modal>
     </>
   );
