@@ -8,6 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
+import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -46,6 +47,7 @@ class _StationDetailPageState extends State<StationDetailPage>
   double _mqttBattW = 0;
   double _mqttSoc = 0;
   bool _mqttActive = false;
+  String _selectedDeviceSn = 'all';
 
   @override
   void initState() {
@@ -208,7 +210,11 @@ class _StationDetailPageState extends State<StationDetailPage>
 
   void _onMQTTData(InverterRealtime data) {
     if (!_mqttSubscribed.contains(data.deviceSN)) return;
+    _recalcMqttAggregation();
+  }
 
+  /// 根据 _selectedDeviceSn 重新聚合 MQTT 数据
+  void _recalcMqttAggregation() {
     var pvSum = 0.0;
     var loadSum = 0.0;
     var battWSum = 0.0;
@@ -219,7 +225,10 @@ class _StationDetailPageState extends State<StationDetailPage>
     var hasBatt = false;
 
     final realtimeService = getIt<RealtimeDataService>();
-    for (final sn in _mqttSubscribed) {
+    final targetSNs = _selectedDeviceSn == 'all'
+        ? _mqttSubscribed
+        : {_selectedDeviceSn};
+    for (final sn in targetSNs) {
       final rt = realtimeService.getLatestData(sn);
       if (rt == null) continue;
       if (rt.pv != null) {
@@ -307,10 +316,25 @@ class _StationDetailPageState extends State<StationDetailPage>
     final deviceCount = (station['device_count'] as num?)?.toInt() ?? 0;
     final online = status == 1 && deviceCount > 0;
 
-    final pvW = (station['pv_power'] as num?)?.toDouble() ?? 0;
-    final loadW = (station['load_power'] as num?)?.toDouble() ?? 0;
-    final battW = (station['batt_power'] as num?)?.toDouble() ?? 0;
-    final soc = (station['batt_soc'] as num?)?.toDouble() ?? 0;
+    double pvW, loadW, battW, soc;
+    if (_selectedDeviceSn != 'all') {
+      // 单设备模式：从 RealtimeDataService 获取该设备数据
+      final rt = getIt<RealtimeDataService>().getLatestData(_selectedDeviceSn);
+      pvW = rt?.pv?.pvPower ?? 0;
+      loadW = rt?.ac?.power ?? 0;
+      if (rt?.battery != null) {
+        battW = rt!.battery!.voltage * rt.battery!.current;
+        soc = rt.battery!.soc;
+      } else {
+        battW = 0;
+        soc = 0;
+      }
+    } else {
+      pvW = (station['pv_power'] as num?)?.toDouble() ?? 0;
+      loadW = (station['load_power'] as num?)?.toDouble() ?? 0;
+      battW = (station['batt_power'] as num?)?.toDouble() ?? 0;
+      soc = (station['batt_soc'] as num?)?.toDouble() ?? 0;
+    }
 
     final displayPvW = _mqttActive ? _mqttPvW : pvW;
     final displayLoadW = _mqttActive ? _mqttLoadW : loadW;
@@ -473,7 +497,78 @@ class _StationDetailPageState extends State<StationDetailPage>
               ),
             ],
           ),
+          if ((_cachedState?.devices ?? []).length > 1) ...[
+            SizedBox(height: 6.h),
+            _buildDeviceSelector(),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceSelector() {
+    final l10n = AppLocalizations.of(context)!;
+    final devices = _cachedState?.devices ?? [];
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        height: 30.h,
+        padding: EdgeInsets.symmetric(horizontal: 8.w),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(8.r),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: devices.any((d) => d['sn'] == _selectedDeviceSn)
+                ? _selectedDeviceSn
+                : 'all',
+            isDense: true,
+            icon: Icon(Icons.arrow_drop_down, size: 18.sp, color: AppColors.primary),
+            style: TextStyle(fontSize: 11.sp, color: AppColors.textPrimary),
+            dropdownColor: Colors.white,
+            borderRadius: BorderRadius.circular(8.r),
+            items: [
+              DropdownMenuItem(
+                value: 'all',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.devices, size: 14.sp, color: AppColors.primary),
+                    SizedBox(width: 4.w),
+                    Text(l10n.allDevices, style: TextStyle(fontSize: 11.sp)),
+                  ],
+                ),
+              ),
+              ...devices.map((d) => DropdownMenuItem(
+                value: d['sn'] as String,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.memory, size: 14.sp, color: AppColors.textSecondary),
+                    SizedBox(width: 4.w),
+                    Flexible(
+                      child: Text(
+                        d['sn'] as String? ?? '',
+                        style: TextStyle(fontSize: 11.sp),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                setState(() {
+                  _selectedDeviceSn = val;
+                });
+                _recalcMqttAggregation();
+              }
+            },
+          ),
+        ),
       ),
     );
   }
