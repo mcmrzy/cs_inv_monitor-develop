@@ -16,6 +16,7 @@ interface FlowEdge {
   active: boolean;
   power: number;
   markerId: string;
+  noArrows?: boolean;
 }
 
 interface NodeConfig {
@@ -25,7 +26,7 @@ interface NodeConfig {
   color: string;
   label: string;
   image: string;
-  posCategory?: 'top' | 'right' | 'bottom';
+  posCategory?: 'top' | 'right' | 'bottom' | 'topright';
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -65,7 +66,7 @@ function computeFlowEdges(
 ): FlowEdge[] {
   const edges: FlowEdge[] = [];
 
-  // 1. PV → Inverter (straight down)
+  // 1. PV → Inverter (straight down) — no animated arrows
   edges.push({
     id: 'pv-inv',
     path: 'M 300 135 L 300 225',
@@ -73,6 +74,7 @@ function computeFlowEdges(
     active: pvPower > 0,
     power: pvPower,
     markerId: 'arrow-pv',
+    noArrows: true,
   });
 
   // 2. Inverter → Load (straight down)
@@ -152,18 +154,16 @@ const FlowNode: React.FC<{
   const displayPower = type === 'battery' && power < 0 ? Math.abs(power) : power;
 
   const imgSize = 100;
-  // Position category: 'top' = text above image (battery/grid), 'bottom' = text below image (inverter), 'right' = text right of image (pv/load)
-  const posCategory: 'top' | 'right' | 'bottom' = type === 'inverter' ? 'bottom'
+  // Position category: 'top' = text above (battery/grid), 'topright' = text top-right (inverter), 'right' = text right (pv/load)
+  const posCategory: 'top' | 'right' | 'bottom' | 'topright' = type === 'inverter' ? 'topright'
     : (type === 'battery' || type === 'grid' ? 'top' : 'right');
 
   // Image edges
   const imgTop = y - imgSize / 2;   // y - 50
-  const imgBottom = y + imgSize / 2; // y + 50
   const imgRight = x + imgSize / 2; // x + 50
 
   // Gaps
   const topGap = 5;   // px between text baseline and image top edge
-  const bottomGap = 5; // px between image bottom edge and text baseline
 
   return (
     <g>
@@ -267,13 +267,13 @@ const FlowNode: React.FC<{
           )}
         </>
       ) : null}
-      {posCategory === 'bottom' && (
+      {posCategory === 'topright' && (
         <>
-          {/* Label: tightly below image bottom */}
+          {/* Label: top-right corner of image */}
           <text
-            x={x}
-            y={imgBottom + bottomGap + 13}
-            textAnchor="middle"
+            x={imgRight + 4}
+            y={imgTop + 8}
+            textAnchor="start"
             dominantBaseline="auto"
             fill="#333"
             fontSize="13"
@@ -284,9 +284,9 @@ const FlowNode: React.FC<{
           </text>
           {/* Power value: below label */}
           <text
-            x={x}
-            y={imgBottom + bottomGap + 30}
-            textAnchor="middle"
+            x={imgRight + 4}
+            y={imgTop + 24}
+            textAnchor="start"
             dominantBaseline="auto"
             fill="#555"
             fontSize="12"
@@ -295,12 +295,11 @@ const FlowNode: React.FC<{
           >
             {formatPower(displayPower)}
           </text>
-          {/* Extra info below power */}
           {extra && (
             <text
-              x={x}
-              y={imgBottom + bottomGap + 47}
-              textAnchor="middle"
+              x={imgRight + 4}
+              y={imgTop + 40}
+              textAnchor="start"
               dominantBaseline="auto"
               fill="#555"
               fontSize="12"
@@ -339,7 +338,7 @@ const FlowPath: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
 FlowPath.displayName = 'FlowPath';
 
 const FlowArrows: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
-  if (!edge.active) return null;
+  if (!edge.active || edge.noArrows) return null;
   const N = 3;
   const dur = 1.8;
   return (
