@@ -1123,18 +1123,13 @@ const DevicesPage: React.FC = () => {
       width: 90,
       responsive: ['sm'],
       render: (_: any, record: any) => {
+        if (!record.model_id || record.model_id === 0) {
+          return <Tag color="orange">未绑定型号</Tag>
+        }
         const devType = getDeviceType(record.model ?? '')
         const cfg = deviceTypeConfig[devType]
         return <Tag color={cfg.color}>{cfg.label}</Tag>
       },
-    },
-    {
-      title: t('dev.ratedPower'),
-      dataIndex: 'rated_power',
-      key: 'rated_power',
-      width: 100,
-      responsive: ['md'],
-      render: (val: number) => val != null ? `${val} W` : '-',
     },
     {
       title: t('dev.firmwareVersion'),

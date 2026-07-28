@@ -182,9 +182,12 @@ const StationDevicesTab: React.FC<StationDevicesTabProps> = ({ stationId, timezo
                       </Col>
                     </Row>
                     <div style={{ marginBottom: 6 }}>
-                      <Tag color={typeCfg.color}>{typeCfg.label}</Tag>
+                      {!dev.model_id || dev.model_id === 0 ? (
+                        <Tag color="orange">未绑定型号</Tag>
+                      ) : (
+                        <Tag color={typeCfg.color}>{typeCfg.label}</Tag>
+                      )}
                       <Tag>{dev.model || '-'}</Tag>
-                      {dev.rated_power != null && <Tag color="blue">{dev.rated_power}W</Tag>}
                     </div>
                     <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>
                       <DesktopOutlined /> {t('station.firmwareLabel')}: {fw}

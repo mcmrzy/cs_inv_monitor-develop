@@ -453,6 +453,10 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 			battery_type = COALESCE(NULLIF(EXCLUDED.battery_type, ''), devices.battery_type),
 			cell_count = CASE WHEN EXCLUDED.cell_count > 0 THEN EXCLUDED.cell_count ELSE devices.cell_count END,
 			temp_sensor_count = CASE WHEN EXCLUDED.temp_sensor_count > 0 THEN EXCLUDED.temp_sensor_count ELSE devices.temp_sensor_count END,
+			model_id = COALESCE(
+				devices.model_id,
+				(SELECT id FROM device_models WHERE model_code = EXCLUDED.model AND lifecycle_status != 'retired' LIMIT 1)
+			),
 			status = CASE WHEN devices.status = 2 AND EXISTS (
 				SELECT 1 FROM alarms WHERE alarms.device_sn = $1 AND alarms.alarm_level = 3 AND alarms.status = 0
 			) THEN 2 ELSE 1 END,
@@ -464,14 +468,6 @@ func (h *InternalHandler) DeviceInfo(c *gin.Context) {
 		logger.Error("InternalDeviceInfo failed", zap.String("sn", req.SN), zap.Error(err))
 		response.Error(c, 500, "upsert device info failed")
 		return
-	}
-
-	if _, err := h.db.Exec(ctx, `
-		UPDATE devices SET model_id = dm.id
-		FROM device_models dm
-		WHERE devices.sn = $1 AND dm.model_code = $2 AND devices.model_id IS NULL
-	`, req.SN, req.Model); err != nil {
-		logger.Warn("DeviceInfo: failed to update model_id", zap.String("sn", req.SN), zap.Error(err))
 	}
 
 	// OTA 升级状态校验：设备上报新固件版本后，检查是否有进行中的升级
