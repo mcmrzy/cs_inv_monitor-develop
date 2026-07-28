@@ -66,7 +66,7 @@ function computeFlowEdges(
 ): FlowEdge[] {
   const edges: FlowEdge[] = [];
 
-  // 1. PV → Inverter (straight down) — no animated arrows
+  // 1. PV → Inverter (straight down) — no static arrowhead marker
   edges.push({
     id: 'pv-inv',
     path: 'M 300 135 L 300 225',
@@ -74,7 +74,7 @@ function computeFlowEdges(
     active: pvPower > 0,
     power: pvPower,
     markerId: 'arrow-pv',
-    noArrows: true,
+    noArrows: true, // 禁用末端静态大箭头，保留流动动画
   });
 
   // 2. Inverter → Load (straight down)
@@ -328,7 +328,7 @@ const FlowPath: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
       stroke={edge.color}
       strokeWidth={sw}
       strokeLinecap="round"
-      markerEnd={edge.active ? `url(#${edge.markerId})` : undefined}
+      markerEnd={edge.active && !edge.noArrows ? `url(#${edge.markerId})` : undefined}
       className={edge.active ? 'flow-path-active' : 'flow-path-inactive'}
       style={edge.active ? { opacity: 0.8 } : undefined}
     />
@@ -338,7 +338,7 @@ const FlowPath: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
 FlowPath.displayName = 'FlowPath';
 
 const FlowArrows: React.FC<{ edge: FlowEdge }> = React.memo(({ edge }) => {
-  if (!edge.active || edge.noArrows) return null;
+  if (!edge.active) return null;
   const N = 3;
   const dur = 1.8;
   return (
