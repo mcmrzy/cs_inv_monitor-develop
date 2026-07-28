@@ -1615,11 +1615,11 @@ func (r *DeviceRepository) RemoveFromStation(ctx context.Context, sn string) err
 
 // updateStationCapacity 根据关联设备的逆变器额定功率自动更新电站容量
 func (r *DeviceRepository) updateStationCapacity(ctx context.Context, stationID int64) {
-	// 计算该电站下所有设备的额定功率之和
-	// 优先使用 device_models.rated_power_kw，回退到设备自身的 rated_power
+	// 计算该电站下所有设备的额定功率之和（结果单位：kW）
+	// 优先使用 device_models.rated_power_kw(kW)，回退到设备自身的 rated_power(W) 并转换为 kW
 	var totalCapacity float64
 	err := r.db.QueryRow(ctx, `
-		SELECT COALESCE(SUM(COALESCE(dm.rated_power_kw, d.rated_power)), 0)
+		SELECT COALESCE(SUM(COALESCE(dm.rated_power_kw, d.rated_power / 1000.0)), 0)
 		FROM devices d
 		LEFT JOIN device_models dm ON d.model_id = dm.id
 		WHERE d.station_id = $1 AND d.deleted_at IS NULL

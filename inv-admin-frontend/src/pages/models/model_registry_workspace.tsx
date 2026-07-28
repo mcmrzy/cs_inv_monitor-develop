@@ -113,9 +113,14 @@ const ModelRegistryWorkspace: React.FC = () => {
     onError: () => messageApi.error(t('models.registry.modelSaveFailed')),
   })
   const retireModel = useMutation({
-    mutationFn: (id: number) => modelApi.deleteModel(id),
+    mutationFn: (id: number) => modelApi.retireModel(id),
     onSuccess: () => { messageApi.success(t('models.registry.modelRetired')); refreshModel() },
     onError: () => messageApi.error(t('models.registry.modelRetireFailed')),
+  })
+  const deleteModel = useMutation({
+    mutationFn: (id: number) => modelApi.deleteModel(id),
+    onSuccess: () => { messageApi.success(t('models.registry.modelDeleted')); refreshModel() },
+    onError: () => messageApi.error(t('models.registry.modelDeleteFailed')),
   })
   const saveCatalog = useMutation({
     mutationFn: (values: Partial<FieldCatalogItem>) => modelApi.saveFieldCatalog(values),
@@ -229,7 +234,8 @@ const ModelRegistryWorkspace: React.FC = () => {
     { title: t('common.actions'), width: 210, render: (_: unknown, row: DeviceModelItem) => <Space>
       <Button type="link" icon={<SettingOutlined />} onClick={() => setSelectedModel(row)}>{t('models.registry.manage')}</Button>
       {canEdit && <Button type="link" icon={<EditOutlined />} onClick={() => openModelModal(row)}>{t('common.edit')}</Button>}
-      {isSystemAdmin && <Popconfirm title={t('models.registry.confirmRetire')} onConfirm={() => retireModel.mutate(row.id)}><Button type="link" danger>{t('models.registry.retire')}</Button></Popconfirm>}
+      {isSystemAdmin && row.is_active && <Popconfirm title={t('models.registry.confirmRetire')} onConfirm={() => retireModel.mutate(row.id)}><Button type="link" danger>{t('models.registry.retire')}</Button></Popconfirm>}
+      {isSystemAdmin && !row.is_active && <Popconfirm title={t('models.registry.confirmDelete')} onConfirm={() => deleteModel.mutate(row.id)}><Button type="link" danger>{t('models.registry.delete')}</Button></Popconfirm>}
     </Space> },
   ]
 
