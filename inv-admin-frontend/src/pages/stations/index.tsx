@@ -489,7 +489,7 @@ const StationsPage: React.FC = () => {
       title: t('station.capacity_kW'),
       dataIndex: 'capacity',
       width: 90,
-      render: (_, record: StationItem) => record.capacity ? `${record.capacity}` : '-',
+      render: (_, record: StationItem) => record.capacity != null && record.capacity > 0 ? `${record.capacity}` : '-',
     },
     {
       title: t('common.status'),
@@ -795,7 +795,7 @@ const StationsPage: React.FC = () => {
           <Descriptions.Item label={t('station.city')}>{station.city || '-'}</Descriptions.Item>
           <Descriptions.Item label={t('station.district')}>{station.district || '-'}</Descriptions.Item>
           <Descriptions.Item label={t('station.address')}>{station.address || '-'}</Descriptions.Item>
-          <Descriptions.Item label={t('station.capacity_kW')}>{station.capacity ? `${station.capacity} kW` : '-'}</Descriptions.Item>
+          <Descriptions.Item label={t('station.capacity_kW')}>{station.capacity != null && station.capacity > 0 ? `${station.capacity} kW` : '-'}</Descriptions.Item>
           <Descriptions.Item label={t('station.panelCount')}>{station.panel_count ?? '-'}</Descriptions.Item>
           <Descriptions.Item label={t('station.batteryCapacity')}>{station.battery_capacity ? `${station.battery_capacity} kWh` : '-'}</Descriptions.Item>
           <Descriptions.Item label={t('station.contact')}>{station.contact_name || '-'}</Descriptions.Item>

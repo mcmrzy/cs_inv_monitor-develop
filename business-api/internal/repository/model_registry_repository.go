@@ -125,8 +125,60 @@ func (r *ModelRepository) GetProtocolSchema(ctx context.Context, modelID int64) 
 }
 
 func (r *ModelRepository) RetireModel(ctx context.Context, id int64) error {
-	_, err := r.db.Exec(ctx, `UPDATE device_models SET lifecycle_status='retired',is_active=false,updated_at=NOW(),lock_version=lock_version+1 WHERE id=$1`, id)
-	return err
+	// 先检查是否有设备关联到这个型号
+	var deviceCount int64
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM devices WHERE model_id=$1 AND deleted_at IS NULL`, id).Scan(&deviceCount)
+	if err != nil {
+		return fmt.Errorf("检查设备关联失败: %w", err)
+	}
+	if deviceCount > 0 {
+		return fmt.Errorf("该型号下还有 %d 台设备，无法删除", deviceCount)
+	}
+
+	// 使用事务删除关联数据和型号记录
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("开启事务失败: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// 删除关联的型号字段能力配置
+	_, err = tx.Exec(ctx, `DELETE FROM device_model_field_capabilities WHERE model_id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("删除字段能力配置失败: %w", err)
+	}
+
+	// 删除关联的型号命令能力配置
+	_, err = tx.Exec(ctx, `DELETE FROM device_model_command_capabilities WHERE model_id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("删除命令能力配置失败: %w", err)
+	}
+
+	// 删除关联的型号字段（新表）
+	_, err = tx.Exec(ctx, `DELETE FROM device_model_fields WHERE model_id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("删除型号字段失败: %w", err)
+	}
+
+	// 删除关联的型号命令（新表）
+	_, err = tx.Exec(ctx, `DELETE FROM device_model_commands WHERE model_id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("删除型号命令失败: %w", err)
+	}
+
+	// 删除关联的迁移报告
+	_, err = tx.Exec(ctx, `DELETE FROM model_registry_migration_report WHERE model_id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("删除迁移报告失败: %w", err)
+	}
+
+	// 删除型号记录本身
+	_, err = tx.Exec(ctx, `DELETE FROM device_models WHERE id=$1`, id)
+	if err != nil {
+		return fmt.Errorf("删除型号失败: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 type FieldCapabilityUpdate struct {
