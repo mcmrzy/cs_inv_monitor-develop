@@ -21,6 +21,7 @@ import useTranslation from '@/hooks/useTranslation'
 import api from '@/services/api'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
 import UploadAvatar from '@/components/UploadAvatar'
+import RegionPicker from '@/components/RegionPicker'
 import regionData from '@/utils/regionData'
 
 interface RouteMenuItem {
@@ -286,7 +287,7 @@ const MainLayout: React.FC = () => {
         avatarProps={{
           size: 'small',
           icon: <UserOutlined />,
-          src: user?.avatar && user.avatar.startsWith('http') ? user.avatar : undefined,
+          src: user?.avatar && (user.avatar.startsWith('http') || user.avatar.startsWith('/uploads/')) ? user.avatar : undefined,
           title: user?.nickname || t('header.user'),
           render: (_, dom) => (
             <Dropdown menu={{ items: userMenuItemsDropdown }} placement="bottomRight">
@@ -362,6 +363,7 @@ const MainLayout: React.FC = () => {
         form={profileForm}
         onFinish={handleUpdateProfile}
         layout="vertical"
+        width={480}
         modalProps={{ destroyOnClose: true, maskClosable: false }}
         submitter={{
           searchConfig: { submitText: t('modal.save'), resetText: t('modal.cancel') },
@@ -374,17 +376,20 @@ const MainLayout: React.FC = () => {
             size={100}
           />
         </div>
+        <Form.Item name="avatar" hidden>
+          <input />
+        </Form.Item>
         <ProFormText
           name="nickname"
           label={t('modal.nickname')}
-          fieldProps={{ prefix: <UserOutlined />, placeholder: t('modal.nicknamePlaceholder') }}
+          fieldProps={{ prefix: <UserOutlined />, placeholder: t('modal.nicknamePlaceholder'), style: { width: 240 } }}
         />
         <Form.Item label={t('modal.phone')}>
           <Space>
             <Input
               value={user?.phone || ''}
               disabled
-              style={{ width: 280 }}
+              style={{ width: 240 }}
               placeholder={t('modal.phonePlaceholder')}
             />
             <Button onClick={() => setPhoneModalOpen(true)}>{t('modal.change')}</Button>
@@ -395,7 +400,7 @@ const MainLayout: React.FC = () => {
             <Input
               value={user?.email || ''}
               disabled
-              style={{ width: 280 }}
+              style={{ width: 240 }}
               placeholder={t('modal.emailPlaceholder')}
             />
             <Button onClick={() => setEmailModalOpen(true)}>{t('modal.change')}</Button>
@@ -405,16 +410,10 @@ const MainLayout: React.FC = () => {
           name="region"
           label={t('modal.region')}
         >
-          <Cascader
+          <RegionPicker
             options={regionData}
             placeholder={t('modal.regionPlaceholder')}
-            changeOnSelect
-            showSearch={{
-              filter: (inputValue, path) =>
-                path.some((option) =>
-                  (option.label as string).toLowerCase().includes(inputValue.toLowerCase())
-                ),
-            }}
+            style={{ width: 240 }}
           />
         </Form.Item>
       </ModalForm>
@@ -465,10 +464,20 @@ const MainLayout: React.FC = () => {
         onOk={async () => {
           try {
             const values = await phoneForm.validateFields()
-            // TODO: 调用发送验证码和更改手机号API
+            const res = await api.put('/auth/change-phone', {
+              new_phone: values.newPhone,
+              code: values.phoneCode,
+            })
+            const responseData = res.data as Record<string, unknown>
+            if (responseData?.code !== undefined && responseData.code !== 0) {
+              message.error((responseData.message as string) || t('msg.profileUpdateFailed'))
+              return
+            }
             message.success(t('msg.phoneChanged'))
             setPhoneModalOpen(false)
             phoneForm.resetFields()
+            // 刷新用户信息
+            queryClient.invalidateQueries({ queryKey: ['user', 'profile'] })
           } catch (error) {
             // 验证失败
           }
@@ -492,20 +501,35 @@ const MainLayout: React.FC = () => {
             <Space>
               <Input placeholder={t('modal.codePlaceholder')} style={{ width: 200 }} />
               <Button
-                onClick={() => {
-                  // TODO: 调用发送验证码API
-                  setCodeSending(true)
-                  setCodeCountdown(60)
-                  const timer = setInterval(() => {
-                    setCodeCountdown((prev) => {
-                      if (prev <= 1) {
-                        clearInterval(timer)
-                        setCodeSending(false)
-                        return 0
-                      }
-                      return prev - 1
-                    })
-                  }, 1000)
+                onClick={async () => {
+                  const phone = phoneForm.getFieldValue('newPhone')
+                  if (!phone) {
+                    message.warning(t('msg.newPhoneRequired'))
+                    return
+                  }
+                  try {
+                    const res = await api.post('/auth/send-phone-code', { phone })
+                    const responseData = res.data as Record<string, unknown>
+                    if (responseData?.code !== undefined && responseData.code !== 0) {
+                      message.error((responseData.message as string) || 'Failed to send code')
+                      return
+                    }
+                    message.success(t('modal.sendCode') + ' ✓')
+                    setCodeSending(true)
+                    setCodeCountdown(60)
+                    const timer = setInterval(() => {
+                      setCodeCountdown((prev) => {
+                        if (prev <= 1) {
+                          clearInterval(timer)
+                          setCodeSending(false)
+                          return 0
+                        }
+                        return prev - 1
+                      })
+                    }, 1000)
+                  } catch {
+                    message.error('Failed to send code')
+                  }
                 }}
                 disabled={codeSending}
                 loading={codeSending}
@@ -528,10 +552,20 @@ const MainLayout: React.FC = () => {
         onOk={async () => {
           try {
             const values = await emailForm.validateFields()
-            // TODO: 调用发送验证码和更改邮箱API
+            const res = await api.put('/auth/change-email', {
+              new_email: values.newEmail,
+              code: values.emailCode,
+            })
+            const responseData = res.data as Record<string, unknown>
+            if (responseData?.code !== undefined && responseData.code !== 0) {
+              message.error((responseData.message as string) || t('msg.profileUpdateFailed'))
+              return
+            }
             message.success(t('msg.emailChanged'))
             setEmailModalOpen(false)
             emailForm.resetFields()
+            // 刷新用户信息
+            queryClient.invalidateQueries({ queryKey: ['user', 'profile'] })
           } catch (error) {
             // 验证失败
           }
@@ -558,20 +592,35 @@ const MainLayout: React.FC = () => {
             <Space>
               <Input placeholder={t('modal.codePlaceholder')} style={{ width: 200 }} />
               <Button
-                onClick={() => {
-                  // TODO: 调用发送验证码API
-                  setCodeSending(true)
-                  setCodeCountdown(60)
-                  const timer = setInterval(() => {
-                    setCodeCountdown((prev) => {
-                      if (prev <= 1) {
-                        clearInterval(timer)
-                        setCodeSending(false)
-                        return 0
-                      }
-                      return prev - 1
-                    })
-                  }, 1000)
+                onClick={async () => {
+                  const email = emailForm.getFieldValue('newEmail')
+                  if (!email) {
+                    message.warning(t('msg.newEmailRequired'))
+                    return
+                  }
+                  try {
+                    const res = await api.post('/auth/send-email-change-code', { email })
+                    const responseData = res.data as Record<string, unknown>
+                    if (responseData?.code !== undefined && responseData.code !== 0) {
+                      message.error((responseData.message as string) || 'Failed to send code')
+                      return
+                    }
+                    message.success(t('modal.sendCode') + ' ✓')
+                    setCodeSending(true)
+                    setCodeCountdown(60)
+                    const timer = setInterval(() => {
+                      setCodeCountdown((prev) => {
+                        if (prev <= 1) {
+                          clearInterval(timer)
+                          setCodeSending(false)
+                          return 0
+                        }
+                        return prev - 1
+                      })
+                    }, 1000)
+                  } catch {
+                    message.error('Failed to send code')
+                  }
                 }}
                 disabled={codeSending}
                 loading={codeSending}

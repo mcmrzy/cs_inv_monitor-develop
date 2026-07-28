@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:jpush_flutter/jpush_flutter.dart';
@@ -56,12 +57,24 @@ class JPushService {
   /// 用户点击打开通知时的回调
   void Function(JPushNotification notification)? onNotificationOpened;
 
+  /// 检查当前平台是否支持 JPush
+  ///
+  /// JPush 仅支持 Android、iOS 和 HarmonyOS
+  bool get isSupported {
+    if (kIsWeb) return false;
+    return Platform.isAndroid || Platform.isIOS;
+  }
+
   /// 初始化 JPush SDK
   ///
   /// [appKey] 为极光推送的 AppKey，未提供时使用占位符。
   /// 应在 App 启动、依赖注入初始化完成后调用。
   Future<void> init({String? appKey}) async {
     if (_initialized) return;
+    if (!isSupported) {
+      debugPrint('[JPushService] Platform not supported, skipping init');
+      return;
+    }
 
     _jpush = JPush.newJPush();
     _jpush.setup(
@@ -96,7 +109,7 @@ class JPushService {
   /// Registration ID 是设备的唯一标识，
   /// 后端可通过此 ID 向特定设备推送消息。
   Future<String?> getRegistrationID() async {
-    if (!_initialized) return null;
+    if (!_initialized || !isSupported) return null;
     return await _jpush.getRegistrationID();
   }
 
@@ -106,7 +119,7 @@ class JPushService {
   /// 向该用户的所有设备推送消息。
   /// 会等待 JPush SDK 就绪后再设置别名，最多重试 3 次。
   Future<void> bindUser(int userId) async {
-    if (!_initialized) return;
+    if (!_initialized || !isSupported) return;
     final alias = 'user_$userId';
 
     for (int attempt = 0; attempt < 3; attempt++) {
@@ -136,7 +149,7 @@ class JPushService {
 
   /// 退出登录时解绑别名
   Future<void> unbindUser() async {
-    if (!_initialized) return;
+    if (!_initialized || !isSupported) return;
     await _jpush.deleteAlias();
   }
 

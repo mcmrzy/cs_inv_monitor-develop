@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
+import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
@@ -89,7 +90,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
             );
           }
 
-          return const Center(child: CircularProgressIndicator(strokeWidth: 3));
+          return const SkeletonOtaPage();
         },
       ),
     );

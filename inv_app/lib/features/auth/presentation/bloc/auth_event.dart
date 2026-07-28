@@ -85,14 +85,22 @@ class AuthChangePasswordRequested extends AuthEvent {
 class AuthUpdateProfileRequested extends AuthEvent {
   final String? nickname;
   final String? avatar;
+  final String? email;
+  final String? country;
+  final String? regionName;
+  final String? bio;
 
   const AuthUpdateProfileRequested({
     this.nickname,
     this.avatar,
+    this.email,
+    this.country,
+    this.regionName,
+    this.bio,
   });
 
   @override
-  List<Object?> get props => [nickname, avatar];
+  List<Object?> get props => [nickname, avatar, email, country, regionName, bio];
 }
 
 class AuthEmailLoginRequested extends AuthEvent {

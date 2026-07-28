@@ -556,7 +556,7 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 
 	var totalEnergy, totalIncome float64
 	var totalDeviceCount, totalOnlineCount, totalFaultCount int
-	var grandTotalEnergy, grandMonthEnergy float64
+	var grandTotalEnergy, grandMonthEnergy, grandTotalPower float64
 
 	summaries := make([]StationSummary, 0, len(stations))
 	for _, station := range stations {
@@ -620,6 +620,7 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 		totalFaultCount += faultCount
 		grandTotalEnergy += stationTotal
 		grandMonthEnergy += monthEnergy
+		grandTotalPower += totalPower
 	}
 
 	result := map[string]interface{}{
@@ -639,7 +640,7 @@ func (h *StationHandler) GetSummary(c *gin.Context) {
 			"total_energy": grandTotalEnergy,
 			"month_energy": grandMonthEnergy,
 			"total_income": totalIncome,
-			"total_power":  float64(0),
+			"total_power":  grandTotalPower,
 			"device_count": totalDeviceCount,
 			"online_count": totalOnlineCount,
 			"fault_count":  totalFaultCount,

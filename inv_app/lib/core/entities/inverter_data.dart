@@ -23,10 +23,14 @@ class ACData {
     return ACData(
       voltage: (json['voltage'] as num?)?.toDouble() ?? 0,
       current: (json['current'] as num?)?.toDouble() ?? 0,
-      power: (json['power'] as num?)?.toDouble() ?? 0,
+      // 支持 Redis 存储的 active_power 和标准 power 两种字段名
+      power: (json['power'] as num?)?.toDouble() ??
+             (json['active_power'] as num?)?.toDouble() ?? 0,
       frequency: (json['frequency'] as num?)?.toDouble() ?? 0,
       loadPercent: (json['load_percent'] as num?)?.toDouble() ?? 0,
-      pf: (json['pf'] as num?)?.toDouble() ?? 0,
+      // 支持 Redis 存储的 power_factor 和标准 pf 两种字段名
+      pf: (json['pf'] as num?)?.toDouble() ??
+          (json['power_factor'] as num?)?.toDouble() ?? 0,
       apparentPower: (json['apparent_power'] as num?)?.toDouble() ?? 0,
       voltageThd: (json['voltage_thd'] as num?)?.toDouble() ?? 0,
     );
@@ -175,9 +179,13 @@ class PVData {
 
   factory PVData.fromJson(Map<String, dynamic> json) {
     return PVData(
-      pvVoltage: (json['pv_voltage'] as num?)?.toDouble() ?? 0,
-      pvCurrent: (json['pv_current'] as num?)?.toDouble() ?? 0,
-      pvPower: (json['pv_power'] as num?)?.toDouble() ?? 0,
+      pvVoltage: (json['pv_voltage'] as num?)?.toDouble() ??
+                 (json['pv1_voltage'] as num?)?.toDouble() ?? 0,
+      pvCurrent: (json['pv_current'] as num?)?.toDouble() ??
+                 (json['pv1_current'] as num?)?.toDouble() ?? 0,
+      // 支持 Redis 存储的 total_power 和标准 pv_power 两种字段名
+      pvPower: (json['pv_power'] as num?)?.toDouble() ??
+               (json['total_power'] as num?)?.toDouble() ?? 0,
       mpptState: json['mppt_state'] as String? ?? '',
       pv1Power: (json['pv1_power'] as num?)?.toDouble() ?? 0,
       pv1VoltageMax: (json['pv1_voltage_max'] as num?)?.toDouble() ?? 0,
@@ -233,11 +241,17 @@ class SystemStatus {
 
   factory SystemStatus.fromJson(Map<String, dynamic> json) {
     return SystemStatus(
-      state: json['state'] as String? ?? '',
+      // 支持 Redis 存储的 work_state 和标准 state 两种字段名
+      state: json['state'] as String? ??
+             (json['work_state'] != null ? json['work_state'].toString() : ''),
       faultCode: (json['fault_code'] as num?)?.toInt() ?? 0,
       alarmCode: (json['alarm_code'] as num?)?.toInt() ?? 0,
-      tempInv: (json['temp_inv'] as num?)?.toDouble() ?? 0,
-      tempMos: (json['temp_mos'] as num?)?.toDouble() ?? 0,
+      // 支持 Redis 存储的 inverter_temperature 和标准 temp_inv 两种字段名
+      tempInv: (json['temp_inv'] as num?)?.toDouble() ??
+               (json['inverter_temperature'] as num?)?.toDouble() ?? 0,
+      // 支持 Redis 存储的 mos_temperature 和标准 temp_mos 两种字段名
+      tempMos: (json['temp_mos'] as num?)?.toDouble() ??
+               (json['mos_temperature'] as num?)?.toDouble() ?? 0,
       efficiency: (json['efficiency'] as num?)?.toDouble() ?? 0,
       ambientTemperature:
           (json['ambient_temperature'] as num?)?.toDouble() ?? 0,

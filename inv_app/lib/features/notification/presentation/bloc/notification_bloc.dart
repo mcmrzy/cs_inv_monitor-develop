@@ -234,10 +234,11 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     final List<SystemNotification> allNotifications = [];
 
     // 1. 从后端获取设备通知（上线/离线等）
+    // 首次加载使用较小的pageSize，减少请求数据量
     if (notificationDataSource != null) {
       try {
         final response =
-            await notificationDataSource!.getList(page: 1, pageSize: 50);
+            await notificationDataSource!.getList(page: 1, pageSize: 20);
         final data = response.data;
         if (data != null) {
           final responseData = data['data'] ?? data;

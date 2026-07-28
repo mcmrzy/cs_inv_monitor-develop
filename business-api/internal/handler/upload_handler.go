@@ -132,8 +132,8 @@ func (h *UploadHandler) UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	// Build URL
-	avatarURL := fmt.Sprintf("%s%s/%s", h.serverURL, avatarURLPrefix, filename)
+	// Build URL - 使用相对路径，通过前端 nginx 代理访问
+	avatarURL := fmt.Sprintf("%s/%s", avatarURLPrefix, filename)
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    0,

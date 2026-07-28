@@ -9,6 +9,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
+import 'package:inv_app/core/widgets/offline_banner.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class HomePage extends StatefulWidget {
@@ -122,6 +123,7 @@ class _HomePageState extends State<HomePage> {
 
           return Column(
             children: [
+              const OfflineBanner(),
               Expanded(
                 child: StyledRefreshIndicator(
                   onRefresh: () async => context

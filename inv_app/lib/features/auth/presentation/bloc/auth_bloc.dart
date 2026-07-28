@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/services/storage_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/services/mqtt_service.dart';
 
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/features/auth/domain/entities/user.dart';
@@ -211,7 +213,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await storageService.deleteIsSystemAdmin();
     await storageService.deletePermissions();
 
-    mqttService.disconnect();
+    try { getIt<MQTTService>().disconnect(); } catch (_) {}
     jpushService.unbindUser();
 
     emit(AuthUnauthenticated());
@@ -278,23 +280,51 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final result = await updateProfileUseCase(
       nickname: event.nickname,
       avatar: event.avatar,
+      email: event.email,
+      country: event.country,
+      regionName: event.regionName,
+      bio: event.bio,
     );
 
-    result.fold(
-      (failure) => emit(AuthError(message: failure.message)),
-      (_) {
-        final currentState = state;
-        if (currentState is AuthAuthenticated) {
-          emit(
-            AuthAuthenticated(
-              userId: currentState.userId,
-              phone: currentState.phone,
-              isSystemAdmin: currentState.isSystemAdmin,
-              permissions: currentState.permissions,
-              user: currentState.user,
-            ),
-          );
-        }
+    await result.fold<Future<void>>(
+      (failure) async {
+        emit(AuthError(message: failure.message));
+      },
+      (_) async {
+        // 更新成功后，重新获取用户信息
+        final profileResult = await getProfileUseCase();
+        profileResult.fold(
+          (failure) {
+            // 如果获取用户信息失败，仍然保持当前状态
+            final currentState = state;
+            if (currentState is AuthAuthenticated) {
+              emit(
+                AuthAuthenticated(
+                  userId: currentState.userId,
+                  phone: currentState.phone,
+                  isSystemAdmin: currentState.isSystemAdmin,
+                  permissions: currentState.permissions,
+                  user: currentState.user,
+                ),
+              );
+            }
+          },
+          (user) {
+            // 使用最新的用户信息更新状态
+            final currentState = state;
+            if (currentState is AuthAuthenticated) {
+              emit(
+                AuthAuthenticated(
+                  userId: currentState.userId,
+                  phone: currentState.phone,
+                  isSystemAdmin: currentState.isSystemAdmin,
+                  permissions: currentState.permissions,
+                  user: user,
+                ),
+              );
+            }
+          },
+        );
       },
     );
   }
@@ -345,11 +375,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         );
 
         jpushService.bindUser(response.user.id);
-        _connectMQTT(
-          response.user.phone.isNotEmpty
-              ? response.user.phone
-              : 'user_${response.user.id}',
-        );
       },
     );
   }

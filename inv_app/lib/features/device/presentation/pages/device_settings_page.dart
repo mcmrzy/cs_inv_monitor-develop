@@ -49,7 +49,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     var loadFailed = false;
 
     try {
-      final deviceRes = await dio.get('/devices/${widget.sn}');
+      final deviceRes = await dio.get('/devices/by-sn/${widget.sn}');
       final data = unwrapApiResponse<Map<String, dynamic>>(
         deviceRes.data,
         validate: (value) => value is Map<String, dynamic>,
@@ -62,7 +62,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     }
 
     try {
-      final res = await dio.get('/devices/${widget.sn}/control-state');
+      final res = await dio.get('/devices/by-sn/${widget.sn}/control-state');
       final state = unwrapApiResponse<Map<String, dynamic>>(
         res.data,
         validate: (value) => value is Map<String, dynamic>,
@@ -160,7 +160,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
         }
       }
       final response = await dio.post(
-        '/devices/${widget.sn}/control',
+        '/devices/by-sn/${widget.sn}/control',
         data: {
           'command': 'set_params',
           'params': paramsToWrite,
@@ -202,7 +202,7 @@ class _DeviceSettingsPageState extends State<DeviceSettingsPage>
     try {
       final dio = getIt<Dio>();
       final response = await dio.post(
-        '/devices/${widget.sn}/control',
+        '/devices/by-sn/${widget.sn}/control',
         data: {'command': command, 'params': {}},
       );
       unwrapApiResponse<Map<String, dynamic>>(

@@ -21,11 +21,11 @@ class DeviceRemoteDataSource {
   }
 
   Future<Response> getDetail(String sn) async {
-    return await dio.get('/devices/$sn');
+    return await dio.get('/devices/by-sn/$sn');
   }
 
   Future<Response> getRealtimeData(String sn) async {
-    return await dio.get('/devices/$sn/realtime');
+    return await dio.get('/devices/by-sn/$sn/realtime');
   }
 
   Future<Response> bind(String sn, int? stationId) async {
@@ -39,7 +39,7 @@ class DeviceRemoteDataSource {
   }
 
   Future<Response> unbind(String sn) async {
-    return await dio.delete('/devices/$sn/unbind');
+    return await dio.delete('/devices/by-sn/$sn/unbind');
   }
 
   Future<Response> control(
@@ -48,7 +48,7 @@ class DeviceRemoteDataSource {
     Map<String, dynamic> params,
   ) async {
     return await dio.post(
-      '/devices/$sn/control',
+      '/devices/by-sn/$sn/control',
       data: {
         'command': cmdType,
         'params': params,
@@ -63,7 +63,7 @@ class DeviceRemoteDataSource {
     String period,
   ) async {
     return await dio.get(
-      '/devices/$sn/statistics',
+      '/devices/by-sn/$sn/statistics',
       queryParameters: {
         'start_date': startDate,
         'end_date': endDate,
@@ -79,7 +79,7 @@ class DeviceRemoteDataSource {
     String period,
   ) async {
     return await dio.get(
-      '/devices/$sn/history',
+      '/devices/by-sn/$sn/history',
       queryParameters: {
         'start_date': startDate,
         'end_date': endDate,
@@ -94,7 +94,7 @@ class DeviceRemoteDataSource {
     int pageSize = 20,
   }) async {
     return await dio.get(
-      '/devices/$sn/alarms',
+      '/devices/by-sn/$sn/alarms',
       queryParameters: {
         'page': page,
         'page_size': pageSize,

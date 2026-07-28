@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/api_service.dart';
+import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
@@ -14,6 +15,7 @@ import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
 import 'package:inv_app/core/services/offline_sync_service.dart';
+import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
@@ -284,6 +286,10 @@ class ServiceLocator {
       () => ApiService(getIt()),
     );
 
+    getIt.registerLazySingleton<ApiClient>(
+      () => ApiClient(getIt()),
+    );
+
     getIt.registerLazySingleton<MQTTService>(
       () => MQTTServiceImpl(),
       dispose: (service) => (service as MQTTServiceImpl).dispose(),
@@ -306,6 +312,11 @@ class ServiceLocator {
 
     getIt.registerLazySingleton<ConnectionModeService>(
       () => ConnectionModeService(getIt()),
+    );
+
+    getIt.registerLazySingleton<NetworkStatusService>(
+      () => NetworkStatusService(connectivity: Connectivity()),
+      dispose: (service) => service.dispose(),
     );
 
     getIt.registerLazySingleton<OfflineCacheService>(

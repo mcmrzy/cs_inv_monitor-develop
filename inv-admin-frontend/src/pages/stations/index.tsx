@@ -30,6 +30,8 @@ import QueryErrorAlert from '@/components/QueryErrorAlert'
 import useLocaleStore from '@/stores/localeStore'
 import StatisticCard from '@/components/StatisticCard'
 import StationCard from './components/StationCard'
+import RegionPicker from '@/components/RegionPicker'
+import regionData from '@/utils/regionData'
 
 const { Title, Text } = Typography
 
@@ -1157,14 +1159,20 @@ const StationsPage: React.FC = () => {
           <Col span={12}>
             <ProFormDigit name="capacity" label={t('station.capacity_kW')} min={0} fieldProps={{ style: { width: '100%' } }} />
           </Col>
-          <Col span={8}>
-            <ProFormText name="province" label={t('station.province')} />
-          </Col>
-          <Col span={8}>
-            <ProFormText name="city" label={t('station.city')} />
-          </Col>
-          <Col span={8}>
-            <ProFormText name="district" label={t('station.district')} />
+          <Col span={24}>
+            <Form.Item label={t('station.province')} name="region">
+              <RegionPicker
+                options={regionData}
+                value={undefined}
+                onChange={(region) => {
+                  editForm.setFieldsValue({
+                    province: region[0] || '',
+                    city: region[1] || '',
+                    district: region[2] || ''
+                  })
+                }}
+              />
+            </Form.Item>
           </Col>
           <Col span={24}>
             <ProFormText name="address" label={t('station.address')} />
@@ -1246,14 +1254,20 @@ const StationsPage: React.FC = () => {
           <Col span={12}>
             <ProFormDigit name="capacity" label={t('station.capacity_kW')} min={0} fieldProps={{ style: { width: '100%' } }} />
           </Col>
-          <Col span={8}>
-            <ProFormText name="province" label={t('station.province')} />
-          </Col>
-          <Col span={8}>
-            <ProFormText name="city" label={t('station.city')} />
-          </Col>
-          <Col span={8}>
-            <ProFormText name="district" label={t('station.district')} />
+          <Col span={24}>
+            <Form.Item label={t('station.province')} name="region">
+              <RegionPicker
+                options={regionData}
+                value={undefined}
+                onChange={(region) => {
+                  addForm.setFieldsValue({
+                    province: region[0] || '',
+                    city: region[1] || '',
+                    district: region[2] || ''
+                  })
+                }}
+              />
+            </Form.Item>
           </Col>
           <Col span={24}>
             <ProFormText name="address" label={t('station.address')} />

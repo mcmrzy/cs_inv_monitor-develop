@@ -17,10 +17,10 @@ class AvatarUploadService {
         throw Exception('只支持 JPEG、PNG、GIF、WebP 格式的图片');
       }
 
-      // 验证文件大小 (2MB)
+      // 安全上限检查（image_picker已压缩，此处仅为安全网）
       final fileSize = await imageFile.length();
-      if (fileSize > 2 * 1024 * 1024) {
-        throw Exception('图片大小不能超过2MB');
+      if (fileSize > 5 * 1024 * 1024) {
+        throw Exception('图片大小不能超过5MB');
       }
 
       // 创建FormData
@@ -33,7 +33,7 @@ class AvatarUploadService {
 
       // 上传文件
       final response = await _apiClient.post(
-        '/api/v1/upload/avatar',
+        '/upload/avatar',
         data: formData,
       );
 

@@ -1,3 +1,6 @@
+// 环境配置：修改 apiBaseUrl 的 defaultValue 切换环境
+// 本地开发：http://localhost:8888/api/v1 (模拟器) 或 http://<电脑IP>:8888/api/v1 (真机)
+// 生产环境：https://jiuxiaoyw.online/api/v1
 class AppConfig {
   static const String appName = '辰烁光伏';
   static const String version = '1.0.0';
@@ -5,7 +8,7 @@ class AppConfig {
 
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://jiuxiaoyw.online/api/v1',
+    defaultValue: 'http://localhost:8888/api/v1',
   );
   static const String mqttBrokerHost = String.fromEnvironment(
     'MQTT_BROKER_HOST',

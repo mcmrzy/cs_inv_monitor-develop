@@ -46,14 +46,14 @@ class OfflineSyncService {
     switch (action.type) {
       case 'param_update':
         await _apiService.put(
-          '/devices/${action.sn}/params',
+          '/devices/by-sn/${action.sn}/params',
           data: {'params': action.data},
           fromJson: (json) => json,
         );
         break;
       case 'control':
         await _apiService.post(
-          '/devices/${action.sn}/control',
+          '/devices/by-sn/${action.sn}/control',
           data: {
             'command': action.data['cmd_type'],
             'params': action.data['params'],
@@ -63,7 +63,7 @@ class OfflineSyncService {
         break;
       case 'wifi_config':
         await _apiService.post(
-          '/devices/${action.sn}/wifi/config',
+          '/devices/by-sn/${action.sn}/wifi/config',
           data: action.data,
           fromJson: (json) => json,
         );

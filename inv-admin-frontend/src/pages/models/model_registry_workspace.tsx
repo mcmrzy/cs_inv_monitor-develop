@@ -39,6 +39,8 @@ const ModelRegistryWorkspace: React.FC = () => {
   const [messageApi, contextHolder] = message.useMessage()
   const [modal, modalContextHolder] = Modal.useModal()
   const hasPermission = useAuthStore((state) => state.hasPermission)
+  const user = useAuthStore((state) => state.user)
+  const isSystemAdmin = user?.isSystemAdmin ?? false
   const canEdit = hasPermission('models:edit')
   const canEditDictionary = hasPermission('models:dictionary')
   const canPublishProtocol = hasPermission('models:protocol_publish')
@@ -227,7 +229,7 @@ const ModelRegistryWorkspace: React.FC = () => {
     { title: t('common.actions'), width: 210, render: (_: unknown, row: DeviceModelItem) => <Space>
       <Button type="link" icon={<SettingOutlined />} onClick={() => setSelectedModel(row)}>{t('models.registry.manage')}</Button>
       {canEdit && <Button type="link" icon={<EditOutlined />} onClick={() => openModelModal(row)}>{t('common.edit')}</Button>}
-      {canEdit && row.is_active && <Popconfirm title={t('models.registry.confirmRetire')} onConfirm={() => retireModel.mutate(row.id)}><Button type="link" danger>{t('models.registry.retire')}</Button></Popconfirm>}
+      {isSystemAdmin && <Popconfirm title={t('models.registry.confirmRetire')} onConfirm={() => retireModel.mutate(row.id)}><Button type="link" danger>{t('models.registry.retire')}</Button></Popconfirm>}
     </Space> },
   ]
 

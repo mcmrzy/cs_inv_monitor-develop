@@ -971,14 +971,18 @@ func (h *AdminHandler) UpdateUserParent(c *gin.Context) {
 			response.Error(c, 404, "上级用户不存在")
 			return
 		}
-		// 验证层级关系：设备商(1)->安装商(2)->终端用户(3)
+		// 验证层级关系：上级角色数值必须小于当前用户（数值越小权限越高）
 		if user.Role <= parent.Role {
 			response.Error(c, 400, "上级用户角色必须高于当前用户")
 			return
 		}
+		// 配额检查（如果组织系统已启用）
 		if err := ensureTenantUserCapacity(c.Request.Context(), h.db, *req.ParentID, userID); err != nil {
-			response.Error(c, 400, err.Error())
-			return
+			// 如果是表不存在的错误，跳过配额检查（组织系统未初始化）
+			if !strings.Contains(err.Error(), "does not exist") {
+				response.Error(c, 400, err.Error())
+				return
+			}
 		}
 	}
 

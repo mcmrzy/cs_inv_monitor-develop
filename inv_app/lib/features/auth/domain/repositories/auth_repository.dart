@@ -37,6 +37,10 @@ abstract class AuthRepository {
   Future<Either<Failure, void>> updateProfile({
     String? nickname,
     String? avatar,
+    String? email,
+    String? country,
+    String? regionName,
+    String? bio,
     String? timezone,
   });
 

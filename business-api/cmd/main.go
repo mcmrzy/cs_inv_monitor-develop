@@ -698,14 +698,15 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	router.Use(requestBodyLimit())
 	router.Use(middleware.CORS(cfg.CORS.AllowedOrigins))
 	router.Use(tracingMiddleware())
-	router.Use(middleware.RateLimit())
-
+	// NOTE: RateLimit is NOT applied globally; internal routes are registered
+	// before the rate-limited public group so device ingestion is never throttled.
+	
 	router.GET("/health", func(c *gin.Context) {
 		status := gin.H{"status": "ok"}
 		httpStatus := http.StatusOK
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
-
+	
 		if deps.DB != nil {
 			if err := deps.DB.Ping(ctx); err != nil {
 				status["db"] = "error"
@@ -722,15 +723,18 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 				status["redis"] = "ok"
 			}
 		}
-
+	
 		if httpStatus != http.StatusOK {
 			status["status"] = "degraded"
 		}
 		c.JSON(httpStatus, status)
 	})
-
+	
+	// ── Internal routes (NO rate limit) ──────────────────────────────
+	// Device communication service calls these endpoints synchronously.
+	// They must never be throttled, even under burst load.
 	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, deps.JPushService, nil, nil)
-
+	
 	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth(cfg.Backends.InternalKey))
 	{
 		internal.POST("/device-status", internalHandler.DeviceStatus)
@@ -745,8 +749,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/ota-status", internalHandler.OTAStatus)
 		internal.POST("/ota-cmd-ack", internalHandler.OTACmdAck)
 	}
-
-	// 鍥轰欢鏂囦欢涓嬭浇锛堟棤闇€璁よ瘉锛岃澶囩洿鎺ヨ闂?/firmware/xxx.bin锛?
+	
+	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
 	// 浣跨敤 http.ServeContent 鏇夸唬 Gin Static锛屼紭鍖栧ぇ鏂囦欢浼犺緭
 	firmwareDir := config.FirmwareDataDir()
 	if err := os.MkdirAll(firmwareDir, 0755); err != nil {
@@ -776,6 +780,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	})
 
 	api := router.Group("/api/v1")
+	api.Use(middleware.RateLimit())
 	{
 		api.POST("/auth/login", deps.AuthHandler.Login)
 		api.POST("/auth/register", deps.AuthHandler.Register)
@@ -819,6 +824,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.POST("/auth/change-password", deps.AuthHandler.ChangePassword)
 			auth.GET("/auth/profile", deps.AuthHandler.GetProfile)
 			auth.PUT("/auth/profile", deps.AuthHandler.UpdateProfile)
+			auth.POST("/auth/send-phone-code", deps.AuthHandler.SendPhoneChangeCode)
+			auth.POST("/auth/send-email-change-code", deps.AuthHandler.SendEmailChangeCode)
+			auth.PUT("/auth/change-phone", deps.AuthHandler.ChangePhone)
+			auth.PUT("/auth/change-email", deps.AuthHandler.ChangeEmail)
 
 			auth.POST("/stations", deps.StationHandler.Create)
 			auth.GET("/stations", deps.StationHandler.List)
@@ -987,6 +996,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			usersGroup.GET("/:id/children", deps.AdminHandler.GetUserChildren)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
 			usersGroup.PUT("/:id/password", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ResetUserPassword)
+			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
+			usersGroup.PUT("/:id/parent", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserParent)
 		}
 
 		parallelGroup := api.Group("/parallel-groups").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))

@@ -65,7 +65,6 @@ void main() {
       wechatLoginUseCase: mockWechatLoginUseCase,
       googleLoginUseCase: mockGoogleLoginUseCase,
       storageService: mockStorageService,
-      mqttService: mockMQTTService,
       jpushService: mockJPushService,
     );
   });

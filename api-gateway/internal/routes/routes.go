@@ -143,6 +143,10 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/auth/logout", p.Handler())
 	userGroup.Any("/api/v1/auth/change-password", p.Handler())
 	userGroup.Any("/api/v1/auth/profile", p.Handler())
+	userGroup.Any("/api/v1/auth/send-phone-code", p.Handler())
+	userGroup.Any("/api/v1/auth/send-email-change-code", p.Handler())
+	userGroup.Any("/api/v1/auth/change-phone", p.Handler())
+	userGroup.Any("/api/v1/auth/change-email", p.Handler())
 
 	userGroup.Any("/api/v1/stations/*action", p.Handler())
 	userGroup.Any("/api/v1/stations", p.Handler())

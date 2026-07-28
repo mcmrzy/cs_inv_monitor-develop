@@ -18,6 +18,8 @@ import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart
 import 'package:inv_app/core/router/app_router.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
+import 'package:inv_app/core/data/china_regions.dart';
+import 'package:inv_app/core/data/regions_data.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +30,10 @@ void main() async {
   ]);
 
   await ServiceLocator.init();
+  
+  // 初始化地区数据
+  initChinaRegions();
+  initGlobalRegions();
 
   // 初始化极光推送（在依赖注入完成后）
   try {
@@ -96,56 +102,71 @@ class _InvAppState extends State<InvApp> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        // AuthBloc 必须立即加载，用于认证检查
         BlocProvider<AuthBloc>(
           create: (_) => getIt<AuthBloc>()..add(AuthCheckRequested()),
         ),
+        // 以下 Bloc 使用懒加载，只在首次访问时创建
         BlocProvider<StationBloc>(
+          lazy: true,
           create: (_) => getIt<StationBloc>(),
         ),
         BlocProvider<DeviceBloc>(
+          lazy: true,
           create: (_) => getIt<DeviceBloc>(),
         ),
         BlocProvider<AlarmBloc>(
+          lazy: true,
           create: (_) => getIt<AlarmBloc>(),
         ),
         BlocProvider<NotificationBloc>(
+          lazy: true,
           create: (_) => widget.notificationBloc,
         ),
         BlocProvider<DashboardBloc>(
+          lazy: true,
           create: (_) => getIt<DashboardBloc>(),
         ),
       ],
-      child: ScreenUtilInit(
-        designSize: const Size(375, 812),
-        minTextAdapt: true,
-        splitScreenMode: true,
-        builder: (context, child) {
-          return MaterialApp.router(
-            onGenerateTitle: (context) =>
-                AppLocalizations.of(context)?.brandName ?? AppConfig.appName,
-            debugShowCheckedModeBanner: false,
-            theme: AppTheme.light,
-            darkTheme: AppTheme.dark,
-            themeMode: ThemeMode.system,
-            routerConfig: AppRouter.router,
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: _currentLocale,
-            builder: (context, widget) {
-              return MediaQuery(
-                data: MediaQuery.of(context).copyWith(
-                  textScaler: const TextScaler.linear(1.0),
-                ),
-                child: widget!,
-              );
-            },
-          );
+      child: BlocListener<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state is AuthUnauthenticated) {
+            // Token过期或登出时，跳转到登录页
+            AppRouter.router.go('/login');
+          }
         },
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          minTextAdapt: true,
+          splitScreenMode: true,
+          builder: (context, child) {
+            return MaterialApp.router(
+              onGenerateTitle: (context) =>
+                  AppLocalizations.of(context)?.brandName ?? AppConfig.appName,
+              debugShowCheckedModeBanner: false,
+              theme: AppTheme.light,
+              darkTheme: AppTheme.dark,
+              themeMode: ThemeMode.system,
+              routerConfig: AppRouter.router,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: AppLocalizations.supportedLocales,
+              locale: _currentLocale,
+              builder: (context, widget) {
+                return MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: const TextScaler.linear(1.0),
+                  ),
+                  child: widget!,
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

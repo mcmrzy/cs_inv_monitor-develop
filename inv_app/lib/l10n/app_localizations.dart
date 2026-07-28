@@ -314,6 +314,23 @@ class AppLocalizations {
   String get displaySettings => _localizedStrings['display_settings']!;
   String get generalSettings => _localizedStrings['general_settings']!;
   String get localModeDesc => _localizedStrings['local_mode_desc']!;
+
+  // 离线模式
+  String get offlineMode => _localizedStrings['offline_mode']!;
+  String get offlineModeActive => _localizedStrings['offline_mode_active']!;
+  String get offlineModeDescription => _localizedStrings['offline_mode_description']!;
+  String get availableOfflineFeatures => _localizedStrings['available_offline_features']!;
+  String get wifiProvisioning => _localizedStrings['wifi_provisioning']!;
+  String get wifiProvisioningDesc => _localizedStrings['wifi_provisioning_desc']!;
+  String get localOTA => _localizedStrings['local_ota']!;
+  String get localOTADesc => _localizedStrings['local_ota_desc']!;
+  String get usageTips => _localizedStrings['usage_tips']!;
+  String get offlineTip1 => _localizedStrings['offline_tip_1']!;
+  String get offlineTip2 => _localizedStrings['offline_tip_2']!;
+  String get offlineTip3 => _localizedStrings['offline_tip_3']!;
+  String get offlineStatus => _localizedStrings['offline_status']!;
+  String get offlineHint => _localizedStrings['offline_hint']!;
+
   String get unitSwitch => _localizedStrings['unit_switch']!;
   String get customServer => _localizedStrings['custom_server']!;
   String get timezone => _localizedStrings['timezone']!;
@@ -597,7 +614,7 @@ class AppLocalizations {
   String get newStation => _localizedStrings['new_station']!;
   String get stationInfo => _localizedStrings['station_info']!;
   String get fillStationInfo => _localizedStrings['fill_station_info']!;
-  String get region => _localizedStrings['region']!;
+  String get stationRegion => _localizedStrings['station_region']!;
   String get selectInstallLocation =>
       _localizedStrings['select_install_location']!;
   String get createStationBtn => _localizedStrings['create_station_btn']!;
@@ -1242,6 +1259,36 @@ class AppLocalizations {
   String get loadPower => _localizedStrings['load_power'] ?? 'Load Power';
   String get noDataAvailable =>
       _localizedStrings['no_data_available'] ?? 'No data available';
+
+  // 个人信息编辑页新增
+  String get accountInfo =>
+      _localizedStrings['account_info'] ?? 'Account Info';
+  String get changePhone =>
+      _localizedStrings['change_phone'] ?? 'Change Phone';
+  String get changeEmail =>
+      _localizedStrings['change_email'] ?? 'Change Email';
+  String get newPhone => _localizedStrings['new_phone'] ?? 'New Phone';
+  String get newEmail => _localizedStrings['new_email'] ?? 'New Email';
+  String get verificationCode =>
+      _localizedStrings['verification_code'] ?? 'Verification Code';
+  String get sendCode => _localizedStrings['send_code'] ?? 'Send Code';
+  String get codeSent => _localizedStrings['code_sent'] ?? 'Code Sent';
+  String get phoneHint =>
+      _localizedStrings['phone_hint'] ?? 'Enter new phone';
+  String get emailHint =>
+      _localizedStrings['email_hint'] ?? 'Enter new email';
+  String get codeHint =>
+      _localizedStrings['code_hint'] ?? 'Enter verification code';
+  String get fillAllFields =>
+      _localizedStrings['fill_all_fields'] ?? 'Please fill all fields';
+  String get phoneChanged =>
+      _localizedStrings['phone_changed'] ?? 'Phone changed';
+  String get emailChanged =>
+      _localizedStrings['email_changed'] ?? 'Email changed';
+  String get emailRequired =>
+      _localizedStrings['email_required'] ?? 'Email required';
+  String get phoneRequired =>
+      _localizedStrings['phone_required'] ?? 'Phone required';
 }
 
 class _AppLocalizationsDelegate
