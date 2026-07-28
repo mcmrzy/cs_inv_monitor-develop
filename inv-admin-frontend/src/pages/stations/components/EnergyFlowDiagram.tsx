@@ -26,6 +26,7 @@ interface NodeConfig {
   label: string;
   image: string;
   textSide?: 'left' | 'right'; // for right-category nodes: which side to place power text
+  posCategory?: 'top' | 'right' | 'bottom';
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -88,7 +89,7 @@ function computeFlowEdges(
   // 3. Inverter → Battery (curve, left-upper) — charging via inverter
   edges.push({
     id: 'inv-batt',
-    path: 'M 250 260 Q 190 245 130 255',
+    path: 'M 250 260 Q 170 250 130 255',
     color: NODE_COLORS.battery,
     active: battPower > 0,
     power: battPower > 0 ? battPower : 0,
@@ -98,7 +99,7 @@ function computeFlowEdges(
   // 4. Battery → Inverter (curve, left-lower) — discharging via inverter
   edges.push({
     id: 'batt-inv',
-    path: 'M 130 295 Q 190 310 250 295',
+    path: 'M 130 295 Q 170 305 250 295',
     color: NODE_COLORS.battery,
     active: battPower < 0,
     power: battPower < 0 ? Math.abs(battPower) : 0,
@@ -156,16 +157,19 @@ const FlowNode: React.FC<{
   const displayPower = type === 'battery' && power < 0 ? Math.abs(power) : power;
 
   const imgSize = 100;
-  // Position category: 'top' = text above image (battery/grid/inverter), 'right' = text right of image (pv/load)
-  const posCategory = type === 'battery' || type === 'grid' || type === 'inverter' ? 'top' : 'right';
+  // Position category: 'top' = text above image (battery/grid), 'bottom' = text below image (inverter), 'right' = text right of image (pv/load)
+  const posCategory: 'top' | 'right' | 'bottom' = type === 'inverter' ? 'bottom'
+    : (type === 'battery' || type === 'grid' ? 'top' : 'right');
   const imgLeft = x - imgSize / 2;  // x - 50
 
-  // Image top/bottom/right edges
+  // Image edges
   const imgTop = y - imgSize / 2;   // y - 50
+  const imgBottom = y + imgSize / 2; // y + 50
   const imgRight = x + imgSize / 2; // x + 50
 
   // Tight gaps: text baseline/edge hugging image with minimal clearance
-  const topGap = 2;   // px between text baseline and image top edge
+  const topGap = 5;   // px between text baseline and image top edge
+  const bottomGap = 5; // px between image bottom edge and text baseline
   const rightGap = 2; // px between image right edge and text start
 
   return (
@@ -199,7 +203,7 @@ const FlowNode: React.FC<{
           {/* Label: above power text */}
           <text
             x={x}
-            y={imgTop - topGap - 15}
+            y={imgTop - topGap - 17}
             textAnchor="middle"
             dominantBaseline="auto"
             fill="#333"
@@ -213,7 +217,7 @@ const FlowNode: React.FC<{
           {extra && (
             <text
               x={x}
-              y={imgTop - topGap - 30}
+              y={imgTop - topGap - 34}
               textAnchor="middle"
               dominantBaseline="auto"
               fill="#555"
@@ -225,7 +229,7 @@ const FlowNode: React.FC<{
             </text>
           )}
         </>
-      ) : (
+      ) : posCategory === 'right' ? (
         <>
           {/* Label: right of image */}
           <text
@@ -258,6 +262,51 @@ const FlowNode: React.FC<{
             <text
               x={x}
               y={y + imgSize / 2 + 16}
+              textAnchor="middle"
+              dominantBaseline="auto"
+              fill="#555"
+              fontSize="12"
+              fontWeight="500"
+              style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
+            >
+              {extra}
+            </text>
+          )}
+        </>
+      ) : null}
+      {posCategory === 'bottom' && (
+        <>
+          {/* Label: tightly below image bottom */}
+          <text
+            x={x}
+            y={imgBottom + bottomGap + 13}
+            textAnchor="middle"
+            dominantBaseline="auto"
+            fill="#333"
+            fontSize="13"
+            fontWeight="700"
+            style={{ textShadow: '0 0 4px rgba(255,255,255,0.9), 0 0 8px rgba(255,255,255,0.7)' }}
+          >
+            {label}
+          </text>
+          {/* Power value: below label */}
+          <text
+            x={x}
+            y={imgBottom + bottomGap + 30}
+            textAnchor="middle"
+            dominantBaseline="auto"
+            fill="#555"
+            fontSize="12"
+            fontWeight="600"
+            style={{ textShadow: '0 0 3px rgba(255,255,255,0.8)' }}
+          >
+            {formatPower(displayPower)}
+          </text>
+          {/* Extra info below power */}
+          {extra && (
+            <text
+              x={x}
+              y={imgBottom + bottomGap + 47}
               textAnchor="middle"
               dominantBaseline="auto"
               fill="#555"
