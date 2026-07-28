@@ -50,6 +50,37 @@ function MapClickHandler({ onPositionChange }: { onPositionChange: (pos: LatLng)
   return null
 }
 
+/* Fix map size when container is inside a modal/dialog with animation */
+function MapSizeFixer() {
+  const map = useMap()
+  useEffect(() => {
+    const fixSize = () => map.invalidateSize({ animate: false })
+
+    // Modal animation may not be complete yet; try multiple times
+    const timers = [50, 150, 300, 600, 1200].map(ms => setTimeout(fixSize, ms))
+
+    // Watch for container resize
+    const container = map.getContainer()
+    const observer = new ResizeObserver(fixSize)
+    observer.observe(container)
+
+    // Also fix size when any ancestor modal finishes transitioning
+    const onTransitionEnd = (e: TransitionEvent) => {
+      if (e.target instanceof HTMLElement && container.closest('.ant-modal')) {
+        fixSize()
+      }
+    }
+    document.addEventListener('transitionend', onTransitionEnd)
+
+    return () => {
+      timers.forEach(clearTimeout)
+      observer.disconnect()
+      document.removeEventListener('transitionend', onTransitionEnd)
+    }
+  }, [map])
+  return null
+}
+
 /* FlyTo controller */
 function FlyToController({ target, zoom }: { target: [number, number] | null; zoom: number }) {
   const map = useMap()
@@ -60,6 +91,7 @@ function FlyToController({ target, zoom }: { target: [number, number] | null; zo
       const z = Number(zoom)
       if (!isNaN(lat) && !isNaN(lng) && !isNaN(z) && isFinite(lat) && isFinite(lng)) {
         try {
+          map.invalidateSize({ animate: false })
           map.flyTo([lat, lng], z, { duration: 1.5 })
         } catch { /* ignore leaflet internal errors */ }
       }
@@ -149,6 +181,7 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
           center={isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0) ? [value.lat, value.lng] : initialCenter}
           zoom={isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0) ? 14 : initialZoom}
           style={{ width: '100%', height: typeof height === 'number' ? `${height}px` : height }}
+          fadeAnimation={false}
           ref={(instance) => {
             mapRef.current = instance
           }}
@@ -157,6 +190,7 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          <MapSizeFixer />
           <MapClickHandler onPositionChange={handlePositionChange} />
           <FlyToController target={flyTarget} zoom={flyZoom} />
           {isValidLatLng(position) && position.lat !== 0 && (
