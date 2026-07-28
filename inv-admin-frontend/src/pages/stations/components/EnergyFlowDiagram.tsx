@@ -85,20 +85,20 @@ function computeFlowEdges(
     markerId: 'arrow-inv',
   });
 
-  // 3. PV → Battery (curve, upper-left) — charging
+  // 3. Inverter → Battery (curve, left-upper) — charging via inverter
   edges.push({
-    id: 'pv-batt',
-    path: 'M 265 105 Q 155 150 110 225',
+    id: 'inv-batt',
+    path: 'M 250 260 Q 190 245 130 255',
     color: NODE_COLORS.battery,
-    active: pvPower > 0 && battPower > 0,
+    active: battPower > 0,
     power: battPower > 0 ? battPower : 0,
     markerId: 'arrow-batt',
   });
 
-  // 4. Battery → Inverter (curve, left-center) — discharging
+  // 4. Battery → Inverter (curve, left-lower) — discharging via inverter
   edges.push({
     id: 'batt-inv',
-    path: 'M 130 275 Q 190 295 250 280',
+    path: 'M 130 295 Q 190 310 250 295',
     color: NODE_COLORS.battery,
     active: battPower < 0,
     power: battPower < 0 ? Math.abs(battPower) : 0,
@@ -156,8 +156,8 @@ const FlowNode: React.FC<{
   const displayPower = type === 'battery' && power < 0 ? Math.abs(power) : power;
 
   const imgSize = 100;
-  // Position category: 'top' = text above image (battery/grid), 'right' = text right of image (pv/load/inverter)
-  const posCategory = type === 'battery' || type === 'grid' ? 'top' : 'right';
+  // Position category: 'top' = text above image (battery/grid/inverter), 'right' = text right of image (pv/load)
+  const posCategory = type === 'battery' || type === 'grid' || type === 'inverter' ? 'top' : 'right';
   const imgLeft = x - imgSize / 2;  // x - 50
 
   // Image top/bottom/right edges
@@ -412,7 +412,13 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
               break;
             case 'battery':
               power = battPower;
-              extra = `${battSoc}%`;
+              if (battPower > 0) {
+                extra = `${Math.round(battSoc)}% ${t('station.charging') || '充电中'}`;
+              } else if (battPower < 0) {
+                extra = `${Math.round(battSoc)}% ${t('station.discharging') || '放电中'}`;
+              } else {
+                extra = `${Math.round(battSoc)}%`;
+              }
               break;
             case 'inverter':
               power = inverterPower;
