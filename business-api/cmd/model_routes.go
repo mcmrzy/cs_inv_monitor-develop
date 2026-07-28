@@ -27,6 +27,7 @@ func registerModelRoutes(auth gin.IRoutes, h *handler.ModelHandler, checker midd
 	auth.POST("/models", modelsCreate, h.CreateModel)
 	auth.GET("/models/:id", h.GetModel)
 	auth.PUT("/models/:id", modelsEdit, h.UpdateModel)
+	auth.POST("/models/:id/retire", modelsDelete, h.RetireModel)
 	auth.DELETE("/models/:id", modelsDelete, h.DeleteModel)
 	auth.GET("/models/:id/fields", h.GetModelFields)
 	auth.GET("/models/fields-by-code/:code", h.GetFieldsByModelCode)

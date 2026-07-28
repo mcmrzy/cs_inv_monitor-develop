@@ -117,6 +117,7 @@ export const modelApi = {
   getModel: (id: number) => api.get(`/models/${id}`),
   createModel: (data: Partial<DeviceModelItem>) => api.post('/models', data),
   updateModel: (id: number, data: Partial<DeviceModelItem>) => api.put(`/models/${id}`, data),
+  retireModel: (id: number) => api.post(`/models/${id}/retire`),
   deleteModel: (id: number) => api.delete(`/models/${id}`),
 
   // 字段 CRUD

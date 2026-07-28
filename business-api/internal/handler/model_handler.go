@@ -378,6 +378,28 @@ func (h *ModelHandler) DeleteModel(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+func (h *ModelHandler) RetireModel(c *gin.Context) {
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	if !isSystemAdmin {
+		response.Error(c, 403, "仅管理员可操作")
+		return
+	}
+
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		response.Error(c, 400, "无效的型号ID")
+		return
+	}
+
+	if err := h.modelService.RetireModel(c.Request.Context(), id); err != nil {
+		response.Error(c, 500, "停用型号失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, nil)
+}
+
 func (h *ModelHandler) GetModelFields(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 64)

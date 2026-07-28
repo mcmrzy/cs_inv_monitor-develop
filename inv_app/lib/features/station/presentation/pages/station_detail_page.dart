@@ -225,9 +225,8 @@ class _StationDetailPageState extends State<StationDetailPage>
     var hasBatt = false;
 
     final realtimeService = getIt<RealtimeDataService>();
-    final targetSNs = _selectedDeviceSn == 'all'
-        ? _mqttSubscribed
-        : {_selectedDeviceSn};
+    final targetSNs =
+        _selectedDeviceSn == 'all' ? _mqttSubscribed : {_selectedDeviceSn};
     for (final sn in targetSNs) {
       final rt = realtimeService.getLatestData(sn);
       if (rt == null) continue;
@@ -525,7 +524,11 @@ class _StationDetailPageState extends State<StationDetailPage>
                 ? _selectedDeviceSn
                 : 'all',
             isDense: true,
-            icon: Icon(Icons.arrow_drop_down, size: 18.sp, color: AppColors.primary),
+            icon: Icon(
+              Icons.arrow_drop_down,
+              size: 18.sp,
+              color: AppColors.primary,
+            ),
             style: TextStyle(fontSize: 11.sp, color: AppColors.textPrimary),
             dropdownColor: Colors.white,
             borderRadius: BorderRadius.circular(8.r),
@@ -542,23 +545,28 @@ class _StationDetailPageState extends State<StationDetailPage>
                 ),
               ),
               ...devices.map((d) => DropdownMenuItem(
-                value: d['sn'] as String,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.memory, size: 14.sp, color: AppColors.textSecondary),
-                    SizedBox(width: 4.w),
-                    Flexible(
-                      child: Text(
-                        d['sn'] as String? ?? '',
-                        style: TextStyle(fontSize: 11.sp),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    value: d['sn'] as String,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.memory,
+                          size: 14.sp,
+                          color: AppColors.textSecondary,
+                        ),
+                        SizedBox(width: 4.w),
+                        Flexible(
+                          child: Text(
+                            d['sn'] as String? ?? '',
+                            style: TextStyle(fontSize: 11.sp),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              )),
-            ],
+              ],
             onChanged: (val) {
               if (val != null) {
                 setState(() {
