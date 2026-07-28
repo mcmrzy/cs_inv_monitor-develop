@@ -629,12 +629,6 @@ const StationsPage: React.FC = () => {
       },
     },
     {
-      title: t('station.ratedPower_W'),
-      dataIndex: 'rated_power',
-      width: 100,
-      render: (_: any, record: DeviceItem) => record.rated_power ?? '-',
-    },
-    {
       title: t('station.firmwareVersion'),
       dataIndex: 'firmware_arm',
       width: 100,
