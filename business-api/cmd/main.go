@@ -167,6 +167,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	authHandler.SetAuthorizationContextResolver(authorizationRepo)
 	stationHandler := handler.NewStationHandler(stationService, deviceService, userService, db, cfg.Backends.AmapAPIKey)
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
+	geocodeHandler := handler.NewGeocodeHandler(stationService, cfg.Backends.AmapAPIKey)
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService, stationService, db)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
 	notificationHandler := handler.NewNotificationHandler(db, jpushService)
@@ -238,6 +239,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		AlarmHandler:                  alarmHandler,
 		NotificationHandler:           notificationHandler,
 		WeatherHandler:                weatherHandler,
+		GeocodeHandler:                geocodeHandler,
 		ModelHandler:                  modelHandler,
 		BatteryHandler:                batteryHandler,
 		EnergyScheduleHandler:         energyScheduleHandler,
@@ -666,6 +668,7 @@ type RouterDeps struct {
 	AlarmHandler                  *handler.AlarmHandler
 	NotificationHandler           *handler.NotificationHandler
 	WeatherHandler                *handler.WeatherHandler
+	GeocodeHandler                *handler.GeocodeHandler
 	ModelHandler                  *handler.ModelHandler
 	BatteryHandler                *handler.BatteryHandler
 	EnergyScheduleHandler         *handler.EnergyScheduleHandler
@@ -838,6 +841,9 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.PUT("/stations/:id/assign", deps.StationHandler.Assign)
 			auth.DELETE("/stations/:id", deps.StationHandler.Delete)
 			auth.GET("/stations/:id/statistics", deps.StationHandler.GetStatistics)
+
+			auth.GET("/geocode", deps.GeocodeHandler.Geocode)
+			auth.GET("/geocode/reverse", deps.GeocodeHandler.ReverseGeocode)
 
 			// ── Devices: static (collection-level) routes ──
 			// All :sn wildcard routes are under /devices/by-sn/ to prevent

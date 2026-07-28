@@ -44,6 +44,7 @@ func (h *StationHandler) canAccessStation(c *gin.Context, stationID int64) (bool
 
 type CreateStationRequest struct {
 	Name        string  `json:"name" binding:"required"`
+	Country     string  `json:"country"`
 	Province    string  `json:"province"`
 	City        string  `json:"city"`
 	District    string  `json:"district"`
@@ -92,9 +93,9 @@ func (h *StationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// 当经纬度为 0 但省市区非空时，自动调用高德地理编码获取坐标
+	// 当经纬度为 0 但省市区非空时，自动调用地理编码获取坐标（中国用高德，海外用 Nominatim）
 	if station.Latitude == 0 && station.Longitude == 0 && station.Province != "" {
-		lat, lng, err := geocodeAddress(station.Province, station.City, station.District, h.amapAPIKey)
+		lat, lng, err := geocodeByAddress(station.Province, station.City, station.District, req.Country, h.amapAPIKey)
 		if err == nil {
 			station.Latitude = lat
 			station.Longitude = lng
@@ -127,6 +128,7 @@ func logAudit(c *gin.Context, userService *service.UserService, action, resource
 
 type UpdateStationRequest struct {
 	Name        string  `json:"name"`
+	Country     string  `json:"country"`
 	Province    string  `json:"province"`
 	City        string  `json:"city"`
 	District    string  `json:"district"`
@@ -215,14 +217,24 @@ func (h *StationHandler) Update(c *gin.Context) {
 		station.Timezone = req.Timezone
 	}
 
-	// 当经纬度为 0 但省市区非空时，自动调用高德地理编码获取坐标
-	if station.Latitude == 0 && station.Longitude == 0 && station.Province != "" {
-		lat, lng, err := geocodeAddress(station.Province, station.City, station.District, h.amapAPIKey)
+	// 地址变更时自动重新地理编码（仅在前端未显式传入新坐标时触发）
+	addressChanged := req.Province != "" || req.City != "" || req.District != ""
+	coordsFromClient := req.Latitude != 0 || req.Longitude != 0
+	if addressChanged && !coordsFromClient {
+		lat, lng, err := geocodeByAddress(station.Province, station.City, station.District, req.Country, h.amapAPIKey)
 		if err == nil {
 			station.Latitude = lat
 			station.Longitude = lng
 		}
 		// 地理编码失败不阻断更新，仅忽略
+	}
+	// 兜底：坐标仍为 0 时尝试编码
+	if station.Latitude == 0 && station.Longitude == 0 && station.Province != "" {
+		lat, lng, err := geocodeByAddress(station.Province, station.City, station.District, req.Country, h.amapAPIKey)
+		if err == nil {
+			station.Latitude = lat
+			station.Longitude = lng
+		}
 	}
 
 	if err := h.stationService.Update(c.Request.Context(), station); err != nil {

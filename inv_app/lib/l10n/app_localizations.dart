@@ -745,6 +745,15 @@ class AppLocalizations {
       _localizedStrings['please_select_district']!;
   String get stationName => _localizedStrings['station_name']!;
   String get stationNameHint => _localizedStrings['station_name_hint']!;
+  String get stationSelectLocationHint =>
+      _localizedStrings['station_select_location_hint'] ??
+      'Drag map to select location';
+  String get stationDragToSelect =>
+      _localizedStrings['station_drag_to_select'] ??
+      'Drag map to pin location';
+  String get stationSelectOnMap =>
+      _localizedStrings['station_select_on_map'] ??
+      'Select on map';
   String get capacityAutoCalculate =>
       _localizedStrings['capacity_auto_calculate']!;
   String get detailAddress => _localizedStrings['detail_address']!;

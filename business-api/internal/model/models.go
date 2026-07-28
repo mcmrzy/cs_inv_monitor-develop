@@ -53,6 +53,7 @@ type Device struct {
 	SN             string     `json:"sn"`
 	Model          string     `json:"model"`
 	ModelID        int64      `json:"model_id"`
+	ModelCategory  string     `json:"model_category"`
 	Manufacturer   string     `json:"manufacturer"`
 	FirmwareArm    string     `json:"firmware_arm"`
 	FirmwareEsp    string     `json:"firmware_esp"`

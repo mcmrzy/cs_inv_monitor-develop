@@ -3811,34 +3811,235 @@ void initChinaRegions() {
   });
 }
 
-/// 国家列表
+/// 国家列表（含所有 globalRegions 中有数据的国家）
 const countries = [
-  {'code': 'CN', 'name': '中国'},
-  {'code': 'US', 'name': '美国'},
-  {'code': 'JP', 'name': '日本'},
-  {'code': 'KR', 'name': '韩国'},
-  {'code': 'GB', 'name': '英国'},
-  {'code': 'DE', 'name': '德国'},
-  {'code': 'FR', 'name': '法国'},
-  {'code': 'AU', 'name': '澳大利亚'},
-  {'code': 'CA', 'name': '加拿大'},
-  {'code': 'SG', 'name': '新加坡'},
-  {'code': 'IN', 'name': '印度'},
-  {'code': 'BR', 'name': '巴西'},
-  {'code': 'RU', 'name': '俄罗斯'},
-  {'code': 'IT', 'name': '意大利'},
-  {'code': 'ES', 'name': '西班牙'},
-  {'code': 'NL', 'name': '荷兰'},
-  {'code': 'CH', 'name': '瑞士'},
-  {'code': 'SE', 'name': '瑞典'},
-  {'code': 'NO', 'name': '挪威'},
-  {'code': 'DK', 'name': '丹麦'},
-  {'code': 'FI', 'name': '芬兰'},
-  {'code': 'NZ', 'name': '新西兰'},
-  {'code': 'MX', 'name': '墨西哥'},
-  {'code': 'TH', 'name': '泰国'},
-  {'code': 'VN', 'name': '越南'},
-  {'code': 'MY', 'name': '马来西亚'},
-  {'code': 'ID', 'name': '印度尼西亚'},
-  {'code': 'PH', 'name': '菲律宾'},
+  {'code': 'CN', 'name': '中国'},  // China
+  {'code': 'BT', 'name': '不丹'},  // Bhutan
+  {'code': 'TL', 'name': '东帝汶'},  // Timor-Leste
+  {'code': 'CF', 'name': '中非'},  // Central African Republic
+  {'code': 'DK', 'name': '丹麦'},  // Denmark
+  {'code': 'UA', 'name': '乌克兰'},  // Ukraine
+  {'code': 'UZ', 'name': '乌兹别克斯坦'},  // Uzbekistan
+  {'code': 'UG', 'name': '乌干达'},  // Uganda
+  {'code': 'UY', 'name': '乌拉圭'},  // Uruguay
+  {'code': 'TD', 'name': '乍得'},  // Chad
+  {'code': 'YE', 'name': '也门'},  // Yemen
+  {'code': 'AM', 'name': '亚美尼亚'},  // Armenia
+  {'code': 'IL', 'name': '以色列'},  // Israel
+  {'code': 'IQ', 'name': '伊拉克'},  // Iraq
+  {'code': 'IR', 'name': '伊朗'},  // Iran
+  {'code': 'BZ', 'name': '伯利兹'},  // Belize
+  {'code': 'CV', 'name': '佛得角'},  // Cape Verde
+  {'code': 'RU', 'name': '俄罗斯'},  // Russia
+  {'code': 'BG', 'name': '保加利亚'},  // Bulgaria
+  {'code': 'HR', 'name': '克罗地亚'},  // Croatia
+  {'code': 'GU', 'name': '关岛'},  // Guam
+  {'code': 'GM', 'name': '冈比亚'},  // The Gambia
+  {'code': 'IS', 'name': '冰岛'},  // Iceland
+  {'code': 'GN', 'name': '几内亚'},  // Guinea
+  {'code': 'GW', 'name': '几内亚比绍'},  // Guinea-Bissau
+  {'code': 'LI', 'name': '列支敦士登'},  // Liechtenstein
+  {'code': 'CG', 'name': '刚果'},  // Congo
+  {'code': 'CD', 'name': '刚果(金)'},  // Democratic Republic of the Congo
+  {'code': 'LY', 'name': '利比亚'},  // Libya
+  {'code': 'LR', 'name': '利比里亚'},  // Liberia
+  {'code': 'CA', 'name': '加拿大'},  // Canada
+  {'code': 'GH', 'name': '加纳'},  // Ghana
+  {'code': 'GA', 'name': '加蓬'},  // Gabon
+  {'code': 'HU', 'name': '匈牙利'},  // Hungary
+  {'code': 'MK', 'name': '北马其顿'},  // North Macedonia
+  {'code': 'SS', 'name': '南苏丹'},  // South Sudan
+  {'code': 'ZA', 'name': '南非'},  // South Africa
+  {'code': 'BQ', 'name': '博内尔'},  // Bonaire, Sint Eustatius and Saba
+  {'code': 'BW', 'name': '博茨瓦纳'},  // Botswana
+  {'code': 'QA', 'name': '卡塔尔'},  // Qatar
+  {'code': 'RW', 'name': '卢旺达'},  // Rwanda
+  {'code': 'LU', 'name': '卢森堡'},  // Luxembourg
+  {'code': 'IN', 'name': '印度'},  // India
+  {'code': 'ID', 'name': '印度尼西亚'},  // Indonesia
+  {'code': 'GT', 'name': '危地马拉'},  // Guatemala
+  {'code': 'EC', 'name': '厄瓜多尔'},  // Ecuador
+  {'code': 'ER', 'name': '厄立特里亚'},  // Eritrea
+  {'code': 'SY', 'name': '叙利亚'},  // Syria
+  {'code': 'CU', 'name': '古巴'},  // Cuba
+  {'code': 'TW', 'name': '台湾'},  // Taiwan
+  {'code': 'KG', 'name': '吉尔吉斯斯坦'},  // Kyrgyzstan
+  {'code': 'DJ', 'name': '吉布提'},  // Djibouti
+  {'code': 'KZ', 'name': '哈萨克斯坦'},  // Kazakhstan
+  {'code': 'CO', 'name': '哥伦比亚'},  // Colombia
+  {'code': 'CR', 'name': '哥斯达黎加'},  // Costa Rica
+  {'code': 'CM', 'name': '喀麦隆'},  // Cameroon
+  {'code': 'TV', 'name': '图瓦卢'},  // Tuvalu
+  {'code': 'TM', 'name': '土库曼斯坦'},  // Turkmenistan
+  {'code': 'TR', 'name': '土耳其'},  // Turkey
+  {'code': 'LC', 'name': '圣卢西亚'},  // Saint Lucia
+  {'code': 'KN', 'name': '圣基茨和尼维斯'},  // Saint Kitts and Nevis
+  {'code': 'ST', 'name': '圣多美和普林西比'},  // Sao Tome and Principe
+  {'code': 'BL', 'name': '圣巴泰勒米'},  // Saint-Barthelemy
+  {'code': 'VC', 'name': '圣文森特和格林纳丁斯'},  // Saint Vincent and the Grenadines
+  {'code': 'PM', 'name': '圣皮埃尔和密克隆'},  // Saint Pierre and Miquelon
+  {'code': 'SH', 'name': '圣赫勒拿'},  // Saint Helena
+  {'code': 'MF', 'name': '圣马丁'},  // Saint-Martin (French part)
+  {'code': 'SM', 'name': '圣马力诺'},  // San Marino
+  {'code': 'GY', 'name': '圭亚那'},  // Guyana
+  {'code': 'TZ', 'name': '坦桑尼亚'},  // Tanzania
+  {'code': 'EG', 'name': '埃及'},  // Egypt
+  {'code': 'ET', 'name': '埃塞俄比亚'},  // Ethiopia
+  {'code': 'KI', 'name': '基里巴斯'},  // Kiribati
+  {'code': 'TJ', 'name': '塔吉克斯坦'},  // Tajikistan
+  {'code': 'SN', 'name': '塞内加尔'},  // Senegal
+  {'code': 'RS', 'name': '塞尔维亚'},  // Serbia
+  {'code': 'SL', 'name': '塞拉利昂'},  // Sierra Leone
+  {'code': 'CY', 'name': '塞浦路斯'},  // Cyprus
+  {'code': 'SC', 'name': '塞舌尔'},  // Seychelles
+  {'code': 'MX', 'name': '墨西哥'},  // Mexico
+  {'code': 'TG', 'name': '多哥'},  // Togo
+  {'code': 'DM', 'name': '多米尼克'},  // Dominica
+  {'code': 'DO', 'name': '多米尼加'},  // Dominican Republic
+  {'code': 'AX', 'name': '奥兰群岛'},  // Aland Islands
+  {'code': 'AT', 'name': '奥地利'},  // Austria
+  {'code': 'VE', 'name': '委内瑞拉'},  // Venezuela
+  {'code': 'BD', 'name': '孟加拉国'},  // Bangladesh
+  {'code': 'AO', 'name': '安哥拉'},  // Angola
+  {'code': 'AI', 'name': '安圭拉'},  // Anguilla
+  {'code': 'AG', 'name': '安提瓜和巴布达'},  // Antigua and Barbuda
+  {'code': 'AD', 'name': '安道尔'},  // Andorra
+  {'code': 'FM', 'name': '密克罗尼西亚'},  // Micronesia
+  {'code': 'NI', 'name': '尼加拉瓜'},  // Nicaragua
+  {'code': 'NG', 'name': '尼日利亚'},  // Nigeria
+  {'code': 'NE', 'name': '尼日尔'},  // Niger
+  {'code': 'NP', 'name': '尼泊尔'},  // Nepal
+  {'code': 'PS', 'name': '巴勒斯坦'},  // Palestinian Territory Occupied
+  {'code': 'BS', 'name': '巴哈马'},  // The Bahamas
+  {'code': 'PK', 'name': '巴基斯坦'},  // Pakistan
+  {'code': 'BB', 'name': '巴巴多斯'},  // Barbados
+  {'code': 'PG', 'name': '巴布亚新几内亚'},  // Papua New Guinea
+  {'code': 'PY', 'name': '巴拉圭'},  // Paraguay
+  {'code': 'PA', 'name': '巴拿马'},  // Panama
+  {'code': 'BH', 'name': '巴林'},  // Bahrain
+  {'code': 'BR', 'name': '巴西'},  // Brazil
+  {'code': 'BF', 'name': '布基纳法索'},  // Burkina Faso
+  {'code': 'BI', 'name': '布隆迪'},  // Burundi
+  {'code': 'GR', 'name': '希腊'},  // Greece
+  {'code': 'PW', 'name': '帕劳'},  // Palau
+  {'code': 'KY', 'name': '开曼群岛'},  // Cayman Islands
+  {'code': 'DE', 'name': '德国'},  // Germany
+  {'code': 'IT', 'name': '意大利'},  // Italy
+  {'code': 'SB', 'name': '所罗门群岛'},  // Solomon Islands
+  {'code': 'LV', 'name': '拉脱维亚'},  // Latvia
+  {'code': 'NO', 'name': '挪威'},  // Norway
+  {'code': 'CZ', 'name': '捷克'},  // Czech Republic
+  {'code': 'MD', 'name': '摩尔多瓦'},  // Moldova
+  {'code': 'MA', 'name': '摩洛哥'},  // Morocco
+  {'code': 'MC', 'name': '摩纳哥'},  // Monaco
+  {'code': 'BN', 'name': '文莱'},  // Brunei
+  {'code': 'FJ', 'name': '斐济'},  // Fiji Islands
+  {'code': 'SZ', 'name': '斯威士兰'},  // Eswatini
+  {'code': 'SK', 'name': '斯洛伐克'},  // Slovakia
+  {'code': 'SI', 'name': '斯洛文尼亚'},  // Slovenia
+  {'code': 'LK', 'name': '斯里兰卡'},  // Sri Lanka
+  {'code': 'SG', 'name': '新加坡'},  // Singapore
+  {'code': 'NC', 'name': '新喀里多尼亚'},  // New Caledonia
+  {'code': 'NZ', 'name': '新西兰'},  // New Zealand
+  {'code': 'JP', 'name': '日本'},  // Japan
+  {'code': 'CL', 'name': '智利'},  // Chile
+  {'code': 'KP', 'name': '朝鲜'},  // North Korea
+  {'code': 'KH', 'name': '柬埔寨'},  // Cambodia
+  {'code': 'GG', 'name': '根西岛'},  // Guernsey
+  {'code': 'GD', 'name': '格林纳达'},  // Grenada
+  {'code': 'GL', 'name': '格陵兰'},  // Greenland
+  {'code': 'GE', 'name': '格鲁吉亚'},  // Georgia
+  {'code': 'BE', 'name': '比利时'},  // Belgium
+  {'code': 'MR', 'name': '毛里塔尼亚'},  // Mauritania
+  {'code': 'MU', 'name': '毛里求斯'},  // Mauritius
+  {'code': 'TO', 'name': '汤加'},  // Tonga
+  {'code': 'SA', 'name': '沙特阿拉伯'},  // Saudi Arabia
+  {'code': 'FR', 'name': '法国'},  // France
+  {'code': 'TF', 'name': '法属南部领地'},  // French Southern Territories
+  {'code': 'GF', 'name': '法属圭亚那'},  // French Guiana
+  {'code': 'PF', 'name': '法属波利尼西亚'},  // French Polynesia
+  {'code': 'FO', 'name': '法罗群岛'},  // Faroe Islands
+  {'code': 'PL', 'name': '波兰'},  // Poland
+  {'code': 'PR', 'name': '波多黎各'},  // Puerto Rico
+  {'code': 'BA', 'name': '波黑'},  // Bosnia and Herzegovina
+  {'code': 'TH', 'name': '泰国'},  // Thailand
+  {'code': 'JE', 'name': '泽西岛'},  // Jersey
+  {'code': 'ZW', 'name': '津巴布韦'},  // Zimbabwe
+  {'code': 'HN', 'name': '洪都拉斯'},  // Honduras
+  {'code': 'HT', 'name': '海地'},  // Haiti
+  {'code': 'AU', 'name': '澳大利亚'},  // Australia
+  {'code': 'IE', 'name': '爱尔兰'},  // Ireland
+  {'code': 'EE', 'name': '爱沙尼亚'},  // Estonia
+  {'code': 'JM', 'name': '牙买加'},  // Jamaica
+  {'code': 'TC', 'name': '特克斯和凯科斯'},  // Turks and Caicos Islands
+  {'code': 'TT', 'name': '特立尼达和多巴哥'},  // Trinidad and Tobago
+  {'code': 'BO', 'name': '玻利维亚'},  // Bolivia
+  {'code': 'NR', 'name': '瑙鲁'},  // Nauru
+  {'code': 'SE', 'name': '瑞典'},  // Sweden
+  {'code': 'CH', 'name': '瑞士'},  // Switzerland
+  {'code': 'GP', 'name': '瓜德罗普'},  // Guadeloupe
+  {'code': 'WF', 'name': '瓦利斯和富图纳'},  // Wallis and Futuna Islands
+  {'code': 'VU', 'name': '瓦努阿图'},  // Vanuatu
+  {'code': 'RE', 'name': '留尼汪'},  // Reunion
+  {'code': 'BY', 'name': '白俄罗斯'},  // Belarus
+  {'code': 'BM', 'name': '百慕大'},  // Bermuda
+  {'code': 'KW', 'name': '科威特'},  // Kuwait
+  {'code': 'KM', 'name': '科摩罗'},  // Comoros
+  {'code': 'CI', 'name': '科特迪瓦'},  // Ivory Coast
+  {'code': 'XK', 'name': '科索沃'},  // Kosovo
+  {'code': 'PE', 'name': '秘鲁'},  // Peru
+  {'code': 'TN', 'name': '突尼斯'},  // Tunisia
+  {'code': 'LT', 'name': '立陶宛'},  // Lithuania
+  {'code': 'SO', 'name': '索马里'},  // Somalia
+  {'code': 'JO', 'name': '约旦'},  // Jordan
+  {'code': 'NA', 'name': '纳米比亚'},  // Namibia
+  {'code': 'NU', 'name': '纽埃'},  // Niue
+  {'code': 'MM', 'name': '缅甸'},  // Myanmar
+  {'code': 'RO', 'name': '罗马尼亚'},  // Romania
+  {'code': 'US', 'name': '美国'},  // United States
+  {'code': 'UM', 'name': '美国本土外小岛屿'},  // United States Minor Outlying Islands
+  {'code': 'VI', 'name': '美属维尔京群岛'},  // Virgin Islands (US)
+  {'code': 'AS', 'name': '美属萨摩亚'},  // American Samoa
+  {'code': 'LA', 'name': '老挝'},  // Laos
+  {'code': 'KE', 'name': '肯尼亚'},  // Kenya
+  {'code': 'FI', 'name': '芬兰'},  // Finland
+  {'code': 'SD', 'name': '苏丹'},  // Sudan
+  {'code': 'SR', 'name': '苏里南'},  // Suriname
+  {'code': 'GB', 'name': '英国'},  // United Kingdom
+  {'code': 'NL', 'name': '荷兰'},  // Netherlands
+  {'code': 'MZ', 'name': '莫桑比克'},  // Mozambique
+  {'code': 'LS', 'name': '莱索托'},  // Lesotho
+  {'code': 'PH', 'name': '菲律宾'},  // Philippines
+  {'code': 'SV', 'name': '萨尔瓦多'},  // El Salvador
+  {'code': 'WS', 'name': '萨摩亚'},  // Samoa
+  {'code': 'PT', 'name': '葡萄牙'},  // Portugal
+  {'code': 'MN', 'name': '蒙古'},  // Mongolia
+  {'code': 'MS', 'name': '蒙特塞拉特'},  // Montserrat
+  {'code': 'ES', 'name': '西班牙'},  // Spain
+  {'code': 'BJ', 'name': '贝宁'},  // Benin
+  {'code': 'ZM', 'name': '赞比亚'},  // Zambia
+  {'code': 'GQ', 'name': '赤道几内亚'},  // Equatorial Guinea
+  {'code': 'VN', 'name': '越南'},  // Vietnam
+  {'code': 'AZ', 'name': '阿塞拜疆'},  // Azerbaijan
+  {'code': 'AF', 'name': '阿富汗'},  // Afghanistan
+  {'code': 'DZ', 'name': '阿尔及利亚'},  // Algeria
+  {'code': 'AL', 'name': '阿尔巴尼亚'},  // Albania
+  {'code': 'OM', 'name': '阿曼'},  // Oman
+  {'code': 'AR', 'name': '阿根廷'},  // Argentina
+  {'code': 'AE', 'name': '阿联酋'},  // United Arab Emirates
+  {'code': 'AW', 'name': '阿鲁巴'},  // Aruba
+  {'code': 'KR', 'name': '韩国'},  // South Korea
+  {'code': 'HK', 'name': '香港'},  // Hong Kong S.A.R.
+  {'code': 'MV', 'name': '马尔代夫'},  // Maldives
+  {'code': 'IM', 'name': '马恩岛'},  // Man (Isle of)
+  {'code': 'MW', 'name': '马拉维'},  // Malawi
+  {'code': 'MQ', 'name': '马提尼克'},  // Martinique
+  {'code': 'MY', 'name': '马来西亚'},  // Malaysia
+  {'code': 'YT', 'name': '马约特'},  // Mayotte
+  {'code': 'MH', 'name': '马绍尔群岛'},  // Marshall Islands
+  {'code': 'MT', 'name': '马耳他'},  // Malta
+  {'code': 'MG', 'name': '马达加斯加'},  // Madagascar
+  {'code': 'ML', 'name': '马里'},  // Mali
+  {'code': 'LB', 'name': '黎巴嫩'},  // Lebanon
+  {'code': 'ME', 'name': '黑山'},  // Montenegro
 ];

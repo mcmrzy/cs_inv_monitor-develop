@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/features/station/presentation/pages/location_picker_page.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class EditStationPage extends StatefulWidget {
@@ -95,6 +96,24 @@ class _EditStationPageState extends State<EditStationPage> {
     }
   }
 
+  Future<void> _openLocationPicker() async {
+    final lat = double.tryParse(_latitudeController.text);
+    final lng = double.tryParse(_longitudeController.text);
+    final result = await Navigator.push<Map<String, double>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(
+          initialLat: lat,
+          initialLng: lng,
+        ),
+      ),
+    );
+    if (result != null) {
+      _latitudeController.text = result['lat']!.toStringAsFixed(6);
+      _longitudeController.text = result['lng']!.toStringAsFixed(6);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -178,16 +197,45 @@ class _EditStationPageState extends State<EditStationPage> {
                     inputType: TextInputType.number,
                   ),
                   SizedBox(height: 12.h),
-                  _buildField(
-                    _latitudeController,
-                    AppLocalizations.of(context)!.latitude,
-                    inputType: TextInputType.number,
+                  // 经纬度 + 地图选点按钮
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildField(
+                          _latitudeController,
+                          AppLocalizations.of(context)!.latitude,
+                          inputType: TextInputType.number,
+                        ),
+                      ),
+                      SizedBox(width: 8.w),
+                      Expanded(
+                        child: _buildField(
+                          _longitudeController,
+                          AppLocalizations.of(context)!.longitude,
+                          inputType: TextInputType.number,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 12.h),
-                  _buildField(
-                    _longitudeController,
-                    AppLocalizations.of(context)!.longitude,
-                    inputType: TextInputType.number,
+                  SizedBox(height: 8.h),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _openLocationPicker,
+                      icon: const Icon(Icons.map_outlined, size: 18),
+                      label: Text(
+                        AppLocalizations.of(context)!.stationSelectOnMap,
+                        style: TextStyle(fontSize: 13.sp),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF2563EB),
+                        side: const BorderSide(color: Color(0xFFBAE6FD)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.r),
+                        ),
+                        padding: EdgeInsets.symmetric(vertical: 10.h),
+                      ),
+                    ),
                   ),
                   SizedBox(height: 24.h),
                   SizedBox(
