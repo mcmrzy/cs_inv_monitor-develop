@@ -219,7 +219,8 @@ const StationsPage: React.FC = () => {
   const renderPower = (v: any) => {
     const n = safeNum(v)
     if (n === 0 && (v == null || v === '')) return '-'
-    return <span style={{ color: n > 0 ? '#52c41a' : undefined, fontWeight: n > 0 ? 600 : 400 }}>{n} W</span>
+    const display = Math.round(n)
+    return <span style={{ color: n > 0 ? '#52c41a' : undefined, fontWeight: n > 0 ? 600 : 400 }}>{display} W</span>
   }
 
   const renderEnergy = (v: any) => {
@@ -230,11 +231,12 @@ const StationsPage: React.FC = () => {
   const renderTemperature = (v: any) => {
     const n = safeNum(v)
     if (n === 0 && (v == null || v === '')) return '-'
+    const display = Math.round(n)
     const color = n > 60 ? '#ff4d4f' : n > 45 ? '#fa8c16' : undefined
     const icon = <FireOutlined style={{ color, marginRight: 4 }} />
     return (
       <Tooltip title={n > 60 ? t('station.temperatureHigh') : n > 45 ? t('station.temperatureWarn') : undefined}>
-        <span style={{ color }}>{icon}{n}°C</span>
+        <span style={{ color }}>{icon}{display}°C</span>
       </Tooltip>
     )
   }

@@ -678,9 +678,6 @@ const DevicesPage: React.FC = () => {
     editForm.setFieldsValue({
       sn: record.sn,
       model: record.model,
-      ratedPower: record.rated_power,
-      firmwareVersion: record.firmware_arm,
-      hardwareVersion: record.firmware_esp,
     })
     setEditModalOpen(true)
   }
@@ -1264,9 +1261,9 @@ const DevicesPage: React.FC = () => {
     const times = telemetryData.map((item: any) =>
       formatInTimezone(item.timestamp ?? item.time, timezone, 'MM-DD HH:mm'),
     )
-    const powers = telemetryData.map((item: any) => item.ac_power ?? item.power ?? item.acPower ?? 0)
-    const voltages = telemetryData.map((item: any) => item.ac_voltage ?? item.voltage ?? item.acVoltage ?? 0)
-    const currents = telemetryData.map((item: any) => item.ac_current ?? item.current ?? item.acCurrent ?? 0)
+    const powers = telemetryData.map((item: any) => parseFloat(Number(item.ac_power ?? item.power ?? item.acPower ?? 0).toFixed(1)))
+    const voltages = telemetryData.map((item: any) => parseFloat(Number(item.ac_voltage ?? item.voltage ?? item.acVoltage ?? 0).toFixed(1)))
+    const currents = telemetryData.map((item: any) => parseFloat(Number(item.ac_current ?? item.current ?? item.acCurrent ?? 0).toFixed(2)))
 
     return {
       tooltip: {
@@ -2160,15 +2157,6 @@ const DevicesPage: React.FC = () => {
           <Form.Item name="model" label={t('common.model')}>
             <Input placeholder={t('common.model')} />
           </Form.Item>
-          <Form.Item name="ratedPower" label={t('dev.ratedPower_W')}>
-            <InputNumber style={{ width: '100%' }} placeholder={t('dev.ratedPower_W')} />
-          </Form.Item>
-          <Form.Item name="firmwareVersion" label={t('dev.firmwareVersion')}>
-            <Input placeholder={t('dev.firmwareVersion')} />
-          </Form.Item>
-          <Form.Item name="hardwareVersion" label={t('dev.hardwareVersion')}>
-            <Input placeholder={t('dev.hardwareVersion')} />
-          </Form.Item>
         </Form>
       </Modal>
 
@@ -2219,15 +2207,6 @@ const DevicesPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="model" label={t('common.model')}>
             <Input placeholder={t('common.model')} />
-          </Form.Item>
-          <Form.Item name="ratedPower" label={t('dev.ratedPower_W')}>
-            <InputNumber style={{ width: '100%' }} placeholder={t('dev.ratedPower_W')} />
-          </Form.Item>
-          <Form.Item name="firmwareVersion" label={t('dev.firmwareVersion')}>
-            <Input placeholder={t('dev.firmwareVersion')} />
-          </Form.Item>
-          <Form.Item name="hardwareVersion" label={t('dev.hardwareVersion')}>
-            <Input placeholder={t('dev.hardwareVersion')} />
           </Form.Item>
         </Form>
       </Modal>

@@ -249,7 +249,13 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
   const trend30Option = useMemo(() => {
     if (!trend30Data?.length) return null
     return {
-      tooltip: { trigger: 'axis' as const },
+      tooltip: {
+        trigger: 'axis' as const,
+        formatter: (params: any) => {
+          const p = Array.isArray(params) ? params[0] : params
+          return `${p.axisValue}<br/>${p.marker} ${p.seriesName}: ${Number(p.value).toFixed(2)} kWh`
+        },
+      },
       grid: { left: '3%', right: '4%', bottom: '12%', top: 40, containLabel: true },
       xAxis: {
         type: 'category' as const,
@@ -263,7 +269,7 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
         type: 'line' as const,
         smooth: true,
         symbol: 'none',
-        data: trend30Data.map((d: any) => safeNum(d.energy)),
+        data: trend30Data.map((d: any) => parseFloat(safeNum(d.energy).toFixed(2))),
         lineStyle: { color: '#f59e0b', width: 2 },
         itemStyle: { color: '#f59e0b' },
         areaStyle: {
@@ -299,10 +305,10 @@ const StationStatisticsTab: React.FC<StationStatisticsTabProps> = ({ stationId, 
       xAxis: { type: 'category' as const, data: categories, axisLabel: { fontSize: 11 } },
       yAxis: { type: 'value' as const, name: 'kWh' },
       series: [
-        { name: t('station.pvGeneration'), type: 'bar' as const, data: pvData.map((v: any) => safeNum(v)), itemStyle: { color: '#f59e0b', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
-        { name: t('station.batteryCharge'), type: 'bar' as const, data: chargeData.map((v: any) => safeNum(v)), itemStyle: { color: '#22c55e', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
-        { name: t('station.batteryDischarge'), type: 'bar' as const, data: dischargeData.map((v: any) => safeNum(v)), itemStyle: { color: '#3b82f6', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
-        { name: t('station.loadUsage'), type: 'bar' as const, data: loadData.map((v: any) => safeNum(v)), itemStyle: { color: '#ef4444', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: t('station.pvGeneration'), type: 'bar' as const, data: pvData.map((v: any) => parseFloat(safeNum(v).toFixed(2))), itemStyle: { color: '#f59e0b', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: t('station.batteryCharge'), type: 'bar' as const, data: chargeData.map((v: any) => parseFloat(safeNum(v).toFixed(2))), itemStyle: { color: '#22c55e', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: t('station.batteryDischarge'), type: 'bar' as const, data: dischargeData.map((v: any) => parseFloat(safeNum(v).toFixed(2))), itemStyle: { color: '#3b82f6', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
+        { name: t('station.loadUsage'), type: 'bar' as const, data: loadData.map((v: any) => parseFloat(safeNum(v).toFixed(2))), itemStyle: { color: '#ef4444', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 20 },
       ],
     }
   }, [energyOverview, t])

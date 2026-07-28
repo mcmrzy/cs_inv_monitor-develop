@@ -238,7 +238,7 @@ const AlertsPage: React.FC = () => {
         </Card>
       )
     }
-    const metric = (value: number | null | undefined, unit = '') => value == null ? '-' : `${value}${unit}`
+    const metric = (value: number | null | undefined, unit = '') => value == null ? '-' : `${Number(Number(value).toFixed(2))}${unit}`
     return (
       <Card size="small" title={label} extra={snapshot.captured_at ? formatInTimezone(snapshot.captured_at, timezone, 'YYYY-MM-DD HH:mm:ss') : undefined}>
         <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} bordered>

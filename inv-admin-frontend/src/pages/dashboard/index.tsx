@@ -254,7 +254,13 @@ const DashboardPage: React.FC = () => {
   const trend30DaysOption = useMemo(() => {
     if (!trend30DaysData || trend30DaysData.length === 0) return {}
     return {
-      tooltip: { trigger: 'axis' as const },
+      tooltip: {
+        trigger: 'axis' as const,
+        formatter: (params: any) => {
+          const p = Array.isArray(params) ? params[0] : params
+          return `${p.axisValue}<br/>${p.marker} ${p.seriesName}: ${Number(p.value).toFixed(2)} kWh`
+        },
+      },
       grid: { left: '3%', right: '4%', bottom: '12%', top: '45', containLabel: true },
       xAxis: {
         type: 'category' as const,
@@ -269,7 +275,7 @@ const DashboardPage: React.FC = () => {
       series: [{
         name: t('station.genEnergy'),
         type: 'line' as const,
-        data: trend30DaysData.map((d: any) => safeNum(d.energy)),
+        data: trend30DaysData.map((d: any) => parseFloat(safeNum(d.energy).toFixed(2))),
         smooth: true,
         symbol: 'none',
         lineStyle: { color: '#f59e0b', width: 2 },
@@ -318,7 +324,7 @@ const DashboardPage: React.FC = () => {
           color: { type: 'linear' as const, x: 0, y: 0, x2: 1, y2: 0,
             colorStops: [{ offset: 0, color: '#1677ff' }, { offset: 1, color: '#4facfe' }] },
         },
-        label: { show: true, position: 'right' as const, formatter: '{c}', fontSize: 11 },
+        label: { show: true, position: 'right' as const, formatter: (p: any) => Number(p.value).toFixed(1), fontSize: 11 },
       }],
     }
   }, [rankingData])
@@ -353,9 +359,9 @@ const DashboardPage: React.FC = () => {
           { title: t('dash.deviceTotal'), value: totalDevices, icon: <DashboardOutlined />, gradient: HERO_GRADIENTS[0] },
           { title: t('dash.deviceOnline'), value: onlineCount, icon: <WifiOutlined />, gradient: HERO_GRADIENTS[2] },
           { title: t('dash.deviceFault'), value: faultCount, icon: <ExclamationCircleOutlined />, gradient: HERO_GRADIENTS[1] },
-          { title: t('dash.todayGeneration'), value: safeNum(stats.todayEnergy), suffix: 'kWh', icon: <ThunderboltOutlined />, gradient: HERO_GRADIENTS[3] },
-          { title: t('dash.totalGeneration'), value: safeNum(stats.totalEnergy), suffix: 'kWh', icon: <LineChartOutlined />, gradient: HERO_GRADIENTS[4] },
-          { title: t('dash.onlineRate'), value: onlineRate, suffix: '%', icon: <PercentageOutlined />, gradient: HERO_GRADIENTS[5] },
+          { title: t('dash.todayGeneration'), value: safeNum(stats.todayEnergy), suffix: 'kWh', icon: <ThunderboltOutlined />, gradient: HERO_GRADIENTS[3], decimals: 1 },
+          { title: t('dash.totalGeneration'), value: safeNum(stats.totalEnergy), suffix: 'kWh', icon: <LineChartOutlined />, gradient: HERO_GRADIENTS[4], decimals: 1 },
+          { title: t('dash.onlineRate'), value: onlineRate, suffix: '%', icon: <PercentageOutlined />, gradient: HERO_GRADIENTS[5], decimals: 1 },
         ].map((item, idx) => (
           <ProCard colSpan={{ xs: 12, sm: 8, lg: 4 }} key={idx}
             bordered={false}
@@ -366,7 +372,7 @@ const DashboardPage: React.FC = () => {
               {item.icon} {item.title}
             </div>
             <div style={{ color: '#fff', fontSize: isMobile ? 22 : 28, fontWeight: 700, lineHeight: 1 }}>
-              {statsLoading ? '-' : safeNum(item.value).toLocaleString()}
+              {statsLoading ? '-' : (item.decimals != null ? safeNum(item.value).toFixed(item.decimals) : safeNum(item.value).toLocaleString())}
               {item.suffix && <span style={{ fontSize: 14, fontWeight: 400, marginLeft: 4 }}>{item.suffix}</span>}
             </div>
           </ProCard>
