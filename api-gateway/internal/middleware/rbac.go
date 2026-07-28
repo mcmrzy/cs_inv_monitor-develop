@@ -225,6 +225,8 @@ var resourceActionMap = map[string]string{
 	"/api/v1/alarm-events/":        "alerts",
 	"/api/v1/stations":             "stations",
 	"/api/v1/stations/":            "stations",
+	"/api/v1/geocode":              "stations",
+	"/api/v1/geocode/":             "stations",
 	"/api/v1/models":               "models",
 	"/api/v1/models/":              "models",
 	"/api/v1/field-catalog":        "models",

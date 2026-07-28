@@ -31,7 +31,7 @@ import useLocaleStore from '@/stores/localeStore'
 import StatisticCard from '@/components/StatisticCard'
 import StationCard from './components/StationCard'
 import RegionPicker from '@/components/RegionPicker'
-import regionData from '@/utils/regionData'
+
 import LocationPicker, { LocationPickerRef, LatLng } from '@/components/LocationPicker'
 
 const { Title, Text } = Typography
@@ -185,9 +185,11 @@ const StationsPage: React.FC = () => {
     try {
       const res = await api.get('/geocode', { params: { address: fullAddr, country } })
       const data = res.data?.data
-      if (data?.lat && data?.lng) {
-        mapRef.current?.flyTo([data.lat, data.lng], 14)
-        mapRef.current?.setPosition({ lat: data.lat, lng: data.lng })
+      const lat = data?.lat != null ? Number(data.lat) : NaN
+      const lng = data?.lng != null ? Number(data.lng) : NaN
+      if (!isNaN(lat) && !isNaN(lng) && isFinite(lat) && isFinite(lng) && mapRef.current) {
+        mapRef.current.flyTo([lat, lng], 14)
+        mapRef.current.setPosition({ lat, lng })
       }
     } catch { /* ignore geocode failure */ }
   }, [])
@@ -1200,7 +1202,6 @@ const StationsPage: React.FC = () => {
           <Col span={24}>
             <Form.Item label={t('station.province')} name="region">
               <RegionPicker
-                options={regionData}
                 value={undefined}
                 onChange={(region) => {
                   editForm.setFieldsValue({
@@ -1210,6 +1211,7 @@ const StationsPage: React.FC = () => {
                   })
                   triggerGeocode(region[0] || '', region[1] || '', region[2] || '', editForm.getFieldValue('address') || '', '', editMapRef)
                 }}
+                mode="station"
               />
             </Form.Item>
           </Col>
@@ -1313,7 +1315,6 @@ const StationsPage: React.FC = () => {
           <Col span={24}>
             <Form.Item label={t('station.province')} name="region">
               <RegionPicker
-                options={regionData}
                 value={undefined}
                 onChange={(region) => {
                   addForm.setFieldsValue({
@@ -1323,6 +1324,7 @@ const StationsPage: React.FC = () => {
                   })
                   triggerGeocode(region[0] || '', region[1] || '', region[2] || '', addForm.getFieldValue('address') || '', '', addMapRef)
                 }}
+                mode="station"
               />
             </Form.Item>
           </Col>

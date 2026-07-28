@@ -22,7 +22,7 @@ import api from '@/services/api'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
 import UploadAvatar from '@/components/UploadAvatar'
 import RegionPicker from '@/components/RegionPicker'
-import regionData from '@/utils/regionData'
+
 
 interface RouteMenuItem {
   path: string
@@ -411,9 +411,9 @@ const MainLayout: React.FC = () => {
           label={t('modal.region')}
         >
           <RegionPicker
-            options={regionData}
             placeholder={t('modal.regionPlaceholder')}
             style={{ width: 240 }}
+            mode="profile"
           />
         </Form.Item>
       </ModalForm>
