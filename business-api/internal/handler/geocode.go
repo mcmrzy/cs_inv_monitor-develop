@@ -64,7 +64,7 @@ func (h *GeocodeHandler) Geocode(c *gin.Context) {
 	})
 }
 
-// ReverseGeocode 逆向地理编码：坐标 → 地址
+// ReverseGeocode 逆向地理编码：坐标 → 地址 + 附近 POI 列表
 // GET /api/v1/geocode/reverse?lat=28.21&lng=112.88
 func (h *GeocodeHandler) ReverseGeocode(c *gin.Context) {
 	latStr := c.Query("lat")
@@ -76,16 +76,24 @@ func (h *GeocodeHandler) ReverseGeocode(c *gin.Context) {
 		return
 	}
 
-	result, err := reverseGeocode(lat, lng)
+	// 中国坐标：优先用高德 regeo（一次请求同时获取地址 + 附近 POI）
+	if coordInChina(lat, lng) && h.amapAPIKey != "" {
+		result, err := reverseGeocodeAmap(lat, lng, h.amapAPIKey)
+		if err == nil {
+			response.Success(c, result)
+			return
+		}
+		logger.Warn("Amap regeo failed, falling back to Nominatim",
+			zap.Float64("lat", lat), zap.Float64("lng", lng), zap.Error(err))
+	}
+
+	// 海外或高德失败：fallback 到 Nominatim
+	result, err := reverseGeocodeNominatim(lat, lng)
 	if err != nil {
 		logger.Warn("Reverse geocode failed", zap.Float64("lat", lat), zap.Float64("lng", lng), zap.Error(err))
 		response.Error(c, 502, "reverse geocode failed: "+err.Error())
 		return
 	}
-
-	// 搜索附近地址列表（类似外卖 App）
-	nearby := searchNearbyAddresses(lat, lng)
-	result.Nearby = nearby
 
 	response.Success(c, result)
 }
@@ -170,15 +178,9 @@ func geocodeByText(address, country, amapKey string) (float64, float64, error) {
 	return geocodeAddressNominatim(address)
 }
 
-// reverseGeocode 逆向地理编码：坐标 → 地址信息
+// reverseGeocode 逆向地理编码：坐标 → 地址信息（内部调用，供 station_handler 使用）
 func reverseGeocode(lat, lng float64) (*ReverseGeocodeResult, error) {
-	// 优先尝试 Nominatim（全球通用）
-	result, err := reverseGeocodeNominatim(lat, lng)
-	if err == nil {
-		return result, nil
-	}
-	// Nominatim 失败时返回错误
-	return nil, fmt.Errorf("reverse geocode failed: %w", err)
+	return reverseGeocodeNominatim(lat, lng)
 }
 
 // ReverseGeocodeResult 逆向地理编码结果
@@ -385,120 +387,121 @@ func reverseGeocodeNominatim(lat, lng float64) (*ReverseGeocodeResult, error) {
 }
 
 // ============================================================
-// 附近地址搜索（类似外卖 App 的地址列表）
+// 高德逆向地理编码 + 附近 POI（中国区域，一次请求）
 // ============================================================
 
-// searchNearbyAddresses 搜索坐标附近的地址列表
-// 策略：先反向地理编码拿到路名/区域名，再用该名称在附近范围搜索
-func searchNearbyAddresses(lat, lng float64) []NearbyAddress {
-	// Step 1: 反向地理编码获取路名和区域
-	revResult, err := reverseGeocodeNominatim(lat, lng)
+// reverseGeocodeAmap 调用高德 regeo API（extensions=all）
+// 一次请求同时返回结构化地址 + 附近 POI 列表
+func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult, error) {
+	// 高德坐标系是 GCJ-02，前端传入的是 WGS-84
+	// 但 regeo 接口对精度要求不高（POI 级别），偏差 300-500m 在 500m radius 内仍可接受
+	regeoURL := fmt.Sprintf(
+		"https://restapi.amap.com/v3/geocode/regeo?location=%.6f,%.6f&key=%s&extensions=all&radius=500&output=json",
+		lng, lat, amapKey,
+	)
+
+	resp, err := geocodeHTTPClient.Get(regeoURL)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("amap regeo request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Status    string `json:"status"`
+		Info      string `json:"info"`
+		Regeocode struct {
+			FormattedAddress string `json:"formatted_address"`
+			AddressComponent struct {
+				Province  string `json:"province"`
+				City      string `json:"city"`
+				District  string `json:"district"`
+				Township  string `json:"township"`
+				Country   string `json:"country"`
+				StreetNumber struct {
+					Street string `json:"street"`
+					Number string `json:"number"`
+				} `json:"streetNumber"`
+			} `json:"addressComponent"`
+			Pois []struct {
+				Name     string `json:"name"`
+				Address  string `json:"address"`
+				Location string `json:"location"` // "lng,lat"
+				Distance string `json:"distance"`
+			} `json:"pois"`
+		} `json:"regeocode"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("amap regeo parse failed: %w", err)
+	}
+	if result.Status != "1" {
+		return nil, fmt.Errorf("amap regeo failed: %s", result.Info)
 	}
 
-	// 构造搜索关键词（优先用路名，其次用区/街道）
-	var queries []string
-	if revResult.Road != "" {
-		queries = append(queries, revResult.Road)
+	comp := result.Regeocode.AddressComponent
+
+	// 构造简洁地址：优先用街道+门牌号，否则用 formatted_address 的后半段
+	shortAddr := comp.StreetNumber.Street
+	if comp.StreetNumber.Number != "" {
+		shortAddr += comp.StreetNumber.Number + "号"
 	}
-	if revResult.District != "" && revResult.District != revResult.Road {
-		queries = append(queries, revResult.District)
+	if shortAddr == "" {
+		// fallback: 从 formatted_address 提取（去掉省市区前缀）
+		shortAddr = result.Regeocode.FormattedAddress
+		// 尝试去掉省市区前缀，只保留街道以下
+		for _, prefix := range []string{comp.Province, comp.City, comp.District, comp.Township} {
+			if prefix != "" && strings.HasPrefix(shortAddr, prefix) {
+				shortAddr = strings.TrimPrefix(shortAddr, prefix)
+			}
+		}
+		shortAddr = strings.TrimSpace(shortAddr)
 	}
-	if len(queries) == 0 {
-		return nil
+	if shortAddr == "" {
+		shortAddr = result.Regeocode.FormattedAddress
 	}
 
-	// Step 2: 用关键词在附近范围搜索
-	delta := 0.008 // 约 800m
-	viewbox := fmt.Sprintf("%f,%f,%f,%f", lng-delta, lat+delta, lng+delta, lat-delta)
-
-	var allResults []NearbyAddress
-	seen := make(map[string]bool)
-
-	for _, q := range queries {
-		searchURL := fmt.Sprintf(
-			"https://nominatim.openstreetmap.org/search?q=%s&format=json&limit=6&viewbox=%s&bounded=1&addressdetails=1&accept-language=zh",
-			url.QueryEscape(q), viewbox,
-		)
-
-		req, err := http.NewRequest("GET", searchURL, nil)
-		if err != nil {
+	// 解析附近 POI 列表
+	var nearby []NearbyAddress
+	for _, poi := range result.Regeocode.Pois {
+		if poi.Name == "" {
 			continue
 		}
-		req.Header.Set("User-Agent", "cs-inv-monitor/1.0")
-
-		resp, err := geocodeHTTPClient.Do(req)
-		if err != nil {
-			continue
+		var pLat, pLng float64
+		if parts := strings.Split(poi.Location, ","); len(parts) == 2 {
+			pLng, _ = strconv.ParseFloat(parts[0], 64)
+			pLat, _ = strconv.ParseFloat(parts[1], 64)
 		}
-
-		var results []struct {
-			DisplayName string `json:"display_name"`
-			Lat         string `json:"lat"`
-			Lon         string `json:"lon"`
-			Address     struct {
-				Road          string `json:"road"`
-				HouseNumber   string `json:"house_number"`
-				Suburb        string `json:"suburb"`
-				Neighbourhood string `json:"neighbourhood"`
-			} `json:"address"`
+		detail := poi.Address
+		if detail == "" || detail == "[]" {
+			detail = comp.Township
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-			resp.Body.Close()
-			continue
-		}
-		resp.Body.Close()
-
-		for _, r := range results {
-			// 构造简洁地址
-			detail := r.Address.Road
-			if r.Address.HouseNumber != "" {
-				detail = r.Address.Road + r.Address.HouseNumber + "号"
-			}
-			if detail == "" {
-				detail = r.Address.Suburb
-			}
-			if detail == "" {
-				detail = r.Address.Neighbourhood
-			}
-
-			// 地点名称：取 display_name 的第一部分
-			name := r.DisplayName
-			if idx := strings.Index(r.DisplayName, ","); idx > 0 {
-				name = strings.TrimSpace(r.DisplayName[:idx])
-			}
-
-			// 去重
-			key := name + "|" + detail
-			if seen[key] || name == "" {
-				continue
-			}
-			seen[key] = true
-
-			rLat, _ := strconv.ParseFloat(r.Lat, 64)
-			rLng, _ := strconv.ParseFloat(r.Lon, 64)
-
-			allResults = append(allResults, NearbyAddress{
-				Name:   name,
-				Detail: detail,
-				Lat:    rLat,
-				Lng:    rLng,
-			})
-		}
-
-		// 如果已经有足够结果，不再继续搜索
-		if len(allResults) >= 5 {
-			break
-		}
+		nearby = append(nearby, NearbyAddress{
+			Name:   poi.Name,
+			Detail: detail,
+			Lat:    pLat,
+			Lng:    pLng,
+		})
 	}
 
-	// 最多返回 8 条
-	if len(allResults) > 8 {
-		allResults = allResults[:8]
+	city := comp.City
+	if city == "" || city == "[]" {
+		city = comp.Province // 直辖市时 city 为空
 	}
 
-	return allResults
+	return &ReverseGeocodeResult{
+		Province: comp.Province,
+		City:     city,
+		District: comp.District,
+		Address:  shortAddr,
+		Country:  "中国",
+		Road:     comp.StreetNumber.Street,
+		Hamlet:   comp.Township,
+		Nearby:   nearby,
+	}, nil
+}
+
+// coordInChina 判断坐标是否在中国境内（粗略边界框）
+func coordInChina(lat, lng float64) bool {
+	return lng >= 72.004 && lng <= 137.8347 && lat >= 0.8293 && lat <= 55.8271
 }
 
 // ============================================================
