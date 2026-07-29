@@ -270,8 +270,8 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("backends.server_url", "SERVER_URL")
 	viper.BindEnv("backends.weather_api", "WEATHER_API_URL")
 	viper.BindEnv("backends.amap_api_key", "AMAP_API_KEY")
-	viper.BindEnv("backends.upload_dir", "UPLOAD_DIR")
 	viper.BindEnv("backends.weather_source", "WEATHER_SOURCE")
+	viper.BindEnv("backends.upload_dir", "UPLOAD_DIR")
 
 	viper.BindEnv("jpush.enabled", "JPUSH_ENABLED")
 	viper.BindEnv("jpush.app_key", "JPUSH_APP_KEY")
