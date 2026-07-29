@@ -94,20 +94,27 @@ let regionPromise: Promise<string> | null = null
 
 /**
  * Detect client region via ip-api.com (client-side, reflects user's actual network location).
- * Falls back to server-side detection if ip-api.com is blocked.
+ * Falls back to CN if ip-api.com is blocked (likely means user is in China).
  */
 function detectRegion(): Promise<string> {
+  // Check localStorage first (survives page refresh)
+  const stored = localStorage.getItem('map_region')
+  if (stored) {
+    cachedRegion = stored
+    return Promise.resolve(stored)
+  }
   if (cachedRegion) return Promise.resolve(cachedRegion)
   if (!regionPromise) {
     regionPromise = fetch('https://ip-api.com/json/?fields=status,countryCode')
       .then(res => res.json())
       .then(data => {
         cachedRegion = data?.countryCode || 'CN'
+        localStorage.setItem('map_region', cachedRegion!)
         return cachedRegion!
       })
       .catch(() => {
-        // ip-api.com may be blocked in China → user is likely in China
         cachedRegion = 'CN'
+        localStorage.setItem('map_region', cachedRegion!)
         return cachedRegion!
       })
   }
