@@ -389,85 +389,116 @@ func reverseGeocodeNominatim(lat, lng float64) (*ReverseGeocodeResult, error) {
 // ============================================================
 
 // searchNearbyAddresses 搜索坐标附近的地址列表
+// 策略：先反向地理编码拿到路名/区域名，再用该名称在附近范围搜索
 func searchNearbyAddresses(lat, lng float64) []NearbyAddress {
-	// 使用 Nominatim search 在坐标附近搜索地址
-	// viewbox 限定搜索范围在坐标附近约 500m
-	delta := 0.005 // 约 500m
+	// Step 1: 反向地理编码获取路名和区域
+	revResult, err := reverseGeocodeNominatim(lat, lng)
+	if err != nil {
+		return nil
+	}
+
+	// 构造搜索关键词（优先用路名，其次用区/街道）
+	var queries []string
+	if revResult.Road != "" {
+		queries = append(queries, revResult.Road)
+	}
+	if revResult.District != "" && revResult.District != revResult.Road {
+		queries = append(queries, revResult.District)
+	}
+	if len(queries) == 0 {
+		return nil
+	}
+
+	// Step 2: 用关键词在附近范围搜索
+	delta := 0.008 // 约 800m
 	viewbox := fmt.Sprintf("%f,%f,%f,%f", lng-delta, lat+delta, lng+delta, lat-delta)
 
-	req, err := http.NewRequest("GET",
-		fmt.Sprintf("https://nominatim.openstreetmap.org/search?format=json&limit=8&viewbox=%s&bounded=1&addressdetails=1&accept-language=zh",
-			viewbox),
-		nil,
-	)
-	if err != nil {
-		return nil
-	}
-	req.Header.Set("User-Agent", "cs-inv-monitor/1.0")
-
-	resp, err := geocodeHTTPClient.Do(req)
-	if err != nil {
-		logger.Warn("Nearby search failed", zap.Error(err))
-		return nil
-	}
-	defer resp.Body.Close()
-
-	var results []struct {
-		DisplayName string `json:"display_name"`
-		Lat         string `json:"lat"`
-		Lon         string `json:"lon"`
-		Address     struct {
-			Road        string `json:"road"`
-			HouseNumber string `json:"house_number"`
-			Suburb      string `json:"suburb"`
-			Neighbourhood string `json:"neighbourhood"`
-		} `json:"address"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-		logger.Warn("Nearby search parse failed", zap.Error(err))
-		return nil
-	}
-
-	var nearby []NearbyAddress
+	var allResults []NearbyAddress
 	seen := make(map[string]bool)
-	for _, r := range results {
-		// 构造简洁地址
-		detail := r.Address.Road
-		if r.Address.HouseNumber != "" {
-			detail = r.Address.Road + r.Address.HouseNumber + "号"
-		}
-		if detail == "" {
-			detail = r.Address.Suburb
-		}
-		if detail == "" {
-			detail = r.Address.Neighbourhood
-		}
 
-		// 地点名称：取 display_name 的第一部分
-		name := r.DisplayName
-		if idx := strings.Index(r.DisplayName, ","); idx > 0 {
-			name = strings.TrimSpace(r.DisplayName[:idx])
-		}
+	for _, q := range queries {
+		searchURL := fmt.Sprintf(
+			"https://nominatim.openstreetmap.org/search?q=%s&format=json&limit=6&viewbox=%s&bounded=1&addressdetails=1&accept-language=zh",
+			url.QueryEscape(q), viewbox,
+		)
 
-		// 去重
-		key := name + "|" + detail
-		if seen[key] {
+		req, err := http.NewRequest("GET", searchURL, nil)
+		if err != nil {
 			continue
 		}
-		seen[key] = true
+		req.Header.Set("User-Agent", "cs-inv-monitor/1.0")
 
-		rLat, _ := strconv.ParseFloat(r.Lat, 64)
-		rLng, _ := strconv.ParseFloat(r.Lon, 64)
+		resp, err := geocodeHTTPClient.Do(req)
+		if err != nil {
+			continue
+		}
 
-		nearby = append(nearby, NearbyAddress{
-			Name:   name,
-			Detail: detail,
-			Lat:    rLat,
-			Lng:    rLng,
-		})
+		var results []struct {
+			DisplayName string `json:"display_name"`
+			Lat         string `json:"lat"`
+			Lon         string `json:"lon"`
+			Address     struct {
+				Road          string `json:"road"`
+				HouseNumber   string `json:"house_number"`
+				Suburb        string `json:"suburb"`
+				Neighbourhood string `json:"neighbourhood"`
+			} `json:"address"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+			resp.Body.Close()
+			continue
+		}
+		resp.Body.Close()
+
+		for _, r := range results {
+			// 构造简洁地址
+			detail := r.Address.Road
+			if r.Address.HouseNumber != "" {
+				detail = r.Address.Road + r.Address.HouseNumber + "号"
+			}
+			if detail == "" {
+				detail = r.Address.Suburb
+			}
+			if detail == "" {
+				detail = r.Address.Neighbourhood
+			}
+
+			// 地点名称：取 display_name 的第一部分
+			name := r.DisplayName
+			if idx := strings.Index(r.DisplayName, ","); idx > 0 {
+				name = strings.TrimSpace(r.DisplayName[:idx])
+			}
+
+			// 去重
+			key := name + "|" + detail
+			if seen[key] || name == "" {
+				continue
+			}
+			seen[key] = true
+
+			rLat, _ := strconv.ParseFloat(r.Lat, 64)
+			rLng, _ := strconv.ParseFloat(r.Lon, 64)
+
+			allResults = append(allResults, NearbyAddress{
+				Name:   name,
+				Detail: detail,
+				Lat:    rLat,
+				Lng:    rLng,
+			})
+		}
+
+		// 如果已经有足够结果，不再继续搜索
+		if len(allResults) >= 5 {
+			break
+		}
 	}
 
-	return nearby
+	// 最多返回 8 条
+	if len(allResults) > 8 {
+		allResults = allResults[:8]
+	}
+
+	return allResults
 }
 
 // ============================================================
