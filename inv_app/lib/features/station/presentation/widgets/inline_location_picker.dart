@@ -61,10 +61,10 @@ class InlineLocationPicker extends StatefulWidget {
   });
 
   @override
-  State<InlineLocationPicker> createState() => _InlineLocationPickerState();
+  State<InlineLocationPicker> createState() => InlineLocationPickerState();
 }
 
-class _InlineLocationPickerState extends State<InlineLocationPicker> {
+class InlineLocationPickerState extends State<InlineLocationPicker> {
   late final MapController _mapController;
   late LatLng _selectedPoint;
   bool _useAmap = true;
@@ -207,6 +207,41 @@ class _InlineLocationPickerState extends State<InlineLocationPicker> {
         'address': _resolvedAddress,
       });
     }
+  }
+
+  /// 外部调用：根据地址搜索并飞到对应位置
+  Future<void> searchAndFlyTo(String address) async {
+    if (address.trim().isEmpty) return;
+    try {
+      final resp = await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/geocode?address=${Uri.encodeQueryComponent(address.trim())}'),
+      ).timeout(const Duration(seconds: 8));
+      if (resp.statusCode == 200 && mounted) {
+        final data = jsonDecode(resp.body);
+        final d = data['data'];
+        if (d != null) {
+          final lat = double.tryParse('${d['lat']}');
+          final lng = double.tryParse('${d['lng']}');
+          if (lat != null && lng != null) {
+            final point = LatLng(lat, lng);
+            setState(() {
+              _selectedPoint = point;
+              _resolvedAddress = address.trim();
+              _nearbyList = [];
+            });
+            final display = _useAmap ? _Gcj02.fromWgs84(lat, lng) : point;
+            _mapController.move(display, 15);
+            widget.onLocationChanged?.call({
+              'lat': lat,
+              'lng': lng,
+              'address': address.trim(),
+            });
+            // 搜索到达后也做一次反向地理编码获取附近地址
+            _reverseGeocode(lat, lng);
+          }
+        }
+      }
+    } catch (_) { /* ignore */ }
   }
 
   @override
