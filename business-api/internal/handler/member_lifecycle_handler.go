@@ -95,7 +95,7 @@ type MemberLifecycleServiceInterface interface {
 	TransferAccept(ctx context.Context, actorUserID int64, transferID int64) error
 	TransferReject(ctx context.Context, actorUserID int64, transferID int64, reason string) error
 	ListTransfers(ctx context.Context, userID int64) ([]service.PendingTransferInfo, error)
-	ListMembers(ctx context.Context, orgID int64, page, pageSize int) (*service.ListMembersResult, error)
+	ListMembers(ctx context.Context, orgID int64, page, pageSize int, roleFilter string) (*service.ListMembersResult, error)
 	BulkAdd(ctx context.Context, actorUserID int64, tenantID int64, req service.BulkAddParams) (*service.BulkAddResult, error)
 	BulkTransfer(ctx context.Context, actorUserID int64, req service.BulkTransferParams) (*service.BulkTransferResult, error)
 }
@@ -287,6 +287,7 @@ func (h *MemberLifecycleHandler) ListMembers(c *gin.Context) {
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	roleFilter := c.Query("role") // optional role filter
 	if page < 1 {
 		page = 1
 	}
@@ -294,7 +295,7 @@ func (h *MemberLifecycleHandler) ListMembers(c *gin.Context) {
 		pageSize = 20
 	}
 
-	result, err := h.svc.ListMembers(c.Request.Context(), orgID, page, pageSize)
+	result, err := h.svc.ListMembers(c.Request.Context(), orgID, page, pageSize, roleFilter)
 	if err != nil {
 		handleServiceError(c, err)
 		return
