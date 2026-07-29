@@ -4,7 +4,6 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Input, Space, Typography } from 'antd'
 import { AimOutlined } from '@ant-design/icons'
-import api from '@/services/api'
 
 const { Text } = Typography
 
@@ -93,15 +92,21 @@ function gcj02ToWgs84(lat: number, lng: number): [number, number] {
 let cachedRegion: string | null = null
 let regionPromise: Promise<string> | null = null
 
+/**
+ * Detect client region via ip-api.com (client-side, reflects user's actual network location).
+ * Falls back to server-side detection if ip-api.com is blocked.
+ */
 function detectRegion(): Promise<string> {
   if (cachedRegion) return Promise.resolve(cachedRegion)
   if (!regionPromise) {
-    regionPromise = api.get('/geo/detect-region')
-      .then(res => {
-        cachedRegion = res.data?.data?.region ?? 'CN'
+    regionPromise = fetch('https://ip-api.com/json/?fields=status,countryCode')
+      .then(res => res.json())
+      .then(data => {
+        cachedRegion = data?.countryCode || 'CN'
         return cachedRegion!
       })
       .catch(() => {
+        // ip-api.com may be blocked in China → user is likely in China
         cachedRegion = 'CN'
         return cachedRegion!
       })
