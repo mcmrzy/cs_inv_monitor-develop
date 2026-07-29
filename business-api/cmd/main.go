@@ -802,6 +802,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.GET("/timezones", func(c *gin.Context) {
 			response.Success(c, timezone.GetTimezoneList())
 		})
+		api.GET("/geo/detect-region", deps.GeocodeHandler.DetectRegion)
 
 		// 楠岃瘉鐮?API锛堟棤闇€璁よ瘉锛?
 		captchaLimit := middleware.RateLimitWith(2, 5)
@@ -1026,6 +1027,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			orgGroup.POST("/:id/move", deps.OrganizationHandler.Move)
 			orgGroup.PATCH("/:id/status", deps.OrganizationHandler.ToggleStatus)
 			orgGroup.GET("/:id/tree", deps.OrganizationHandler.GetTree)
+			orgGroup.GET("/:id/members", deps.MemberLifecycleHandler.ListMembers)
 		}
 
 		// Member Lifecycle Management APIs

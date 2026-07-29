@@ -134,6 +134,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	publicGroup.POST("/api/v1/auth/refresh", p.Handler())
 	publicGroup.POST("/api/v1/auth/context", p.Handler())
 	publicGroup.GET("/api/v1/timezones", p.Handler())
+	publicGroup.GET("/api/v1/geo/detect-region", p.Handler())
 	publicGroup.Any("/api/v1/captcha/*action", p.Handler())
 	publicGroup.Any("/uploads/*action", p.Handler())
 	publicGroup.Any("/firmware/*action", p.Handler())

@@ -1,9 +1,10 @@
-import React, { useRef, useCallback, useImperativeHandle, forwardRef, useEffect, useState } from 'react'
+import React, { useRef, useCallback, useImperativeHandle, forwardRef, useEffect, useState, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Input, Space, Typography } from 'antd'
 import { AimOutlined } from '@ant-design/icons'
+import api from '@/services/api'
 
 const { Text } = Typography
 
@@ -38,6 +39,74 @@ const defaultIcon = L.icon({
 /* Helper: validate coordinates */
 function isValidLatLng(pos: { lat: number; lng: number } | null | undefined): pos is LatLng {
   return !!pos && typeof pos.lat === 'number' && typeof pos.lng === 'number' && !isNaN(pos.lat) && !isNaN(pos.lng)
+}
+
+// ============================================================
+// GCJ-02 coordinate conversion (for AMap tiles in China)
+// ============================================================
+const PI = Math.PI
+const A = 6378245.0
+const EE = 0.00669342162296594323
+
+function inChina(lat: number, lng: number) {
+  return lng >= 72.004 && lng <= 137.8347 && lat >= 0.8293 && lat <= 55.8271
+}
+
+function transformLat(x: number, y: number) {
+  let ret = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x))
+  ret += (20 * Math.sin(6 * x * PI) + 20 * Math.sin(2 * x * PI)) * 2 / 3
+  ret += (20 * Math.sin(y * PI) + 40 * Math.sin(y / 3 * PI)) * 2 / 3
+  ret += (160 * Math.sin(y / 12 * PI) + 320 * Math.sin(y * PI / 30)) * 2 / 3
+  return ret
+}
+
+function transformLng(x: number, y: number) {
+  let ret = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x))
+  ret += (20 * Math.sin(6 * x * PI) + 20 * Math.sin(2 * x * PI)) * 2 / 3
+  ret += (20 * Math.sin(x * PI) + 40 * Math.sin(x / 3 * PI)) * 2 / 3
+  ret += (150 * Math.sin(x / 12 * PI) + 300 * Math.sin(x / 30 * PI)) * 2 / 3
+  return ret
+}
+
+function wgs84ToGcj02(lat: number, lng: number): [number, number] {
+  if (!inChina(lat, lng)) return [lat, lng]
+  let dLat = transformLat(lng - 105, lat - 35)
+  let dLng = transformLng(lng - 105, lat - 35)
+  const radLat = lat / 180 * PI
+  let magic = Math.sin(radLat)
+  magic = 1 - EE * magic * magic
+  const sqrtMagic = Math.sqrt(magic)
+  dLat = (dLat * 180) / ((A * (1 - EE)) / (magic * sqrtMagic) * PI)
+  dLng = (dLng * 180) / ((A / sqrtMagic) * Math.cos(radLat) * PI)
+  return [lat + dLat, lng + dLng]
+}
+
+function gcj02ToWgs84(lat: number, lng: number): [number, number] {
+  if (!inChina(lat, lng)) return [lat, lng]
+  const [gcjLat, gcjLng] = wgs84ToGcj02(lat, lng)
+  const dLat = gcjLat - lat
+  const dLng = gcjLng - lng
+  return [lat - dLat, lng - dLng]
+}
+
+// Module-level cache for region detection
+let cachedRegion: string | null = null
+let regionPromise: Promise<string> | null = null
+
+function detectRegion(): Promise<string> {
+  if (cachedRegion) return Promise.resolve(cachedRegion)
+  if (!regionPromise) {
+    regionPromise = api.get('/geo/detect-region')
+      .then(res => {
+        cachedRegion = res.data?.data?.region ?? 'CN'
+        return cachedRegion!
+      })
+      .catch(() => {
+        cachedRegion = 'CN'
+        return cachedRegion!
+      })
+  }
+  return regionPromise
 }
 
 /* Click handler component */
@@ -106,6 +175,22 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
     const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null)
     const [flyZoom, setFlyZoom] = useState(initialZoom)
     const [position, setPosition] = useState<LatLng | null>(null)
+    const [useAmap, setUseAmap] = useState(false)
+
+    // Detect region on mount
+    useEffect(() => {
+      detectRegion().then(region => setUseAmap(region === 'CN'))
+    }, [])
+
+    // Convert WGS-84 to display coords (GCJ-02 for AMap, WGS-84 for OSM)
+    const toDisplay = useCallback((lat: number, lng: number): [number, number] => {
+      return useAmap ? wgs84ToGcj02(lat, lng) : [lat, lng]
+    }, [useAmap])
+
+    // Convert display coords to WGS-84
+    const toWgs84 = useCallback((lat: number, lng: number): [number, number] => {
+      return useAmap ? gcj02ToWgs84(lat, lng) : [lat, lng]
+    }, [useAmap])
 
     // Sync external value
     useEffect(() => {
@@ -117,9 +202,9 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
     useImperativeHandle(ref, () => ({
       flyTo: (center: [number, number], zoom = 12) => {
         if (!center || isNaN(center[0]) || isNaN(center[1])) return
-        setFlyTarget(center)
+        const display = toDisplay(center[0], center[1])
+        setFlyTarget(display)
         setFlyZoom(zoom)
-        // Reset target after animation to allow re-flying to same location
         setTimeout(() => setFlyTarget(null), 2000)
       },
       setPosition: (pos: LatLng) => {
@@ -127,14 +212,17 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
         setPosition(pos)
         onChange?.(pos)
       },
-    }))
+    }), [toDisplay, onChange])
 
     const handlePositionChange = useCallback(
       (pos: LatLng) => {
-        setPosition(pos)
-        onChange?.(pos)
+        // Convert from display coords (GCJ-02) to WGS-84
+        const [wgsLat, wgsLng] = toWgs84(pos.lat, pos.lng)
+        const newPos = { lat: wgsLat, lng: wgsLng }
+        setPosition(newPos)
+        onChange?.(newPos)
       },
-      [onChange],
+      [onChange, toWgs84],
     )
 
     const handleLocate = useCallback(() => {
@@ -144,7 +232,8 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
             const newPos = { lat: geoPos.coords.latitude, lng: geoPos.coords.longitude }
             setPosition(newPos)
             onChange?.(newPos)
-            setFlyTarget([newPos.lat, newPos.lng])
+            const display = toDisplay(newPos.lat, newPos.lng)
+            setFlyTarget(display)
             setFlyZoom(15)
             setTimeout(() => setFlyTarget(null), 2000)
           },
@@ -152,7 +241,27 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
           { timeout: 5000 },
         )
       }
-    }, [onChange])
+    }, [onChange, toDisplay])
+
+    // Compute display center for MapContainer
+    const displayCenter = useMemo(() => {
+      if (isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0)) {
+        return toDisplay(value.lat, value.lng)
+      }
+      return initialCenter
+    }, [value, toDisplay, initialCenter])
+
+    const displayZoom = useMemo(() => {
+      return isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0) ? 14 : initialZoom
+    }, [value, initialZoom])
+
+    // Marker position in display coords
+    const markerPosition = useMemo(() => {
+      if (isValidLatLng(position) && position.lat !== 0) {
+        return toDisplay(position.lat, position.lng)
+      }
+      return null
+    }, [position, toDisplay])
 
     return (
       <div style={{ border: '1px solid #d9d9d9', borderRadius: 8, overflow: 'hidden' }}>
@@ -178,8 +287,8 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
           </a>
         </div>
         <MapContainer
-          center={isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0) ? [value.lat, value.lng] : initialCenter}
-          zoom={isValidLatLng(value) && (value.lat !== 0 || value.lng !== 0) ? 14 : initialZoom}
+          center={displayCenter}
+          zoom={displayZoom}
           style={{ width: '100%', height: typeof height === 'number' ? `${height}px` : height }}
           fadeAnimation={false}
           ref={(instance) => {
@@ -187,14 +296,18 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
           }}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={useAmap
+              ? '&copy; <a href="https://www.amap.com">高德地图</a>'
+              : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}
+            url={useAmap
+              ? 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+              : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'}
           />
           <MapSizeFixer />
           <MapClickHandler onPositionChange={handlePositionChange} />
           <FlyToController target={flyTarget} zoom={flyZoom} />
-          {isValidLatLng(position) && position.lat !== 0 && (
-            <Marker position={[position.lat, position.lng]} icon={defaultIcon} />
+          {markerPosition && (
+            <Marker position={markerPosition} icon={defaultIcon} />
           )}
         </MapContainer>
       </div>

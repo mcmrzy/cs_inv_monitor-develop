@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"sync"
+
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
@@ -18,6 +20,13 @@ import (
 )
 
 var geocodeHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
+// regionCache 缓存服务器出口 IP 所属区域，避免重复调用 ip-api.com
+var (
+	regionCache     string
+	regionCacheOnce bool
+	regionCacheMu   sync.Mutex
+)
 
 // GeocodeHandler 提供地理编码 API 供前端调用
 type GeocodeHandler struct {
@@ -75,6 +84,53 @@ func (h *GeocodeHandler) ReverseGeocode(c *gin.Context) {
 	}
 
 	response.Success(c, result)
+}
+
+// DetectRegion 检测服务器出口 IP 所属区域，供前端决定地图瓦片源
+// GET /api/v1/geo/detect-region
+// 返回 {"region": "CN"} 或 {"region": "global"}
+func (h *GeocodeHandler) DetectRegion(c *gin.Context) {
+	regionCacheMu.Lock()
+	defer regionCacheMu.Unlock()
+
+	if regionCacheOnce {
+		response.Success(c, gin.H{"region": regionCache})
+		return
+	}
+
+	region := detectServerRegion()
+	regionCache = region
+	regionCacheOnce = true
+	logger.Info("Server region detected", zap.String("region", region))
+	response.Success(c, gin.H{"region": region})
+}
+
+// detectServerRegion 通过 ip-api.com 检测服务器出口 IP 所属国家
+func detectServerRegion() string {
+	type ipAPIResult struct {
+	Status      string `json:"status"`
+	CountryCode string `json:"countryCode"`
+	}
+
+	resp, err := geocodeHTTPClient.Get("http://ip-api.com/json/?fields=status,countryCode")
+	if err != nil {
+		logger.Warn("ip-api.com request failed, defaulting to CN", zap.Error(err))
+		return "CN"
+	}
+	defer resp.Body.Close()
+
+	var result ipAPIResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		logger.Warn("ip-api.com parse failed, defaulting to CN", zap.Error(err))
+		return "CN"
+	}
+
+	if result.Status != "success" || result.CountryCode == "" {
+		logger.Warn("ip-api.com returned no result, defaulting to CN")
+		return "CN"
+	}
+
+	return result.CountryCode
 }
 
 // ============================================================
