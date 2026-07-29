@@ -10,6 +10,7 @@ import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/features/station/presentation/pages/location_picker_page.dart';
+import 'package:inv_app/features/station/presentation/widgets/inline_location_picker.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class CreateStationPage extends StatefulWidget {
@@ -345,27 +346,20 @@ class _CreateStationPageState extends State<CreateStationPage> {
                           AppLocalizations.of(context)!.detailAddressHint,
                         ),
                         SizedBox(height: 12.h),
-                        // 地图选点按钮
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _geocoding ? null : _openLocationPicker,
-                            icon: Icon(Icons.map_outlined, size: 18.sp),
-                            label: Text(
-                              _latitude != null && _longitude != null
-                                  ? '${AppLocalizations.of(context)!.stationSelectOnMap} (${_latitude!.toStringAsFixed(4)}, ${_longitude!.toStringAsFixed(4)})'
-                                  : AppLocalizations.of(context)!.stationSelectOnMap,
-                              style: TextStyle(fontSize: 13.sp),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.primary,
-                              side: const BorderSide(color: Color(0xFFBAE6FD)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.r),
-                              ),
-                              padding: EdgeInsets.symmetric(vertical: 12.h),
-                            ),
-                          ),
+                        // 内联地图选点
+                        InlineLocationPicker(
+                          initialLat: _latitude,
+                          initialLng: _longitude,
+                          onLocationChanged: (result) {
+                            setState(() {
+                              _latitude = (result['lat'] as num?)?.toDouble();
+                              _longitude = (result['lng'] as num?)?.toDouble();
+                            });
+                            final addr = result['address'] as String?;
+                            if (addr != null && addr.isNotEmpty) {
+                              _detailCtl.text = addr;
+                            }
+                          },
                         ),
                       ],
                     ),
