@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// WGS-84 → GCJ-02 coordinate conversion (for China map tiles)
@@ -61,45 +64,83 @@ class LocationPickerPage extends StatefulWidget {
 
 class _LocationPickerPageState extends State<LocationPickerPage> {
   late final MapController _mapController;
-  late LatLng _selectedPoint;
-  late LatLng _displayCenter; // GCJ-02 center for display
+  late LatLng _selectedPoint; // WGS-84
   bool _hasSelection = false;
-  late final bool _isChina;
+  bool _useAmap = true; // default to AMap (safe for China)
+  bool _initialized = false;
+
+  /// Cached region result across the entire app lifecycle
+  static String? _cachedRegion;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
-    final hasInitial = (widget.initialLat != null && widget.initialLat != 0) ||
-        (widget.initialLng != null && widget.initialLng != 0);
-    if (hasInitial) {
-      final lat = widget.initialLat ?? 0;
-      final lng = widget.initialLng ?? 0;
-      _selectedPoint = LatLng(lat, lng);
-      _isChina = _Gcj02.inChina(lat, lng);
-      _displayCenter = _isChina ? _Gcj02.fromWgs84(lat, lng) : LatLng(lat, lng);
-      _hasSelection = true;
-    } else {
-      _selectedPoint = const LatLng(30, 110);
-      _isChina = true;
-      _displayCenter = _Gcj02.fromWgs84(30, 110);
+    _selectedPoint = const LatLng(30, 110);
+    _detectRegion();
+  }
+
+  /// Call API to detect server region via IP, cache the result
+  Future<void> _detectRegion() async {
+    if (_cachedRegion != null) {
+      setState(() {
+        _useAmap = _cachedRegion == 'CN';
+        _initSelection();
+      });
+      return;
     }
+    try {
+      final resp = await http
+          .get(Uri.parse('${AppConfig.apiBaseUrl}/geo/detect-region'))
+          .timeout(const Duration(seconds: 5));
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body);
+        _cachedRegion = data['data']?['region'] as String? ?? 'CN';
+      } else {
+        _cachedRegion = 'CN';
+      }
+    } catch (_) {
+      _cachedRegion = 'CN';
+    }
+    if (mounted) {
+      setState(() {
+        _useAmap = _cachedRegion == 'CN';
+        _initSelection();
+      });
+    }
+  }
+
+  void _initSelection() {
+    if (_initialized) return;
+    _initialized = true;
+    final hasInitial =
+        (widget.initialLat != null && widget.initialLat != 0) ||
+            (widget.initialLng != null && widget.initialLng != 0);
+    if (hasInitial) {
+      _selectedPoint = LatLng(widget.initialLat ?? 0, widget.initialLng ?? 0);
+      _hasSelection = true;
+    }
+  }
+
+  /// Convert map camera center (GCJ-02) back to WGS-84
+  LatLng _toWgs84(LatLng gcjCenter) {
+    if (!_useAmap) return gcjCenter;
+    final gcj = _Gcj02.fromWgs84(gcjCenter.latitude, gcjCenter.longitude);
+    final dLat = gcj.latitude - gcjCenter.latitude;
+    final dLng = gcj.longitude - gcjCenter.longitude;
+    return LatLng(gcjCenter.latitude - dLat, gcjCenter.longitude - dLng);
+  }
+
+  /// Get display center (GCJ-02 for AMap, WGS-84 for OSM)
+  LatLng get _displayCenter {
+    if (!_useAmap) return _selectedPoint;
+    return _Gcj02.fromWgs84(_selectedPoint.latitude, _selectedPoint.longitude);
   }
 
   void _onMapEvent(MapEvent event) {
     if (event is MapEventMoveEnd) {
       setState(() {
-        final center = event.camera.center;
-        // Convert GCJ-02 display center back to WGS-84 for storage
-        if (_isChina) {
-          // Approximate reverse: offset ≈ forward offset for small areas
-          final gcj = _Gcj02.fromWgs84(center.latitude, center.longitude);
-          final dLat = gcj.latitude - center.latitude;
-          final dLng = gcj.longitude - center.longitude;
-          _selectedPoint = LatLng(center.latitude - dLat, center.longitude - dLng);
-        } else {
-          _selectedPoint = center;
-        }
+        _selectedPoint = _toWgs84(event.camera.center);
         _hasSelection = true;
       });
     }
@@ -115,8 +156,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final hasInitial = (widget.initialLat != null && widget.initialLat != 0) ||
-        (widget.initialLng != null && widget.initialLng != 0);
 
     return Scaffold(
       body: Stack(
@@ -126,14 +165,14 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _displayCenter,
-              initialZoom: hasInitial ? 15 : 4,
+              initialZoom: _hasSelection ? 15 : 4,
               onMapEvent: _onMapEvent,
               minZoom: 2,
               maxZoom: 18,
             ),
             children: [
               TileLayer(
-                urlTemplate: _isChina
+                urlTemplate: _useAmap
                     ? 'https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
                     : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.csinv.monitor',
@@ -142,12 +181,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                 MarkerLayer(
                   markers: [
                     Marker(
-                      point: _isChina
-                          ? _Gcj02.fromWgs84(
-                              _selectedPoint.latitude,
-                              _selectedPoint.longitude,
-                            )
-                          : _selectedPoint,
+                      point: _displayCenter,
                       width: 40,
                       height: 40,
                       child: const Icon(
