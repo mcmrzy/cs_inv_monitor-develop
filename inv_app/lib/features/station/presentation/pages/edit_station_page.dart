@@ -29,6 +29,7 @@ class _EditStationPageState extends State<EditStationPage> {
   final _valleyPriceController = TextEditingController();
   final _latitudeController = TextEditingController();
   final _longitudeController = TextEditingController();
+  final _mapKey = GlobalKey<InlineLocationPickerState>();
   bool _loaded = false;
   bool _isSubmitting = false;
 
@@ -173,9 +174,35 @@ class _EditStationPageState extends State<EditStationPage> {
                     AppLocalizations.of(context)!.districtLabel,
                   ),
                   SizedBox(height: 12.h),
-                  _buildField(
-                    _addressController,
-                    AppLocalizations.of(context)!.detailAddress,
+                  // 详细地址 + 搜索按钮
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildField(
+                          _addressController,
+                          AppLocalizations.of(context)!.detailAddress,
+                        ),
+                      ),
+                      SizedBox(width: 8.w),
+                      Padding(
+                        padding: EdgeInsets.only(top: 8.h),
+                        child: IconButton(
+                          onPressed: () {
+                            _mapKey.currentState?.searchAndFlyTo(_addressController.text);
+                          },
+                          icon: const Icon(Icons.search, size: 20),
+                          style: IconButton.styleFrom(
+                            foregroundColor: const Color(0xFF2563EB),
+                            backgroundColor: const Color(0xFFF0F9FF),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8.r),
+                            ),
+                          ),
+                          tooltip: '搜索地址',
+                        ),
+                      ),
+                    ],
                   ),
                   SizedBox(height: 12.h),
                   _buildField(
@@ -225,6 +252,7 @@ class _EditStationPageState extends State<EditStationPage> {
                   SizedBox(height: 12.h),
                   // 内联地图选点
                   InlineLocationPicker(
+                    key: _mapKey,
                     initialLat: double.tryParse(_latitudeController.text),
                     initialLng: double.tryParse(_longitudeController.text),
                     onLocationChanged: (result) {

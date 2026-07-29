@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/continents_data.dart';
 import 'package:inv_app/core/data/regions_data.dart';
+import 'package:inv_app/core/data/country_name_mapping.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -24,6 +25,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtl = TextEditingController();
   final _detailCtl = TextEditingController();
+  final _mapKey = GlobalKey<InlineLocationPickerState>();
 
   String _country = '中国';
   String? _province;
@@ -36,11 +38,11 @@ class _CreateStationPageState extends State<CreateStationPage> {
 
   List<String> get _provinces {
     if (_country == '中国') {
-      final list = chinaRegions.keys.toList();
-      list.sort();
-      return list;
+      return chinaRegions.keys.toList();
     }
-    return globalRegions[_country] ?? [];
+    // 将中文国家名映射到英文名，然后从 globalRegions 获取省份数据
+    final englishName = getEnglishCountryName(_country);
+    return globalRegions[englishName] ?? [];
   }
 
   String get _addressText {
@@ -134,9 +136,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
           if (_country != '中国') return [];
           final m = chinaRegions[p];
           if (m == null) return [];
-          final list = m.keys.toList();
-          list.sort();
-          return list;
+          return m.keys.toList();
         },
         districtsFn: (p, c) {
           if (_country != '中国') return [];
@@ -340,14 +340,41 @@ class _CreateStationPageState extends State<CreateStationPage> {
                           ),
                         ),
                         SizedBox(height: 12.h),
-                        _field(
-                          _detailCtl,
-                          AppLocalizations.of(context)!.detailAddress,
-                          AppLocalizations.of(context)!.detailAddressHint,
+                        // 详细地址 + 搜索按钮
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _field(
+                                _detailCtl,
+                                AppLocalizations.of(context)!.detailAddress,
+                                AppLocalizations.of(context)!.detailAddressHint,
+                              ),
+                            ),
+                            SizedBox(width: 8.w),
+                            Padding(
+                              padding: EdgeInsets.only(top: 28.h),
+                              child: IconButton(
+                                onPressed: () {
+                                  _mapKey.currentState?.searchAndFlyTo(_detailCtl.text);
+                                },
+                                icon: Icon(Icons.search, size: 20.sp),
+                                style: IconButton.styleFrom(
+                                  foregroundColor: AppColors.primary,
+                                  backgroundColor: const Color(0xFFF0F9FF),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10.r),
+                                  ),
+                                ),
+                                tooltip: '搜索地址',
+                              ),
+                            ),
+                          ],
                         ),
                         SizedBox(height: 12.h),
                         // 内联地图选点
                         InlineLocationPicker(
+                          key: _mapKey,
                           initialLat: _latitude,
                           initialLng: _longitude,
                           onLocationChanged: (result) {
@@ -580,8 +607,10 @@ class _ContinentCountryPickerPageState
     extends State<_ContinentCountryPickerPage> {
   late FixedExtentScrollController _continentCtrl;
   late FixedExtentScrollController _countryCtrl;
+  late TextEditingController _searchCtrl;
   int _continentIdx = 0;
   int _countryIdx = 0;
+  String _searchQuery = '';
 
   static const _itemH = 44.0;
 
@@ -590,20 +619,32 @@ class _ContinentCountryPickerPageState
     super.initState();
     _continentCtrl = FixedExtentScrollController();
     _countryCtrl = FixedExtentScrollController();
+    _searchCtrl = TextEditingController();
   }
 
   @override
   void dispose() {
     _continentCtrl.dispose();
     _countryCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
   List<Map<String, String>> get _currentCountries {
     if (continents.isEmpty) return [];
-    return List<Map<String, String>>.from(
+    var countries = List<Map<String, String>>.from(
         continents[_continentIdx]['countries'] as List,
     );
+    // 按拼音排序（Unicode 码点顺序，对中文字符近似拼音顺序）
+    countries.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
+    // 按搜索关键词过滤
+    if (_searchQuery.isNotEmpty) {
+      countries = countries.where((c) {
+        final name = c['name'] ?? '';
+        return name.toLowerCase().contains(_searchQuery.toLowerCase());
+      }).toList();
+    }
+    return countries;
   }
 
   void _onContinentChanged(int idx) {
@@ -683,6 +724,56 @@ class _ContinentCountryPickerPageState
                         ),
                       ),
                     ],
+                  ),
+                ),
+                // 搜索框
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      hintText: '搜索国家/地区...',
+                      prefixIcon: Icon(Icons.search, size: 20.sp, color: AppColors.textHint),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, size: 18.sp, color: AppColors.textHint),
+                              onPressed: () {
+                                setState(() {
+                                  _searchCtrl.clear();
+                                  _searchQuery = '';
+                                  _countryIdx = 0;
+                                });
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  _countryCtrl.jumpToItem(0);
+                                });
+                              },
+                            )
+                          : null,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 10.h),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                        borderSide: BorderSide(color: AppColors.surfaceHover),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                        borderSide: BorderSide(color: AppColors.surfaceHover),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                        borderSide: BorderSide(color: AppColors.primary),
+                      ),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFB),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                        _countryIdx = 0;
+                      });
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _countryCtrl.jumpToItem(0);
+                      });
+                    },
                   ),
                 ),
                 SizedBox(
