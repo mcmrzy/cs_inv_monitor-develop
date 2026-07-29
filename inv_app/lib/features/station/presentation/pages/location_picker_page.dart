@@ -70,6 +70,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   bool _useAmap = true; // default to AMap (safe for China)
   bool _initialized = false;
   String _resolvedAddress = '';
+  List<Map<String, dynamic>> _nearbyList = [];
+  bool _loadingNearby = false;
   Timer? _reverseTimer;
 
   /// Cached region result across the entire app lifecycle
@@ -155,12 +157,13 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
-  /// Reverse geocoding: coords → short address (road + house number)
+  /// Reverse geocoding: coords → short address + nearby list
   Future<void> _reverseGeocode(double lat, double lng) async {
+    setState(() => _loadingNearby = true);
     try {
       final resp = await http.get(
         Uri.parse('${AppConfig.apiBaseUrl}/geocode/reverse?lat=$lat&lng=$lng'),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 8));
       if (resp.statusCode == 200 && mounted) {
         final data = jsonDecode(resp.body);
         final d = data['data'];
@@ -169,9 +172,43 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
           if (addr.isNotEmpty) {
             setState(() => _resolvedAddress = addr);
           }
+          // 附近地址列表
+          final nearby = d['nearby'];
+          if (nearby is List) {
+            setState(() {
+              _nearbyList = nearby
+                  .whereType<Map<String, dynamic>>()
+                  .take(6)
+                  .toList();
+            });
+          } else {
+            setState(() => _nearbyList = []);
+          }
         }
       }
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      if (mounted) setState(() => _nearbyList = []);
+    }
+    if (mounted) setState(() => _loadingNearby = false);
+  }
+
+  /// 选择附近地址
+  void _selectNearby(Map<String, dynamic> item) {
+    final lat = (item['lat'] as num?)?.toDouble();
+    final lng = (item['lng'] as num?)?.toDouble();
+    final detail = item['detail'] as String? ?? '';
+    final name = item['name'] as String? ?? '';
+    if (lat != null && lng != null) {
+      final point = LatLng(lat, lng);
+      setState(() {
+        _selectedPoint = point;
+        _hasSelection = true;
+        _resolvedAddress = detail.isNotEmpty ? detail : name;
+        _nearbyList = [];
+      });
+      final display = _useAmap ? _Gcj02.fromWgs84(lat, lng) : point;
+      _mapController.move(display, 16);
+    }
   }
 
   void _confirm() {
@@ -310,53 +347,100 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               ),
             ),
 
-          // 底部确认按钮
+          // 底部附近地址列表 + 确认按钮
           Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 20.h,
-            left: 24.w,
-            right: 24.w,
-            child: SizedBox(
-              height: 48.h,
-              child: FilledButton.icon(
-                onPressed: _hasSelection ? _confirm : null,
-                icon: const Icon(Icons.check, size: 20),
-                label: Text(
-                  l10n.confirm,
-                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
-                ),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24.r),
-                  ),
-                  elevation: 4,
-                ),
-              ),
-            ),
-          ),
-
-          // 底部提示文字
-          Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 76.h,
+            bottom: 0,
             left: 0,
             right: 0,
-            child: Center(
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 12.w,
-                  vertical: 4.h,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                child: Text(
-                  l10n.stationDragToSelect,
-                  style: TextStyle(
-                    fontSize: 12.sp,
-                    color: Colors.white,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, -2),
                   ),
+                ],
+              ),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 附近地址列表
+                    if (_loadingNearby)
+                      Padding(
+                        padding: EdgeInsets.all(12.w),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 16.w,
+                              height: 16.w,
+                              child: const CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8.w),
+                            Text('搜索附近地址...',
+                                style: TextStyle(fontSize: 13.sp, color: Colors.grey)),
+                          ],
+                        ),
+                      ),
+                    if (!_loadingNearby && _nearbyList.isNotEmpty)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: 200.h),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.symmetric(vertical: 4.h),
+                          itemCount: _nearbyList.length,
+                          separatorBuilder: (_, __) =>
+                              Divider(height: 1, indent: 44.w, color: const Color(0xFFF0F0F0)),
+                          itemBuilder: (context, idx) {
+                            final item = _nearbyList[idx];
+                            final name = item['name'] as String? ?? '';
+                            final detail = item['detail'] as String? ?? '';
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(Icons.location_on_outlined,
+                                  color: const Color(0xFF2563EB), size: 20.sp),
+                              title: Text(name,
+                                  style: TextStyle(
+                                      fontSize: 14.sp, fontWeight: FontWeight.w500)),
+                              subtitle: detail.isNotEmpty && detail != name
+                                  ? Text(detail,
+                                      style: TextStyle(
+                                          fontSize: 12.sp, color: Colors.grey))
+                                  : null,
+                              onTap: () => _selectNearby(item),
+                            );
+                          },
+                        ),
+                      ),
+                    // 确认按钮
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(24.w, 8.h, 24.w, 12.h),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 48.h,
+                        child: FilledButton.icon(
+                          onPressed: _hasSelection ? _confirm : null,
+                          icon: const Icon(Icons.check, size: 20),
+                          label: Text(
+                            l10n.confirm,
+                            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24.r),
+                            ),
+                            elevation: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

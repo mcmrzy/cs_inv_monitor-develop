@@ -2,8 +2,15 @@ import React, { useRef, useCallback, useImperativeHandle, forwardRef, useEffect,
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { AimOutlined } from '@ant-design/icons'
+import { AimOutlined, EnvironmentOutlined } from '@ant-design/icons'
 import api from '@/services/api'
+
+interface NearbyAddress {
+  name: string
+  detail: string
+  lat: number
+  lng: number
+}
 
 export interface LatLng {
   lat: number
@@ -187,6 +194,8 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
     const [flyZoom, setFlyZoom] = useState(initialZoom)
     const [position, setPosition] = useState<LatLng | null>(null)
     const [useAmap, setUseAmap] = useState(false)
+    const [nearbyList, setNearbyList] = useState<NearbyAddress[]>([])
+    const [loadingNearby, setLoadingNearby] = useState(false)
     const reverseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Detect region on mount
@@ -234,18 +243,26 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
         setPosition(newPos)
         onChange?.(newPos)
 
-        // Debounced reverse geocoding: coords → address (now returns short address)
+        // Debounced reverse geocoding + nearby address search
         if (onReverseGeocode) {
           if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current)
           reverseTimerRef.current = setTimeout(() => {
+            setLoadingNearby(true)
             api.get('/geocode/reverse', { params: { lat: wgsLat, lng: wgsLng } })
               .then(res => {
                 const data = res.data?.data
                 if (data?.address) {
                   onReverseGeocode(newPos, data.address)
                 }
+                // 附近地址列表
+                if (data?.nearby && Array.isArray(data.nearby)) {
+                  setNearbyList(data.nearby)
+                } else {
+                  setNearbyList([])
+                }
               })
-              .catch(() => { /* ignore */ })
+              .catch(() => { setNearbyList([]) })
+              .finally(() => setLoadingNearby(false))
           }, 500)
         }
       },
@@ -269,6 +286,19 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
         )
       }
     }, [onChange, toDisplay])
+
+    // 选择附近地址
+    const handleSelectNearby = useCallback((item: NearbyAddress) => {
+      const newPos = { lat: item.lat, lng: item.lng }
+      setPosition(newPos)
+      onChange?.(newPos)
+      onReverseGeocode?.(newPos, item.detail || item.name)
+      setNearbyList([])
+      const display = toDisplay(item.lat, item.lng)
+      setFlyTarget(display)
+      setFlyZoom(16)
+      setTimeout(() => setFlyTarget(null), 2000)
+    }, [onChange, onReverseGeocode, toDisplay])
 
     // Compute display center for MapContainer
     const displayCenter = useMemo(() => {
@@ -330,6 +360,43 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
             <Marker position={markerPosition} icon={defaultIcon} />
           )}
         </MapContainer>
+        {/* 附近地址列表 */}
+        {(loadingNearby || nearbyList.length > 0) && (
+          <div style={{
+            maxHeight: 180,
+            overflowY: 'auto',
+            borderTop: '1px solid #f0f0f0',
+            background: '#fff',
+          }}>
+            {loadingNearby && (
+              <div style={{ padding: '8px 12px', color: '#999', fontSize: 12 }}>搜索附近地址...</div>
+            )}
+            {nearbyList.map((item, idx) => (
+              <div
+                key={idx}
+                onClick={() => handleSelectNearby(item)}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid #f5f5f5',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+                onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+              >
+                <EnvironmentOutlined style={{ color: '#1677ff', marginTop: 3, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: '#333' }}>{item.name}</div>
+                  {item.detail && item.detail !== item.name && (
+                    <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>{item.detail}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     )
   },

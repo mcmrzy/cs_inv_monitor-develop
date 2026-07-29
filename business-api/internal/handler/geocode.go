@@ -83,6 +83,10 @@ func (h *GeocodeHandler) ReverseGeocode(c *gin.Context) {
 		return
 	}
 
+	// 搜索附近地址列表（类似外卖 App）
+	nearby := searchNearbyAddresses(lat, lng)
+	result.Nearby = nearby
+
 	response.Success(c, result)
 }
 
@@ -179,13 +183,22 @@ func reverseGeocode(lat, lng float64) (*ReverseGeocodeResult, error) {
 
 // ReverseGeocodeResult 逆向地理编码结果
 type ReverseGeocodeResult struct {
-	Province string `json:"province"`
-	City     string `json:"city"`
-	District string `json:"district"`
-	Address  string `json:"address"`
-	Country  string `json:"country"`
-	Road     string `json:"road"`
-	Hamlet   string `json:"hamlet"`
+	Province string            `json:"province"`
+	City     string            `json:"city"`
+	District string            `json:"district"`
+	Address  string            `json:"address"`
+	Country  string            `json:"country"`
+	Road     string            `json:"road"`
+	Hamlet   string            `json:"hamlet"`
+	Nearby   []NearbyAddress   `json:"nearby"`
+}
+
+// NearbyAddress 附近地址条目（类似外卖 App 的地址列表）
+type NearbyAddress struct {
+	Name   string  `json:"name"`   // 地点名称（如 "麓谷企业广场"）
+	Detail string  `json:"detail"` // 详细地址（如 "文轩路123号"）
+	Lat    float64 `json:"lat"`
+	Lng    float64 `json:"lng"`
 }
 
 // ============================================================
@@ -369,6 +382,92 @@ func reverseGeocodeNominatim(lat, lng float64) (*ReverseGeocodeResult, error) {
 		Road:     road,
 		Hamlet:   result.Address.Hamlet,
 	}, nil
+}
+
+// ============================================================
+// 附近地址搜索（类似外卖 App 的地址列表）
+// ============================================================
+
+// searchNearbyAddresses 搜索坐标附近的地址列表
+func searchNearbyAddresses(lat, lng float64) []NearbyAddress {
+	// 使用 Nominatim search 在坐标附近搜索地址
+	// viewbox 限定搜索范围在坐标附近约 500m
+	delta := 0.005 // 约 500m
+	viewbox := fmt.Sprintf("%f,%f,%f,%f", lng-delta, lat+delta, lng+delta, lat-delta)
+
+	req, err := http.NewRequest("GET",
+		fmt.Sprintf("https://nominatim.openstreetmap.org/search?format=json&limit=8&viewbox=%s&bounded=1&addressdetails=1&accept-language=zh",
+			viewbox),
+		nil,
+	)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", "cs-inv-monitor/1.0")
+
+	resp, err := geocodeHTTPClient.Do(req)
+	if err != nil {
+		logger.Warn("Nearby search failed", zap.Error(err))
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var results []struct {
+		DisplayName string `json:"display_name"`
+		Lat         string `json:"lat"`
+		Lon         string `json:"lon"`
+		Address     struct {
+			Road        string `json:"road"`
+			HouseNumber string `json:"house_number"`
+			Suburb      string `json:"suburb"`
+			Neighbourhood string `json:"neighbourhood"`
+		} `json:"address"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		logger.Warn("Nearby search parse failed", zap.Error(err))
+		return nil
+	}
+
+	var nearby []NearbyAddress
+	seen := make(map[string]bool)
+	for _, r := range results {
+		// 构造简洁地址
+		detail := r.Address.Road
+		if r.Address.HouseNumber != "" {
+			detail = r.Address.Road + r.Address.HouseNumber + "号"
+		}
+		if detail == "" {
+			detail = r.Address.Suburb
+		}
+		if detail == "" {
+			detail = r.Address.Neighbourhood
+		}
+
+		// 地点名称：取 display_name 的第一部分
+		name := r.DisplayName
+		if idx := strings.Index(r.DisplayName, ","); idx > 0 {
+			name = strings.TrimSpace(r.DisplayName[:idx])
+		}
+
+		// 去重
+		key := name + "|" + detail
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		rLat, _ := strconv.ParseFloat(r.Lat, 64)
+		rLng, _ := strconv.ParseFloat(r.Lon, 64)
+
+		nearby = append(nearby, NearbyAddress{
+			Name:   name,
+			Detail: detail,
+			Lat:    rLat,
+			Lng:    rLng,
+		})
+	}
+
+	return nearby
 }
 
 // ============================================================
