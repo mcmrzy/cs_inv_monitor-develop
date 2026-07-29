@@ -633,10 +633,21 @@ func (s *DeviceService) GetControlFieldsBySN(ctx context.Context, sn string) ([]
 
 func (s *DeviceService) GetModelFieldsBySN(ctx context.Context, sn string) ([]model.DeviceModelField, error) {
 	modelID, err := s.modelRepo.GetModelIDByDeviceSN(ctx, sn)
-	if err != nil || modelID == 0 {
+	if err != nil {
+		logger.Warn("GetModelIDByDeviceSN failed",
+			zap.String("sn", sn), zap.Error(err))
 		return []model.DeviceModelField{}, nil
 	}
-	return s.modelRepo.GetFieldsByModelID(ctx, modelID)
+	if modelID == 0 {
+		return []model.DeviceModelField{}, nil
+	}
+	fields, err := s.modelRepo.GetFieldsByModelID(ctx, modelID)
+	if err != nil {
+		logger.Warn("GetFieldsByModelID failed",
+			zap.Int64("model_id", modelID), zap.Error(err))
+		return []model.DeviceModelField{}, nil
+	}
+	return fields, nil
 }
 
 func (s *DeviceService) FilterByDataPermission(ctx context.Context, userID int64, sns []string) ([]string, error) {

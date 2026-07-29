@@ -48,8 +48,8 @@ android {
         // JPush 推送配置
         manifestPlaceholders["JPUSH_PKGNAME"] = "com.csinv.app"
         manifestPlaceholders["JPUSH_APPKEY"] =
-            System.getenv("JPUSH_APP_KEY") ?: "000000000000000000000000"
-        manifestPlaceholders["JPUSH_CHANNEL"] = "csergy_app"
+            System.getenv("JPUSH_APP_KEY") ?: "e89e8b711cd18f666705fe7f"
+        manifestPlaceholders["JPUSH_CHANNEL"] = "inv_app"
     }
 
     signingConfigs {

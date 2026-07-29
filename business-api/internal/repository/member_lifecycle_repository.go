@@ -396,6 +396,99 @@ func (r *MemberLifecycleRepository) InvalidateAuthCache(rootTenantID int64, orgI
 	}
 }
 
+// ==================== List Members ====================
+
+// OrgMemberWithUser represents a member with user details
+// This is used for the frontend member list display
+// Since we don't have email/phone in organization_memberships,
+// we join with the users table to get those details
+// In the new org system, the "email" is actually the user's identifier
+// and "phone" is the user's phone number from the users table
+// The frontend expects these fields in the response
+// Note: In the new org system, users are added by user_id, not by email
+// So we need to join with the users table to get the email/phone
+// The frontend OrgMember type expects: id, user_id, organization_id, role, status, email, phone, nickname, joined_at
+// But in our system, role is stored as role_code in membership_role_assignments
+// and status is stored in organization_memberships
+// We'll need to handle this mapping carefully
+
+type OrgMemberWithUser struct {
+	ID             int64      `json:"id"`
+	UserID         int64      `json:"user_id"`
+	OrganizationID int64      `json:"organization_id"`
+	Role           string     `json:"role"`
+	Status         string     `json:"status"`
+	Email          string     `json:"email"`
+	Phone          *string    `json:"phone,omitempty"`
+	Nickname       *string    `json:"nickname,omitempty"`
+	JoinedAt       time.Time  `json:"joined_at"`
+}
+
+// ListMembersByOrgID lists all members of an organization with user details
+func (r *MemberLifecycleRepository) ListMembersByOrgID(ctx context.Context, orgID int64, page, pageSize int) ([]OrgMemberWithUser, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	// Get total count
+	var total int64
+	err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM organization_memberships
+		WHERE organization_id = $1
+	`, orgID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get members with user details
+	rows, err := r.db.Query(ctx, `
+		SELECT 
+			m.id, m.user_id, m.organization_id,
+			COALESCE(mra.role_code, 'viewer') as role,
+			m.status,
+			COALESCE(u.email, '') as email,
+			u.phone,
+			u.nickname,
+			m.joined_at
+		FROM organization_memberships m
+		LEFT JOIN membership_role_assignments mra ON mra.membership_id = m.id
+		LEFT JOIN users u ON u.id = m.user_id
+		WHERE m.organization_id = $1
+		ORDER BY m.joined_at DESC
+		LIMIT $2 OFFSET $3
+	`, orgID, pageSize, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var members []OrgMemberWithUser
+	for rows.Next() {
+		var m OrgMemberWithUser
+		var persistenceStatus string
+		if err := rows.Scan(
+			&m.ID, &m.UserID, &m.OrganizationID,
+			&m.Role, &persistenceStatus,
+			&m.Email, &m.Phone, &m.Nickname, &m.JoinedAt,
+		); err != nil {
+			logger.Error("ListMembersByOrgID scan error", zap.Error(err))
+			continue
+		}
+		m.Status = model.ProjectMembershipStatus(persistenceStatus)
+		members = append(members, m)
+	}
+
+	if members == nil {
+		members = []OrgMemberWithUser{}
+	}
+
+	return members, total, nil
+}
+
 // ==================== Audit Logging ====================
 
 // LogAudit writes an audit log entry asynchronously

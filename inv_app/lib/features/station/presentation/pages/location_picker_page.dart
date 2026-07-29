@@ -70,8 +70,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   bool _useAmap = true; // default to AMap (safe for China)
   bool _initialized = false;
   String _resolvedAddress = '';
-  final _searchController = TextEditingController();
-  bool _searching = false;
   Timer? _reverseTimer;
 
   /// Cached region result across the entire app lifecycle
@@ -85,7 +83,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     _detectRegion();
   }
 
-  /// Call ip-api.com from client to detect user's actual network region
+  /// Call ipwho.is from client to detect user's actual network region
   Future<void> _detectRegion() async {
     if (_cachedRegion != null) {
       setState(() {
@@ -95,18 +93,16 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
     try {
-      // ip-api.com free tier: HTTP only, no CORS needed, works from any client
       final resp = await http
-          .get(Uri.parse('http://ip-api.com/json/?fields=status,countryCode'))
+          .get(Uri.parse('https://ipwho.is/?fields=country_code'))
           .timeout(const Duration(seconds: 5));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
-        _cachedRegion = data['countryCode'] as String? ?? 'CN';
+        _cachedRegion = data['country_code'] as String? ?? 'CN';
       } else {
         _cachedRegion = 'CN';
       }
     } catch (_) {
-      // ip-api.com may be blocked in China → user is likely in China
       _cachedRegion = 'CN';
     }
     if (mounted) {
@@ -159,7 +155,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     }
   }
 
-  /// Reverse geocoding: coords → address
+  /// Reverse geocoding: coords → short address (road + house number)
   Future<void> _reverseGeocode(double lat, double lng) async {
     try {
       final resp = await http.get(
@@ -169,51 +165,13 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
         final data = jsonDecode(resp.body);
         final d = data['data'];
         if (d != null) {
-          final parts = [
-            d['province'] as String?,
-            d['city'] as String?,
-            d['district'] as String?,
-            d['address'] as String?,
-          ].where((s) => s != null && s.isNotEmpty).toList();
-          if (parts.isNotEmpty) {
-            setState(() => _resolvedAddress = parts.join(' '));
+          final addr = d['address'] as String? ?? '';
+          if (addr.isNotEmpty) {
+            setState(() => _resolvedAddress = addr);
           }
         }
       }
     } catch (_) { /* ignore */ }
-  }
-
-  /// Forward geocoding: search text → fly to location
-  Future<void> _searchAddress() async {
-    final query = _searchController.text.trim();
-    if (query.isEmpty) return;
-    setState(() => _searching = true);
-    try {
-      final resp = await http.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/geocode?address=${Uri.encodeQueryComponent(query)}'),
-      ).timeout(const Duration(seconds: 8));
-      if (resp.statusCode == 200 && mounted) {
-        final data = jsonDecode(resp.body);
-        final d = data['data'];
-        if (d != null) {
-          final lat = double.tryParse('${d['lat']}');
-          final lng = double.tryParse('${d['lng']}');
-          if (lat != null && lng != null) {
-            final point = LatLng(lat, lng);
-            setState(() {
-              _selectedPoint = point;
-              _hasSelection = true;
-              _resolvedAddress = query;
-            });
-            final display = _useAmap
-                ? _Gcj02.fromWgs84(lat, lng)
-                : point;
-            _mapController.move(display, 15);
-          }
-        }
-      }
-    } catch (_) { /* ignore */ }
-    if (mounted) setState(() => _searching = false);
   }
 
   void _confirm() {
@@ -226,7 +184,6 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   @override
   void dispose() {
-    _searchController.dispose();
     _reverseTimer?.cancel();
     super.dispose();
   }
@@ -284,110 +241,74 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             ),
           ),
 
-          // 顶部返回按钮 + 搜索框
+          // 顶部返回按钮
           Positioned(
             top: MediaQuery.of(context).padding.top + 8.h,
             left: 12.w,
-            right: 12.w,
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20.r),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ),
+
+          // 地址显示（顶部居中）
+          if (_resolvedAddress.isNotEmpty)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 60.h,
+              left: 24.w,
+              right: 24.w,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 14.w,
+                  vertical: 8.h,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.95),
+                  borderRadius: BorderRadius.circular(16.r),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
                     ),
-                    SizedBox(width: 8.w),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20.r),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.location_on_outlined,
+                        size: 16.sp, color: const Color(0xFFE53935)),
+                    SizedBox(width: 6.w),
+                    Flexible(
+                      child: Text(
+                        _resolvedAddress,
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          color: const Color(0xFF333333),
+                          fontWeight: FontWeight.w500,
                         ),
-                        child: TextField(
-                          controller: _searchController,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => _searchAddress(),
-                          decoration: InputDecoration(
-                            hintText: l10n.stationSearchAddress,
-                            hintStyle: TextStyle(fontSize: 13.sp, color: Colors.grey),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 14.w,
-                              vertical: 10.h,
-                            ),
-                            suffixIcon: _searching
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : IconButton(
-                                    icon: const Icon(Icons.search, size: 20),
-                                    onPressed: _searchAddress,
-                                  ),
-                          ),
-                          style: TextStyle(fontSize: 13.sp),
-                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-                // 地址显示
-                if (_resolvedAddress.isNotEmpty)
-                  Container(
-                    margin: EdgeInsets.only(top: 6.h),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12.w,
-                      vertical: 6.h,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.92),
-                      borderRadius: BorderRadius.circular(12.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 3,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      _resolvedAddress,
-                      style: TextStyle(
-                        fontSize: 12.sp,
-                        color: const Color(0xFF555555),
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-              ],
+              ),
             ),
-          ),
 
           // 底部确认按钮
           Positioned(

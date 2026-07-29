@@ -44,7 +44,6 @@ const AdminPage: React.FC = () => {
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
         { key: 'channels', label: t('channel.title'), children: <ChannelManagement /> },
         { key: 'settings', label: t('admin.systemConfig'), children: <SettingsTab /> },
-        { key: 'quotas', label: t('admin.systemQuota'), children: <QuotaTab /> },
         { key: 'permissions', label: t('admin.permissionConfig'), children: <PermissionTab /> },
         { key: 'api-overview', label: t('admin.apiOverview'), children: <APIOverviewTab onNavigateToPermissions={() => setActiveTab('permissions')} /> },
       ]} />
@@ -243,47 +242,6 @@ const TenantTab: React.FC = () => {
         </Form>
       </Modal>
     </div>
-  )
-}
-
-const QuotaTab: React.FC = () => {
-  const { t } = useTranslation()
-  const { message } = App.useApp()
-  const [form] = Form.useForm()
-
-  const { isLoading, error, refetch } = useQuery({
-    queryKey: ['admin', 'quotas'],
-    queryFn: () => adminApi.getSystemConfig().then((r) => {
-      const d = r.data?.data ?? {}
-      form.setFieldsValue({
-        maxDevicesPerTenant: d.maxDevicesPerTenant ?? 500,
-        maxUsersPerTenant: d.maxUsersPerTenant ?? 200,
-        maxAlertsPerDay: d.maxAlertsPerDay ?? 1000,
-        maxOtaTasksPerMonth: d.maxOtaTasksPerMonth ?? 50,
-      })
-      return d
-    }),
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: (values: any) => adminApi.updateSystemConfig(values),
-    onSuccess: () => { message.success(t('admin.quotaSaveSuccess')) },
-    onError: () => { message.error(t('admin.quotaSaveFailed')) },
-  })
-
-  return (
-    <>
-      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
-      <Card title={t('admin.systemQuota')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
-      <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-        <Form.Item name="maxDevicesPerTenant" label={t('admin.maxDevicesPerTenant')}><InputNumber min={1} max={10000} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="maxUsersPerTenant" label={t('admin.maxUsersPerTenant')}><InputNumber min={1} max={1000} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="maxAlertsPerDay" label={t('admin.maxAlertsPerDay')}><InputNumber min={1} max={100000} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="maxOtaTasksPerMonth" label={t('admin.maxOtaTasksPerMonth')}><InputNumber min={1} max={5000} style={{ width: '100%' }} /></Form.Item>
-        <Form.Item><Button type="primary" onClick={async () => { try { saveMutation.mutate(await form.validateFields()) } catch {} }} loading={saveMutation.isPending}>{t('common.save')}</Button></Form.Item>
-      </Form>
-      </Card>
-    </>
   )
 }
 

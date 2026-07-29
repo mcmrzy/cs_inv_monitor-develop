@@ -2,11 +2,8 @@ import React, { useRef, useCallback, useImperativeHandle, forwardRef, useEffect,
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Input, Space, Typography } from 'antd'
-import { AimOutlined, SearchOutlined } from '@ant-design/icons'
+import { AimOutlined } from '@ant-design/icons'
 import api from '@/services/api'
-
-const { Text } = Typography
 
 export interface LatLng {
   lat: number
@@ -95,8 +92,8 @@ let cachedRegion: string | null = null
 let regionPromise: Promise<string> | null = null
 
 /**
- * Detect client region via ip-api.com (client-side, reflects user's actual network location).
- * Falls back to CN if ip-api.com is blocked (likely means user is in China).
+ * Detect region via ipwho.is (supports HTTPS + CORS, client-side IP detection).
+ * Falls back to CN if API fails.
  */
 function detectRegion(): Promise<string> {
   // Check localStorage first (survives page refresh)
@@ -107,10 +104,10 @@ function detectRegion(): Promise<string> {
   }
   if (cachedRegion) return Promise.resolve(cachedRegion)
   if (!regionPromise) {
-    regionPromise = fetch('https://ip-api.com/json/?fields=status,countryCode')
+    regionPromise = fetch('https://ipwho.is/?fields=country_code')
       .then(res => res.json())
       .then(data => {
-        cachedRegion = data?.countryCode || 'CN'
+        cachedRegion = data?.country_code || 'CN'
         localStorage.setItem('map_region', cachedRegion!)
         return cachedRegion!
       })
@@ -190,8 +187,6 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
     const [flyZoom, setFlyZoom] = useState(initialZoom)
     const [position, setPosition] = useState<LatLng | null>(null)
     const [useAmap, setUseAmap] = useState(false)
-    const [searchValue, setSearchValue] = useState('')
-    const [searching, setSearching] = useState(false)
     const reverseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Detect region on mount
@@ -239,16 +234,16 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
         setPosition(newPos)
         onChange?.(newPos)
 
-        // Debounced reverse geocoding: coords → address
+        // Debounced reverse geocoding: coords → address (now returns short address)
         if (onReverseGeocode) {
           if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current)
           reverseTimerRef.current = setTimeout(() => {
             api.get('/geocode/reverse', { params: { lat: wgsLat, lng: wgsLng } })
               .then(res => {
                 const data = res.data?.data
-                const addr = [data?.province, data?.city, data?.district, data?.address]
-                  .filter(Boolean).join(' ')
-                if (addr) onReverseGeocode(newPos, addr)
+                if (data?.address) {
+                  onReverseGeocode(newPos, data.address)
+                }
               })
               .catch(() => { /* ignore */ })
           }, 500)
@@ -274,28 +269,6 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
         )
       }
     }, [onChange, toDisplay])
-
-    const handleSearch = useCallback(() => {
-      if (!searchValue.trim()) return
-      setSearching(true)
-      api.get('/geocode', { params: { address: searchValue.trim() } })
-        .then(res => {
-          const data = res.data?.data
-          const lat = data?.lat != null ? Number(data.lat) : NaN
-          const lng = data?.lng != null ? Number(data.lng) : NaN
-          if (!isNaN(lat) && !isNaN(lng) && isFinite(lat) && isFinite(lng)) {
-            const newPos = { lat, lng }
-            setPosition(newPos)
-            onChange?.(newPos)
-            const display = toDisplay(lat, lng)
-            setFlyTarget(display)
-            setFlyZoom(15)
-            setTimeout(() => setFlyTarget(null), 2000)
-          }
-        })
-        .catch(() => { /* ignore */ })
-        .finally(() => setSearching(false))
-    }, [searchValue, onChange, toDisplay])
 
     // Compute display center for MapContainer
     const displayCenter = useMemo(() => {
@@ -325,26 +298,11 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
             background: '#fafafa',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             borderBottom: '1px solid #f0f0f0',
-            gap: 8,
           }}
         >
-          <Input
-            size="small"
-            placeholder="搜索地址..."
-            value={searchValue}
-            onChange={e => setSearchValue(e.target.value)}
-            onPressEnter={handleSearch}
-            suffix={
-              <SearchOutlined
-                style={{ cursor: 'pointer', color: searching ? '#999' : '#1677ff' }}
-                onClick={handleSearch}
-              />
-            }
-            style={{ flex: 1 }}
-          />
-          <a onClick={handleLocate} style={{ cursor: 'pointer', fontSize: 16, flexShrink: 0 }} title="使用我的位置">
+          <a onClick={handleLocate} style={{ cursor: 'pointer', fontSize: 16 }} title="使用我的位置">
             <AimOutlined />
           </a>
         </div>
