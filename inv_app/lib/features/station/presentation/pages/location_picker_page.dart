@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// WGS-84 → GCJ-02 coordinate conversion (for China map tiles)
@@ -80,7 +79,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
     _detectRegion();
   }
 
-  /// Call API to detect server region via IP, cache the result
+  /// Call ip-api.com from client to detect user's actual network region
   Future<void> _detectRegion() async {
     if (_cachedRegion != null) {
       setState(() {
@@ -90,16 +89,18 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
       return;
     }
     try {
+      // ip-api.com free tier: HTTP only, no CORS needed, works from any client
       final resp = await http
-          .get(Uri.parse('${AppConfig.apiBaseUrl}/geo/detect-region'))
+          .get(Uri.parse('http://ip-api.com/json/?fields=status,countryCode'))
           .timeout(const Duration(seconds: 5));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body);
-        _cachedRegion = data['data']?['region'] as String? ?? 'CN';
+        _cachedRegion = data['countryCode'] as String? ?? 'CN';
       } else {
         _cachedRegion = 'CN';
       }
     } catch (_) {
+      // ip-api.com may be blocked in China → user is likely in China
       _cachedRegion = 'CN';
     }
     if (mounted) {
