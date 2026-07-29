@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/features/station/presentation/pages/location_picker_page.dart';
+import 'package:inv_app/features/station/presentation/widgets/inline_location_picker.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class EditStationPage extends StatefulWidget {
@@ -221,25 +222,21 @@ class _EditStationPageState extends State<EditStationPage> {
                       ),
                     ],
                   ),
-                  SizedBox(height: 8.h),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _openLocationPicker,
-                      icon: const Icon(Icons.map_outlined, size: 18),
-                      label: Text(
-                        AppLocalizations.of(context)!.stationSelectOnMap,
-                        style: TextStyle(fontSize: 13.sp),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF2563EB),
-                        side: const BorderSide(color: Color(0xFFBAE6FD)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.r),
-                        ),
-                        padding: EdgeInsets.symmetric(vertical: 10.h),
-                      ),
-                    ),
+                  SizedBox(height: 12.h),
+                  // 内联地图选点
+                  InlineLocationPicker(
+                    initialLat: double.tryParse(_latitudeController.text),
+                    initialLng: double.tryParse(_longitudeController.text),
+                    onLocationChanged: (result) {
+                      _latitudeController.text =
+                          (result['lat'] as num?)?.toStringAsFixed(6) ?? '';
+                      _longitudeController.text =
+                          (result['lng'] as num?)?.toStringAsFixed(6) ?? '';
+                      final addr = result['address'] as String?;
+                      if (addr != null && addr.isNotEmpty) {
+                        _addressController.text = addr;
+                      }
+                    },
                   ),
                   SizedBox(height: 24.h),
                   SizedBox(
