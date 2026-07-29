@@ -1021,6 +1021,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		{
 			orgGroup.POST("", deps.OrganizationHandler.Create)
 			orgGroup.GET("", deps.OrganizationHandler.List)
+			orgGroup.GET("/hierarchy", deps.OrganizationHandler.GetOrgHierarchy)
 			orgGroup.GET("/:id", deps.OrganizationHandler.GetByID)
 			orgGroup.PUT("/:id", deps.OrganizationHandler.Update)
 			orgGroup.DELETE("/:id", deps.OrganizationHandler.Delete)
@@ -1028,6 +1029,16 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			orgGroup.PATCH("/:id/status", deps.OrganizationHandler.ToggleStatus)
 			orgGroup.GET("/:id/tree", deps.OrganizationHandler.GetTree)
 			orgGroup.GET("/:id/members", deps.MemberLifecycleHandler.ListMembers)
+			orgGroup.GET("/:id/quota", deps.OrganizationHandler.GetOrgQuota)
+			orgGroup.PUT("/:id/quota", deps.OrganizationHandler.SetOrgQuota)
+			orgGroup.POST("/:id/join", deps.OrganizationHandler.JoinOrg)
+			orgGroup.POST("/:id/approve-join", deps.OrganizationHandler.ApproveJoin)
+		}
+		
+		// My organizations (current user's org memberships)
+		myGroup := api.Group("/my").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
+		{
+			myGroup.GET("/organizations", deps.OrganizationHandler.MyOrganizations)
 		}
 
 		// Member Lifecycle Management APIs

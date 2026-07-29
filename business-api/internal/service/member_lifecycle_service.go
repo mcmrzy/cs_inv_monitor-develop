@@ -502,6 +502,32 @@ func (s *MemberLifecycleService) ListTransfers(ctx context.Context, userID int64
 	return result, nil
 }
 
+// ==================== List Members ====================
+
+// ListMembersResult represents the paginated result of listing members
+type ListMembersResult struct {
+	Items []repository.OrgMemberWithUser
+	Total int64
+	Page  int
+	Size  int
+}
+
+// ListMembers lists all members of an organization
+func (s *MemberLifecycleService) ListMembers(ctx context.Context, orgID int64, page, pageSize int) (*ListMembersResult, error) {
+	members, total, err := s.repo.ListMembersByOrgID(ctx, orgID, page, pageSize)
+	if err != nil {
+		logger.Error("ListMembers query failed", zap.Int64("org_id", orgID), zap.Error(err))
+		return nil, newServiceError(500, "查询成员列表失败")
+	}
+
+	return &ListMembersResult{
+		Items: members,
+		Total: total,
+		Page:  page,
+		Size:  pageSize,
+	}, nil
+}
+
 // ==================== Bulk Operations ====================
 
 func (s *MemberLifecycleService) BulkAdd(ctx context.Context, actorUserID int64, tenantID int64, req BulkAddParams) (*BulkAddResult, error) {

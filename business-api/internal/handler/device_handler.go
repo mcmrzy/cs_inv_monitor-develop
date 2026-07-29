@@ -8,10 +8,12 @@ import (
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
 	"inv-api-server/internal/service"
+	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 var deviceSNRegex = regexp.MustCompile(`^[A-Z0-9-]{8,64}$`)
@@ -172,11 +174,16 @@ func (h *DeviceHandler) GetDetail(c *gin.Context) {
 		},
 	}
 
-	// 附加型号字段元数据
-	modelFields, _ := h.deviceService.GetModelFieldsBySN(c.Request.Context(), sn)
-	if len(modelFields) > 0 {
-		result["model_fields"] = modelFields
+	// 附加型号字段元数据（始终返回，保证 API 响应结构一致）
+	modelFields, mfErr := h.deviceService.GetModelFieldsBySN(c.Request.Context(), sn)
+	if mfErr != nil {
+		logger.Warn("GetModelFieldsBySN failed",
+			zap.String("sn", sn), zap.Error(mfErr))
 	}
+	if modelFields == nil {
+		modelFields = []model.DeviceModelField{}
+	}
+	result["model_fields"] = modelFields
 
 	response.Success(c, result)
 }

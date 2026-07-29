@@ -158,6 +158,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
     });
 
     try {
+      final completer = Completer<void>();
+      
+      // 创建一个临时的监听器来等待状态变化
+      final subscription = context.read<AuthBloc>().stream.listen((state) {
+        if (state is AuthAuthenticated || state is AuthError) {
+          completer.complete();
+        }
+      });
+
       context.read<AuthBloc>().add(
             AuthUpdateProfileRequested(
               nickname: _nicknameController.text,
@@ -169,14 +178,30 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ),
           );
 
+      // 等待 AuthBloc 处理完成
+      await completer.future;
+      await subscription.cancel();
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context)!.success),
-            backgroundColor: AppColors.successLight,
-          ),
-        );
-        Navigator.pop(context);
+        final currentState = context.read<AuthBloc>().state;
+        if (currentState is AuthAuthenticated) {
+          // 更新成功
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.success),
+              backgroundColor: AppColors.successLight,
+            ),
+          );
+          Navigator.pop(context);
+        } else if (currentState is AuthError) {
+          // 更新失败
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(currentState.message),
+              backgroundColor: AppColors.errorLight,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

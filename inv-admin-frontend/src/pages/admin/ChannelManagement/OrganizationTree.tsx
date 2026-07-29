@@ -19,7 +19,15 @@ interface Props {
   onSelectOrg: (id: number | null) => void
 }
 
-const ORG_TYPES = ['manufacturer', 'distributor', 'dealer', 'installer', 'end_user']
+// Channel hierarchy: manufacturer -> agent -> distributor -> installer -> customer
+const ORG_HIERARCHY: Record<string, string[]> = {
+  manufacturer: ['agent', 'service_partner'],
+  agent: ['distributor', 'service_partner'],
+  distributor: ['installer'],
+  installer: ['customer'],
+}
+
+const ALL_ORG_TYPES = ['agent', 'distributor', 'installer', 'customer', 'service_partner']
 
 const OrganizationTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   const { t } = useTranslation()
@@ -125,12 +133,21 @@ const OrganizationTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   const getTypeColor = (type: string) => {
     const colors: Record<string, string> = {
       manufacturer: 'blue',
-      distributor: 'purple',
-      dealer: 'cyan',
+      agent: 'purple',
+      distributor: 'cyan',
       installer: 'green',
-      end_user: 'orange',
+      customer: 'orange',
+      service_partner: 'magenta',
     }
     return colors[type] ?? 'default'
+  }
+
+  // Get allowed child types based on selected org's type
+  const getAllowedTypes = (): string[] => {
+    if (!selectedOrgId) return ['agent', 'service_partner'] // root: can create agent under manufacturer
+    const selectedOrg = orgList.find((o) => o.id === selectedOrgId)
+    if (!selectedOrg) return ALL_ORG_TYPES
+    return ORG_HIERARCHY[selectedOrg.type] ?? []
   }
 
   return (
@@ -246,23 +263,30 @@ const OrganizationTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
         onCancel={() => { setCreateOpen(false); createForm.resetFields() }}
         confirmLoading={createMutation.isPending}
         destroyOnClose
+        width={520}
       >
         <Form form={createForm} layout="vertical" preserve={false}>
           <Form.Item name="name" label={t('channel.org.name')} rules={[{ required: true }]}>
-            <Input />
+            <Input placeholder={t('channel.org.namePlaceholder')} />
           </Form.Item>
           <Form.Item name="type" label={t('channel.org.type')} rules={[{ required: true }]}>
-            <Select options={ORG_TYPES.map((type) => ({ label: t(`channel.org.type.${type}`), value: type }))} />
+            <Select
+              options={getAllowedTypes().map((type) => ({ label: t(`channel.org.type.${type}`), value: type }))}
+              placeholder={t('channel.org.typePlaceholder')}
+            />
           </Form.Item>
           <Form.Item name="parent_id" label={t('channel.org.parent')}>
             <Select
               allowClear
               placeholder={t('channel.org.parentNone')}
-              options={orgList.map((o) => ({ label: o.name, value: o.id }))}
+              options={orgList.map((o) => ({ label: `${o.name} (${t(`channel.org.type.${o.type}`)})`, value: o.id }))}
             />
           </Form.Item>
-          <Form.Item name="description" label={t('channel.org.description')}>
-            <Input.TextArea rows={3} />
+          <Form.Item name="code" label={t('channel.org.code')}>
+            <Input placeholder={t('channel.org.codePlaceholder')} />
+          </Form.Item>
+          <Form.Item name="admin_email" label={t('channel.org.adminEmail')}>
+            <Input placeholder={t('channel.org.adminEmailPlaceholder')} type="email" />
           </Form.Item>
         </Form>
       </Modal>
@@ -286,7 +310,7 @@ const OrganizationTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
             <Input />
           </Form.Item>
           <Form.Item name="type" label={t('channel.org.type')} rules={[{ required: true }]}>
-            <Select options={ORG_TYPES.map((type) => ({ label: t(`channel.org.type.${type}`), value: type }))} />
+            <Select options={ALL_ORG_TYPES.map((type) => ({ label: t(`channel.org.type.${type}`), value: type }))} disabled />
           </Form.Item>
           <Form.Item name="description" label={t('channel.org.description')}>
             <Input.TextArea rows={3} />

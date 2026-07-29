@@ -61,7 +61,7 @@ class User {
       nickname: json['nickname'] as String?,
       avatar: json['avatar'] as String?,
       country: json['country'] as String?,
-      region: json['region'] as String?,
+      region: (json['region'] ?? json['region_name']) as String?,
       bio: json['bio'] as String?,
       isSystemAdmin: isSystemAdmin,
       permissions: perms,

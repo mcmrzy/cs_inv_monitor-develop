@@ -184,6 +184,8 @@ type ReverseGeocodeResult struct {
 	District string `json:"district"`
 	Address  string `json:"address"`
 	Country  string `json:"country"`
+	Road     string `json:"road"`
+	Hamlet   string `json:"hamlet"`
 }
 
 // ============================================================
@@ -302,15 +304,19 @@ func reverseGeocodeNominatim(lat, lng float64) (*ReverseGeocodeResult, error) {
 	var result struct {
 		DisplayName string `json:"display_name"`
 		Address     struct {
-			Country     string `json:"country"`
-			State       string `json:"state"`
-			Province    string `json:"province"`
-			City        string `json:"city"`
-			Town        string `json:"town"`
-			County      string `json:"county"`
-			Suburb      string `json:"suburb"`
+			Country      string `json:"country"`
+			State        string `json:"state"`
+			Province     string `json:"province"`
+			City         string `json:"city"`
+			Town         string `json:"town"`
+			County       string `json:"county"`
+			Suburb       string `json:"suburb"`
 			CityDistrict string `json:"city_district"`
-			Village     string `json:"village"`
+			Village      string `json:"village"`
+			Hamlet       string `json:"hamlet"`
+			Road         string `json:"road"`
+			HouseNumber  string `json:"house_number"`
+			Neighbourhood string `json:"neighbourhood"`
 		} `json:"address"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -337,12 +343,31 @@ func reverseGeocodeNominatim(lat, lng float64) (*ReverseGeocodeResult, error) {
 		district = result.Address.Village
 	}
 
+	// 构造简洁地址：路名 + 门牌号（类似外卖定位格式）
+	road := result.Address.Road
+	shortAddr := road
+	if result.Address.HouseNumber != "" {
+		shortAddr = road + result.Address.HouseNumber + "号"
+	}
+	if shortAddr == "" {
+		// 没有路名时，用 neighbourhood/hamlet
+		shortAddr = result.Address.Neighbourhood
+		if shortAddr == "" {
+			shortAddr = result.Address.Hamlet
+		}
+	}
+	if shortAddr == "" {
+		shortAddr = result.DisplayName // 最终 fallback
+	}
+
 	return &ReverseGeocodeResult{
 		Province: province,
 		City:     city,
 		District: district,
-		Address:  result.DisplayName,
+		Address:  shortAddr,
 		Country:  result.Address.Country,
+		Road:     road,
+		Hamlet:   result.Address.Hamlet,
 	}, nil
 }
 

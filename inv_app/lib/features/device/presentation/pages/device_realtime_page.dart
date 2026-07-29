@@ -89,6 +89,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   /// 将后端返回的各种 group_name 格式统一规范化为内部 key
   /// 支持格式：
   ///   - 内部 key: ac_params, pv_params, ...
+  ///   - 后端短格式: ac, pv, battery, energy, system, status
   ///   - Admin 前端格式: models.acParams, models.batteryParams, ...
   ///   - 中文显示名: 交流参数, 光伏参数, ...
   static String _normalizeGroupName(String raw) {
@@ -103,6 +104,19 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
       'control_cmd',
     };
     if (internalKeys.contains(raw)) return raw;
+    // 后端数据库短格式 → 内部 key
+    const shortKeyMap = {
+      'ac': 'ac_params',
+      'pv': 'pv_params',
+      'battery': 'battery_params',
+      'bms': 'battery_params',
+      'energy': 'energy_stats',
+      'system': 'system_status',
+      'status': 'system_status',
+      'info': 'device_info',
+      'control': 'control_cmd',
+    };
+    if (shortKeyMap.containsKey(raw)) return shortKeyMap[raw]!;
     // Admin 前端格式 models.xxx → 内部 key
     const adminKeyMap = {
       'models.acParams': 'ac_params',
@@ -253,6 +267,10 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
           // 始终使用 API 返回的字段配置（比默认更完整）
           if (fields.isNotEmpty) {
             _modelFields = fields;
+          } else if (_modelFields.isEmpty) {
+            // API 未返回 model_fields（型号字段未配置），
+            // 用已有的 realtime 数据兜底生成默认字段
+            _modelFields = _buildDefaultModelFields();
           }
           _online = data['online_status']?['online'] == true ||
               data['device']?['status'] == 1;
@@ -283,6 +301,25 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   void _subscribeMqttData() {
     try {
       final realtimeService = getIt<RealtimeDataService>();
+      // 页面打开时先读取已缓存的实时数据（避免数据未变化导致流不触发）
+      final cached = realtimeService.getLatestData(widget.sn);
+      if (cached != null && mounted) {
+        setState(() {
+          final newMqttData = _inverterToFlatMap(cached);
+          _realtimeData.addAll(newMqttData);
+          _hasMqttData = true;
+          if (_modelFields.isEmpty) {
+            _modelFields = _buildDefaultModelFields();
+          }
+          if (cached.onlineStatus != null) {
+            _online = cached.onlineStatus!.online;
+          }
+          if (_loading) {
+            _loading = false;
+            _error = null;
+          }
+        });
+      }
       realtimeService.startPolling(widget.sn);
       _realtimeSub = realtimeService.realtimeDataStream
           .where((rt) => rt.deviceSN == widget.sn)
@@ -410,13 +447,18 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
   }
 
   // field_key → 中文名称映射（后端 field_name 缺失时的兜底）
-  // 与 admin 前端 DEFAULT_FIELD_LABELS 保持一致（不含单位，单位由 field.unit 单独显示）
+  // 包含所有 device_model_fields 表中 model_id=2 的 field_key
   static const _fieldNameMap = {
     // 交流参数
     'ac_voltage': '输出电压',
     'ac_current': '输出电流',
+    'ac_active_power': '有功功率',
     'ac_power': '有功功率',
+    'ac_apparent_power': '视在功率',
     'ac_frequency': '输出频率',
+    'ac_power_factor': '功率因数',
+    'ac_voltage_thd': '电压THD',
+    'load_percent': '负载率',
     'power_factor': '功率因数',
     'apparent_power': '视在功率',
     'load_rate': '负载率',
@@ -426,8 +468,33 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     'load_power': '负载功率',
     // 电池参数
     'battery_soc': '电池SOC',
+    'battery_soh': '电池SOH',
     'battery_voltage': '电池电压',
     'battery_current': '电池电流',
+    'battery_temperature': '电池温度',
+    'battery_power': '充放电功率',
+    'battery_state': '充放电状态',
+    'battery_capacity_remain': '剩余容量',
+    'battery_capacity_total': '额定容量',
+    'battery_cycle_count': '循环次数',
+    'battery_protect_status': '保护状态',
+    'battery_temp_min': '电池最低温度',
+    'battery_temp_max': '电池最高温度',
+    'cell_voltage_min': '单体最低电压',
+    'cell_voltage_max': '单体最高电压',
+    'cell_voltage_diff': '电芯压差',
+    'charge_voltage_ref': '充电参考电压',
+    'discharge_cutoff_voltage': '放电截止电压',
+    'max_charge_current': '最大充电电流',
+    'max_discharge_current': '最大放电电流',
+    'charge_request_current_x10': '充电请求电流',
+    'charge_request_voltage_x10': '充电请求电压',
+    'bms_fault_code': 'BMS故障码',
+    'batt_soc': '电池SOC',
+    'batt_soh': '电池SOH',
+    'batt_voltage': '电池电压',
+    'batt_current': '电池电流',
+    'charge_status': '充放电状态',
     'battery_capacity': '电池容量',
     'battery_health': '电池健康度',
     'charge_discharge_power': '充放电功率',
@@ -438,19 +505,12 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     'cell_min_temp': '电芯最低温度',
     'cell_max_voltage': '单体最高电压',
     'cell_min_voltage': '单体最低电压',
-    'cell_voltage_diff': '电芯压差',
-    'charge_status': '充放电状态',
     'battery_avg_temp': '电池平均温度',
-    'bms_fault_code': 'BMS故障码',
     'protect_status': '保护状态',
     'max_chg_current': '最大充电电流',
     'max_dischg_current': '最大放电电流',
     'charge_volt_ref': '充电参考电压',
     'dischg_cut_volt': '放电截止电压',
-    'batt_soc': '电池SOC',
-    'batt_soh': '电池SOH',
-    'batt_voltage': '电池电压',
-    'batt_current': '电池电流',
     'batt_charge_state': '充放电状态',
     // 光伏参数
     'pv1_voltage': 'PV1电压',
@@ -460,27 +520,34 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     'pv1_power': 'PV1功率',
     'pv2_power': 'PV2功率',
     'pv_total_power': 'PV总功率',
-    'mppt_status': 'MPPT状态',
-    'mppt_state': 'MPPT状态',
     'pv1_voltage_max': 'PV1历史最高电压',
     'pv1_power_max': 'PV1历史最高功率',
     'pv2_voltage_max': 'PV2历史最高电压',
     'pv2_power_max': 'PV2历史最高功率',
+    'mppt_state': 'MPPT状态',
+    'mppt_status': 'MPPT状态',
     'pv_voltage': '光伏电压',
     'pv_current': '光伏电流',
     'pv_power': '光伏功率',
     // 系统状态
-    'run_status': '运行状态',
-    'state': '工作状态',
+    'work_state': '工作状态',
     'fault_code': '故障码',
     'alarm_code': '告警码',
+    'inverter_temperature': '逆变器温度',
+    'mos_temperature': 'MOS温度',
+    'ambient_temperature': '环境温度',
+    'fan_speed_percent': '风扇转速',
+    'dc_bus_voltage': '直流母线电压',
+    'efficiency': '转换效率',
+    'runtime_hours': '运行时长',
+    'system_mode': '系统模式',
+    'run_status': '运行状态',
+    'state': '工作状态',
     'inverter_temp': '逆变器温度',
     'heatsink_temp': '散热器温度',
     'ambient_temp': '环境温度',
-    'dc_bus_voltage': '直流母线电压',
     'vbus1': '母线电压1',
     'vbus2': '母线电压2',
-    'efficiency': '转换效率',
     'total_run_time': '累计运行时长',
     'fan_speed': '风扇转速',
     'temp_inv': '逆变器温度',
@@ -492,6 +559,18 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     'output_type': '输出类型',
     'nominal_active_power': '额定有功功率',
     // 能量统计
+    'daily_pv_energy': '日发电量',
+    'daily_charge_energy': '日充电量',
+    'daily_discharge_energy': '日放电量',
+    'daily_load_energy': '日用电量',
+    'total_charge_energy': '累计充电量',
+    'total_discharge_energy': '累计放电量',
+    'total_load_energy': '累计用电量',
+    'total_pv_energy': '累计发电量',
+    'total_charge_capacity': '累计充电容量',
+    'total_discharge_capacity': '累计放电容量',
+    'total_charge_time': '累计充电时间',
+    'total_discharge_time': '累计放电时间',
     'energy': '当日发电量',
     'total_energy': '累计发电量',
     'daily_charge': '当日充电量',
@@ -503,7 +582,6 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     'run_time': '运行时间',
     'daily_pv': '日发电量',
     'total_pv': '累计发电量',
-    'runtime_hours': '运行时长',
     'daily_feed_energy': '日馈网电量',
     'total_feed_energy': '累计馈网电量',
     'daily_grid_import': '日购电量',
@@ -521,17 +599,18 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     'charge_enable': '充电使能',
     'discharge_enable': '放电使能',
     'grid_charge_enable': '电网充电使能',
-    'max_charge_current': '最大充电电流',
-    'max_discharge_current': '最大放电电流',
     // 设备信息
     'serial_number': '序列号',
     'total_active_power': '总有功功率',
   };
 
-  /// 字段显示名称：优先使用 fieldName，若为空或与 fieldKey 相同则查中文映射
+  /// 字段显示名称：优先使用 fieldName，若为空、与 fieldKey 相同、或是 i18n key 则查中文映射
   String _displayName(DeviceModelField field) {
-    if (field.fieldName.isNotEmpty && field.fieldName != field.fieldKey) {
-      return field.fieldName;
+    // fieldName 如果是 i18n key（如 "fields.battery_voltage"），不直接显示
+    final fn = field.fieldName;
+    final isI18nKey = fn.startsWith('fields.') || fn.startsWith('models.');
+    if (fn.isNotEmpty && fn != field.fieldKey && !isI18nKey) {
+      return fn;
     }
     // 查静态中文映射
     final mapped = _fieldNameMap[field.fieldKey];

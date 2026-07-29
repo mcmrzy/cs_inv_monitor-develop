@@ -9,11 +9,13 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
+	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 // OrganizationHandler handles organization management operations
@@ -24,9 +26,11 @@ type OrganizationHandler struct {
 
 // CreateOrganizationRequest represents a request to create a new organization unit
 type CreateOrganizationRequest struct {
-	Name     string  `json:"name" binding:"required"`
-	Type     string  `json:"type" binding:"required"`
-	ParentID *int64  `json:"parent_id"` // nil = direct child of root tenant
+	Name       string  `json:"name" binding:"required"`
+	Type       string  `json:"type" binding:"required"`
+	ParentID   *int64  `json:"parent_id"`             // nil = direct child of root tenant
+	Code       *string `json:"code,omitempty"`        // optional org code
+	AdminEmail *string `json:"admin_email,omitempty"` // optional: assign existing user as org admin
 }
 
 // UpdateOrganizationRequest represents a request to update organization metadata
@@ -95,6 +99,12 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
+	// Debug log
+	logger.Info("CreateOrganization request",
+			zap.String("name", req.Name),
+			zap.String("type", req.Type),
+			zap.Bool("isSystemAdmin", isSystemAdmin))
+
 	// Only system admins can create orgs during migration period
 	if !isSystemAdmin {
 		response.Error(c, 403, "end users cannot create organizations")
@@ -104,13 +114,16 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	// Validate organization type.
 	// "manufacturer" cannot be created via the API — the root manufacturer
 	// org is provisioned automatically by ensure_tenant_root().
+	// Channel hierarchy: manufacturer -> agent -> distributor -> installer -> customer
 	validTypes := map[string]bool{
 		"agent":           true,
 		"distributor":     true,
+		"installer":       true,
 		"customer":        true,
 		"service_partner": true,
 	}
 	if !validTypes[req.Type] {
+		logger.Warn("invalid organization type", zap.String("type", req.Type))
 		response.Error(c, 400, "invalid organization type")
 		return
 	}
@@ -147,13 +160,14 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// If ParentID provided, validate it belongs to same root_tenant
+	// If ParentID provided, validate it belongs to same root_tenant and check hierarchy
 	var parentID *int64
+	var parentType string
 	if req.ParentID != nil {
 		var checkTenantID int64
 		err = tx.QueryRow(ctx, `
-			SELECT root_tenant_id FROM organizations WHERE id = $1 AND deleted_at IS NULL
-		`, *req.ParentID).Scan(&checkTenantID)
+			SELECT root_tenant_id, org_type FROM organizations WHERE id = $1 AND deleted_at IS NULL
+		`, *req.ParentID).Scan(&checkTenantID, &parentType)
 		if err == pgx.ErrNoRows {
 			tx.Rollback(ctx)
 			response.Error(c, 404, "parent organization not found")
@@ -174,6 +188,36 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	} else {
 		// Default parent is the manufacturer root org
 		parentID = &tenantID
+		parentType = "manufacturer"
+	}
+
+	// Validate hierarchy: enforce strict parent-child type rules
+	hierarchyRules := map[string]string{
+		"agent":           "manufacturer",
+		"distributor":     "agent",
+		"installer":       "distributor",
+		"customer":        "installer",
+		"service_partner": "manufacturer",
+	}
+	if expectedParent, ok := hierarchyRules[req.Type]; ok {
+		if req.Type == "customer" {
+			// customer can also be directly under manufacturer (unassigned pool)
+			if parentType != "installer" && parentType != "manufacturer" {
+				tx.Rollback(ctx)
+				response.Error(c, 400, fmt.Sprintf("customer must be under installer or manufacturer, but parent is %s", parentType))
+				return
+			}
+		} else if req.Type == "service_partner" {
+			if parentType != "manufacturer" && parentType != "agent" {
+				tx.Rollback(ctx)
+				response.Error(c, 400, fmt.Sprintf("service_partner must be under manufacturer or agent, but parent is %s", parentType))
+				return
+			}
+		} else if parentType != expectedParent {
+			tx.Rollback(ctx)
+			response.Error(c, 400, fmt.Sprintf("%s must be under %s, but parent is %s", req.Type, expectedParent, parentType))
+			return
+		}
 	}
 
 	// Insert organization — the AFTER INSERT trigger handles closure and tenant_roots
@@ -187,17 +231,91 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		Version:      1,
 	}
 
+	var orgCode *string
+	if req.Code != nil && *req.Code != "" {
+		orgCode = req.Code
+	}
+
 	err = tx.QueryRow(ctx, `
-		INSERT INTO organizations (root_tenant_id, parent_id, org_type, name, status, version)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO organizations (root_tenant_id, parent_id, org_type, code, name, status, version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
-	`, org.RootTenantID, org.ParentID, org.Type, org.Name, org.Status, org.Version).
+	`, org.RootTenantID, org.ParentID, org.Type, orgCode, org.Name, org.Status, org.Version).
 		Scan(&org.ID, &org.CreatedAt, &org.UpdatedAt)
 	if err != nil {
 		tx.Rollback(ctx)
 		log.Printf("[CreateOrg] insert error: user_id=%d, tenant_id=%d, parent_id=%v, type=%s, err=%v", userID, tenantID, parentID, req.Type, err)
 		response.Error(c, 500, fmt.Sprintf("create organization failed: %v", err))
 		return
+	}
+
+	// If admin_email provided, find user and create membership
+	if req.AdminEmail != nil && *req.AdminEmail != "" {
+		var adminUserID int64
+		err = tx.QueryRow(ctx, `
+			SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL
+		`, *req.AdminEmail).Scan(&adminUserID)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				tx.Rollback(ctx)
+				response.Error(c, 404, fmt.Sprintf("user with email %s not found", *req.AdminEmail))
+				return
+			}
+			tx.Rollback(ctx)
+			log.Printf("[CreateOrg] query admin user error: err=%v", err)
+			response.Error(c, 500, "query admin user failed")
+			return
+		}
+
+		// Create membership
+		var membershipID int64
+		err = tx.QueryRow(ctx, `
+			INSERT INTO organization_memberships (root_tenant_id, organization_id, user_id, status)
+			VALUES ($1, $2, $3, 'active')
+			RETURNING id
+		`, tenantID, org.ID, adminUserID).Scan(&membershipID)
+		if err != nil {
+			tx.Rollback(ctx)
+			log.Printf("[CreateOrg] create membership error: org_id=%d, user_id=%d, err=%v", org.ID, adminUserID, err)
+			response.Error(c, 500, fmt.Sprintf("create membership failed: %v", err))
+			return
+		}
+		// Assign org_admin role
+		_, err = tx.Exec(ctx, `
+			INSERT INTO membership_role_assignments (root_tenant_id, organization_id, membership_id, role_code, assigned_by)
+			VALUES ($1, $2, $3, 'org_admin', $4)
+		`, tenantID, org.ID, membershipID, userID)
+		if err != nil {
+			tx.Rollback(ctx)
+			log.Printf("[CreateOrg] assign role error: membership_id=%d, err=%v", membershipID, err)
+			response.Error(c, 500, fmt.Sprintf("assign admin role failed: %v", err))
+			return
+		}
+	}
+
+	// Initialize default quotas for the new org (inherit from parent if exists)
+	defaultQuotas := []struct {
+		resourceType string
+		limit        int64
+	}{
+		{"members", 100},
+		{"direct_child_organizations", 50},
+		{"descendant_organizations", 200},
+		{"inventory_devices", 1000},
+		{"claimed_devices", 500},
+		{"stations", 200},
+		{"pending_invitations", 20},
+	}
+	for _, q := range defaultQuotas {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO organization_quotas (root_tenant_id, organization_id, resource_type, quota_limit, inherited_from_organization_id)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (root_tenant_id, organization_id, resource_type) DO NOTHING
+		`, tenantID, org.ID, q.resourceType, q.limit, parentID)
+		if err != nil {
+			log.Printf("[CreateOrg] init quota warning: resource_type=%s, err=%v", q.resourceType, err)
+			// Don't fail for quota init issues
+		}
 	}
 
 	if err = tx.Commit(ctx); err != nil {
@@ -239,19 +357,10 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	})
 }
 
-// List handles GET /api/v1/organizations - List organizations with pagination and filters
+// List handles GET /api/v1/organizations - List organizations (returns array for frontend compatibility)
 func (h *OrganizationHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	isSystemAdmin := middleware.GetIsSystemAdmin(c)
-
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize := getPageSize(c, 20)
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
 
 	// Filter by type and status
 	orgType := c.Query("type")
@@ -276,7 +385,6 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 	// System admin sees all organizations
 	_ = isSystemAdmin
 	
-	var totalCount int64
 	var orgs []OrganizationWithChildren
 
 	query := `
@@ -302,11 +410,7 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 		argIdx++
 	}
 
-	query += ` GROUP BY o.id ORDER BY o.created_at DESC LIMIT $` + fmt.Sprintf("%d", argIdx) + ` OFFSET $` + fmt.Sprintf("%d", argIdx+1)
-
-	// Calculate offset
-	offset := int64((page - 1) * pageSize)
-	args = append(args, pageSize, offset)
+	query += ` GROUP BY o.id ORDER BY o.created_at DESC`
 
 	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
@@ -329,31 +433,17 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 		orgs = append(orgs, org)
 	}
 
-	// Get total count
-	countQuery := `SELECT COUNT(*) FROM organizations WHERE root_tenant_id = $1 AND deleted_at IS NULL`
-	countArgs := []interface{}{tenantID}
-	if orgType != "" {
-		countQuery += " AND org_type = $2"
-		countArgs = append(countArgs, orgType)
-	}
-	if status != "" {
-		countQuery += " AND status = $3"
-		countArgs = append(countArgs, status)
-	}
-	err = tx.QueryRow(ctx, countQuery, countArgs...).Scan(&totalCount)
-	if err != nil {
-		log.Printf("[ListOrg] count error: err=%v", err)
-		response.Error(c, 500, "count organizations failed")
-		return
-	}
-
 	if err = tx.Commit(ctx); err != nil {
 		log.Printf("[ListOrg] commit error: err=%v", err)
 		response.Error(c, 500, "query failed")
 		return
 	}
 
-	response.Page(c, orgs, totalCount, page, pageSize)
+	// Return as array for frontend compatibility (OrganizationTree expects array)
+	if orgs == nil {
+		orgs = []OrganizationWithChildren{}
+	}
+	response.Success(c, orgs)
 }
 
 // GetByID handles GET /api/v1/organizations/:id - Get organization details with children count
@@ -843,4 +933,371 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 		"subtree":           treeNodes,
 		"total_nodes":       len(treeNodes),
 	})
+}
+
+// ── GetOrgHierarchy: GET /api/v1/organizations/hierarchy ──
+// Returns the full org tree with member_count and device_count per node.
+func (h *OrganizationHandler) GetOrgHierarchy(c *gin.Context) {
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
+		response.Error(c, 403, "tenant context missing")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	type HierarchyNode struct {
+		ID           int64            `json:"id"`
+		ParentID     *int64           `json:"parent_id"`
+		Name         string           `json:"name"`
+		Type         string           `json:"type"`
+		Code         string           `json:"code"`
+		Status       string           `json:"status"`
+		MemberCount  int              `json:"member_count"`
+		DeviceCount  int              `json:"device_count"`
+		ChildCount   int              `json:"children_count"`
+		Children     []*HierarchyNode `json:"children,omitempty"`
+	}
+
+	rows, err := h.db.Query(ctx, `
+		SELECT o.id, o.parent_id, o.name, o.org_type, COALESCE(o.code, ''), o.status,
+			(SELECT COUNT(*) FROM organization_memberships m
+				WHERE m.organization_id = o.id AND m.status = 'active') AS member_count,
+			(SELECT COUNT(*) FROM authorization_resources ar
+				WHERE ar.organization_id = o.id AND ar.resource_type = 'device' AND ar.status = 'active') AS device_count,
+			(SELECT COUNT(*) FROM organizations c
+				WHERE c.parent_id = o.id AND c.deleted_at IS NULL) AS child_count
+		FROM organizations o
+		WHERE o.root_tenant_id = $1 AND o.deleted_at IS NULL
+		ORDER BY o.created_at
+	`, tenantID)
+	if err != nil {
+		log.Printf("[GetOrgHierarchy] query error: err=%v", err)
+		response.Error(c, 500, "query hierarchy failed")
+		return
+	}
+	defer rows.Close()
+
+	nodeMap := make(map[int64]*HierarchyNode)
+	var roots []*HierarchyNode
+	for rows.Next() {
+		n := &HierarchyNode{}
+		if err := rows.Scan(&n.ID, &n.ParentID, &n.Name, &n.Type, &n.Code, &n.Status,
+			&n.MemberCount, &n.DeviceCount, &n.ChildCount); err != nil {
+			continue
+		}
+		nodeMap[n.ID] = n
+	}
+	for _, n := range nodeMap {
+		if n.ParentID == nil || nodeMap[*n.ParentID] == nil {
+			roots = append(roots, n)
+		} else {
+			parent := nodeMap[*n.ParentID]
+			parent.Children = append(parent.Children, n)
+		}
+	}
+
+	response.Success(c, roots)
+}
+
+// ── GetOrgQuota: GET /api/v1/organizations/:id/quota ──
+func (h *OrganizationHandler) GetOrgQuota(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.Error(c, 400, "invalid organization id")
+		return
+	}
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
+		response.Error(c, 403, "tenant context missing")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Verify org belongs to tenant
+	var orgName string
+	err = h.db.QueryRow(ctx,
+		`SELECT name FROM organizations WHERE id = $1 AND root_tenant_id = $2 AND deleted_at IS NULL`,
+		id, tenantID).Scan(&orgName)
+	if err == pgx.ErrNoRows {
+		response.Error(c, 404, "organization not found")
+		return
+	}
+	if err != nil {
+		response.Error(c, 500, "query failed")
+		return
+	}
+
+	type QuotaItem struct {
+		ResourceType string `json:"resource_type"`
+		QuotaLimit   int64  `json:"quota_limit"`
+		UsedCount    int64  `json:"used_count"`
+		ReservedCount int64 `json:"reserved_count"`
+		InheritedFrom *int64 `json:"inherited_from_organization_id,omitempty"`
+	}
+
+	rows, err := h.db.Query(ctx, `
+		SELECT q.resource_type, q.quota_limit,
+			COALESCE(u.used_count, 0), COALESCE(u.reserved_count, 0),
+			q.inherited_from_organization_id
+		FROM organization_quotas q
+		LEFT JOIN organization_quota_usage u
+			ON u.root_tenant_id = q.root_tenant_id
+			AND u.organization_id = q.organization_id
+			AND u.resource_type = q.resource_type
+		WHERE q.root_tenant_id = $1 AND q.organization_id = $2
+		ORDER BY q.resource_type
+	`, tenantID, id)
+	if err != nil {
+		log.Printf("[GetOrgQuota] query error: err=%v", err)
+		response.Error(c, 500, "query quota failed")
+		return
+	}
+	defer rows.Close()
+
+	var quotas []QuotaItem
+	for rows.Next() {
+		var q QuotaItem
+		if err := rows.Scan(&q.ResourceType, &q.QuotaLimit, &q.UsedCount, &q.ReservedCount, &q.InheritedFrom); err != nil {
+			continue
+		}
+		quotas = append(quotas, q)
+	}
+	if quotas == nil {
+		quotas = []QuotaItem{}
+	}
+	response.Success(c, quotas)
+}
+
+// ── SetOrgQuota: PUT /api/v1/organizations/:id/quota ──
+func (h *OrganizationHandler) SetOrgQuota(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.Error(c, 400, "invalid organization id")
+		return
+	}
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
+		response.Error(c, 403, "tenant context missing")
+		return
+	}
+
+	var req struct {
+		Quotas []struct {
+			ResourceType string `json:"resource_type" binding:"required"`
+			QuotaLimit   int64  `json:"quota_limit" binding:"required"`
+		} `json:"quotas" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Verify org exists
+	var orgType string
+	err = h.db.QueryRow(ctx,
+		`SELECT org_type FROM organizations WHERE id = $1 AND root_tenant_id = $2 AND deleted_at IS NULL`,
+		id, tenantID).Scan(&orgType)
+	if err == pgx.ErrNoRows {
+		response.Error(c, 404, "organization not found")
+		return
+	}
+
+	for _, q := range req.Quotas {
+		_, err = h.db.Exec(ctx, `
+			INSERT INTO organization_quotas (root_tenant_id, organization_id, resource_type, quota_limit, inherited_from_organization_id)
+			VALUES ($1, $2, $3, $4, (SELECT parent_id FROM organizations WHERE id = $2))
+			ON CONFLICT (root_tenant_id, organization_id, resource_type)
+			DO UPDATE SET quota_limit = $4, updated_at = NOW()
+		`, tenantID, id, q.ResourceType, q.QuotaLimit)
+		if err != nil {
+			log.Printf("[SetOrgQuota] upsert error: resource=%s, err=%v", q.ResourceType, err)
+		}
+	}
+
+	response.SuccessWithMessage(c, "quota updated", gin.H{"organization_id": id})
+}
+
+// ── JoinOrg: POST /api/v1/organizations/:id/join ──
+// User requests to join an organization (creates pending invitation).
+func (h *OrganizationHandler) JoinOrg(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.Error(c, 400, "invalid organization id")
+		return
+	}
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
+		response.Error(c, 403, "tenant context missing")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Check org exists
+	var orgName string
+	err = h.db.QueryRow(ctx,
+		`SELECT name FROM organizations WHERE id = $1 AND root_tenant_id = $2 AND deleted_at IS NULL`,
+		id, tenantID).Scan(&orgName)
+	if err == pgx.ErrNoRows {
+		response.Error(c, 404, "organization not found")
+		return
+	}
+
+	// Check if already a member
+	var existingID int64
+	err = h.db.QueryRow(ctx,
+		`SELECT id FROM organization_memberships WHERE organization_id = $1 AND user_id = $2 AND status = 'active'`,
+		id, userID).Scan(&existingID)
+	if err == nil {
+		response.Error(c, 409, "already a member of this organization")
+		return
+	}
+
+	// Check if already has pending invitation
+	err = h.db.QueryRow(ctx,
+		`SELECT id FROM invitations WHERE organization_id = $1 AND recipient = (SELECT email FROM users WHERE id = $2) AND status = 'pending'`,
+		id, userID).Scan(&existingID)
+	if err == nil {
+		response.Error(c, 409, "join request already pending")
+		return
+	}
+
+	// Create invitation (pending join request)
+	var userEmail string
+	h.db.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, userID).Scan(&userEmail)
+
+	_, err = h.db.Exec(ctx, `
+		INSERT INTO invitations (root_tenant_id, organization_id, recipient, token_key_id, token_digest, role_assignments, invited_by, expires_at)
+		VALUES ($1, $2, $3, 'join_request', decode(md5(random()::text), 'hex'), '[{"role_code": "viewer"}]'::jsonb, $4, NOW() + INTERVAL '72 hours')
+	`, tenantID, id, userEmail, userID)
+	if err != nil {
+		log.Printf("[JoinOrg] insert error: err=%v", err)
+		response.Error(c, 500, "join request failed")
+		return
+	}
+
+	response.SuccessWithMessage(c, "join request submitted", gin.H{
+		"organization_id": id,
+		"organization_name": orgName,
+		"status": "pending",
+	})
+}
+
+// ── ApproveJoin: POST /api/v1/organizations/:id/approve-join ──
+// Admin approves a join request (accepts invitation and creates membership).
+func (h *OrganizationHandler) ApproveJoin(c *gin.Context) {
+	adminUserID := middleware.GetUserID(c)
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.Error(c, 400, "invalid organization id")
+		return
+	}
+
+	var req struct {
+		UserID int64  `json:"user_id" binding:"required"`
+		Action string `json:"action" binding:"required"` // approve / reject
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
+		response.Error(c, 403, "tenant context missing")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	if req.Action == "approve" {
+		// Create membership
+		var membershipID int64
+		err = h.db.QueryRow(ctx, `
+			INSERT INTO organization_memberships (root_tenant_id, organization_id, user_id, status)
+			VALUES ($1, $2, $3, 'active')
+			ON CONFLICT (root_tenant_id, organization_id, user_id) WHERE status = 'active'
+			DO NOTHING
+			RETURNING id
+		`, tenantID, id, req.UserID).Scan(&membershipID)
+		if err != nil && err != pgx.ErrNoRows {
+			log.Printf("[ApproveJoin] create membership error: err=%v", err)
+			response.Error(c, 500, "approve failed")
+			return
+		}
+
+		// Update invitation status
+		_, _ = h.db.Exec(ctx, `
+			UPDATE invitations SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()
+			WHERE organization_id = $1 AND recipient = (SELECT email FROM users WHERE id = $2) AND status = 'pending'
+		`, id, req.UserID)
+
+		response.SuccessWithMessage(c, "join approved", gin.H{"user_id": req.UserID, "organization_id": id})
+	} else {
+		// Reject
+		_, _ = h.db.Exec(ctx, `
+			UPDATE invitations SET status = 'rejected', updated_at = NOW()
+			WHERE organization_id = $1 AND recipient = (SELECT email FROM users WHERE id = $2) AND status = 'pending'
+		`, id, req.UserID)
+
+		response.SuccessWithMessage(c, "join rejected", gin.H{"user_id": req.UserID, "organization_id": id})
+	}
+	_ = adminUserID
+}
+
+// ── MyOrganizations: GET /api/v1/my/organizations ──
+// Returns organizations the current user belongs to.
+func (h *OrganizationHandler) MyOrganizations(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	tenantID := middleware.GetRootTenantID(c)
+	if tenantID == 0 {
+		response.Error(c, 403, "tenant context missing")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	type MyOrg struct {
+		ID       int64  `json:"id"`
+		Name     string `json:"name"`
+		Type     string `json:"type"`
+		Status   string `json:"status"`
+		Role     string `json:"role"`
+		JoinedAt string `json:"joined_at"`
+	}
+
+	rows, err := h.db.Query(ctx, `
+		SELECT o.id, o.name, o.org_type, o.status,
+			COALESCE((SELECT string_agg(ra.role_code, ',') FROM membership_role_assignments ra
+				WHERE ra.membership_id = m.id AND ra.status = 'active'), 'viewer') AS role,
+			m.joined_at
+		FROM organization_memberships m
+		JOIN organizations o ON o.id = m.organization_id AND o.deleted_at IS NULL
+		WHERE m.user_id = $1 AND m.root_tenant_id = $2 AND m.status = 'active'
+		ORDER BY m.joined_at DESC
+	`, userID, tenantID)
+	if err != nil {
+		log.Printf("[MyOrganizations] query error: err=%v", err)
+		response.Error(c, 500, "query failed")
+		return
+	}
+	defer rows.Close()
+
+	var orgs []MyOrg
+	for rows.Next() {
+		var o MyOrg
+		if err := rows.Scan(&o.ID, &o.Name, &o.Type, &o.Status, &o.Role, &o.JoinedAt); err != nil {
+			continue
+		}
+		orgs = append(orgs, o)
+	}
+	if orgs == nil {
+		orgs = []MyOrg{}
+	}
+	response.Success(c, orgs)
 }

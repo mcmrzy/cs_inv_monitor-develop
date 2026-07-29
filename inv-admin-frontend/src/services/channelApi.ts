@@ -6,9 +6,10 @@ export interface Organization {
   id: number
   name: string
   parent_id: number | null
-  type: string // manufacturer/distributor/dealer/installer/end_user
+  type: string // manufacturer/agent/distributor/installer/customer/service_partner
   status: string // active/disabled
   member_count: number
+  code?: string
   description?: string
   created_at: string
   updated_at: string
@@ -64,7 +65,7 @@ export const channelApi = {
   getOrganization: (id: number) =>
     api.get(`/organizations/${id}`, { expectedDataShape: 'object' }),
 
-  createOrganization: (data: { name: string; parent_id?: number | null; type: string; description?: string }) =>
+  createOrganization: (data: { name: string; parent_id?: number | null; type: string; code?: string; admin_email?: string }) =>
     api.post('/organizations', data),
 
   updateOrganization: (id: number, data: { name?: string; type?: string; description?: string; status?: string }) =>

@@ -95,6 +95,7 @@ type MemberLifecycleServiceInterface interface {
 	TransferAccept(ctx context.Context, actorUserID int64, transferID int64) error
 	TransferReject(ctx context.Context, actorUserID int64, transferID int64, reason string) error
 	ListTransfers(ctx context.Context, userID int64) ([]service.PendingTransferInfo, error)
+	ListMembers(ctx context.Context, orgID int64, page, pageSize int) (*service.ListMembersResult, error)
 	BulkAdd(ctx context.Context, actorUserID int64, tenantID int64, req service.BulkAddParams) (*service.BulkAddResult, error)
 	BulkTransfer(ctx context.Context, actorUserID int64, req service.BulkTransferParams) (*service.BulkTransferResult, error)
 }
@@ -272,6 +273,34 @@ func (h *MemberLifecycleHandler) ReactivateMember(c *gin.Context) {
 	response.SuccessWithMessage(c, "成员已恢复活跃", gin.H{
 		"membership_id": membershipID,
 	})
+}
+
+// ==================== List Members Endpoint ====================
+
+// ListMembers handles GET /api/v1/organizations/:id/members - List members of an organization
+func (h *MemberLifecycleHandler) ListMembers(c *gin.Context) {
+	orgID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.Error(c, 400, "invalid organization id")
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	result, err := h.svc.ListMembers(c.Request.Context(), orgID, page, pageSize)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+
+	response.Page(c, result.Items, result.Total, result.Page, result.Size)
 }
 
 // ==================== Transfer Flow ====================
