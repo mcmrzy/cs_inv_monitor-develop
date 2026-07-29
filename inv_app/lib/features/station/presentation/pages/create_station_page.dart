@@ -179,7 +179,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
   }
 
   Future<void> _openLocationPicker() async {
-    final result = await Navigator.push<Map<String, double>>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
@@ -190,9 +190,14 @@ class _CreateStationPageState extends State<CreateStationPage> {
     );
     if (result != null) {
       setState(() {
-        _latitude = result['lat'];
-        _longitude = result['lng'];
+        _latitude = (result['lat'] as num?)?.toDouble();
+        _longitude = (result['lng'] as num?)?.toDouble();
       });
+      // Auto-fill address from reverse geocoding
+      final addr = result['address'] as String?;
+      if (addr != null && addr.isNotEmpty) {
+        _detailCtl.text = addr;
+      }
     }
   }
 

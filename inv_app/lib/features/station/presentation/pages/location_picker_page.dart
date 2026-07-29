@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// WGS-84 → GCJ-02 coordinate conversion (for China map tiles)
@@ -67,6 +69,10 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   bool _hasSelection = false;
   bool _useAmap = true; // default to AMap (safe for China)
   bool _initialized = false;
+  String _resolvedAddress = '';
+  final _searchController = TextEditingController();
+  bool _searching = false;
+  Timer? _reverseTimer;
 
   /// Cached region result across the entire app lifecycle
   static String? _cachedRegion;
@@ -140,18 +146,89 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
 
   void _onMapEvent(MapEvent event) {
     if (event is MapEventMoveEnd) {
+      final wgs84 = _toWgs84(event.camera.center);
       setState(() {
-        _selectedPoint = _toWgs84(event.camera.center);
+        _selectedPoint = wgs84;
         _hasSelection = true;
+      });
+      // Debounced reverse geocoding
+      _reverseTimer?.cancel();
+      _reverseTimer = Timer(const Duration(milliseconds: 600), () {
+        _reverseGeocode(wgs84.latitude, wgs84.longitude);
       });
     }
   }
 
+  /// Reverse geocoding: coords → address
+  Future<void> _reverseGeocode(double lat, double lng) async {
+    try {
+      final resp = await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/geocode/reverse?lat=$lat&lng=$lng'),
+      ).timeout(const Duration(seconds: 5));
+      if (resp.statusCode == 200 && mounted) {
+        final data = jsonDecode(resp.body);
+        final d = data['data'];
+        if (d != null) {
+          final parts = [
+            d['province'] as String?,
+            d['city'] as String?,
+            d['district'] as String?,
+            d['address'] as String?,
+          ].where((s) => s != null && s.isNotEmpty).toList();
+          if (parts.isNotEmpty) {
+            setState(() => _resolvedAddress = parts.join(' '));
+          }
+        }
+      }
+    } catch (_) { /* ignore */ }
+  }
+
+  /// Forward geocoding: search text → fly to location
+  Future<void> _searchAddress() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) return;
+    setState(() => _searching = true);
+    try {
+      final resp = await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/geocode?address=${Uri.encodeQueryComponent(query)}'),
+      ).timeout(const Duration(seconds: 8));
+      if (resp.statusCode == 200 && mounted) {
+        final data = jsonDecode(resp.body);
+        final d = data['data'];
+        if (d != null) {
+          final lat = double.tryParse('${d['lat']}');
+          final lng = double.tryParse('${d['lng']}');
+          if (lat != null && lng != null) {
+            final point = LatLng(lat, lng);
+            setState(() {
+              _selectedPoint = point;
+              _hasSelection = true;
+              _resolvedAddress = query;
+            });
+            final display = _useAmap
+                ? _Gcj02.fromWgs84(lat, lng)
+                : point;
+            _mapController.move(display, 15);
+          }
+        }
+      }
+    } catch (_) { /* ignore */ }
+    if (mounted) setState(() => _searching = false);
+  }
+
   void _confirm() {
-    Navigator.of(context).pop({
+    Navigator.of(context).pop(<String, dynamic>{
       'lat': _selectedPoint.latitude,
       'lng': _selectedPoint.longitude,
+      'address': _resolvedAddress,
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _reverseTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -207,60 +284,107 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             ),
           ),
 
-          // 顶部返回按钮 + 坐标显示
+          // 顶部返回按钮 + 搜索框
           Positioned(
             top: MediaQuery.of(context).padding.top + 8.h,
             left: 12.w,
             right: 12.w,
-            child: Row(
+            child: Column(
               children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20.r),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
+                Row(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ),
+                    SizedBox(width: 8.w),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20.r),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (_) => _searchAddress(),
+                          decoration: InputDecoration(
+                            hintText: l10n.stationSearchAddress,
+                            hintStyle: TextStyle(fontSize: 13.sp, color: Colors.grey),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 14.w,
+                              vertical: 10.h,
+                            ),
+                            suffixIcon: _searching
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: const Icon(Icons.search, size: 20),
+                                    onPressed: _searchAddress,
+                                  ),
+                          ),
+                          style: TextStyle(fontSize: 13.sp),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox(width: 8.w),
-                Expanded(
-                  child: Container(
+                // 地址显示
+                if (_resolvedAddress.isNotEmpty)
+                  Container(
+                    margin: EdgeInsets.only(top: 6.h),
                     padding: EdgeInsets.symmetric(
                       horizontal: 12.w,
-                      vertical: 8.h,
+                      vertical: 6.h,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(20.r),
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(12.r),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 4,
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 3,
                           offset: const Offset(0, 1),
                         ),
                       ],
                     ),
                     child: Text(
-                      _hasSelection
-                          ? '${_selectedPoint.latitude.toStringAsFixed(6)}, ${_selectedPoint.longitude.toStringAsFixed(6)}'
-                          : l10n.stationSelectLocationHint,
+                      _resolvedAddress,
                       style: TextStyle(
-                        fontSize: 13.sp,
-                        color: const Color(0xFF333333),
+                        fontSize: 12.sp,
+                        color: const Color(0xFF555555),
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                     ),
                   ),
-                ),
               ],
             ),
           ),

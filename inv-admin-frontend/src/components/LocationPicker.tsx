@@ -3,7 +3,8 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-lea
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Input, Space, Typography } from 'antd'
-import { AimOutlined } from '@ant-design/icons'
+import { AimOutlined, SearchOutlined } from '@ant-design/icons'
+import api from '@/services/api'
 
 const { Text } = Typography
 
@@ -20,6 +21,7 @@ export interface LocationPickerRef {
 interface LocationPickerProps {
   value?: LatLng
   onChange?: (pos: LatLng) => void
+  onReverseGeocode?: (pos: LatLng, address: string) => void
   initialCenter?: [number, number]
   initialZoom?: number
   height?: number | string
@@ -182,12 +184,15 @@ function FlyToController({ target, zoom }: { target: [number, number] | null; zo
 }
 
 const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
-  ({ value, onChange, initialCenter = [30, 110], initialZoom = 4, height = 300 }, ref) => {
+  ({ value, onChange, onReverseGeocode, initialCenter = [30, 110], initialZoom = 4, height = 300 }, ref) => {
     const mapRef = useRef<L.Map | null>(null)
     const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null)
     const [flyZoom, setFlyZoom] = useState(initialZoom)
     const [position, setPosition] = useState<LatLng | null>(null)
     const [useAmap, setUseAmap] = useState(false)
+    const [searchValue, setSearchValue] = useState('')
+    const [searching, setSearching] = useState(false)
+    const reverseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     // Detect region on mount
     useEffect(() => {
@@ -233,8 +238,23 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
         const newPos = { lat: wgsLat, lng: wgsLng }
         setPosition(newPos)
         onChange?.(newPos)
+
+        // Debounced reverse geocoding: coords → address
+        if (onReverseGeocode) {
+          if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current)
+          reverseTimerRef.current = setTimeout(() => {
+            api.get('/geocode/reverse', { params: { lat: wgsLat, lng: wgsLng } })
+              .then(res => {
+                const data = res.data?.data
+                const addr = [data?.province, data?.city, data?.district, data?.address]
+                  .filter(Boolean).join(' ')
+                if (addr) onReverseGeocode(newPos, addr)
+              })
+              .catch(() => { /* ignore */ })
+          }, 500)
+        }
       },
-      [onChange, toWgs84],
+      [onChange, toWgs84, onReverseGeocode],
     )
 
     const handleLocate = useCallback(() => {
@@ -254,6 +274,28 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
         )
       }
     }, [onChange, toDisplay])
+
+    const handleSearch = useCallback(() => {
+      if (!searchValue.trim()) return
+      setSearching(true)
+      api.get('/geocode', { params: { address: searchValue.trim() } })
+        .then(res => {
+          const data = res.data?.data
+          const lat = data?.lat != null ? Number(data.lat) : NaN
+          const lng = data?.lng != null ? Number(data.lng) : NaN
+          if (!isNaN(lat) && !isNaN(lng) && isFinite(lat) && isFinite(lng)) {
+            const newPos = { lat, lng }
+            setPosition(newPos)
+            onChange?.(newPos)
+            const display = toDisplay(lat, lng)
+            setFlyTarget(display)
+            setFlyZoom(15)
+            setTimeout(() => setFlyTarget(null), 2000)
+          }
+        })
+        .catch(() => { /* ignore */ })
+        .finally(() => setSearching(false))
+    }, [searchValue, onChange, toDisplay])
 
     // Compute display center for MapContainer
     const displayCenter = useMemo(() => {
@@ -285,16 +327,24 @@ const LocationPicker = forwardRef<LocationPickerRef, LocationPickerProps>(
             alignItems: 'center',
             justifyContent: 'space-between',
             borderBottom: '1px solid #f0f0f0',
+            gap: 8,
           }}
         >
-          <Space size={4}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {position && position.lat !== 0
-                ? `${position.lat.toFixed(6)}, ${position.lng.toFixed(6)}`
-                : 'Click on the map to select location'}
-            </Text>
-          </Space>
-          <a onClick={handleLocate} style={{ cursor: 'pointer', fontSize: 16 }} title="Use my location">
+          <Input
+            size="small"
+            placeholder="搜索地址..."
+            value={searchValue}
+            onChange={e => setSearchValue(e.target.value)}
+            onPressEnter={handleSearch}
+            suffix={
+              <SearchOutlined
+                style={{ cursor: 'pointer', color: searching ? '#999' : '#1677ff' }}
+                onClick={handleSearch}
+              />
+            }
+            style={{ flex: 1 }}
+          />
+          <a onClick={handleLocate} style={{ cursor: 'pointer', fontSize: 16, flexShrink: 0 }} title="使用我的位置">
             <AimOutlined />
           </a>
         </div>
