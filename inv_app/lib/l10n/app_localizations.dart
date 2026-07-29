@@ -751,6 +751,9 @@ class AppLocalizations {
   String get stationDragToSelect =>
       _localizedStrings['station_drag_to_select'] ??
       'Drag map to pin location';
+  String get stationSearchAddress =>
+      _localizedStrings['station_search_address'] ??
+      'Search address...';
   String get stationSelectOnMap =>
       _localizedStrings['station_select_on_map'] ??
       'Select on map';

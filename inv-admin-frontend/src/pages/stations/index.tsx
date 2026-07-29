@@ -1229,6 +1229,10 @@ const StationsPage: React.FC = () => {
                 ref={editMapRef}
                 value={editLocation}
                 onChange={setEditLocation}
+                onReverseGeocode={(_pos, addr) => {
+                  // Fill address field when user picks a point on map
+                  editForm.setFieldsValue({ address: addr })
+                }}
                 initialCenter={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? [editLocation.lat, editLocation.lng] : [30, 110]}
                 initialZoom={editLocation && (editLocation.lat !== 0 || editLocation.lng !== 0) ? 14 : 4}
               />
@@ -1342,6 +1346,9 @@ const StationsPage: React.FC = () => {
                 ref={addMapRef}
                 value={addLocation}
                 onChange={setAddLocation}
+                onReverseGeocode={(_pos, addr) => {
+                  addForm.setFieldsValue({ address: addr })
+                }}
               />
             </Form.Item>
           </Col>

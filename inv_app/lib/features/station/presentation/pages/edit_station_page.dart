@@ -99,7 +99,7 @@ class _EditStationPageState extends State<EditStationPage> {
   Future<void> _openLocationPicker() async {
     final lat = double.tryParse(_latitudeController.text);
     final lng = double.tryParse(_longitudeController.text);
-    final result = await Navigator.push<Map<String, double>>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (_) => LocationPickerPage(
@@ -109,8 +109,12 @@ class _EditStationPageState extends State<EditStationPage> {
       ),
     );
     if (result != null) {
-      _latitudeController.text = result['lat']!.toStringAsFixed(6);
-      _longitudeController.text = result['lng']!.toStringAsFixed(6);
+      _latitudeController.text = (result['lat'] as num?)?.toStringAsFixed(6) ?? '';
+      _longitudeController.text = (result['lng'] as num?)?.toStringAsFixed(6) ?? '';
+      final addr = result['address'] as String?;
+      if (addr != null && addr.isNotEmpty) {
+        _addressController.text = addr;
+      }
     }
   }
 
