@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -393,11 +394,12 @@ func reverseGeocodeNominatim(lat, lng float64) (*ReverseGeocodeResult, error) {
 // reverseGeocodeAmap 调用高德 regeo API（extensions=all）
 // 一次请求同时返回结构化地址 + 附近 POI 列表
 func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult, error) {
-	// 高德坐标系是 GCJ-02，前端传入的是 WGS-84
-	// 但 regeo 接口对精度要求不高（POI 级别），偏差 300-500m 在 500m radius 内仍可接受
+	// WGS-84 → GCJ-02 坐标转换（高德使用 GCJ-02 坐标系）
+	gcjLat, gcjLng := wgs84ToGcj02(lat, lng)
+
 	regeoURL := fmt.Sprintf(
 		"https://restapi.amap.com/v3/geocode/regeo?location=%.6f,%.6f&key=%s&extensions=all&radius=500&output=json",
-		lng, lat, amapKey,
+		gcjLng, gcjLat, amapKey,
 	)
 
 	resp, err := geocodeHTTPClient.Get(regeoURL)
@@ -502,6 +504,46 @@ func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult
 // coordInChina 判断坐标是否在中国境内（粗略边界框）
 func coordInChina(lat, lng float64) bool {
 	return lng >= 72.004 && lng <= 137.8347 && lat >= 0.8293 && lat <= 55.8271
+}
+
+// ============================================================
+// WGS-84 → GCJ-02 坐标转换（中国地图偏移纠正）
+// ============================================================
+
+const (
+	gcjA  = 6378245.0
+	gcjEE = 0.00669342162296594323
+)
+
+func wgs84ToGcj02(lat, lng float64) (float64, float64) {
+	if !coordInChina(lat, lng) {
+		return lat, lng
+	}
+	dLat := transformLat(lng-105.0, lat-35.0)
+	dLng := transformLng(lng-105.0, lat-35.0)
+	radLat := lat / 180.0 * math.Pi
+	magic := math.Sin(radLat)
+	magic = 1 - gcjEE*magic*magic
+	sqrtMagic := math.Sqrt(magic)
+	dLat = (dLat * 180.0) / ((gcjA * (1 - gcjEE)) / (magic * sqrtMagic) * math.Pi)
+	dLng = (dLng * 180.0) / (gcjA / sqrtMagic * math.Cos(radLat) * math.Pi)
+	return lat + dLat, lng + dLng
+}
+
+func transformLat(x, y float64) float64 {
+	ret := -100.0 + 2.0*x + 3.0*y + 0.2*y*y + 0.1*x*y + 0.2*math.Sqrt(math.Abs(x))
+	ret += (20.0*math.Sin(6.0*x*math.Pi) + 20.0*math.Sin(2.0*x*math.Pi)) * 2.0 / 3.0
+	ret += (20.0*math.Sin(y*math.Pi) + 40.0*math.Sin(y/3.0*math.Pi)) * 2.0 / 3.0
+	ret += (160.0*math.Sin(y/12.0*math.Pi) + 320.0*math.Sin(y*math.Pi/30.0)) * 2.0 / 3.0
+	return ret
+}
+
+func transformLng(x, y float64) float64 {
+	ret := 300.0 + x + 2.0*y + 0.1*x*x + 0.1*x*y + 0.1*math.Sqrt(math.Abs(x))
+	ret += (20.0*math.Sin(6.0*x*math.Pi) + 20.0*math.Sin(2.0*x*math.Pi)) * 2.0 / 3.0
+	ret += (20.0*math.Sin(x*math.Pi) + 40.0*math.Sin(x/3.0*math.Pi)) * 2.0 / 3.0
+	ret += (150.0*math.Sin(x/12.0*math.Pi) + 300.0*math.Sin(x/30.0*math.Pi)) * 2.0 / 3.0
+	return ret
 }
 
 // ============================================================
