@@ -52,6 +52,15 @@ func (s *EmailService) SendCode(ctx context.Context, email, codeType string) err
 	}
 
 	if emailCfg.Host != "" && emailCfg.Host != "smtp.example.com" {
+		// 验证SMTP配置完整性
+		if emailCfg.Username == "" || emailCfg.Password == "" || emailCfg.From == "" {
+			logger.Error("SMTP配置不完整",
+				zap.String("host", emailCfg.Host),
+				zap.Bool("username_empty", emailCfg.Username == ""),
+				zap.Bool("password_empty", emailCfg.Password == ""),
+				zap.Bool("from_empty", emailCfg.From == ""))
+			return fmt.Errorf("邮件服务配置错误：SMTP认证信息不完整")
+		}
 		// Use template for better formatting
 		data := map[string]string{
 			"ToEmail": email,
