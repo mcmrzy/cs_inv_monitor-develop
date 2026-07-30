@@ -74,6 +74,7 @@ type AuthHandler struct {
 	emailService    *service.EmailService
 	rbacCache       *service.RBACCache
 	captchaHandler  *CaptchaHandler
+	jverifyService  *service.JVerifyService
 	contextResolver authorizationContextResolver
 }
 
@@ -84,7 +85,7 @@ type authorizationContextResolver interface {
 	LoadAllPermissionCodes(ctx context.Context, actor model.ActorContext) ([]string, error)
 }
 
-func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService, rbacCache *service.RBACCache, captchaHandler *CaptchaHandler) *AuthHandler {
+func NewAuthHandler(userService *service.UserService, jwtService *service.JWTService, smsService *service.SMSService, emailService *service.EmailService, rbacCache *service.RBACCache, captchaHandler *CaptchaHandler, jverifyService *service.JVerifyService) *AuthHandler {
 	return &AuthHandler{
 		userService:    userService,
 		jwtService:     jwtService,
@@ -92,6 +93,7 @@ func NewAuthHandler(userService *service.UserService, jwtService *service.JWTSer
 		emailService:   emailService,
 		rbacCache:      rbacCache,
 		captchaHandler: captchaHandler,
+		jverifyService: jverifyService,
 	}
 }
 
@@ -954,7 +956,12 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 
 	if err := h.emailService.SendCode(c.Request.Context(), req.Email, req.Type); err != nil {
 		logger.Warn("send email code failed", zap.String("email", req.Email), zap.Error(err))
-		response.Error(c, 4010, "verification code delivery failed")
+		// 区分配置错误和网络错误，提供更友好的错误信息
+		errMsg := "验证码发送失败，请稍后重试"
+		if strings.Contains(err.Error(), "配置错误") {
+			errMsg = "邮件服务配置错误，请联系管理员"
+		}
+		response.Error(c, 4010, errMsg)
 		return
 	}
 
@@ -1237,6 +1244,102 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 	})
 }
 
+// JVerifyLogin 极光认证一键登录
+// 客户端通过运营商 SDK 获取 loginToken，后端验证并解密手机号，
+// 用户不存在时自动创建（无需密码，可通过“忘记密码”设置）。
+type JVerifyLoginRequest struct {
+	LoginToken string `json:"login_token" binding:"required"`
+}
+
+func (h *AuthHandler) JVerifyLogin(c *gin.Context) {
+	if !h.jverifyService.IsEnabled() {
+		response.Error(c, 503, "one-click login service unavailable")
+		return
+	}
+
+	var req JVerifyLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "invalid request")
+		return
+	}
+
+	// 验证 loginToken 并解密手机号
+	phone, err := h.jverifyService.VerifyLoginToken(c.Request.Context(), req.LoginToken)
+	if err != nil {
+		logger.Warn("JVerify token verification failed", zap.Error(err))
+		response.Error(c, 4006, "one-click login verification failed, please try again")
+		return
+	}
+
+	// 查找用户
+	user, err := h.userService.GetByPhone(c.Request.Context(), phone)
+	if err != nil {
+		response.Error(c, 500, "system error")
+		return
+	}
+
+	// 用户不存在则自动创建
+	if user == nil {
+		user = &model.User{
+			Phone:  phone,
+			Role:   defaultSelfRegisteredRole,
+			Status: 1,
+		}
+		if err := h.userService.Create(c.Request.Context(), user); err != nil {
+			response.Error(c, 500, "create user failed")
+			return
+		}
+	}
+
+	if user.Status != 1 {
+		response.Error(c, 4002, "account disabled")
+		return
+	}
+
+	// 生成 token
+	tokenResult, err := h.generateLoginTokenPair(c.Request.Context(), user)
+	if err != nil {
+		response.Error(c, 500, "generate token failed")
+		return
+	}
+
+	if err := h.jwtService.StoreRefreshToken(c.Request.Context(), user.ID, tokenResult.RefreshToken, refreshTokenLifetime); err != nil {
+		response.Error(c, 500, "create refresh session failed")
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := h.userService.UpdateLoginInfo(ctx, user.ID, c.ClientIP()); err != nil {
+			logger.Warn("UpdateLoginInfo failed", zap.Error(err))
+		}
+		h.userService.LogAudit(ctx, user.ID, user.Nickname, "login_by_jverify", "auth", "", "{}", c.ClientIP())
+	}()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+	}()
+
+	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
+
+	setAuthCookies(c, tokenResult.AccessToken, tokenResult.RefreshToken, accessTokenLifetime, refreshTokenLifetime)
+
+	user.PasswordHash = ""
+	response.Success(c, LoginResponse{
+		AccessToken:          tokenResult.AccessToken,
+		RefreshToken:         tokenResult.RefreshToken,
+		User:                 user,
+		ExpiresIn:            int64(accessTokenLifetime.Seconds()),
+		Permissions:          permissions,
+		IsSystemAdmin:        user.IsSystemAdmin,
+		ActiveOrganizationID: tokenResult.ActiveOrganizationID,
+		RootTenantID:         tokenResult.RootTenantID,
+		MembershipID:         tokenResult.MembershipID,
+	})
+}
+
 // EmailCodeLogin 邮箱验证码登录
 type EmailCodeLoginRequest struct {
 	Email string `json:"email" binding:"required"`
@@ -1422,7 +1525,12 @@ func (h *AuthHandler) SendEmailChangeCode(c *gin.Context) {
 
 	if err := h.emailService.SendCode(c.Request.Context(), req.Email, "change_email"); err != nil {
 		logger.Warn("send email change code failed", zap.String("email", req.Email), zap.Error(err))
-		response.Error(c, 4010, "verification code delivery failed")
+		// 区分配置错误和网络错误，提供更友好的错误信息
+		errMsg := "验证码发送失败，请稍后重试"
+		if strings.Contains(err.Error(), "配置错误") {
+			errMsg = "邮件服务配置错误，请联系管理员"
+		}
+		response.Error(c, 4010, errMsg)
 		return
 	}
 

@@ -36,7 +36,7 @@ sms:
   template: ""
 
 email:
-  host: smtp.qq.com
+  host: smtp.qiye.aliyun.com
   port: 465
   username: ""
   password: ""
@@ -77,6 +77,13 @@ jpush:
   master_secret: ""
   timeout: 10
   dedup_ttl: 120
+
+# 极光认证（一键登录）配置 (通过环境变量 JVERIFY_* 覆盖)
+jverify:
+  enabled: false
+  rsa_private_key: ""  # PKCS8 base64 私钥，用于解密手机号
+  app_key: ""          # 极光认证服务独立 AppKey
+  master_secret: ""    # 极光认证服务独立 Master Secret
 
 # RBAC 缓存配置
 rbac:
