@@ -261,7 +261,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
         <div
           className="org-card"
           style={{
-            width: 560,
+            width: 420,
             background: '#FFFFFF',
             borderRadius: 14,
             border: `1px solid ${selected ? meta.color : '#E3EAF3'}`,
