@@ -7,7 +7,6 @@ import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
 import { CheckOutlined, CloseOutlined, ReloadOutlined } from '@ant-design/icons'
 
-import dayjs from 'dayjs'
 import { channelApi, type TransferRequest } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
@@ -142,7 +141,12 @@ const TransferApprovals: React.FC = () => {
               title={t('channel.transfer.confirmApprove')}
               onConfirm={() => approveMutation.mutate(record.id)}
             >
-              <Button size="small" type="primary" icon={<CheckOutlined />}>
+              <Button
+                size="small"
+                type="primary"
+                icon={<CheckOutlined />}
+                loading={approveMutation.isPending && approveMutation.variables === record.id}
+              >
                 {t('channel.transfer.approve')}
               </Button>
             </Popconfirm>
@@ -178,11 +182,16 @@ const TransferApprovals: React.FC = () => {
                   title={t('channel.transfer.confirmApprove')}
                   onConfirm={() => batchApproveMutation.mutate(selectedRowKeys as number[])}
                 >
-                  <Button type="primary" icon={<CheckOutlined />}>
+                  <Button type="primary" icon={<CheckOutlined />} loading={batchApproveMutation.isPending}>
                     {t('channel.transfer.batchApprove')}
                   </Button>
                 </Popconfirm>
-                <Button danger icon={<CloseOutlined />} onClick={handleBatchReject}>
+                <Button
+                  danger
+                  icon={<CloseOutlined />}
+                  loading={batchRejectMutation.isPending}
+                  onClick={handleBatchReject}
+                >
                   {t('channel.transfer.batchReject')}
                 </Button>
               </>

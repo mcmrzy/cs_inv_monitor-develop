@@ -5,9 +5,8 @@ import {
 } from 'antd'
 import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns } from '@ant-design/pro-components'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, RedoOutlined } from '@ant-design/icons'
 
-import dayjs from 'dayjs'
 import { channelApi, type OrgMember } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
@@ -15,7 +14,7 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import Popconfirm from '@/components/LocalizedPopconfirm'
-import { roleLabel, roleLabels } from '@/utils/roleLabel'
+import { roleLabel } from '@/utils/roleLabel'
 
 interface Props {
   selectedOrgId: number | null
@@ -77,10 +76,23 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
 
   const columns: ProColumns<OrgMember>[] = [
     { title: t('channel.member.email'), dataIndex: 'email', width: 200, ellipsis: true },
-    { title: t('channel.member.phone'), dataIndex: 'phone', width: 130 },
     {
-      title: t('channel.member.role'), dataIndex: 'role', width: 120,
-      render: (_, record: OrgMember) => <Tag color="blue">{roleLabels(record.role, t)}</Tag>,
+      title: t('channel.member.phone'), dataIndex: 'phone', width: 130,
+      render: (_, record: OrgMember) => record.phone || '-',
+    },
+    {
+      title: t('channel.member.role'), dataIndex: 'role', width: 180,
+      render: (_, record: OrgMember) => {
+        const codes = (record.role ?? '').split(',').map((code) => code.trim()).filter(Boolean)
+        if (codes.length === 0) return '-'
+        return (
+          <Space size={[4, 4]} wrap>
+            {codes.map((code) => (
+              <Tag key={code} color="blue">{roleLabel(code, t)}</Tag>
+            ))}
+          </Space>
+        )
+      },
     },
     {
       title: t('channel.member.status'), dataIndex: 'status', width: 90,
@@ -95,12 +107,13 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
       render: (_, record: OrgMember) => record.joined_at ? formatInTimezone(record.joined_at, timezone, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: t('common.actions'), key: 'actions', width: 200,
+      title: t('common.actions'), key: 'actions', width: 240,
       render: (_: unknown, record: OrgMember) => (
-        <Space>
+        <Space size={[4, 4]} wrap>
           <Button
             size="small"
             type="link"
+            icon={<EditOutlined />}
             onClick={() => {
               setEditingMember(record)
               editForm.setFieldsValue({ role: record.role })
@@ -114,14 +127,18 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
               title={t('channel.member.reactivate') + '?'}
               onConfirm={() => reactivateMutation.mutate(record.id)}
             >
-              <Button size="small" type="link">{t('channel.member.reactivate')}</Button>
+              <Button size="small" type="link" icon={<RedoOutlined />}>
+                {t('channel.member.reactivate')}
+              </Button>
             </Popconfirm>
           )}
           <Popconfirm
             title={t('channel.member.confirmRemove')}
             onConfirm={() => removeMutation.mutate(record.id)}
           >
-            <Button size="small" type="link" danger>{t('channel.member.remove')}</Button>
+            <Button size="small" type="link" danger icon={<DeleteOutlined />}>
+              {t('channel.member.remove')}
+            </Button>
           </Popconfirm>
         </Space>
       ),
