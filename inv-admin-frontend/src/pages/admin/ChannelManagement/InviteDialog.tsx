@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
-  Modal, Input, Select, InputNumber, Row, Col, App, TreeSelect, Tag, Space, Button,
+  Modal, Input, InputNumber, Row, Col, App, TreeSelect, Tag, Space, Button, Switch, Tooltip,
 } from 'antd'
 import {
   MailOutlined, ApartmentOutlined, BankOutlined, ShopOutlined,
-  DeploymentUnitOutlined, ToolOutlined, HomeOutlined,
+  DeploymentUnitOutlined, ToolOutlined, HomeOutlined, CrownOutlined, QuestionCircleOutlined,
 } from '@ant-design/icons'
-import { channelApi, type OrgHierarchyNode } from '@/services/channelApi'
+import { channelApi, type OrgHierarchyNode, type InvitationAssignment } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
 import useAuthStore from '@/stores/authStore'
@@ -20,16 +20,16 @@ interface Props {
   onSent: () => void
 }
 
-// ── 可邀请角色：与后端 inviterAllowedRolesByOrgType 保持一致 ──
-const ALLOWED_ROLES_BY_ORG_TYPE: Record<string, string[]> = {
-  manufacturer: ['agent', 'distributor', 'installer', 'customer'],
-  agent: ['installer', 'customer'],
-  distributor: ['installer', 'customer'],
-  installer: ['customer'],
-  customer: [],
+// ── 身份模型：成员身份 = 组织类型（manufacturer 组织等同 org_admin）──
+// 组织内不再有可自由选择的"角色"；org_admin 仅作为可叠加的管理角色，
+// 通过"设为组织管理员"开关追加。
+const ORG_TYPE_IDENTITY: Record<string, string> = {
+  manufacturer: 'org_admin',
+  agent: 'agent',
+  distributor: 'distributor',
+  installer: 'installer',
+  customer: 'customer',
 }
-
-const ALL_ROLES = ['org_admin', 'agent', 'distributor', 'installer', 'customer']
 
 // ── 组织类型 → 类型色 + 图标（与组织树卡片同配色，仅展示用）──
 const ORG_TYPE_META: Record<string, { color: string; icon: ReactNode }> = {
@@ -58,14 +58,11 @@ const HINT_STYLE: CSSProperties = {
   lineHeight: '18px',
 }
 
-// 多组织取并集；系统管理员豁免全量；org_admin 管理角色始终可分配
-export function resolveAllowedRoles(orgTypes: string[], isSystemAdmin: boolean): string[] {
-  if (isSystemAdmin) return [...ALL_ROLES]
-  const set = new Set<string>(['org_admin'])
-  for (const orgType of orgTypes) {
-    for (const role of ALLOWED_ROLES_BY_ORG_TYPE[orgType] ?? []) set.add(role)
-  }
-  return [...set]
+interface MyOrg {
+  id: number
+  name: string
+  type: string
+  roles: string[]
 }
 
 const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) => {
@@ -76,28 +73,51 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
 
   const [emailInput, setEmailInput] = useState('')
   const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<number[]>([])
-  const [roleAssignments, setRoleAssignments] = useState<{ organization_id: number; role_code: string }[]>([])
+  const [adminByOrg, setAdminByOrg] = useState<Record<number, boolean>>({})
   const [expiresHours, setExpiresHours] = useState<number>(72)
 
-  // 普通管理员：所属组织类型决定可邀请角色；系统管理员豁免全量
+  // 我的组织（真实角色码）：roles 含 org_admin 的组织 = 我可管理的组织
   const { data: myOrgs } = useQuery({
     queryKey: queryKeys.channels.myOrganizations(user?.id),
     queryFn: () => channelApi.getMyOrganizations().then((r) => r.data?.data ?? []),
     enabled: !isSystemAdmin && open,
   })
 
-  const myOrgTypes: string[] = Array.isArray(myOrgs)
-    ? [...new Set((myOrgs as any[]).map((o: any) => o.type ?? o.org_type).filter(Boolean))]
-    : []
+  const managedOrgIds = useMemo(() => {
+    if (isSystemAdmin) return null // 系统管理员可管理全部组织
+    if (!Array.isArray(myOrgs)) return new Set<number>()
+    return new Set(
+      (myOrgs as MyOrg[])
+        .filter((o) => Array.isArray(o.roles) && o.roles.includes('org_admin'))
+        .map((o) => o.id),
+    )
+  }, [isSystemAdmin, myOrgs])
 
-  const roleOptions = resolveAllowedRoles(myOrgTypes, isSystemAdmin)
-
-  // 系统管理员：全量组织树；普通管理员：仅自己的组织（后端仅允许邀请自己所属组织）
+  // 组织树：系统管理员全量；普通管理员剪枝为"自己 org_admin 的组织 + 全部下级"
   const { data: orgHierarchy, isLoading: loadingOrgs } = useQuery({
     queryKey: queryKeys.channels.orgHierarchy(),
     queryFn: () => channelApi.getOrgHierarchy().then((r) => r.data?.data ?? []),
     enabled: open,
   })
+
+  const pruneToManaged = (nodes: OrgHierarchyNode[], managed: Set<number> | null): OrgHierarchyNode[] => {
+    if (!managed) return nodes
+    const result: OrgHierarchyNode[] = []
+    for (const node of nodes) {
+      if (managed.has(node.id)) {
+        result.push(node) // 管理组织的整棵子树均可邀请
+      } else {
+        const children = pruneToManaged(node.children ?? [], managed)
+        if (children.length > 0) result.push({ ...node, children })
+      }
+    }
+    return result
+  }
+
+  const pickerTree = useMemo(
+    () => pruneToManaged((orgHierarchy ?? []) as OrgHierarchyNode[], managedOrgIds),
+    [orgHierarchy, managedOrgIds],
+  )
 
   const flattenTree = (nodes: OrgHierarchyNode[]): { label: string; value: number; isLeaf: boolean }[] =>
     nodes.flatMap((node) => {
@@ -108,13 +128,9 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       ]
     })
 
-  const orgOptions = isSystemAdmin
-    ? flattenTree((orgHierarchy ?? []) as OrgHierarchyNode[])
-    : Array.isArray(myOrgs)
-      ? (myOrgs as any[]).map((o: any) => ({ label: o.name, value: o.id, isLeaf: true }))
-      : []
+  const orgOptions = flattenTree(pickerTree)
 
-  // 组织 id → type 映射（仅用于展示类型色 / 图标，只读，不参与任何提交逻辑）
+  // 组织 id → type 映射（仅用于展示类型色 / 图标 / 推导身份，只读）
   const orgTypeById = useMemo(() => {
     const map = new Map<number, string>()
     const walk = (nodes: OrgHierarchyNode[]) => {
@@ -125,9 +141,9 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     }
     walk((orgHierarchy ?? []) as OrgHierarchyNode[])
     if (Array.isArray(myOrgs)) {
-      for (const o of myOrgs as any[]) {
+      for (const o of myOrgs as MyOrg[]) {
         if (o.id != null) {
-          const type = o.type ?? o.org_type
+          const type = o.type
           if (type) map.set(o.id, type)
         }
       }
@@ -136,6 +152,12 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
   }, [orgHierarchy, myOrgs])
 
   const orgTypeOf = (orgId: number): string | undefined => orgTypeById.get(orgId)
+
+  // 身份由组织类型自动推导
+  const identityOf = (orgId: number): string | undefined => ORG_TYPE_IDENTITY[orgTypeOf(orgId) ?? '']
+
+  // 该组织是否为管理范围（系统管理员全量；普通管理员剪枝后全部在管理范围内）
+  const canManageOrg = (orgId: number): boolean => isSystemAdmin || (managedOrgIds?.has(orgId) ?? false)
 
   // TreeSelect 已选组织 → 带类型色圆点的 Tag
   const renderSelectedOrgTag = (props: any) => {
@@ -172,24 +194,23 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     )
   }
 
-  // 打开时预填初始组织
+  // 打开时预填初始组织（仅当该组织在管理范围内；myOrgs 加载完成后 managedOrgIds 稳定，本 effect 会再次执行并补填）
   useEffect(() => {
     if (!open) return
     setEmailInput('')
     setExpiresHours(72)
-    if (initialOrgId) {
+    setAdminByOrg({})
+    if (initialOrgId && (isSystemAdmin || managedOrgIds?.has(initialOrgId))) {
       setSelectedOrganizationIds([initialOrgId])
-      setRoleAssignments([{ organization_id: initialOrgId, role_code: 'customer' }])
     } else {
       setSelectedOrganizationIds([])
-      setRoleAssignments([])
     }
-  }, [open, initialOrgId])
+  }, [open, initialOrgId, isSystemAdmin, managedOrgIds])
 
   const sendMutation = useMutation({
     mutationFn: (data: {
       emails: string[]
-      assignments: { organization_id: number; role_code: string }[]
+      assignments: InvitationAssignment[]
       expires_hours: number
     }) => channelApi.sendInvitation(data),
     onSuccess: (res) => {
@@ -219,7 +240,7 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       }
 
       setSelectedOrganizationIds([])
-      setRoleAssignments([])
+      setAdminByOrg({})
       setEmailInput('')
       onSent()
       onClose()
@@ -233,27 +254,18 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       .map((e) => e.trim().toLowerCase())
       .filter((e) => e.length > 0 && /^[^\s@]+@[^\s@]+$/.test(e))
 
-  const handleRoleChange = (orgId: number, roleCode: string) => {
-    setRoleAssignments((prev) => {
-      const existing = prev.findIndex((r) => r.organization_id === orgId)
-      if (existing >= 0) {
-        const updated = [...prev]
-        updated[existing] = { organization_id: orgId, role_code: roleCode }
-        return updated
-      }
-      return [...prev, { organization_id: orgId, role_code: roleCode }]
+  const handleSelectOrgs = (values: number[]) => {
+    setSelectedOrganizationIds(values)
+    setAdminByOrg((prev) => {
+      const next: Record<number, boolean> = {}
+      for (const id of values) if (prev[id]) next[id] = true
+      return next
     })
   }
 
-  const handleRemoveAssignment = (orgId: number) => {
-    setRoleAssignments((prev) => prev.filter((r) => r.organization_id !== orgId))
-    setSelectedOrganizationIds((prev) => prev.filter((id) => id !== orgId))
-  }
-
   const validateAndSend = (): boolean => {
-    if (roleOptions.length <= 1) {
-      // 仅剩 org_admin（customer 组织）→ 无法发起渠道邀请
-      message.warning(t('channel.invite.noPermission'))
+    if (!isSystemAdmin && (managedOrgIds?.size ?? 0) === 0) {
+      message.warning(t('channel.invite.noManagePermission'))
       return false
     }
     const emails = parseEmails(emailInput)
@@ -265,21 +277,18 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       message.error(t('channel.invite.orgRequired'))
       return false
     }
-    const hasRoleMissing = selectedOrganizationIds.some(
-      (orgId) => !roleAssignments.find((r) => r.organization_id === orgId)?.role_code,
-    )
-    if (hasRoleMissing) {
-      message.error(t('channel.invite.roleRequired'))
-      return false
-    }
-    const assignments = selectedOrganizationIds
-      .map((orgId) => ({
-        organization_id: orgId,
-        role_code: roleAssignments.find((r) => r.organization_id === orgId)?.role_code ?? '',
-      }))
-      .filter((a) => a.role_code !== '')
+    // 展开为：身份（=组织类型）+ 可选的 org_admin 叠加
+    const assignments: InvitationAssignment[] = selectedOrganizationIds.flatMap((orgId) => {
+      const identity = identityOf(orgId)
+      if (!identity) return []
+      const list: InvitationAssignment[] = [{ organization_id: orgId, role_code: identity }]
+      if (adminByOrg[orgId] && identity !== 'org_admin') {
+        list.push({ organization_id: orgId, role_code: 'org_admin' })
+      }
+      return list
+    })
     if (assignments.length === 0) {
-      message.error(t('channel.invite.roleRequired'))
+      message.error(t('channel.invite.identityMissing'))
       return false
     }
     sendMutation.mutate({ emails, assignments, expires_hours: expiresHours })
@@ -336,13 +345,14 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
         {/* ── 分组分隔线 ── */}
         <div style={{ height: 1, background: '#eef2f7', margin: '2px 0' }} />
 
-        {/* ── 分组二：组织与角色分配 ── */}
+        {/* ── 分组二：组织与成员身份 ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 3, height: 14, borderRadius: 2, background: '#1677ff' }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2d3d' }}>
               {t('channel.invite.roleAssignments')}
             </span>
+            <span style={{ fontSize: 12, color: '#8c9cb0' }}>{t('channel.invite.identityAuto')}</span>
           </div>
 
           <div>
@@ -354,10 +364,7 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
               allowClear
               showSearch
               value={selectedOrganizationIds}
-              onChange={(values: number[]) => {
-                setSelectedOrganizationIds(values)
-                setRoleAssignments((prev) => prev.filter((r) => values.includes(r.organization_id)))
-              }}
+              onChange={handleSelectOrgs}
               disabled={loadingOrgs}
               treeDefaultExpandAll={isSystemAdmin}
               style={{ width: '100%' }}
@@ -372,6 +379,8 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
                 const orgType = orgTypeOf(orgId)
                 const meta = orgType ? ORG_TYPE_META[orgType] : undefined
                 const color = meta?.color ?? DEFAULT_ORG_COLOR
+                const identity = identityOf(orgId)
+                const manageable = canManageOrg(orgId)
                 return (
                   <div
                     key={orgId}
@@ -428,16 +437,50 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
                           {t(`channel.org.type.${orgType}`)}
                         </Tag>
                       )}
+                      {/* 身份 = 组织类型，自动推导，不可手动选择 */}
+                      <Tag
+                        style={{
+                          marginInlineEnd: 0,
+                          borderColor: '#d9e6f5',
+                          background: '#f0f6ff',
+                          color: '#1677ff',
+                          borderRadius: 6,
+                          lineHeight: '18px',
+                          paddingInline: 6,
+                        }}
+                      >
+                        {t('channel.invite.identity')}：{identity ? roleLabel(identity, t) : '—'}
+                      </Tag>
                     </div>
-                    <Select
-                      size="small"
-                      options={roleOptions.map((code) => ({ label: roleLabel(code, t), value: code }))}
-                      style={{ width: 160, flexShrink: 0 }}
-                      value={roleAssignments.find((r) => r.organization_id === orgId)?.role_code}
-                      onChange={(val) => handleRoleChange(orgId, val)}
-                      placeholder={t('channel.invite.selectRole')}
-                    />
-                    <Button size="small" danger onClick={() => handleRemoveAssignment(orgId)} style={{ flexShrink: 0 }}>
+
+                    {identity && identity !== 'org_admin' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                        <CrownOutlined style={{ color: '#d48806' }} />
+                        <span style={{ fontSize: 13, color: '#1f2d3d' }}>
+                          {t('channel.invite.setOrgAdmin')}
+                        </span>
+                        <Tooltip title={t('channel.invite.orgAdminHint')}>
+                          <QuestionCircleOutlined style={{ color: '#8c9cb0', fontSize: 12 }} />
+                        </Tooltip>
+                        <Switch
+                          size="small"
+                          checked={!!adminByOrg[orgId]}
+                          onChange={(checked) =>
+                            setAdminByOrg((prev) => ({ ...prev, [orgId]: checked }))
+                          }
+                          disabled={!manageable}
+                        />
+                      </div>
+                    )}
+
+                    <Button size="small" danger onClick={() => {
+                      setSelectedOrganizationIds((prev) => prev.filter((id) => id !== orgId))
+                      setAdminByOrg((prev) => {
+                        const next = { ...prev }
+                        delete next[orgId]
+                        return next
+                      })
+                    }} style={{ flexShrink: 0 }}>
                       {t('common.delete')}
                     </Button>
                   </div>
