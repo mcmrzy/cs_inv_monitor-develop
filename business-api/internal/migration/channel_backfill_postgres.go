@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"inv-api-server/internal/repository"
 )
 
 type PostgresOrganizationBackfillStore struct {
@@ -416,15 +418,29 @@ func applyOrganizationOperation(ctx context.Context, tx pgx.Tx, mappingDigest st
 	}
 	expectedRoleStatus := membershipStatusForRole(membershipStatus)
 	for _, roleCode := range operation.RoleCodes {
-		if _, err := tx.Exec(ctx, `
+		var roleAssignmentID int64
+		err := tx.QueryRow(ctx, `
 			INSERT INTO membership_role_assignments(root_tenant_id,organization_id,membership_id,role_code,status)
 			SELECT $1::BIGINT,$2::BIGINT,$3::BIGINT,$4::VARCHAR(64),$5::VARCHAR(20)
 			WHERE NOT EXISTS (
 				SELECT 1 FROM membership_role_assignments
 				WHERE membership_id=$3 AND role_code=$4::VARCHAR(64)
 			)
-		`, operation.RootTenantID, operation.OrganizationID, operation.SourceUserID, roleCode, expectedRoleStatus); err != nil {
+			RETURNING id
+		`, operation.RootTenantID, operation.OrganizationID, operation.SourceUserID, roleCode, expectedRoleStatus).Scan(&roleAssignmentID)
+		if err == pgx.ErrNoRows {
+			// 已存在同角色分配：复用现有分配（保证授权写入不重复）
+			err = tx.QueryRow(ctx, `
+				SELECT id FROM membership_role_assignments
+				WHERE membership_id=$1 AND role_code=$2
+			`, operation.SourceUserID, roleCode).Scan(&roleAssignmentID)
+		}
+		if err != nil {
 			return fmt.Errorf("insert role assignment %s: %w", roleCode, err)
+		}
+		// 写入该角色默认授权，避免成员登录后菜单全空
+		if err := repository.EnsureRoleDefaultGrants(ctx, tx, operation.RootTenantID, operation.OrganizationID, roleAssignmentID, roleCode); err != nil {
+			return fmt.Errorf("grant default permissions for role %s: %w", roleCode, err)
 		}
 	}
 	roleRows, err := tx.Query(ctx, `SELECT role_code,status FROM membership_role_assignments WHERE membership_id=$1 ORDER BY role_code`, operation.SourceUserID)
