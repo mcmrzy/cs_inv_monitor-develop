@@ -338,14 +338,19 @@ func (r *OrganizationRepository) CreateMembership(ctx context.Context, tx pgx.Tx
 }
 
 // CreateRoleAssignment inserts a new membership role assignment within a transaction
+// and writes the role's default permission grants so the new member is immediately
+// authorized (permissions would otherwise be empty and hide all menu items).
 func (r *OrganizationRepository) CreateRoleAssignment(ctx context.Context, tx pgx.Tx, ra *model.MembershipRoleAssignment) error {
 	query := `
 		INSERT INTO membership_role_assignments (root_tenant_id, organization_id, membership_id, role_code, status, version)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
-	return tx.QueryRow(ctx, query,
+	if err := tx.QueryRow(ctx, query,
 		ra.RootTenantID, ra.OrganizationID, ra.MembershipID,
 		ra.RoleCode, ra.Status, ra.Version,
-	).Scan(&ra.ID)
+	).Scan(&ra.ID); err != nil {
+		return err
+	}
+	return EnsureRoleDefaultGrants(ctx, tx, ra.RootTenantID, ra.OrganizationID, ra.ID, ra.RoleCode)
 }

@@ -12,6 +12,7 @@ import (
 
 	"inv-api-server/internal/middleware"
 	"inv-api-server/internal/model"
+	"inv-api-server/internal/repository"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
 
@@ -277,14 +278,23 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 			return
 		}
 		// Assign org_admin role
-		_, err = tx.Exec(ctx, `
+		var roleAssignmentID int64
+		err = tx.QueryRow(ctx, `
 			INSERT INTO membership_role_assignments (root_tenant_id, organization_id, membership_id, role_code, assigned_by)
 			VALUES ($1, $2, $3, 'org_admin', $4)
-		`, tenantID, org.ID, membershipID, userID)
+			RETURNING id
+		`, tenantID, org.ID, membershipID, userID).Scan(&roleAssignmentID)
 		if err != nil {
 			tx.Rollback(ctx)
 			log.Printf("[CreateOrg] assign role error: membership_id=%d, err=%v", membershipID, err)
 			response.Error(c, 500, fmt.Sprintf("assign admin role failed: %v", err))
+			return
+		}
+		// 写入 org_admin 默认授权，避免新管理员登录后菜单全空
+		if err := repository.EnsureRoleDefaultGrants(ctx, tx, tenantID, org.ID, roleAssignmentID, "org_admin"); err != nil {
+			tx.Rollback(ctx)
+			log.Printf("[CreateOrg] grant default permissions error: err=%v", err)
+			response.Error(c, 500, fmt.Sprintf("grant default permissions failed: %v", err))
 			return
 		}
 	}
@@ -1370,14 +1380,29 @@ func (h *OrganizationHandler) ApproveJoin(c *gin.Context) {
 		}
 
 		// Assign the default channel role 'customer' (org_type is not a valid role_code)
-		_, err = tx.Exec(ctx, `
+		var roleAssignmentID int64
+		err = tx.QueryRow(ctx, `
 			INSERT INTO membership_role_assignments (root_tenant_id, organization_id, membership_id, role_code, status)
 			VALUES ($1, $2, $3, 'customer', 'active')
 			ON CONFLICT (membership_id, role_code) WHERE status = 'active'
 			DO NOTHING
-		`, orgTenantID, id, membershipID)
+			RETURNING id
+		`, orgTenantID, id, membershipID).Scan(&roleAssignmentID)
+		if err == pgx.ErrNoRows {
+			// 已存在同角色分配：复用现有分配（保证授权写入不重复）
+			err = tx.QueryRow(ctx, `
+				SELECT id FROM membership_role_assignments
+				WHERE membership_id = $1 AND role_code = 'customer' AND status = 'active'
+			`, membershipID).Scan(&roleAssignmentID)
+		}
 		if err != nil {
 			log.Printf("[ApproveJoin] assign role error: err=%v", err)
+			response.Error(c, 500, "approve failed")
+			return
+		}
+		// 写入 customer 默认授权，避免新成员登录后菜单全空
+		if err := repository.EnsureRoleDefaultGrants(ctx, tx, orgTenantID, id, roleAssignmentID, "customer"); err != nil {
+			log.Printf("[ApproveJoin] grant default permissions error: err=%v", err)
 			response.Error(c, 500, "approve failed")
 			return
 		}
