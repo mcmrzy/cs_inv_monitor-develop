@@ -261,7 +261,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
         <div
           className="org-card"
           style={{
-            width: 300,
+            width: 560,
             background: '#FFFFFF',
             borderRadius: 14,
             border: `1px solid ${selected ? meta.color : '#E3EAF3'}`,
@@ -287,80 +287,82 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
               background: `linear-gradient(90deg, ${meta.color}, ${meta.color}99)`,
             }}
           />
-          {/* 白色头部 */}
-          <div style={{ padding: '16px 18px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ color: meta.color, fontSize: 22, lineHeight: 1 }}>{meta.icon}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                title={node.name}
-                style={{
-                  color: '#1f2d3d', fontWeight: 600, fontSize: 16,
-                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                }}
-              >
-                {node.name}
-              </div>
-              <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <span
+          {/* 白色头部：左侧名称标签 + 右侧统计（横向布局） */}
+          <div style={{ padding: '14px 18px 12px', display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ color: meta.color, fontSize: 22, lineHeight: 1, flexShrink: 0 }}>{meta.icon}</span>
+              <div style={{ minWidth: 0 }}>
+                <div
+                  title={node.name}
                   style={{
-                    background: `${meta.color}14`, color: meta.color,
-                    fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
+                    color: '#1f2d3d', fontWeight: 600, fontSize: 16,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}
                 >
-                  {t(`channel.org.type.${node.type}`)}
-                </span>
-                <span
-                  style={
-                    node.status === 'active'
-                      ? {
-                          background: '#52c41a14', color: '#52c41a',
-                          fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
-                        }
-                      : {
-                          background: '#f0f2f5', color: '#86909c',
-                          fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
-                        }
-                  }
-                >
-                  {t(`channel.org.status.${node.status}`)}
-                </span>
+                  {node.name}
+                </div>
+                <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span
+                    style={{
+                      background: `${meta.color}14`, color: meta.color,
+                      fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
+                    }}
+                  >
+                    {t(`channel.org.type.${node.type}`)}
+                  </span>
+                  <span
+                    style={
+                      node.status === 'active'
+                        ? {
+                            background: '#52c41a14', color: '#52c41a',
+                            fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
+                          }
+                        : {
+                            background: '#f0f2f5', color: '#86909c',
+                            fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
+                          }
+                    }
+                  >
+                    {t(`channel.org.status.${node.status}`)}
+                  </span>
+                </div>
               </div>
+              {children.length > 0 && (
+                <span style={{ color: '#5a6b85', fontSize: 13, flexShrink: 0, marginLeft: 4 }}>
+                  {expanded ? <CompressOutlined /> : <ExpandOutlined />}
+                </span>
+              )}
             </div>
-            {children.length > 0 && (
-              <span style={{ color: '#5a6b85', fontSize: 13, flexShrink: 0 }}>
-                {expanded ? <CompressOutlined /> : <ExpandOutlined />}
-              </span>
-            )}
-          </div>
 
-          {/* 统计信息（圆角色块：图标 + 文字标签） */}
-          <div style={{ display: 'flex', gap: 8, padding: '12px 18px 8px', flexWrap: 'wrap' }}>
-            <Tooltip title={t('channel.org.memberCount')}>
-              <span style={statChipStyle}>
-                <TeamOutlined style={{ color: meta.color }} />
-                <span>{t('channel.org.memberCount')}</span>
-                <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.member_count}</b>
-              </span>
-            </Tooltip>
-            <Tooltip title={t('channel.org.deviceCount')}>
-              <span style={statChipStyle}>
-                <DesktopOutlined style={{ color: meta.color }} />
-                <span>{t('channel.org.deviceCount')}</span>
-                <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.device_count}</b>
-              </span>
-            </Tooltip>
-            <Tooltip title={t('channel.org.childrenCount')}>
-              <span style={statChipStyle}>
-                <ApartmentOutlined style={{ color: meta.color }} />
-                <span>{t('channel.org.childrenCount')}</span>
-                <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.children_count}</b>
-              </span>
-            </Tooltip>
+            {/* 统计信息（圆角色块，横向显示在头部右侧） */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flexShrink: 0 }}>
+              <Tooltip title={t('channel.org.memberCount')}>
+                <span style={statChipStyle}>
+                  <TeamOutlined style={{ color: meta.color }} />
+                  <span>{t('channel.org.memberCount')}</span>
+                  <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.member_count}</b>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('channel.org.deviceCount')}>
+                <span style={statChipStyle}>
+                  <DesktopOutlined style={{ color: meta.color }} />
+                  <span>{t('channel.org.deviceCount')}</span>
+                  <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.device_count}</b>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('channel.org.childrenCount')}>
+                <span style={statChipStyle}>
+                  <ApartmentOutlined style={{ color: meta.color }} />
+                  <span>{t('channel.org.childrenCount')}</span>
+                  <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.children_count}</b>
+                </span>
+              </Tooltip>
+            </div>
           </div>
 
           {/* 操作按钮（圆角矩形：图标 + 文字，合理换行） */}
           <div
-            style={{ display: 'flex', gap: 8, padding: '10px 18px 16px', flexWrap: 'wrap' }}
+            style={{ display: 'flex', gap: 8, padding: '4px 18px 16px', flexWrap: 'wrap' }}
             onClick={(e) => e.stopPropagation()}
           >
             <Tooltip title={t('channel.org.edit')}>
