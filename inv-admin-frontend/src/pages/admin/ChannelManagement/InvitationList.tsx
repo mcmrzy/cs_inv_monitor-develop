@@ -17,6 +17,7 @@ import { roleLabel } from '@/utils/roleLabel'
 // Full status set returned by the backend
 const STATUS_COLORS: Record<string, string> = {
   pending: 'orange',
+  used: 'blue',
   accepted: 'green',
   rejected: 'red',
   expired: 'default',
@@ -107,39 +108,42 @@ const InvitationList: React.FC = () => {
       render: (_, record: Invitation) => record.created_at ? formatInTimezone(record.created_at, timezone, 'YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: t('common.actions'), key: 'actions', width: 160,
+      title: t('common.actions'), key: 'actions', width: 180,
       render: (_: unknown, record: Invitation) => (
-        <Space>
-          {record.status === 'pending' && (
-            <>
+        record.status === 'pending' || record.status === 'expired' ? (
+          <Space size={[4, 4]} wrap>
+            {record.status === 'pending' && (
+              <>
+                <Button
+                  size="small"
+                  type="link"
+                  icon={<CopyOutlined />}
+                  onClick={copyInviteLink}
+                >
+                  {t('channel.invite.copyLink')}
+                </Button>
+                <Popconfirm
+                  title={t('channel.invite.confirmRevoke')}
+                  onConfirm={() => revokeMutation.mutate(record.id)}
+                >
+                  <Button size="small" type="link" danger icon={<StopOutlined />}>
+                    {t('channel.invite.revoke')}
+                  </Button>
+                </Popconfirm>
+              </>
+            )}
+            {record.status === 'expired' && (
               <Button
                 size="small"
                 type="link"
-                icon={<CopyOutlined />}
-                onClick={copyInviteLink}
+                icon={<ReloadOutlined />}
+                onClick={() => resendMutation.mutate(record)}
               >
-                {t('channel.invite.copyLink')}
+                {t('channel.invite.resend')}
               </Button>
-              <Popconfirm
-                title={t('channel.invite.confirmRevoke')}
-                onConfirm={() => revokeMutation.mutate(record.id)}
-              >
-                <Button size="small" type="link" danger icon={<StopOutlined />}>
-                  {t('channel.invite.revoke')}
-                </Button>
-              </Popconfirm>
-            </>
-          )}
-          {record.status === 'expired' && (
-            <Button
-              size="small"
-              type="link"
-              onClick={() => resendMutation.mutate(record)}
-            >
-              {t('channel.invite.resend')}
-            </Button>
-          )}
-        </Space>
+            )}
+          </Space>
+        ) : <span style={{ color: '#999' }}>-</span>
       ),
     },
   ]
@@ -147,9 +151,6 @@ const InvitationList: React.FC = () => {
   return (
     <div>
       {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} style={{ marginBottom: 16 }} />}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button>
-      </div>
       <ProTable<Invitation>
         rowKey="id"
         columns={columns}
@@ -158,6 +159,11 @@ const InvitationList: React.FC = () => {
         size="middle"
         search={false}
         options={false}
+        toolBarRender={() => [
+          <Button key="refresh" icon={<ReloadOutlined />} onClick={() => refetch()}>
+            {t('common.refresh')}
+          </Button>,
+        ]}
         locale={{ emptyText: <Empty description={t('common.noData')} /> }}
         pagination={{
           current: page,

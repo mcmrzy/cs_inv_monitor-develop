@@ -261,7 +261,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
         <div
           className="org-card"
           style={{
-            width: 252,
+            width: 300,
             background: '#FFFFFF',
             borderRadius: 14,
             border: `1px solid ${selected ? meta.color : '#E3EAF3'}`,
@@ -280,70 +280,98 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
             if (children.length > 0) toggleExpand(node.id)
           }}
         >
-          {/* 彩色渐变头部 */}
-          <div style={{ background: meta.gradient, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ color: '#FFFFFF', fontSize: 20, lineHeight: 1 }}>{meta.icon}</span>
+          {/* 顶部彩色横条（仅一条，颜色来自类型 meta） */}
+          <div
+            style={{
+              height: 6,
+              background: `linear-gradient(90deg, ${meta.color}, ${meta.color}99)`,
+            }}
+          />
+          {/* 白色头部 */}
+          <div style={{ padding: '12px 16px 10px', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ color: meta.color, fontSize: 20, lineHeight: 1 }}>{meta.icon}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div
                 title={node.name}
                 style={{
-                  color: '#FFFFFF', fontWeight: 600, fontSize: 15,
+                  color: '#1f2d3d', fontWeight: 600, fontSize: 15,
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}
               >
                 {node.name}
               </div>
-              <div style={{ marginTop: 5, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <span
                   style={{
-                    background: 'rgba(255,255,255,0.22)', color: '#FFFFFF',
+                    background: `${meta.color}14`, color: meta.color,
                     fontSize: 11, lineHeight: '18px', padding: '0 8px', borderRadius: 9,
-                    border: '1px solid rgba(255,255,255,0.35)',
                   }}
                 >
                   {t(`channel.org.type.${node.type}`)}
                 </span>
                 <span
-                  style={{
-                    background: node.status === 'active' ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)',
-                    color: '#FFFFFF', fontSize: 11, lineHeight: '18px', padding: '0 8px', borderRadius: 9,
-                    border: '1px solid rgba(255,255,255,0.35)',
-                  }}
+                  style={
+                    node.status === 'active'
+                      ? {
+                          background: '#52c41a14', color: '#52c41a',
+                          fontSize: 11, lineHeight: '18px', padding: '0 8px', borderRadius: 9,
+                        }
+                      : {
+                          background: '#f0f2f5', color: '#86909c',
+                          fontSize: 11, lineHeight: '18px', padding: '0 8px', borderRadius: 9,
+                        }
+                  }
                 >
                   {t(`channel.org.status.${node.status}`)}
                 </span>
               </div>
             </div>
             {children.length > 0 && (
-              <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, flexShrink: 0 }}>
+              <span style={{ color: '#5a6b85', fontSize: 13, flexShrink: 0 }}>
                 {expanded ? <CompressOutlined /> : <ExpandOutlined />}
               </span>
             )}
           </div>
 
-          {/* 统计信息 */}
-          <div style={{ display: 'flex', gap: 10, padding: '10px 14px 6px', flexWrap: 'wrap' }}>
+          {/* 统计信息（圆角色块：图标 + 文字标签） */}
+          <div style={{ display: 'flex', gap: 8, padding: '8px 16px 4px', flexWrap: 'wrap' }}>
             <Tooltip title={t('channel.org.memberCount')}>
-              <span style={statChipStyle}><TeamOutlined /> {node.member_count}</span>
+              <span style={statChipStyle}>
+                <TeamOutlined style={{ color: meta.color }} />
+                <span>{t('channel.org.memberCount')}</span>
+                <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.member_count}</b>
+              </span>
             </Tooltip>
             <Tooltip title={t('channel.org.deviceCount')}>
-              <span style={statChipStyle}><DesktopOutlined /> {node.device_count}</span>
+              <span style={statChipStyle}>
+                <DesktopOutlined style={{ color: meta.color }} />
+                <span>{t('channel.org.deviceCount')}</span>
+                <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.device_count}</b>
+              </span>
             </Tooltip>
             <Tooltip title={t('channel.org.childrenCount')}>
-              <span style={statChipStyle}><ApartmentOutlined /> {node.children_count}</span>
+              <span style={statChipStyle}>
+                <ApartmentOutlined style={{ color: meta.color }} />
+                <span>{t('channel.org.childrenCount')}</span>
+                <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.children_count}</b>
+              </span>
             </Tooltip>
           </div>
 
-          {/* 操作按钮 */}
+          {/* 操作按钮（圆角矩形：图标 + 文字，合理换行） */}
           <div
-            style={{ display: 'flex', gap: 2, padding: '2px 8px 10px', flexWrap: 'wrap' }}
+            style={{ display: 'flex', gap: 6, padding: '6px 16px 12px', flexWrap: 'wrap' }}
             onClick={(e) => e.stopPropagation()}
           >
             <Tooltip title={t('channel.org.edit')}>
-              <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(node)} />
+              <Button size="small" icon={<EditOutlined />} style={softActionBtnStyle} onClick={() => openEdit(node)}>
+                {t('channel.org.edit')}
+              </Button>
             </Tooltip>
             <Tooltip title={t('channel.org.move')}>
-              <Button size="small" type="text" icon={<SwapOutlined />} onClick={() => openMove(node)} />
+              <Button size="small" icon={<SwapOutlined />} style={softActionBtnStyle} onClick={() => openMove(node)}>
+                {t('channel.org.move')}
+              </Button>
             </Tooltip>
             <Popconfirm
               title={t('channel.org.confirmToggle')}
@@ -352,38 +380,43 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
               <Tooltip title={node.status === 'active' ? t('channel.org.status.disabled') : t('channel.org.status.active')}>
                 <Button
                   size="small"
-                  type="text"
                   icon={node.status === 'active' ? <StopOutlined /> : <CheckCircleOutlined />}
-                  style={node.status === 'active' ? { color: '#faad14' } : { color: '#52c41a' }}
-                />
+                  style={node.status === 'active' ? warnActionBtnStyle : successActionBtnStyle}
+                >
+                  {node.status === 'active' ? t('channel.org.status.disabled') : t('channel.org.status.active')}
+                </Button>
               </Tooltip>
             </Popconfirm>
             <Popconfirm
               title={t('channel.org.confirmDelete')}
               onConfirm={() => deleteMutation.mutate(node.id)}
             >
-              <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+              <Button size="small" danger icon={<DeleteOutlined />} style={dangerActionBtnStyle}>
+                {t('channel.org.delete')}
+              </Button>
             </Popconfirm>
             {isSystemAdmin && creatableChildTypes.length > 0 && (
               <Tooltip title={t('channel.org.createChild')}>
                 <Button
                   size="small"
-                  type="text"
                   icon={<PlusOutlined />}
-                  style={{ color: meta.color }}
+                  style={{ ...softActionBtnStyle, color: meta.color, background: `${meta.color}12` }}
                   onClick={() => openCreate(node.id)}
-                />
+                >
+                  {t('channel.org.createChild')}
+                </Button>
               </Tooltip>
             )}
             <Tooltip title={t('channel.org.invite')}>
               <Button
                 size="small"
                 type="primary"
-                ghost
                 icon={<UserAddOutlined />}
-                style={{ borderColor: meta.color, color: meta.color }}
+                style={{ borderRadius: 8, height: 26, fontSize: 12, padding: '0 10px', background: meta.color, borderColor: meta.color }}
                 onClick={() => openInvite(node.id)}
-              />
+              >
+                {t('channel.org.invite')}
+              </Button>
             </Tooltip>
           </div>
         </div>
@@ -555,16 +588,52 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   )
 }
 
-// 统计信息小徽章样式
+// 统计信息圆角色块（图标 + 文字标签）
 const statChipStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 4,
+  gap: 6,
   background: '#F5F7FB',
-  borderRadius: 8,
-  padding: '3px 8px',
+  borderRadius: 10,
+  padding: '6px 12px',
   fontSize: 12,
   color: '#4A5A75',
+}
+
+// 圆角操作按钮基础样式（浅色底）
+const actionBtnBaseStyle: React.CSSProperties = {
+  borderRadius: 8,
+  height: 26,
+  padding: '0 10px',
+  fontSize: 12,
+  border: 'none',
+}
+
+// 通用操作（编辑 / 移动）：浅灰底
+const softActionBtnStyle: React.CSSProperties = {
+  ...actionBtnBaseStyle,
+  background: '#F5F7FB',
+  color: '#4A5A75',
+}
+
+// 停用（当前启用状态 → 橙色）
+const warnActionBtnStyle: React.CSSProperties = {
+  ...actionBtnBaseStyle,
+  background: '#fff7e6',
+  color: '#fa8c16',
+}
+
+// 启用（当前禁用状态 → 绿色）
+const successActionBtnStyle: React.CSSProperties = {
+  ...actionBtnBaseStyle,
+  background: '#f6ffed',
+  color: '#52c41a',
+}
+
+// 删除：浅红底
+const dangerActionBtnStyle: React.CSSProperties = {
+  ...actionBtnBaseStyle,
+  background: '#fff1f0',
 }
 
 export default OrgCardTree

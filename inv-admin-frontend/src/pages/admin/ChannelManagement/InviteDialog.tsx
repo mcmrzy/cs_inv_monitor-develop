@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Modal, Input, Select, InputNumber, Row, Col, App, TreeSelect, Tag, Space, Button,
 } from 'antd'
+import {
+  MailOutlined, ApartmentOutlined, BankOutlined, ShopOutlined,
+  DeploymentUnitOutlined, ToolOutlined, HomeOutlined,
+} from '@ant-design/icons'
 import { channelApi, type OrgHierarchyNode } from '@/services/channelApi'
 import { queryKeys } from '@/utils/queryKeys'
 import useTranslation from '@/hooks/useTranslation'
@@ -26,6 +30,33 @@ const ALLOWED_ROLES_BY_ORG_TYPE: Record<string, string[]> = {
 }
 
 const ALL_ROLES = ['org_admin', 'agent', 'distributor', 'installer', 'customer']
+
+// ── 组织类型 → 类型色 + 图标（与组织树卡片同配色，仅展示用）──
+const ORG_TYPE_META: Record<string, { color: string; icon: ReactNode }> = {
+  manufacturer: { color: '#1677ff', icon: <BankOutlined /> },
+  agent: { color: '#722ed1', icon: <ShopOutlined /> },
+  distributor: { color: '#08979c', icon: <DeploymentUnitOutlined /> },
+  installer: { color: '#389e0d', icon: <ToolOutlined /> },
+  customer: { color: '#d46b08', icon: <HomeOutlined /> },
+}
+
+const DEFAULT_ORG_COLOR = '#5c6b7a'
+
+// ── 表单标签 / 说明文字统一样式 ──
+const LABEL_STYLE: CSSProperties = {
+  display: 'block',
+  marginBottom: 6,
+  fontSize: 14,
+  fontWeight: 500,
+  color: '#1f2d3d',
+}
+
+const HINT_STYLE: CSSProperties = {
+  marginTop: 6,
+  fontSize: 12,
+  color: '#8c9cb0',
+  lineHeight: '18px',
+}
 
 // 多组织取并集；系统管理员豁免全量；org_admin 管理角色始终可分配
 export function resolveAllowedRoles(orgTypes: string[], isSystemAdmin: boolean): string[] {
@@ -82,6 +113,64 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     : Array.isArray(myOrgs)
       ? (myOrgs as any[]).map((o: any) => ({ label: o.name, value: o.id, isLeaf: true }))
       : []
+
+  // 组织 id → type 映射（仅用于展示类型色 / 图标，只读，不参与任何提交逻辑）
+  const orgTypeById = useMemo(() => {
+    const map = new Map<number, string>()
+    const walk = (nodes: OrgHierarchyNode[]) => {
+      for (const n of nodes) {
+        if (n.id != null && n.type) map.set(n.id, n.type)
+        if (n.children?.length) walk(n.children)
+      }
+    }
+    walk((orgHierarchy ?? []) as OrgHierarchyNode[])
+    if (Array.isArray(myOrgs)) {
+      for (const o of myOrgs as any[]) {
+        if (o.id != null) {
+          const type = o.type ?? o.org_type
+          if (type) map.set(o.id, type)
+        }
+      }
+    }
+    return map
+  }, [orgHierarchy, myOrgs])
+
+  const orgTypeOf = (orgId: number): string | undefined => orgTypeById.get(orgId)
+
+  // TreeSelect 已选组织 → 带类型色圆点的 Tag
+  const renderSelectedOrgTag = (props: any) => {
+    const { label, closable, onClose } = props
+    const color = ORG_TYPE_META[orgTypeOf(Number(props.value)) ?? '']?.color ?? DEFAULT_ORG_COLOR
+    return (
+      <Tag
+        closable={closable}
+        onClose={onClose}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          marginInlineEnd: 4,
+          paddingInline: 8,
+          borderRadius: 6,
+          background: `${color}14`,
+          borderColor: `${color}40`,
+          color: '#1f2d3d',
+        }}
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            background: color,
+            display: 'inline-block',
+            flexShrink: 0,
+          }}
+        />
+        {label}
+      </Tag>
+    )
+  }
 
   // 打开时预填初始组织
   useEffect(() => {
@@ -207,11 +296,13 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       width={900}
       destroyOnHidden
     >
-      <div style={{ minHeight: '55vh', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ minHeight: '55vh', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* ── 分组一：收件人信息（邀请邮箱 + 有效时长）── */}
         <Row gutter={16}>
           <Col span={16}>
             <div>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+              <label style={LABEL_STYLE}>
+                <MailOutlined style={{ marginRight: 6, color: '#1677ff' }} />
                 {t('channel.invite.email')}
               </label>
               <Input.TextArea
@@ -220,79 +311,141 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
               />
+              <div style={HINT_STYLE}>
+                <MailOutlined style={{ marginRight: 4 }} />
+                {t('channel.invite.emailPlaceholder')}
+              </div>
             </div>
           </Col>
           <Col span={8}>
             <div>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                {t('channel.invite.expiryHours')}
-              </label>
+              <label style={LABEL_STYLE}>{t('channel.invite.expiryHours')}</label>
               <InputNumber
                 min={1}
                 max={720}
                 value={expiresHours}
                 onChange={(v) => setExpiresHours(v ?? 72)}
                 style={{ width: '100%' }}
+                addonAfter={t('admin.hours')}
               />
+              <div style={HINT_STYLE}>{`1 - 720 ${t('admin.hours')}`}</div>
             </div>
           </Col>
         </Row>
 
-        <div>
-          <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-            {t('channel.invite.organization')}
-          </label>
-          <TreeSelect
-            treeData={orgOptions}
-            placeholder={t('channel.org.select')}
-            multiple
-            allowClear
-            showSearch
-            value={selectedOrganizationIds}
-            onChange={(values: number[]) => {
-              setSelectedOrganizationIds(values)
-              setRoleAssignments((prev) => prev.filter((r) => values.includes(r.organization_id)))
-            }}
-            disabled={loadingOrgs}
-            treeDefaultExpandAll={isSystemAdmin}
-            style={{ width: '100%' }}
-          />
-        </div>
+        {/* ── 分组分隔线 ── */}
+        <div style={{ height: 1, background: '#eef2f7', margin: '2px 0' }} />
 
-        {selectedOrganizationIds.length > 0 && (
-          <div>
-            <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+        {/* ── 分组二：组织与角色分配 ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 3, height: 14, borderRadius: 2, background: '#1677ff' }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2d3d' }}>
               {t('channel.invite.roleAssignments')}
-            </label>
-            <Space direction="vertical" style={{ width: '100%' }}>
+            </span>
+          </div>
+
+          <div>
+            <label style={LABEL_STYLE}>{t('channel.invite.organization')}</label>
+            <TreeSelect
+              treeData={orgOptions}
+              placeholder={t('channel.org.select')}
+              multiple
+              allowClear
+              showSearch
+              value={selectedOrganizationIds}
+              onChange={(values: number[]) => {
+                setSelectedOrganizationIds(values)
+                setRoleAssignments((prev) => prev.filter((r) => values.includes(r.organization_id)))
+              }}
+              disabled={loadingOrgs}
+              treeDefaultExpandAll={isSystemAdmin}
+              style={{ width: '100%' }}
+              tagRender={renderSelectedOrgTag}
+            />
+          </div>
+
+          {selectedOrganizationIds.length > 0 && (
+            <Space direction="vertical" size={10} style={{ width: '100%' }}>
               {selectedOrganizationIds.map((orgId) => {
                 const org = orgOptions.find((n) => n.value === orgId)
+                const orgType = orgTypeOf(orgId)
+                const meta = orgType ? ORG_TYPE_META[orgType] : undefined
+                const color = meta?.color ?? DEFAULT_ORG_COLOR
                 return (
-                  <Row key={orgId} align="middle" gutter={[8, 8]}>
-                    <Col flex="auto">
-                      <Tag color="blue">{org?.label}</Tag>
-                    </Col>
-                    <Col>
-                      <Select
-                        size="small"
-                        options={roleOptions.map((code) => ({ label: roleLabel(code, t), value: code }))}
-                        style={{ width: 160 }}
-                        value={roleAssignments.find((r) => r.organization_id === orgId)?.role_code}
-                        onChange={(val) => handleRoleChange(orgId, val)}
-                        placeholder={t('channel.invite.selectRole')}
-                      />
-                    </Col>
-                    <Col>
-                      <Button size="small" danger onClick={() => handleRemoveAssignment(orgId)}>
-                        {t('admin.remove')}
-                      </Button>
-                    </Col>
-                  </Row>
+                  <div
+                    key={orgId}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      background: '#F7F9FC',
+                      border: '1px solid #eef2f7',
+                      borderRadius: 10,
+                      padding: '10px 12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 22,
+                          height: 22,
+                          borderRadius: 6,
+                          flexShrink: 0,
+                          fontSize: 12,
+                          background: `${color}14`,
+                          color,
+                        }}
+                      >
+                        {meta?.icon ?? <ApartmentOutlined />}
+                      </span>
+                      <span
+                        style={{
+                          fontWeight: 500,
+                          color: '#1f2d3d',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {org?.label}
+                      </span>
+                      {orgType && meta && (
+                        <Tag
+                          style={{
+                            marginInlineEnd: 0,
+                            borderColor: `${color}40`,
+                            background: `${color}14`,
+                            color,
+                            borderRadius: 6,
+                            lineHeight: '18px',
+                            paddingInline: 6,
+                          }}
+                        >
+                          {t(`channel.org.type.${orgType}`)}
+                        </Tag>
+                      )}
+                    </div>
+                    <Select
+                      size="small"
+                      options={roleOptions.map((code) => ({ label: roleLabel(code, t), value: code }))}
+                      style={{ width: 160, flexShrink: 0 }}
+                      value={roleAssignments.find((r) => r.organization_id === orgId)?.role_code}
+                      onChange={(val) => handleRoleChange(orgId, val)}
+                      placeholder={t('channel.invite.selectRole')}
+                    />
+                    <Button size="small" danger onClick={() => handleRemoveAssignment(orgId)} style={{ flexShrink: 0 }}>
+                      {t('common.delete')}
+                    </Button>
+                  </div>
                 )
               })}
             </Space>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </Modal>
   )
