@@ -213,7 +213,9 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Permission: system admins may invite to any organization in the tenant;
-	// organization admins (org_admin role) may invite to their own organizations.
+	// other users must manage the target organization (be org_admin of the
+	// organization or of one of its ancestors — i.e. their own organizations
+	// plus all descendants).
 	if !isSystemAdmin {
 		ok, err := h.canCreateInvitationsFor(ctx, userID, assignments)
 		if err != nil {
@@ -222,36 +224,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 			return
 		}
 		if !ok {
-			response.Error(c, 403, "无权发送邀请（需要系统管理员或目标组织管理员）")
-			return
-		}
-	}
-
-	// Role hierarchy check: non-system-admin inviters may only assign roles that
-	// their own organization type can invite (see inviterAllowedRolesByOrgType).
-	// System admins are unrestricted. Violations return a detailed 403 listing
-	// every illegal assignment instead of a generic error.
-	if !isSystemAdmin {
-		inviterOrgTypes, err := h.inviterOrgTypes(ctx, userID)
-		if err != nil {
-			logger.Error("Failed to resolve inviter org types", zap.Error(err))
-			response.Error(c, 500, "权限校验失败")
-			return
-		}
-		allowed := resolveAllowedRoles(inviterOrgTypes, isSystemAdmin)
-		allowedSet := make(map[string]bool, len(allowed))
-		for _, r := range allowed {
-			allowedSet[r] = true
-		}
-		var illegal []string
-		for _, a := range assignments {
-			if !allowedSet[a.RoleCode] {
-				illegal = append(illegal, fmt.Sprintf("%s（组织 %d）", a.RoleCode, a.OrganizationID))
-			}
-		}
-		if len(illegal) > 0 {
-			response.Error(c, 403, fmt.Sprintf("无权邀请角色 %s（当前可邀请角色：%s）",
-				strings.Join(illegal, "、"), strings.Join(allowed, "、")))
+			response.Error(c, 403, "无权发送邀请（仅可邀请自己管理范围内的组织）")
 			return
 		}
 	}
@@ -283,6 +256,20 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 			return
 		}
 		orgCache[a.OrganizationID] = org
+	}
+
+	// Identity model: a membership's channel role MUST equal the organization
+	// type (agent org → agent identity, etc.); org_admin is the only
+	// management role that may be stacked onto any organization. This check
+	// applies to system admins too — an agent org cannot host customer
+	// identities regardless of who creates the invitation.
+	for _, a := range assignments {
+		org := orgCache[a.OrganizationID]
+		if !validateRoleOrgMatch(org, a.RoleCode) {
+			response.Error(c, 400, fmt.Sprintf("角色 %s 与组织「%s」（%s 类型）不匹配：成员身份必须与组织类型一致",
+				a.RoleCode, org.Name, org.Type))
+			return
+		}
 	}
 
 	// Check pending-invitation quota per organization (from organization_quotas)
@@ -587,7 +574,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	}
 
 	// Validate every target organization exists and belongs to the invitation tenant
-	orgCache := make(map[int64]bool)
+	orgCache := make(map[int64]*model.Organization)
 	for _, a := range assignments {
 		orgID := a.OrganizationID
 		if orgID == nil {
@@ -597,7 +584,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 			response.Error(c, 500, "组织信息错误")
 			return
 		}
-		if orgCache[*orgID] {
+		if _, ok := orgCache[*orgID]; ok {
 			continue
 		}
 		org, err := h.orgRepo.GetByID(ctx, *orgID)
@@ -613,7 +600,7 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 			response.Error(c, 500, "组织信息错误")
 			return
 		}
-		orgCache[*orgID] = true
+		orgCache[*orgID] = org
 	}
 
 	// Hash the user's password
@@ -671,6 +658,13 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		}
 		if !validRoleCodes[roleCode] {
 			response.Error(c, 500, fmt.Sprintf("无效的角色代码: %s", roleCode))
+			return
+		}
+		// Identity model: channel role must equal the organization type;
+		// org_admin is stackable. Blocks legacy/tampered invitations that
+		// carry a role that does not match the target organization.
+		if !validateRoleOrgMatch(orgCache[*orgID], roleCode) {
+			response.Error(c, 500, fmt.Sprintf("邀请角色 %s 与组织类型不匹配，请联系管理员重新邀请", roleCode))
 			return
 		}
 
@@ -750,8 +744,11 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 	})
 }
 
-// canCreateInvitationsFor reports whether the user is an org_admin of every
-// target organization (used for non-system-admin invitation creation).
+// canCreateInvitationsFor reports whether the user manages every target
+// organization. Management scope = the organizations the user is org_admin
+// of PLUS all their descendants (organization_closure; includes self rows,
+// so being org_admin of the target itself also passes). Used for
+// non-system-admin invitation creation.
 func (h *InvitationHandler) canCreateInvitationsFor(ctx context.Context, userID int64, assignments []RoleAssignmentInput) (bool, error) {
 	seen := make(map[int64]bool)
 	for _, a := range assignments {
@@ -764,11 +761,14 @@ func (h *InvitationHandler) canCreateInvitationsFor(ctx context.Context, userID 
 		err := h.db.QueryRow(ctx, `
 			SELECT EXISTS(
 				SELECT 1
-				FROM membership_role_assignments ra
+				FROM organization_closure c
 				JOIN organization_memberships m
-				  ON m.id = ra.membership_id AND m.organization_id = ra.organization_id
-				WHERE ra.organization_id = $1 AND m.user_id = $2
-				  AND ra.role_code = 'org_admin' AND ra.status = 'active' AND m.status = 'active'
+				  ON m.organization_id = c.ancestor_id AND m.status = 'active'
+				JOIN membership_role_assignments ra
+				  ON ra.membership_id = m.id AND ra.organization_id = m.organization_id
+				WHERE c.descendant_id = $1
+				  AND m.user_id = $2
+				  AND ra.role_code = 'org_admin' AND ra.status = 'active'
 			)
 		`, a.OrganizationID, userID).Scan(&isAdmin)
 		if err != nil {
@@ -941,68 +941,31 @@ var validRoleCodes = map[string]bool{
 	"customer":    true,
 }
 
-// inviterAllowedRolesByOrgType restricts which channel roles an inviter may
-// assign, based on the inviter's own organization type:
-//
-//	manufacturer -> {agent, distributor, installer, customer}
-//	agent        -> {installer, customer}
-//	distributor  -> {installer, customer}
-//	installer    -> {customer}
-//	customer     -> (cannot invite channel roles)
-//
-// org_admin is a management role (not a channel identity) and stays assignable
-// everywhere; it is appended by resolveAllowedRoles.
-var inviterAllowedRolesByOrgType = map[string][]string{
-	"manufacturer": {"agent", "distributor", "installer", "customer"},
-	"agent":        {"installer", "customer"},
-	"distributor":  {"installer", "customer"},
-	"installer":    {"customer"},
-	"customer":     nil,
+// orgTypeIdentityRoles maps every organization type to its member identity
+// role. Identity model: a membership's channel role equals the organization
+// type — an agent organization only hosts agent identities, an installer
+// organization only hosts installer identities, etc. The manufacturer
+// (root) organization hosts org_admin identities.
+var orgTypeIdentityRoles = map[string]string{
+	"manufacturer": "org_admin",
+	"agent":        "agent",
+	"distributor":  "distributor",
+	"installer":    "installer",
+	"customer":     "customer",
 }
 
-// resolveAllowedRoles returns the role codes an inviter may assign.
-// System admins may assign every role; other inviters get the union over their
-// own organization types plus org_admin. Multiple memberships yield the union
-// of the allowed sets of every involved org type.
-func resolveAllowedRoles(inviterOrgTypes []string, isSystemAdmin bool) []string {
-	if isSystemAdmin {
-		return []string{"agent", "distributor", "installer", "customer", "org_admin"}
+// validateRoleOrgMatch reports whether roleCode is legal for the target
+// organization: either the organization's identity role (its org type) or
+// the stackable management role org_admin.
+func validateRoleOrgMatch(org *model.Organization, roleCode string) bool {
+	if org == nil {
+		return false
 	}
-	allowed := []string{"org_admin"} // management role is always assignable
-	seen := map[string]bool{"org_admin": true}
-	for _, t := range inviterOrgTypes {
-		for _, r := range inviterAllowedRolesByOrgType[t] {
-			if !seen[r] {
-				seen[r] = true
-				allowed = append(allowed, r)
-			}
-		}
+	if roleCode == "org_admin" {
+		return true
 	}
-	return allowed
-}
-
-// inviterOrgTypes returns the distinct org types of the user's active
-// memberships (orgs not deleted).
-func (h *InvitationHandler) inviterOrgTypes(ctx context.Context, userID int64) ([]string, error) {
-	rows, err := h.db.Query(ctx, `
-		SELECT DISTINCT o.org_type
-		FROM organization_memberships m
-		JOIN organizations o ON o.id = m.organization_id
-		WHERE m.user_id = $1 AND m.status = 'active' AND o.deleted_at IS NULL
-	`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var types []string
-	for rows.Next() {
-		var t string
-		if err := rows.Scan(&t); err != nil {
-			return nil, err
-		}
-		types = append(types, t)
-	}
-	return types, rows.Err()
+	identity, ok := orgTypeIdentityRoles[org.Type]
+	return ok && identity == roleCode
 }
 
 // roleIDToCode maps legacy numeric role IDs to role codes.

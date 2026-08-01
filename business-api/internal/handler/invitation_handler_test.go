@@ -8,6 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+
+	"inv-api-server/internal/model"
 )
 
 // ============================================================================
@@ -279,56 +281,49 @@ func (suite *InvitationHandlerTestSuite) TestGetInvitationDetails_InvalidID() {
 }
 
 // ============================================================================
-// Role Hierarchy Resolution (pure functions)
+// Identity-Role Matching (pure functions)
 // ============================================================================
 
-func (suite *InvitationHandlerTestSuite) TestResolveAllowedRoles_SystemAdminFullSet() {
-	roles := resolveAllowedRoles(nil, true)
-	assert.ElementsMatch(suite.T(), []string{"agent", "distributor", "installer", "customer", "org_admin"}, roles)
+func (suite *InvitationHandlerTestSuite) TestValidateRoleOrgMatch_IdentityEqualsOrgType() {
+	// Identity model: channel role MUST equal the organization type.
+	agentOrg := &model.Organization{ID: 3, Type: "agent"}
+	assert.True(suite.T(), validateRoleOrgMatch(agentOrg, "agent"))
+	assert.False(suite.T(), validateRoleOrgMatch(agentOrg, "customer"))
+	assert.False(suite.T(), validateRoleOrgMatch(agentOrg, "installer"))
+	assert.False(suite.T(), validateRoleOrgMatch(agentOrg, "distributor"))
+
+	distributorOrg := &model.Organization{ID: 6, Type: "distributor"}
+	assert.True(suite.T(), validateRoleOrgMatch(distributorOrg, "distributor"))
+	assert.False(suite.T(), validateRoleOrgMatch(distributorOrg, "installer"))
+
+	installerOrg := &model.Organization{ID: 13, Type: "installer"}
+	assert.True(suite.T(), validateRoleOrgMatch(installerOrg, "installer"))
+	assert.False(suite.T(), validateRoleOrgMatch(installerOrg, "customer"))
+
+	customerOrg := &model.Organization{ID: 20, Type: "customer"}
+	assert.True(suite.T(), validateRoleOrgMatch(customerOrg, "customer"))
+	assert.False(suite.T(), validateRoleOrgMatch(customerOrg, "agent"))
 }
 
-func (suite *InvitationHandlerTestSuite) TestResolveAllowedRoles_ByInviterOrgType() {
-	// manufacturer org admin: every channel role + org_admin
-	assert.ElementsMatch(suite.T(),
-		[]string{"agent", "distributor", "installer", "customer", "org_admin"},
-		resolveAllowedRoles([]string{"manufacturer"}, false))
-
-	// agent org admin: installer + customer + org_admin
-	assert.ElementsMatch(suite.T(),
-		[]string{"installer", "customer", "org_admin"},
-		resolveAllowedRoles([]string{"agent"}, false))
-
-	// distributor org admin: installer + customer + org_admin
-	assert.ElementsMatch(suite.T(),
-		[]string{"installer", "customer", "org_admin"},
-		resolveAllowedRoles([]string{"distributor"}, false))
-
-	// installer org admin: customer + org_admin
-	assert.ElementsMatch(suite.T(),
-		[]string{"customer", "org_admin"},
-		resolveAllowedRoles([]string{"installer"}, false))
-
-	// customer org admin: org_admin only (no channel roles invitable)
-	assert.ElementsMatch(suite.T(),
-		[]string{"org_admin"},
-		resolveAllowedRoles([]string{"customer"}, false))
+func (suite *InvitationHandlerTestSuite) TestValidateRoleOrgMatch_ManufacturerHostsOrgAdmin() {
+	// The manufacturer (root) organization hosts org_admin identities only.
+	org := &model.Organization{ID: 1, Type: "manufacturer"}
+	assert.True(suite.T(), validateRoleOrgMatch(org, "org_admin"))
+	assert.False(suite.T(), validateRoleOrgMatch(org, "agent"))
+	assert.False(suite.T(), validateRoleOrgMatch(org, "customer"))
 }
 
-func (suite *InvitationHandlerTestSuite) TestResolveAllowedRoles_MultiOrgUnion() {
-	// agent + installer memberships -> union {installer, customer} + org_admin
-	assert.ElementsMatch(suite.T(),
-		[]string{"installer", "customer", "org_admin"},
-		resolveAllowedRoles([]string{"agent", "installer"}, false))
-
-	// manufacturer + agent -> full channel set
-	assert.ElementsMatch(suite.T(),
-		[]string{"agent", "distributor", "installer", "customer", "org_admin"},
-		resolveAllowedRoles([]string{"manufacturer", "agent"}, false))
+func (suite *InvitationHandlerTestSuite) TestValidateRoleOrgMatch_OrgAdminStackableEverywhere() {
+	// org_admin is the only management role; it may stack on any org type.
+	for _, typ := range []string{"manufacturer", "agent", "distributor", "installer", "customer"} {
+		org := &model.Organization{ID: 1, Type: typ}
+		assert.True(suite.T(), validateRoleOrgMatch(org, "org_admin"), "org_admin must be stackable on %s", typ)
+	}
 }
 
-func (suite *InvitationHandlerTestSuite) TestResolveAllowedRoles_NoMembership() {
-	// No memberships -> only the management role remains assignable.
-	assert.ElementsMatch(suite.T(), []string{"org_admin"}, resolveAllowedRoles(nil, false))
+func (suite *InvitationHandlerTestSuite) TestValidateRoleOrgMatch_NilOrgRejected() {
+	assert.False(suite.T(), validateRoleOrgMatch(nil, "agent"))
+	assert.False(suite.T(), validateRoleOrgMatch(nil, "org_admin"))
 }
 
 // ============================================================================
