@@ -288,23 +288,23 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
             }}
           />
           {/* 白色头部 */}
-          <div style={{ padding: '12px 16px 10px', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ color: meta.color, fontSize: 20, lineHeight: 1 }}>{meta.icon}</span>
+          <div style={{ padding: '16px 18px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ color: meta.color, fontSize: 22, lineHeight: 1 }}>{meta.icon}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div
                 title={node.name}
                 style={{
-                  color: '#1f2d3d', fontWeight: 600, fontSize: 15,
+                  color: '#1f2d3d', fontWeight: 600, fontSize: 16,
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}
               >
                 {node.name}
               </div>
-              <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <span
                   style={{
                     background: `${meta.color}14`, color: meta.color,
-                    fontSize: 11, lineHeight: '18px', padding: '0 8px', borderRadius: 9,
+                    fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
                   }}
                 >
                   {t(`channel.org.type.${node.type}`)}
@@ -314,11 +314,11 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
                     node.status === 'active'
                       ? {
                           background: '#52c41a14', color: '#52c41a',
-                          fontSize: 11, lineHeight: '18px', padding: '0 8px', borderRadius: 9,
+                          fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
                         }
                       : {
                           background: '#f0f2f5', color: '#86909c',
-                          fontSize: 11, lineHeight: '18px', padding: '0 8px', borderRadius: 9,
+                          fontSize: 12, lineHeight: '20px', padding: '0 10px', borderRadius: 10,
                         }
                   }
                 >
@@ -334,7 +334,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
           </div>
 
           {/* 统计信息（圆角色块：图标 + 文字标签） */}
-          <div style={{ display: 'flex', gap: 8, padding: '8px 16px 4px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, padding: '12px 18px 8px', flexWrap: 'wrap' }}>
             <Tooltip title={t('channel.org.memberCount')}>
               <span style={statChipStyle}>
                 <TeamOutlined style={{ color: meta.color }} />
@@ -360,7 +360,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
 
           {/* 操作按钮（圆角矩形：图标 + 文字，合理换行） */}
           <div
-            style={{ display: 'flex', gap: 6, padding: '6px 16px 12px', flexWrap: 'wrap' }}
+            style={{ display: 'flex', gap: 8, padding: '10px 18px 16px', flexWrap: 'wrap' }}
             onClick={(e) => e.stopPropagation()}
           >
             <Tooltip title={t('channel.org.edit')}>
@@ -412,7 +412,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
                 size="small"
                 type="primary"
                 icon={<UserAddOutlined />}
-                style={{ borderRadius: 8, height: 26, fontSize: 12, padding: '0 10px', background: meta.color, borderColor: meta.color }}
+                style={{ borderRadius: 8, height: 30, fontSize: 13, padding: '0 12px', background: meta.color, borderColor: meta.color }}
                 onClick={() => openInvite(node.id)}
               >
                 {t('channel.org.invite')}
@@ -592,20 +592,20 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
 const statChipStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 6,
+  gap: 8,
   background: '#F5F7FB',
   borderRadius: 10,
-  padding: '6px 12px',
-  fontSize: 12,
+  padding: '8px 14px',
+  fontSize: 13,
   color: '#4A5A75',
 }
 
 // 圆角操作按钮基础样式（浅色底）
 const actionBtnBaseStyle: React.CSSProperties = {
   borderRadius: 8,
-  height: 26,
-  padding: '0 10px',
-  fontSize: 12,
+  height: 30,
+  padding: '0 12px',
+  fontSize: 13,
   border: 'none',
 }
 
