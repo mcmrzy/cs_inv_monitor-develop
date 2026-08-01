@@ -2162,7 +2162,7 @@ const DevicesPage: React.FC = () => {
         confirmLoading={createMutation.isPending}
         okText={t('dev.addDevice')}
         cancelText={t('common.cancel')}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={addForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
@@ -2217,7 +2217,7 @@ const DevicesPage: React.FC = () => {
         confirmLoading={updateMutation.isPending}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="sn" label={t('dev.deviceSN')}>
@@ -2239,7 +2239,7 @@ const DevicesPage: React.FC = () => {
         cancelText={t('common.cancel')}
         width={800}
         okButtonProps={{ disabled: !importFile }}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 16 }}>
           <Text type="secondary">
@@ -2352,7 +2352,7 @@ const DevicesPage: React.FC = () => {
         confirmLoading={requestUnbindMutation.isPending}
         okText={t('common.submit')}
         cancelText={t('common.cancel')}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 12 }}>
           <Text>{t('dev.deviceSN')}: <Text strong>{unbindTargetSn}</Text></Text>
@@ -2485,7 +2485,7 @@ const DevicesPage: React.FC = () => {
           }
         }}
         confirmLoading={assignInstallerMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 16 }}>
           <Text>{t('dev.deviceSN')}：</Text>

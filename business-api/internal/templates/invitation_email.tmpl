@@ -3,143 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
-    <title>.SenderName - 组织邀请</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #EFF2F7;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 600px;
-            margin: 30px auto;
-            padding: 20px 16px;
-        }
-        .header {
-            background: linear-gradient(135deg, #1E88E5, #42A5F5);
-            color: white;
-            padding: 32px 24px;
-            text-align: center;
-            border-radius: 24px 24px 0 0;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 26px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-        }
-        .content {
-            background: #FFFFFF;
-            border-radius: 0 0 24px 24px;
-            padding: 32px 28px;
-            margin-top: -8px;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
-        }
-        .code-box {
-            background: linear-gradient(135deg, #F0F7FF 0%, #FFFFFF 100%);
-            padding: 24px 20px;
-            border-radius: 20px;
-            text-align: center;
-            font-size: 32px;
-            letter-spacing: 8px;
-            font-weight: 800;
-            margin: 28px 0;
-            border: 2px solid rgba(30,136,229,0.2);
-            box-shadow: inset 0 1px 2px rgba(0,0,0,0.02), 0 6px 12px -6px rgba(30,136,229,0.15);
-            color: #1363B3;
-        }
-        .footer {
-            text-align: center;
-            color: #9AA6B9;
-            font-size: 12px;
-            margin-top: 32px;
-            padding-top: 20px;
-            border-top: 1px solid #ECF0F5;
-        }
-        h2 {
-            font-size: 24px;
-            color: #0A1C2F;
-            margin-bottom: 16px;
-            font-weight: 600;
-        }
-        p {
-            font-size: 16px;
-            color: #3E4A5E;
-            margin: 12px 0;
-            line-height: 1.6;
-        }
-        .highlight {
-            font-weight: 600;
-            color: #1E88E5;
-        }
-        .warning-box {
-            background: #FFF8E1;
-            border-left: 4px solid #FFA000;
-            padding: 16px 20px;
-            margin: 20px 0;
-            border-radius: 8px;
-        }
-        .link-button {
-            display: inline-block;
-            padding: 14px 28px;
-            background: linear-gradient(135deg, #1E88E5, #42A5F5);
-            color: white;
-            text-decoration: none;
-            border-radius: 50px;
-            font-weight: 600;
-            margin: 20px 0;
-            transition: all 0.3s;
-        }
-    </style>
+    <title>{{.SenderName}} - 组织邀请</title>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>.OrganizationName · 团队邀请</h1>
-        </div>
-        <div class="content">
-            <p>尊敬的<span class="highlight">.ToEmail</span>:</p>
+<body style="margin:0; padding:0; background-color:#EFF2F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+    <div style="max-width:520px; margin:30px auto; padding:20px 16px;">
+        <!-- 主卡片：圆角 + 阴影 -->
+        <div style="background:#FFFFFF; border-radius:32px; box-shadow:0 25px 45px -12px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.02); overflow:hidden;">
             
-            <p>您已被邀请加入 <strong class="highlight">.OrganizationName</strong>，担任 
-               <strong style="background: linear-gradient(135deg, #E3F2FD, #BBDEFB); padding: 4px 12px; border-radius: 20px; color: #1565C0;">.RoleName</strong> 角色。
-            </p>
+            <!-- 装饰条：科技蓝渐变光效 -->
+            <div style="height:6px; background: linear-gradient(90deg, #1E88E5, #64B5F6, #90CAF9, #1E88E5); background-size: 200% auto;"></div>
             
-            <p>您的临时邀请码为:</p>
-            <div class="code-box">
-                .TokenHint****
-            </div>
-            
-            <div class="warning-box">
-                <p style="margin: 0; font-weight: 600; color: #F57C00;">⚠️ 重要提示</p>
-                <p style="margin: 8px 0 0 0; font-size: 14px; color: #616161;">
-                    此代码将在 <strong class="highlight">.ExpiresHours</strong> 小时后失效，请及时使用。
+            <!-- 内边距区域 -->
+            <div style="padding: 36px 32px 44px 32px;">
+                
+                <!-- 品牌区 + 太阳能标识 -->
+                <div style="display: flex; align-items: center; margin-bottom: 28px;">
+                    <span style="font-size: 28px;">☀️</span>
+                    <span style="font-weight: 600; font-size: 20px; color: #1F2A3E; letter-spacing: 0.5px; margin-left: 10px;">CSERGY</span>
+                    <span style="background:#EFF2F9; padding:4px 12px; border-radius:40px; font-size: 12px; font-weight:500; color:#1E88E5; margin-left: 10px;">智慧能源</span>
+                </div>
+                
+                <!-- 邀请标题区 -->
+                <div style="text-align: center; margin-bottom: 28px;">
+                    <div style="font-size: 44px; line-height: 1;">🤝</div>
+                    <h1 style="margin: 12px 0 0; font-size: 24px; font-weight: 700; color: #0A1C2F;">邀请加入组织</h1>
+                    <p style="margin: 10px 0 0; font-size: 14px; color: #5A6B84;">{{.SenderName}} 邀请您加入团队</p>
+                    <div style="display:inline-block; margin-top: 14px; background: linear-gradient(135deg, #E3F2FD, #BBDEFB); padding: 8px 20px; border-radius: 40px; color: #1565C0; font-size: 16px; font-weight: 600;">{{.OrganizationName}}</div>
+                </div>
+                
+                <!-- 角色说明 -->
+                <p style="font-size: 15px; color: #3E4A5E; line-height: 1.8; text-align: center; margin: 0;">
+                    您将以 <strong style="color:#1E88E5; background:#EFF6FE; padding: 2px 10px; border-radius: 8px;">{{.RoleName}}</strong> 身份加入，<br>
+                    点击下方按钮完成注册并激活账号：
                 </p>
+                
+                <!-- 主 CTA 按钮 -->
+                <div style="text-align: center; margin: 30px 0 8px;">
+                    <a href="{{.InviteURL}}" style="display:inline-block; background: linear-gradient(135deg, #1E88E5, #42A5F5); color:#FFFFFF; text-decoration:none; padding: 15px 44px; border-radius: 50px; font-size: 16px; font-weight: 600; letter-spacing: 1px; box-shadow: 0 10px 20px -8px rgba(30,136,229,0.5);">立即接受邀请 →</a>
+                </div>
+                <p style="text-align: center; font-size: 12px; color: #9AA6B9; margin: 12px 0 0;">如按钮无法点击，请复制下方链接到浏览器打开</p>
+                <p style="text-align: center; font-size: 12px; color: #7E8A9E; margin: 4px 0 0; word-break: break-all;">{{.InviteURL}}</p>
+                
+                <!-- 备用邀请码 -->
+                <div style="background: #F7FAFF; border: 1px dashed #BBDEFB; border-radius: 16px; padding: 18px 20px; margin: 24px 0 0;">
+                    <p style="margin: 0 0 8px; font-size: 13px; color: #7E8A9E; text-align: center;">备用邀请码（页面提示输入时使用）</p>
+                    <div style="text-align:center; font-size: 26px; letter-spacing: 6px; font-weight: 700; color: #1363B3;">{{.TokenHint}}****</div>
+                </div>
+                
+                <!-- 过期提示 -->
+                <div style="background: #FFF8E1; border-radius: 12px; padding: 14px 18px; margin: 16px 0 0;">
+                    <p style="margin:0; font-size: 13px; color:#B26A00; line-height: 1.7;">⏰ 此邀请将在 <strong>{{.ExpiresHours}}</strong> 小时后失效，请尽快完成注册。若您并未发起此邀请，请忽略本邮件。</p>
+                </div>
+                
             </div>
-            
-            <p>访问管理后台并使用此代码完成注册和加入流程。</p>
-            
-            <div style="text-align: center; margin: 32px 0;">
-                <a href="https://your-domain.com/auth/register?invite=.TokenHint" 
-                   class="link-button"
-                   style="background: linear-gradient(135deg, #1E88E5, #42A5F5); color: white; padding: 14px 28px; text-decoration: none; border-radius: 50px; font-weight: 600; display: inline-block;">
-                   立即加入组织
-                </a>
-            </div>
-            
-            <hr style="border: none; border-top: 1px solid #ECF0F5; margin: 32px 0;">
-            
-            <p style="font-size: 14px; color: #7E8A9E; margin: 0;">
-                如果您没有收到此邀请，可能是有人误操作。如果您没有尝试加入该组织，请忽略此邮件。
-            </p>
         </div>
-        <div class="footer">
-            <p>如需帮助，请联系系统管理员或发送邮件至 support@yourdomain.com</p>
-            <p>© .CompanyName · All rights reserved</p>
-            <p style="color: #C0CCDA; margin-top: 8px;">此邮件由系统自动发出，请勿直接回复</p>
+        
+        <!-- 页脚 -->
+        <div style="text-align: center; margin-top: 24px;">
+            <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap;">
+                <span style="font-size: 13px; color: #7E8A9E;">© CSERGY · 智慧光伏解决方案</span>
+                <span style="width:4px; height:4px; background:#C0CCDA; border-radius:50%; display:inline-block;"></span>
+                <span style="font-size: 13px; color: #7E8A9E;">让能源更智能</span>
+            </div>
+            <p style="font-size: 12px; color: #A6B1C6; margin: 0;">CSERGY | 清洁能源 · 高效逆变</p>
+            <p style="font-size: 12px; color: #A6B1C6; margin: 4px 0 0;">此邮件由 CSERGY 系统自动发出，请勿直接回复</p>
         </div>
     </div>
 </body>

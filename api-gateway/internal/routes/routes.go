@@ -131,6 +131,7 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	publicGroup.Any("/api/v1/auth/email-reset-password", p.Handler())
 	publicGroup.Any("/api/v1/auth/phone-code-login", p.Handler())
 	publicGroup.Any("/api/v1/auth/email-code-login", p.Handler())
+	publicGroup.Any("/api/v1/auth/jverify-login", p.Handler())
 	publicGroup.POST("/api/v1/auth/refresh", p.Handler())
 	publicGroup.POST("/api/v1/auth/context", p.Handler())
 	publicGroup.GET("/api/v1/timezones", p.Handler())
@@ -188,6 +189,8 @@ func registerAPIRoutes(publicGroup, userGroup, adminGroup *gin.RouterGroup, p *p
 	userGroup.Any("/api/v1/organizations", p.Handler())
 	userGroup.Any("/api/v1/invitations/*action", p.Handler())
 	userGroup.Any("/api/v1/members/*action", p.Handler())
+	userGroup.Any("/api/v1/my/*action", p.Handler())
+	userGroup.Any("/api/v1/my", p.Handler())
 	publicGroup.Any("/api/v1/invite/accept", p.Handler())
 
 	// Admin — 需管理员（route-groups 单独注册，其余通过 admin/*action 通配符代理）

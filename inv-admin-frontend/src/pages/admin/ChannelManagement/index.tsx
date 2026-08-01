@@ -1,29 +1,17 @@
 import { useState } from 'react'
-import { Tabs, Typography } from 'antd'
+import { Tabs } from 'antd'
 import { ProCard } from '@ant-design/pro-components'
 import useAuthStore from '@/stores/authStore'
 import useTranslation from '@/hooks/useTranslation'
 import OrganizationTree from './OrganizationTree'
 import MemberList from './MemberList'
-import InvitationManager from './InvitationManager'
 import TransferApprovals from './TransferApprovals'
-
-const { Title } = Typography
 
 const ChannelManagement: React.FC = () => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
   const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
-
-  if (!user?.isSystemAdmin) {
-    return (
-      <ProCard style={{ borderRadius: 12 }}>
-        <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-          {t('channel.noPermission')}
-        </div>
-      </ProCard>
-    )
-  }
+  const isSystemAdmin = !!user?.isSystemAdmin
 
   return (
     <ProCard style={{ borderRadius: 12 }}>
@@ -40,21 +28,21 @@ const ChannelManagement: React.FC = () => {
               />
             ),
           },
-          {
-            key: 'members',
-            label: t('channel.members'),
-            children: <MemberList selectedOrgId={selectedOrgId} />,
-          },
-          {
-            key: 'invitations',
-            label: t('channel.invitations'),
-            children: <InvitationManager selectedOrgId={selectedOrgId} />,
-          },
-          {
-            key: 'transfers',
-            label: t('channel.transfers'),
-            children: <TransferApprovals />,
-          },
+          // 非系统管理员仅开放组织架构（含邀请）；成员/转移审批为系统管理员能力
+          ...(isSystemAdmin
+            ? [
+                {
+                  key: 'members',
+                  label: t('channel.members'),
+                  children: <MemberList selectedOrgId={selectedOrgId} />,
+                },
+                {
+                  key: 'transfers',
+                  label: t('channel.transfers'),
+                  children: <TransferApprovals />,
+                },
+              ]
+            : []),
         ]}
       />
     </ProCard>

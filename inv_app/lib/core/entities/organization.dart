@@ -63,53 +63,60 @@ class Organization {
   }
 }
 
-/// 组织成员角色枚举
+/// 组织成员角色枚举（与后端 membership_role_assignments.role_code 一致）
 enum OrgMemberRole {
-  owner, // 拥有者
-  admin, // 管理员
-  member, // 普通成员
-  viewer, // 查看者
+  orgAdmin, // 组织管理员
+  agent, // 代理商
+  distributor, // 分销商
+  installer, // 安装商
+  customer, // 终端用户
 }
 
 extension OrgMemberRoleExtension on OrgMemberRole {
   String get displayName {
     switch (this) {
-      case OrgMemberRole.owner:
-        return '拥有者';
-      case OrgMemberRole.admin:
-        return '管理员';
-      case OrgMemberRole.member:
-        return '成员';
-      case OrgMemberRole.viewer:
-        return '查看者';
+      case OrgMemberRole.orgAdmin:
+        return '组织管理员';
+      case OrgMemberRole.agent:
+        return '代理商';
+      case OrgMemberRole.distributor:
+        return '分销商';
+      case OrgMemberRole.installer:
+        return '安装商';
+      case OrgMemberRole.customer:
+        return '终端用户';
     }
   }
 
   String get apiValue {
     switch (this) {
-      case OrgMemberRole.owner:
-        return 'owner';
-      case OrgMemberRole.admin:
-        return 'admin';
-      case OrgMemberRole.member:
-        return 'member';
-      case OrgMemberRole.viewer:
-        return 'viewer';
+      case OrgMemberRole.orgAdmin:
+        return 'org_admin';
+      case OrgMemberRole.agent:
+        return 'agent';
+      case OrgMemberRole.distributor:
+        return 'distributor';
+      case OrgMemberRole.installer:
+        return 'installer';
+      case OrgMemberRole.customer:
+        return 'customer';
     }
   }
 
   static OrgMemberRole fromApiValue(String value) {
     switch (value.toLowerCase()) {
-      case 'owner':
-        return OrgMemberRole.owner;
-      case 'admin':
-        return OrgMemberRole.admin;
-      case 'member':
-        return OrgMemberRole.member;
-      case 'viewer':
-        return OrgMemberRole.viewer;
+      case 'org_admin':
+        return OrgMemberRole.orgAdmin;
+      case 'agent':
+        return OrgMemberRole.agent;
+      case 'distributor':
+        return OrgMemberRole.distributor;
+      case 'installer':
+        return OrgMemberRole.installer;
+      case 'customer':
+        return OrgMemberRole.customer;
       default:
-        return OrgMemberRole.member;
+        return OrgMemberRole.customer;
     }
   }
 }
@@ -163,60 +170,47 @@ class OrganizationMember {
   }
 }
 
-/// 组织邀请实体
+/// 组织邀请实体（与后端 invitations 列表项对齐）
 class OrganizationInvitation {
   final int id;
-  final int organizationId;
+  final int? organizationId;
+  final String? organization;
   final String email;
-  final OrgMemberRole role;
-  final String? invitedBy;
-  final String? invitedByName;
+  final List<String> roleCodes;
+  final String status; // pending/accepted/rejected/expired/revoked
   final String? expiresAt;
-  final bool used;
-  final String? usedAt;
-  final String? inviteLink;
+  final String? createdAt;
+  final String? inviterName;
+  final String? inviteLink; // 仅创建响应中返回一次（相对路径）
 
   const OrganizationInvitation({
     required this.id,
-    required this.organizationId,
+    this.organizationId,
+    this.organization,
     required this.email,
-    required this.role,
-    this.invitedBy,
-    this.invitedByName,
+    this.roleCodes = const [],
+    required this.status,
     this.expiresAt,
-    this.used = false,
-    this.usedAt,
+    this.createdAt,
+    this.inviterName,
     this.inviteLink,
   });
 
   factory OrganizationInvitation.fromJson(Map<String, dynamic> json) {
     return OrganizationInvitation(
       id: json['id'] as int,
-      organizationId: json['organization_id'] as int,
-      email: json['email'] as String,
-      role: OrgMemberRoleExtension.fromApiValue(json['role'] as String),
-      invitedBy: json['invited_by'] as String?,
-      invitedByName: json['invited_by_name'] as String?,
+      organizationId: json['organization_id'] as int?,
+      organization: json['organization'] as String?,
+      email: (json['email'] as String?) ?? '',
+      roleCodes: (json['role_codes'] as List? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+      status: (json['status'] as String?) ?? 'pending',
       expiresAt: json['expires_at'] as String?,
-      used: json['used'] as bool? ?? false,
-      usedAt: json['used_at'] as String?,
+      createdAt: json['created_at'] as String?,
+      inviterName: json['inviter_name'] as String?,
       inviteLink: json['invite_link'] as String?,
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'organization_id': organizationId,
-      'email': email,
-      'role': role.apiValue,
-      'invited_by': invitedBy,
-      'invited_by_name': invitedByName,
-      'expires_at': expiresAt,
-      'used': used,
-      'used_at': usedAt,
-      'invite_link': inviteLink,
-    };
   }
 }
 

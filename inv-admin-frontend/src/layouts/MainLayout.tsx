@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Button, Avatar, Dropdown, Badge, Typography, theme, Grid, Form, App, Select, Cascader, Modal, Input, Space,
 } from 'antd'
@@ -19,6 +19,8 @@ import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 import useTranslation from '@/hooks/useTranslation'
 import api from '@/services/api'
+import { channelApi } from '@/services/channelApi'
+import { queryKeys } from '@/utils/queryKeys'
 import { TIMEZONE_LIST, REGION_LABELS, getTimezoneLabel } from '@/utils/timezone'
 import UploadAvatar from '@/components/UploadAvatar'
 import RegionPicker from '@/components/RegionPicker'
@@ -44,7 +46,8 @@ const getAdminRoutes = (t: (key: string) => string): RouteMenuItem[] => [
   { path: '/ota', name: t('menu.ota'), icon: <CloudUploadOutlined />, permission: 'firmware:view' },
   { path: '/alerts', name: t('menu.alertCenter'), icon: <AlertOutlined />, permission: 'alerts:view' },
   { path: '/work-orders', name: t('menu.workOrders'), icon: <FileTextOutlined />, permission: 'work_orders:view' },
-  { path: '/admin', name: t('menu.systemConfig'), icon: <SettingOutlined />, permission: 'admin:view' },
+  // 组织架构对所有登录用户开放（后端按可见范围剪枝 + 角色校验兑底）
+  { path: '/organizations', name: t('menu.orgManagement'), icon: <SettingOutlined /> },
   { path: '/users', name: t('menu.userManage'), icon: <TeamOutlined />, permission: 'users:view' },
   { path: '/operation-logs', name: t('menu.operationLogs'), icon: <UnorderedListOutlined />, permission: 'admin:view' },
   { path: '/system/system-monitor', name: t('menu.systemMonitor'), icon: <HeartOutlined />, permission: 'admin:view' },
@@ -58,6 +61,8 @@ const getUserRoutes = (t: (key: string) => string): RouteMenuItem[] => [
   { path: '/remote-settings', name: t('menu.remoteSettings'), icon: <ControlOutlined />, permission: 'devices:view' },
   { path: '/alerts', name: t('menu.alertCenter'), icon: <AlertOutlined />, permission: 'alerts:view' },
   { path: '/work-orders', name: t('menu.workOrders'), icon: <FileTextOutlined />, permission: 'work_orders:view' },
+  // 组织架构对所有登录用户开放（后端按可见范围剪枝 + 角色校验兑底）
+  { path: '/organizations', name: t('menu.orgManagement'), icon: <SettingOutlined /> },
 ]
 
 const MainLayout: React.FC = () => {
@@ -69,6 +74,7 @@ const MainLayout: React.FC = () => {
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileForm] = Form.useForm()
+  const [profileAvatar, setProfileAvatar] = useState('')
   const [timezoneModalOpen, setTimezoneModalOpen] = useState(false)
   const [phoneModalOpen, setPhoneModalOpen] = useState(false)
   const [emailModalOpen, setEmailModalOpen] = useState(false)
@@ -95,22 +101,51 @@ const MainLayout: React.FC = () => {
 
   const isAdminRole = user && (user.isSystemAdmin || hasPermission('admin:manage'))
 
+  // 纯终端用户识别：非系统管理员且所有组织角色并集仅含 customer（无任何管理/渠道角色）
+  // 终端用户不可见组织架构（/organizations）入口；其余登录用户（含普通组织管理员）均可见
+  const { data: myOrgsData } = useQuery({
+    queryKey: queryKeys.channels.myOrganizations(user?.id),
+    queryFn: () => channelApi.getMyOrganizations().then((r) => r.data?.data ?? []),
+    enabled: !!user && !user.isSystemAdmin,
+  })
+
+  const isEndUser = useMemo(() => {
+    if (!user || user.isSystemAdmin) return false
+    const orgs = (myOrgsData ?? []) as Array<{ roles?: string[]; role?: string }>
+    if (!Array.isArray(orgs) || orgs.length === 0) return false
+    const roleSet = new Set<string>()
+    for (const org of orgs) {
+      const roles = Array.isArray(org.roles) && org.roles.length > 0 ? org.roles : org.role ? [org.role] : []
+      roles.forEach((r) => roleSet.add(r))
+    }
+    // 无角色信息（保守）或仅 customer 角色 → 视为终端用户
+    return roleSet.size > 0 && [...roleSet].every((r) => r === 'customer')
+  }, [user, myOrgsData])
+
   // Build ProLayout route config with permission filtering
   const routeConfig = useMemo((): ProLayoutProps['route'] => {
     const source = isAdminRole ? getAdminRoutes(t) : getUserRoutes(t)
-    const filtered = source.filter(item => !item.permission || hasPermission(item.permission))
+    // 终端用户不可见组织架构入口；其余菜单按权限过滤
+    const filtered = source.filter(
+      (item) =>
+        !(item.path === '/organizations' && isEndUser) &&
+        (!item.permission || hasPermission(item.permission)),
+    )
     return {
       path: '/',
       routes: filtered.map(({ permission, ...rest }) => rest),
     }
-  }, [isAdminRole, hasPermission, lang, t])
+  }, [isAdminRole, isEndUser, hasPermission, lang, t])
 
   const handleLogout = () => {
     logout()
+    // 清空全局查询缓存，避免跨用户数据串味（如组织角色等按用户维度的数据）
+    queryClient.clear()
     navigate('/login')
   }
 
   const handleOpenProfile = () => {
+    setProfileAvatar(user?.avatar || '')
     profileForm.setFieldsValue({
       nickname: user?.nickname || '',
       avatar: user?.avatar || '',
@@ -244,6 +279,13 @@ const MainLayout: React.FC = () => {
 
   const siderCollapsed = isMobile ? mobileCollapsed : collapsed
 
+  // 路由级兑底：终端用户直达 /organizations 时重定向（菜单已隐藏入口，这里拦截 URL 直达）
+  useEffect(() => {
+    if (isEndUser && location.pathname.startsWith('/organizations')) {
+      navigate('/unauthorized', { replace: true })
+    }
+  }, [isEndUser, location.pathname, navigate])
+
   return (
     <>
       <ProLayout
@@ -312,7 +354,7 @@ const MainLayout: React.FC = () => {
         form={passwordForm}
         onFinish={handleChangePassword}
         layout="vertical"
-        modalProps={{ destroyOnClose: true, maskClosable: false }}
+        modalProps={{ destroyOnHidden: true, maskClosable: false }}
         submitter={{
           searchConfig: { submitText: t('modal.confirm'), resetText: t('modal.cancel') },
         }}
@@ -364,15 +406,15 @@ const MainLayout: React.FC = () => {
         onFinish={handleUpdateProfile}
         layout="vertical"
         width={480}
-        modalProps={{ destroyOnClose: true, maskClosable: false }}
+        modalProps={{ destroyOnHidden: true, maskClosable: false }}
         submitter={{
           searchConfig: { submitText: t('modal.save'), resetText: t('modal.cancel') },
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
           <UploadAvatar
-            value={profileForm.getFieldValue('avatar')}
-            onChange={(url) => profileForm.setFieldsValue({ avatar: url })}
+            value={profileAvatar}
+            onChange={(url) => { setProfileAvatar(url); profileForm.setFieldsValue({ avatar: url }) }}
             size={100}
           />
         </div>
@@ -433,7 +475,7 @@ const MainLayout: React.FC = () => {
           return true
         }}
         layout="vertical"
-        modalProps={{ destroyOnClose: true, maskClosable: false }}
+        modalProps={{ destroyOnHidden: true, maskClosable: false }}
         submitter={{
           searchConfig: { submitText: t('modal.save'), resetText: t('modal.cancel') },
         }}
@@ -482,7 +524,7 @@ const MainLayout: React.FC = () => {
             // 验证失败
           }
         }}
-        destroyOnClose
+        destroyOnHidden
         maskClosable={false}
       >
         <Form form={phoneForm} layout="vertical">
@@ -570,7 +612,7 @@ const MainLayout: React.FC = () => {
             // 验证失败
           }
         }}
-        destroyOnClose
+        destroyOnHidden
         maskClosable={false}
       >
         <Form form={emailForm} layout="vertical">

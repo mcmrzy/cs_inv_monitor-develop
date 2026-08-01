@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"inv-api-server/internal/model"
 	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/response"
@@ -61,8 +62,63 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		return
 	}
 
+	// Attach each user's organization type(s) so the frontend can
+	// show the org-type-based role (agent/distributor/installer/customer).
+	type userListItem struct {
+		model.User
+		OrgRoles []string `json:"org_roles"`
+	}
+
+	items := make([]userListItem, 0, len(result.Items))
+	roleMap := make(map[int64][]string)
+	if len(result.Items) > 0 {
+		ids := make([]int64, 0, len(result.Items))
+		for _, u := range result.Items {
+			ids = append(ids, u.ID)
+		}
+		rows, qerr := h.db.Query(c.Request.Context(), `
+			SELECT m.user_id, o.org_type
+			FROM organization_memberships m
+			JOIN organizations o ON o.id = m.organization_id AND o.deleted_at IS NULL
+			WHERE m.status = 'active' AND m.user_id = ANY($1)
+			ORDER BY m.user_id, o.org_type
+		`, ids)
+		if qerr == nil {
+			defer rows.Close()
+			seen := make(map[int64]map[string]struct{})
+			for rows.Next() {
+				var uid int64
+				var orgType string
+				if err := rows.Scan(&uid, &orgType); err != nil {
+					continue
+				}
+				// manufacturer is shown as org_admin (super admin)
+				code := orgType
+				if code == "manufacturer" {
+					code = "org_admin"
+				}
+				if seen[uid] == nil {
+					seen[uid] = make(map[string]struct{})
+				}
+				if _, ok := seen[uid][code]; ok {
+					continue
+				}
+				seen[uid][code] = struct{}{}
+				roleMap[uid] = append(roleMap[uid], code)
+			}
+		}
+	}
+
+	for _, u := range result.Items {
+		roles := roleMap[u.ID]
+		if roles == nil {
+			roles = []string{}
+		}
+		items = append(items, userListItem{User: u, OrgRoles: roles})
+	}
+
 	response.Success(c, gin.H{
-		"items": result.Items,
+		"items": items,
 		"total": result.Total,
 	})
 }
@@ -1268,8 +1324,7 @@ func (h *AdminHandler) GetOperationStats(c *gin.Context) {
 
 // Available role codes defined by the membership_role_assignments CHECK constraint.
 var availableRoleCodes = []string{
-	"org_admin", "channel_manager", "operator", "installer",
-	"after_sales", "viewer", "finance", "api_client",
+	"org_admin", "agent", "distributor", "installer", "customer",
 }
 
 // ListOrgRoles returns the distinct role_codes that exist in an organization.

@@ -55,7 +55,7 @@ func CreateOrganization() {
 // @Security BearerAuth
 // @Param page query integer false "Page number (from 1)" default(1) minimum(1)
 // @Param page_size query integer false "Items per page (max 100)" default(20) minimum(1) maximum(100)
-// @Param type query string false "Filter by organization type" Enum(manufacturer, agent, distributor, customer, service_partner)
+// @Param type query string false "Filter by organization type" Enum(manufacturer, agent, distributor, installer, customer)
 // @Param status query string false "Filter by organization status" Enum(active, disabled, quarantined)
 // @Success 200 {object} PaginatedOrganizationList "Organization list"
 // @Failure 403 {object} ErrorResponse "Forbidden access"

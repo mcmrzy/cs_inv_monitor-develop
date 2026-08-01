@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/mqtt_service.dart';
+import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -56,6 +57,7 @@ class _StationDetailPageState extends State<StationDetailPage>
         AnimationController(vsync: this, duration: const Duration(seconds: 4))
           ..repeat();
     _cachedState = null;
+    _loadCachedDetailIfAvailable();
     _activeTabIndex = 0;
     _weatherIcon = '\uD83C\uDF1E';
     _weatherTemp = null;
@@ -183,6 +185,27 @@ class _StationDetailPageState extends State<StationDetailPage>
     super.dispose();
   }
 
+  void _loadCachedDetailIfAvailable() {
+    try {
+      final dataCacheService = getIt<DataCacheService>();
+      final cached = dataCacheService.load(DataCacheService.stationDetail(widget.stationId));
+      if (cached != null && cached is Map<String, dynamic>) {
+        final station = cached['station'] as Map<String, dynamic>?;
+        final devices = (cached['devices'] as List?) ?? [];
+        if (station != null) {
+          _cachedState = StationDetailLoaded(
+            stationId: widget.stationId,
+            station: station,
+            devices: devices,
+            isFromCache: true,
+          );
+        }
+      }
+    } catch (_) {
+      // Cache service not available, ignore
+    }
+  }
+
   void _initMQTTRealtime(StationDetailLoaded ds) {
     if (_mqttSub != null) return;
     final devices = (ds.devices as List?) ?? [];
@@ -279,31 +302,108 @@ class _StationDetailPageState extends State<StationDetailPage>
           return Scaffold(body: Center(child: Text(l10n.stationNotFound)));
         }
 
-        return Scaffold(
-          body: Column(
-            children: [
-              if (ds.isFromCache)
-                SafeArea(
-                  bottom: false,
-                  child: OfflineDataBanner(
-                    onRetry: () => context.read<StationBloc>().add(
-                          StationDetailRequested(stationId: widget.stationId),
-                        ),
+        return BlocListener<StationBloc, StationState>(
+          listener: (context, state) {
+            if (state is StationDeleteSuccess) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(l10n.str('station_deleted', {})),
+                  backgroundColor: AppColors.successLight,
+                ),
+              );
+              context.pop();
+            } else if (state is DeviceUnbindSuccess) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '${l10n.str('device_unbound', {})} - ${state.sn}',
+                  ),
+                  backgroundColor: AppColors.successLight,
+                ),
+              );
+              context.read<StationBloc>().add(
+                StationDetailRequested(stationId: widget.stationId),
+              );
+            } else if (state is DeviceDeleteSuccess) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '${l10n.str('device_deleted', {})} - ${state.sn}',
+                  ),
+                  backgroundColor: AppColors.successLight,
+                ),
+              );
+              context.read<StationBloc>().add(
+                StationDetailRequested(stationId: widget.stationId),
+              );
+            } else if (state is DeviceRebindSuccess) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '${l10n.str('device_rebound', {})} - ${state.sn}',
+                  ),
+                  backgroundColor: AppColors.successLight,
+                ),
+              );
+              context.read<StationBloc>().add(
+                StationDetailRequested(stationId: widget.stationId),
+              );
+            } else if (state is DeviceBindSuccess) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '${l10n.str('device_bound', {})} - ${state.sn}',
+                  ),
+                  backgroundColor: AppColors.successLight,
+                ),
+              );
+              context.read<StationBloc>().add(
+                StationDetailRequested(stationId: widget.stationId),
+              );
+            } else if (state is DeviceReorderSuccess) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    l10n.str('device_order_saved', {}),
+                  ),
+                  backgroundColor: AppColors.successLight,
+                ),
+              );
+            } else if (state is StationError) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(l10n.translateError(state.message)),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+          child: Scaffold(
+            body: Column(
+              children: [
+                if (ds.isFromCache)
+                  SafeArea(
+                    bottom: false,
+                    child: OfflineDataBanner(
+                      onRetry: () => context.read<StationBloc>().add(
+                            StationDetailRequested(stationId: widget.stationId),
+                          ),
+                    ),
+                  ),
+                Expanded(
+                  child: IndexedStack(
+                    index: _activeTabIndex,
+                    children: [
+                      _buildOverviewBody(station),
+                      _buildStatisticsBody(station),
+                      _buildDevicesBody(ds),
+                    ],
                   ),
                 ),
-              Expanded(
-                child: IndexedStack(
-                  index: _activeTabIndex,
-                  children: [
-                    _buildOverviewBody(station),
-                    _buildStatisticsBody(station),
-                    _buildDevicesBody(ds),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
+            bottomNavigationBar: _bottomBar(),
           ),
-          bottomNavigationBar: _bottomBar(),
         );
       },
     );
@@ -482,6 +582,44 @@ class _StationDetailPageState extends State<StationDetailPage>
                   ],
                 ),
               ),
+              SizedBox(width: 8.w),
+              // 更多操作菜单
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_vert,
+                  size: 20,
+                  color: AppColors.textPrimary,
+                ),
+                onSelected: (val) async {
+                  if (val == 'edit') {
+                    context.push('/station/${widget.stationId}/edit');
+                  } else if (val == 'delete') {
+                    await _confirmDelete(l10n);
+                  }
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18, color: AppColors.textSecondary),
+                        SizedBox(width: 8.w),
+                        Text(l10n.editStation),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                        SizedBox(width: 8.w),
+                        Text(l10n.delete, style: const TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
           SizedBox(height: 4.h),
@@ -507,6 +645,37 @@ class _StationDetailPageState extends State<StationDetailPage>
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDelete(AppLocalizations l10n) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.delete),
+        content: Text(l10n.str('confirm_delete_station', {})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.str('cancel', {})),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              l10n.delete,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    // Dispatch delete request and listen for success/error
+    context
+        .read<StationBloc>()
+        .add(StationDeleteRequested(stationId: widget.stationId));
   }
 
   Widget _buildDeviceSelector() {
@@ -1417,6 +1586,39 @@ class _StationDetailPageState extends State<StationDetailPage>
                 showSearch: false,
                 whiteHeader: true,
                 bottomPadding: 100,
+                enableReordering: true,
+                onDeviceChanged: () {
+                  // 保存新的排序顺序到数据库
+                  final deviceIds = devices.map((d) => d['sn'] as String).toList();
+                  context
+                      .read<StationBloc>()
+                      .add(DeviceReorderRequested(
+                        stationId: widget.stationId,
+                        deviceOrder: deviceIds,
+                      ));
+                },
+                onUnbind: (sn) {
+                  context
+                      .read<StationBloc>()
+                      .add(DeviceUnbindRequested(sn: sn));
+                },
+                onRebind: (sn) {
+                  // TODO: 实现换绑逻辑，需要选择新电站
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('换绑功能开发中')),
+                  );
+                },
+                onBind: (sn) {
+                  // TODO: 实现绑定逻辑，需要选择电站
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('绑定功能开发中')),
+                  );
+                },
+                onDelete: (sn) {
+                  context
+                      .read<StationBloc>()
+                      .add(DeviceDeleteRequested(sn: sn));
+                },
               ),
             ),
           ],

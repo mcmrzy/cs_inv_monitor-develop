@@ -25,6 +25,11 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     on<StationCreateRequested>(_onCreateRequested);
     on<StationUpdateRequested>(_onUpdateRequested);
     on<StationDeleteRequested>(_onDeleteRequested);
+    on<DeviceUnbindRequested>(_onDeviceUnbindRequested);
+    on<DeviceRebindRequested>(_onDeviceRebindRequested);
+    on<DeviceBindRequested>(_onDeviceBindRequested);
+    on<DeviceDeleteRequested>(_onDeleteDeviceRequested);
+    on<DeviceReorderRequested>(_onDeviceReorderRequested);
   }
 
   /// 快速检查是否有网络连接
@@ -223,6 +228,71 @@ class StationBloc extends Bloc<StationEvent, StationState> {
       (_) {
         emit(StationDeleteSuccess());
         add(StationSummaryRequested());
+      },
+    );
+  }
+
+  Future<void> _onDeviceUnbindRequested(
+    DeviceUnbindRequested event,
+    Emitter<StationState> emit,
+  ) async {
+    final result = await repository.unbindDevice(event.sn);
+    result.fold(
+      (failure) => emit(StationError(message: failure.message)),
+      (_) {
+        emit(DeviceUnbindSuccess(sn: event.sn));
+      },
+    );
+  }
+
+  Future<void> _onDeviceRebindRequested(
+    DeviceRebindRequested event,
+    Emitter<StationState> emit,
+  ) async {
+    final result = await repository.rebindDevice(event.sn, event.newStationId);
+    result.fold(
+      (failure) => emit(StationError(message: failure.message)),
+      (_) {
+        emit(DeviceRebindSuccess(sn: event.sn));
+      },
+    );
+  }
+
+  Future<void> _onDeviceBindRequested(
+    DeviceBindRequested event,
+    Emitter<StationState> emit,
+  ) async {
+    final result = await repository.bindDevice(event.sn, event.stationId);
+    result.fold(
+      (failure) => emit(StationError(message: failure.message)),
+      (_) {
+        emit(DeviceBindSuccess(sn: event.sn));
+      },
+    );
+  }
+
+  Future<void> _onDeleteDeviceRequested(
+    DeviceDeleteRequested event,
+    Emitter<StationState> emit,
+  ) async {
+    final result = await repository.deleteDevice(event.sn);
+    result.fold(
+      (failure) => emit(StationError(message: failure.message)),
+      (_) {
+        emit(DeviceDeleteSuccess(sn: event.sn));
+      },
+    );
+  }
+
+  Future<void> _onDeviceReorderRequested(
+    DeviceReorderRequested event,
+    Emitter<StationState> emit,
+  ) async {
+    final result = await repository.reorderDevices(event.stationId, event.deviceOrder);
+    result.fold(
+      (failure) => emit(StationError(message: failure.message)),
+      (_) {
+        emit(DeviceReorderSuccess(stationId: event.stationId));
       },
     );
   }

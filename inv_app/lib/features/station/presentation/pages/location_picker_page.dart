@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:inv_app/core/config/app_config.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// WGS-84 → GCJ-02 coordinate conversion (for China map tiles)
@@ -161,12 +162,13 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
   Future<void> _reverseGeocode(double lat, double lng) async {
     setState(() => _loadingNearby = true);
     try {
-      final resp = await http.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/geocode/reverse?lat=$lat&lng=$lng'),
-      ).timeout(const Duration(seconds: 8));
-      if (resp.statusCode == 200 && mounted) {
-        final data = jsonDecode(resp.body);
-        final d = data['data'];
+      final dio = getIt<Dio>();
+      final res = await dio.get('/geocode/reverse', queryParameters: {
+        'lat': lat,
+        'lng': lng,
+      }).timeout(const Duration(seconds: 8));
+      if (mounted && res.data is Map) {
+        final d = res.data['data'];
         if (d != null) {
           final addr = d['address'] as String? ?? '';
           if (addr.isNotEmpty) {

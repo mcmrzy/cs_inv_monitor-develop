@@ -56,6 +56,7 @@ var publicPaths = map[string]bool{
 	"/api/v1/auth/email-register":  true,
 	"/api/v1/auth/email-login":     true,
 	"/api/v1/auth/send-email-code": true,
+	"/api/v1/auth/jverify-login":   true,
 	"/api/v1/auth/refresh":         true,
 	"/api/v1/timezones":            true,
 	"/api/v1/invite/accept":        true,

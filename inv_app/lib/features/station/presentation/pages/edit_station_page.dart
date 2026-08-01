@@ -98,28 +98,6 @@ class _EditStationPageState extends State<EditStationPage> {
     }
   }
 
-  Future<void> _openLocationPicker() async {
-    final lat = double.tryParse(_latitudeController.text);
-    final lng = double.tryParse(_longitudeController.text);
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LocationPickerPage(
-          initialLat: lat,
-          initialLng: lng,
-        ),
-      ),
-    );
-    if (result != null) {
-      _latitudeController.text = (result['lat'] as num?)?.toStringAsFixed(6) ?? '';
-      _longitudeController.text = (result['lng'] as num?)?.toStringAsFixed(6) ?? '';
-      final addr = result['address'] as String?;
-      if (addr != null && addr.isNotEmpty) {
-        _addressController.text = addr;
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -189,7 +167,15 @@ class _EditStationPageState extends State<EditStationPage> {
                         padding: EdgeInsets.only(top: 8.h),
                         child: IconButton(
                           onPressed: () {
-                            _mapKey.currentState?.searchAndFlyTo(_addressController.text);
+                            final buf = StringBuffer();
+                            if (_provinceController.text.isNotEmpty) buf.write(_provinceController.text);
+                            if (_cityController.text.isNotEmpty) buf.write(' ${_cityController.text}');
+                            if (_districtController.text.isNotEmpty) buf.write(' ${_districtController.text}');
+                            if (_addressController.text.isNotEmpty) buf.write(' ${_addressController.text}');
+                            _mapKey.currentState?.searchAndFlyTo(
+                              buf.toString().trim(),
+                              displayAddress: _addressController.text,
+                            );
                           },
                           icon: const Icon(Icons.search, size: 20),
                           style: IconButton.styleFrom(

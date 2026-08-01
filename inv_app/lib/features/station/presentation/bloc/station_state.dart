@@ -62,6 +62,51 @@ class StationUpdateSuccess extends StationState {}
 
 class StationDeleteSuccess extends StationState {}
 
+class DeviceUnbindSuccess extends StationState {
+  final String sn;
+
+  const DeviceUnbindSuccess({required this.sn});
+
+  @override
+  List<Object?> get props => [sn];
+}
+
+class DeviceRebindSuccess extends StationState {
+  final String sn;
+
+  const DeviceRebindSuccess({required this.sn});
+
+  @override
+  List<Object?> get props => [sn];
+}
+
+class DeviceBindSuccess extends StationState {
+  final String sn;
+
+  const DeviceBindSuccess({required this.sn});
+
+  @override
+  List<Object?> get props => [sn];
+}
+
+class DeviceDeleteSuccess extends StationState {
+  final String sn;
+
+  const DeviceDeleteSuccess({required this.sn});
+
+  @override
+  List<Object?> get props => [sn];
+}
+
+class DeviceReorderSuccess extends StationState {
+  final int stationId;
+
+  const DeviceReorderSuccess({required this.stationId});
+
+  @override
+  List<Object?> get props => [stationId];
+}
+
 class StationError extends StationState {
   final String message;
 

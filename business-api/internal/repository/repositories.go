@@ -321,8 +321,46 @@ func (r *UserRepository) UpdatePassword(ctx context.Context, userID int64, passw
 }
 
 func (r *UserRepository) UpdateProfile(ctx context.Context, userID int64, nickname, avatar, tz, country, regionName, bio string) error {
-	query := `UPDATE users SET nickname = $1, avatar = $2, timezone = $3, country = $4, region_name = $5, bio = $6, updated_at = NOW() WHERE id = $7`
-	_, err := r.db.Exec(ctx, query, nickname, avatar, tz, country, regionName, bio, userID)
+	// 只更新非空字段，避免覆盖现有数据
+	query := `UPDATE users SET updated_at = NOW()`
+	args := []interface{}{}
+	argIdx := 1
+
+	if nickname != "" {
+		query += `, nickname = $` + strconv.Itoa(argIdx)
+		args = append(args, nickname)
+		argIdx++
+	}
+	if avatar != "" {
+		query += `, avatar = $` + strconv.Itoa(argIdx)
+		args = append(args, avatar)
+		argIdx++
+	}
+	if tz != "" {
+		query += `, timezone = $` + strconv.Itoa(argIdx)
+		args = append(args, tz)
+		argIdx++
+	}
+	if country != "" {
+		query += `, country = $` + strconv.Itoa(argIdx)
+		args = append(args, country)
+		argIdx++
+	}
+	if regionName != "" {
+		query += `, region_name = $` + strconv.Itoa(argIdx)
+		args = append(args, regionName)
+		argIdx++
+	}
+	if bio != "" {
+		query += `, bio = $` + strconv.Itoa(argIdx)
+		args = append(args, bio)
+		argIdx++
+	}
+
+	query += ` WHERE id = $` + strconv.Itoa(argIdx)
+	args = append(args, userID)
+
+	_, err := r.db.Exec(ctx, query, args...)
 	return err
 }
 

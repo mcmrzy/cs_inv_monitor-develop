@@ -797,6 +797,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.5"
+  jiguang_auth:
+    dependency: "direct main"
+    description:
+      name: jiguang_auth
+      sha256: "2e77627b490103954447f9a9be1daf7b5e9c68f4f7271bc59888c13e1a7ce3ec"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.3"
   jni:
     dependency: transitive
     description:

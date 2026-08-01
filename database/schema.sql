@@ -5668,7 +5668,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     root_tenant_id BIGINT NOT NULL,
     parent_id BIGINT,
     org_type VARCHAR(32) NOT NULL
-        CHECK (org_type IN ('manufacturer', 'agent', 'distributor', 'customer', 'service_partner')),
+        CHECK (org_type IN ('manufacturer', 'agent', 'distributor', 'installer', 'customer')),
     code VARCHAR(64),
     name VARCHAR(160) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'active'
@@ -5793,7 +5793,6 @@ BEGIN
         (NEW.org_type = 'agent' AND parent_type = 'manufacturer')
         OR (NEW.org_type = 'distributor' AND parent_type = 'agent')
         OR (NEW.org_type = 'customer' AND parent_type = 'distributor')
-        OR (NEW.org_type = 'service_partner' AND parent_type IN ('manufacturer', 'agent', 'distributor'))
     ) THEN
         RAISE EXCEPTION 'illegal organization hierarchy: % cannot be parent of %', parent_type, NEW.org_type
             USING ERRCODE = '23514';
@@ -5879,7 +5878,7 @@ CREATE TABLE IF NOT EXISTS membership_role_assignments (
     organization_id BIGINT NOT NULL,
     membership_id BIGINT NOT NULL,
     role_code VARCHAR(64) NOT NULL
-        CHECK (role_code IN ('org_admin', 'channel_manager', 'operator', 'installer', 'after_sales', 'viewer', 'finance', 'api_client')),
+        CHECK (role_code IN ('org_admin', 'agent', 'distributor', 'installer', 'customer')),
     status VARCHAR(20) NOT NULL DEFAULT 'active'
         CHECK (status IN ('active', 'revoked', 'expired')),
     version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0),
@@ -6220,6 +6219,7 @@ CREATE TABLE IF NOT EXISTS invitations (
     invited_by BIGINT REFERENCES users(id) ON DELETE RESTRICT,
     expires_at TIMESTAMPTZ NOT NULL,
     accepted_at TIMESTAMPTZ,
+    accepted_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     version BIGINT NOT NULL DEFAULT 1 CHECK (version > 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -6237,6 +6237,9 @@ CREATE INDEX IF NOT EXISTS idx_invitations_expiry
     ON invitations(status, expires_at) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_invitations_organization_fk
     ON invitations(root_tenant_id, organization_id);
+CREATE INDEX IF NOT EXISTS idx_invitations_accepted_by
+    ON invitations(accepted_by_user_id)
+    WHERE accepted_by_user_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS channel_migration_quarantine (
     id BIGSERIAL PRIMARY KEY,
@@ -7077,7 +7080,6 @@ BEGIN
         (NEW.org_type = 'agent' AND parent_type = 'manufacturer')
         OR (NEW.org_type = 'distributor' AND parent_type = 'agent')
         OR (NEW.org_type = 'customer' AND parent_type = 'distributor')
-        OR (NEW.org_type = 'service_partner' AND parent_type IN ('manufacturer', 'agent', 'distributor'))
     ) THEN
         RAISE EXCEPTION 'illegal organization hierarchy: % cannot be parent of %', parent_type, NEW.org_type
             USING ERRCODE = '23514';
@@ -7135,7 +7137,6 @@ BEGIN
         (v_org_type = 'agent' AND v_parent_type = 'manufacturer')
         OR (v_org_type = 'distributor' AND v_parent_type = 'agent')
         OR (v_org_type = 'customer' AND v_parent_type = 'distributor')
-        OR (v_org_type = 'service_partner' AND v_parent_type IN ('manufacturer', 'agent', 'distributor'))
     ) THEN
         RETURN 'invalid_hierarchy';
     END IF;
@@ -7363,7 +7364,6 @@ BEGIN
         (NEW.org_type = 'agent' AND parent_type = 'manufacturer')
         OR (NEW.org_type = 'distributor' AND parent_type = 'agent')
         OR (NEW.org_type = 'customer' AND parent_type = 'distributor')
-        OR (NEW.org_type = 'service_partner' AND parent_type IN ('manufacturer', 'agent', 'distributor'))
     ) THEN
         RAISE EXCEPTION 'illegal organization hierarchy: % cannot be parent of %', parent_type, NEW.org_type
             USING ERRCODE = '23514';
@@ -7421,7 +7421,6 @@ BEGIN
         (v_org_type = 'agent' AND v_parent_type = 'manufacturer')
         OR (v_org_type = 'distributor' AND v_parent_type = 'agent')
         OR (v_org_type = 'customer' AND v_parent_type = 'distributor')
-        OR (v_org_type = 'service_partner' AND v_parent_type IN ('manufacturer', 'agent', 'distributor'))
     ) THEN
         RETURN 'invalid_hierarchy';
     END IF;

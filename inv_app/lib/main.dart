@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/locale_service.dart';
@@ -17,6 +18,7 @@ import 'package:inv_app/features/notification/presentation/bloc/notification_blo
 import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart';
 import 'package:inv_app/core/router/app_router.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
+import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/regions_data.dart';
@@ -40,6 +42,13 @@ void main() async {
     await getIt<JPushService>().init();
   } catch (e) {
     debugPrint('JPush init failed: $e');
+  }
+
+  // 初始化极光认证（一键登录）
+  try {
+    await getIt<JVerifyService>().init();
+  } catch (e) {
+    debugPrint('JVerify init failed: $e');
   }
 
   // 提前创建 NotificationBloc 实例，用于接收 JPush 事件
@@ -102,9 +111,9 @@ class _InvAppState extends State<InvApp> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        // AuthBloc 必须立即加载，用于认证检查
+        // AuthBloc 立即创建（登录状态检查由 SplashPage 触发，避免重复检查）
         BlocProvider<AuthBloc>(
-          create: (_) => getIt<AuthBloc>()..add(AuthCheckRequested()),
+          create: (_) => getIt<AuthBloc>(),
         ),
         // 以下 Bloc 使用懒加载，只在首次访问时创建
         BlocProvider<StationBloc>(
@@ -131,8 +140,14 @@ class _InvAppState extends State<InvApp> {
       child: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthUnauthenticated) {
-            // Token过期或登出时，跳转到登录页
-            AppRouter.router.go('/login');
+            // Splash 页自行处理未登录分流（一键登录/登录页）；
+            // 此处仅兜底登出/Token 过期等场景
+            final currentPath = GoRouterState.of(context).matchedLocation;
+            if (currentPath != '/splash' &&
+                currentPath != '/jverify-login' &&
+                currentPath != '/login') {
+              AppRouter.router.go('/login');
+            }
           }
         },
         child: ScreenUtilInit(

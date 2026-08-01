@@ -61,3 +61,51 @@ class StationDeleteRequested extends StationEvent {
   @override
   List<Object?> get props => [stationId];
 }
+
+class DeviceUnbindRequested extends StationEvent {
+  final String sn;
+
+  const DeviceUnbindRequested({required this.sn});
+
+  @override
+  List<Object?> get props => [sn];
+}
+
+class DeviceRebindRequested extends StationEvent {
+  final String sn;
+  final int newStationId;
+
+  const DeviceRebindRequested({required this.sn, required this.newStationId});
+
+  @override
+  List<Object?> get props => [sn, newStationId];
+}
+
+class DeviceBindRequested extends StationEvent {
+  final String sn;
+  final int stationId;
+
+  const DeviceBindRequested({required this.sn, required this.stationId});
+
+  @override
+  List<Object?> get props => [sn, stationId];
+}
+
+class DeviceDeleteRequested extends StationEvent {
+  final String sn;
+
+  const DeviceDeleteRequested({required this.sn});
+
+  @override
+  List<Object?> get props => [sn];
+}
+
+class DeviceReorderRequested extends StationEvent {
+  final int stationId;
+  final List<String> deviceOrder;
+
+  const DeviceReorderRequested({required this.stationId, required this.deviceOrder});
+
+  @override
+  List<Object?> get props => [stationId, deviceOrder];
+}

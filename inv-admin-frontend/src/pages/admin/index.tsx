@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tabs, Card, Button, Tag, Select, Input, Space, Row, Col,
-  Modal, Form, Switch, InputNumber,
+  Modal, Form, InputNumber,
   Checkbox, Spin, Typography, App, Empty,
 } from 'antd'
 import { ProTable } from '@ant-design/pro-components'
@@ -28,116 +28,27 @@ const AdminPage: React.FC = () => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
   const [activeTab, setActiveTab] = useState('channels')
+  const isSystemAdmin = !!user?.isSystemAdmin
 
-  if (!user?.isSystemAdmin) {
-    return (
-      <Card bordered={false} style={{ borderRadius: 12 }}>
-        <Title level={4}>{t('admin.title')}</Title>
-        <Text type="secondary">{t('admin.onlySuperAdmin')}</Text>
-      </Card>
-    )
-  }
+  // 非系统管理员仅开放组织架构（channels）；权限配置与 API 概览为系统管理员专属
+  const tabItems = [
+    { key: 'channels', label: t('channel.title'), children: <ChannelManagement /> },
+    ...(isSystemAdmin
+      ? [
+          { key: 'permissions', label: t('admin.permissionConfig'), children: <PermissionTab /> },
+          {
+            key: 'api-overview',
+            label: t('admin.apiOverview'),
+            children: <APIOverviewTab onNavigateToPermissions={() => setActiveTab('permissions')} />,
+          },
+        ]
+      : []),
+  ]
 
   return (
     <div>
-      <Title level={4} style={{ marginBottom: 16 }}>{t('admin.title')}</Title>
-      <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
-        { key: 'channels', label: t('channel.title'), children: <ChannelManagement /> },
-        { key: 'settings', label: t('admin.systemConfig'), children: <SettingsTab /> },
-        { key: 'permissions', label: t('admin.permissionConfig'), children: <PermissionTab /> },
-        { key: 'api-overview', label: t('admin.apiOverview'), children: <APIOverviewTab onNavigateToPermissions={() => setActiveTab('permissions')} /> },
-      ]} />
-    </div>
-  )
-}
-
-const SettingsTab: React.FC = () => {
-  const { t } = useTranslation()
-  const { message, modal } = App.useApp()
-  const [form] = Form.useForm()
-
-  const { isLoading, error, refetch } = useQuery({
-    queryKey: queryKeys.admin.config(),
-    queryFn: () => adminApi.getSystemConfig().then((r) => {
-      form.setFieldsValue(r.data?.data ?? {})
-      return r.data?.data ?? {}
-    }),
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: (values: any) => adminApi.updateSystemConfig(values),
-    onSuccess: () => { message.success(t('admin.configSaveSuccess')) },
-    onError: () => { message.error(t('admin.configSaveFailed')) },
-  })
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} />}
-      <Card title={t('admin.basicSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
-        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-          <Form.Item name="site_name" label={t('admin.siteName')}><Input placeholder={t('admin.siteNamePlaceholder')} /></Form.Item>
-        </Form>
-      </Card>
-
-      <Card title={t('admin.emailSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
-        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-          <Row gutter={16}>
-            <Col span={16}><Form.Item name="email_host" label={t('admin.smtpServer')}><Input placeholder="smtp.qq.com" /></Form.Item></Col>
-            <Col span={8}><Form.Item name="email_port" label={t('admin.smtpPort')}><InputNumber placeholder="465" style={{ width: '100%' }} /></Form.Item></Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}><Form.Item name="email_username" label={t('admin.emailUsername')}><Input placeholder="your@email.com" /></Form.Item></Col>
-            <Col span={12}><Form.Item name="email_password" label={t('admin.emailPassword')}><Input.Password placeholder={t('admin.emailPasswordPlaceholder')} /></Form.Item></Col>
-          </Row>
-          <Form.Item name="email_from" label={t('admin.emailFrom')}><Input placeholder="your@email.com" /></Form.Item>
-          <Form.Item name="email_use_ssl" label={t('admin.enableSSL')} valuePropName="checked"><Switch /></Form.Item>
-        </Form>
-      </Card>
-
-      <Card title={t('admin.mqttSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
-        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-          <Row gutter={16}>
-            <Col span={16}><Form.Item name="mqtt_broker" label={t('admin.mqttBroker')}><Input placeholder="jiuxiaoyw.online" /></Form.Item></Col>
-            <Col span={8}><Form.Item name="mqtt_port" label={t('admin.mqttPort')}><Input placeholder="8883" /></Form.Item></Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}><Form.Item name="mqtt_username" label={t('admin.mqttUsername')}><Input /></Form.Item></Col>
-            <Col span={12}><Form.Item name="mqtt_password" label={t('admin.mqttPassword')}><Input.Password /></Form.Item></Col>
-          </Row>
-          <Form.Item name="mqtt_tls_insecure" label={t('admin.mqttTLSInsecure')} valuePropName="checked"><Switch /></Form.Item>
-        </Form>
-      </Card>
-
-      <Card title={t('admin.smsSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
-        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-          <Row gutter={16}>
-            <Col span={12}><Form.Item name="sms_access_key" label="Access Key"><Input.Password /></Form.Item></Col>
-            <Col span={12}><Form.Item name="sms_secret_key" label="Secret Key"><Input.Password /></Form.Item></Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}><Form.Item name="sms_sign_name" label={t('admin.smsSignName')}><Input /></Form.Item></Col>
-            <Col span={12}><Form.Item name="sms_template" label={t('admin.smsTemplate')}><Input /></Form.Item></Col>
-          </Row>
-        </Form>
-      </Card>
-
-      <Card title={t('admin.dataSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
-        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
-          <Row gutter={16}>
-            <Col span={8}><Form.Item name="data_retention_days" label={t('admin.dataRetention')}><InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="30" /></Form.Item></Col>
-            <Col span={8}><Form.Item name="alert_retention_days" label={t('admin.alertRetention')}><InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="90" /></Form.Item></Col>
-            <Col span={8}><Form.Item name="max_login_attempts" label={t('admin.maxLoginAttempts')}><InputNumber min={1} max={10} style={{ width: '100%' }} placeholder="5" /></Form.Item></Col>
-          </Row>
-          <Form.Item name="enable_auto_upgrade" label={t('admin.autoUpgrade')} valuePropName="checked"><Switch /></Form.Item>
-        </Form>
-      </Card>
-
-      <Button type="primary" size="large" onClick={async () => {
-        try {
-          const v = await form.validateFields()
-          saveMutation.mutate(v)
-        } catch {}
-      }} loading={saveMutation.isPending}>{t('admin.saveConfig')}</Button>
+      <Title level={4} style={{ marginBottom: 16 }}>{t('admin.orgTitle')}</Title>
+      <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
     </div>
   )
 }
@@ -222,7 +133,7 @@ const TenantTab: React.FC = () => {
         pagination={{ current: page, pageSize, total: listRes?.total ?? 0, showSizeChanger: true, showTotal: (tt) => t('common.total', { total: tt }), onChange: (p, ps) => { setPage(p); setPageSize(ps) } }} />
 
       <Modal title={t('admin.createTenant')} open={createOpen} onOk={async () => { try { createMutation.mutate(await createForm.validateFields()) } catch {} }}
-        onCancel={() => { setCreateOpen(false); createForm.resetFields() }} confirmLoading={createMutation.isPending} destroyOnClose>
+        onCancel={() => { setCreateOpen(false); createForm.resetFields() }} confirmLoading={createMutation.isPending} destroyOnHidden>
         <Form form={createForm} layout="vertical" preserve={false}>
           <Form.Item name="phone" label={t('admin.tenantPhone')} rules={[{ required: true, message: t('admin.pleaseInputPhone') }]}><Input placeholder={t('admin.pleaseInputPhone')} /></Form.Item>
           <Form.Item name="nickname" label={t('admin.tenantName')}><Input placeholder={t('admin.pleaseInputTenantName')} /></Form.Item>
@@ -234,7 +145,7 @@ const TenantTab: React.FC = () => {
       </Modal>
 
       <Modal title={t('admin.editTenantQuota')} open={editOpen} onOk={async () => { try { updateMutation.mutate({ id: editingTenant!.id, values: await editForm.validateFields() }) } catch {} }}
-        onCancel={() => { setEditOpen(false); setEditingTenant(null) }} confirmLoading={updateMutation.isPending} destroyOnClose>
+        onCancel={() => { setEditOpen(false); setEditingTenant(null) }} confirmLoading={updateMutation.isPending} destroyOnHidden>
         {editingTenant && <div style={{ marginBottom: 16 }}><strong>{t('admin.tenant')}:</strong> {editingTenant.nickname} ({editingTenant.phone})</div>}
         <Form form={editForm} layout="vertical" preserve={false}>
           <Form.Item name="deviceLimit" label={t('admin.deviceQuota')}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
@@ -292,13 +203,10 @@ const ALL_PERMISSION_DEFS = [
 ]
 const ROLE_CODE_TABS = [
   { key: 'org_admin', label: 'admin.role.orgAdmin' },
-  { key: 'channel_manager', label: 'admin.role.channelManager' },
-  { key: 'operator', label: 'admin.role.operator' },
+  { key: 'agent', label: 'admin.role.agent' },
+  { key: 'distributor', label: 'admin.role.distributor' },
   { key: 'installer', label: 'admin.role.installer' },
-  { key: 'after_sales', label: 'admin.role.afterSales' },
-  { key: 'viewer', label: 'admin.role.viewer' },
-  { key: 'finance', label: 'admin.role.finance' },
-  { key: 'api_client', label: 'admin.role.apiClient' },
+  { key: 'customer', label: 'admin.role.customer' },
 ]
 
 const PermissionTab: React.FC = () => {
@@ -405,7 +313,7 @@ const PermissionTab: React.FC = () => {
                 style={{ width: 240 }}
                 value={selectedOrgId ?? undefined}
                 onChange={(val) => { setSelectedOrgId(val) }}
-                options={flatOrgs.map((o) => ({ label: `${o.name} (${o.type})`, value: o.id }))}
+                options={flatOrgs.map((o) => ({ label: `${o.name} (${t(`channel.org.type.${o.type}`)})`, value: o.id }))}
                 showSearch
                 optionFilterProp="label"
               />

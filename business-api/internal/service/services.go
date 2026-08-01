@@ -331,51 +331,69 @@ func NewSMSService(cache *redis.Client, provider SMSProvider) *SMSService {
 }
 
 func (s *SMSService) SendCode(ctx context.Context, phone, codeType string) error {
-	key := fmt.Sprintf("sms:%s:%s", phone, codeType)
 	cooldownKey := fmt.Sprintf("sms:%s:%s:cooldown", phone, codeType)
 
+	// 防刷：检查发送冷却时间
 	exists, err := s.cache.Exists(ctx, cooldownKey).Result()
 	if err != nil {
 		return err
 	}
-
 	if exists > 0 {
 		ttl, _ := s.cache.TTL(ctx, cooldownKey).Result()
 		return fmt.Errorf("请等待 %d 秒后再发送", int(ttl.Seconds()))
 	}
 
-	code := generateCode(6)
-
-	logger.Debug("SMS code generated", zap.String("phone", maskPhone(phone)), zap.String("type", codeType))
-
+	// 通过阿里云号码认证服务发送（系统自动生成验证码）
 	if s.provider != nil {
-		if err := s.provider.Send(ctx, phone, code); err != nil {
-			logger.Warn("SMS send failed, code still stored locally", zap.String("phone", maskPhone(phone)), zap.Error(err))
+		if err := s.provider.Send(ctx, phone, ""); err != nil {
+			logger.Warn("SMS send failed", zap.String("phone", maskPhone(phone)), zap.Error(err))
+			return fmt.Errorf("发送验证码失败: %w", err)
 		}
 	}
 
-	pipe := s.cache.Pipeline()
-	pipe.Set(ctx, key, code, 5*time.Minute)
-	pipe.Set(ctx, cooldownKey, "1", 60*time.Second)
-	_, err = pipe.Exec(ctx)
-	return err
+	// 设置冷却时间
+	s.cache.Set(ctx, cooldownKey, "1", 60*time.Second)
+	return nil
 }
 
 func (s *SMSService) VerifyCode(ctx context.Context, phone, code, codeType string) bool {
-	key := fmt.Sprintf("sms:%s:%s", phone, codeType)
 	failKey := fmt.Sprintf("sms:%s:%s:fail", phone, codeType)
 
-	storedCode, err := s.cache.Get(ctx, key).Result()
-	if err != nil {
-		return false
-	}
-
-	// 检查验证码尝试次数
+	// 防暴破：检查失败次数
 	failCount, _ := s.cache.Get(ctx, failKey).Int()
 	if failCount >= 5 {
 		return false
 	}
 
+	// 通过阿里云号码认证服务校验验证码
+	if s.provider != nil {
+		ok, err := s.provider.Verify(ctx, phone, code)
+		if err != nil {
+			logger.Warn("SMS verify API error", zap.String("phone", maskPhone(phone)), zap.Error(err))
+			// API 失败时回退到本地 Redis 校验
+			return s.localVerifyCode(ctx, phone, code, codeType, failKey)
+		}
+		if ok {
+			s.cache.Del(ctx, failKey)
+			return true
+		}
+		// 记录失败次数
+		s.cache.Incr(ctx, failKey)
+		s.cache.Expire(ctx, failKey, 5*time.Minute)
+		return false
+	}
+
+	// 无 provider 时使用本地 Redis 校验（mock 场景）
+	return s.localVerifyCode(ctx, phone, code, codeType, failKey)
+}
+
+// localVerifyCode 本地 Redis 验证码校验（回退方案）
+func (s *SMSService) localVerifyCode(ctx context.Context, phone, code, codeType, failKey string) bool {
+	key := fmt.Sprintf("sms:%s:%s", phone, codeType)
+	storedCode, err := s.cache.Get(ctx, key).Result()
+	if err != nil {
+		return false
+	}
 	if storedCode == code {
 		pipe := s.cache.Pipeline()
 		pipe.Del(ctx, key)
@@ -383,8 +401,6 @@ func (s *SMSService) VerifyCode(ctx context.Context, phone, code, codeType strin
 		pipe.Exec(ctx)
 		return true
 	}
-
-	// 记录失败次数
 	s.cache.Incr(ctx, failKey)
 	s.cache.Expire(ctx, failKey, 5*time.Minute)
 	return false

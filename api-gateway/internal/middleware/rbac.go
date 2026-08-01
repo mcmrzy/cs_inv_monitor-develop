@@ -259,11 +259,19 @@ var authenticatedOnlyPaths = map[string]struct{}{
 	"/api/v1/auth/logout":          {},
 	"/api/v1/auth/change-password": {},
 	"/api/v1/auth/profile":         {},
+	"/api/v1/my/organizations":     {},
 }
 
 func isAuthenticatedOnlyPath(path string) bool {
-	_, ok := authenticatedOnlyPaths[path]
-	return ok
+	if _, ok := authenticatedOnlyPaths[path]; ok {
+		return true
+	}
+	// Join request is a self-service operation: POST /api/v1/organizations/{id}/join
+	// Any authenticated user may request to join an organization.
+	if strings.HasPrefix(path, "/api/v1/organizations/") && strings.HasSuffix(path, "/join") {
+		return true
+	}
+	return false
 }
 
 // appAllowedPaths defines APP-side endpoint whitelist.
@@ -286,6 +294,37 @@ var appAllowedMethodPaths = []struct {
 	method string
 }{
 	{"/api/v1/stations", "POST"},
+	// Channel organization members (non-system-admins) perform invitation
+	// actions from the org-tree page; business rules (membership scope, role
+	// hierarchy, inviter-only revoke) are enforced by business-api.
+	{"/api/v1/invitations/create", "POST"},
+	{"/api/v1/invitations", "DELETE"},
+}
+
+// basicUserGETPrefixes defines GET endpoints that any authenticated user may access
+// without organization-level RBAC grants. Data scoping (showing only the user's
+// own resources) is enforced by the downstream business-api service layer.
+var basicUserGETPrefixes = []string{
+	"/api/v1/stations",
+	"/api/v1/devices",
+	"/api/v1/device/",
+	"/api/v1/alarms",
+	"/api/v1/alerts",
+	"/api/v1/alarm-events",
+	"/api/v1/dashboard",
+	"/api/v1/stats/",
+	"/api/v1/notifications",
+	"/api/v1/alert-rules",
+	"/api/v1/ota/",
+	"/api/v1/parallel",
+	"/api/v1/parallel-groups",
+	"/api/v1/work-orders",
+	"/api/v1/work-order-stats",
+	// Organization tree / my-organizations / invitation records for the org
+	// management page; subtree scoping is enforced by business-api.
+	"/api/v1/organizations",
+	"/api/v1/my",
+	"/api/v1/invitations",
 }
 
 func isAppAllowedPath(path string) bool {
@@ -306,6 +345,20 @@ func isAppAllowedPathWithMethod(path, method string) bool {
 	}
 	for _, entry := range appAllowedMethodPaths {
 		if entry.method == method && (path == entry.prefix || strings.HasPrefix(path, entry.prefix+"/")) {
+			return true
+		}
+	}
+	return false
+}
+
+// isBasicUserGET checks whether the request is a GET to a common app endpoint
+// that any authenticated user may access without org-level RBAC grants.
+func isBasicUserGET(path, method string) bool {
+	if method != http.MethodGet {
+		return false
+	}
+	for _, prefix := range basicUserGETPrefixes {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") || strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}
@@ -367,6 +420,18 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 
 		// APP endpoints do not require business RBAC, but still require an active account
 		if isAppAllowedPathWithMethod(path, c.Request.Method) {
+			if !r.isUserActive(c.Request.Context(), userID) {
+				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "账号不可用"})
+				c.Abort()
+				return
+			}
+			c.Next()
+			return
+		}
+
+		// Basic user GET endpoints: any authenticated user can view their own data.
+		// Data scoping is enforced by the downstream service layer.
+		if isBasicUserGET(path, c.Request.Method) {
 			if !r.isUserActive(c.Request.Context(), userID) {
 				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "账号不可用"})
 				c.Abort()

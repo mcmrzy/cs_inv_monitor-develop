@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:inv_app/core/config/app_config.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 
 /// WGS-84 → GCJ-02 coordinate conversion
 class _Gcj02 {
@@ -126,6 +127,27 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
     }
   }
 
+  @override
+  void didUpdateWidget(covariant InlineLocationPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newLat = widget.initialLat;
+    final newLng = widget.initialLng;
+    final oldLat = oldWidget.initialLat;
+    final oldLng = oldWidget.initialLng;
+    if (newLat != null && newLng != null &&
+        (newLat != oldLat || newLng != oldLng)) {
+      final farAway = (newLat - _selectedPoint.latitude).abs() > 0.001 ||
+          (newLng - _selectedPoint.longitude).abs() > 0.001;
+      if (farAway) {
+        _selectedPoint = LatLng(newLat, newLng);
+        _initialized = true;
+        final display = _useAmap ? _Gcj02.fromWgs84(newLat, newLng) : _selectedPoint;
+        _mapController.move(display, 15);
+        _reverseGeocode(newLat, newLng);
+      }
+    }
+  }
+
   LatLng _toWgs84(LatLng gcjCenter) {
     if (!_useAmap) return gcjCenter;
     final gcj = _Gcj02.fromWgs84(gcjCenter.latitude, gcjCenter.longitude);
@@ -153,12 +175,13 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
   Future<void> _reverseGeocode(double lat, double lng) async {
     setState(() => _loadingNearby = true);
     try {
-      final resp = await http.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/geocode/reverse?lat=$lat&lng=$lng'),
-      ).timeout(const Duration(seconds: 8));
-      if (resp.statusCode == 200 && mounted) {
-        final data = jsonDecode(resp.body);
-        final d = data['data'];
+      final dio = getIt<Dio>();
+      final res = await dio.get('/geocode/reverse', queryParameters: {
+        'lat': lat,
+        'lng': lng,
+      }).timeout(const Duration(seconds: 8));
+      if (mounted && res.data is Map) {
+        final d = res.data['data'];
         if (d != null) {
           final addr = d['address'] as String? ?? '';
           if (addr.isNotEmpty) {
@@ -210,23 +233,24 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
   }
 
   /// 外部调用：根据地址搜索并飞到对应位置
-  Future<void> searchAndFlyTo(String address) async {
+  Future<void> searchAndFlyTo(String address, {String? displayAddress}) async {
     if (address.trim().isEmpty) return;
     try {
-      final resp = await http.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/geocode?address=${Uri.encodeQueryComponent(address.trim())}'),
-      ).timeout(const Duration(seconds: 8));
-      if (resp.statusCode == 200 && mounted) {
-        final data = jsonDecode(resp.body);
-        final d = data['data'];
+      final dio = getIt<Dio>();
+      final res = await dio.get('/geocode', queryParameters: {
+        'address': address.trim(),
+      }).timeout(const Duration(seconds: 8));
+      if (mounted && res.data is Map) {
+        final d = res.data['data'];
         if (d != null) {
           final lat = double.tryParse('${d['lat']}');
           final lng = double.tryParse('${d['lng']}');
           if (lat != null && lng != null) {
+            final addrText = displayAddress ?? address.trim();
             final point = LatLng(lat, lng);
             setState(() {
               _selectedPoint = point;
-              _resolvedAddress = address.trim();
+              _resolvedAddress = addrText;
               _nearbyList = [];
             });
             final display = _useAmap ? _Gcj02.fromWgs84(lat, lng) : point;
@@ -234,7 +258,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
             widget.onLocationChanged?.call({
               'lat': lat,
               'lng': lng,
-              'address': address.trim(),
+              'address': addrText,
             });
             // 搜索到达后也做一次反向地理编码获取附近地址
             _reverseGeocode(lat, lng);

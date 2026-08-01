@@ -28,6 +28,8 @@ import 'package:inv_app/features/auth/presentation/pages/splash_page.dart';
 
 import 'package:inv_app/features/auth/presentation/pages/login_page.dart';
 
+import 'package:inv_app/features/auth/presentation/pages/jverify_auth_page.dart';
+
 import 'package:inv_app/features/auth/presentation/pages/register_page.dart';
 
 import 'package:inv_app/features/auth/presentation/pages/forgot_password_page.dart';
@@ -135,6 +137,12 @@ class AppRouter {
         path: '/login',
         name: 'login',
         pageBuilder: (context, state) => _fadePage(state, const LoginPage()),
+      ),
+      GoRoute(
+        path: '/jverify-login',
+        name: 'jverifyAuth',
+        pageBuilder: (context, state) =>
+            _fadePage(state, const JVerifyAuthPage()),
       ),
       GoRoute(
         path: '/register',
@@ -919,9 +927,11 @@ class _DeviceListPageState extends State<DeviceListPage> {
           }
 
           if (state is DeviceListLoaded) {
+            // Global device list page - only read mode, no station context for unbind
             return DeviceListView(
               devices: state.devices,
               whiteHeader: true,
+              showUnbindButton: false, // 禁用解绑功能，因为没有电站上下文
               onDeviceChanged: () {
                 context.read<DeviceBloc>().add(const DeviceListRequested());
               },

@@ -8,7 +8,7 @@ database:
   host: postgres
   port: 5432
   user: postgres
-  password: ""
+  password: "local-dev-password_STRONG_PASSWORD"
   database: inv_mqtt
   ssl_mode: disable
   max_open_conns: 150
@@ -39,7 +39,7 @@ mqtt:
   #      Use when the broker has a certificate signed by a trusted public CA.
   tls_insecure: false
   cert_sha256: ""
-  tls_skip_verify: false
+  tls_skip_verify: true
 
 kafka:
   enabled: true
@@ -53,7 +53,7 @@ kafka:
 
 backends:
   api_server: http://inv-api-server:8080
-  internal_key: ""
+  internal_key: "local-dev-internal-key-1234567890"
 
 log:
   level: info

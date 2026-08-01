@@ -15,12 +15,13 @@ import useTimezoneStore from '@/stores/timezoneStore'
 import { formatInTimezone } from '@/utils/timezone'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import Popconfirm from '@/components/LocalizedPopconfirm'
+import { roleLabel, roleLabels } from '@/utils/roleLabel'
 
 interface Props {
   selectedOrgId: number | null
 }
 
-const MEMBER_ROLES = ['admin', 'operator', 'dealer', 'installer', 'viewer']
+const MEMBER_ROLES = ['org_admin', 'agent', 'distributor', 'installer', 'customer']
 
 const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
   const { t } = useTranslation()
@@ -78,8 +79,8 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
     { title: t('channel.member.email'), dataIndex: 'email', width: 200, ellipsis: true },
     { title: t('channel.member.phone'), dataIndex: 'phone', width: 130 },
     {
-      title: t('channel.member.role'), dataIndex: 'role', width: 100,
-      render: (_, record: OrgMember) => <Tag color="blue">{record.role}</Tag>,
+      title: t('channel.member.role'), dataIndex: 'role', width: 120,
+      render: (_, record: OrgMember) => <Tag color="blue">{roleLabels(record.role, t)}</Tag>,
     },
     {
       title: t('channel.member.status'), dataIndex: 'status', width: 90,
@@ -178,14 +179,14 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
         onOk={async () => { try { addMutation.mutate(await addForm.validateFields()) } catch {} }}
         onCancel={() => { setAddOpen(false); addForm.resetFields() }}
         confirmLoading={addMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={addForm} layout="vertical" preserve={false}>
           <Form.Item name="email" label={t('channel.member.email')} rules={[{ required: true, type: 'email' }]}>
             <Input placeholder="user@example.com" />
           </Form.Item>
           <Form.Item name="role" label={t('channel.member.role')} rules={[{ required: true }]}>
-            <Select options={MEMBER_ROLES.map((r) => ({ label: r, value: r }))} />
+            <Select options={MEMBER_ROLES.map((r) => ({ label: roleLabel(r, t), value: r }))} />
           </Form.Item>
         </Form>
       </Modal>
@@ -202,14 +203,14 @@ const MemberList: React.FC<Props> = ({ selectedOrgId }) => {
         }}
         onCancel={() => { setEditOpen(false); setEditingMember(null) }}
         confirmLoading={updateRoleMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <div style={{ marginBottom: 16 }}>
           <strong>{editingMember?.email}</strong>
         </div>
         <Form form={editForm} layout="vertical" preserve={false}>
           <Form.Item name="role" label={t('channel.member.role')} rules={[{ required: true }]}>
-            <Select options={MEMBER_ROLES.map((r) => ({ label: r, value: r }))} />
+            <Select options={MEMBER_ROLES.map((r) => ({ label: roleLabel(r, t), value: r }))} />
           </Form.Item>
         </Form>
       </Modal>

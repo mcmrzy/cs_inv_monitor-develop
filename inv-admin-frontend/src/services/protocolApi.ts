@@ -124,7 +124,7 @@ export function getApiErrorMessage(error: unknown): string {
 export const protocolApi = {
   getParallelState: async (sn: string): Promise<ParallelState> =>
     unwrap(await api.get<ApiResponse<ParallelState>>(
-      `/devices/${encodeURIComponent(sn)}/parallel-state`,
+      `/devices/by-sn/${encodeURIComponent(sn)}/parallel-state`,
       { expectedDataShape: 'object' },
     )),
 
@@ -133,7 +133,7 @@ export const protocolApi = {
     params: ProtocolQueryParams = {},
   ): Promise<PaginatedResponse<ThreePhaseSample>> =>
     unwrap(await api.get<ApiResponse<PaginatedResponse<ThreePhaseSample>>>(
-      `/devices/${encodeURIComponent(sn)}/three-phase`,
+      `/devices/by-sn/${encodeURIComponent(sn)}/three-phase`,
       { params, expectedDataShape: 'page' },
     )),
 
@@ -142,7 +142,7 @@ export const protocolApi = {
     params: ProtocolQueryParams = {},
   ): Promise<PaginatedResponse<AlarmEvent>> =>
     unwrap(await api.get<ApiResponse<PaginatedResponse<AlarmEvent>>>(
-      `/devices/${encodeURIComponent(sn)}/alarm-events`,
+      `/devices/by-sn/${encodeURIComponent(sn)}/alarm-events`,
       { params, expectedDataShape: 'page' },
     )),
 

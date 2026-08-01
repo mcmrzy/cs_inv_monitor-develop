@@ -10,6 +10,7 @@ import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
 import 'package:inv_app/core/widgets/styled_refresh_indicator.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 import 'package:inv_app/core/widgets/offline_banner.dart';
+import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class HomePage extends StatefulWidget {
@@ -42,6 +43,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Eagerly load cached data to avoid skeleton flash when offline
+    _loadCachedDataIfAvailable();
     context.read<StationBloc>().add(StationSummaryRequested());
     final realtimeService = getIt<RealtimeDataService>();
     _statusSub = realtimeService.statusStream.listen((_) {
@@ -54,6 +57,26 @@ class _HomePageState extends State<HomePage> {
         context.read<StationBloc>().add(StationSummaryRequested());
       }
     });
+  }
+
+  void _loadCachedDataIfAvailable() {
+    try {
+      final dataCacheService = getIt<DataCacheService>();
+      final cached = dataCacheService.load(DataCacheService.stationSummary);
+      if (cached != null && cached is Map<String, dynamic>) {
+        final stations = (cached['stations'] as List?) ?? [];
+        final summary = (cached['summary'] as Map<String, dynamic>?) ?? {};
+        if (stations.isNotEmpty) {
+          _cachedState = StationSummaryLoaded(
+            stations: stations,
+            summary: summary,
+            isFromCache: true,
+          );
+        }
+      }
+    } catch (_) {
+      // Cache service not available, ignore
+    }
   }
 
   @override
@@ -425,8 +448,8 @@ class _HomePageState extends State<HomePage> {
     final name = station['station_name'] ?? station['name'] ?? '';
     final id = station['station_id'] ?? station['id'] ?? 0;
     final faultCount = station['fault_count'] ?? 0;
-    final todayEnergy = station['today_energy'] ?? 0;
-    final totalEnergy = station['total_energy'] ?? 0;
+    final todayEnergy = (station['today_energy'] ?? 0).toDouble();
+    final totalEnergy = (station['total_energy'] ?? 0).toDouble();
     final status = station['status'] ?? 1;
     final onlineCount = station['online_count'] ?? 0;
 
@@ -449,149 +472,63 @@ class _HomePageState extends State<HomePage> {
         : (hasFault ? AppColors.badgeAlarmBg : AppColors.badgeOfflineBg);
     final badgeText = ok ? l10n.normal : (hasFault ? l10n.fault : l10n.offline);
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: 14.h),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16.r),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16.r),
-          onTap: () => context.push('/station/$id'),
-          child: Padding(
-            padding: EdgeInsets.all(16.w),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 72.w,
-                  height: 72.w,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14.r),
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.primary.withValues(alpha: 0.08),
-                        AppColors.primary.withValues(alpha: 0.15),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Image.asset(
-                    'assets/images/solar_panel.png',
-                    width: 56.w,
-                    height: 56.w,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                SizedBox(width: 14.w),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              name,
-                              style: TextStyle(
-                                fontSize: 16.sp,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 8.w,
-                              vertical: 3.h,
-                            ),
-                            decoration: BoxDecoration(
-                              color: badgeBg,
-                              borderRadius: BorderRadius.circular(6.r),
-                            ),
-                            child: Text(
-                              badgeText,
-                              style: TextStyle(
-                                fontSize: 11.sp,
-                                fontWeight: FontWeight.w600,
-                                color: badgeColor,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 4.h),
-                      Text(
-                        addressText,
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          color: AppColors.textHint,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      SizedBox(height: 10.h),
-                      Row(
-                        children: [
-                          _energyItem(
-                            todayEnergy.toStringAsFixed(1),
-                            'kWh',
-                            l10n.todayGeneration,
-                          ),
-                          SizedBox(width: 24.w),
-                          _energyItem(
-                            totalEnergy.toStringAsFixed(0),
-                            'kWh',
-                            l10n.totalGeneration,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return _StationCard(
+      name: name,
+      id: id,
+      faultCount: faultCount,
+      todayEnergy: todayEnergy,
+      totalEnergy: totalEnergy,
+      addressText: addressText,
+      badgeText: badgeText,
+      badgeColor: badgeColor,
+      badgeBg: badgeBg,
+      onTap: () => context.push('/station/$id'),
+      onLongPress: () => _showStationMenu(context, station),
     );
   }
 
-  Widget _energyItem(String value, String unit, String label) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: value,
-                style: TextStyle(
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                  height: 1.1,
-                ),
+  void _showStationMenu(BuildContext context, dynamic station) {
+    final l10n = AppLocalizations.of(context)!;
+    final id = station['station_id'] ?? station['id'] ?? 0;
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40.w,
+              height: 4.h,
+              margin: EdgeInsets.only(top: 12.h),
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2.r),
               ),
-              TextSpan(
-                text: ' $unit',
-                style: TextStyle(
-                  fontSize: 11.sp,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textHint,
-                ),
-              ),
-            ],
-          ),
+            ),
+            ListTile(
+              leading: Icon(Icons.edit_outlined, color: AppColors.primary),
+              title: Text(l10n.editStation),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/station/edit/$id');
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.add, color: AppColors.success),
+              title: Text(l10n.addDevice),
+              onTap: () {
+                Navigator.pop(ctx);
+                context.push('/add-device?station_id=$id');
+              },
+            ),
+          ],
         ),
-        SizedBox(height: 2.h),
-        Text(
-          label,
-          style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
-        ),
-      ],
+      ),
     );
   }
 
@@ -722,6 +659,230 @@ class _AnimatedHdrBtnState extends State<_AnimatedHdrBtn>
           child: Icon(widget.icon, size: 20.sp, color: AppColors.textSecondary),
         ),
       ),
+    );
+  }
+}
+
+class _StationCard extends StatefulWidget {
+  final String name;
+  final int id;
+  final int faultCount;
+  final double todayEnergy;
+  final double totalEnergy;
+  final String addressText;
+  final String badgeText;
+  final Color badgeColor;
+  final Color badgeBg;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const _StationCard({
+    required this.name,
+    required this.id,
+    required this.faultCount,
+    required this.todayEnergy,
+    required this.totalEnergy,
+    required this.addressText,
+    required this.badgeText,
+    required this.badgeColor,
+    required this.badgeBg,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  @override
+  State<_StationCard> createState() => _StationCardState();
+}
+
+class _StationCardState extends State<_StationCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 150),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 14.h),
+      child: GestureDetector(
+        onTapDown: (_) => _controller.forward(),
+        onTapUp: (_) {
+          _controller.reverse();
+          widget.onTap();
+        },
+        onTapCancel: () => _controller.reverse(),
+        onLongPress: widget.onLongPress,
+        child: ScaleTransition(
+          scale: _scaleAnimation,
+          child: Hero(
+            tag: 'station_${widget.id}',
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.r),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16.r),
+                onTap: () {}, // 由外层 GestureDetector 处理
+                child: _buildCardContent(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardContent() {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: EdgeInsets.all(16.w),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 72.w,
+            height: 72.w,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14.r),
+              gradient: LinearGradient(
+                colors: [
+                  AppColors.primary.withValues(alpha: 0.08),
+                  AppColors.primary.withValues(alpha: 0.15),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Image.asset(
+              'assets/images/solar_panel.png',
+              width: 56.w,
+              height: 56.w,
+              fit: BoxFit.contain,
+            ),
+          ),
+          SizedBox(width: 14.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.name,
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 8.w,
+                        vertical: 3.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: widget.badgeBg,
+                        borderRadius: BorderRadius.circular(6.r),
+                      ),
+                      child: Text(
+                        widget.badgeText,
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w600,
+                          color: widget.badgeColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 4.h),
+                Text(
+                  widget.addressText,
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    color: AppColors.textHint,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 10.h),
+                Row(
+                  children: [
+                    _energyItem(
+                      widget.todayEnergy.toStringAsFixed(1),
+                      'kWh',
+                      l10n.todayGeneration,
+                    ),
+                    SizedBox(width: 24.w),
+                    _energyItem(
+                      widget.totalEnergy.toStringAsFixed(0),
+                      'kWh',
+                      l10n.totalGeneration,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _energyItem(String value, String unit, String label) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: value,
+                style: TextStyle(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  height: 1.1,
+                ),
+              ),
+              TextSpan(
+                text: ' $unit',
+                style: TextStyle(
+                  fontSize: 11.sp,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textHint,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 2.h),
+        Text(
+          label,
+          style: TextStyle(fontSize: 10.sp, color: AppColors.textHint),
+        ),
+      ],
     );
   }
 }

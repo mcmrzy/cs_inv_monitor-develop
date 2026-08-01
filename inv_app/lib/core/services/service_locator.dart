@@ -20,6 +20,7 @@ import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/app_update_service.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
+import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/features/auth/data/datasources/auth_remote_data_source.dart';
 import 'package:inv_app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:inv_app/features/auth/domain/repositories/auth_repository.dart';
@@ -348,6 +349,10 @@ class ServiceLocator {
     getIt.registerLazySingleton<JPushService>(
       () => JPushService(),
     );
+
+    getIt.registerLazySingleton<JVerifyService>(
+      () => JVerifyService(),
+    );
   }
 
   static void _initDataSources() {
@@ -433,6 +438,7 @@ class ServiceLocator {
     getIt.registerLazySingleton(() => RefreshTokenUseCase(getIt()));
     getIt.registerLazySingleton(() => WechatLoginUseCase(getIt()));
     getIt.registerLazySingleton(() => GoogleLoginUseCase(getIt()));
+    getIt.registerLazySingleton(() => JVerifyLoginUseCase(getIt()));
   }
 
   static void _initBloc() {
@@ -452,6 +458,7 @@ class ServiceLocator {
         refreshTokenUseCase: getIt(),
         wechatLoginUseCase: getIt(),
         googleLoginUseCase: getIt(),
+        jverifyLoginUseCase: getIt(),
         storageService: getIt(),
         jpushService: getIt(),
       ),

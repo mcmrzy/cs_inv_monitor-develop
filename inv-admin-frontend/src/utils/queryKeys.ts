@@ -68,6 +68,8 @@ export const queryKeys = {
   },
   channels: {
     organizations: () => ['channels', 'organizations'] as const,
+    orgHierarchy: () => ['channels', 'org-hierarchy'] as const,
+    myOrganizations: (userId?: number | string) => ['channels', 'my-organizations', userId] as const,
     organizationDetail: (id: number) => ['channels', 'organizations', id] as const,
     members: (orgId: number, params?: Record<string, any>) => ['channels', 'members', orgId, params] as const,
     invitations: (params?: Record<string, any>) => ['channels', 'invitations', params] as const,

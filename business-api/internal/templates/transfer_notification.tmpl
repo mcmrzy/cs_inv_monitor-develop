@@ -137,30 +137,30 @@
             <p>有一条设备转移请求等待您的处理。</p>
             
             <div class="device-sn">
-                📦 .DeviceSN
+                📦 {{.DeviceSN}}
             </div>
             
             <div class="transition-flow">
                 <div class="org-card">
-                    <p class="org-name">.FromOrg</p>
+                    <p class="org-name">{{.FromOrg}}</p>
                     <p class="org-label">转出组织</p>
                 </div>
                 <span class="arrow">➜</span>
                 <div class="org-card">
-                    <p class="org-name">.ToOrg</p>
+                    <p class="org-name">{{.ToOrg}}</p>
                     <p class="org-label">转入组织</p>
                 </div>
             </div>
             
             <div class="info-box">
                 <p style="margin: 0 0 8px 0; font-weight: 600; color: #1565C0;">📋 转移原因</p>
-                <p style="margin: 0; font-size: 14px; color: #424242;">.Reason</p>
+                <p style="margin: 0; font-size: 14px; color: #424242;">{{.Reason}}</p>
             </div>
             
             <p>如果您同意此转移，请登录管理系统批准该请求。</p>
             
             <div style="text-align: center; margin: 32px 0;">
-                <a href="https://your-domain.com/admin/devices/transfers" 
+                <a href="{{.ActionURL}}" 
                    class="action-button"
                    style="background: linear-gradient(135deg, #FF6D00, #FF9800); color: white; padding: 14px 28px; text-decoration: none; border-radius: 50px; font-weight: 600; display: inline-block;">
                    查看转移请求

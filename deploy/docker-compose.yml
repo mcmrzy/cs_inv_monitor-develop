@@ -79,6 +79,10 @@ services:
       JPUSH_MASTER_SECRET: ${JPUSH_MASTER_SECRET}
       JPUSH_TIMEOUT: ${JPUSH_TIMEOUT:-10}
       JPUSH_DEDUP_TTL: ${JPUSH_DEDUP_TTL:-120}
+      JVERIFY_ENABLED: ${JVERIFY_ENABLED:-false}
+      JVERIFY_APP_KEY: ${JVERIFY_APP_KEY}
+      JVERIFY_MASTER_SECRET: ${JVERIFY_MASTER_SECRET}
+      JVERIFY_RSA_PRIVATE_KEY: ${JVERIFY_RSA_PRIVATE_KEY}
     volumes:
       - firmware_data:/data/firmware
       - uploads_data:/data/uploads  # 头像上传文件持久化存储

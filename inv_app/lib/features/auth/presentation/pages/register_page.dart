@@ -92,6 +92,7 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -117,35 +118,59 @@ class _RegisterPageState extends State<RegisterPage> {
           }
         },
         builder: (context, state) {
-          return SafeArea(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.all(24.w),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(height: 40.h),
-                    _buildHeader(),
-                    SizedBox(height: 32.h),
-                    _buildEmailField(),
-                    SizedBox(height: 16.h),
-                    _buildCodeField(state),
-                    SizedBox(height: 16.h),
-                    _buildPhoneField(),
-                    SizedBox(height: 16.h),
-                    _buildNicknameField(),
-                    SizedBox(height: 16.h),
-                    _buildPasswordField(),
-                    SizedBox(height: 16.h),
-                    _buildConfirmPasswordField(),
-                    SizedBox(height: 32.h),
-                    _buildRegisterButton(state),
-                    SizedBox(height: 24.h),
-                    _buildLoginRow(),
-                  ],
+          // 顶部品牌渐变区 + 悬浮表单卡片，键盘弹出仍可滚动
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildBrandHeader(),
+                // 悬浮卡片：Transform 视觉上叠（Container 负 margin 会触发运行时断言崩溃）
+                Transform.translate(
+                  offset: Offset(0, -24.h),
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                    padding: EdgeInsets.fromLTRB(24.w, 28.h, 24.w, 8.h),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20.r),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF1565C0).withValues(alpha: 0.12),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildHeader(),
+                          SizedBox(height: 28.h),
+                          _buildEmailField(),
+                          SizedBox(height: 16.h),
+                          _buildCodeField(state),
+                          SizedBox(height: 16.h),
+                          _buildPhoneField(),
+                          SizedBox(height: 16.h),
+                          _buildNicknameField(),
+                          SizedBox(height: 16.h),
+                          _buildPasswordField(),
+                          SizedBox(height: 16.h),
+                          _buildConfirmPasswordField(),
+                          SizedBox(height: 28.h),
+                          _buildRegisterButton(state),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                // 视觉间隙由 Transform 上移补偿
+                const SizedBox(height: 0),
+                _buildLoginRow(),
+                SizedBox(height: 32.h),
+              ],
             ),
           );
         },
@@ -153,21 +178,128 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
+  /// 品牌区：渐变头部 + 返回按钮 + Logo + 品牌名
+  Widget _buildBrandHeader() {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      height: 260.h,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF42A5F5)],
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36.r)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [
+            // 返回按钮（白色，浮于渐变区）
+            if (Navigator.of(context).canPop())
+              Positioned(
+                left: 4.w,
+                top: 0,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                  color: Colors.white,
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+            // 装饰：右上大圆环
+            Positioned(
+              right: -70.w,
+              top: -70.w,
+              child: Container(
+                width: 230.w,
+                height: 230.w,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    width: 26,
+                  ),
+                ),
+              ),
+            ),
+            // 装饰：左下光斑
+            Positioned(
+              left: -50.w,
+              bottom: -40.w,
+              child: Container(
+                width: 150.w,
+                height: 150.w,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // 大 Logo：白底圆角卡 + csergy.png
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 14.w,
+                      vertical: 6.h,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12.r),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Image.asset(
+                      'assets/images/brand_logo.png',
+                      height: 36.h,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  SizedBox(height: 14.h),
+                  // 小 Logo：辰烁科技.png
+                  Image.asset(
+                    'assets/images/brand_name.png',
+                    height: 22.h,
+                    fit: BoxFit.contain,
+                  ),
+                  SizedBox(height: 4.h),
+                  Text(
+                    l10n.pvInverterMonitor,
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 标题区：创建账号 + 副标语（置于表单卡片内）
   Widget _buildHeader() {
     final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
-        Icon(Icons.person_add_outlined, size: 64.sp, color: AppColors.primary),
-        SizedBox(height: 16.h),
         Text(
           l10n.createAccount,
           style: TextStyle(
-            fontSize: 28.sp,
+            fontSize: 24.sp,
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
           ),
         ),
-        SizedBox(height: 8.h),
+        SizedBox(height: 6.h),
         Text(
           l10n.registerToUseAll,
           style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
@@ -185,7 +317,6 @@ class _RegisterPageState extends State<RegisterPage> {
         labelText: l10n.email,
         hintText: l10n.pleaseInputEmail,
         prefixIcon: const Icon(Icons.email_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
         if (value == null || value.isEmpty) return l10n.pleaseInputEmail;
@@ -212,8 +343,6 @@ class _RegisterPageState extends State<RegisterPage> {
               hintText: l10n.pleaseInputVerificationCode,
               prefixIcon: const Icon(Icons.mark_email_read_outlined),
               counterText: '',
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -236,7 +365,7 @@ class _RegisterPageState extends State<RegisterPage> {
               disabledBackgroundColor: Colors.grey.shade300,
               disabledForegroundColor: Colors.grey.shade500,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8.r),
+                borderRadius: BorderRadius.circular(12.r),
               ),
               padding: EdgeInsets.zero,
             ),
@@ -270,7 +399,6 @@ class _RegisterPageState extends State<RegisterPage> {
         hintText: l10n.pleaseInputPhone,
         prefixIcon: const Icon(Icons.phone_outlined),
         counterText: '',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
         if (value == null || value.trim().isEmpty) return l10n.pleaseInputPhone;
@@ -288,7 +416,6 @@ class _RegisterPageState extends State<RegisterPage> {
         labelText: l10n.pleaseInputUsername,
         hintText: l10n.pleaseInputUsername,
         prefixIcon: const Icon(Icons.person_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
         if (value == null || value.trim().isEmpty) {
@@ -317,7 +444,6 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
         ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
         if (value == null || value.isEmpty) return l10n.pleaseInputPassword;
@@ -346,7 +472,6 @@ class _RegisterPageState extends State<RegisterPage> {
             () => _obscureConfirmPassword = !_obscureConfirmPassword,
           ),
         ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
       ),
       validator: (value) {
         if (value == null || value.isEmpty) return l10n.pleaseConfirmPassword;
@@ -356,26 +481,52 @@ class _RegisterPageState extends State<RegisterPage> {
     );
   }
 
+  /// 注册按钮（品牌渐变）
   Widget _buildRegisterButton(AuthState state) {
     final l10n = AppLocalizations.of(context)!;
-    return ElevatedButton(
-      onPressed: state is AuthLoading ? null : _handleRegister,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        padding: EdgeInsets.symmetric(vertical: 14.h),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+    return Container(
+      height: 50.h,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1565C0), Color(0xFF2196F3)],
+        ),
+        borderRadius: BorderRadius.circular(14.r),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1565C0).withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      child: state is AuthLoading
-          ? SizedBox(
-              height: 20.h,
-              width: 20.w,
-              child: const CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
-          : Text(l10n.register, style: TextStyle(fontSize: 16.sp)),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14.r),
+          onTap: state is AuthLoading ? null : _handleRegister,
+          child: Center(
+            child: state is AuthLoading
+                ? SizedBox(
+                    width: 20.h,
+                    height: 20.h,
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Text(
+                    l10n.register,
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -389,8 +540,18 @@ class _RegisterPageState extends State<RegisterPage> {
           style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
         ),
         TextButton(
-          onPressed: () => context.go('/login'),
-          child: Text(l10n.loginNow, style: TextStyle(fontSize: 14.sp)),
+          onPressed: () {
+            // 优先返回上一页（登录页/一键登录页），无上级页面时才跳转登录页
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            } else {
+              context.go('/login');
+            }
+          },
+          child: Text(
+            l10n.loginNow,
+            style: TextStyle(fontSize: 14.sp, color: AppColors.primary),
+          ),
         ),
       ],
     );

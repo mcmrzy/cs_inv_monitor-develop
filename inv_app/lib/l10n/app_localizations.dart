@@ -74,8 +74,28 @@ class AppLocalizations {
   String get verifyCode => _localizedStrings['verify_code']!;
   String get rememberPassword => _localizedStrings['remember_password']!;
   String get otherLogin => _localizedStrings['other_login']!;
+    String get oneClickLogin => _localizedStrings['one_click_login']!;
+    String get jverifyNotAvailable => _localizedStrings['jverify_not_available']!;
   String get wechatLogin => _localizedStrings['wechat_login']!;
   String get googleLogin => _localizedStrings['google_login']!;
+  String get oneClickLoginTitle =>
+      _localizedStrings['one_click_login_title']!;
+  String get oneClickLoginSubtitle =>
+      _localizedStrings['one_click_login_subtitle']!;
+  String get agreeTermsPrefix => _localizedStrings['agree_terms_prefix']!;
+  String get agreeTermsAnd => _localizedStrings['agree_terms_and']!;
+  String get useOtherLogin => _localizedStrings['use_other_login']!;
+  String get gettingPhone => _localizedStrings['getting_phone']!;
+  String get fetchPhoneFailed => _localizedStrings['fetch_phone_failed']!;
+  String get noPhoneNumber => _localizedStrings['no_phone_number']!;
+  String get jverifyInitFailed => _localizedStrings['jverify_init_failed']!;
+  String get jverifyServiceError =>
+      _localizedStrings['jverify_service_error']!;
+  String get agreeTermsFirst => _localizedStrings['agree_terms_first']!;
+  String get jverifyLaunching => _localizedStrings['jverify_launching']!;
+  String get jverifyCancelled => _localizedStrings['jverify_cancelled']!;
+  String get jverifyAuthFailed => _localizedStrings['jverify_auth_failed']!;
+  String get jverifyRetry => _localizedStrings['jverify_retry']!;
 
   // 导航
   String get home => _localizedStrings['home']!;
@@ -106,6 +126,11 @@ class AppLocalizations {
   String get coalSaved => _localizedStrings['coal_saved']!;
   String get co2Reduction => _localizedStrings['co2_reduction']!;
   String get treeEquivalent => _localizedStrings['tree_equivalent']!;
+  String get stationDeleted => _localizedStrings['station_deleted']!;
+  String get confirmDeleteStation => _localizedStrings['confirm_delete_station']!;
+  String get confirmUnbindDevice => _localizedStrings['confirm_unbind_device']!;
+  String get deviceUnbound => _localizedStrings['device_unbound']!;
+  String get unbind => _localizedStrings['unbind']!;
 
   // 设备
   String get deviceManagement => _localizedStrings['device_management']!;
@@ -605,6 +630,8 @@ class AppLocalizations {
   String get deviceSnLabel => _localizedStrings['device_sn_label']!;
   String get input16DigitSn => _localizedStrings['input_16digit_sn']!;
   String get bindDevice => _localizedStrings['bind_device']!;
+  String get rebindDevice => _localizedStrings['rebind_device']!;
+  String get deleteDevice => _localizedStrings['delete_device']!;
   String get qrNotRecognized => _localizedStrings['qr_not_recognized']!;
   String get checksumMismatch => _localizedStrings['checksum_mismatch']!;
   String get continueAdd => _localizedStrings['continue_add']!;
@@ -946,6 +973,7 @@ class AppLocalizations {
   String get alarmNotFound => _localizedStrings['alarm_not_found']!;
   String get userAgreementTitle => _localizedStrings['user_agreement_title']!;
   String get privacyPolicyTitle => _localizedStrings['privacy_policy_title']!;
+  String get nicknameNotSet => _localizedStrings['nickname_not_set']!;
   String get loggedIn => _localizedStrings['logged_in']!;
   String get myDevices => _localizedStrings['my_devices']!;
   String get myStations => _localizedStrings['my_stations']!;
@@ -1301,6 +1329,15 @@ class AppLocalizations {
       _localizedStrings['email_required'] ?? 'Email required';
   String get phoneRequired =>
       _localizedStrings['phone_required'] ?? 'Phone required';
+  // 编辑个人资料页面 - 空值提示
+  String get clickToSetNickname =>
+      _localizedStrings['click_to_set_nickname'] ?? 'Click to set nickname';
+  String get clickToSetEmail =>
+      _localizedStrings['click_to_set_email'] ?? 'Click to set email';
+  String get clickToSetPhone =>
+      _localizedStrings['click_to_set_phone'] ?? 'Click to set phone';
+  String get clickToSetRegion =>
+      _localizedStrings['click_to_set_region'] ?? 'Click to set region';
 }
 
 class _AppLocalizationsDelegate

@@ -211,7 +211,7 @@ void main() {
         final realtime = {'online': true};
         final responseData = {'online': false};
         
-        final online = realtime['online'] as bool? ?? responseData['online'] as bool? ?? false;
+        final online = realtime['online'] ?? responseData['online'] ?? false;
         expect(online, true);
       });
 
@@ -219,7 +219,7 @@ void main() {
         final realtime = <String, dynamic>{};
         final responseData = {'online': false};
         
-        final online = realtime['online'] as bool? ?? responseData['online'] as bool? ?? false;
+        final online = realtime['online'] ?? responseData['online'] ?? false;
         expect(online, false);
       });
 

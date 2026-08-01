@@ -24,7 +24,7 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "com.csinv.app"
+    namespace = "com.csergy.app1"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -39,17 +39,22 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.csinv.app"
-        minSdk = flutter.minSdkVersion
+        applicationId = "com.csergy.app1"
+        minSdk = 29  // jiguang_auth 要求 Android 10+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // JPush 推送配置
-        manifestPlaceholders["JPUSH_PKGNAME"] = "com.csinv.app"
+        // JPush / JVerify 配置
+        manifestPlaceholders["JPUSH_PKGNAME"] = "com.csergy.app1"
         manifestPlaceholders["JPUSH_APPKEY"] =
-            System.getenv("JPUSH_APP_KEY") ?: "e89e8b711cd18f666705fe7f"
+            System.getenv("JPUSH_APP_KEY") ?: "5a5df0da74b0ec20becb9bb1"
         manifestPlaceholders["JPUSH_CHANNEL"] = "inv_app"
+
+        // JVerify 原生 SDK 需要 NDK abiFilters
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
     }
 
     signingConfigs {

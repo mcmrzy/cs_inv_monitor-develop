@@ -4,6 +4,9 @@ services:
     container_name: inv-api-gateway
     ports:
       - "8080:8080"
+    # config.docker.yaml 使用 ${VAR} 占位符（os.ExpandEnv），需要注入完整环境变量
+    env_file:
+      - .env.prod
     volumes:
       - ../api-gateway/config.docker.yaml:/app/config.yaml:ro
     networks:

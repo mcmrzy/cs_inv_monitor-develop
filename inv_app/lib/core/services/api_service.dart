@@ -284,42 +284,47 @@ class ApiService {
 
   // ==================== Invitation APIs ====================
 
-  /// 发送邀请
-  Future<OrganizationInvitation> sendInvitation({
+  /// 发送邀请（批量接口的单邮箱形态：emails x assignments）
+  /// 返回创建结果 Map（含 created 数量与 results 明细，results[].invite_link
+  /// 为相对路径，仅在创建时返回一次）
+  Future<Map<String, dynamic>> sendInvitation({
     required int orgId,
     required String email,
-    required OrgMemberRole role,
-    int? days,
+    required String roleCode,
+    int? expiresHours,
   }) async {
-    final result = await post<OrganizationInvitation>(
+    final result = await post<Map<String, dynamic>>(
       '/api/v1/invitations/create',
       data: {
-        'organization_id': orgId,
-        'email': email,
-        'role': role.apiValue,
-        if (days != null) 'expires_in_days': days,
+        'emails': [email],
+        'assignments': [
+          {'organization_id': orgId, 'role_code': roleCode},
+        ],
+        if (expiresHours != null) 'expires_hours': expiresHours,
       },
-      fromJson: (json) =>
-          OrganizationInvitation.fromJson(json as Map<String, dynamic>),
+      fromJson: (json) => Map<String, dynamic>.from(json as Map),
     );
     return result.fold(
       (failure) => throw Exception(failure.message),
-      (invitation) => invitation,
+      (data) => data,
     );
   }
 
-  /// 获取邀请列表
+  /// 获取邀请列表（分页结构 {items: [], total, page, page_size}）
   Future<List<OrganizationInvitation>> listInvitations(int orgId) async {
     final result = await get<List<OrganizationInvitation>>(
       '/api/v1/invitations/list',
-      queryParameters: {'organization_id': orgId},
-      fromJson: (data) => (data as List)
-          .map(
-            (item) => OrganizationInvitation.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .toList(),
+      queryParameters: {'organization_id': orgId, 'page': 1, 'page_size': 100},
+      fromJson: (data) {
+        final list = data is Map ? (data['items'] as List) : (data as List);
+        return list
+            .map(
+              (item) => OrganizationInvitation.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
+            .toList();
+      },
     );
     return result.fold(
       (failure) => throw Exception(failure.message),
@@ -327,27 +332,15 @@ class ApiService {
     );
   }
 
-  /// 撤销邀请
+  /// 撤销邀请（路径与后端一致：/api/v1/invitations/:id/revoke）
   Future<void> revokeInvitation(int invitationId) async {
     final result = await delete<Map<String, dynamic>>(
-      '/api/v1/invitations/revoke/$invitationId',
+      '/api/v1/invitations/$invitationId/revoke',
       fromJson: (json) => json,
     );
     return result.fold(
       (failure) => throw Exception(failure.message),
       (_) => {},
-    );
-  }
-
-  /// 复制邀请链接
-  Future<String> copyInviteLink(int invitationId) async {
-    final result = await post<Map<String, dynamic>>(
-      '/api/v1/invitations/copy-link/$invitationId',
-      fromJson: (json) => json,
-    );
-    return result.fold(
-      (failure) => throw Exception(failure.message),
-      (data) => data['link'] as String,
     );
   }
 

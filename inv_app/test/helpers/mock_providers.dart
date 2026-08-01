@@ -24,6 +24,7 @@ import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
+import 'package:inv_app/core/services/jverify_service.dart';
 import 'package:inv_app/features/notification/data/datasources/notification_remote_data_source.dart';
 import 'package:inv_app/features/dashboard/data/datasources/dashboard_sse_data_source.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
@@ -96,6 +97,9 @@ class MockLocalCommunicationService extends Mock
 /// Mock implementation of [JPushService] for testing push notifications.
 class MockJPushService extends Mock implements JPushService {}
 
+/// Mock implementation of [JVerifyService] for testing one-click login.
+class MockJVerifyService extends Mock implements JVerifyService {}
+
 /// Mock implementation of [NotificationRemoteDataSource] for testing
 /// notification API calls.
 class MockNotificationRemoteDataSource extends Mock
@@ -151,6 +155,9 @@ class MockWechatLoginUseCase extends Mock implements WechatLoginUseCase {}
 
 /// Mock implementation of [GoogleLoginUseCase] for testing Google login.
 class MockGoogleLoginUseCase extends Mock implements GoogleLoginUseCase {}
+
+/// Mock implementation of [JVerifyLoginUseCase] for testing JVerify one-click login.
+class MockJVerifyLoginUseCase extends Mock implements JVerifyLoginUseCase {}
 
 // ---------------------------------------------------------------------------
 // Bloc mocks

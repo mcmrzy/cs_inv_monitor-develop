@@ -6,7 +6,7 @@ export interface Organization {
   id: number
   name: string
   parent_id: number | null
-  type: string // manufacturer/agent/distributor/installer/customer/service_partner
+  type: string // manufacturer/agent/distributor/installer/customer
   status: string // active/disabled
   member_count: number
   code?: string
@@ -30,14 +30,33 @@ export interface OrgMember {
 
 export interface Invitation {
   id: number
-  organization_id: number
+  organization_id?: number | null
+  organization?: string | null
   email: string
+  role_id?: number
   role_name: string
-  status: string // pending/used/expired/revoked
+  role_codes: string[]
+  status: string // pending/accepted/rejected/expired/revoked
   token_hint: string
   expires_at: string
   created_at: string
+  inviter_name: string
   created_by?: number
+}
+
+// Role assignment input for batch invitations (channel role model)
+export interface InvitationAssignment {
+  organization_id: number
+  role_code: string // org_admin/agent/distributor/installer/customer
+}
+
+// Result per recipient email returned by the batch create endpoint
+export interface InvitationCreateResult {
+  email: string
+  invitation_id?: number
+  status: 'created' | 'duplicate' | 'failed'
+  error?: string
+  invite_link?: string
 }
 
 export interface TransferRequest {
@@ -53,6 +72,27 @@ export interface TransferRequest {
   reason: string
   status: string // pending/approved/rejected
   created_at: string
+}
+
+export interface OrgHierarchyNode {
+  id: number
+  parent_id: number | null
+  name: string
+  type: string
+  code: string
+  status: string
+  member_count: number
+  device_count: number
+  children_count: number
+  children?: OrgHierarchyNode[]
+}
+
+export interface OrgQuotaItem {
+  resource_type: string // device/member/sub_org
+  quota_limit: number
+  used_count: number
+  reserved_count: number
+  inherited_from_organization_id?: number
 }
 
 // ────────────────────── API ──────────────────────
@@ -100,14 +140,23 @@ export const channelApi = {
   getInvitations: (params?: any) =>
     api.get('/invitations/list', { params, expectedDataShape: 'page' }),
 
-  sendInvitation: (data: { organization_id: number; email: string; role_name: string; expires_in_hours?: number }) =>
+  // Batch create: emails[] x assignments[] with per-email result details.
+  // Legacy single format {email, role_id, organization_id} is also accepted.
+  sendInvitation: (data: {
+    emails: string[]
+    assignments: InvitationAssignment[]
+    expires_hours: number
+  }) =>
     api.post('/invitations/create', data),
 
   revokeInvitation: (id: number) =>
     api.delete(`/invitations/${id}/revoke`),
 
-  resendInvitation: (id: number) =>
-    api.post(`/invitations/${id}/resend`),
+  // The DB stores only the token digest; the full link is returned once at
+  // creation time (see InvitationCreateResult.invite_link). This endpoint
+  // returns guidance instead of the unrecoverable raw token.
+  getInvitationLink: (id: number) =>
+    api.get(`/invitations/${id}/copy-link`),
 
   // ── Transfers ──
   getTransferRequests: (params?: any) =>
@@ -124,4 +173,23 @@ export const channelApi = {
 
   batchRejectTransfers: (ids: number[], reason?: string) =>
     api.post('/members/transfers/batch-reject', { transfer_ids: ids, reason }),
+
+  // ── Hierarchy / Quota / Join ──
+  getOrgHierarchy: () =>
+    api.get('/organizations/hierarchy', { expectedDataShape: 'array' }),
+
+  getOrgQuota: (id: number) =>
+    api.get(`/organizations/${id}/quota`, { expectedDataShape: 'array' }),
+
+  setOrgQuota: (id: number, data: { quotas: { resource_type: string; quota_limit: number }[] }) =>
+    api.put(`/organizations/${id}/quota`, data),
+
+  joinOrganization: (id: number) =>
+    api.post(`/organizations/${id}/join`),
+
+  approveJoin: (id: number, data: { user_id: number; action: 'approve' | 'reject' }) =>
+    api.post(`/organizations/${id}/approve-join`, data),
+
+  getMyOrganizations: () =>
+    api.get('/my/organizations', { expectedDataShape: 'array' }),
 }

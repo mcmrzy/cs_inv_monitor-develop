@@ -36,12 +36,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final ImagePicker _picker = ImagePicker();
 
   // 邮箱验证码相关状态
-  bool _isSendingEmailCode = false;
   int _emailCountdown = 0;
   Timer? _emailTimer;
 
   // 手机验证码相关状态
-  bool _isSendingPhoneCode = false;
   int _phoneCountdown = 0;
   Timer? _phoneTimer;
 
@@ -218,140 +216,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           _isLoading = false;
         });
       }
-    }
-  }
-
-  /// 发送邮箱验证码
-  Future<void> _sendEmailCode(String email) async {
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.emailRequired),
-          backgroundColor: AppColors.errorLight,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSendingEmailCode = true;
-    });
-
-    try {
-      final apiClient = getIt<ApiClient>();
-      final response = await apiClient.post(
-        '/auth/send-email-code',
-        data: {'email': email},
-      );
-
-      if (response.statusCode == 200 && response.data['code'] == 0) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.codeSent),
-              backgroundColor: AppColors.successLight,
-            ),
-          );
-        }
-
-        // 开始倒计时
-        setState(() {
-          _emailCountdown = 60;
-        });
-        _emailTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (_emailCountdown > 0) {
-            setState(() {
-              _emailCountdown--;
-            });
-          } else {
-            timer.cancel();
-            setState(() {
-              _isSendingEmailCode = false;
-            });
-          }
-        });
-      } else {
-        throw Exception(response.data['message'] ?? '发送失败');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: AppColors.errorLight,
-          ),
-        );
-      }
-      setState(() {
-        _isSendingEmailCode = false;
-      });
-    }
-  }
-
-  /// 发送手机验证码
-  Future<void> _sendPhoneCode(String phone) async {
-    if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.phoneRequired),
-          backgroundColor: AppColors.errorLight,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSendingPhoneCode = true;
-    });
-
-    try {
-      final apiClient = getIt<ApiClient>();
-      final response = await apiClient.post(
-        '/auth/send-sms-code',
-        data: {'phone': phone},
-      );
-
-      if (response.statusCode == 200 && response.data['code'] == 0) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context)!.codeSent),
-              backgroundColor: AppColors.successLight,
-            ),
-          );
-        }
-
-        // 开始倒计时
-        setState(() {
-          _phoneCountdown = 60;
-        });
-        _phoneTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (_phoneCountdown > 0) {
-            setState(() {
-              _phoneCountdown--;
-            });
-          } else {
-            timer.cancel();
-            setState(() {
-              _isSendingPhoneCode = false;
-            });
-          }
-        });
-      } else {
-        throw Exception(response.data['message'] ?? '发送失败');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: AppColors.errorLight,
-          ),
-        );
-      }
-      setState(() {
-        _isSendingPhoneCode = false;
-      });
     }
   }
 
@@ -658,9 +522,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
             });
           } else {
             timer.cancel();
-            setDialogState(() {
-              _isSendingPhoneCode = false;
-            });
           }
         });
       } else {
@@ -930,9 +791,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
             });
           } else {
             timer.cancel();
-            setDialogState(() {
-              _isSendingEmailCode = false;
-            });
           }
         });
       } else {
@@ -1102,6 +960,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     value: _nicknameController.text,
                     icon: Icons.person_outline,
                     onEdit: () => _showEditNicknameDialog(l10n),
+                    l10n: l10n,
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
                   _buildReadOnlyField(
@@ -1109,6 +968,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     value: _phoneController.text,
                     icon: Icons.phone_outlined,
                     onEdit: () => _showChangePhoneDialog(l10n),
+                    l10n: l10n,
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
                   _buildReadOnlyField(
@@ -1116,6 +976,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     value: _emailController.text,
                     icon: Icons.email_outlined,
                     onEdit: () => _showChangeEmailDialog(l10n),
+                    l10n: l10n,
                   ),
                   Divider(height: 1.h, indent: 16.w, endIndent: 16.w),
                   _buildRegionSelector(l10n),
@@ -1250,49 +1111,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
     );
   }
 
-
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType? keyboardType,
-    int maxLines = 1,
-  }) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.w),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, size: 20.sp),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.r),
-            borderSide: BorderSide(color: AppColors.border),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.r),
-            borderSide: BorderSide(color: AppColors.border),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.r),
-            borderSide: BorderSide(color: AppColors.primary, width: 2),
-          ),
-          contentPadding:
-              EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-        ),
-      ),
-    );
-  }
-
   Widget _buildReadOnlyField({
     required String label,
     required String value,
     required IconData icon,
     required VoidCallback onEdit,
+    required AppLocalizations l10n,
   }) {
+    // 如果值为空，显示"点击设置..."的提示
+    final displayValue = value.isNotEmpty 
+      ? value 
+      : _getPlaceholderText(label, l10n);
+
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.w),
       child: Container(
@@ -1318,10 +1148,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ),
                   SizedBox(height: 4.h),
                   Text(
-                    value.isNotEmpty ? value : '-',
+                    displayValue,
                     style: TextStyle(
                       fontSize: 14.sp,
-                      color: AppColors.textPrimary,
+                      color: value.isNotEmpty ? AppColors.textPrimary : AppColors.textHint,
                     ),
                   ),
                 ],
@@ -1340,7 +1170,23 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ),
     );
   }
-
+  
+  /// 根据字段标签获取占位符文本
+  String _getPlaceholderText(String label, AppLocalizations l10n) {
+    switch (label) {
+      case '昵称':
+        return l10n.clickToSetNickname;
+      case '邮箱':
+        return l10n.clickToSetEmail;
+      case '手机':
+        return l10n.clickToSetPhone;
+      case '地区':
+        return l10n.clickToSetRegion;
+      default:
+        return '-';
+    }
+  }
+  
   Widget _buildRegionSelector(AppLocalizations l10n) {
     final country = _countryController.text;
     final region = _regionController.text;

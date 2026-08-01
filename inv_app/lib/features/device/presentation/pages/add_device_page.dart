@@ -8,7 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
-import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
+import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart' hide DeviceBindRequested, DeviceBindSuccess;
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/utils/sn_utils.dart';

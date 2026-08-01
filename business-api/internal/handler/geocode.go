@@ -22,6 +22,22 @@ import (
 
 var geocodeHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
+// flexString 兼容高德 API 中 address 字段可能返回 [] (空数组) 而非字符串的情况
+type flexString string
+
+func (f *flexString) UnmarshalJSON(data []byte) error {
+	if len(data) > 0 && data[0] == '[' {
+		*f = ""
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*f = flexString(s)
+	return nil
+}
+
 // regionCache 缓存服务器出口 IP 所属区域，避免重复调用 ip-api.com
 var (
 	regionCache     string
@@ -249,8 +265,10 @@ func geocodeAddressAmap(province, city, district, amapKey string) (float64, floa
 	lng, _ := strconv.ParseFloat(parts[0], 64)
 	lat, _ := strconv.ParseFloat(parts[1], 64)
 
-	logger.Info("Amap geocode success", zap.String("address", address), zap.Float64("lat", lat), zap.Float64("lng", lng))
-	return lat, lng, nil
+	// 高德返回的是 GCJ-02 坐标，转为 WGS-84 存储
+	wgsLat, wgsLng := gcj02ToWgs84(lat, lng)
+	logger.Info("Amap geocode success", zap.String("address", address), zap.Float64("wgs84_lat", wgsLat), zap.Float64("wgs84_lng", wgsLng))
+	return wgsLat, wgsLng, nil
 }
 
 // ============================================================
@@ -414,10 +432,10 @@ func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult
 		Regeocode struct {
 			FormattedAddress string `json:"formatted_address"`
 			AddressComponent struct {
-				Province  string `json:"province"`
-				City      string `json:"city"`
-				District  string `json:"district"`
-				Township  string `json:"township"`
+				Province  flexString `json:"province"`
+				City      flexString `json:"city"`
+				District  flexString `json:"district"`
+				Township  flexString `json:"township"`
 				Country   string `json:"country"`
 				StreetNumber struct {
 					Street string `json:"street"`
@@ -425,10 +443,10 @@ func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult
 				} `json:"streetNumber"`
 			} `json:"addressComponent"`
 			Pois []struct {
-				Name     string `json:"name"`
-				Address  string `json:"address"`
-				Location string `json:"location"` // "lng,lat"
-				Distance string `json:"distance"`
+				Name     string     `json:"name"`
+				Address  flexString `json:"address"`
+				Location string     `json:"location"` // "lng,lat"
+				Distance string     `json:"distance"`
 			} `json:"pois"`
 		} `json:"regeocode"`
 	}
@@ -450,7 +468,7 @@ func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult
 		// fallback: 从 formatted_address 提取（去掉省市区前缀）
 		shortAddr = result.Regeocode.FormattedAddress
 		// 尝试去掉省市区前缀，只保留街道以下
-		for _, prefix := range []string{comp.Province, comp.City, comp.District, comp.Township} {
+		for _, prefix := range []string{string(comp.Province), string(comp.City), string(comp.District), string(comp.Township)} {
 			if prefix != "" && strings.HasPrefix(shortAddr, prefix) {
 				shortAddr = strings.TrimPrefix(shortAddr, prefix)
 			}
@@ -471,10 +489,12 @@ func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult
 		if parts := strings.Split(poi.Location, ","); len(parts) == 2 {
 			pLng, _ = strconv.ParseFloat(parts[0], 64)
 			pLat, _ = strconv.ParseFloat(parts[1], 64)
+			// 高德 POI 坐标为 GCJ-02，转为 WGS-84 统一存储
+			pLat, pLng = gcj02ToWgs84(pLat, pLng)
 		}
-		detail := poi.Address
-		if detail == "" || detail == "[]" {
-			detail = comp.Township
+		detail := string(poi.Address)
+		if detail == "" {
+			detail = string(comp.Township)
 		}
 		nearby = append(nearby, NearbyAddress{
 			Name:   poi.Name,
@@ -484,19 +504,19 @@ func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult
 		})
 	}
 
-	city := comp.City
-	if city == "" || city == "[]" {
-		city = comp.Province // 直辖市时 city 为空
+	city := string(comp.City)
+	if city == "" {
+		city = string(comp.Province) // 直辖市时 city 为空
 	}
 
 	return &ReverseGeocodeResult{
-		Province: comp.Province,
+		Province: string(comp.Province),
 		City:     city,
-		District: comp.District,
+		District: string(comp.District),
 		Address:  shortAddr,
 		Country:  "中国",
 		Road:     comp.StreetNumber.Street,
-		Hamlet:   comp.Township,
+		Hamlet:   string(comp.Township),
 		Nearby:   nearby,
 	}, nil
 }
@@ -528,6 +548,25 @@ func wgs84ToGcj02(lat, lng float64) (float64, float64) {
 	dLat = (dLat * 180.0) / ((gcjA * (1 - gcjEE)) / (magic * sqrtMagic) * math.Pi)
 	dLng = (dLng * 180.0) / (gcjA / sqrtMagic * math.Cos(radLat) * math.Pi)
 	return lat + dLat, lng + dLng
+}
+
+// gcj02ToWgs84 将高德 API 返回的 GCJ-02 坐标转换为 WGS-84（迭代逼近法，精度 < 0.5mm）
+func gcj02ToWgs84(lat, lng float64) (float64, float64) {
+	if !coordInChina(lat, lng) {
+		return lat, lng
+	}
+	wgsLat, wgsLng := lat, lng
+	for i := 0; i < 5; i++ {
+		gcjLat, gcjLng := wgs84ToGcj02(wgsLat, wgsLng)
+		dLat := gcjLat - lat
+		dLng := gcjLng - lng
+		wgsLat -= dLat
+		wgsLng -= dLng
+		if math.Abs(dLat) < 1e-9 && math.Abs(dLng) < 1e-9 {
+			break
+		}
+	}
+	return wgsLat, wgsLng
 }
 
 func transformLat(x, y float64) float64 {

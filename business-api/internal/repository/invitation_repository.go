@@ -26,19 +26,20 @@ func (r *InvitationRepository) GetById(ctx context.Context, db *pgxpool.Pool, id
 	query := `
 		SELECT id, root_tenant_id, organization_id, invited_by, recipient,
 		       token_key_id, token_digest, role_assignments,
-		       expires_at, accepted_at, status, version, created_at, updated_at
+		       expires_at, accepted_at, accepted_by_user_id, status, version, created_at, updated_at
 		FROM invitations WHERE id = $1
 	`
 
 	var invitation model.Invitation
 	var acceptedAt sql.NullTime
+	var acceptedBy sql.NullInt64
 	var orgID int64
 
 	err := db.QueryRow(ctx, query, id).Scan(
 		&invitation.ID, &invitation.RootTenantID, &orgID,
 		&invitation.InvitedBy, &invitation.Recipient,
 		&invitation.TokenKeyID, &invitation.TokenDigest, &invitation.RoleAssignments,
-		&invitation.ExpiresAt, &acceptedAt,
+		&invitation.ExpiresAt, &acceptedAt, &acceptedBy,
 		&invitation.Status, &invitation.Version, &invitation.CreatedAt, &invitation.UpdatedAt,
 	)
 
@@ -52,6 +53,9 @@ func (r *InvitationRepository) GetById(ctx context.Context, db *pgxpool.Pool, id
 	invitation.OrganizationID = &orgID
 	if acceptedAt.Valid {
 		invitation.AcceptedAt = &acceptedAt.Time
+	}
+	if acceptedBy.Valid {
+		invitation.AcceptedByUserID = &acceptedBy.Int64
 	}
 
 	return &invitation, nil
@@ -62,19 +66,20 @@ func (r *InvitationRepository) FindByTokenDigest(ctx context.Context, db *pgxpoo
 	query := `
 		SELECT id, root_tenant_id, organization_id, invited_by, recipient,
 		       token_key_id, token_digest, role_assignments,
-		       expires_at, accepted_at, status, version, created_at, updated_at
+		       expires_at, accepted_at, accepted_by_user_id, status, version, created_at, updated_at
 		FROM invitations WHERE token_digest = $1 AND status = 'pending'
 	`
 
 	var invitation model.Invitation
 	var acceptedAt sql.NullTime
+	var acceptedBy sql.NullInt64
 	var orgID int64
 
 	err := db.QueryRow(ctx, query, digest).Scan(
 		&invitation.ID, &invitation.RootTenantID, &orgID,
 		&invitation.InvitedBy, &invitation.Recipient,
 		&invitation.TokenKeyID, &invitation.TokenDigest, &invitation.RoleAssignments,
-		&invitation.ExpiresAt, &acceptedAt,
+		&invitation.ExpiresAt, &acceptedAt, &acceptedBy,
 		&invitation.Status, &invitation.Version, &invitation.CreatedAt, &invitation.UpdatedAt,
 	)
 
@@ -88,6 +93,9 @@ func (r *InvitationRepository) FindByTokenDigest(ctx context.Context, db *pgxpoo
 	invitation.OrganizationID = &orgID
 	if acceptedAt.Valid {
 		invitation.AcceptedAt = &acceptedAt.Time
+	}
+	if acceptedBy.Valid {
+		invitation.AcceptedByUserID = &acceptedBy.Int64
 	}
 
 	return &invitation, nil
@@ -128,10 +136,10 @@ func (r *InvitationRepository) MarkUsed(ctx context.Context, tx any, id int64, u
 func (r *InvitationRepository) markUsedWithPool(ctx context.Context, pool *pgxpool.Pool, id int64, userID int64) error {
 	query := `
 		UPDATE invitations 
-		SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()
+		SET status = 'accepted', accepted_at = NOW(), accepted_by_user_id = $2, updated_at = NOW()
 		WHERE id = $1 AND status = 'pending'
 	`
-	result, err := pool.Exec(ctx, query, id)
+	result, err := pool.Exec(ctx, query, id, userID)
 	if err != nil {
 		return err
 	}
@@ -144,10 +152,10 @@ func (r *InvitationRepository) markUsedWithPool(ctx context.Context, pool *pgxpo
 func (r *InvitationRepository) markUsedWithTx(ctx context.Context, tx pgx.Tx, id int64, userID int64) error {
 	query := `
 		UPDATE invitations 
-		SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()
+		SET status = 'accepted', accepted_at = NOW(), accepted_by_user_id = $2, updated_at = NOW()
 		WHERE id = $1 AND status = 'pending'
 	`
-	result, err := tx.Exec(ctx, query, id)
+	result, err := tx.Exec(ctx, query, id, userID)
 	if err != nil {
 		return err
 	}
@@ -161,6 +169,7 @@ func (r *InvitationRepository) markUsedWithTx(ctx context.Context, tx pgx.Tx, id
 type ListInvitationsFilter struct {
 	RootTenantID     int64
 	OrganizationID   int64
+	OrganizationIDs  []int64 // scoped org set (non-system-admin subtree); AND-ed with OrganizationID if both set
 	Email            string
 	Status           string
 }
@@ -181,13 +190,26 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 		pageSize = 20
 	}
 
+	// Auto-expire stale pending invitations before listing
+	if _, err := db.Exec(ctx, `
+		UPDATE invitations SET status = 'expired', updated_at = NOW()
+		WHERE root_tenant_id = $1 AND status = 'pending' AND expires_at < NOW()
+	`, filter.RootTenantID); err != nil {
+		// Non-fatal: listing should still work if expiry update fails
+		_ = err
+	}
+
 	// Count total
 	countQuery := `SELECT COUNT(*) FROM invitations WHERE root_tenant_id = $1`
 	args := []interface{}{filter.RootTenantID}
 
 	if filter.OrganizationID > 0 {
-		countQuery += " AND organization_id = $2"
+		countQuery += " AND organization_id = $" + strconv.Itoa(len(args)+1)
 		args = append(args, filter.OrganizationID)
+	}
+	if len(filter.OrganizationIDs) > 0 {
+		countQuery += " AND organization_id = ANY($" + strconv.Itoa(len(args)+1) + ")"
+		args = append(args, filter.OrganizationIDs)
 	}
 	if filter.Email != "" {
 		countQuery += " AND LOWER(recipient) = LOWER($" + strconv.Itoa(len(args)+1) + ")"
@@ -219,8 +241,12 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 	listArgs := []interface{}{filter.RootTenantID}
 
 	if filter.OrganizationID > 0 {
-		listQuery += " AND i.organization_id = $2"
+		listQuery += " AND i.organization_id = $" + strconv.Itoa(len(listArgs)+1)
 		listArgs = append(listArgs, filter.OrganizationID)
+	}
+	if len(filter.OrganizationIDs) > 0 {
+		listQuery += " AND i.organization_id = ANY($" + strconv.Itoa(len(listArgs)+1) + ")"
+		listArgs = append(listArgs, filter.OrganizationIDs)
 	}
 	if filter.Email != "" {
 		listQuery += " AND LOWER(i.recipient) = LOWER($" + strconv.Itoa(len(listArgs)+1) + ")"
@@ -275,6 +301,15 @@ func (r *InvitationRepository) ListWithDetails(ctx context.Context, db *pgxpool.
 	return total, items, nil
 }
 
+// MarkExpired marks all expired pending invitations of a tenant as expired.
+func (r *InvitationRepository) MarkExpired(ctx context.Context, db *pgxpool.Pool, rootTenantID int64) error {
+	_, err := db.Exec(ctx, `
+		UPDATE invitations SET status = 'expired', updated_at = NOW()
+		WHERE root_tenant_id = $1 AND status = 'pending' AND expires_at < NOW()
+	`, rootTenantID)
+	return err
+}
+
 // CountByStatus counts invitations by status
 func (r *InvitationRepository) CountByStatus(ctx context.Context, db *pgxpool.Pool, rootTenantID, organizationID int64, status string) (int64, error) {
 	query := `
@@ -306,19 +341,19 @@ func (r *InvitationRepository) Insert(ctx context.Context, tx pgx.Tx, invitation
 // roleNames maps legacy role IDs to human-readable names
 var roleNames = map[int]string{
 	1: "org_admin",
-	2: "channel_manager",
-	3: "channel_manager",
-	4: "operator",
-	5: "viewer",
+	2: "agent",
+	3: "distributor",
+	4: "installer",
+	5: "customer",
 }
 
 // roleCodes maps legacy role IDs to role code strings
 var roleCodes = map[int]string{
 	1: "org_admin",
-	2: "channel_manager",
-	3: "channel_manager",
-	4: "operator",
-	5: "viewer",
+	2: "agent",
+	3: "distributor",
+	4: "installer",
+	5: "customer",
 }
 
 // GetRoleName returns the human-readable name for a legacy role ID

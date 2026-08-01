@@ -26,8 +26,16 @@ type mockMemberLifecycleService struct {
 	transferAcceptFn   func(ctx context.Context, actorUserID int64, transferID int64) error
 	transferRejectFn   func(ctx context.Context, actorUserID int64, transferID int64, reason string) error
 	listTransfersFn    func(ctx context.Context, userID int64) ([]service.PendingTransferInfo, error)
+	listMembersFn     func(ctx context.Context, orgID int64, page, pageSize int, roleFilter string) (*service.ListMembersResult, error)
 	bulkAddFn          func(ctx context.Context, actorUserID int64, tenantID int64, req service.BulkAddParams) (*service.BulkAddResult, error)
 	bulkTransferFn     func(ctx context.Context, actorUserID int64, req service.BulkTransferParams) (*service.BulkTransferResult, error)
+}
+
+func (m *mockMemberLifecycleService) ListMembers(ctx context.Context, orgID int64, page, pageSize int, roleFilter string) (*service.ListMembersResult, error) {
+	if m.listMembersFn != nil {
+		return m.listMembersFn(ctx, orgID, page, pageSize, roleFilter)
+	}
+	return &service.ListMembersResult{Page: page, Size: pageSize}, nil
 }
 
 func (m *mockMemberLifecycleService) AddMember(ctx context.Context, a int64, t int64, r service.AddMemberParams) (*service.AddMemberResult, error) {
