@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"testing"
@@ -38,9 +37,12 @@ func TestInvitationHandlerSuite(t *testing.T) {
 // ============================================================================
 
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InvalidEmail() {
+	// Invalid email is dropped by normalizeEmails → empty recipients → 400.
 	req := CreateInvitationRequest{
-		Email:        "invalid-email",
-		RoleID:       2,
+		Emails: []string{"invalid-email"},
+		Assignments: []RoleAssignmentInput{
+			{OrganizationID: 1, RoleCode: "agent"},
+		},
 		ExpiresHours: 24,
 	}
 	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
@@ -48,12 +50,14 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InvalidEmail() {
 
 	suite.handler.Create(c)
 
-	assertBizResponse(suite.T(), w, 400, "invalid request")
+	assertBizResponse(suite.T(), w, 400, "至少需要一个有效的邮箱地址")
 }
 
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_MissingEmail() {
 	req := map[string]interface{}{
-		"role_id":       2,
+		"assignments": []map[string]interface{}{
+			{"organization_id": 1, "role_code": "agent"},
+		},
 		"expires_hours": 24,
 	}
 	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
@@ -61,13 +65,16 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_MissingEmail() {
 
 	suite.handler.Create(c)
 
-	assertBizResponse(suite.T(), w, 400, "invalid request")
+	assertBizResponse(suite.T(), w, 400, "至少需要一个有效的邮箱地址")
 }
 
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InvalidRole() {
+	// role_code not in the channel role model → 400 before any DB access.
 	req := CreateInvitationRequest{
-		Email:        "test@example.com",
-		RoleID:       10, // exceeds max=5
+		Emails: []string{"test@example.com"},
+		Assignments: []RoleAssignmentInput{
+			{OrganizationID: 1, RoleCode: "superuser"},
+		},
 		ExpiresHours: 24,
 	}
 	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
@@ -75,13 +82,15 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InvalidRole() {
 
 	suite.handler.Create(c)
 
-	assertBizResponse(suite.T(), w, 400, "invalid request")
+	assertBizResponse(suite.T(), w, 400, "无效的角色代码")
 }
 
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_ExceedsMaxExpiration() {
 	req := CreateInvitationRequest{
-		Email:        "test@example.com",
-		RoleID:       2,
+		Emails: []string{"test@example.com"},
+		Assignments: []RoleAssignmentInput{
+			{OrganizationID: 1, RoleCode: "agent"},
+		},
 		ExpiresHours: 800, // exceeds max=720
 	}
 	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
@@ -89,42 +98,50 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_ExceedsMaxExpirati
 
 	suite.handler.Create(c)
 
-	assertBizResponse(suite.T(), w, 400, "invalid request")
+	assertBizResponse(suite.T(), w, 400, "请求参数无效")
 }
 
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_MissingExpiresHours() {
 	req := map[string]interface{}{
-		"email":   "test@example.com",
-		"role_id": 2,
+		"emails": []string{"test@example.com"},
+		"assignments": []map[string]interface{}{
+			{"organization_id": 1, "role_code": "agent"},
+		},
 	}
 	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
 	setAuthClaimsInContext(c, 1, true, 100)
 
 	suite.handler.Create(c)
 
-	assertBizResponse(suite.T(), w, 400, "invalid request")
+	assertBizResponse(suite.T(), w, 400, "请求参数无效")
 }
 
-func (suite *InvitationHandlerTestSuite) TestCreateInvitation_EnduserForbidden() {
-	// Valid request body but caller is not a system admin → 403 before DB access.
-	req := CreateInvitationRequest{
-		Email:        "test@example.com",
-		RoleID:       2,
-		ExpiresHours: 24,
-	}
-	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
-	setAuthClaimsInContext(c, 1, false, 100) // non-admin user
+func (suite *InvitationHandlerTestSuite) TestNormalizeAssignments_LegacyConversion() {
+	// Legacy single-invitation payload converts to the canonical assignments format.
+	orgID := int64(2)
+	assignments, err := normalizeAssignments(nil, &orgID, 3)
+	assert.NoError(suite.T(), err)
+	assert.Len(suite.T(), assignments, 1)
+	assert.Equal(suite.T(), int64(2), assignments[0].OrganizationID)
+	assert.Equal(suite.T(), "distributor", assignments[0].RoleCode)
 
-	suite.handler.Create(c)
+	// Invalid legacy role ID is rejected.
+	_, err = normalizeAssignments(nil, &orgID, 99)
+	assert.Error(suite.T(), err)
 
-	assertBizResponse(suite.T(), w, 403, "end users cannot create invitations")
+	// No assignments and no legacy fields → nil.
+	out, err := normalizeAssignments(nil, nil, 0)
+	assert.NoError(suite.T(), err)
+	assert.Nil(suite.T(), out)
 }
 
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_SQLInjectionAttempt() {
-	// Malicious email fails the "email" validator → binding error → 400.
+	// Malicious email fails validation in normalizeEmails → empty recipients → 400.
 	req := CreateInvitationRequest{
-		Email:        "test'; DROP TABLE invitations; --",
-		RoleID:       2,
+		Emails: []string{"test'; DROP TABLE invitations; --"},
+		Assignments: []RoleAssignmentInput{
+			{OrganizationID: 1, RoleCode: "agent"},
+		},
 		ExpiresHours: 24,
 	}
 	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
@@ -132,14 +149,16 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_SQLInjectionAttemp
 
 	suite.handler.Create(c)
 
-	assertBizResponse(suite.T(), w, 400, "invalid request")
+	assertBizResponse(suite.T(), w, 400, "至少需要一个有效的邮箱地址")
 }
 
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_XSSAttempt() {
-	// XSS payload in email fails the "email" validator → binding error → 400.
+	// XSS payload in email fails validation in normalizeEmails → empty recipients → 400.
 	req := CreateInvitationRequest{
-		Email:        "<script>alert('xss')</script>@example.com",
-		RoleID:       2,
+		Emails: []string{"<script>alert('xss')</script>@example.com"},
+		Assignments: []RoleAssignmentInput{
+			{OrganizationID: 1, RoleCode: "agent"},
+		},
 		ExpiresHours: 24,
 	}
 	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
@@ -147,7 +166,7 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_XSSAttempt() {
 
 	suite.handler.Create(c)
 
-	assertBizResponse(suite.T(), w, 400, "invalid request")
+	assertBizResponse(suite.T(), w, 400, "至少需要一个有效的邮箱地址")
 }
 
 // ============================================================================
@@ -260,17 +279,56 @@ func (suite *InvitationHandlerTestSuite) TestGetInvitationDetails_InvalidID() {
 }
 
 // ============================================================================
-// Helper Method Tests
+// Role Hierarchy Resolution (pure functions)
 // ============================================================================
 
-func (suite *InvitationHandlerTestSuite) TestCheckInvitationQuota_Default() {
-	// checkInvitationQuota does not access any handler fields; it returns a
-	// fixed default of 100.
-	ctx := context.Background()
-	maxPending, err := suite.handler.checkInvitationQuota(ctx, 1, 1)
+func (suite *InvitationHandlerTestSuite) TestResolveAllowedRoles_SystemAdminFullSet() {
+	roles := resolveAllowedRoles(nil, true)
+	assert.ElementsMatch(suite.T(), []string{"agent", "distributor", "installer", "customer", "org_admin"}, roles)
+}
 
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), int64(100), maxPending)
+func (suite *InvitationHandlerTestSuite) TestResolveAllowedRoles_ByInviterOrgType() {
+	// manufacturer org admin: every channel role + org_admin
+	assert.ElementsMatch(suite.T(),
+		[]string{"agent", "distributor", "installer", "customer", "org_admin"},
+		resolveAllowedRoles([]string{"manufacturer"}, false))
+
+	// agent org admin: installer + customer + org_admin
+	assert.ElementsMatch(suite.T(),
+		[]string{"installer", "customer", "org_admin"},
+		resolveAllowedRoles([]string{"agent"}, false))
+
+	// distributor org admin: installer + customer + org_admin
+	assert.ElementsMatch(suite.T(),
+		[]string{"installer", "customer", "org_admin"},
+		resolveAllowedRoles([]string{"distributor"}, false))
+
+	// installer org admin: customer + org_admin
+	assert.ElementsMatch(suite.T(),
+		[]string{"customer", "org_admin"},
+		resolveAllowedRoles([]string{"installer"}, false))
+
+	// customer org admin: org_admin only (no channel roles invitable)
+	assert.ElementsMatch(suite.T(),
+		[]string{"org_admin"},
+		resolveAllowedRoles([]string{"customer"}, false))
+}
+
+func (suite *InvitationHandlerTestSuite) TestResolveAllowedRoles_MultiOrgUnion() {
+	// agent + installer memberships -> union {installer, customer} + org_admin
+	assert.ElementsMatch(suite.T(),
+		[]string{"installer", "customer", "org_admin"},
+		resolveAllowedRoles([]string{"agent", "installer"}, false))
+
+	// manufacturer + agent -> full channel set
+	assert.ElementsMatch(suite.T(),
+		[]string{"agent", "distributor", "installer", "customer", "org_admin"},
+		resolveAllowedRoles([]string{"manufacturer", "agent"}, false))
+}
+
+func (suite *InvitationHandlerTestSuite) TestResolveAllowedRoles_NoMembership() {
+	// No memberships -> only the management role remains assignable.
+	assert.ElementsMatch(suite.T(), []string{"org_admin"}, resolveAllowedRoles(nil, false))
 }
 
 // ============================================================================

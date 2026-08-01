@@ -78,6 +78,15 @@ type AuthHandler struct {
 	contextResolver authorizationContextResolver
 }
 
+// cacheUserPermissions safely caches user permissions when RBAC cache is enabled.
+// cfg.RBAC.Enabled=false 时 rbacCache 为 nil，直接调用会触发空指针崩溃。
+func (h *AuthHandler) cacheUserPermissions(ctx context.Context, userID int64) {
+	if h.rbacCache == nil {
+		return
+	}
+	_ = h.rbacCache.CacheUserPermissions(ctx, userID)
+}
+
 type authorizationContextResolver interface {
 	ResolveAuthorizationSessionContext(ctx context.Context, userID, organizationID int64) (model.AuthorizationSessionContext, error)
 	ResolveUserSessionVersion(ctx context.Context, userID int64) (int64, error)
@@ -317,7 +326,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
 	// 获取用户权限列表
@@ -410,7 +419,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
 	user.PasswordHash = ""
@@ -1058,7 +1067,7 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
 	user.PasswordHash = ""
@@ -1147,7 +1156,7 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
 	user.PasswordHash = ""
@@ -1223,7 +1232,7 @@ func (h *AuthHandler) PhoneCodeLogin(c *gin.Context) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
@@ -1319,7 +1328,7 @@ func (h *AuthHandler) JVerifyLogin(c *gin.Context) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)
@@ -1402,7 +1411,7 @@ func (h *AuthHandler) EmailCodeLogin(c *gin.Context) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		h.rbacCache.CacheUserPermissions(ctx, user.ID)
+		h.cacheUserPermissions(ctx, user.ID)
 	}()
 
 	permissions := h.loadUserPermissions(c.Request.Context(), user.ID, tokenResult)

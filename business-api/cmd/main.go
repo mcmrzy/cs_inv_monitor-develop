@@ -136,8 +136,13 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	}
 	smsService := service.NewSMSService(rdb, smsProvider)
 	configService := service.NewConfigService(db, rdb, *cfg)
-	emailService := service.NewEmailService(rdb, cfg.Email, configService)
+	emailService := service.NewEmailService(rdb, cfg.Email, configService, cfg.Backends.FrontendURL)
 	jpushService := service.NewJPushService(&cfg.JPush, rdb)
+	jverifyService, err := service.NewJVerifyService(&cfg.JVerify)
+	if err != nil {
+		logger.Warn("Failed to create JVerify service", zap.Error(err))
+		jverifyService = service.NewDisabledJVerifyService()
+	}
 	stationService := service.NewStationService(stationRepo)
 	permChecker := service.NewPermChecker(rdb, userRepo)
 	deviceService := service.NewDeviceService(deviceRepo, rdb, modelRepo, permChecker, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, db)
@@ -163,7 +168,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	otaService := service.NewOTAService(otaRepo, rdb, cfg.Backends.DeviceServer, cfg.Backends.InternalKey, cfg.Backends.UploadDir, cfg.Backends.ServerURL, db, jpushService)
 
 	captchaHandler := handler.NewCaptchaHandler(rdb)
-	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache, captchaHandler)
+	authHandler := handler.NewAuthHandler(userService, jwtService, smsService, emailService, rbacCache, captchaHandler, jverifyService)
 	authHandler.SetAuthorizationContextResolver(authorizationRepo)
 	stationHandler := handler.NewStationHandler(stationService, deviceService, userService, db, cfg.Backends.AmapAPIKey)
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
@@ -796,6 +801,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		api.POST("/auth/refresh", deps.AuthHandler.RefreshToken)
 		api.POST("/auth/context", deps.AuthHandler.AuthorizationContext)
 		api.POST("/auth/phone-code-login", deps.AuthHandler.PhoneCodeLogin)
+		api.POST("/auth/jverify-login", deps.AuthHandler.JVerifyLogin)
 		api.POST("/auth/email-code-login", deps.AuthHandler.EmailCodeLogin)
 
 		// 鍏叡鍙傝€冩暟鎹?(鏃犻渶璁よ瘉)
@@ -822,6 +828,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 				authInv.GET("/list", deps.InvitationHandler.List)
 				authInv.DELETE("/:id/revoke", deps.InvitationHandler.Revoke)
 				authInv.GET("/:id/details", deps.InvitationHandler.Details)
+				authInv.GET("/:id/copy-link", deps.InvitationHandler.CopyLink)
 			}
 
 			auth.POST("/auth/logout", deps.AuthHandler.Logout)

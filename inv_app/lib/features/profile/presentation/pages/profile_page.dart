@@ -16,8 +16,8 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   /// 将相对路径的头像URL转换为完整URL
-  String _getFullAvatarUrl(String? avatar) {
-    if (avatar == null || avatar.isEmpty) return '';
+  String? _getFullAvatarUrl(String? avatar) {
+    if (avatar == null || avatar.isEmpty) return null;
     
     // 如果已经是完整URL，直接返回
     if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
@@ -97,7 +97,11 @@ class _ProfilePageState extends State<ProfilePage> {
   ) {
     final roleText = isSystemAdmin ? l10n.roleAdmin : l10n.roleUser;
 
-    final displayNameToShow = displayName.isNotEmpty ? displayName : l10n.loggedIn;
+    // 如果 displayName 为空或仅包含手机号（说明没有昵称），则显示"未设置昵称"
+    final hasNickname = authState != null && authState.nickname != null && authState.nickname!.isNotEmpty;
+    final displayNameToShow = hasNickname && displayName.isNotEmpty 
+      ? displayName 
+      : (authState != null ? l10n.nicknameNotSet : l10n.loggedIn);
     final avatarUrl = _getFullAvatarUrl(authState?.avatar);
 
     return GestureDetector(

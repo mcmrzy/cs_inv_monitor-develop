@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS-INV 光伏逆变器物联网监控系统 - 架构文档</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --light: #f8fafc;
+            --dark: #1e293b;
+            --gray: #94a3b8;
+            --border: #e2e8f0;
+            --code-bg: #1e1e1e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 1rem;
+        }
+
+        .header .version {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            display: inline-block;
+            font-size: 0.9rem;
+        }
+
+        .nav {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 1rem;
+            z-index: 100;
+        }
+
+        .nav ul {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            justify-content: center;
+        }
+
+        .nav a {
+            text-decoration: none;
+            color: var(--primary);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav a:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .section {
+            background: white;
+            border-radius: 20px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .section h2 {
+            color: var(--primary);
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 3px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .section h2::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+        }
+
+        .section h3 {
+            color: var(--dark);
+            font-size: 1.5rem;
+            margin: 2rem 0 1rem;
+            padding-left: 1rem;
+            border-left: 4px solid var(--primary);
+        }
+
+        .section h4 {
+            color: var(--secondary);
+            font-size: 1.2rem;
+            margin: 1.5rem 0 0.5rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            color: #475569;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 15px;
+            padding: 1.5rem;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h4 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .card li {
+            padding: 0.5rem 0;
+            border-bottom: 1px dashed var(--border);
+            color: #64748b;
+        }
+
+        .card li:last-child {
+            border-bottom: none;
+        }
+
+        .card li::before {
+            content: '•';
+            color: var(--primary);
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+        }
+
+        tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        tr:hover {
+            background: #e2e8f0;
+        }
+
+        .tech-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin: 0.25rem;
+        }
+
+        .tech-go {
+            background: #00ADD8;
+            color: white;
+        }
+
+        .tech-flutter {
+            background: #02569B;
+            color: white;
+        }
+
+        .tech-react {
+            background: #61DAFB;
+            color: #1e293b;
+        }
+
+        .tech-postgres {
+            background: #336791;
+            color: white;
+        }
+
+        .tech-redis {
+            background: #DC382D;
+            color: white;
+        }
+
+        .tech-mqtt {
+            background: #660066;
+            color: white;
+        }
+
+        .tech-kafka {
+            background: #231F20;
+            color: white;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            color: #d4d4d4;
+            padding: 1.5rem;
+            border-radius: 12px;
+            overflow-x: auto;
+            font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.9rem;
+            line-height: 1.8;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+
+        .code-block::before {
+            content: attr(data-lang);
+            position: absolute;
+            top: 0.5rem;
+            right: 1rem;
+            color: #858585;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .keyword {
+            color: #569cd6;
+        }
+
+        .string {
+            color: #ce9178;
+        }
+
+        .comment {
+            color: #6a9955;
+        }
+
+        .function {
+            color: #dcdcaa;
+        }
+
+        .number {
+            color: #b5cea8;
+        }
+
+        .architecture-diagram {
+            background: #f8fafc;
+            border: 2px solid var(--border);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .architecture-diagram pre {
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-left: 5px solid var(--primary);
+            padding: 1.5rem;
+            border-radius: 0 12px 12px 0;
+            margin: 1.5rem 0;
+        }
+
+        .warning-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 5px solid var(--warning);
+            padding: 1.5rem;
+            border-radius: 0 12px 12px 0;
+            margin: 1.5rem 0;
+        }
+
+        .success-box {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border-left: 5px solid var(--success);
+            padding: 1.5rem;
+            border-radius: 0 12px 12px 0;
+            margin: 1.5rem 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card .number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: block;
+        }
+
+        .stat-card .label {
+            color: var(--secondary);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin: 2rem 0;
+            padding: 2rem;
+            background: #f8fafc;
+            border-radius: 15px;
+        }
+
+        .flow-step {
+            background: white;
+            border: 2px solid var(--primary);
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            min-width: 120px;
+            text-align: center;
+            position: relative;
+        }
+
+        .flow-step::after {
+            content: '→';
+            position: absolute;
+            right: -1.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--primary);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .flow-step:last-child::after {
+            content: '';
+        }
+
+        .flow-step.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary-dark);
+        }
+
+        .flow-step.active::after {
+            color: white;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            padding: 2rem;
+            margin-top: 3rem;
+            opacity: 0.9;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: none;
+            border-bottom: 1px dashed white;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .nav ul {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .section {
+                padding: 1.5rem;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            table {
+                font-size: 0.9rem;
+            }
+
+            th, td {
+                padding: 0.75rem;
+            }
+        }
+
+        .toc {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .toc h4 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 1rem;
+        }
+
+        .toc li {
+            margin: 0.5rem 0;
+        }
+
+        .toc a {
+            color: #475569;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .toc a:hover {
+            color: var(--primary);
+        }
+
+        .icon {
+            font-size: 1.2rem;
+            margin-right: 0.5rem;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin: 0.25rem;
+        }
+
+        .tag-api {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .tag-service {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .tag-db {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .tag-infra {
+            background: #e2e8f0;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>CS-INV 光伏逆变器物联网监控系统</h1>
+            <p class="subtitle">基于 MQTT 协议的光伏逆变器远程监控平台</p>
+            <span class="version">版本 1.0.0 | 最后更新: 2026年7月30日</span>
+        </header>
+
+        <nav class="nav">
+            <ul>
+                <li><a href="#overview"><span class="icon">📋</span> 项目概述</a></li>
+                <li><a href="#architecture"><span class="icon">🏗️</span> 系统架构</a></li>
+                <li><a href="#tech-stack"><span class="icon">⚙️</span> 技术栈</a></li>
+                <li><a href="#subsystems"><span class="icon">🔧</span> 子系统详解</a></li>
+                <li><a href="#database"><span class="icon">🗄️</span> 数据库设计</a></li>
+                <li><a href="#api"><span class="icon">🔌</span> API 设计</a></li>
+                <li><a href="#deployment"><span class="icon">🚀</span> 部署架构</a></li>
+                <li><a href="#frontend"><span class="icon">💻</span> 前端架构</a></li>
+                <li><a href="#security"><span class="icon">🔒</span> 安全认证</a></li>
+                <li><a href="#dev-guide"><span class="icon">📖</span> 开发指南</a></li>
+            </ul>
+        </nav>
+
+        <!-- 项目概述 -->
+        <section id="overview" class="section">
+            <h2>项目概述</h2>
+            
+            <div class="highlight-box">
+                <p><strong>CS-INV</strong> 是一个企业级的光伏逆变器物联网监控系统，支持万级设备接入、实时数据监控、告警管理、OTA 固件升级等功能。系统采用多服务架构，包含 Go 后端、React 管理后台、Flutter 移动端，通过 MQTT 协议实现设备与服务端的实时通信。</p>
+            </div>
+
+            <h3>核心功能特性</h3>
+            <div class="grid">
+                <div class="card">
+                    <h4>设备接入与通信</h4>
+                    <ul>
+                        <li>BLE 蓝牙配网 - 通过蓝牙低功耗协议配置 WiFi</li>
+                        <li>实时数据采集 - 毫秒级延迟推送至 APP 与管理后台</li>
+                        <li>万级设备接入 - EMQX 共享订阅 + 多实例水平扩展</li>
+                        <li>MQTT 协议支持 - 设备状态、遥测、告警数据传输</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>监控与管理</h4>
+                    <ul>
+                        <li>实时数据监控 - 电压、电流、功率、电量、温度等</li>
+                        <li>告警管理 - 实时告警检测、分级告警、推送通知</li>
+                        <li>电站管理 - 电站分组、设备绑定、发电统计</li>
+                        <li>数据统计 - 图表分析、能量聚合分析</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>固件升级 (OTA)</h4>
+                    <ul>
+                        <li>ARM/ESP 双芯片远程升级</li>
+                        <li>MQTT 命令下发 + 进度实时跟踪</li>
+                        <li>升级包管理 - 打包多个芯片固件</li>
+                        <li>本地 OTA - App 通过 WiFi 直连设备升级</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>用户与权限</h4>
+                    <ul>
+                        <li>JWT 认证 - Bearer Token 认证机制</li>
+                        <li>RBAC 权限控制 - 基于角色的权限管理</li>
+                        <li>多租户支持 - 代理商→安装商→终端用户层级</li>
+                        <li>设备分享 - 多用户共享同一设备</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>系统指标</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="number">10K+</span>
+                    <span class="label">设备接入能力</span>
+                </div>
+                <div class="stat-card">
+                    <span class="number">&lt;100ms</span>
+                    <span class="label">数据推送延迟</span>
+                </div>
+                <div class="stat-card">
+                    <span class="number">99.9%</span>
+                    <span class="label">系统可用性</span>
+                </div>
+                <div class="stat-card">
+                    <span class="number">6</span>
+                    <span class="label">微服务数量</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 系统架构 -->
+        <section id="architecture" class="section">
+            <h2>系统架构</h2>
+            
+            <h3>整体架构图</h3>
+            <div class="architecture-diagram">
+                <pre>
+Flutter App ── MQTT (JWT认证) ──→ EMQX Broker ←── 设备(ESP32-C3+ARM) 数据上报
+    │                                  │
+    │                            共享订阅 $share/inv-group/
+    │                                  │
+    │                     inv_device_server (Go, 多实例)
+    │                                  │
+    │                          PostgreSQL + Redis
+    │
+    └── HTTP REST ──→ api-gateway ──→ inv_api_server (Go :8080)
+                           │
+                     Web 管理后台 + WebSocket
+                </pre>
+            </div>
+
+            <h3>数据流说明</h3>
+            <div class="flow-diagram">
+                <div class="flow-step">设备</div>
+                <div class="flow-step">EMQX</div>
+                <div class="flow-step active">Device Server</div>
+                <div class="flow-step">PostgreSQL</div>
+                <div class="flow-step">Redis</div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>链路</th>
+                        <th>路径</th>
+                        <th>场景</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>实时上行</td>
+                        <td>设备 → EMQX → 共享订阅 → Device Server → PostgreSQL + Redis</td>
+                        <td>遥测数据入库</td>
+                    </tr>
+                    <tr>
+                        <td>实时下行</td>
+                        <td>App MQTT 直连 EMQX（JWT 认证）</td>
+                        <td>APP 设备详情页实时推送</td>
+                    </tr>
+                    <tr>
+                        <td>历史查询</td>
+                        <td>App/Web → API Gateway → API Server → PostgreSQL</td>
+                        <td>统计报表、告警记录</td>
+                    </tr>
+                    <tr>
+                        <td>命令下发</td>
+                        <td>Web/App → API Server → Device Server → MQTT → 设备</td>
+                        <td>OTA 升级、参数配置</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>设计原则</h3>
+            <div class="success-box">
+                <p><strong>实时数据走 MQTT 直连（低延迟推送）</strong>，历史/统计数据走 HTTP API（按需查询），安全靠 EMQX 内置 JWT 认证 + 网关层统一鉴权。</p>
+            </div>
+        </section>
+
+        <!-- 技术栈 -->
+        <section id="tech-stack" class="section">
+            <h2>技术栈</h2>
+            
+            <h3>后端服务</h3>
+            <div class="grid">
+                <div class="card">
+                    <h4>Go 语言生态</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-go">Go 1.25</span> 后端编程语言</li>
+                        <li><span class="tech-badge tech-go">Gin v1.9</span> HTTP 框架与路由</li>
+                        <li><span class="tech-badge tech-go">pgx v5</span> PostgreSQL 驱动</li>
+                        <li><span class="tech-badge tech-go">go-redis v9</span> Redis 客户端</li>
+                        <li><span class="tech-badge tech-go">paho.mqtt.golang</span> MQTT 客户端</li>
+                        <li><span class="tech-badge tech-go">kafka-go</span> Kafka 消费者</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>开发工具</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-go">Viper</span> 配置管理</li>
+                        <li><span class="tech-badge tech-go">Zap</span> 结构化日志</li>
+                        <li><span class="tech-badge tech-go">Prometheus</span> 指标采集</li>
+                        <li><span class="tech-badge tech-go">OpenTelemetry</span> 链路追踪</li>
+                        <li><span class="tech-badge tech-go">JWT (HS256)</span> 认证机制</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>前端与移动端</h3>
+            <div class="grid">
+                <div class="card">
+                    <h4>React 管理后台</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-react">React 18</span> Web 管理后台</li>
+                        <li><span class="tech-badge tech-react">TypeScript 5.x</span> 类型安全</li>
+                        <li><span class="tech-badge tech-react">Vite 5</span> 构建工具</li>
+                        <li><span class="tech-badge tech-react">Ant Design v5</span> UI 组件库</li>
+                        <li><span class="tech-badge tech-react">ECharts</span> 数据可视化</li>
+                        <li><span class="tech-badge tech-react">Zustand</span> 全局状态管理</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>Flutter 移动端</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-flutter">Flutter 3.x</span> 跨平台移动端</li>
+                        <li><span class="tech-badge tech-flutter">flutter_bloc</span> BLoC 状态管理</li>
+                        <li><span class="tech-badge tech-flutter">go_router</span> 声明式路由</li>
+                        <li><span class="tech-badge tech-flutter">Dio</span> HTTP 客户端</li>
+                        <li><span class="tech-badge tech-flutter">mqtt_client</span> MQTT 直连</li>
+                        <li><span class="tech-badge tech-flutter">flutter_blue_plus</span> BLE 蓝牙配网</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>基础设施</h3>
+            <div class="grid">
+                <div class="card">
+                    <h4>数据库与缓存</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-postgres">PostgreSQL 16</span> 关系型数据库</li>
+                        <li><span class="tech-badge tech-postgres">TimescaleDB</span> 时序数据扩展</li>
+                        <li><span class="tech-badge tech-redis">Redis 7</span> 缓存 + Pub/Sub + Streams</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>消息队列</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-mqtt">EMQX 5.x</span> MQTT Broker</li>
+                        <li><span class="tech-badge tech-kafka">Kafka</span> 消息队列（可选）</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>部署与运维</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-infra">Docker Compose</span> 容器化编排</li>
+                        <li><span class="tech-badge tech-infra">Nginx</span> 前端静态资源托管</li>
+                        <li><span class="tech-badge tech-infra">K8s HPA</span> 自动扩缩容</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 子系统详解 -->
+        <section id="subsystems" class="section">
+            <h2>子系统详解</h2>
+            
+            <h3>服务架构总览</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>服务</th>
+                        <th>目录</th>
+                        <th>端口</th>
+                        <th>技术栈</th>
+                        <th>职责</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>inv-api-server</strong></td>
+                        <td><code>business-api/</code></td>
+                        <td>8080</td>
+                        <td><span class="tech-badge tech-go">Go + Gin</span></td>
+                        <td>用户端 REST API（认证、设备、告警、OTA、RBAC）</td>
+                    </tr>
+                    <tr>
+                        <td><strong>inv-device-server</strong></td>
+                        <td><code>device-communication/</code></td>
+                        <td>8081</td>
+                        <td><span class="tech-badge tech-go">Go + MQTT</span></td>
+                        <td>设备通信（MQTT 管理、数据解析、告警消费）</td>
+                    </tr>
+                    <tr>
+                        <td><strong>api-gateway</strong></td>
+                        <td><code>api-gateway/</code></td>
+                        <td>80</td>
+                        <td><span class="tech-badge tech-go">Go + Gin</span></td>
+                        <td>反向代理（JWT 校验、限流、RBAC 权限、请求转发）</td>
+                    </tr>
+                    <tr>
+                        <td><strong>mqtt-kafka-bridge</strong></td>
+                        <td><code>mqtt-kafka-bridge/</code></td>
+                        <td>8080</td>
+                        <td><span class="tech-badge tech-go">Go</span></td>
+                        <td>EMQX Webhook → Kafka 消息转发</td>
+                    </tr>
+                    <tr>
+                        <td><strong>inv-admin-frontend</strong></td>
+                        <td><code>inv-admin-frontend/</code></td>
+                        <td>5173/3000</td>
+                        <td><span class="tech-badge tech-react">React + TS</span></td>
+                        <td>管理后台 Web UI</td>
+                    </tr>
+                    <tr>
+                        <td><strong>inv_app</strong></td>
+                        <td><code>inv_app/</code></td>
+                        <td>-</td>
+                        <td><span class="tech-badge tech-flutter">Flutter</span></td>
+                        <td>手机 App（设备监控、OTA、WiFi 配网）</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>API 网关 (api-gateway)</h3>
+            <div class="highlight-box">
+                <p><strong>职责：</strong>作为系统统一入口，提供 JWT 认证、RBAC 权限校验、多级限流及反向代理功能。</p>
+            </div>
+            
+            <h4>核心功能</h4>
+            <ul>
+                <li>JWT Token 验证 - 所有受保护资源的统一认证</li>
+                <li>RBAC 权限校验 - 基于 Redis 缓存的权限矩阵</li>
+                <li>多级限流 - 全局 + 路由级别的令牌桶算法</li>
+                <li>反向代理 - 请求转发至 API Server 和 Device Server</li>
+                <li>CORS 跨域处理 - 前端跨域请求支持</li>
+            </ul>
+
+            <h4>架构设计</h4>
+            <div class="code-block" data-lang="go">
+// API 网关配置示例
+type Config struct {
+    Server struct {
+        Port           int      `yaml:"port"`
+        TrustedProxies []string `yaml:"trusted_proxies"`
+    } `yaml:"server"`
+    
+    JWT struct {
+        Secret   string `yaml:"secret"`
+        Issuer   string `yaml:"issuer"`
+        Audience string `yaml:"audience"`
+    } `yaml:"jwt"`
+    
+    RateLimit struct {
+        Rate  float64 `yaml:"rate"`
+        Burst int     `yaml:"burst"`
+    } `yaml:"rate_limit"`
+    
+    RBAC struct {
+        Enabled     bool `yaml:"enabled"`
+        CacheTTLSec int  `yaml:"cache_ttl_sec"`
+    } `yaml:"rbac"`
+    
+    Backends struct {
+        APIServer    string `yaml:"api_server"`
+        DeviceServer string `yaml:"device_server"`
+    } `yaml:"backends"`
+}
+            </div>
+
+            <h3>API 服务 (business-api)</h3>
+            <div class="highlight-box">
+                <p><strong>职责：</strong>用户端 REST API 服务，处理认证、设备管理、告警、OTA 升级等业务逻辑。</p>
+            </div>
+
+            <h4>Handler → Service → Repository 三层架构</h4>
+            <div class="code-block" data-lang="text">
+Handler 层 (HTTP 接口层)
+    ├── AuthHandler      - 用户认证（登录/注册/找回密码）
+    ├── DeviceHandler    - 设备管理（CRUD、控制、参数）
+    ├── StationHandler   - 电站管理
+    ├── AlarmHandler     - 告警管理
+    ├── OTAHandler       - OTA 升级管理
+    └── WSHandler        - WebSocket 实时推送
+
+Service 层 (业务逻辑层)
+    ├── UserService      - 用户业务逻辑
+    ├── DeviceService    - 设备业务逻辑
+    ├── StationService   - 电站业务逻辑
+    ├── AlarmService     - 告警业务逻辑
+    └── OTAService       - OTA 升级业务逻辑
+
+Repository 层 (数据访问层)
+    ├── UserRepository   - 用户数据访问
+    ├── DeviceRepository - 设备数据访问
+    ├── StationRepository- 电站数据访问
+    └── AlarmRepository  - 告警数据访问
+            </div>
+
+            <h3>设备通信服务 (device-communication)</h3>
+            <div class="highlight-box">
+                <p><strong>职责：</strong>设备通信服务，负责 MQTT 客户端管理、数据解析、设备状态同步、命令下发等。</p>
+            </div>
+
+            <h4>核心组件</h4>
+            <div class="grid">
+                <div class="card">
+                    <h4>MQTT 客户端</h4>
+                    <ul>
+                        <li>EMQX 共享订阅连接</li>
+                        <li>设备数据解析（AC/Battery/PV/Status/Energy）</li>
+                        <li>旧字段兼容映射</li>
+                        <li>OTA 命令下发</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>数据处理</h4>
+                    <ul>
+                        <li>Redis Pub/Sub 实时推送</li>
+                        <li>Redis Streams 消息缓冲</li>
+                        <li>设备在线状态管理</li>
+                        <li>离线检测与状态同步</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>监控与健康</h4>
+                    <ul>
+                        <li>Prometheus `/metrics` 端点</li>
+                        <li>Kafka 消费者（可选）</li>
+                        <li>健康检查与状态上报</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>MQTT-Kafka 桥接 (mqtt-kafka-bridge)</h3>
+            <div class="highlight-box">
+                <p><strong>职责：</strong>接收 EMQX Webhook 消息，按主题分流至 Kafka，支持批量写入与健康检查。</p>
+            </div>
+
+            <h4>消息处理流程</h4>
+            <div class="flow-diagram">
+                <div class="flow-step">EMQX Webhook</div>
+                <div class="flow-step">消息解析</div>
+                <div class="flow-step active">主题分流</div>
+                <div class="flow-step">Kafka 写入</div>
+            </div>
+        </section>
+
+        <!-- 数据库设计 -->
+        <section id="database" class="section">
+            <h2>数据库设计</h2>
+            
+            <h3>数据库架构</h3>
+            <div class="highlight-box">
+                <p>系统使用 <strong>PostgreSQL 16</strong> 作为主数据库，结合 <strong>TimescaleDB</strong> 扩展处理时序数据。数据库采用增量迁移策略，迁移文件位于 <code>database/migrations/</code>。</p>
+            </div>
+
+            <h3>核心表结构</h3>
+            <div class="grid">
+                <div class="card">
+                    <h4>用户相关表</h4>
+                    <ul>
+                        <li><code>users</code> - 用户表</li>
+                        <li><code>user_operation_logs</code> - 用户操作日志</li>
+                        <li><code>verification_codes</code> - 验证码表</li>
+                        <li><code>user_device_rel</code> - 用户设备关联表</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>电站与设备表</h4>
+                    <ul>
+                        <li><code>stations</code> - 电站表</li>
+                        <li><code>devices</code> - 设备表</li>
+                        <li><code>device_models</code> - 设备型号表</li>
+                        <li><code>device_model_fields</code> - 型号字段配置</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>时序数据表</h4>
+                    <ul>
+                        <li><code>device_telemetry_3min</code> - 遥测数据（超表）</li>
+                        <li><code>device_latest_state</code> - 设备最新状态</li>
+                        <li><code>device_energy_day</code> - 日能量统计</li>
+                        <li><code>device_energy_month</code> - 月能量统计</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>告警与升级表</h4>
+                    <ul>
+                        <li><code>alarms</code> - 告警表</li>
+                        <li><code>firmware_versions</code> - 固件版本表</li>
+                        <li><code>device_upgrades</code> - 设备升级记录</li>
+                        <li><code>upgrade_tasks</code> - 升级任务表</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>TimescaleDB 时序优化</h3>
+            <div class="code-block" data-lang="sql">
+-- 创建超表（自动按时间分区）
+SELECT create_hypertable('device_telemetry_3min', 'event_time', 
+    chunk_time_interval => INTERVAL '1 day');
+
+-- 启用压缩策略
+ALTER TABLE device_telemetry_3min SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'device_sn',
+    timescaledb.compress_orderby = 'event_time DESC'
+);
+
+-- 添加压缩策略（3天后压缩）
+SELECT add_compression_policy('device_telemetry_3min', INTERVAL '3 days');
+
+-- 添加保留策略（90天后删除）
+SELECT add_retention_policy('device_telemetry_3min', INTERVAL '90 days');
+            </div>
+
+            <h3>数据库迁移策略</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>序号</th>
+                        <th>内容</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>001</td>
+                        <td>初始化 Schema</td>
+                        <td>表/索引/约束</td>
+                    </tr>
+                    <tr>
+                        <td>002</td>
+                        <td>性能索引优化</td>
+                        <td>关键查询索引</td>
+                    </tr>
+                    <tr>
+                        <td>003</td>
+                        <td>TimescaleDB 压缩策略</td>
+                        <td>时序数据压缩</td>
+                    </tr>
+                    <tr>
+                        <td>004</td>
+                        <td>能量统计列</td>
+                        <td>能量数据扩展</td>
+                    </tr>
+                    <tr>
+                        <td>005</td>
+                        <td>设备日数据 JSONB 重构</td>
+                        <td>数据结构优化</td>
+                    </tr>
+                    <tr>
+                        <td>006</td>
+                        <td>OTA 重构为 device_upgrades</td>
+                        <td>升级记录重构</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- API 设计 -->
+        <section id="api" class="section">
+            <h2>API 设计</h2>
+            
+            <h3>API 规范</h3>
+            <div class="highlight-box">
+                <p>系统采用 RESTful API 设计，所有接口遵循统一的响应格式。API 文档使用 OpenAPI 3.0 规范定义，支持多级渠道平台架构。</p>
+            </div>
+
+            <h3>统一响应格式</h3>
+            <div class="code-block" data-lang="json">
+// 成功响应
+{
+    "code": 0,
+    "message": "success",
+    "data": { ... }
+}
+
+// 分页响应
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "items": [ ... ],
+        "total": 100,
+        "page": 1,
+        "page_size": 20
+    }
+}
+
+// 错误响应
+{
+    "code": "ERROR_CODE",
+    "message": "错误描述",
+    "details": { ... }
+}
+            </div>
+
+            <h3>API 模块划分</h3>
+            <div class="grid">
+                <div class="card">
+                    <h4><span class="tag tag-api">API</span> 认证模块</h4>
+                    <ul>
+                        <li>POST /api/v1/auth/login - 用户登录</li>
+                        <li>POST /api/v1/auth/register - 用户注册</li>
+                        <li>POST /api/v1/auth/refresh - Token 刷新</li>
+                        <li>POST /api/v1/auth/sms/send - 发送验证码</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4><span class="tag tag-api">API</span> 设备模块</h4>
+                    <ul>
+                        <li>GET /api/v1/devices - 设备列表</li>
+                        <li>GET /api/v1/devices/:sn - 设备详情</li>
+                        <li>POST /api/v1/devices/:sn/command - 发送命令</li>
+                        <li>GET /api/v1/devices/:sn/telemetry - 遥测数据</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4><span class="tag tag-api">API</span> 电站模块</h4>
+                    <ul>
+                        <li>GET /api/v1/stations - 电站列表</li>
+                        <li>POST /api/v1/stations - 创建电站</li>
+                        <li>GET /api/v1/stations/:id - 电站详情</li>
+                        <li>GET /api/v1/stations/:id/devices - 电站设备</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4><span class="tag tag-api">API</span> OTA 模块</h4>
+                    <ul>
+                        <li>GET /api/v1/firmware/versions - 固件版本</li>
+                        <li>POST /api/v1/ota/tasks - 创建升级任务</li>
+                        <li>GET /api/v1/ota/tasks/:id - 任务详情</li>
+                        <li>POST /api/v1/ota/push - 推送升级</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>MQTT 主题格式</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>主题</th>
+                        <th>方向</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>inv/{device_sn}/telemetry</code></td>
+                        <td>上行</td>
+                        <td>设备遥测数据</td>
+                    </tr>
+                    <tr>
+                        <td><code>inv/{device_sn}/alarm</code></td>
+                        <td>上行</td>
+                        <td>告警数据</td>
+                    </tr>
+                    <tr>
+                        <td><code>inv/{device_sn}/status</code></td>
+                        <td>上行</td>
+                        <td>在线状态</td>
+                    </tr>
+                    <tr>
+                        <td><code>inv/{device_sn}/command</code></td>
+                        <td>下行</td>
+                        <td>下行命令</td>
+                    </tr>
+                    <tr>
+                        <td><code>inv/{device_sn}/ota/status</code></td>
+                        <td>上行</td>
+                        <td>OTA 升级状态回报</td>
+                    </tr>
+                    <tr>
+                        <td><code>inv/{device_sn}/ota/progress</code></td>
+                        <td>上行</td>
+                        <td>OTA 升级进度</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- 部署架构 -->
+        <section id="deployment" class="section">
+            <h2>部署架构</h2>
+            
+            <h3>Docker Compose 部署</h3>
+            <div class="highlight-box">
+                <p>系统使用 Docker Compose 进行容器化编排，支持开发环境和生产环境两种配置。所有服务通过 <code>inv-net</code> 网络互联。</p>
+            </div>
+
+            <h3>服务容器配置</h3>
+            <div class="code-block" data-lang="yaml">
+# 核心服务容器配置
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg18
+    container_name: inv-postgres
+    ports: ["5432:5432"]
+    
+  redis:
+    image: redis:7.2-alpine
+    container_name: inv-redis
+    
+  inv-api-server:
+    build: ../business-api
+    container_name: inv-api-server
+    ports: ["8081:8080"]  # 固件下载专用端口
+    
+  inv-device-server:
+    build: ../device-communication
+    container_name: inv-device-server
+    
+  api-gateway:
+    build: ../api-gateway
+    container_name: inv-api-gateway
+    ports: ["8888:8080"]  # API 网关入口
+    
+  mqtt-kafka-bridge:
+    build: ../mqtt-kafka-bridge
+    container_name: inv-mqtt-bridge
+    ports: ["8082:18088"]
+    
+  inv-admin-frontend:
+    build: ../inv-admin-frontend
+    container_name: inv-admin-frontend
+    ports: ["3000:8080"]
+            </div>
+
+            <h3>端口映射</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>服务</th>
+                        <th>内部端口</th>
+                        <th>映射端口</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>API Gateway</td>
+                        <td>8080</td>
+                        <td>8888</td>
+                        <td>统一 HTTP 入口</td>
+                    </tr>
+                    <tr>
+                        <td>API Server</td>
+                        <td>8080</td>
+                        <td>8081</td>
+                        <td>固件下载专用端口</td>
+                    </tr>
+                    <tr>
+                        <td>Admin Frontend</td>
+                        <td>8080</td>
+                        <td>3000</td>
+                        <td>Web 管理后台</td>
+                    </tr>
+                    <tr>
+                        <td>PostgreSQL</td>
+                        <td>5432</td>
+                        <td>5432</td>
+                        <td>数据库</td>
+                    </tr>
+                    <tr>
+                        <td>Redis</td>
+                        <td>6379</td>
+                        <td>6379</td>
+                        <td>缓存</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>健康检查配置</h3>
+            <div class="code-block" data-lang="yaml">
+# 健康检查配置示例
+healthcheck:
+  test: ["CMD-SHELL", "pg_isready -U postgres -d inv_mqtt"]
+  interval: 5s
+  timeout: 5s
+  retries: 5
+  
+# Redis 健康检查
+healthcheck:
+  test: ["CMD-SHELL", "redis-cli -a $REDIS_PASSWORD ping | grep -q PONG"]
+  interval: 5s
+  retries: 5
+            </div>
+        </section>
+
+        <!-- 前端架构 -->
+        <section id="frontend" class="section">
+            <h2>前端架构</h2>
+            
+            <h3>React 管理后台</h3>
+            <div class="highlight-box">
+                <p>基于 React 18 + TypeScript + Vite + Ant Design 构建的管理后台，采用 Zustand 状态管理，支持国际化与主题切换。</p>
+            </div>
+
+            <h4>技术栈</h4>
+            <div class="grid">
+                <div class="card">
+                    <h4>核心框架</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-react">React 18</span> UI 框架</li>
+                        <li><span class="tech-badge tech-react">TypeScript 5.x</span> 类型安全</li>
+                        <li><span class="tech-badge tech-react">Vite 5</span> 构建工具</li>
+                        <li><span class="tech-badge tech-react">React Router 6</span> 路由管理</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>UI 与状态</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-react">Ant Design v5</span> UI 组件库</li>
+                        <li><span class="tech-badge tech-react">Zustand</span> 全局状态管理</li>
+                        <li><span class="tech-badge tech-react">React Query</span> 服务端状态</li>
+                        <li><span class="tech-badge tech-react">Axios</span> HTTP 客户端</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h4>目录结构</h4>
+            <div class="code-block" data-lang="text">
+inv-admin-frontend/
+├── src/
+│   ├── components/           # 通用组件
+│   ├── hooks/                # 自定义 Hooks
+│   ├── layouts/              # 页面布局
+│   ├── locales/              # 国际化
+│   ├── pages/                # 页面（设备/电站/用户/告警/OTA/统计）
+│   ├── services/             # API 调用
+│   ├── stores/               # Zustand 状态管理
+│   ├── types/                # TypeScript 类型定义
+│   └── utils/                # 工具函数
+├── vite.config.ts
+└── package.json
+            </div>
+
+            <h3>Flutter 移动端</h3>
+            <div class="highlight-box">
+                <p>基于 Flutter 3.x + Dart 构建的跨平台移动端应用，采用 BLoC 状态管理，支持 MQTT 直连设备。</p>
+            </div>
+
+            <h4>技术栈</h4>
+            <div class="grid">
+                <div class="card">
+                    <h4>核心框架</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-flutter">Flutter 3.x</span> 跨平台框架</li>
+                        <li><span class="tech-badge tech-flutter">Dart</span> 编程语言</li>
+                        <li><span class="tech-badge tech-flutter">flutter_bloc</span> 状态管理</li>
+                        <li><span class="tech-badge tech-flutter">go_router</span> 路由管理</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>功能模块</h4>
+                    <ul>
+                        <li><span class="tech-badge tech-flutter">mqtt_client</span> MQTT 直连</li>
+                        <li><span class="tech-badge tech-flutter">Dio</span> HTTP 客户端</li>
+                        <li><span class="tech-badge tech-flutter">flutter_blue_plus</span> BLE 蓝牙</li>
+                        <li><span class="tech-badge tech-flutter">fl_chart</span> 图表渲染</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h4>目录结构</h4>
+            <div class="code-block" data-lang="text">
+inv_app/
+├── lib/
+│   ├── core/                 # 核心模块（配置、路由、服务、主题）
+│   │   ├── config/           # 应用配置
+│   │   ├── entities/         # 数据模型
+│   │   ├── router/           # 路由守卫
+│   │   ├── services/         # MQTT / API 服务
+│   │   └── widgets/          # 通用组件
+│   ├── features/             # 功能模块（BLoC 模式）
+│   │   ├── auth/             # 认证模块
+│   │   ├── dashboard/        # 仪表盘
+│   │   ├── device/           # 设备管理
+│   │   ├── alarm/            # 告警管理
+│   │   ├── station/          # 电站管理
+│   │   └── statistics/       # 数据统计
+│   └── l10n/                 # 国际化
+└── pubspec.yaml
+            </div>
+        </section>
+
+        <!-- 安全认证 -->
+        <section id="security" class="section">
+            <h2>安全与认证</h2>
+            
+            <h3>JWT 认证机制</h3>
+            <div class="highlight-box">
+                <p>系统采用 JWT (JSON Web Token) 进行用户认证，支持 Bearer Token 方式传递。Token 由 API Server 签发，EMQX 验签，确保全链路安全。</p>
+            </div>
+
+            <h4>认证流程</h4>
+            <div class="flow-diagram">
+                <div class="flow-step">用户登录</div>
+                <div class="flow-step">API Server</div>
+                <div class="flow-step active">签发 JWT</div>
+                <div class="flow-step">客户端存储</div>
+                <div class="flow-step">请求携带 Token</div>
+            </div>
+
+            <h4>JWT 配置</h4>
+            <div class="code-block" data-lang="yaml">
+# JWT 配置示例
+jwt:
+  secret: "your-secret-key"
+  expire_time: 24h          # Access Token 过期时间
+  refresh_expire_time: 168h # Refresh Token 过期时间
+  issuer: "inv-api-server"
+  audience: "inv-app"
+            </div>
+
+            <h3>RBAC 权限控制</h3>
+            <div class="highlight-box">
+                <p>系统采用基于角色的访问控制 (RBAC)，支持多级权限管理。权限矩阵缓存在 Redis 中，支持数据库回退。</p>
+            </div>
+
+            <h4>角色定义</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>角色代码</th>
+                        <th>角色名称</th>
+                        <th>权限范围</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>0</code></td>
+                        <td>超级管理员</td>
+                        <td>系统全部权限</td>
+                    </tr>
+                    <tr>
+                        <td><code>1</code></td>
+                        <td>代理商</td>
+                        <td>下级用户管理、设备管理</td>
+                    </tr>
+                    <tr>
+                        <td><code>2</code></td>
+                        <td>安装商</td>
+                        <td>设备安装、配置管理</td>
+                    </tr>
+                    <tr>
+                        <td><code>3</code></td>
+                        <td>终端用户</td>
+                        <td>设备监控、数据查看</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4>权限校验流程</h4>
+            <div class="code-block" data-lang="text">
+1. API 网关接收请求
+2. JWT 中间件验证 Token
+3. 提取 user_id、role 等声明
+4. RBAC 中间件校验权限
+   ├── 优先从内存 roleCache 读取
+   ├── 其次查询 Redis 缓存
+   └── 最后回源至 PostgreSQL
+5. 注入 X-User-ID、X-User-Role 请求头
+6. 转发至后端服务
+            </div>
+
+            <h3>多租户架构</h3>
+            <div class="success-box">
+                <p>系统通过 <code>parent_id</code> 字段实现层级关系，支持代理商→安装商→终端用户的多级租户架构。每个用户只能访问其下级用户的数据。</p>
+            </div>
+
+            <h3>服务间认证</h3>
+            <div class="warning-box">
+                <p>内部服务调用使用 <code>X-Internal-Key</code> Header 进行认证，确保服务间通信安全。</p>
+            </div>
+        </section>
+
+        <!-- 开发指南 -->
+        <section id="dev-guide" class="section">
+            <h2>开发指南</h2>
+            
+            <h3>环境要求</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>依赖</th>
+                        <th>最低版本</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Go</td>
+                        <td>1.25+</td>
+                        <td>后端编译</td>
+                    </tr>
+                    <tr>
+                        <td>Flutter</td>
+                        <td>3.x</td>
+                        <td>移动端构建</td>
+                    </tr>
+                    <tr>
+                        <td>Node.js</td>
+                        <td>18+</td>
+                        <td>前端构建</td>
+                    </tr>
+                    <tr>
+                        <td>PostgreSQL</td>
+                        <td>16</td>
+                        <td>数据库</td>
+                    </tr>
+                    <tr>
+                        <td>Redis</td>
+                        <td>7</td>
+                        <td>缓存</td>
+                    </tr>
+                    <tr>
+                        <td>EMQX</td>
+                        <td>5.x</td>
+                        <td>MQTT Broker</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>快速开始</h3>
+            <div class="code-block" data-lang="bash">
+# 1. 数据库初始化
+psql -U postgres -c "CREATE DATABASE inv_mqtt;"
+psql -U postgres -d inv_mqtt -f database/schema.sql
+
+# 2. 启动后端服务
+cd api-gateway && go run main.go
+cd business-api && go run cmd/main.go
+cd device-communication && go run cmd/main.go
+
+# 3. 启动前端
+cd inv-admin-frontend
+npm install && npm run dev
+
+# 4. 启动移动端
+cd inv_app
+flutter pub get && flutter run
+
+# 5. Docker 一键启动
+cd deploy
+docker compose up -d
+            </div>
+
+            <h3>Makefile 命令</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>命令</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>make build-go</code></td>
+                        <td>构建所有 Go 服务</td>
+                    </tr>
+                    <tr>
+                        <td><code>make test-go</code></td>
+                        <td>运行 Go 单元测试</td>
+                    </tr>
+                    <tr>
+                        <td><code>make vet-go</code></td>
+                        <td>Go 静态检查</td>
+                    </tr>
+                    <tr>
+                        <td><code>make build-app</code></td>
+                        <td>构建 Flutter APK</td>
+                    </tr>
+                    <tr>
+                        <td><code>make build-web</code></td>
+                        <td>构建 Web 管理后台</td>
+                    </tr>
+                    <tr>
+                        <td><code>make docker-up</code></td>
+                        <td>Docker Compose 启动全部服务</td>
+                    </tr>
+                    <tr>
+                        <td><code>make install-hooks</code></td>
+                        <td>安装 Git hooks</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>提交前验证清单</h3>
+            <div class="warning-box">
+                <p><strong>推送代码前，至少执行以下最小验证：</strong></p>
+                <ul>
+                    <li><code>make build-go</code> - Go 编译检查（必须通过）</li>
+                    <li><code>make test-go</code> - Go 测试（必须通过）</li>
+                    <li><code>make vet-go</code> - Go 静态检查（必须通过）</li>
+                    <li><code>make type-check</code> - 前端类型检查（如涉及前端修改）</li>
+                    <li><code>make analyze-app</code> - Flutter 分析（如涉及移动端修改）</li>
+                </ul>
+            </div>
+
+            <h3>命名约定</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>场景</th>
+                        <th>规范</th>
+                        <th>示例</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Go 数据库字段</td>
+                        <td>snake_case</td>
+                        <td><code>firmware_arm</code>, <code>created_at</code></td>
+                    </tr>
+                    <tr>
+                        <td>Go struct 字段</td>
+                        <td>PascalCase</td>
+                        <td><code>FirmwareArm</code>, <code>CreatedAt</code></td>
+                    </tr>
+                    <tr>
+                        <td>Go JSON tag</td>
+                        <td>snake_case</td>
+                        <td><code>"firmware_arm"</code></td>
+                    </tr>
+                    <tr>
+                        <td>TypeScript</td>
+                        <td>camelCase</td>
+                        <td><code>firmwareArm</code>, <code>createdAt</code></td>
+                    </tr>
+                    <tr>
+                        <td>Dart</td>
+                        <td>snake_case</td>
+                        <td><code>firmware_arm</code>, <code>created_at</code></td>
+                    </tr>
+                    <tr>
+                        <td>数据库表名</td>
+                        <td>snake_case 复数</td>
+                        <td><code>device_upgrades</code>, <code>firmware_versions</code></td>
+                    </tr>
+                    <tr>
+                        <td>API 路径</td>
+                        <td>kebab-case</td>
+                        <td><code>/api/v1/device-upgrades</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>核心文件保护</h3>
+            <div class="warning-box">
+                <p><strong>以下文件/目录变更需格外谨慎：</strong></p>
+                <ul>
+                    <li><code>database/schema.sql</code> — 数据库主 schema，变更需伴随迁移脚本</li>
+                    <li><code>database/migrations/</code> — 迁移文件，只增不改</li>
+                    <li><code>deploy/docker-compose.yml</code> — 生产部署配置</li>
+                    <li><code>deploy/.secrets/</code> — 敏感配置，禁止提交到版本控制</li>
+                    <li><code>.github/workflows/</code> — CI/CD 管线定义</li>
+                    <li><code>contracts/</code> — API 契约与事件定义</li>
+                </ul>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p>CS-INV 光伏逆变器物联网监控系统 - 架构文档</p>
+            <p>版本 1.0.0 | 最后更新: 2026年7月30日</p>
+            <p>本文档由系统自动生成，如有疑问请联系开发团队</p>
+        </footer>
+    </div>
+
+    <script>
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        // 导航栏高亮
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('.nav a');
+            
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (pageYOffset >= sectionTop - 200) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.style.background = '';
+                link.style.color = '';
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.style.background = '#2563eb';
+                    link.style.color = 'white';
+                }
+            });
+        });
+
+        // 代码块复制功能
+        document.querySelectorAll('.code-block').forEach(block => {
+            const copyBtn = document.createElement('button');
+            copyBtn.innerHTML = '复制';
+            copyBtn.style.cssText = `
+                position: absolute;
+                top: 0.5rem;
+                right: 0.5rem;
+                background: #4b5563;
+                color: white;
+                border: none;
+                padding: 0.25rem 0.5rem;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.75rem;
+            `;
+            block.style.position = 'relative';
+            block.appendChild(copyBtn);
+            
+            copyBtn.addEventListener('click', () => {
+                const code = block.textContent.replace('复制', '').trim();
+                navigator.clipboard.writeText(code).then(() => {
+                    copyBtn.innerHTML = '已复制!';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '复制';
+                    }, 2000);
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
@@ -26,6 +27,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final RefreshTokenUseCase refreshTokenUseCase;
   final WechatLoginUseCase wechatLoginUseCase;
   final GoogleLoginUseCase googleLoginUseCase;
+  final JVerifyLoginUseCase jverifyLoginUseCase;
   final StorageService storageService;
   final JPushService jpushService;
 
@@ -44,6 +46,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     required this.refreshTokenUseCase,
     required this.wechatLoginUseCase,
     required this.googleLoginUseCase,
+    required this.jverifyLoginUseCase,
     required this.storageService,
     required this.jpushService,
   }) : super(AuthInitial()) {
@@ -61,6 +64,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthTokenRefreshed>(_onTokenRefreshed);
     on<AuthWechatLoginRequested>(_onWechatLoginRequested);
     on<AuthGoogleLoginRequested>(_onGoogleLoginRequested);
+    on<AuthJVerifyLoginWithTokenRequested>(_onJVerifyLoginWithTokenRequested);
   }
 
   Future<void> _onAuthCheckRequested(
@@ -275,6 +279,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthUpdateProfileRequested event,
     Emitter<AuthState> emit,
   ) async {
+    // 保存当前状态，以便在更新失败时恢复
+    final previousState = state;
+    final previousUserId = previousState is AuthAuthenticated ? previousState.userId : null;
+    final previousPhone = previousState is AuthAuthenticated ? previousState.phone : null;
+    final previousIsSystemAdmin = previousState is AuthAuthenticated ? previousState.isSystemAdmin : false;
+    final previousPermissions = previousState is AuthAuthenticated ? previousState.permissions : <String>[];
+    final previousUser = previousState is AuthAuthenticated ? previousState.user : null;
+
     emit(AuthLoading());
 
     final result = await updateProfileUseCase(
@@ -296,29 +308,27 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         profileResult.fold(
           (failure) {
             // 如果获取用户信息失败，仍然保持当前状态
-            final currentState = state;
-            if (currentState is AuthAuthenticated) {
+            if (previousUserId != null) {
               emit(
                 AuthAuthenticated(
-                  userId: currentState.userId,
-                  phone: currentState.phone,
-                  isSystemAdmin: currentState.isSystemAdmin,
-                  permissions: currentState.permissions,
-                  user: currentState.user,
+                  userId: previousUserId,
+                  phone: previousPhone ?? '',
+                  isSystemAdmin: previousIsSystemAdmin,
+                  permissions: previousPermissions,
+                  user: previousUser,
                 ),
               );
             }
           },
           (user) {
             // 使用最新的用户信息更新状态
-            final currentState = state;
-            if (currentState is AuthAuthenticated) {
+            if (previousUserId != null) {
               emit(
                 AuthAuthenticated(
-                  userId: currentState.userId,
-                  phone: currentState.phone,
-                  isSystemAdmin: currentState.isSystemAdmin,
-                  permissions: currentState.permissions,
+                  userId: previousUserId,
+                  phone: previousPhone ?? user.phone,
+                  isSystemAdmin: user.isSystemAdmin,
+                  permissions: user.permissions,
                   user: user,
                 ),
               );
@@ -403,6 +413,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await storageService.saveRefreshToken(response.refreshToken!);
         }
         await storageService.saveUserId(response.user.id);
+        await storageService.saveUserPhone(response.user.phone);
         await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
         await storageService.savePermissions(response.permissions);
 
@@ -495,6 +506,46 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     await result.fold<Future<void>>(
       (failure) async {
+        emit(AuthError(message: failure.message));
+      },
+      (response) async {
+        await storageService.saveToken(response.token);
+        if (response.refreshToken != null) {
+          await storageService.saveRefreshToken(response.refreshToken!);
+        }
+        await storageService.saveUserId(response.user.id);
+        await storageService.saveUserPhone(response.user.phone);
+        await storageService.saveIsSystemAdmin(response.user.isSystemAdmin);
+        await storageService.savePermissions(response.permissions);
+
+        emit(
+          AuthAuthenticated(
+            userId: response.user.id,
+            phone: response.user.phone,
+            isSystemAdmin: response.user.isSystemAdmin,
+            permissions: response.permissions,
+            user: response.user,
+          ),
+        );
+
+        jpushService.bindUser(response.user.id);
+      },
+    );
+  }
+
+  /// 使用已获取的 loginToken 直接登录（不再重新拉起授权页）
+  Future<void> _onJVerifyLoginWithTokenRequested(
+    AuthJVerifyLoginWithTokenRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(AuthLoading());
+
+    // 直接调用后端验证
+    final response = await jverifyLoginUseCase(loginToken: event.loginToken);
+
+    await response.fold<Future<void>>(
+      (failure) async {
+        debugPrint('[AuthBloc] Login failed: ${failure.message}');
         emit(AuthError(message: failure.message));
       },
       (response) async {

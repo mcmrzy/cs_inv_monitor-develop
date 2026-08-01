@@ -541,34 +541,70 @@ type AppVersion struct {
 // Invitation represents an invitation to join an organization with SHA-256 token security.
 // Field names match the DB columns defined in migration 064.
 type Invitation struct {
-	ID               int64     `json:"id"`
-	RootTenantID     int64     `json:"root_tenant_id"`
-	OrganizationID   *int64    `json:"organization_id,omitempty"`
-	InvitedBy        int64     `json:"invited_by"`
-	Recipient        string    `json:"recipient"`
-	TokenKeyID       string    `json:"-"`
-	TokenDigest      []byte    `json:"-"` // SHA-256 raw bytes (BYTEA), never expose
-	RoleAssignments  string    `json:"role_assignments"` // JSONB array, e.g. "[{\"role_id\":3}]"
-	ExpiresAt        time.Time `json:"expires_at"`
+	ID               int64      `json:"id"`
+	RootTenantID     int64      `json:"root_tenant_id"`
+	OrganizationID   *int64     `json:"organization_id,omitempty"`
+	InvitedBy        int64      `json:"invited_by"`
+	Recipient        string     `json:"recipient"`
+	TokenKeyID       string     `json:"-"`
+	TokenDigest      []byte     `json:"-"` // SHA-256 raw bytes (BYTEA), never expose
+	RoleAssignments  string     `json:"role_assignments"` // JSONB array: [{"organization_id":3,"role_code":"agent"}] or legacy [{"role_id":3}]
+	ExpiresAt        time.Time  `json:"expires_at"`
 	AcceptedAt       *time.Time `json:"accepted_at,omitempty"`
-	Status           string    `json:"status"` // pending|accepted|rejected|expired|revoked
-	Version          int64     `json:"version"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	AcceptedByUserID *int64     `json:"accepted_by_user_id,omitempty"`
+	Status           string     `json:"status"` // pending|accepted|rejected|expired|revoked
+	Version          int64      `json:"version"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+// RoleAssignmentItem represents a single org-role assignment inside the
+// RoleAssignments JSONB array. Supports both the new multi-org format
+// {"organization_id":N,"role_code":"agent"} and the legacy single-role
+// format {"role_id":N}.
+type RoleAssignmentItem struct {
+	OrganizationID *int64 `json:"organization_id,omitempty"`
+	RoleID         int    `json:"role_id,omitempty"` // legacy format only
+	RoleCode       string `json:"role_code,omitempty"`
+}
+
+// ParseRoleAssignments parses the RoleAssignments JSONB array into items.
+// Returns nil for empty or malformed payloads.
+func (inv *Invitation) ParseRoleAssignments() []RoleAssignmentItem {
+	if inv.RoleAssignments == "" || inv.RoleAssignments == "[]" {
+		return nil
+	}
+	var arr []RoleAssignmentItem
+	if err := json.Unmarshal([]byte(inv.RoleAssignments), &arr); err != nil {
+		return nil
+	}
+	return arr
 }
 
 // FirstRoleID extracts the first role_id from the RoleAssignments JSONB array.
-// Returns 0 if the array is empty or malformed.
+// Returns 0 if the array is empty or malformed. Legacy helper for old
+// single-role invitations; prefer ParseRoleAssignments for new data.
 func (inv *Invitation) FirstRoleID() int {
-	if inv.RoleAssignments == "" || inv.RoleAssignments == "[]" {
+	items := inv.ParseRoleAssignments()
+	if len(items) == 0 {
 		return 0
 	}
-	// Quick parse: look for "role_id":N pattern
-	var arr []struct {
-		RoleID int `json:"role_id"`
+	if items[0].RoleID > 0 {
+		return items[0].RoleID
 	}
-	if err := json.Unmarshal([]byte(inv.RoleAssignments), &arr); err != nil || len(arr) == 0 {
-		return 0
+	if items[0].RoleCode != "" {
+		if id, ok := roleCodeToID[items[0].RoleCode]; ok {
+			return id
+		}
 	}
-	return arr[0].RoleID
+	return 0
+}
+
+// roleCodeToID maps role codes to their legacy numeric role IDs.
+var roleCodeToID = map[string]int{
+	"org_admin":   1,
+	"agent":       2,
+	"distributor": 3,
+	"installer":   4,
+	"customer":    5,
 }

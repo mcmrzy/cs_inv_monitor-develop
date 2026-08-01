@@ -7,7 +7,7 @@ import ParallelPage from './index'
 
 describe('ParallelPage', () => {
   it('distinguishes a reported disabled state from missing data', async () => {
-    server.use(http.get('/api/v1/devices/:sn/parallel-state', ({ params }) => HttpResponse.json({
+    server.use(http.get('/api/v1/devices/by-sn/:sn/parallel-state', ({ params }) => HttpResponse.json({
       code: 0,
       message: 'success',
       data: {
@@ -29,7 +29,7 @@ describe('ParallelPage', () => {
   })
 
   it('shows access errors instead of an empty state', async () => {
-    server.use(http.get('/api/v1/devices/:sn/parallel-state', () =>
+    server.use(http.get('/api/v1/devices/by-sn/:sn/parallel-state', () =>
       HttpResponse.json({ code: 403, message: 'device access denied' }, { status: 403 }),
     ))
 

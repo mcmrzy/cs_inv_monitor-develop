@@ -235,8 +235,8 @@ void main() {
         expect(hasEnergyData, true);
 
         // 验证数据提取
-        final dailyPv = (realtime['daily_pv'] as num?)?.toDouble() ?? 0;
-        final runtimeHours = (realtime['runtime_hours'] as num?)?.toInt() ?? 0;
+        final dailyPv = realtime['daily_pv']?.toDouble() ?? 0;
+        final runtimeHours = realtime['runtime_hours']?.toInt() ?? 0;
         expect(dailyPv, 15.5);
         expect(runtimeHours, 500);
       });
@@ -252,7 +252,7 @@ void main() {
         };
 
         // 优先从 realtime 获取
-        final online = realtime['online'] as bool? ?? responseData['online'] as bool? ?? false;
+        final online = realtime['online'] ?? responseData['online'] ?? false;
         expect(online, true);
       });
 
@@ -263,7 +263,7 @@ void main() {
         };
 
         // realtime 没有时从 responseData 获取
-        final online = realtime['online'] as bool? ?? responseData['online'] as bool? ?? false;
+        final online = realtime['online'] ?? responseData['online'] ?? false;
         expect(online, false);
       });
 

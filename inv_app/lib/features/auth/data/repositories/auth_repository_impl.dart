@@ -104,7 +104,7 @@ class AuthRepositoryImpl implements AuthRepository {
     if (avatar != null) data['avatar'] = avatar;
     if (email != null) data['email'] = email;
     if (country != null) data['country'] = country;
-    if (regionName != null) data['region'] = regionName;
+    if (regionName != null) data['region_name'] = regionName;
     if (bio != null) data['bio'] = bio;
     if (timezone != null) data['timezone'] = timezone;
     return apiService.put(
@@ -188,6 +188,17 @@ class AuthRepositoryImpl implements AuthRepository {
     return apiService.post(
       '/auth/google-login',
       data: {'id_token': idToken},
+      fromJson: (json) => LoginResponse.fromJson(json),
+    );
+  }
+
+  @override
+  Future<Either<Failure, LoginResponse>> jverifyLogin({
+    required String loginToken,
+  }) async {
+    return apiService.post(
+      '/auth/jverify-login',
+      data: {'login_token': loginToken},
       fromJson: (json) => LoginResponse.fromJson(json),
     );
   }

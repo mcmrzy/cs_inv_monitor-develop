@@ -19,6 +19,7 @@ import type { User } from '@/types'
 import { formatInTimezone } from '@/utils/timezone'
 import QueryErrorAlert from '@/components/QueryErrorAlert'
 import useTimezoneStore from '@/stores/timezoneStore'
+import { roleLabel } from '@/utils/roleLabel'
 
 const { Title } = Typography
 
@@ -29,6 +30,7 @@ interface UserRecord {
   is_system_admin?: boolean
   /** @deprecated */
   role?: number
+  org_roles?: string[]
   status: number
   parent_id?: string | null
   created_at: string
@@ -167,6 +169,10 @@ const UsersPage: React.FC = () => {
       render: (_: any, record: User) => {
         const raw = record as unknown as UserRecord
         if (raw.is_system_admin) return <Tag color='#eb2f96'>{t('header.systemAdmin')}</Tag>
+        const roles = raw.org_roles ?? []
+        if (roles.length > 0) {
+          return <Space size={2}>{roles.map((r) => <Tag key={r} color='#1677ff'>{roleLabel(r, t)}</Tag>)}</Space>
+        }
         return <Tag color='#1677ff'>{t('header.member')}</Tag>
       },
     },
@@ -266,7 +272,7 @@ const UsersPage: React.FC = () => {
 
       <Modal title={editingUser ? t('user.editUser') : t('user.addUserTitle')} open={modalOpen}
         onCancel={() => { setModalOpen(false); form.resetFields() }} onOk={handleSave}
-        confirmLoading={createMutation.isPending || updateMutation.isPending} destroyOnClose>
+        confirmLoading={createMutation.isPending || updateMutation.isPending} destroyOnHidden>
         <Form form={form} layout="vertical">
           <Form.Item name="phone" label={t('user.phone')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.phone') }]}><Input placeholder={t('common.pleaseInput') + t('user.phone')} /></Form.Item>
           <Form.Item name="email" label={t('user.email')} rules={[{ required: true, message: t('common.pleaseInput') + t('user.email') }, { type: 'email', message: t('user.emailFormatError') }]}><Input placeholder={t('common.pleaseInput') + t('user.email')} /></Form.Item>
@@ -293,7 +299,7 @@ const UsersPage: React.FC = () => {
 
       <Modal title={t('user.resetPasswordTitle')} open={resetPwdOpen}
         onCancel={() => { setResetPwdOpen(false); pwdForm.resetFields() }} onOk={handleResetPwd}
-        confirmLoading={resetPwdMutation.isPending} destroyOnClose>
+        confirmLoading={resetPwdMutation.isPending} destroyOnHidden>
         <Form form={pwdForm} layout="vertical">
           <Form.Item name="password" label={t('user.newPassword')} rules={[{ required: true, message: t('user.pleaseInputPassword') }, { min: 6, message: t('user.pwdMinLength') }]}>
             <Input.Password placeholder={t('user.pleaseInputPassword')} />
@@ -312,7 +318,7 @@ const UsersPage: React.FC = () => {
         open={childrenDrawerOpen}
         onClose={() => { setChildrenDrawerOpen(false); setSelectedUserId(''); setSelectedUserName('') }}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         {childrenRes?.items && childrenRes.items.length > 0 ? (
           <Table<User>
@@ -329,6 +335,10 @@ const UsersPage: React.FC = () => {
                 render: (_: any, record: User) => {
                   const raw = record as unknown as UserRecord
                   if (raw.is_system_admin) return <Tag color='#eb2f96'>{t('header.systemAdmin')}</Tag>
+                  const roles = raw.org_roles ?? []
+                  if (roles.length > 0) {
+                    return <Space size={2}>{roles.map((r) => <Tag key={r} color='#1677ff'>{roleLabel(r, t)}</Tag>)}</Space>
+                  }
                   return <Tag color='#1677ff'>{t('header.member')}</Tag>
                 },
               },

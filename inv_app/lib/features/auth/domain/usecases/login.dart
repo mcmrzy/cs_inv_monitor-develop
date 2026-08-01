@@ -206,3 +206,15 @@ class GoogleLoginUseCase {
     return repository.googleLogin(idToken: idToken);
   }
 }
+
+class JVerifyLoginUseCase {
+  final AuthRepository repository;
+
+  JVerifyLoginUseCase(this.repository);
+
+  Future<Either<Failure, LoginResponse>> call({
+    required String loginToken,
+  }) {
+    return repository.jverifyLogin(loginToken: loginToken);
+  }
+}

@@ -22,6 +22,7 @@ type Config struct {
 	Backends    BackendsConfig    `mapstructure:"backends"`
 	Migration   MigrationConfig   `mapstructure:"migration"`
 	JPush       JPushConfig       `mapstructure:"jpush"`
+	JVerify     JVerifyConfig     `mapstructure:"jverify"`
 	RBAC        RBACConfig        `mapstructure:"rbac"`
 	EmailQueue  EmailQueueConfig  `mapstructure:"email_queue"`
 }
@@ -34,6 +35,7 @@ type BackendsConfig struct {
 	DeviceServer  string `mapstructure:"device_server"`
 	InternalKey   string `mapstructure:"internal_key"`
 	ServerURL     string `mapstructure:"server_url"`     // 外部访问地址，用于ESP32下载固件
+	FrontendURL   string `mapstructure:"frontend_url"`   // 管理后台外部访问地址，用于邀请邮件等通知链接
 	WeatherAPI    string `mapstructure:"weather_api"`    // 天气API地址
 	AmapAPIKey    string `mapstructure:"amap_api_key"`   // 高德地图API Key
 	UploadDir     string `mapstructure:"upload_dir"`     // 固件上传存储目录
@@ -113,6 +115,14 @@ type LogConfig struct {
 	Compress   bool   `mapstructure:"compress"`
 }
 
+// JVerifyConfig 极光认证（一键登录）配置
+type JVerifyConfig struct {
+	Enabled       bool   `mapstructure:"enabled"`
+	RSAPrivateKey string `mapstructure:"rsa_private_key"` // PKCS8 base64 私钥，用于解密手机号
+	AppKey        string `mapstructure:"app_key"`         // 极光认证服务 AppKey
+	MasterSecret  string `mapstructure:"master_secret"`   // 极光认证服务 Master Secret
+}
+
 // JPushConfig 极光推送配置
 //   - Enabled:      是否启用推送
 //   - AppKey:       极光应用 AppKey
@@ -152,6 +162,7 @@ func Load(configPath string) (*Config, error) {
 
 	viper.SetDefault("timezone", "Asia/Shanghai")
 	viper.SetDefault("backends.device_server", "http://inv-device-server:8081")
+	viper.SetDefault("backends.frontend_url", "http://localhost:3000")
 	viper.SetDefault("backends.weather_api", "https://api.open-meteo.com/v1/forecast")
 	viper.SetDefault("backends.amap_api_key", "")
 	viper.SetDefault("backends.weather_source", "open-meteo")
@@ -216,6 +227,11 @@ func Load(configPath string) (*Config, error) {
 	viper.SetDefault("jpush.timeout", 10)
 	viper.SetDefault("jpush.dedup_ttl", 120)
 
+	viper.SetDefault("jverify.enabled", false)
+	viper.SetDefault("jverify.rsa_private_key", "")
+	viper.SetDefault("jverify.app_key", "")
+	viper.SetDefault("jverify.master_secret", "")
+
 	viper.SetDefault("rbac.enabled", true)
 	viper.SetDefault("rbac.ttl_duration", 5*time.Minute)
 	viper.SetDefault("rbac.max_idle_conns", 10)
@@ -268,6 +284,7 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("backends.device_server", "DEVICE_SERVER_URL")
 	viper.BindEnv("backends.internal_key", "INTERNAL_KEY")
 	viper.BindEnv("backends.server_url", "SERVER_URL")
+	viper.BindEnv("backends.frontend_url", "FRONTEND_URL")
 	viper.BindEnv("backends.weather_api", "WEATHER_API_URL")
 	viper.BindEnv("backends.amap_api_key", "AMAP_API_KEY")
 	viper.BindEnv("backends.weather_source", "WEATHER_SOURCE")
@@ -278,6 +295,11 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("jpush.master_secret", "JPUSH_MASTER_SECRET")
 	viper.BindEnv("jpush.timeout", "JPUSH_TIMEOUT")
 	viper.BindEnv("jpush.dedup_ttl", "JPUSH_DEDUP_TTL")
+
+	viper.BindEnv("jverify.enabled", "JVERIFY_ENABLED")
+	viper.BindEnv("jverify.rsa_private_key", "JVERIFY_RSA_PRIVATE_KEY")
+	viper.BindEnv("jverify.app_key", "JVERIFY_APP_KEY")
+	viper.BindEnv("jverify.master_secret", "JVERIFY_MASTER_SECRET")
 
 	var config Config
 	if err := viper.Unmarshal(&config); err != nil {

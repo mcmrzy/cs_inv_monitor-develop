@@ -1,10 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/components/permission_gate.dart';
+import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/entities/organization.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
 import 'package:inv_app/core/services/api_service.dart';
 import 'package:intl/intl.dart';
+
+/// 可邀请角色按邀请人所属组织类型受限（与后端 inviterAllowedRolesByOrgType 一致）：
+/// manufacturer→{agent,distributor,installer,customer}、agent→{installer,customer}、
+/// distributor→{installer,customer}、installer→{customer}、customer→不可邀请；
+/// org_admin 为管理角色，始终可分配。
+const Map<String, List<String>> kAllowedRolesByOrgType = {
+  'manufacturer': ['agent', 'distributor', 'installer', 'customer'],
+  'agent': ['installer', 'customer'],
+  'distributor': ['installer', 'customer'],
+  'installer': ['customer'],
+  'customer': [],
+};
+
+/// 多组织取并集；org_admin 始终可分配。
+List<String> resolveAllowedRoles(Set<String> orgTypes) {
+  final allowed = <String>{'org_admin'};
+  for (final t in orgTypes) {
+    allowed.addAll(kAllowedRolesByOrgType[t] ?? const []);
+  }
+  return allowed.toList();
+}
 
 /// 组织邀请管理屏幕
 class OrgInvitationScreen extends StatefulWidget {
@@ -26,6 +48,8 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
   List<OrganizationInvitation>? _invitations;
   bool _isLoading = false;
   String? _error;
+  Set<String> _myOrgTypes = {};
+  bool _orgTypesLoaded = false;
 
   @override
   void initState() {
@@ -34,6 +58,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
     _tabController = TabController(length: 3, vsync: this);
 
     _loadInvitations();
+    _loadMyOrgTypes();
   }
 
   @override
@@ -69,11 +94,11 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
   }
 
   List<OrganizationInvitation> get _pendingInvitations {
-    return _invitations?.where((i) => !i.used).toList() ?? [];
+    return _invitations?.where((i) => i.status == 'pending').toList() ?? [];
   }
 
-  List<OrganizationInvitation> get _usedInvitations {
-    return _invitations?.where((i) => i.used).toList() ?? [];
+  List<OrganizationInvitation> get _acceptedInvitations {
+    return _invitations?.where((i) => i.status == 'accepted').toList() ?? [];
   }
 
   @override
@@ -91,7 +116,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
           controller: _tabController,
           tabs: const [
             Tab(text: '待接受'),
-            Tab(text: '已使用'),
+            Tab(text: '已接受'),
             Tab(text: '全部'),
           ],
         ),
@@ -116,7 +141,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
         controller: _tabController,
         children: [
           _buildInvitationList(_pendingInvitations),
-          _buildInvitationList(_usedInvitations),
+          _buildInvitationList(_acceptedInvitations),
           _buildInvitationList(_invitations ?? []),
         ],
       ),
@@ -184,17 +209,54 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
         final invite = invitations[index];
         return _InvitationCard(
           invitation: invite,
-          onRevoke: () => _revokeInvitation(invite.id),
-          onCopyLink: () => _copyInviteLink(invite.id),
+          onRevoke: invite.status == 'pending'
+              ? () => _revokeInvitation(invite.id)
+              : null,
         );
       },
     );
   }
 
+  /// 加载当前用户所属组织类型（决定可邀请角色集合）
+  Future<void> _loadMyOrgTypes() async {
+    try {
+      final result = await _apiService.get<List<dynamic>>(
+        '/api/v1/my/organizations',
+        fromJson: (data) => data as List,
+      );
+      final orgTypes = result.fold(
+        (failure) => <String>{},
+        (list) => list
+            .map((e) => (e as Map)['type']?.toString() ?? '')
+            .where((t) => t.isNotEmpty)
+            .toSet(),
+      );
+      if (mounted) {
+        setState(() {
+          _myOrgTypes = orgTypes;
+          _orgTypesLoaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _orgTypesLoaded = true);
+      }
+    }
+  }
+
   Future<void> _showSendInviteDialog() async {
+    // 确保角色集合已加载（后端会再次校验，这里保证下拉选项正确）
+    if (!_orgTypesLoaded) {
+      await _loadMyOrgTypes();
+    }
+    if (!mounted) return;
+    final allowedRoles = resolveAllowedRoles(_myOrgTypes);
+    // 默认选中第一个可邀请的渠道角色（避免默认角色不在允许集合中）
+    final defaultRole = allowedRoles.length > 1
+        ? allowedRoles.firstWhere((r) => r != 'org_admin', orElse: () => 'org_admin')
+        : 'org_admin';
     final emailController = TextEditingController();
-    final roleController =
-        TextEditingController(text: OrgMemberRole.member.apiValue);
+    final roleController = TextEditingController(text: defaultRole);
     final daysController = TextEditingController(text: '7');
 
     showModalBottomSheet(
@@ -252,12 +314,15 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 'owner', child: Text('拥有者')),
-                        DropdownMenuItem(value: 'admin', child: Text('管理员')),
-                        DropdownMenuItem(value: 'member', child: Text('成员')),
-                        DropdownMenuItem(value: 'viewer', child: Text('查看者')),
-                      ],
+                      items: OrgMemberRole.values
+                          .where((r) => allowedRoles.contains(r.apiValue))
+                          .map(
+                            (r) => DropdownMenuItem(
+                              value: r.apiValue,
+                              child: Text(r.displayName),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (value) {
                         setModalState(() {
                           roleController.text = value!;
@@ -291,24 +356,44 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                         }
 
                         try {
-                          await _apiService.sendInvitation(
+                          final result = await _apiService.sendInvitation(
                             orgId: widget.organizationId,
                             email: email,
-                            role: OrgMemberRoleExtension.fromApiValue(
-                              roleController.text,
-                            ),
-                            days: days,
+                            roleCode: roleController.text,
+                            expiresHours: days * 24,
                           );
+
+                          // 提取创建时唯一返回的邀请链接（相对路径）
+                          String? inviteLink;
+                          final results = result['results'];
+                          if (results is List && results.isNotEmpty) {
+                            final first = results.first;
+                            if (first is Map && first['invite_link'] != null) {
+                              inviteLink = first['invite_link'] as String;
+                            }
+                          }
 
                           await Future.microtask(() {});
                           if (!mounted) return;
                           Navigator.pop(context); // ignore: use_build_context_synchronously
-                          ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
-                            SnackBar(
-                              content: Text('邀请已发送至 $email'),
-                              backgroundColor: Colors.green,
-                            ),
-                          );
+                          if (inviteLink != null) {
+                            final serverBase =
+                                AppConfig.apiBaseUrl.replaceAll(
+                              RegExp(r'/api/v1$'),
+                              '',
+                            );
+                            _showInviteLinkDialog(
+                              '$serverBase$inviteLink',
+                              email,
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
+                              const SnackBar(
+                                content: Text('邀请已发送（邀请链接仅在创建时可见）'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
 
                           // 刷新邀请列表
                           _loadInvitations();
@@ -381,26 +466,42 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
     }
   }
 
-  Future<void> _copyInviteLink(int invitationId) async {
-    try {
-      // TODO: 实现复制链接功能
-      // import 'package:flutter/services.dart';
-      // await Clipboard.setData(ClipboardData(text: link));
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('邀请链接已复制到剪贴板'),
-          backgroundColor: Colors.green,
+  /// 展示创建时返回的邀请链接（完整链接仅此一次可见）
+  void _showInviteLinkDialog(String link, String email) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('邀请已发送'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('已向 $email 发送邀请。'),
+            const SizedBox(height: 12),
+            const Text('邀请链接仅此一次可见，请及时分享给受邀人：'),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SelectableText(
+                link,
+                style: const TextStyle(fontSize: 13),
+              ),
+            ),
+          ],
         ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('复制失败：$e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -408,22 +509,37 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
 class _InvitationCard extends StatelessWidget {
   final OrganizationInvitation invitation;
   final VoidCallback? onRevoke;
-  final VoidCallback? onCopyLink;
 
   const _InvitationCard({
     required this.invitation,
     this.onRevoke,
-    this.onCopyLink,
   });
+
+  /// 状态 → (颜色, 文案)，对齐后端 status 枚举
+  (Color, String) _statusDisplay(String status) {
+    switch (status) {
+      case 'accepted':
+        return (Colors.green, '已接受');
+      case 'rejected':
+        return (Colors.red, '已拒绝');
+      case 'expired':
+        return (Colors.grey, '已过期');
+      case 'revoked':
+        return (Colors.grey, '已撤销');
+      case 'pending':
+      default:
+        return (Colors.orange, '待接受');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = invitation.used ? Colors.grey : Colors.orange;
-    final statusText = invitation.used
-        ? (invitation.usedAt != null
-            ? '已于 ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.parse(invitation.usedAt!))} 使用'
-            : '已使用')
-        : '待接受';
+    final (statusColor, statusText) = _statusDisplay(invitation.status);
+    final roleText = invitation.roleCodes.isEmpty
+        ? '未指定'
+        : invitation.roleCodes
+            .map((c) => OrgMemberRoleExtension.fromApiValue(c).displayName)
+            .join('、');
 
     return Card(
       elevation: 2,
@@ -464,76 +580,56 @@ class _InvitationCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert),
-                  onSelected: (value) {
-                    if (value == 'revoke' && onRevoke != null) {
-                      onRevoke!();
-                    } else if (value == 'copy' && onCopyLink != null) {
-                      onCopyLink!();
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'copy',
-                      child: Row(
-                        children: [
-                          Icon(Icons.copy),
-                          SizedBox(width: 8),
-                          Text('复制邀请链接'),
-                        ],
-                      ),
+                if (onRevoke != null)
+                  IconButton(
+                    icon: const Icon(
+                      Icons.cancel_outlined,
+                      color: Colors.red,
                     ),
-                    if (!invitation.used)
-                      const PopupMenuItem(
-                        value: 'revoke',
-                        child: Row(
-                          children: [
-                            Icon(Icons.cancel, color: Colors.red),
-                            SizedBox(width: 8),
-                            Text('撤销邀请'),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+                    tooltip: '撤销邀请',
+                    onPressed: onRevoke,
+                  ),
               ],
             ),
             const Divider(height: 24),
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        invitation.email,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '角色：${invitation.role.displayName}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      if (invitation.invitedByName != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          '邀请人：${invitation.invitedByName}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ],
+                Text(
+                  invitation.email,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  '角色：$roleText',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                if (invitation.organization != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '组织：${invitation.organization}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+                if (invitation.inviterName != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '邀请人：${invitation.inviterName}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
               ],
             ),
             if (invitation.expiresAt != null) ...[

@@ -5,7 +5,7 @@ import { getApiErrorMessage, protocolApi } from './protocolApi'
 
 describe('protocolApi', () => {
   it('loads the reported parallel state without using legacy groups', async () => {
-    server.use(http.get('/api/v1/devices/:sn/parallel-state', ({ params }) =>
+    server.use(http.get('/api/v1/devices/by-sn/:sn/parallel-state', ({ params }) =>
       HttpResponse.json({
         code: 0,
         message: 'success',
@@ -27,7 +27,7 @@ describe('protocolApi', () => {
   })
 
   it('loads paged three-phase 3-minute samples', async () => {
-    server.use(http.get('/api/v1/devices/:sn/three-phase', ({ request }) => {
+    server.use(http.get('/api/v1/devices/by-sn/:sn/three-phase', ({ request }) => {
       const url = new URL(request.url)
       expect(url.searchParams.get('page_size')).toBe('500')
       return HttpResponse.json({
@@ -43,7 +43,7 @@ describe('protocolApi', () => {
   })
 
   it('loads alarm lifecycle and trace fields', async () => {
-    server.use(http.get('/api/v1/devices/:sn/alarm-events', () => HttpResponse.json({
+    server.use(http.get('/api/v1/devices/by-sn/:sn/alarm-events', () => HttpResponse.json({
       code: 0,
       message: 'success',
       data: {
@@ -105,7 +105,7 @@ describe('protocolApi', () => {
   })
 
   it('makes access-denied errors visible to callers', async () => {
-    server.use(http.get('/api/v1/devices/:sn/parallel-state', () =>
+    server.use(http.get('/api/v1/devices/by-sn/:sn/parallel-state', () =>
       HttpResponse.json({ code: 403, message: 'device access denied' }, { status: 403 }),
     ))
 

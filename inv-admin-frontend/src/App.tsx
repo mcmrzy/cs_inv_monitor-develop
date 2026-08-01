@@ -15,6 +15,7 @@ import useLocaleStore from '@/stores/localeStore'
 import useTimezoneStore from '@/stores/timezoneStore'
 
 const LoginPage = lazyWithRetry(() => import('@/pages/login'))
+const InviteAcceptPage = lazyWithRetry(() => import('@/pages/invite/InviteAcceptPage'))
 const UnauthorizedPage = lazyWithRetry(() => import('@/pages/unauthorized'))
 const DashboardPage = lazyWithRetry(() => import('@/pages/dashboard'))
 const DevicesPage = lazyWithRetry(() => import('@/pages/devices'))
@@ -48,6 +49,7 @@ const RoleRedirect: React.FC = () => {
 const AppRoutes: React.FC = () => (
   <Routes>
     <Route path="/login" element={<LoginPage />} />
+    <Route path="/invite/:token" element={<InviteAcceptPage />} />
     <Route path="/unauthorized" element={<UnauthorizedPage />} />
     <Route
       path="/"
@@ -78,7 +80,9 @@ const AppRoutes: React.FC = () => (
       <Route path="/alerts" element={<AlertsPage />} />
       <Route path="/work-orders" element={<WorkOrdersPage />} />
       <Route path="/users" element={<UsersPage />} />
-      <Route path="/admin" element={<AdminPage />} />
+      <Route path="/organizations" element={<AdminPage />} />
+      {/* 旧路径兼容：/admin → /organizations */}
+      <Route path="/admin" element={<Navigate to="/organizations" replace />} />
       <Route path="/parallel" element={<ParallelPage />} />
       <Route path="/stations" element={<StationsPage />} />
       <Route path="/stations/:id" element={<StationDetailPage />} />

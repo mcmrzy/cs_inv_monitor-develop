@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tabs, Row, Col, Progress, Typography, Statistic, Card,
   Button, Space, Tag, Badge, message, Tooltip, Alert,
-  Table, Input, Descriptions, Empty, Spin,
+  Table, Input, Descriptions, Empty, Spin, Form, InputNumber, Switch, App,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { ProTable, ProCard } from '@ant-design/pro-components'
@@ -28,6 +28,8 @@ import { adminApi, type AuditLog, type SystemHealth } from '@/services/adminApi'
 import useTranslation from '@/hooks/useTranslation'
 import { formatInTimezone } from '@/utils/timezone'
 import useTimezoneStore from '@/stores/timezoneStore'
+import { queryKeys } from '@/utils/queryKeys'
+import QueryErrorAlert from '@/components/QueryErrorAlert'
 import type {
   ServiceStatus,
   DLQItem,
@@ -817,6 +819,99 @@ const SystemLogTab: React.FC = () => {
   )
 }
 
+/* ==================== 系统配置 Tab ==================== */
+
+const SettingsTab: React.FC = () => {
+  const { t } = useTranslation()
+  const { message: appMessage } = App.useApp()
+  const [form] = Form.useForm()
+
+  const { isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.admin.config(),
+    queryFn: () => adminApi.getSystemConfig().then((r) => {
+      form.setFieldsValue(r.data?.data ?? {})
+      return r.data?.data ?? {}
+    }),
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: (values: any) => adminApi.updateSystemConfig(values),
+    onSuccess: () => { appMessage.success(t('admin.configSaveSuccess')) },
+    onError: () => { appMessage.error(t('admin.configSaveFailed')) },
+  })
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {error && <QueryErrorAlert error={error} onRetry={() => { void refetch() }} />}
+      <Card title={t('admin.basicSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Form.Item name="site_name" label={t('admin.siteName')}><Input placeholder={t('admin.siteNamePlaceholder')} /></Form.Item>
+        </Form>
+      </Card>
+
+      <Card title={t('admin.emailSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Row gutter={16}>
+            <Col span={16}><Form.Item name="email_host" label={t('admin.smtpServer')}><Input placeholder="smtp.qq.com" /></Form.Item></Col>
+            <Col span={8}><Form.Item name="email_port" label={t('admin.smtpPort')}><InputNumber placeholder="465" style={{ width: '100%' }} /></Form.Item></Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="email_username" label={t('admin.emailUsername')}><Input placeholder="your@email.com" /></Form.Item></Col>
+            <Col span={12}><Form.Item name="email_password" label={t('admin.emailPassword')}><Input.Password placeholder={t('admin.emailPasswordPlaceholder')} /></Form.Item></Col>
+          </Row>
+          <Form.Item name="email_from" label={t('admin.emailFrom')}><Input placeholder="your@email.com" /></Form.Item>
+          <Form.Item name="email_use_ssl" label={t('admin.enableSSL')} valuePropName="checked"><Switch /></Form.Item>
+        </Form>
+      </Card>
+
+      <Card title={t('admin.mqttSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Row gutter={16}>
+            <Col span={16}><Form.Item name="mqtt_broker" label={t('admin.mqttBroker')}><Input placeholder="jiuxiaoyw.online" /></Form.Item></Col>
+            <Col span={8}><Form.Item name="mqtt_port" label={t('admin.mqttPort')}><Input placeholder="8883" /></Form.Item></Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="mqtt_username" label={t('admin.mqttUsername')}><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="mqtt_password" label={t('admin.mqttPassword')}><Input.Password /></Form.Item></Col>
+          </Row>
+          <Form.Item name="mqtt_tls_insecure" label={t('admin.mqttTLSInsecure')} valuePropName="checked"><Switch /></Form.Item>
+        </Form>
+      </Card>
+
+      <Card title={t('admin.smsSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="sms_access_key" label="Access Key"><Input.Password /></Form.Item></Col>
+            <Col span={12}><Form.Item name="sms_secret_key" label="Secret Key"><Input.Password /></Form.Item></Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}><Form.Item name="sms_sign_name" label={t('admin.smsSignName')}><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="sms_template" label={t('admin.smsTemplate')}><Input /></Form.Item></Col>
+          </Row>
+        </Form>
+      </Card>
+
+      <Card title={t('admin.dataSettings')} bordered={false} style={{ borderRadius: 12 }} loading={isLoading}>
+        <Form form={form} layout="vertical" style={{ maxWidth: 600 }}>
+          <Row gutter={16}>
+            <Col span={8}><Form.Item name="data_retention_days" label={t('admin.dataRetention')}><InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="30" /></Form.Item></Col>
+            <Col span={8}><Form.Item name="alert_retention_days" label={t('admin.alertRetention')}><InputNumber min={1} max={365} style={{ width: '100%' }} placeholder="90" /></Form.Item></Col>
+            <Col span={8}><Form.Item name="max_login_attempts" label={t('admin.maxLoginAttempts')}><InputNumber min={1} max={10} style={{ width: '100%' }} placeholder="5" /></Form.Item></Col>
+          </Row>
+          <Form.Item name="enable_auto_upgrade" label={t('admin.autoUpgrade')} valuePropName="checked"><Switch /></Form.Item>
+        </Form>
+      </Card>
+
+      <Button type="primary" size="large" onClick={async () => {
+        try {
+          const v = await form.validateFields()
+          saveMutation.mutate(v)
+        } catch {}
+      }} loading={saveMutation.isPending}>{t('admin.saveConfig')}</Button>
+    </div>
+  )
+}
+
 /* ==================== 主组件 ==================== */
 
 const SystemMonitorPage: React.FC = () => {
@@ -834,6 +929,7 @@ const SystemMonitorPage: React.FC = () => {
           { key: 'pipeline', label: t('system.tabDataPipeline'), children: <DataPipelineTab /> },
           { key: 'stats', label: t('system.tabOperationStats'), children: <OperationStatsTab /> },
           { key: 'logs', label: t('system.tabSystemLog'), children: <SystemLogTab /> },
+          { key: 'settings', label: t('admin.systemConfig'), children: <SettingsTab /> },
         ]}
         size="large"
       />

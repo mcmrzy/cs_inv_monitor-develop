@@ -21,13 +21,14 @@ import (
 )
 
 type EmailService struct {
-	cache  *redis.Client
-	cfg    config.EmailConfig
-	cfgSvc *ConfigService
+	cache       *redis.Client
+	cfg         config.EmailConfig
+	cfgSvc      *ConfigService
+	frontendURL string
 }
 
-func NewEmailService(cache *redis.Client, cfg config.EmailConfig, cfgSvc *ConfigService) *EmailService {
-	return &EmailService{cache: cache, cfg: cfg, cfgSvc: cfgSvc}
+func NewEmailService(cache *redis.Client, cfg config.EmailConfig, cfgSvc *ConfigService, frontendURL string) *EmailService {
+	return &EmailService{cache: cache, cfg: cfg, cfgSvc: cfgSvc, frontendURL: frontendURL}
 }
 
 func (s *EmailService) SendCode(ctx context.Context, email, codeType string) error {
@@ -67,7 +68,7 @@ func (s *EmailService) SendCode(ctx context.Context, email, codeType string) err
 			"Code":    code,
 			"Subject": getSubjectByCodeType(codeType),
 		}
-		if err := s.sendMailWithTemplate(email, data, "verification_code.tmpl", emailCfg); err != nil {
+		if err := s.sendMailWithTemplate(email, data, "verification_code.tmpl", data["Subject"], emailCfg); err != nil {
 			return fmt.Errorf("邮件发送失败：%v", err)
 		}
 	} else {
@@ -225,7 +226,7 @@ func (s *EmailService) sendMail(to, code, codeType string, cfg config.EmailConfi
 }
 
 // sendMailWithTemplate sends email using HTML templates
-func (s *EmailService) sendMailWithTemplate(to string, data map[string]string, templateName string, cfg config.EmailConfig) error {
+func (s *EmailService) sendMailWithTemplate(to string, data map[string]string, templateName, subject string, cfg config.EmailConfig) error {
 	// Get the directory of this file
 	currentDir := "./internal/templates"
 	templatePath := filepath.Join(currentDir, templateName)
@@ -251,7 +252,7 @@ func (s *EmailService) sendMailWithTemplate(to string, data map[string]string, t
 	m := gomail.NewMessage()
 	m.SetHeader("From", cfg.From)
 	m.SetHeader("To", to)
-	m.SetHeader("Subject", "邀请加入组织")
+	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", buf.String())
 
 	d := gomail.NewDialer(cfg.Host, cfg.Port, cfg.Username, cfg.Password)
@@ -426,7 +427,7 @@ func maskEmail(email string) string {
 }
 
 // SendInvitationEmail sends invitation emails to new users
-func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organizationName string, expiresHours int, senderName string) error {
+func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organizationName string, expiresHours int, senderName, invitePath string) error {
 	ctx := context.Background()
 	emailCfg := s.cfg
 	if s.cfgSvc != nil {
@@ -445,9 +446,10 @@ func (s *EmailService) SendInvitationEmail(toEmail, tokenHint, roleName, organiz
 		"ExpiresHours":     fmt.Sprintf("%d", expiresHours),
 		"SenderName":       senderName,
 		"CompanyName":      strings.Split(senderName, " ")[0], // Extract company name
+		"InviteURL":        strings.TrimRight(s.frontendURL, "/") + invitePath,
 	}
 
-	return s.sendMailWithTemplate(toEmail, data, "invitation_email.tmpl", emailCfg)
+	return s.sendMailWithTemplate(toEmail, data, "invitation_email.tmpl", "【CSERGY】邀请加入组织 · "+organizationName, emailCfg)
 }
 
 // SendTransferNotification sends device transfer notification emails
@@ -463,14 +465,15 @@ func (s *EmailService) SendTransferNotification(requesterEmail, deviceSN, fromOr
 	}
 
 	data := map[string]string{
-		"DeviceSN":  deviceSN,
-		"FromOrg":   fromOrg,
-		"ToOrg":     toOrg,
-		"Reason":    reason,
+		"DeviceSN":   deviceSN,
+		"FromOrg":    fromOrg,
+		"ToOrg":      toOrg,
+		"Reason":     reason,
 		"SenderName": senderName,
+		"ActionURL":  strings.TrimRight(s.frontendURL, "/") + "/organizations",
 	}
 
-	return s.sendMailWithTemplate("admin@example.com", data, "transfer_notification.tmpl", emailCfg)
+	return s.sendMailWithTemplate("admin@example.com", data, "transfer_notification.tmpl", "设备转移通知", emailCfg)
 }
 
 // SendWelcomeEmail sends welcome emails to new users
@@ -491,7 +494,7 @@ func (s *EmailService) SendWelcomeEmail(toEmail, username string, senderName str
 		"SenderName": senderName,
 	}
 
-	return s.sendMailWithTemplate(toEmail, data, "welcome_email.tmpl", emailCfg)
+	return s.sendMailWithTemplate(toEmail, data, "welcome_email.tmpl", "欢迎加入 CSERGY 平台", emailCfg)
 }
 
 // SendPasswordReset sends password reset emails
@@ -513,5 +516,5 @@ func (s *EmailService) SendPasswordReset(token, username, userEmail string, send
 		"SenderName": senderName,
 	}
 
-	return s.sendMailWithTemplate(userEmail, data, "password_reset.tmpl", emailCfg)
+	return s.sendMailWithTemplate(userEmail, data, "password_reset.tmpl", "重置密码", emailCfg)
 }

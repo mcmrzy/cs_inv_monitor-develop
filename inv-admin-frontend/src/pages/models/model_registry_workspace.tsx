@@ -386,12 +386,12 @@ const ModelRegistryWorkspace: React.FC = () => {
     ]} />
 
     <Drawer width={1040} open={!!selectedModel && !modelModalOpen} onClose={() => setSelectedModel(null)}
-      title={selectedModel ? `${selectedModel.model_code} · ${selectedModel.model_name}` : ''} destroyOnClose>
+      title={selectedModel ? `${selectedModel.model_code} · ${selectedModel.model_name}` : ''} destroyOnHidden>
       <Tabs items={drawerTabs} />
     </Drawer>
 
     <Modal title={selectedModel ? t('models.editModel') : t('models.addModel')} open={modelModalOpen} onCancel={() => { setModelModalOpen(false); setSelectedModel(null) }}
-      onOk={() => modelForm.submit()} confirmLoading={saveModel.isPending} destroyOnClose>
+      onOk={() => modelForm.submit()} confirmLoading={saveModel.isPending} destroyOnHidden>
       <Form form={modelForm} layout="vertical" onFinish={(values) => saveModel.mutate(values)}>
         <Form.Item name="model_code" label={t('models.modelCode')} rules={[{ required: true }]}><Input disabled={!!selectedModel} /></Form.Item>
         <Form.Item name="model_name" label={t('models.modelName')} rules={[{ required: true }]}><Input /></Form.Item>
@@ -409,7 +409,7 @@ const ModelRegistryWorkspace: React.FC = () => {
     </Modal>
 
     <Modal title={editingField ? t('models.registry.editStandardField') : t('models.registry.addStandardField')} open={fieldModalOpen} onCancel={() => setFieldModalOpen(false)}
-      onOk={() => fieldForm.submit()} confirmLoading={saveCatalog.isPending} destroyOnClose>
+      onOk={() => fieldForm.submit()} confirmLoading={saveCatalog.isPending} destroyOnHidden>
       <Form form={fieldForm} layout="vertical" onFinish={(values) => saveCatalog.mutate(values)}>
         <Form.Item name="field_key" label={t('models.registry.fieldKey')} rules={[{ required: true, pattern: /^[a-z][a-z0-9_]*$/ }]}><Input disabled={!!editingField} /></Form.Item>
         <Space size="middle" style={{ display: 'flex' }}>
@@ -428,7 +428,7 @@ const ModelRegistryWorkspace: React.FC = () => {
     </Modal>
 
     <Modal title={editingCommand ? t('models.registry.editCommand') : t('models.registry.addCommandCapability')} open={commandModalOpen} onCancel={() => setCommandModalOpen(false)}
-      onOk={() => commandForm.submit()} confirmLoading={saveCommand.isPending} width={680} destroyOnClose>
+      onOk={() => commandForm.submit()} confirmLoading={saveCommand.isPending} width={680} destroyOnHidden>
       <Form form={commandForm} layout="vertical" onFinish={(values) => saveCommand.mutate(values)}>
         <Space size="middle" style={{ display: 'flex' }}>
           <Form.Item name="command_code" label={t('models.registry.commandCode')} rules={[{ required: true }]}><Input disabled={!!editingCommand} /></Form.Item>
@@ -445,7 +445,7 @@ const ModelRegistryWorkspace: React.FC = () => {
     </Modal>
 
     <Modal title={t('models.registry.newHeartbeatDraft')} open={protocolModalOpen} onCancel={() => setProtocolModalOpen(false)}
-      onOk={() => protocolForm.submit()} confirmLoading={saveProtocol.isPending} width={760} destroyOnClose>
+      onOk={() => protocolForm.submit()} confirmLoading={saveProtocol.isPending} width={760} destroyOnHidden>
       <Form form={protocolForm} layout="vertical" onFinish={(values) => saveProtocol.mutate(values)}>
         <Space size="middle" style={{ display: 'flex' }}>
           <Form.Item name="protocol_code" label={t('models.registry.protocolCode')} rules={[{ required: true }]}><Input /></Form.Item>

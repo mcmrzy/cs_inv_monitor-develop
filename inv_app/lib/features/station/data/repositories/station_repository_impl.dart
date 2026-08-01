@@ -160,6 +160,86 @@ class StationRepositoryImpl implements StationRepository {
   }
 
   @override
+  Future<Either<Failure, void>> unbindDevice(String sn) async {
+    try {
+      final response = await remoteDataSource.unbindDevice(sn);
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold(
+        (failure) => Left(failure),
+        (_) => const Right(null),
+      );
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> rebindDevice(String sn, int newStationId) async {
+    try {
+      final response = await remoteDataSource.rebindDevice(sn, newStationId);
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold(
+        (failure) => Left(failure),
+        (_) => const Right(null),
+      );
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> bindDevice(String sn, int stationId) async {
+    try {
+      final response = await remoteDataSource.bindDevice(sn, stationId);
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold(
+        (failure) => Left(failure),
+        (_) => const Right(null),
+      );
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> deleteDevice(String sn) async {
+    try {
+      final response = await remoteDataSource.deleteDevice(sn);
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold(
+        (failure) => Left(failure),
+        (_) => const Right(null),
+      );
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> reorderDevices(int stationId, List<String> deviceOrder) async {
+    try {
+      final response = await remoteDataSource.reorderDevices(stationId, deviceOrder);
+      final parsed = _parseData(response, allowEmpty: true);
+      return parsed.fold(
+        (failure) => Left(failure),
+        (_) => const Right(null),
+      );
+    } on DioException catch (e) {
+      return Left(_mapError(e));
+    } catch (e) {
+      return Left(UnknownFailure(e.toString()));
+    }
+  }
+
+  @override
   Future<Either<Failure, List<dynamic>>> getStatistics(
     int stationId,
     String startDate,

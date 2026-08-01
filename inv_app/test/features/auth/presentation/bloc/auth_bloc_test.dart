@@ -26,6 +26,7 @@ void main() {
   late MockRefreshTokenUseCase mockRefreshTokenUseCase;
   late MockWechatLoginUseCase mockWechatLoginUseCase;
   late MockGoogleLoginUseCase mockGoogleLoginUseCase;
+  late MockJVerifyLoginUseCase mockJVerifyLoginUseCase;
   late MockStorageService mockStorageService;
   late MockMQTTService mockMQTTService;
   late MockJPushService mockJPushService;
@@ -45,6 +46,7 @@ void main() {
     mockRefreshTokenUseCase = MockRefreshTokenUseCase();
     mockWechatLoginUseCase = MockWechatLoginUseCase();
     mockGoogleLoginUseCase = MockGoogleLoginUseCase();
+    mockJVerifyLoginUseCase = MockJVerifyLoginUseCase();
     mockStorageService = MockStorageService();
     mockMQTTService = MockMQTTService();
     mockJPushService = MockJPushService();
@@ -64,6 +66,7 @@ void main() {
       refreshTokenUseCase: mockRefreshTokenUseCase,
       wechatLoginUseCase: mockWechatLoginUseCase,
       googleLoginUseCase: mockGoogleLoginUseCase,
+      jverifyLoginUseCase: mockJVerifyLoginUseCase,
       storageService: mockStorageService,
       jpushService: mockJPushService,
     );

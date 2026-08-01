@@ -14,6 +14,8 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        // 兼容旧版 flutter_libserialport（wifi_scan 依赖）
+        jcenter()
     }
 }
 

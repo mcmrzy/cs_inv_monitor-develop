@@ -185,15 +185,38 @@ describe('channelApi', () => {
       expect(res.data.code).toBe(0)
     })
 
-    it('sendInvitation should create invitation', async () => {
+    it('sendInvitation should create invitations in batch', async () => {
       server.use(
         http.post('/api/v1/invitations/create', async ({ request }) => {
           const body = (await request.json()) as any
-          return HttpResponse.json({ code: 0, data: { id: 2, ...body, status: 'pending' } })
+          expect(body.emails).toEqual(['a@test.com', 'b@test.com'])
+          expect(body.assignments).toEqual([
+            { organization_id: 1, role_code: 'agent' },
+            { organization_id: 2, role_code: 'distributor' },
+          ])
+          expect(body.expires_hours).toBe(72)
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              created: 2,
+              results: [
+                { email: 'a@test.com', invitation_id: 10, status: 'created', invite_link: '/invite/abc' },
+                { email: 'b@test.com', invitation_id: 11, status: 'created', invite_link: '/invite/def' },
+              ],
+            },
+          })
         }),
       )
-      const res = await channelApi.sendInvitation({ organization_id: 1, email: 'new@test.com', role_name: 'member' })
+      const res = await channelApi.sendInvitation({
+        emails: ['a@test.com', 'b@test.com'],
+        assignments: [
+          { organization_id: 1, role_code: 'agent' },
+          { organization_id: 2, role_code: 'distributor' },
+        ],
+        expires_hours: 72,
+      })
       expect(res.data.code).toBe(0)
+      expect(res.data.data.created).toBe(2)
     })
 
     it('revokeInvitation should revoke invitation', async () => {
@@ -206,13 +229,17 @@ describe('channelApi', () => {
       expect(res.data.code).toBe(0)
     })
 
-    it('resendInvitation should resend invitation', async () => {
+    it('getInvitationLink should return copy-link guidance', async () => {
       server.use(
-        http.post('/api/v1/invitations/:id/resend', () => {
-          return HttpResponse.json({ code: 0, message: 'resent' })
+        http.get('/api/v1/invitations/:id/copy-link', () => {
+          return HttpResponse.json({
+            code: 0,
+            message: 'invitation link visible only at creation',
+            data: { invitation_id: 1, email: 'a@test.com' },
+          })
         }),
       )
-      const res = await channelApi.resendInvitation(1)
+      const res = await channelApi.getInvitationLink(1)
       expect(res.data.code).toBe(0)
     })
   })

@@ -7,6 +7,7 @@ import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/continents_data.dart';
 import 'package:inv_app/core/data/regions_data.dart';
 import 'package:inv_app/core/data/country_name_mapping.dart';
+import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
@@ -34,7 +35,6 @@ class _CreateStationPageState extends State<CreateStationPage> {
   double? _latitude;
   double? _longitude;
   bool _submitting = false;
-  bool _geocoding = false;
 
   List<String> get _provinces {
     if (_country == '中国') {
@@ -42,7 +42,9 @@ class _CreateStationPageState extends State<CreateStationPage> {
     }
     // 将中文国家名映射到英文名，然后从 globalRegions 获取省份数据
     final englishName = getEnglishCountryName(_country);
-    return globalRegions[englishName] ?? [];
+    final provincesList = globalRegions[englishName] ?? [];
+    // 将英文省份名翻译为中文
+    return provincesList.map((p) => getLocalizedProvinceName(englishName, p)).toList();
   }
 
   String get _addressText {
@@ -158,7 +160,6 @@ class _CreateStationPageState extends State<CreateStationPage> {
   Future<void> _autoGeocode() async {
     final addr = _addressText;
     if (addr.isEmpty) return;
-    setState(() => _geocoding = true);
     try {
       final dio = getIt<Dio>();
       final res = await dio.get('/geocode', queryParameters: {
@@ -167,38 +168,19 @@ class _CreateStationPageState extends State<CreateStationPage> {
       });
       final data = res.data['data'];
       if (data != null && data['lat'] != null && data['lng'] != null) {
+        final lat = (data['lat'] as num).toDouble();
+        final lng = (data['lng'] as num).toDouble();
         setState(() {
-          _latitude = (data['lat'] as num).toDouble();
-          _longitude = (data['lng'] as num).toDouble();
+          _latitude = lat;
+          _longitude = lng;
+        });
+        // 地图飞到对应位置（等待 InlineLocationPicker didUpdateWidget 生效）
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _mapKey.currentState?.searchAndFlyTo(addr);
         });
       }
     } catch (_) {
       // 地理编码失败不阻断流程
-    } finally {
-      if (mounted) setState(() => _geocoding = false);
-    }
-  }
-
-  Future<void> _openLocationPicker() async {
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LocationPickerPage(
-          initialLat: _latitude,
-          initialLng: _longitude,
-        ),
-      ),
-    );
-    if (result != null) {
-      setState(() {
-        _latitude = (result['lat'] as num?)?.toDouble();
-        _longitude = (result['lng'] as num?)?.toDouble();
-      });
-      // Auto-fill address from reverse geocoding
-      final addr = result['address'] as String?;
-      if (addr != null && addr.isNotEmpty) {
-        _detailCtl.text = addr;
-      }
     }
   }
 
@@ -356,7 +338,10 @@ class _CreateStationPageState extends State<CreateStationPage> {
                               padding: EdgeInsets.only(top: 28.h),
                               child: IconButton(
                                 onPressed: () {
-                                  _mapKey.currentState?.searchAndFlyTo(_detailCtl.text);
+                                  _mapKey.currentState?.searchAndFlyTo(
+                                    _addressText,
+                                    displayAddress: _detailCtl.text,
+                                  );
                                 },
                                 icon: Icon(Icons.search, size: 20.sp),
                                 style: IconButton.styleFrom(
@@ -635,16 +620,88 @@ class _ContinentCountryPickerPageState
     var countries = List<Map<String, String>>.from(
         continents[_continentIdx]['countries'] as List,
     );
-    // 按拼音排序（Unicode 码点顺序，对中文字符近似拼音顺序）
-    countries.sort((a, b) => (a['name'] ?? '').compareTo(b['name'] ?? ''));
-    // 按搜索关键词过滤
-    if (_searchQuery.isNotEmpty) {
-      countries = countries.where((c) {
-        final name = c['name'] ?? '';
-        return name.toLowerCase().contains(_searchQuery.toLowerCase());
-      }).toList();
-    }
     return countries;
+  }
+
+  /// 搜索国家/省市并自动滚动到对应位置
+  void _searchAndNavigate(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _searchQuery = '';
+        _countryIdx = 0;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _countryCtrl.jumpToItem(0);
+      });
+      return;
+    }
+
+    setState(() {
+      _searchQuery = query;
+    });
+
+    final lowerQuery = query.toLowerCase();
+
+    // 1. 先搜索国家名
+    for (int i = 0; i < continents.length; i++) {
+      final continent = continents[i];
+      final countries = continent['countries'] as List? ?? [];
+      for (int j = 0; j < countries.length; j++) {
+        final country = Map<String, String>.from(countries[j] as Map);
+        final name = country['name'] ?? '';
+        if (name.toLowerCase().contains(lowerQuery)) {
+          setState(() {
+            _continentIdx = i;
+            _countryIdx = j;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _continentCtrl.jumpToItem(i);
+            _countryCtrl.jumpToItem(j);
+          });
+          return;
+        }
+      }
+    }
+
+    // 2. 搜索省份/城市（在 globalRegions 中搜索）
+    for (final entry in globalRegions.entries) {
+      final countryNameEn = entry.key;
+      final provinces = entry.value;
+      for (final province in provinces) {
+        if (province.toLowerCase().contains(lowerQuery)) {
+          // 找到匹配的省份，找到对应的国家在哪个洲
+          final countryNameZh = _getChineseCountryName(countryNameEn);
+          for (int i = 0; i < continents.length; i++) {
+            final continent = continents[i];
+            final countries = continent['countries'] as List? ?? [];
+            for (int j = 0; j < countries.length; j++) {
+              final country = Map<String, String>.from(countries[j] as Map);
+              if (country['name'] == countryNameZh) {
+                setState(() {
+                  _continentIdx = i;
+                  _countryIdx = j;
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _continentCtrl.jumpToItem(i);
+                  _countryCtrl.jumpToItem(j);
+                });
+                return;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /// 根据英文国家名获取中文名
+  String _getChineseCountryName(String englishName) {
+    for (final entry in countryNameZhToEn.entries) {
+      if (entry.value == englishName) {
+        return entry.key;
+      }
+    }
+    return englishName;
   }
 
   void _onContinentChanged(int idx) {
@@ -738,14 +795,8 @@ class _ContinentCountryPickerPageState
                           ? IconButton(
                               icon: Icon(Icons.clear, size: 18.sp, color: AppColors.textHint),
                               onPressed: () {
-                                setState(() {
-                                  _searchCtrl.clear();
-                                  _searchQuery = '';
-                                  _countryIdx = 0;
-                                });
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  _countryCtrl.jumpToItem(0);
-                                });
+                                _searchCtrl.clear();
+                                _searchAndNavigate('');
                               },
                             )
                           : null,
@@ -766,13 +817,7 @@ class _ContinentCountryPickerPageState
                       fillColor: const Color(0xFFF8FAFB),
                     ),
                     onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                        _countryIdx = 0;
-                      });
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        _countryCtrl.jumpToItem(0);
-                      });
+                      _searchAndNavigate(value);
                     },
                   ),
                 ),

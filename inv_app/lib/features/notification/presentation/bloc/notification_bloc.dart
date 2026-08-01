@@ -113,7 +113,6 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
   final RealtimeDataService? realtimeDataService;
   final NotificationRemoteDataSource? notificationDataSource;
   static const _localNotifKey = 'local_notifications'; // 仅存储OTA/APP更新等本地通知
-  static const _maxNotifications = 100;
 
   StreamSubscription<dynamic>? _realtimeSub;
   StreamSubscription<dynamic>? _alarmSub;
@@ -158,19 +157,6 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     });
   }
 
-  Future<void> _addOtaNotification(dynamic ota) async {
-    final storage = getIt<StorageService>();
-    final notification = SystemNotification(
-      type: SystemNotificationType.otaAvailable,
-      title: '',
-      subtitle: '',
-      timestamp: DateTime.now(),
-      deviceSn: ota.deviceSN,
-    );
-    await _prependLocalNotification(storage, notification);
-    add(const SystemNotificationsRequested());
-  }
-
   /// MQTT 状态更新时，不再本地生成通知（后端已处理），仅触发刷新
   Future<void> _onMqttStatusUpdate(
     _MqttStatusUpdate event,
@@ -201,30 +187,6 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
       '[NotificationBloc] JPush tapped: ${event.notifyType}, deviceSn=${event.deviceSn}',
     );
     _debouncedRefresh();
-  }
-
-  Future<void> _prependLocalNotification(
-    StorageService storage,
-    SystemNotification notification,
-  ) async {
-    final storedJson = await storage.getString(_localNotifKey);
-    List<SystemNotification> stored = [];
-    if (storedJson != null && storedJson.isNotEmpty) {
-      try {
-        final decoded = json.decode(storedJson) as List;
-        stored = decoded
-            .map((e) => SystemNotification.fromJson(e as Map<String, dynamic>))
-            .toList();
-      } catch (_) {}
-    }
-
-    final allNotifications = [notification, ...stored];
-    final trimmed = allNotifications.length > _maxNotifications
-        ? allNotifications.sublist(0, _maxNotifications)
-        : allNotifications;
-
-    final saveJson = json.encode(trimmed.map((e) => e.toJson()).toList());
-    await storage.saveString(_localNotifKey, saveJson);
   }
 
   Future<void> _onSystemNotificationsRequested(

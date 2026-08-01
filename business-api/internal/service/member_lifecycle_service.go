@@ -512,9 +512,9 @@ type ListMembersResult struct {
 	Size  int
 }
 
-// ListMembers lists all members of an organization
-func (s *MemberLifecycleService) ListMembers(ctx context.Context, orgID int64, page, pageSize int) (*ListMembersResult, error) {
-	members, total, err := s.repo.ListMembersByOrgID(ctx, orgID, page, pageSize)
+// ListMembers lists all members of an organization, optionally filtered by role
+func (s *MemberLifecycleService) ListMembers(ctx context.Context, orgID int64, page, pageSize int, roleFilter string) (*ListMembersResult, error) {
+	members, total, err := s.repo.ListMembersByOrgID(ctx, orgID, page, pageSize, roleFilter)
 	if err != nil {
 		logger.Error("ListMembers query failed", zap.Int64("org_id", orgID), zap.Error(err))
 		return nil, newServiceError(500, "查询成员列表失败")

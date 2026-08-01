@@ -73,4 +73,8 @@ abstract class AuthRepository {
   Future<Either<Failure, LoginResponse>> googleLogin({
     required String idToken,
   });
+
+  Future<Either<Failure, LoginResponse>> jverifyLogin({
+    required String loginToken,
+  });
 }

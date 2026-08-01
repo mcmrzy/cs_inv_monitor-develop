@@ -1,0 +1,218 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"inv-api-server/internal/config"
+	"inv-api-server/pkg/logger"
+
+	"go.uber.org/zap"
+)
+
+const (
+	jverifyAPIURL     = "https://api.verification.jpush.cn/v2/web/loginTokenVerify"
+	jverifySuccessCode = 8000
+)
+
+// JVerifyService 极光认证服务，负责验证 loginToken 并解密手机号
+type JVerifyService struct {
+	enabled      bool
+	appKey       string
+	masterSecret string
+	privateKey   *rsa.PrivateKey
+	httpClient   *http.Client
+}
+
+// NewJVerifyService 创建 JVerify 服务实例
+// cfg: JVerify 配置（包含独立的 AppKey 和 MasterSecret）
+func NewJVerifyService(cfg *config.JVerifyConfig) (*JVerifyService, error) {
+	if cfg == nil || !cfg.Enabled {
+		logger.Info("JVerify service disabled")
+		return &JVerifyService{enabled: false}, nil
+	}
+
+	if cfg.AppKey == "" || cfg.MasterSecret == "" {
+		return nil, fmt.Errorf("jverify.app_key and jverify.master_secret are required when enabled=true")
+	}
+
+	if cfg.RSAPrivateKey == "" {
+		return nil, fmt.Errorf("jverify.rsa_private_key is required when enabled=true")
+	}
+
+	privateKey, err := parsePKCS8PrivateKey(cfg.RSAPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("parse RSA private key: %w", err)
+	}
+
+	logger.Info("JVerify service initialized", zap.String("app_key", cfg.AppKey))
+	return &JVerifyService{
+		enabled:      true,
+		appKey:       cfg.AppKey,
+		masterSecret: cfg.MasterSecret,
+		privateKey:   privateKey,
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+	}, nil
+}
+
+// NewDisabledJVerifyService 创建一个禁用的 JVerify 服务实例（降级使用）
+func NewDisabledJVerifyService() *JVerifyService {
+	return &JVerifyService{enabled: false}
+}
+
+// IsEnabled 返回服务是否启用
+func (s *JVerifyService) IsEnabled() bool {
+	return s != nil && s.enabled
+}
+
+// VerifyLoginToken 验证极光 loginToken 并解密手机号
+// loginToken: 客户端 SDK 获取的令牌
+// 返回: 明文手机号
+func (s *JVerifyService) VerifyLoginToken(ctx context.Context, loginToken string) (string, error) {
+	if !s.IsEnabled() {
+		return "", fmt.Errorf("jverify service is disabled")
+	}
+
+	logger.Info("JVerify VerifyLoginToken started", 
+		zap.String("loginToken_prefix", loginToken[:20]),
+		zap.String("api_url", jverifyAPIURL),
+		zap.String("app_key", s.appKey))
+
+	// 构建请求
+	reqBody := map[string]string{"loginToken": loginToken}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, jverifyAPIURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return "", fmt.Errorf("create request: %w", err)
+	}
+
+	// Basic Auth 鉴权
+	req.SetBasicAuth(s.appKey, s.masterSecret)
+	req.Header.Set("Content-Type", "application/json")
+
+	logger.Info("JVerify sending request to API")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		logger.Error("JVerify HTTP request failed", zap.Error(err))
+		return "", fmt.Errorf("http request to jverify API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	logger.Info("JVerify received response", zap.Int("status_code", resp.StatusCode))
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read response body: %w", err)
+	}
+
+	logger.Info("JVerify response body", zap.String("body", string(respBody)))
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("jverify API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// 解析响应
+	var apiResp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Phone   string `json:"phone"` // RSA 加密的手机号
+	}
+	if err := json.Unmarshal(respBody, &apiResp); err != nil {
+		return "", fmt.Errorf("unmarshal response: %w", err)
+	}
+
+	if apiResp.Code != jverifySuccessCode {
+		return "", fmt.Errorf("jverify API error (code=%d): %s", apiResp.Code, apiResp.Message)
+	}
+
+	if apiResp.Phone == "" {
+		return "", fmt.Errorf("jverify API returned empty phone")
+	}
+
+	// RSA 解密手机号
+	phone, err := s.decryptPhone(apiResp.Phone)
+	if err != nil {
+		return "", fmt.Errorf("decrypt phone: %w", err)
+	}
+
+	logger.Info("JVerify login token verified", zap.String("phone", phone[:3]+"****"+phone[7:]))
+	return phone, nil
+}
+
+// decryptPhone 使用 RSA PKCS1v15 解密极光返回的加密手机号
+func (s *JVerifyService) decryptPhone(encryptedPhone string) (string, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(encryptedPhone)
+	if err != nil {
+		return "", fmt.Errorf("base64 decode: %w", err)
+	}
+
+	plaintext, err := rsa.DecryptPKCS1v15(nil, s.privateKey, ciphertext)
+	if err != nil {
+		return "", fmt.Errorf("RSA decrypt: %w", err)
+	}
+
+	return strings.TrimSpace(string(plaintext)), nil
+}
+
+// parsePKCS8PrivateKey 解析 PKCS8 格式的 RSA 私钥
+// 支持 PEM 格式（含头尾）和纯 base64 格式
+// 自动处理环境变量中的字面 \n 转义
+func parsePKCS8PrivateKey(keyBase64 string) (*rsa.PrivateKey, error) {
+	// 去除首尾空白和可能的外层引号
+	keyBase64 = strings.TrimSpace(keyBase64)
+	keyBase64 = strings.Trim(keyBase64, "\"'")
+
+	// 环境变量中的 \n 可能是字面文本，需转为真实换行
+	if strings.Contains(keyBase64, "\\n") {
+		keyBase64 = strings.ReplaceAll(keyBase64, "\\n", "\n")
+	}
+	keyBase64 = strings.TrimSpace(keyBase64)
+
+	var derBytes []byte
+	var err error
+
+	// 检查是否是 PEM 格式
+	if strings.HasPrefix(keyBase64, "-----BEGIN") {
+		block, _ := pem.Decode([]byte(keyBase64))
+		if block == nil {
+			return nil, fmt.Errorf("failed to decode PEM block")
+		}
+		derBytes = block.Bytes
+	} else {
+		// 纯 base64 格式
+		derBytes, err = base64.StdEncoding.DecodeString(keyBase64)
+		if err != nil {
+			return nil, fmt.Errorf("base64 decode: %w", err)
+		}
+	}
+
+	// 尝试 PKCS8 格式
+	key, err := x509.ParsePKCS8PrivateKey(derBytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse PKCS8 private key: %w", err)
+	}
+
+	rsaKey, ok := key.(*rsa.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("key is not an RSA private key")
+	}
+
+	return rsaKey, nil
+}

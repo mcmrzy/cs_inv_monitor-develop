@@ -78,7 +78,7 @@ class JPushService {
 
     _jpush = JPush.newJPush();
     _jpush.setup(
-      appKey: appKey ?? '*REMOVED*',
+      appKey: appKey ?? '5a5df0da74b0ec20becb9bb1',
       channel: 'inv_app',
       production: true,
       debug: kDebugMode,

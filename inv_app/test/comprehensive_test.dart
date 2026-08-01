@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:dio/dio.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
-import 'package:inv_app/core/services/realtime_data_service.dart';
 
 // Mock classes
 class MockDio extends Mock implements Dio {}

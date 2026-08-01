@@ -1029,14 +1029,14 @@ const StationsPage: React.FC = () => {
         />
       )}
       <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-        <Title level={4} style={{ margin: 0 }}>⚡ {t('station.title')}</Title>
+        <Title level={4} style={{ margin: 0 }}>{t('station.title')}</Title>
         <Space>
           {isAdmin && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddModalOpen(true)}>
               {t('station.addStation')}
             </Button>
           )}
-          {isAdmin && <Tag icon={<ReloadOutlined spin={isLoading} />} color="processing">{t('station.manageAll')}</Tag>}
+
           <Button icon={<ReloadOutlined />} onClick={() => refetch()}>{t('common.refresh')}</Button>
         </Space>
       </Space>
@@ -1167,7 +1167,7 @@ const StationsPage: React.FC = () => {
           setCurrentStation(null)
         }}
         width={screens.md ? 800 : '100%'}
-        destroyOnClose
+        destroyOnHidden
       >
         <Tabs
           activeKey={activeTab}
@@ -1190,7 +1190,7 @@ const StationsPage: React.FC = () => {
         onFinish={handleEditSave}
         layout="vertical"
         width={720}
-        modalProps={{ destroyOnClose: true, maskClosable: false }}
+        modalProps={{ destroyOnHidden: true, maskClosable: false }}
       >
         <Row gutter={16}>
           <Col span={12}>
@@ -1205,11 +1205,11 @@ const StationsPage: React.FC = () => {
                 value={undefined}
                 onChange={(region) => {
                   editForm.setFieldsValue({
-                    province: region[0] || '',
-                    city: region[1] || '',
-                    district: region[2] || ''
+                    country: region[0] || '',
+                    province: region[1] || '',
+                    city: region[2] || ''
                   })
-                  triggerGeocode(region[0] || '', region[1] || '', region[2] || '', editForm.getFieldValue('address') || '', '', editMapRef)
+                  triggerGeocode(region[1] || '', region[2] || '', '', editForm.getFieldValue('address') || '', region[0] || '', editMapRef)
                 }}
                 mode="station"
               />
@@ -1219,7 +1219,7 @@ const StationsPage: React.FC = () => {
             <ProFormText name="address" label={t('station.address')} fieldProps={{
               onChange: () => {
                 const v = editForm.getFieldsValue()
-                triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', '', editMapRef)
+                triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', v.country || '', editMapRef)
               }
             }} />
           </Col>
@@ -1307,7 +1307,7 @@ const StationsPage: React.FC = () => {
         onFinish={handleCreate}
         layout="vertical"
         width={720}
-        modalProps={{ destroyOnClose: true, maskClosable: false }}
+        modalProps={{ destroyOnHidden: true, maskClosable: false }}
       >
         <Row gutter={16}>
           <Col span={12}>
@@ -1322,11 +1322,11 @@ const StationsPage: React.FC = () => {
                 value={undefined}
                 onChange={(region) => {
                   addForm.setFieldsValue({
-                    province: region[0] || '',
-                    city: region[1] || '',
-                    district: region[2] || ''
+                    country: region[0] || '',
+                    province: region[1] || '',
+                    city: region[2] || ''
                   })
-                  triggerGeocode(region[0] || '', region[1] || '', region[2] || '', addForm.getFieldValue('address') || '', '', addMapRef)
+                  triggerGeocode(region[1] || '', region[2] || '', '', addForm.getFieldValue('address') || '', region[0] || '', addMapRef)
                 }}
                 mode="station"
               />
@@ -1336,7 +1336,7 @@ const StationsPage: React.FC = () => {
             <ProFormText name="address" label={t('station.address')} fieldProps={{
               onChange: () => {
                 const v = addForm.getFieldsValue()
-                triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', '', addMapRef)
+                triggerGeocode(v.province || '', v.city || '', v.district || '', v.address || '', v.country || '', addMapRef)
               }
             }} />
           </Col>

@@ -424,8 +424,8 @@ type OrgMemberWithUser struct {
 	JoinedAt       time.Time  `json:"joined_at"`
 }
 
-// ListMembersByOrgID lists all members of an organization with user details
-func (r *MemberLifecycleRepository) ListMembersByOrgID(ctx context.Context, orgID int64, page, pageSize int) ([]OrgMemberWithUser, int64, error) {
+// ListMembersByOrgID lists all members of an organization with user details, optionally filtered by role
+func (r *MemberLifecycleRepository) ListMembersByOrgID(ctx context.Context, orgID int64, page, pageSize int, roleFilter string) ([]OrgMemberWithUser, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -434,33 +434,53 @@ func (r *MemberLifecycleRepository) ListMembersByOrgID(ctx context.Context, orgI
 	}
 	offset := (page - 1) * pageSize
 
+	// Build WHERE clause with optional role filter (role = org type now)
+	whereClause := "WHERE m.organization_id = $1"
+	args := []interface{}{orgID}
+	argIdx := 2
+	if roleFilter != "" {
+		if roleFilter == "org_admin" {
+			whereClause += fmt.Sprintf(" AND o.org_type = $%d", argIdx)
+			args = append(args, "manufacturer")
+		} else {
+			whereClause += fmt.Sprintf(" AND o.org_type = $%d", argIdx)
+			args = append(args, roleFilter)
+		}
+		argIdx++
+	}
+
 	// Get total count
 	var total int64
-	err := r.db.QueryRow(ctx, `
-		SELECT COUNT(*) FROM organization_memberships
-		WHERE organization_id = $1
-	`, orgID).Scan(&total)
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*) FROM organization_memberships m
+		JOIN organizations o ON o.id = m.organization_id AND o.deleted_at IS NULL
+		%s
+	`, whereClause)
+	err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// Get members with user details
-	rows, err := r.db.Query(ctx, `
+	// Get members with user details and roles (role derived from org type)
+	query := fmt.Sprintf(`
 		SELECT 
 			m.id, m.user_id, m.organization_id,
-			COALESCE(mra.role_code, 'viewer') as role,
+			CASE WHEN o.org_type = 'manufacturer' THEN 'org_admin' ELSE o.org_type END as role,
 			m.status,
 			COALESCE(u.email, '') as email,
 			u.phone,
 			u.nickname,
 			m.joined_at
 		FROM organization_memberships m
-		LEFT JOIN membership_role_assignments mra ON mra.membership_id = m.id
+		JOIN organizations o ON o.id = m.organization_id AND o.deleted_at IS NULL
 		LEFT JOIN users u ON u.id = m.user_id
-		WHERE m.organization_id = $1
+		%s
 		ORDER BY m.joined_at DESC
-		LIMIT $2 OFFSET $3
-	`, orgID, pageSize, offset)
+		LIMIT $%d OFFSET $%d
+	`, whereClause, argIdx, argIdx+1)
+	args = append(args, pageSize, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
 	}

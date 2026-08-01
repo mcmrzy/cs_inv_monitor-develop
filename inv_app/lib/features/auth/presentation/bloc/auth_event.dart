@@ -180,3 +180,13 @@ class AuthGoogleLoginRequested extends AuthEvent {
   @override
   List<Object?> get props => [idToken];
 }
+
+/// 使用已获取的 loginToken 直接登录（不再重新拉起授权页）
+class AuthJVerifyLoginWithTokenRequested extends AuthEvent {
+  final String loginToken;
+
+  const AuthJVerifyLoginWithTokenRequested({required this.loginToken});
+
+  @override
+  List<Object?> get props => [loginToken];
+}

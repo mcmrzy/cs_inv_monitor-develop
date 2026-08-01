@@ -85,7 +85,7 @@ func ValidateChannelMappingConfig(config ChannelMappingConfig) error {
 	}
 	allowedOrganizations := map[string]bool{
 		"manufacturer": true, "agent": true, "distributor": true,
-		"customer": true, "service_partner": true,
+		"customer": true,
 	}
 	allowedRoles := map[string]bool{
 		"org_admin": true, "channel_manager": true, "operator": true, "installer": true,
@@ -439,8 +439,7 @@ func analyzeOwnershipConflicts(facts []LegacyOwnershipFact) []QuarantineEntry {
 func legalOrganizationEdge(parent, child string) bool {
 	return (parent == "manufacturer" && child == "agent") ||
 		(parent == "agent" && child == "distributor") ||
-		(parent == "distributor" && child == "customer") ||
-		(child == "service_partner" && (parent == "manufacturer" || parent == "agent" || parent == "distributor"))
+		(parent == "distributor" && child == "customer")
 }
 
 type OrganizationBackfillStore interface {
