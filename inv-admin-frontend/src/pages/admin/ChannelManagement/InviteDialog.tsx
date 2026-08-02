@@ -75,9 +75,8 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
   const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<number[]>([])
   const [adminByOrg, setAdminByOrg] = useState<Record<number, boolean>>({})
   const [expiresHours, setExpiresHours] = useState<number>(72)
-  // 邀请模式：existing = 邀请到已有组织；customer = 邀请用户（自动创建客户组织）
+  // 邀请模式：existing = 邀请到已有组织；customer = 邀请终端用户（直接挂安装商组织）
   const [inviteMode, setInviteMode] = useState<'existing' | 'customer'>('existing')
-  const [customerOrgName, setCustomerOrgName] = useState('')
   const [customerParentOrgId, setCustomerParentOrgId] = useState<number | null>(null)
 
   // 我的组织（真实角色码）：roles 含 org_admin 的组织 = 我可管理的组织
@@ -218,7 +217,6 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     setExpiresHours(72)
     setAdminByOrg({})
     setInviteMode('existing')
-    setCustomerOrgName('')
     setCustomerParentOrgId(null)
     if (initialOrgId && (isSystemAdmin || managedOrgIds?.has(initialOrgId))) {
       setSelectedOrganizationIds([initialOrgId])
@@ -238,7 +236,7 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     mutationFn: (data: {
       emails: string[]
       assignments?: InvitationAssignment[]
-      customer_org?: { name?: string; parent_org_id: number | null }
+      customer_org?: { parent_org_id: number | null }
       expires_hours: number
     }) => channelApi.sendInvitation(data),
     onSuccess: (res) => {
@@ -253,11 +251,6 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
             ? t('channel.invite.sendPartialSuccess', { count: created.length, failed: failed.length })
             : t('channel.invite.sendSuccess', { count: created.length }),
         )
-      }
-      // 客户模式：提示自动创建的客户组织
-      const newOrg = data?.new_org
-      if (newOrg?.name) {
-        message.success(t('channel.invite.customerOrgCreated', { name: newOrg.name }))
       }
       failed.forEach((r: any) => message.warning(`${r.email}: ${r.error || t('admin.operationFailed')}`))
 
@@ -307,23 +300,20 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       return false
     }
 
-    // ── 客户模式：自动创建客户组织并邀请终端用户（每批一个客户组织）──
+    // ── 客户模式：终端用户直接挂到指定安装商组织下（不创建新组织）──
     if (inviteMode === 'customer') {
-      if (!isSystemAdmin && !customerParentOrgId) {
+      if (!customerParentOrgId) {
         message.error(t('channel.invite.parentRequired'))
         return false
       }
       const payload: {
         emails: string[]
         expires_hours: number
-        customer_org: { name?: string; parent_org_id: number | null }
+        customer_org: { parent_org_id: number | null }
       } = {
         emails,
         expires_hours: expiresHours,
-        customer_org: {
-          ...(customerOrgName.trim() ? { name: customerOrgName.trim() } : {}),
-          parent_org_id: customerParentOrgId ?? null,
-        },
+        customer_org: { parent_org_id: customerParentOrgId },
       }
       sendMutation.mutate(payload)
       return true
@@ -416,7 +406,7 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
         {/* ── 分组分隔线 ── */}
         <div style={{ height: 1, background: '#eef2f7', margin: '2px 0' }} />
 
-        {/* ── 分组二：组织与成员身份 / 客户组织信息 ── */}
+        {/* ── 分组二：组织与成员身份 / 归属安装商信息 ── */}
         {inviteMode === 'customer' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -427,25 +417,13 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
               <span style={{ fontSize: 12, color: '#8c9cb0' }}>{t('channel.invite.customerOrgSectionHint')}</span>
             </div>
             <Row gutter={16}>
-              <Col span={12}>
+              <Col span={24}>
                 <div>
                   <label style={LABEL_STYLE}>
                     <HomeOutlined style={{ marginRight: 6, color: '#d46b08' }} />
-                    {t('channel.invite.customerOrgName')}
+                    {t('channel.invite.parentInstaller')}
                   </label>
-                  <Input
-                    value={customerOrgName}
-                    onChange={(e) => setCustomerOrgName(e.target.value)}
-                    placeholder={t('channel.invite.customerOrgNamePlaceholder')}
-                  />
-                  <div style={HINT_STYLE}>{t('channel.invite.customerOrgNameHint')}</div>
-                </div>
-              </Col>
-              <Col span={12}>
-                <div>
-                  <label style={LABEL_STYLE}>{t('channel.invite.parentInstaller')}</label>
                   <Select
-                    allowClear={isSystemAdmin}
                     showSearch
                     optionFilterProp="label"
                     placeholder={t('channel.invite.parentPlaceholder')}
@@ -453,7 +431,7 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
                     value={customerParentOrgId}
                     onChange={(v) => setCustomerParentOrgId(v ?? null)}
                     style={{ width: '100%' }}
-                    status={!isSystemAdmin && !customerParentOrgId ? 'warning' : undefined}
+                    status={!customerParentOrgId ? 'warning' : undefined}
                   />
                   <div style={HINT_STYLE}>{t('channel.invite.parentHint')}</div>
                 </div>

@@ -663,8 +663,11 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 	pageSize := getPageSize(c, 10)
 	offset := (page - 1) * pageSize
 
+	// Legacy role=1 tenants were removed by migration 076; in the new architecture
+	// tenants are root organizations. List regular (non-system-admin) users here
+	// for backward compatibility of this unregistered handler.
 	var total int64
-	err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role = 1 AND deleted_at IS NULL`).Scan(&total)
+	err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE is_system_admin = false AND deleted_at IS NULL`).Scan(&total)
 	if err != nil {
 		response.Error(c, 500, "查询租户列表失败")
 		return
@@ -672,9 +675,9 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, `
 		SELECT u.id, u.phone, COALESCE(u.nickname,''), COALESCE(u.email,''), u.status,
-		       u.device_limit, u.user_limit, COALESCE(u.created_at, NOW()), COALESCE(u.last_login_at, u.created_at)
+		       COALESCE(u.created_at, NOW()), COALESCE(u.last_login_at, u.created_at)
 		FROM users u
-		WHERE u.role = 1 AND u.deleted_at IS NULL
+		WHERE u.is_system_admin = false AND u.deleted_at IS NULL
 		ORDER BY u.id DESC
 		LIMIT $1 OFFSET $2
 	`, pageSize, offset)
@@ -702,12 +705,11 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 	for rows.Next() {
 		var t tenantItem
 		var lastLoginAt *time.Time
-		if err := rows.Scan(&t.ID, &t.Phone, &t.Nickname, &t.Email, &t.Status, &t.DeviceLimit, &t.UserLimit, &t.CreatedAt, &lastLoginAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Phone, &t.Nickname, &t.Email, &t.Status, &t.CreatedAt, &lastLoginAt); err != nil {
 			continue
 		}
 		t.LastLoginAt = lastLoginAt
 
-		h.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE parent_id = $1 AND deleted_at IS NULL`, t.ID).Scan(&t.SubUserCount)
 		h.db.QueryRow(ctx, `SELECT COUNT(*) FROM devices WHERE user_id = $1 AND deleted_at IS NULL`, t.ID).Scan(&t.DeviceCount)
 
 		items = append(items, t)
@@ -765,10 +767,10 @@ func (h *AdminHandler) CreateTenant(c *gin.Context) {
 	var userID int64
 	var createdAt, updatedAt time.Time
 	err = h.db.QueryRow(ctx, `
-		INSERT INTO users (phone, email, password_hash, nickname, role, status, device_limit, user_limit, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 1, 1, $5, $6, NOW(), NOW())
+		INSERT INTO users (phone, email, password_hash, nickname, is_system_admin, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, false, 1, NOW(), NOW())
 		RETURNING id, created_at, updated_at
-	`, req.Phone, req.Email, string(hashedPassword), nickname, req.DeviceLimit, req.UserLimit).Scan(&userID, &createdAt, &updatedAt)
+	`, req.Phone, req.Email, string(hashedPassword), nickname).Scan(&userID, &createdAt, &updatedAt)
 	if err != nil {
 		response.Error(c, 500, "创建租户失败")
 		return
@@ -816,9 +818,10 @@ func (h *AdminHandler) UpdateTenant(c *gin.Context) {
 		return
 	}
 
-	_, err = h.db.Exec(ctx, `UPDATE users SET
-		device_limit=COALESCE($1,device_limit),user_limit=COALESCE($2,user_limit),updated_at=NOW()
-		WHERE id=$3 AND role=1 AND deleted_at IS NULL`, req.DeviceLimit, req.UserLimit, tenantID)
+	// Legacy device_limit/user_limit/role columns were removed by migration 076;
+	// keep the handler functional by touching only updated_at.
+	_, err = h.db.Exec(ctx, `UPDATE users SET updated_at=NOW()
+		WHERE id=$1 AND is_system_admin=false AND deleted_at IS NULL`, tenantID)
 	if err != nil {
 		response.Error(c, 500, "update tenant quota failed")
 		return
@@ -963,8 +966,10 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		argIdx++
 	}
 	if req.Role != nil {
-		setClauses = append(setClauses, fmt.Sprintf("role = $%d", argIdx))
-		args = append(args, *req.Role)
+		// Legacy role column was removed by migration 076; map role == 0 (system admin)
+		// onto the is_system_admin flag (dual permission model).
+		setClauses = append(setClauses, fmt.Sprintf("is_system_admin = $%d", argIdx))
+		args = append(args, *req.Role == 0)
 		argIdx++
 	}
 	if req.Status != nil {
@@ -1025,11 +1030,6 @@ func (h *AdminHandler) UpdateUserParent(c *gin.Context) {
 		parent, err := h.userRepo.GetByID(c.Request.Context(), *req.ParentID)
 		if err != nil || parent == nil {
 			response.Error(c, 404, "上级用户不存在")
-			return
-		}
-		// 验证层级关系：上级角色数值必须小于当前用户（数值越小权限越高）
-		if user.Role <= parent.Role {
-			response.Error(c, 400, "上级用户角色必须高于当前用户")
 			return
 		}
 		// 配额检查（如果组织系统已启用）
@@ -1260,22 +1260,29 @@ func (h *AdminHandler) GetOperationStats(c *gin.Context) {
 		}
 	}
 
-	// 7. User role distribution
+	// 7. User role distribution (org-type based in the new architecture;
+	// the legacy users.role column was removed by migration 076)
 	roleRows, _ := h.db.Query(ctx, `
-		SELECT role, COUNT(*) as cnt FROM users
-		WHERE deleted_at IS NULL GROUP BY role ORDER BY role`)
+		SELECT COALESCE(o.org_type, 'none') AS org_type, COUNT(DISTINCT u.id) AS cnt
+		FROM users u
+		LEFT JOIN organization_memberships m ON m.user_id = u.id AND m.status = 'active'
+		LEFT JOIN organizations o ON o.id = m.organization_id AND o.deleted_at IS NULL
+		WHERE u.deleted_at IS NULL
+		GROUP BY o.org_type ORDER BY cnt DESC`)
 	roleDist := []gin.H{}
 	if roleRows != nil {
 		defer roleRows.Close()
 		for roleRows.Next() {
-			var role, cnt int
+			var role string
+			var cnt int
 			roleRows.Scan(&role, &cnt)
 			roleDist = append(roleDist, gin.H{"role": role, "count": cnt})
 		}
 	}
 
+	// Tenant count: one root organization per tenant in the new org architecture
 	var tenantCount, stationCount int
-	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE role = 2 AND deleted_at IS NULL").Scan(&tenantCount)
+	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM organizations WHERE parent_id IS NULL AND deleted_at IS NULL").Scan(&tenantCount)
 	h.db.QueryRow(ctx, "SELECT COUNT(*) FROM stations").Scan(&stationCount)
 
 	stats["users"] = gin.H{
@@ -1578,7 +1585,7 @@ func (h *AdminHandler) ListAllPermissionCodes(c *gin.Context) {
 				('parallel:view'), ('parallel:create'), ('parallel:control'),
 				('audit:view'),
 				('admin:view'), ('admin:manage'),
-				('organizations:view'), ('organizations:manage'), ('organizations:create'), ('organizations:invite'),
+				('organizations:view'), ('organizations:manage'), ('organizations:invite'),
 				('organizations:manage_members'),
 		) AS t(permission_code)
 		ORDER BY permission_code

@@ -75,8 +75,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
-  // 组织创建权限：系统管理员可创建全部渠道组织；普通管理员仅可创建客户组织
-  // （在自己的管理范围内：自己 org_admin 的组织 + 全部下级子树）
+  // 组织创建权限：仅系统管理员可创建组织（终端用户通过邀请直接挂安装商组织，不建组织）
   const { user } = useAuthStore()
   const isSystemAdmin = !!user?.isSystemAdmin
   const { data: myOrgs } = useQuery({
@@ -94,7 +93,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
     )
   }, [isSystemAdmin, myOrgs])
   const hasManageScope = isSystemAdmin || (managedOrgIds?.size ?? 0) > 0
-  const canCreateOrg = isSystemAdmin || hasManageScope
+  const canCreateOrg = isSystemAdmin
   const [searchText, setSearchText] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [createOpen, setCreateOpen] = useState(false)

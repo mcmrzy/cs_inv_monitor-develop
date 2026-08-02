@@ -19,7 +19,7 @@ import (
 //   - agent       <- 旧 role 2（channel_manager）∪ role 3（operator）
 //   - distributor <- 旧 role 3（operator）
 //   - installer   <- 最小业务集（旧 role 4 无种子）
-//   - customer    <- 最小查看集（旧 role 5 无种子）
+//   - customer    <- 最小查看集 + 自助管理（设备/电站增改，旧 role 5 无种子）
 
 // RoleDefaultPermissionScopes 角色码 → 默认 data_scope。
 // 管理层角色覆盖自身及全部下级组织；执行层角色仅覆盖自身组织。
@@ -48,7 +48,7 @@ var RoleDefaultPermissions = map[string][]string{
 		"admin:view", "admin:manage",
 		"models:view", "models:create", "models:edit", "models:delete",
 		"notifications:view", "notifications:create", "notifications:edit",
-		"organizations:view", "organizations:manage", "organizations:create", "organizations:invite", "organizations:manage_members",
+		"organizations:view", "organizations:manage", "organizations:invite", "organizations:manage_members",
 	},
 	"agent": {
 		"dashboard:view",
@@ -88,8 +88,8 @@ var RoleDefaultPermissions = map[string][]string{
 	},
 	"customer": {
 		"dashboard:view",
-		"devices:view",
-		"stations:view",
+		"devices:view", "devices:create", "devices:edit",
+		"stations:view", "stations:create", "stations:edit",
 		"alerts:view",
 		"firmware:view",
 		"notifications:view",

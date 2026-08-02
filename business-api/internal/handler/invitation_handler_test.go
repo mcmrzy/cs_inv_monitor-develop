@@ -64,7 +64,6 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_CustomerOrg_Invali
 	req := CreateInvitationRequest{
 		Emails: []string{"invalid-email"},
 		CustomerOrg: &CustomerOrgInput{
-			Name:        "测试客户",
 			ParentOrgID: int64Ptr(13),
 		},
 		ExpiresHours: 24,
@@ -80,8 +79,8 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_CustomerOrg_Invali
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_CustomerOrg_NonAdminRequiresParent() {
 	// Non-system admins MUST specify the parent installer org (no root-default).
 	req := CreateInvitationRequest{
-		Emails:      []string{"user@example.com"},
-		CustomerOrg: &CustomerOrgInput{Name: "测试客户"}, // no parent_org_id
+		Emails:       []string{"user@example.com"},
+		CustomerOrg:  &CustomerOrgInput{}, // no parent_org_id
 		ExpiresHours: 24,
 	}
 	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
@@ -339,7 +338,8 @@ func (suite *InvitationHandlerTestSuite) TestValidateRoleOrgMatch_IdentityEquals
 
 	installerOrg := &model.Organization{ID: 13, Type: "installer"}
 	assert.True(suite.T(), validateRoleOrgMatch(installerOrg, "installer"))
-	assert.False(suite.T(), validateRoleOrgMatch(installerOrg, "customer"))
+	// 安装商组织可容纳终端用户（customer）身份：用户直接挂安装商旗下
+	assert.True(suite.T(), validateRoleOrgMatch(installerOrg, "customer"))
 
 	customerOrg := &model.Organization{ID: 20, Type: "customer"}
 	assert.True(suite.T(), validateRoleOrgMatch(customerOrg, "customer"))
