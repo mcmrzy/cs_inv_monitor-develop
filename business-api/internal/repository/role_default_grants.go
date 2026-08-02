@@ -48,7 +48,7 @@ var RoleDefaultPermissions = map[string][]string{
 		"admin:view", "admin:manage",
 		"models:view", "models:create", "models:edit", "models:delete",
 		"notifications:view", "notifications:create", "notifications:edit",
-		"organizations:view", "organizations:manage", "organizations:invite", "organizations:manage_members",
+		"organizations:view", "organizations:manage", "organizations:create", "organizations:invite", "organizations:manage_members",
 	},
 	"agent": {
 		"dashboard:view",

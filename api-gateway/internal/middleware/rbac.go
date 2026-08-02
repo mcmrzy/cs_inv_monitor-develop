@@ -127,7 +127,7 @@ func (r *RBACMiddleware) loadUserPermissionsFromDB(ctx context.Context, userID, 
 		JOIN role_permission_grants pg
 		  ON pg.root_tenant_id = ra.root_tenant_id
 		 AND pg.role_assignment_id = ra.id
-		WHERE m.user_id = $1 AND m.deleted_at IS NULL
+		WHERE m.user_id = $1 AND m.status = 'active'
 	`
 	args := []interface{}{userID}
 	paramIdx := 2
@@ -655,7 +655,7 @@ func (r *RBACMiddleware) hasDeviceAccess(ctx context.Context, userID, sn string)
 			      AND organization_id = m.organization_id
 			      AND membership_id = m.id
 			 )
-			WHERE m.user_id = $1 AND m.deleted_at IS NULL
+			WHERE m.user_id = $1 AND m.status = 'active'
 			  AND pg.permission_code = 'devices:view'
 			  AND pg.data_scope IN ('organization_and_descendants', 'organization', 'assigned_resources')
 		) OR EXISTS (

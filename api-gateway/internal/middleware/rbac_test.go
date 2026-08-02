@@ -259,7 +259,7 @@ func TestRBACGuard_NonAdminWithoutPermissions_Forbidden(t *testing.T) {
 	router := newTestRouter(rbac)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/admin/users", nil)
 	req.Header.Set("X-User-ID", "42")
 	router.ServeHTTP(w, req)
 
@@ -303,7 +303,7 @@ func TestRBACGuard_PermissionDenied(t *testing.T) {
 	router := newTestRouter(rbac)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/admin/users", nil)
 	req.Header.Set("X-User-ID", "20")
 	router.ServeHTTP(w, req)
 
@@ -316,7 +316,7 @@ func TestRBACGuard_NoDBConnection_Forbidden(t *testing.T) {
 	router := newTestRouter(rbac)
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/admin/users", nil)
 	req.Header.Set("X-User-ID", "42")
 	router.ServeHTTP(w, req)
 
@@ -364,14 +364,14 @@ func TestRBACGuard_StaleNegativeCacheRefreshes(t *testing.T) {
 	queries := 0
 	rbac.queryUserPermissions = func(_ context.Context, userID, orgID, membershipID int64) ([]PermissionEntry, error) {
 		queries++
-		return []PermissionEntry{{PermissionCode: "devices:view", DataScope: "organization"}}, nil
+		return []PermissionEntry{{PermissionCode: "admin:manage", DataScope: "organization"}}, nil
 	}
 
 	router := newTestRouter(rbac)
 
-	// First request — no cache, queries DB, gets devices:view
+	// First request — no cache, queries DB, gets admin:manage
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/v1/devices", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/admin/users", nil)
 	req.Header.Set("X-User-ID", "42")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)

@@ -75,9 +75,26 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const queryClient = useQueryClient()
-  // 组织创建/删除等管理操作仅系统管理员可用（后端 Create 明确拒绝非管理员）
+  // 组织创建权限：系统管理员可创建全部渠道组织；普通管理员仅可创建客户组织
+  // （在自己的管理范围内：自己 org_admin 的组织 + 全部下级子树）
   const { user } = useAuthStore()
   const isSystemAdmin = !!user?.isSystemAdmin
+  const { data: myOrgs } = useQuery({
+    queryKey: queryKeys.channels.myOrganizations(user?.id),
+    queryFn: () => channelApi.getMyOrganizations().then((r) => r.data?.data ?? []),
+    enabled: !isSystemAdmin,
+  })
+  const managedOrgIds = useMemo(() => {
+    if (isSystemAdmin) return null
+    if (!Array.isArray(myOrgs)) return new Set<number>()
+    return new Set(
+      (myOrgs as any[])
+        .filter((o) => Array.isArray(o.roles) && o.roles.includes('org_admin'))
+        .map((o) => o.id),
+    )
+  }, [isSystemAdmin, myOrgs])
+  const hasManageScope = isSystemAdmin || (managedOrgIds?.size ?? 0) > 0
+  const canCreateOrg = isSystemAdmin || hasManageScope
   const [searchText, setSearchText] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const [createOpen, setCreateOpen] = useState(false)
@@ -113,6 +130,32 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
     walk(roots)
     return list
   }, [roots])
+
+  // 非系统管理员父级下拉：仅限管理范围内的 installer 组织（customer 必挂安装商）
+  const managedInstallerOptions = useMemo(() => {
+    if (isSystemAdmin) return []
+    const pruneToManaged = (nodes: OrgHierarchyNode[], managed: Set<number>): OrgHierarchyNode[] => {
+      const result: OrgHierarchyNode[] = []
+      for (const node of nodes) {
+        if (managed.has(node.id)) {
+          result.push(node)
+        } else {
+          const children = pruneToManaged(node.children ?? [], managed)
+          if (children.length > 0) result.push({ ...node, children })
+        }
+      }
+      return result
+    }
+    const list: OrgHierarchyNode[] = []
+    const walk = (nodes: OrgHierarchyNode[]) => {
+      for (const n of nodes) {
+        if (n.type === 'installer') list.push(n)
+        if (n.children?.length) walk(n.children)
+      }
+    }
+    walk(pruneToManaged(roots, managedOrgIds ?? new Set<number>()))
+    return list
+  }, [isSystemAdmin, roots, managedOrgIds])
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.channels.orgHierarchy() })
@@ -193,6 +236,8 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
 
   // 基于有效父组织类型计算可创建的下级类型
   const getAllowedTypes = (): string[] => {
+    // 普通管理员仅可创建客户组织（后端强校验）
+    if (!isSystemAdmin) return ['customer']
     const effectiveParentId = (watchedParentId ?? selectedOrgId) as number | null
     if (!effectiveParentId) return ALL_ORG_TYPES
     const parentOrg = flatOrgs.find((o) => o.id === effectiveParentId)
@@ -220,7 +265,15 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
 
   const openCreate = (parentId: number | null = null) => {
     createForm.resetFields()
-    if (parentId) createForm.setFieldsValue({ parent_id: parentId })
+    // 普通管理员仅可为 installer 组织创建客户组织；非 installer 的选中组织不作为默认父级
+    let usableParent = parentId
+    if (!isSystemAdmin && parentId) {
+      const p = flatOrgs.find((o) => o.id === parentId)
+      usableParent = p?.type === 'installer' ? parentId : null
+    }
+    if (usableParent) createForm.setFieldsValue({ parent_id: usableParent })
+    // 普通管理员：类型固定为客户组织，且必须指定归属安装商
+    if (!isSystemAdmin) createForm.setFieldsValue({ type: 'customer' })
     setCreateOpen(true)
   }
 
@@ -395,7 +448,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
                 {t('channel.org.delete')}
               </Button>
             </Popconfirm>
-            {isSystemAdmin && creatableChildTypes.length > 0 && (
+            {canCreateOrg && creatableChildTypes.length > 0 && (isSystemAdmin || node.type === 'installer') && (
               <Tooltip title={t('channel.org.createChild')}>
                 <Button
                   size="small"
@@ -438,7 +491,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16, textAlign: 'left' }}>
         <Col>
           <Space>
-            {isSystemAdmin && (
+            {canCreateOrg && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate(selectedOrgId)}>
                 {t('channel.org.create')}
               </Button>
@@ -509,14 +562,26 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
             <Select
               options={getAllowedTypes().map((type) => ({ label: t(`channel.org.type.${type}`), value: type }))}
               placeholder={t('channel.org.typePlaceholder')}
+              disabled={!isSystemAdmin}
             />
           </Form.Item>
-          <Form.Item name="parent_id" label={t('channel.org.parent')}>
+          <Form.Item
+            name="parent_id"
+            label={isSystemAdmin ? t('channel.org.parent') : t('channel.invite.parentInstaller')}
+            rules={isSystemAdmin ? [] : [{ required: true, message: t('channel.invite.parentRequired') }]}
+          >
             <Select
-              allowClear
-              placeholder={t('channel.org.parentNone')}
-              options={flatOrgs.map((o) => ({ label: `${o.name} (${t(`channel.org.type.${o.type}`)})`, value: o.id }))}
-              onChange={() => createForm.setFieldValue('type', undefined)}
+              allowClear={isSystemAdmin}
+              placeholder={isSystemAdmin ? t('channel.org.parentNone') : t('channel.invite.parentPlaceholder')}
+              options={
+                isSystemAdmin
+                  ? flatOrgs.map((o) => ({ label: `${o.name} (${t(`channel.org.type.${o.type}`)})`, value: o.id }))
+                  : managedInstallerOptions.map((o) => ({ label: o.name, value: o.id }))
+              }
+              onChange={() => {
+                if (isSystemAdmin) createForm.setFieldValue('type', undefined)
+                else createForm.setFieldValue('type', 'customer')
+              }}
             />
           </Form.Item>
           <Form.Item name="code" label={t('channel.org.code')}>

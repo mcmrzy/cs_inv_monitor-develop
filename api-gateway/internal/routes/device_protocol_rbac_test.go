@@ -110,11 +110,12 @@ func TestDeviceProtocolReadRoutesRequireJWTAndDevicesView(t *testing.T) {
 				assert.EqualValues(t, 0, backendHits.Load())
 			})
 
-			t.Run("missing devices view", func(t *testing.T) {
+			t.Run("no devices view but basic user GET allowed", func(t *testing.T) {
 				mr.Set(userPermsCacheKey(42), "[]")
-				status, _ := performGatewayRequest(t, engine, path, signedProtocolRouteToken(t, 42, false))
-				assert.Equal(t, http.StatusForbidden, status)
-				assert.EqualValues(t, 0, backendHits.Load())
+				status, body := performGatewayRequest(t, engine, path, signedProtocolRouteToken(t, 42, false))
+				assert.Equal(t, http.StatusOK, status)
+				assert.JSONEq(t, `{"source":"api","ok":true}`, body)
+				assert.EqualValues(t, 1, backendHits.Load())
 			})
 
 			t.Run("devices view proxies to API", func(t *testing.T) {
@@ -129,7 +130,7 @@ func TestDeviceProtocolReadRoutesRequireJWTAndDevicesView(t *testing.T) {
 				status, body := performGatewayRequest(t, engine, path, signedProtocolRouteToken(t, 42, false))
 				assert.Equal(t, http.StatusOK, status)
 				assert.JSONEq(t, `{"source":"api","ok":true}`, body)
-				assert.EqualValues(t, 1, backendHits.Load())
+				assert.EqualValues(t, 2, backendHits.Load())
 			})
 		})
 	}
