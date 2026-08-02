@@ -55,6 +55,43 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_InvalidEmail() {
 	assertBizResponse(suite.T(), w, 400, "至少需要一个有效的邮箱地址")
 }
 
+// ============================================================================
+// Create Invitation – Customer Org Mode (auto-create customer organization)
+// ============================================================================
+
+func (suite *InvitationHandlerTestSuite) TestCreateInvitation_CustomerOrg_InvalidEmail() {
+	// Customer-org mode still requires at least one valid email.
+	req := CreateInvitationRequest{
+		Emails: []string{"invalid-email"},
+		CustomerOrg: &CustomerOrgInput{
+			Name:        "测试客户",
+			ParentOrgID: int64Ptr(13),
+		},
+		ExpiresHours: 24,
+	}
+	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
+	setAuthClaimsInContext(c, 1, true, 100)
+
+	suite.handler.Create(c)
+
+	assertBizResponse(suite.T(), w, 400, "至少需要一个有效的邮箱地址")
+}
+
+func (suite *InvitationHandlerTestSuite) TestCreateInvitation_CustomerOrg_NonAdminRequiresParent() {
+	// Non-system admins MUST specify the parent installer org (no root-default).
+	req := CreateInvitationRequest{
+		Emails:      []string{"user@example.com"},
+		CustomerOrg: &CustomerOrgInput{Name: "测试客户"}, // no parent_org_id
+		ExpiresHours: 24,
+	}
+	c, w := createTestGinContext("/api/v1/invitations/create", "POST", req)
+	setAuthClaimsInContext(c, 1, false, 100)
+
+	suite.handler.Create(c)
+
+	assertBizResponse(suite.T(), w, 400, "必须指定客户归属的安装商组织")
+}
+
 func (suite *InvitationHandlerTestSuite) TestCreateInvitation_MissingEmail() {
 	req := map[string]interface{}{
 		"assignments": []map[string]interface{}{
@@ -116,6 +153,10 @@ func (suite *InvitationHandlerTestSuite) TestCreateInvitation_MissingExpiresHour
 	suite.handler.Create(c)
 
 	assertBizResponse(suite.T(), w, 400, "请求参数无效")
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
 }
 
 func (suite *InvitationHandlerTestSuite) TestNormalizeAssignments_LegacyConversion() {

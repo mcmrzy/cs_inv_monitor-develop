@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
-  Modal, Input, InputNumber, Row, Col, App, TreeSelect, Tag, Space, Button, Switch, Tooltip,
+  Modal, Input, InputNumber, Row, Col, App, TreeSelect, Tag, Space, Button, Switch, Tooltip, Radio, Select,
 } from 'antd'
 import {
   MailOutlined, ApartmentOutlined, BankOutlined, ShopOutlined,
@@ -75,6 +75,10 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
   const [selectedOrganizationIds, setSelectedOrganizationIds] = useState<number[]>([])
   const [adminByOrg, setAdminByOrg] = useState<Record<number, boolean>>({})
   const [expiresHours, setExpiresHours] = useState<number>(72)
+  // 邀请模式：existing = 邀请到已有组织；customer = 邀请用户（自动创建客户组织）
+  const [inviteMode, setInviteMode] = useState<'existing' | 'customer'>('existing')
+  const [customerOrgName, setCustomerOrgName] = useState('')
+  const [customerParentOrgId, setCustomerParentOrgId] = useState<number | null>(null)
 
   // 我的组织（真实角色码）：roles 含 org_admin 的组织 = 我可管理的组织
   const { data: myOrgs } = useQuery({
@@ -129,6 +133,19 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     })
 
   const orgOptions = flattenTree(pickerTree)
+
+  // 客户模式可选归属安装商：管理范围内的 installer 组织（系统管理员为全量）
+  const installerOptions = useMemo(() => {
+    const list: { label: string; value: number }[] = []
+    const walk = (nodes: OrgHierarchyNode[]) => {
+      for (const n of nodes) {
+        if (n.type === 'installer' && n.status === 'active') list.push({ label: n.name, value: n.id })
+        if (n.children?.length) walk(n.children)
+      }
+    }
+    walk(pickerTree)
+    return list
+  }, [pickerTree])
 
   // 组织 id → type 映射（仅用于展示类型色 / 图标 / 推导身份，只读）
   const orgTypeById = useMemo(() => {
@@ -200,6 +217,9 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     setEmailInput('')
     setExpiresHours(72)
     setAdminByOrg({})
+    setInviteMode('existing')
+    setCustomerOrgName('')
+    setCustomerParentOrgId(null)
     if (initialOrgId && (isSystemAdmin || managedOrgIds?.has(initialOrgId))) {
       setSelectedOrganizationIds([initialOrgId])
     } else {
@@ -207,10 +227,18 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
     }
   }, [open, initialOrgId, isSystemAdmin, managedOrgIds])
 
+  // 客户模式预填：初始组织为 installer 时作为默认归属安装商（等树加载完成）
+  useEffect(() => {
+    if (!open || !initialOrgId || customerParentOrgId) return
+    if (orgTypeOf(initialOrgId) === 'installer') setCustomerParentOrgId(initialOrgId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialOrgId, orgHierarchy])
+
   const sendMutation = useMutation({
     mutationFn: (data: {
       emails: string[]
-      assignments: InvitationAssignment[]
+      assignments?: InvitationAssignment[]
+      customer_org?: { name?: string; parent_org_id: number | null }
       expires_hours: number
     }) => channelApi.sendInvitation(data),
     onSuccess: (res) => {
@@ -225,6 +253,11 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
             ? t('channel.invite.sendPartialSuccess', { count: created.length, failed: failed.length })
             : t('channel.invite.sendSuccess', { count: created.length }),
         )
+      }
+      // 客户模式：提示自动创建的客户组织
+      const newOrg = data?.new_org
+      if (newOrg?.name) {
+        message.success(t('channel.invite.customerOrgCreated', { name: newOrg.name }))
       }
       failed.forEach((r: any) => message.warning(`${r.email}: ${r.error || t('admin.operationFailed')}`))
 
@@ -273,6 +306,29 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       message.error(t('channel.invite.emailRequired'))
       return false
     }
+
+    // ── 客户模式：自动创建客户组织并邀请终端用户（每批一个客户组织）──
+    if (inviteMode === 'customer') {
+      if (!isSystemAdmin && !customerParentOrgId) {
+        message.error(t('channel.invite.parentRequired'))
+        return false
+      }
+      const payload: {
+        emails: string[]
+        expires_hours: number
+        customer_org: { name?: string; parent_org_id: number | null }
+      } = {
+        emails,
+        expires_hours: expiresHours,
+        customer_org: {
+          ...(customerOrgName.trim() ? { name: customerOrgName.trim() } : {}),
+          parent_org_id: customerParentOrgId ?? null,
+        },
+      }
+      sendMutation.mutate(payload)
+      return true
+    }
+
     if (selectedOrganizationIds.length === 0) {
       message.error(t('channel.invite.orgRequired'))
       return false
@@ -306,6 +362,21 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
       destroyOnHidden
     >
       <div style={{ minHeight: '55vh', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {/* ── 邀请模式：已有组织 / 自动创建客户组织 ── */}
+        <div>
+          <label style={LABEL_STYLE}>{t('channel.invite.mode')}</label>
+          <Radio.Group
+            value={inviteMode}
+            onChange={(e) => setInviteMode(e.target.value)}
+            options={[
+              { label: t('channel.invite.modeExisting'), value: 'existing' },
+              { label: t('channel.invite.modeCustomer'), value: 'customer' },
+            ]}
+            optionType="button"
+            buttonStyle="solid"
+          />
+        </div>
+
         {/* ── 分组一：收件人信息（邀请邮箱 + 有效时长）── */}
         <Row gutter={16}>
           <Col span={16}>
@@ -345,8 +416,52 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
         {/* ── 分组分隔线 ── */}
         <div style={{ height: 1, background: '#eef2f7', margin: '2px 0' }} />
 
-        {/* ── 分组二：组织与成员身份 ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* ── 分组二：组织与成员身份 / 客户组织信息 ── */}
+        {inviteMode === 'customer' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 3, height: 14, borderRadius: 2, background: '#d46b08' }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2d3d' }}>
+                {t('channel.invite.customerOrgSection')}
+              </span>
+              <span style={{ fontSize: 12, color: '#8c9cb0' }}>{t('channel.invite.customerOrgSectionHint')}</span>
+            </div>
+            <Row gutter={16}>
+              <Col span={12}>
+                <div>
+                  <label style={LABEL_STYLE}>
+                    <HomeOutlined style={{ marginRight: 6, color: '#d46b08' }} />
+                    {t('channel.invite.customerOrgName')}
+                  </label>
+                  <Input
+                    value={customerOrgName}
+                    onChange={(e) => setCustomerOrgName(e.target.value)}
+                    placeholder={t('channel.invite.customerOrgNamePlaceholder')}
+                  />
+                  <div style={HINT_STYLE}>{t('channel.invite.customerOrgNameHint')}</div>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div>
+                  <label style={LABEL_STYLE}>{t('channel.invite.parentInstaller')}</label>
+                  <Select
+                    allowClear={isSystemAdmin}
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder={t('channel.invite.parentPlaceholder')}
+                    options={installerOptions}
+                    value={customerParentOrgId}
+                    onChange={(v) => setCustomerParentOrgId(v ?? null)}
+                    style={{ width: '100%' }}
+                    status={!isSystemAdmin && !customerParentOrgId ? 'warning' : undefined}
+                  />
+                  <div style={HINT_STYLE}>{t('channel.invite.parentHint')}</div>
+                </div>
+              </Col>
+            </Row>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 3, height: 14, borderRadius: 2, background: '#1677ff' }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2d3d' }}>
@@ -489,6 +604,7 @@ const InviteDialog: React.FC<Props> = ({ open, initialOrgId, onClose, onSent }) 
             </Space>
           )}
         </div>
+        )}
       </div>
     </Modal>
   )

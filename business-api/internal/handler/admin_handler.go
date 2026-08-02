@@ -1578,7 +1578,7 @@ func (h *AdminHandler) ListAllPermissionCodes(c *gin.Context) {
 				('parallel:view'), ('parallel:create'), ('parallel:control'),
 				('audit:view'),
 				('admin:view'), ('admin:manage'),
-				('organizations:view'), ('organizations:manage'), ('organizations:invite'),
+				('organizations:view'), ('organizations:manage'), ('organizations:create'), ('organizations:invite'),
 				('organizations:manage_members'),
 		) AS t(permission_code)
 		ORDER BY permission_code

@@ -37,6 +37,13 @@ type RoleAssignmentInput struct {
 	RoleCode       string `json:"role_code" binding:"required"`
 }
 
+// CustomerOrgInput 邀请"终端用户"时自动创建客户组织（每批邀请一个）。
+// 客户组织归属指定安装商（installer）或根组织（manufacturer，不指定时）。
+type CustomerOrgInput struct {
+	Name        string `json:"name"`           // 客户组织名称；空则自动生成
+	ParentOrgID *int64 `json:"parent_org_id"` // 归属安装商组织 ID；nil = 根组织下
+}
+
 // CreateInvitationRequest represents the request to create invitations.
 // Supports both the batch format (emails x assignments) and the legacy
 // single-invitation format (email + role_id + organization_id).
@@ -44,6 +51,10 @@ type CreateInvitationRequest struct {
 	Emails       []string              `json:"emails"`
 	Assignments  []RoleAssignmentInput `json:"assignments"`
 	ExpiresHours int                   `json:"expires_hours" binding:"required,min=1,max=720"` // max 30 days
+
+	// 客户组织模式：提供后自动创建 customer 组织并邀请终端用户
+	// （此时 assignments 将被忽略，后端统一构造为 customer 身份）
+	CustomerOrg *CustomerOrgInput `json:"customer_org"`
 
 	// Legacy single-invitation fields (backward compatible)
 	Email          string `json:"email"`
@@ -197,35 +208,140 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		response.Error(c, 400, "至少需要一个有效的邮箱地址")
 		return
 	}
-	if len(assignments) == 0 {
-		response.Error(c, 400, "至少需要一个组织与角色分配")
-		return
-	}
-
-	// Validate role codes against the channel role model
-	for _, a := range assignments {
-		if !validRoleCodes[a.RoleCode] {
-			response.Error(c, 400, fmt.Sprintf("无效的角色代码: %s", a.RoleCode))
-			return
-		}
-	}
 
 	ctx := c.Request.Context()
+	callerTenantID := middleware.GetRootTenantID(c)
+	orgCache := make(map[int64]*model.Organization)
 
-	// Permission: system admins may invite to any organization in the tenant;
-	// other users must manage the target organization (be org_admin of the
-	// organization or of one of its ancestors — i.e. their own organizations
-	// plus all descendants).
-	if !isSystemAdmin {
-		ok, err := h.canCreateInvitationsFor(ctx, userID, assignments)
-		if err != nil {
-			logger.Error("Failed to verify org admin permission", zap.Error(err))
-			response.Error(c, 500, "权限校验失败")
+	// ── 客户组织模式：邀请终端用户，自动创建客户组织（每批一个）──
+	isCustomerMode := req.CustomerOrg != nil
+	var customerParentOrgID int64 // 0 = 根组织（manufacturer）
+	var customerOrgName string
+	var customerOrgID int64
+	if isCustomerMode {
+		// 归属组织：installer 或 manufacturer（不指定 = 根组织）
+		if req.CustomerOrg.ParentOrgID != nil && *req.CustomerOrg.ParentOrgID > 0 {
+			parentOrg, perr := h.orgRepo.GetByID(ctx, *req.CustomerOrg.ParentOrgID)
+			if perr != nil || parentOrg == nil {
+				response.Error(c, 404, fmt.Sprintf("归属组织 %d 不存在", *req.CustomerOrg.ParentOrgID))
+				return
+			}
+			if parentOrg.RootTenantID != callerTenantID {
+				response.Error(c, 403, "归属组织不在当前租户范围内")
+				return
+			}
+			if parentOrg.Type != "installer" && parentOrg.Type != "manufacturer" {
+				response.Error(c, 400, "客户组织必须归属于安装商（installer）或根组织")
+				return
+			}
+			customerParentOrgID = parentOrg.ID
+		}
+		// 非系统管理员：必须指定归属安装商且在其管理范围内
+		if !isSystemAdmin {
+			if customerParentOrgID == 0 {
+				response.Error(c, 400, "必须指定客户归属的安装商组织")
+				return
+			}
+			ok, cerr := h.canCreateInvitationsFor(ctx, userID, []RoleAssignmentInput{
+				{OrganizationID: customerParentOrgID, RoleCode: "org_admin"},
+			})
+			if cerr != nil {
+				logger.Error("Failed to verify org admin permission", zap.Error(cerr))
+				response.Error(c, 500, "权限校验失败")
+				return
+			}
+			if !ok {
+				response.Error(c, 403, "无权向该安装商下邀请用户（仅可邀请自己管理范围内的组织）")
+				return
+			}
+		}
+		customerOrgName = strings.TrimSpace(req.CustomerOrg.Name)
+		if customerOrgName == "" {
+			customerOrgName = "客户-" + time.Now().Format("20060102150405")
+		}
+	} else {
+		if len(assignments) == 0 {
+			response.Error(c, 400, "至少需要一个组织与角色分配")
 			return
 		}
-		if !ok {
-			response.Error(c, 403, "无权发送邀请（仅可邀请自己管理范围内的组织）")
-			return
+
+		// Validate role codes against the channel role model
+		for _, a := range assignments {
+			if !validRoleCodes[a.RoleCode] {
+				response.Error(c, 400, fmt.Sprintf("无效的角色代码: %s", a.RoleCode))
+				return
+			}
+		}
+
+		// Permission: system admins may invite to any organization in the tenant;
+		// other users must manage the target organization (be org_admin of the
+		// organization or of one of its ancestors — i.e. their own organizations
+		// plus all descendants).
+		if !isSystemAdmin {
+			ok, err := h.canCreateInvitationsFor(ctx, userID, assignments)
+			if err != nil {
+				logger.Error("Failed to verify org admin permission", zap.Error(err))
+				response.Error(c, 500, "权限校验失败")
+				return
+			}
+			if !ok {
+				response.Error(c, 403, "无权发送邀请（仅可邀请自己管理范围内的组织）")
+				return
+			}
+		}
+
+		// Verify all target organizations belong to the caller's tenant
+		for _, a := range assignments {
+			if _, ok := orgCache[a.OrganizationID]; ok {
+				continue
+			}
+			org, err := h.orgRepo.GetByID(ctx, a.OrganizationID)
+			if err != nil || org == nil {
+				response.Error(c, 404, fmt.Sprintf("组织 %d 不存在", a.OrganizationID))
+				return
+			}
+			if org.RootTenantID != callerTenantID {
+				logger.Warn("Organization not in caller's tenant",
+					zap.Int64("user_tenant", callerTenantID),
+					zap.Int64("org_tenant", org.RootTenantID))
+				response.Error(c, 403, "无法为其他租户的组织发送邀请")
+				return
+			}
+			orgCache[a.OrganizationID] = org
+		}
+
+		// Identity model: a membership's channel role MUST equal the organization
+		// type (agent org → agent identity, etc.); org_admin is the only
+		// management role that may be stacked onto any organization. This check
+		// applies to system admins too — an agent org cannot host customer
+		// identities regardless of who creates the invitation.
+		for _, a := range assignments {
+			org := orgCache[a.OrganizationID]
+			if !validateRoleOrgMatch(org, a.RoleCode) {
+				response.Error(c, 400, fmt.Sprintf("角色 %s 与组织「%s」（%s 类型）不匹配：成员身份必须与组织类型一致",
+					a.RoleCode, org.Name, org.Type))
+				return
+			}
+		}
+
+		// Check pending-invitation quota per organization (from organization_quotas)
+		quotaChecked := make(map[int64]bool)
+		for _, a := range assignments {
+			if quotaChecked[a.OrganizationID] {
+				continue
+			}
+			maxPending, err := h.checkInvitationQuota(ctx, callerTenantID, a.OrganizationID)
+			if err != nil {
+				logger.Error("Failed to check invitation quota", zap.Error(err))
+				response.Error(c, 500, "检查配额失败")
+				return
+			}
+			currentCount, _ := h.invitationRepo.CountByStatus(ctx, h.db, callerTenantID, a.OrganizationID, "pending")
+			if currentCount+int64(len(emails)) > maxPending {
+				response.Error(c, 403, fmt.Sprintf("组织 %s 的邀请名额已满（最多允许 %d 个待处理邀请）", orgCache[a.OrganizationID].Name, maxPending))
+				return
+			}
+			quotaChecked[a.OrganizationID] = true
 		}
 	}
 
@@ -236,60 +352,42 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Verify all target organizations belong to the caller's tenant
-	callerTenantID := middleware.GetRootTenantID(c)
-	orgCache := make(map[int64]*model.Organization)
-	for _, a := range assignments {
-		if _, ok := orgCache[a.OrganizationID]; ok {
-			continue
-		}
-		org, err := h.orgRepo.GetByID(ctx, a.OrganizationID)
-		if err != nil || org == nil {
-			response.Error(c, 404, fmt.Sprintf("组织 %d 不存在", a.OrganizationID))
-			return
-		}
-		if org.RootTenantID != callerTenantID {
-			logger.Warn("Organization not in caller's tenant",
-				zap.Int64("user_tenant", callerTenantID),
-				zap.Int64("org_tenant", org.RootTenantID))
-			response.Error(c, 403, "无法为其他租户的组织发送邀请")
-			return
-		}
-		orgCache[a.OrganizationID] = org
+	// Role label for the notification email (based on the first assignment;
+	// customer mode always uses the 'customer' identity)
+	roleCode := "customer"
+	if !isCustomerMode {
+		roleCode = assignments[0].RoleCode
+	}
+	roleName := repository.GetRoleName(roleIDFromCode(roleCode))
+	var orgName string
+	if isCustomerMode {
+		orgName = customerOrgName
+	} else {
+		orgName = orgCache[assignments[0].OrganizationID].Name
 	}
 
-	// Identity model: a membership's channel role MUST equal the organization
-	// type (agent org → agent identity, etc.); org_admin is the only
-	// management role that may be stacked onto any organization. This check
-	// applies to system admins too — an agent org cannot host customer
-	// identities regardless of who creates the invitation.
-	for _, a := range assignments {
-		org := orgCache[a.OrganizationID]
-		if !validateRoleOrgMatch(org, a.RoleCode) {
-			response.Error(c, 400, fmt.Sprintf("角色 %s 与组织「%s」（%s 类型）不匹配：成员身份必须与组织类型一致",
-				a.RoleCode, org.Name, org.Type))
-			return
-		}
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		response.Error(c, 500, "数据库事务开始失败")
+		return
 	}
+	defer tx.Rollback(ctx)
 
-	// Check pending-invitation quota per organization (from organization_quotas)
-	quotaChecked := make(map[int64]bool)
-	for _, a := range assignments {
-		if quotaChecked[a.OrganizationID] {
-			continue
+	// 客户模式：事务内创建客户组织，assignments 统一构造为 customer 身份
+	if isCustomerMode {
+		// 不指定归属安装商时挂到根组织（manufacturer，tenantID 即根组织 ID）
+		parentForInsert := customerParentOrgID
+		if parentForInsert == 0 {
+			parentForInsert = callerTenantID
 		}
-		maxPending, err := h.checkInvitationQuota(ctx, callerTenantID, a.OrganizationID)
-		if err != nil {
-			logger.Error("Failed to check invitation quota", zap.Error(err))
-			response.Error(c, 500, "检查配额失败")
+		newOrgID, cerr := h.createCustomerOrgTx(ctx, tx, callerTenantID, customerOrgName, parentForInsert)
+		if cerr != nil {
+			logger.Error("Failed to create customer org", zap.Error(cerr))
+			response.Error(c, 500, "创建客户组织失败")
 			return
 		}
-		currentCount, _ := h.invitationRepo.CountByStatus(ctx, h.db, callerTenantID, a.OrganizationID, "pending")
-		if currentCount+int64(len(emails)) > maxPending {
-			response.Error(c, 403, fmt.Sprintf("组织 %s 的邀请名额已满（最多允许 %d 个待处理邀请）", orgCache[a.OrganizationID].Name, maxPending))
-			return
-		}
-		quotaChecked[a.OrganizationID] = true
+		customerOrgID = newOrgID
+		assignments = []RoleAssignmentInput{{OrganizationID: newOrgID, RoleCode: "customer"}}
 	}
 
 	// Build role_assignments JSONB (same assignments for every recipient email)
@@ -298,17 +396,6 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		response.Error(c, 500, "序列化角色分配失败")
 		return
 	}
-
-	// Role label for the notification email (based on the first assignment)
-	roleName := repository.GetRoleName(roleIDFromCode(assignments[0].RoleCode))
-	orgName := orgCache[assignments[0].OrganizationID].Name
-
-	tx, err := h.db.Begin(ctx)
-	if err != nil {
-		response.Error(c, 500, "数据库事务开始失败")
-		return
-	}
-	defer tx.Rollback(ctx)
 
 	now := time.Now()
 	type createdItem struct {
@@ -413,10 +500,58 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		}()
 	}
 
-	response.Success(c, gin.H{
+	payload := gin.H{
 		"created": len(created),
 		"results": results,
-	})
+	}
+	if isCustomerMode {
+		payload["new_org"] = gin.H{"id": customerOrgID, "name": customerOrgName}
+	}
+	response.Success(c, payload)
+}
+
+// createCustomerOrgTx 在事务内创建客户组织并初始化默认配额。
+// 返回新组织的 ID。
+func (h *InvitationHandler) createCustomerOrgTx(ctx context.Context, tx pgx.Tx, tenantID int64, name string, parentID int64) (int64, error) {
+	var orgID int64
+	err := tx.QueryRow(ctx, `
+		INSERT INTO organizations (root_tenant_id, parent_id, org_type, code, name, status, version)
+		VALUES ($1, $2, 'customer', NULL, $3, 'active', 1)
+		RETURNING id
+	`, tenantID, parentID, name).Scan(&orgID)
+	if err != nil {
+		return 0, err
+	}
+
+	// 初始化默认配额（与 Organization Create 保持一致）
+	defaultQuotas := []struct {
+		resourceType string
+		limit        int64
+	}{
+		{"members", 100},
+		{"direct_child_organizations", 50},
+		{"descendant_organizations", 200},
+		{"inventory_devices", 1000},
+		{"claimed_devices", 500},
+		{"stations", 200},
+		{"pending_invitations", 20},
+	}
+	for _, q := range defaultQuotas {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO organization_quotas (root_tenant_id, organization_id, resource_type, quota_limit, inherited_from_organization_id)
+			SELECT $1, $2, $3::varchar,
+				LEAST($4, COALESCE((
+					SELECT pq.quota_limit FROM organization_quotas pq
+					WHERE pq.root_tenant_id = $1 AND pq.organization_id = $5 AND pq.resource_type = $3::varchar
+				), $4)),
+				$5
+			ON CONFLICT (root_tenant_id, organization_id, resource_type) DO NOTHING
+		`, tenantID, orgID, q.resourceType, q.limit, parentID)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return orgID, nil
 }
 
 // List returns paginated list of pending invitations
