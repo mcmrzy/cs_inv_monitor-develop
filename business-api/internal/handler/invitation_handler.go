@@ -37,11 +37,10 @@ type RoleAssignmentInput struct {
 	RoleCode       string `json:"role_code" binding:"required"`
 }
 
-// CustomerOrgInput 邀请"终端用户"时自动创建客户组织（每批邀请一个）。
-// 客户组织归属指定安装商（installer）或根组织（manufacturer，不指定时）。
+// CustomerOrgInput 邀请"终端用户"时指定其归属安装商组织。
+// 终端用户以 customer 身份直接挂在 installer 组织下，不创建新组织。
 type CustomerOrgInput struct {
-	Name        string `json:"name"`           // 客户组织名称；空则自动生成
-	ParentOrgID *int64 `json:"parent_org_id"` // 归属安装商组织 ID；nil = 根组织下
+	ParentOrgID *int64 `json:"parent_org_id"` // 归属安装商组织 ID（必填）
 }
 
 // CreateInvitationRequest represents the request to create invitations.
@@ -52,7 +51,7 @@ type CreateInvitationRequest struct {
 	Assignments  []RoleAssignmentInput `json:"assignments"`
 	ExpiresHours int                   `json:"expires_hours" binding:"required,min=1,max=720"` // max 30 days
 
-	// 客户组织模式：提供后自动创建 customer 组织并邀请终端用户
+	// 客户组织模式：提供后终端用户直接挂到指定安装商组织下
 	// （此时 assignments 将被忽略，后端统一构造为 customer 身份）
 	CustomerOrg *CustomerOrgInput `json:"customer_org"`
 
@@ -213,35 +212,32 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	callerTenantID := middleware.GetRootTenantID(c)
 	orgCache := make(map[int64]*model.Organization)
 
-	// ── 客户组织模式：邀请终端用户，自动创建客户组织（每批一个）──
+	// ── 客户模式：邀请终端用户，直接挂到指定安装商组织下（不建组织）──
 	isCustomerMode := req.CustomerOrg != nil
-	var customerParentOrgID int64 // 0 = 根组织（manufacturer）
-	var customerOrgName string
-	var customerOrgID int64
+	var customerParentOrgID int64
 	if isCustomerMode {
-		// 归属组织：installer 或 manufacturer（不指定 = 根组织）
-		if req.CustomerOrg.ParentOrgID != nil && *req.CustomerOrg.ParentOrgID > 0 {
-			parentOrg, perr := h.orgRepo.GetByID(ctx, *req.CustomerOrg.ParentOrgID)
-			if perr != nil || parentOrg == nil {
-				response.Error(c, 404, fmt.Sprintf("归属组织 %d 不存在", *req.CustomerOrg.ParentOrgID))
-				return
-			}
-			if parentOrg.RootTenantID != callerTenantID {
-				response.Error(c, 403, "归属组织不在当前租户范围内")
-				return
-			}
-			if parentOrg.Type != "installer" && parentOrg.Type != "manufacturer" {
-				response.Error(c, 400, "客户组织必须归属于安装商（installer）或根组织")
-				return
-			}
-			customerParentOrgID = parentOrg.ID
+		// 归属安装商：必填（系统管理员也必须指定），且必须为 installer 组织
+		if req.CustomerOrg.ParentOrgID == nil || *req.CustomerOrg.ParentOrgID <= 0 {
+			response.Error(c, 400, "必须指定客户归属的安装商组织")
+			return
 		}
-		// 非系统管理员：必须指定归属安装商且在其管理范围内
+		parentOrg, perr := h.orgRepo.GetByID(ctx, *req.CustomerOrg.ParentOrgID)
+		if perr != nil || parentOrg == nil {
+			response.Error(c, 404, fmt.Sprintf("归属组织 %d 不存在", *req.CustomerOrg.ParentOrgID))
+			return
+		}
+		if parentOrg.RootTenantID != callerTenantID {
+			response.Error(c, 403, "归属组织不在当前租户范围内")
+			return
+		}
+		if parentOrg.Type != "installer" {
+			response.Error(c, 400, "终端用户必须归属安装商（installer）组织")
+			return
+		}
+		customerParentOrgID = parentOrg.ID
+		orgCache[customerParentOrgID] = parentOrg
+		// 非系统管理员：归属安装商必须在其管理范围内
 		if !isSystemAdmin {
-			if customerParentOrgID == 0 {
-				response.Error(c, 400, "必须指定客户归属的安装商组织")
-				return
-			}
 			ok, cerr := h.canCreateInvitationsFor(ctx, userID, []RoleAssignmentInput{
 				{OrganizationID: customerParentOrgID, RoleCode: "org_admin"},
 			})
@@ -254,10 +250,6 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 				response.Error(c, 403, "无权向该安装商下邀请用户（仅可邀请自己管理范围内的组织）")
 				return
 			}
-		}
-		customerOrgName = strings.TrimSpace(req.CustomerOrg.Name)
-		if customerOrgName == "" {
-			customerOrgName = "客户-" + time.Now().Format("20060102150405")
 		}
 	} else {
 		if len(assignments) == 0 {
@@ -361,7 +353,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	roleName := repository.GetRoleName(roleIDFromCode(roleCode))
 	var orgName string
 	if isCustomerMode {
-		orgName = customerOrgName
+		orgName = orgCache[customerParentOrgID].Name
 	} else {
 		orgName = orgCache[assignments[0].OrganizationID].Name
 	}
@@ -373,21 +365,9 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 
-	// 客户模式：事务内创建客户组织，assignments 统一构造为 customer 身份
+	// 客户模式：assignments 统一构造为 customer 身份，直接挂归属安装商组织
 	if isCustomerMode {
-		// 不指定归属安装商时挂到根组织（manufacturer，tenantID 即根组织 ID）
-		parentForInsert := customerParentOrgID
-		if parentForInsert == 0 {
-			parentForInsert = callerTenantID
-		}
-		newOrgID, cerr := h.createCustomerOrgTx(ctx, tx, callerTenantID, customerOrgName, parentForInsert)
-		if cerr != nil {
-			logger.Error("Failed to create customer org", zap.Error(cerr))
-			response.Error(c, 500, "创建客户组织失败")
-			return
-		}
-		customerOrgID = newOrgID
-		assignments = []RoleAssignmentInput{{OrganizationID: newOrgID, RoleCode: "customer"}}
+		assignments = []RoleAssignmentInput{{OrganizationID: customerParentOrgID, RoleCode: "customer"}}
 	}
 
 	// Build role_assignments JSONB (same assignments for every recipient email)
@@ -504,54 +484,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 		"created": len(created),
 		"results": results,
 	}
-	if isCustomerMode {
-		payload["new_org"] = gin.H{"id": customerOrgID, "name": customerOrgName}
-	}
 	response.Success(c, payload)
-}
-
-// createCustomerOrgTx 在事务内创建客户组织并初始化默认配额。
-// 返回新组织的 ID。
-func (h *InvitationHandler) createCustomerOrgTx(ctx context.Context, tx pgx.Tx, tenantID int64, name string, parentID int64) (int64, error) {
-	var orgID int64
-	err := tx.QueryRow(ctx, `
-		INSERT INTO organizations (root_tenant_id, parent_id, org_type, code, name, status, version)
-		VALUES ($1, $2, 'customer', NULL, $3, 'active', 1)
-		RETURNING id
-	`, tenantID, parentID, name).Scan(&orgID)
-	if err != nil {
-		return 0, err
-	}
-
-	// 初始化默认配额（与 Organization Create 保持一致）
-	defaultQuotas := []struct {
-		resourceType string
-		limit        int64
-	}{
-		{"members", 100},
-		{"direct_child_organizations", 50},
-		{"descendant_organizations", 200},
-		{"inventory_devices", 1000},
-		{"claimed_devices", 500},
-		{"stations", 200},
-		{"pending_invitations", 20},
-	}
-	for _, q := range defaultQuotas {
-		_, err = tx.Exec(ctx, `
-			INSERT INTO organization_quotas (root_tenant_id, organization_id, resource_type, quota_limit, inherited_from_organization_id)
-			SELECT $1, $2, $3::varchar,
-				LEAST($4, COALESCE((
-					SELECT pq.quota_limit FROM organization_quotas pq
-					WHERE pq.root_tenant_id = $1 AND pq.organization_id = $5 AND pq.resource_type = $3::varchar
-				), $4)),
-				$5
-			ON CONFLICT (root_tenant_id, organization_id, resource_type) DO NOTHING
-		`, tenantID, orgID, q.resourceType, q.limit, parentID)
-		if err != nil {
-			return 0, err
-		}
-	}
-	return orgID, nil
 }
 
 // List returns paginated list of pending invitations
@@ -1090,8 +1023,9 @@ var orgTypeIdentityRoles = map[string]string{
 }
 
 // validateRoleOrgMatch reports whether roleCode is legal for the target
-// organization: either the organization's identity role (its org type) or
-// the stackable management role org_admin.
+// organization: either the organization's identity role (its org type), the
+// stackable management role org_admin, or the terminal-user identity
+// (customer) which is hosted by installer organizations.
 func validateRoleOrgMatch(org *model.Organization, roleCode string) bool {
 	if org == nil {
 		return false
@@ -1100,7 +1034,11 @@ func validateRoleOrgMatch(org *model.Organization, roleCode string) bool {
 		return true
 	}
 	identity, ok := orgTypeIdentityRoles[org.Type]
-	return ok && identity == roleCode
+	if ok && identity == roleCode {
+		return true
+	}
+	// 安装商组织可容纳终端用户（customer）身份：用户直接挂安装商旗下
+	return org.Type == "installer" && roleCode == "customer"
 }
 
 // roleIDToCode maps legacy numeric role IDs to role codes.

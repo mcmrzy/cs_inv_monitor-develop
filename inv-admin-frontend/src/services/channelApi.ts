@@ -142,14 +142,13 @@ export const channelApi = {
 
   // Batch create: emails[] x assignments[] with per-email result details.
   // Legacy single format {email, role_id, organization_id} is also accepted.
-  // Customer-org mode: provide customer_org to auto-create a customer org
-  // (assignments are ignored by the backend and forced to 'customer').
+  // Customer mode: provide customer_org {parent_org_id} to attach invitees as
+  // customer members directly under the given installer org (no org created).
   sendInvitation: (data: {
     emails: string[]
     assignments?: InvitationAssignment[]
     customer_org?: {
-      name?: string
-      parent_org_id?: number | null // installer org; null/undefined = root manufacturer
+      parent_org_id: number | null // required: installer org
     }
     expires_hours: number
   }) =>

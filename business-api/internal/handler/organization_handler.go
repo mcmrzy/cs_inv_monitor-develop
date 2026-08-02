@@ -110,18 +110,11 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 			zap.String("type", req.Type),
 			zap.Bool("isSystemAdmin", isSystemAdmin))
 
-	// 权限：系统管理员可创建任意渠道组织；非系统管理员仅可在自身管理范围内
-	// 创建客户组织（customer），用于邀请终端用户。
+	// 权限：仅系统管理员可创建组织。
+	// 终端用户通过邀请直接挂到安装商组织下，不再为普通管理员开放建组织入口。
 	if !isSystemAdmin {
-		if req.Type != "customer" {
-			response.Error(c, 403, "仅系统管理员可创建渠道组织，普通管理员可创建客户组织")
-			return
-		}
-		// 非系统管理员创建客户组织必须显式指定归属组织（不允许默认挂根组织）
-		if req.ParentID == nil || *req.ParentID <= 0 {
-			response.Error(c, 400, "创建客户组织必须指定归属组织（安装商）")
-			return
-		}
+		response.Error(c, 403, "仅系统管理员可创建组织")
+		return
 	}
 
 	// Validate organization type.
@@ -221,35 +214,6 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		} else if parentType != expectedParent {
 			tx.Rollback(ctx)
 			response.Error(c, 400, fmt.Sprintf("%s must be under %s, but parent is %s", req.Type, expectedParent, parentType))
-			return
-		}
-	}
-
-	// 非系统管理员：父组织必须在其管理范围内（自己 org_admin 的组织 + 全部下级子树）
-	if !isSystemAdmin {
-		var isManaged bool
-		err = tx.QueryRow(ctx, `
-			SELECT EXISTS(
-				SELECT 1
-				FROM organization_closure c
-				JOIN organization_memberships m
-				  ON m.organization_id = c.ancestor_id AND m.status = 'active'
-				JOIN membership_role_assignments ra
-				  ON ra.membership_id = m.id AND ra.organization_id = m.organization_id
-				WHERE c.descendant_id = $1
-				  AND m.user_id = $2
-				  AND ra.role_code = 'org_admin' AND ra.status = 'active'
-			)
-		`, *parentID, userID).Scan(&isManaged)
-		if err != nil {
-			tx.Rollback(ctx)
-			log.Printf("[CreateOrg] check manage scope error: user_id=%d, parent_id=%d, err=%v", userID, *parentID, err)
-			response.Error(c, 500, "权限校验失败")
-			return
-		}
-		if !isManaged {
-			tx.Rollback(ctx)
-			response.Error(c, 403, "无权在此组织下创建客户组织（仅可管理范围内的组织）")
 			return
 		}
 	}
