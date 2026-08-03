@@ -182,12 +182,14 @@ class _LoginFormState extends State<LoginForm> {
                 width: 20.w,
                 height: 20.w,
                 decoration: BoxDecoration(
-                  color: _rememberPassword ? AppColors.primary : Colors.white,
+                  color: _rememberPassword
+                      ? AppColors.primary
+                      : AppColor.surfaceContainer(context),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: _rememberPassword
                         ? AppColors.primary
-                        : const Color(0xFFD1D5DB),
+                        : AppColor.outline(context),
                     width: 1.5,
                   ),
                 ),

@@ -39,7 +39,7 @@ class _AuthPageState extends State<AuthPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColor.surfaceContainer(context),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -48,7 +48,6 @@ class _AuthPageState extends State<AuthPage> {
                 content: Text(
                   AppLocalizations.of(context)!.translateError(state.message),
                 ),
-                backgroundColor: AppColors.error,
               ),
             );
           } else if (state is AuthAuthenticated) {
@@ -70,7 +69,7 @@ class _AuthPageState extends State<AuthPage> {
                     margin: const EdgeInsets.fromLTRB(24, 0, 24, 0),
                     padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 8.h),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColor.surfaceContainer(context),
                       borderRadius: BorderRadius.circular(20.r),
                       boxShadow: [
                         BoxShadow(

@@ -61,7 +61,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.pleaseInputCorrectPhone),
-          backgroundColor: AppColors.error,
         ),
       );
       return;
@@ -97,7 +96,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                 content: Text(
                   AppLocalizations.of(context)!.translateError(state.message),
                 ),
-                backgroundColor: AppColors.error,
               ),
             );
           } else if (state is AuthCodeSent) {
@@ -105,7 +103,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               SnackBar(
                 content:
                     Text(AppLocalizations.of(context)!.verificationCodeSent),
-                backgroundColor: AppColors.success,
               ),
             );
             _startCountdown();
@@ -114,7 +111,6 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
               SnackBar(
                 content:
                     Text(AppLocalizations.of(context)!.passwordResetSuccess),
-                backgroundColor: AppColors.success,
               ),
             );
             context.go('/login');
@@ -249,8 +245,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.grey.shade300,
-              disabledForegroundColor: Colors.grey.shade500,
+              disabledBackgroundColor: AppColors.surfaceHover,
+              disabledForegroundColor: AppColors.textHint,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8.r),
               ),

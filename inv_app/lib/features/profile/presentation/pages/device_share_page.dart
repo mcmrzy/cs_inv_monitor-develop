@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/device/presentation/bloc/device_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -58,7 +59,10 @@ class _DeviceSharePageState extends State<DeviceSharePage> {
               children: [
                 Text(
                   l10n.shareDeviceDesc(widget.deviceSN),
-                  style: TextStyle(fontSize: 14.sp, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 14.sp,
+                    color: AppColor.textSecondary(context),
+                  ),
                 ),
                 SizedBox(height: 16.h),
                 TextFormField(

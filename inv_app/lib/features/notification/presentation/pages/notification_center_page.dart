@@ -361,7 +361,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     return Container(
       margin: EdgeInsets.only(bottom: 8.h),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
       ),
       child: InkWell(
@@ -497,7 +497,7 @@ class _NotificationCenterPageState extends State<NotificationCenterPage> {
     return Container(
       margin: EdgeInsets.only(bottom: 8.h),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
       ),
       child: Padding(
