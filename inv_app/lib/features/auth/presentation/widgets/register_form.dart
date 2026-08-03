@@ -2,19 +2,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
-class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+/// 注册表单组件（创建账号标题 / 邮箱 / 验证码 / 手机 / 昵称 / 密码 / 确认密码）
+/// 由 AuthPage 通过 AnimatedSwitcher 与登录表单切换展示
+class RegisterForm extends StatefulWidget {
+  const RegisterForm({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  State<RegisterForm> createState() => _RegisterFormState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
+class _RegisterFormState extends State<RegisterForm> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -91,195 +92,40 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: BlocConsumer<AuthBloc, AuthState>(
-        listener: (context, state) {
-          if (state is AuthError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  AppLocalizations.of(context)!.translateError(state.message),
-                ),
-                backgroundColor: AppColors.error,
-              ),
-            );
-          } else if (state is AuthCodeSent) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content:
-                    Text(AppLocalizations.of(context)!.verificationCodeSent),
-                backgroundColor: AppColors.success,
-              ),
-            );
-            _startCountdown();
-          } else if (state is AuthAuthenticated) {
-            context.go('/home');
-          }
-        },
-        builder: (context, state) {
-          // 顶部品牌渐变区 + 悬浮表单卡片，键盘弹出仍可滚动
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildBrandHeader(),
-                // 悬浮卡片：Transform 视觉上叠（Container 负 margin 会触发运行时断言崩溃）
-                Transform.translate(
-                  offset: Offset(0, -24.h),
-                  child: Container(
-                    margin: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                    padding: EdgeInsets.fromLTRB(24.w, 28.h, 24.w, 8.h),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF1565C0).withValues(alpha: 0.12),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildHeader(),
-                          SizedBox(height: 28.h),
-                          _buildEmailField(),
-                          SizedBox(height: 16.h),
-                          _buildCodeField(state),
-                          SizedBox(height: 16.h),
-                          _buildPhoneField(),
-                          SizedBox(height: 16.h),
-                          _buildNicknameField(),
-                          SizedBox(height: 16.h),
-                          _buildPasswordField(),
-                          SizedBox(height: 16.h),
-                          _buildConfirmPasswordField(),
-                          SizedBox(height: 28.h),
-                          _buildRegisterButton(state),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                // 视觉间隙由 Transform 上移补偿
-                const SizedBox(height: 0),
-                _buildLoginRow(),
-                SizedBox(height: 32.h),
-              ],
+    final state = context.watch<AuthBloc>().state;
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state is AuthCodeSent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text(AppLocalizations.of(context)!.verificationCodeSent),
+              backgroundColor: AppColors.success,
             ),
           );
-        },
-      ),
-    );
-  }
-
-  /// 品牌区：渐变头部 + 返回按钮 + Logo + 品牌名
-  Widget _buildBrandHeader() {
-    final l10n = AppLocalizations.of(context)!;
-    return Container(
-      height: 260.h,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0D47A1), Color(0xFF1565C0), Color(0xFF42A5F5)],
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(36.r)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Stack(
+          _startCountdown();
+        }
+      },
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 返回按钮（白色，浮于渐变区）
-            if (Navigator.of(context).canPop())
-              Positioned(
-                left: 4.w,
-                top: 0,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-                  color: Colors.white,
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ),
-            // 装饰：右上大圆环
-            Positioned(
-              right: -70.w,
-              top: -70.w,
-              child: Container(
-                width: 230.w,
-                height: 230.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    width: 26,
-                  ),
-                ),
-              ),
-            ),
-            // 装饰：左下光斑
-            Positioned(
-              left: -50.w,
-              bottom: -40.w,
-              child: Container(
-                width: 150.w,
-                height: 150.w,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.06),
-                ),
-              ),
-            ),
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // 大 Logo：白底圆角卡 + csergy.png
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 14.w,
-                      vertical: 6.h,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Image.asset(
-                      'assets/images/brand_logo.png',
-                      height: 36.h,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  SizedBox(height: 14.h),
-                  // 小 Logo：辰烁科技.png
-                  Image.asset(
-                    'assets/images/brand_name.png',
-                    height: 22.h,
-                    fit: BoxFit.contain,
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    l10n.pvInverterMonitor,
-                    style: TextStyle(
-                      fontSize: 13.sp,
-                      color: Colors.white.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildHeader(),
+            SizedBox(height: 28.h),
+            _buildEmailField(),
+            SizedBox(height: 16.h),
+            _buildCodeField(state),
+            SizedBox(height: 16.h),
+            _buildPhoneField(),
+            SizedBox(height: 16.h),
+            _buildNicknameField(),
+            SizedBox(height: 16.h),
+            _buildPasswordField(),
+            SizedBox(height: 16.h),
+            _buildConfirmPasswordField(),
+            SizedBox(height: 28.h),
+            _buildRegisterButton(state),
           ],
         ),
       ),
@@ -527,33 +373,6 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildLoginRow() {
-    final l10n = AppLocalizations.of(context)!;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          l10n.alreadyHaveAccount,
-          style: TextStyle(fontSize: 14.sp, color: AppColors.textSecondary),
-        ),
-        TextButton(
-          onPressed: () {
-            // 优先返回上一页（登录页/一键登录页），无上级页面时才跳转登录页
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            } else {
-              context.go('/login');
-            }
-          },
-          child: Text(
-            l10n.loginNow,
-            style: TextStyle(fontSize: 14.sp, color: AppColors.primary),
-          ),
-        ),
-      ],
     );
   }
 }

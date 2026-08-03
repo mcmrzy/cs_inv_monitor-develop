@@ -37,20 +37,21 @@ func setupChannelTest(t *testing.T) *channelTestContext {
 	pw := "ChTest@2026"
 
 	// User A — primary admin
-	phoneA := fmt.Sprintf("150%08d", time.Now().UnixNano()%100000000)
+	phoneA := fmt.Sprintf("150%08d", time.Now().UnixNano()/1000%100000000)
 	registerUser(t, cfg.APIBaseURL, phoneA, pw)
 	// User B — secondary user (for cross-tenant / isolation tests)
-	phoneB := fmt.Sprintf("151%08d", time.Now().UnixNano()%100000000)
+	phoneB := fmt.Sprintf("151%08d", time.Now().UnixNano()/1000%100000000)
 	registerUser(t, cfg.APIBaseURL, phoneB, pw)
 
-	// Promote both users from end-user (role=5) to super-admin (role=0)
-	// so that OrganizationHandler.Create does not reject them with 403.
+	// Promote both users to system admin (is_system_admin=true, the new RBAC
+	// model; users.role was removed by migration 076) so that
+	// OrganizationHandler.Create does not reject them with 403.
 	pool := ConnectDB(t, cfg)
 	defer pool.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	for _, phone := range []string{phoneA, phoneB} {
-		_, err := pool.Exec(ctx, "UPDATE users SET role = 0 WHERE phone = $1", phone)
+		_, err := pool.Exec(ctx, "UPDATE users SET is_system_admin = true WHERE phone = $1", phone)
 		require.NoError(t, err, "promote user role for phone %s", phone)
 	}
 
@@ -105,6 +106,18 @@ func (c *channelTestContext) createInvitation(t *testing.T, email string, roleID
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp.Data, &data))
 	return data
+}
+
+// invitationIDFromCreate extracts the invitation ID from a create response.
+// The create endpoint returns {"created":N,"results":[{email,invitation_id,status,invite_link}]}.
+func invitationIDFromCreate(t *testing.T, data map[string]interface{}) int64 {
+	t.Helper()
+	results, _ := data["results"].([]interface{})
+	require.NotEmpty(t, results, "create response should contain results")
+	first, _ := results[0].(map[string]interface{})
+	id, _ := first["invitation_id"].(float64)
+	require.NotZero(t, id, "invitation_id should be present in create response")
+	return int64(id)
 }
 
 // generateClaimCode generates a device claim code and returns the response data.

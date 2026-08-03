@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:inv_app/core/entities/inverter_data.dart';
 
 void main() {
   group('RealtimeDataService 数据解析测试', () {

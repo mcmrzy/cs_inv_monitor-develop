@@ -152,30 +152,6 @@ func GetIsSystemAdmin(c *gin.Context) bool {
 	return ok && b
 }
 
-// GetRole is deprecated. During the migration from the legacy role system to
-// the organization-based permission system, it returns 0 for system admins and
-// 5 (end-user) for all other users.  Handlers should migrate to RequirePermission
-// or GetIsSystemAdmin as part of Phase 4.
-func GetRole(c *gin.Context) int {
-	if GetIsSystemAdmin(c) {
-		return 0
-	}
-	return 5
-}
-
-// RequireRole is deprecated. During the migration it acts as a system-admin
-// gate.  Handlers should migrate to RequirePermission as part of Phase 4.
-func RequireRole(minRole int) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if GetIsSystemAdmin(c) || GetRole(c) <= minRole {
-			c.Next()
-			return
-		}
-		response.Forbidden(c, "permission denied")
-		c.Abort()
-	}
-}
-
 // GetActorContext extracts the ActorContext from the gin context.
 func GetActorContext(c *gin.Context) model.ActorContext {
 	v, exists := c.Get("actor_context")

@@ -26,10 +26,6 @@ import (
 )
 
 // Self-registered accounts are terminal users. Elevated partner, installer,
-// operator, and administrator roles must only be assigned by an authorized
-// administrator after registration.
-const defaultSelfRegisteredRole = 5
-
 const (
 	accessTokenLifetime  = 15 * time.Minute
 	refreshTokenLifetime = 7 * 24 * time.Hour
@@ -387,7 +383,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	user := &model.User{
 		Phone:        req.Phone,
 		PasswordHash: string(hashedPassword),
-		Role:         defaultSelfRegisteredRole,
 		Status:       1,
 	}
 
@@ -1034,7 +1029,6 @@ func (h *AuthHandler) EmailRegister(c *gin.Context) {
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
 		Nickname:     req.Nickname,
-		Role:         defaultSelfRegisteredRole,
 		Status:       1,
 	}
 
@@ -1291,7 +1285,6 @@ func (h *AuthHandler) JVerifyLogin(c *gin.Context) {
 	if user == nil {
 		user = &model.User{
 			Phone:  phone,
-			Role:   defaultSelfRegisteredRole,
 			Status: 1,
 		}
 		if err := h.userService.Create(c.Request.Context(), user); err != nil {

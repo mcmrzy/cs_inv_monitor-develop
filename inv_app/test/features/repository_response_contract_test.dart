@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:inv_app/core/errors/failures.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/features/alarm/data/datasources/alarm_remote_data_source.dart';
 import 'package:inv_app/features/alarm/data/repositories/alarm_repository_impl.dart';
 import 'package:inv_app/features/dashboard/data/datasources/dashboard_remote_data_source.dart';
@@ -24,8 +23,6 @@ class _AlarmRemote extends Mock implements AlarmRemoteDataSource {}
 class _DashboardRemote extends Mock implements DashboardRemoteDataSource {}
 
 class _OtaRemote extends Mock implements OtaRemoteDataSource {}
-
-class _Mqtt extends Mock implements MQTTService {}
 
 Response<dynamic> responseWith(dynamic data) => Response<dynamic>(
       data: data,
@@ -57,7 +54,7 @@ void main() {
         ),
       ).thenAnswer((_) async => responseWith({'code': 0, 'data': []}));
 
-      final result = await DeviceRepositoryImpl(remote, _Mqtt()).getList();
+      final result = await DeviceRepositoryImpl(remote).getList();
       expectFormatFailure(result);
     });
 
@@ -126,7 +123,7 @@ void main() {
     when(() => remote.unbind(any()))
         .thenAnswer((_) async => responseWith({'code': 0, 'data': null}));
 
-    final result = await DeviceRepositoryImpl(remote, _Mqtt()).unbind('SN1');
+    final result = await DeviceRepositoryImpl(remote).unbind('SN1');
     expect(result.isRight(), isTrue);
   });
 }

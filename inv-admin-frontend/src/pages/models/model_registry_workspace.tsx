@@ -170,7 +170,11 @@ const ModelRegistryWorkspace: React.FC = () => {
     mutationFn: () => modelApi.validateRegistry(selectedModel!.id),
     onSuccess: (response) => {
       const result = unwrap<{ valid: boolean; issues: string[] }>(response)
-      result.valid ? messageApi.success(t('models.registry.validationPassed')) : modal.warning({ title: t('models.registry.validationFailed'), content: result.issues.join(lang === 'zh' ? '；' : '; ') })
+      if (result.valid) {
+        messageApi.success(t('models.registry.validationPassed'))
+      } else {
+        modal.warning({ title: t('models.registry.validationFailed'), content: result.issues.join(lang === 'zh' ? '；' : '; ') })
+      }
     },
   })
   const activateModel = useMutation({

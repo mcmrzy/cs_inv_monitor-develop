@@ -19,17 +19,6 @@ func NewAlarmHandler(alarmService *service.AlarmService) *AlarmHandler {
 	return &AlarmHandler{alarmService: alarmService}
 }
 
-// mapRoleFromSystemAdmin converts the boolean is_system_admin flag to the
-// legacy role integer that the repository layer still expects.
-// System admin → 0 (super admin), non-admin → 5 (end user).
-// This is a temporary bridge during the permission system migration.
-func mapRoleFromSystemAdmin(isSystemAdmin bool) int {
-	if isSystemAdmin {
-		return 0
-	}
-	return 5
-}
-
 func (h *AlarmHandler) List(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	isSystemAdmin := middleware.GetIsSystemAdmin(c)
@@ -63,14 +52,14 @@ func (h *AlarmHandler) List(c *gin.Context) {
 	}
 
 	params := repository.AlarmListParams{
-		UserID:     userID,
-		StationID:  stationID,
-		Status:     status,
-		AlarmLevel: alarmLevel,
-		Keyword:    keyword,
-		Page:       page,
-		PageSize:   pageSize,
-		Role:       mapRoleFromSystemAdmin(isSystemAdmin),
+		UserID:        userID,
+		StationID:     stationID,
+		Status:        status,
+		AlarmLevel:    alarmLevel,
+		Keyword:       keyword,
+		Page:          page,
+		PageSize:      pageSize,
+		IsSystemAdmin: isSystemAdmin,
 	}
 
 	alarms, total, err := h.alarmService.List(c.Request.Context(), params)
@@ -168,7 +157,7 @@ func (h *AlarmHandler) GetStats(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 	isSystemAdmin := middleware.GetIsSystemAdmin(c)
 
-	stats, err := h.alarmService.GetStats(c.Request.Context(), userID, mapRoleFromSystemAdmin(isSystemAdmin))
+	stats, err := h.alarmService.GetStats(c.Request.Context(), userID, isSystemAdmin)
 	if err != nil {
 		response.Error(c, 500, "get stats failed")
 		return

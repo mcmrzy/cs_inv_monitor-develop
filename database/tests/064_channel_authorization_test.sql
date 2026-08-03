@@ -21,15 +21,16 @@ BEGIN
 END;
 $$;
 
-INSERT INTO users(id, phone, password_hash, role) VALUES
-    (959001, 'migration064-sql-1', 'hash', 1),
-    (959002, 'migration064-sql-2', 'hash', 5);
+INSERT INTO users(id, phone, password_hash) VALUES
+    (959001, 'migration064-sql-1', 'hash'),
+    (959002, 'migration064-sql-2', 'hash');
 
 INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, code, name) VALUES
     (959100, 959100, NULL, 'manufacturer', 'SQL-ROOT-A', 'SQL Manufacturer A'),
     (959101, 959100, 959100, 'agent', 'SQL-AGENT-A', 'SQL Agent A'),
     (959102, 959100, 959101, 'distributor', 'SQL-DIST-A', 'SQL Distributor A'),
-    (959103, 959100, 959102, 'customer', 'SQL-CUSTOMER-A', 'SQL Customer A'),
+    (959103, 959100, 959102, 'installer', 'SQL-INST-A', 'SQL Installer A'),
+    (959104, 959100, 959103, 'customer', 'SQL-CUSTOMER-A', 'SQL Customer A'),
     (959200, 959200, NULL, 'manufacturer', 'SQL-ROOT-B', 'SQL Manufacturer B'),
     (959201, 959200, 959200, 'agent', 'SQL-AGENT-B', 'SQL Agent B');
 
@@ -55,7 +56,7 @@ BEGIN
 
     BEGIN
         INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, name)
-        VALUES (959110, 959100, 959100, 'customer', 'Illegal skipped customer');
+        VALUES (959110, 959100, 959101, 'customer', 'Illegal skipped customer');
         RAISE EXCEPTION 'expected illegal hierarchy to fail';
     EXCEPTION WHEN check_violation THEN NULL;
     END;
@@ -63,7 +64,7 @@ BEGIN
     BEGIN
         UPDATE organizations SET parent_id=959102 WHERE id=959101;
         RAISE EXCEPTION 'expected direct organization move to fail';
-    EXCEPTION WHEN object_not_in_prerequisite_state THEN NULL;
+    EXCEPTION WHEN check_violation OR object_not_in_prerequisite_state THEN NULL;
     END;
 END;
 $$;
@@ -71,7 +72,7 @@ $$;
 INSERT INTO organization_memberships(id, root_tenant_id, organization_id, user_id)
 VALUES (959300, 959100, 959101, 959001);
 INSERT INTO membership_role_assignments(id, root_tenant_id, organization_id, membership_id, role_code)
-VALUES (959400, 959100, 959101, 959300, 'channel_manager');
+VALUES (959400, 959100, 959101, 959300, 'agent');
 INSERT INTO role_permission_grants(
     root_tenant_id, organization_id, role_assignment_id,
     permission_code, data_scope, scope_definition

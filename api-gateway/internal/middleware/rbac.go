@@ -351,6 +351,32 @@ func isAppAllowedPathWithMethod(path, method string) bool {
 	return false
 }
 
+// isSelfServiceDeviceOperation identifies device self-service operations that
+// any authenticated user may initiate. Ownership/tenant checks are enforced by
+// the downstream business-api service layer (bind only unbound devices,
+// unbind/transfer only own devices, claim requires a valid claim code).
+func isSelfServiceDeviceOperation(path, method string) bool {
+	if method != http.MethodPost {
+		return false
+	}
+	switch path {
+	case "/api/v1/devices/bind", "/api/v1/devices/import-excel":
+		return true
+	}
+	if strings.HasPrefix(path, "/api/v1/devices/claim-code/") {
+		return true
+	}
+	const bySNPrefix = "/api/v1/devices/by-sn/"
+	if strings.HasPrefix(path, bySNPrefix) {
+		for _, suffix := range []string{"/unbind", "/request-unbind", "/claim", "/request-transfer"} {
+			if strings.HasSuffix(path, suffix) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // isBasicUserGET checks whether the request is a GET to a common app endpoint
 // that any authenticated user may access without org-level RBAC grants.
 func isBasicUserGET(path, method string) bool {
@@ -432,6 +458,19 @@ func (r *RBACMiddleware) RBACGuard() gin.HandlerFunc {
 		// Basic user GET endpoints: any authenticated user can view their own data.
 		// Data scoping is enforced by the downstream service layer.
 		if isBasicUserGET(path, c.Request.Method) {
+			if !r.isUserActive(c.Request.Context(), userID) {
+				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "账号不可用"})
+				c.Abort()
+				return
+			}
+			c.Next()
+			return
+		}
+
+		// Device self-service operations (bind/unbind/claim/transfer): any
+		// authenticated user may initiate them; ownership and tenant isolation
+		// are enforced by the downstream service layer.
+		if isSelfServiceDeviceOperation(path, c.Request.Method) {
 			if !r.isUserActive(c.Request.Context(), userID) {
 				c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "账号不可用"})
 				c.Abort()

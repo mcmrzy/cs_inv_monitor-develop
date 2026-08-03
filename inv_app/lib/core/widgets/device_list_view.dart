@@ -135,7 +135,6 @@ class DeviceFilterBar extends StatelessWidget {
 
 class DeviceCard extends StatefulWidget {
   final Map<String, dynamic> device;
-  final VoidCallback? onDeviceChanged;
   final ValueChanged<String>? onUnbind;
   final ValueChanged<String>? onRebind;
   final ValueChanged<String>? onBind;
@@ -146,7 +145,6 @@ class DeviceCard extends StatefulWidget {
   const DeviceCard({
     super.key,
     required this.device,
-    this.onDeviceChanged,
     this.onUnbind,
     this.onRebind,
     this.onBind,
@@ -172,7 +170,7 @@ class _DeviceCardState extends State<DeviceCard>
       duration: const Duration(milliseconds: 100),
       reverseDuration: const Duration(milliseconds: 150),
     );
-    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.98).animate(
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
   }
@@ -183,11 +181,9 @@ class _DeviceCardState extends State<DeviceCard>
     super.dispose();
   }
 
-  void _showDetail(BuildContext context) async {
+  void _showDetail(BuildContext context) {
     final sn = widget.device['sn'] ?? '';
-    _controller.forward().then((_) => _controller.reverse().then((_) {
-      Navigator.pushNamed(context, '/device/$sn');
-    }));
+    Navigator.pushNamed(context, '/device/$sn');
   }
 
   // 显示设备动作菜单
@@ -310,25 +306,36 @@ class _DeviceCardState extends State<DeviceCard>
     final firmwareArm = _extractString(['firmware_arm', 'fw_version']);
     final ratedPower = _extractNum('rated_power');
 
-    Widget cardContent = GestureDetector(
-      onTap: () => _showDetail(context),
-      onLongPress: widget.showUnbindButton ? () => _showActions(context, sn) : null,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: Container(
-          margin: EdgeInsets.only(bottom: 12.h),
-          padding: EdgeInsets.all(16.w),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16.r),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 6,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
+    Widget cardContent = Padding(
+      // margin 放在缩放外层：与电站卡片结构一致，按下时只缩放卡片本体
+      padding: EdgeInsets.only(bottom: 12.h),
+      child: GestureDetector(
+        // 与电站卡片一致的手感：按下缩放、抬起恢复并跳转
+        onTapDown: (_) => _controller.forward(),
+        onTapUp: (_) {
+          _controller.reverse();
+          _showDetail(context);
+        },
+        onTapCancel: () => _controller.reverse(),
+        // 拖动排序模式下长按由 ReorderableListView 接管；否则长按弹出操作菜单
+        onLongPress: widget.enableReordering || !widget.showUnbindButton
+            ? null
+            : () => _showActions(context, sn),
+        child: ScaleTransition(
+          scale: _scaleAnimation,
+          child: Container(
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.r),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -354,6 +361,16 @@ class _DeviceCardState extends State<DeviceCard>
                     child: Text(badgeText,
                         style: TextStyle(fontSize: 11.sp, fontWeight: FontWeight.w600, color: badgeColor)),
                   ),
+                  // 拖动排序模式下长按被占用，提供菜单按钮入口
+                  if (widget.enableReordering)
+                    GestureDetector(
+                      onTap: () => _showActions(context, sn),
+                      child: Padding(
+                        padding: EdgeInsets.only(left: 6.w),
+                        child: Icon(Icons.more_horiz,
+                            size: 20, color: AppColors.textHint),
+                      ),
+                    ),
                 ],
               ),
               if (model != '--') ...[SizedBox(height: 4.h), Text(model, style: TextStyle(fontSize: 13.sp, color: AppColors.textSecondary))],
@@ -370,17 +387,11 @@ class _DeviceCardState extends State<DeviceCard>
           ),
         ),
       ),
+    ),
     );
 
-    if (widget.enableReordering) {
-      return LongPressDraggable(
-        data: sn,
-        childWhenDragging: Opacity(opacity: 0.5, child: cardContent),
-        feedback: Material(elevation: 4, child: CloneWidget(widget: cardContent)),
-        child: cardContent,
-      );
-    }
-
+    // ReorderableListView 在移动端默认用 ReorderableDelayedDragStartListener
+    // 包裹整个 item（长按即拖动），无需额外的 LongPressDraggable。
     return cardContent;
   }
 
@@ -445,13 +456,6 @@ class _DeviceCardState extends State<DeviceCard>
   }
 }
 
-class CloneWidget extends StatelessWidget {
-  final Widget widget;
-  const CloneWidget({super.key, required this.widget});
-  @override
-  Widget build(BuildContext context) => widget;
-}
-
 class DeviceListView extends StatefulWidget {
   final List<dynamic> devices;
   final bool showSearch;
@@ -459,7 +463,8 @@ class DeviceListView extends StatefulWidget {
   final List<String>? filterLabels;
   final String? emptyText;
   final double? bottomPadding;
-  final VoidCallback? onDeviceChanged;
+  // 排序变化回调：传入新的 SN 顺序（仅 enableReordering 时触发）
+  final ValueChanged<List<String>>? onDeviceChanged;
   final ValueChanged<String>? onUnbind;
   final ValueChanged<String>? onRebind;
   final ValueChanged<String>? onBind;
@@ -491,6 +496,51 @@ class DeviceListView extends StatefulWidget {
 class _DeviceListViewState extends State<DeviceListView> {
   int _deviceFilter = 0;
   String _searchQuery = '';
+  // 拖动排序后的设备顺序：以本地状态持有，避免每次 build
+  // 从 widget.devices 重新派生导致排序丢失
+  late List<dynamic> _ordered;
+
+  @override
+  void initState() {
+    super.initState();
+    _ordered = List.of(widget.devices);
+  }
+
+  @override
+  void didUpdateWidget(DeviceListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 设备集合（SN 集合）变化时重置本地顺序；
+    // 拖动排序后父级刷新返回同集合数据时保持本地顺序
+    if (!_sameSnSet(oldWidget.devices, widget.devices)) {
+      _ordered = List.of(widget.devices);
+    }
+  }
+
+  bool _sameSnSet(List<dynamic> a, List<dynamic> b) {
+    if (a.length != b.length) return false;
+    final sns = a.map((d) => d['sn']).toSet();
+    return b.every((d) => sns.contains(d['sn']));
+  }
+
+  // 把过滤视图中的拖动结果同步回 _ordered：
+  // 移动的元素插到锚点元素之前（移到末尾则插到最后一个元素之后）
+  void _applyReorder(int oldIndex, int newIndex) {
+    final filtered = _filterDevices(_ordered);
+    final moved = filtered[oldIndex];
+    final movedSn = (moved['sn'] ?? '').toString();
+    _ordered.removeWhere((d) => (d['sn'] ?? '').toString() == movedSn);
+    final afterRemove = List.of(filtered)..removeAt(oldIndex);
+    final anchorSn =
+        newIndex >= afterRemove.length
+            ? (afterRemove.last['sn'] ?? '').toString()
+            : (afterRemove[newIndex]['sn'] ?? '').toString();
+    final anchorIdx =
+        _ordered.indexWhere((d) => (d['sn'] ?? '').toString() == anchorSn);
+    _ordered.insert(
+      anchorIdx + (newIndex >= afterRemove.length ? 1 : 0),
+      moved,
+    );
+  }
 
   List<dynamic> _filterDevices(List<dynamic> devices) {
     var list = devices;
@@ -530,7 +580,7 @@ class _DeviceListViewState extends State<DeviceListView> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filterDevices(widget.devices);
+    final filtered = _filterDevices(_ordered);
     final headerBgColor = widget.whiteHeader ? Colors.white : AppColors.background;
     final headerChipBgColor = widget.whiteHeader ? Colors.white : headerBgColor;
 
@@ -556,21 +606,40 @@ class _DeviceListViewState extends State<DeviceListView> {
                   ? ReorderableListView.builder(
                       physics: const BouncingScrollPhysics(),
                       padding: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, (widget.bottomPadding ?? 100).h),
+                      // 拖起时卡片浮起放大，让用户明确感知正在拖动排序
+                      proxyDecorator: (child, index, animation) {
+                        final curved = CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeInOut,
+                        );
+                        return AnimatedBuilder(
+                          animation: curved,
+                          builder: (_, __) => Transform.scale(
+                            scale: 1 + 0.03 * curved.value,
+                            child: Material(
+                              color: Colors.white,
+                              elevation: 6 * curved.value,
+                              borderRadius: BorderRadius.circular(16.r),
+                              shadowColor:
+                                  AppColors.primary.withValues(alpha: 0.4),
+                              child: child,
+                            ),
+                          ),
+                        );
+                      },
                       onReorderItem: (oldIndex, newIndex) {
-                        setState(() {
-                          final device = filtered.removeAt(oldIndex);
-                          filtered.insert(newIndex, device);
-                        });
+                        setState(() => _applyReorder(oldIndex, newIndex));
                         // 异步更新数据库排序字段
-                        if (widget.onDeviceChanged != null) {
-                          widget.onDeviceChanged!();
-                        }
+                        widget.onDeviceChanged?.call(
+                          _ordered
+                              .map((d) => (d['sn'] ?? '').toString())
+                              .toList(),
+                        );
                       },
                       itemCount: filtered.length,
                       itemBuilder: (_, i) => DeviceCard(
                         key: ValueKey(filtered[i]['sn'] ?? i),
                         device: filtered[i],
-                        onDeviceChanged: widget.onDeviceChanged,
                         onUnbind: widget.onUnbind,
                         onRebind: widget.onRebind,
                         onBind: widget.onBind,
@@ -588,7 +657,6 @@ class _DeviceListViewState extends State<DeviceListView> {
                       itemBuilder: (_, i) => DeviceCard(
                         key: ValueKey(filtered[i]['sn'] ?? i),
                         device: filtered[i],
-                        onDeviceChanged: widget.onDeviceChanged,
                         onUnbind: widget.onUnbind,
                         onRebind: widget.onRebind,
                         onBind: widget.onBind,

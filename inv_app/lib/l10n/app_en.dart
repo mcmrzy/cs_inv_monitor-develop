@@ -56,6 +56,9 @@ const Map<String, String> en = {
   // Navigation
   'home': 'Home',
   'device': 'Device',
+  'device_count_hint': '{count} devices',
+  'summary_hint': 'View station summary',
+  'select_device': 'Select Device',
   'alarm': 'Alarm',
   'statistics': 'Statistics',
   'profile': 'Profile',
@@ -667,6 +670,9 @@ const Map<String, String> en = {
   'select_region': 'Select Country/Region',
   'edit_station': 'Edit Station',
   'save_changes': 'Save',
+  'edit_station_hint': 'Edit station name & address',
+  'long_press_sort_hint': 'Long press a card to sort',
+  'address_not_found': 'Address not found, please check and retry',
   'other_group': 'Other',
 
   // Provision additions
@@ -888,6 +894,14 @@ const Map<String, String> en = {
   'err_code_expired': 'Verification code expired',
   'err_login_too_many': 'Too many login failures, please try again later',
   'err_code_too_frequent': 'Code sent too frequently, please try again later',
+  // Device binding/unbinding errors
+  'err_device_already_bound': 'Device already bound',
+  'err_device_not_found': 'Device not found',
+  'err_device_quota_reached': 'Device quota limit reached for this organization',
+  'err_unbind_request_failed': 'Failed to request unbind, please try again later',
+  'err_unbind_request_pending': 'An unbind request is already pending for this device',
+  'err_permission_denied': 'Permission denied',
+  'err_admin_only': 'Admin only',
 
   // New keys
   'got_it': 'Got it',

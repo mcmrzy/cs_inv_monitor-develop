@@ -23,7 +23,7 @@ func NewTestUser(overrides ...func(*model.User)) *model.User {
 		PasswordHash: string(hash),
 		Nickname:     "测试用户",
 		Avatar:       "",
-		Role:         5, // 普通用户
+		IsSystemAdmin: false,
 		Status:       1, // 正常
 		Timezone:     "Asia/Shanghai",
 		LastLoginIP:  "127.0.0.1",
@@ -40,7 +40,7 @@ func NewTestUser(overrides ...func(*model.User)) *model.User {
 func NewTestAdmin() *model.User {
 	return NewTestUser(func(u *model.User) {
 		u.ID = 100
-		u.Role = 1
+		u.IsSystemAdmin = true
 		u.Nickname = "管理员"
 		u.Phone = "13900139000"
 		u.Email = "admin@example.com"

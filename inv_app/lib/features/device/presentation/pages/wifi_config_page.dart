@@ -6,7 +6,6 @@ import 'package:wifi_iot/wifi_iot.dart';
 import 'package:inv_app/core/services/provision_service.dart';
 import 'package:inv_app/core/services/ble_provisioning_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/wifi_scan_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/services/storage_service.dart';
@@ -508,28 +507,6 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
-    final mqtt = getIt<MQTTService>();
-    bool deviceOnline = false;
-
-    try {
-      final onlineFuture = mqtt.statusStream
-          .where((s) => s.online)
-          .first
-          .timeout(const Duration(seconds: 30));
-      deviceOnline =
-          await onlineFuture.then((_) => true).catchError((_) => false);
-    } catch (_) {}
-
-    if (!mounted) return;
-    if (deviceOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.deviceOnlineWifi),
-          backgroundColor: AppColors.successLight,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
 
     final shouldSwitch =
         await showWifiSwitchDialog(context, originalSsid: _originalSsid);

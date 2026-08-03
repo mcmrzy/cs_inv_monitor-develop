@@ -8,7 +8,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inv_app/core/entities/inverter_data.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/core/utils/timezone_utils.dart';
@@ -178,10 +177,6 @@ class _StationDetailPageState extends State<StationDetailPage>
     _alarmSub?.cancel();
     _anim.dispose();
     _mqttSub?.cancel();
-    final mqtt = getIt<MQTTService>();
-    for (final sn in _mqttSubscribed) {
-      mqtt.unsubscribeDeviceTopics(sn);
-    }
     super.dispose();
   }
 
@@ -707,62 +702,8 @@ class _StationDetailPageState extends State<StationDetailPage>
           ),
         ],
       ),
-      child: PopupMenuButton<String>(
-        onSelected: (val) {
-          setState(() {
-            _selectedDeviceSn = val;
-          });
-          _recalcMqttAggregation();
-        },
-        itemBuilder: (context) {
-          return [
-            PopupMenuItem(
-              value: 'all',
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.devices,
-                    size: 20.sp,
-                    color: AppColors.primary,
-                  ),
-                  SizedBox(width: 12.w),
-                  Text(
-                    l10n.allDevices,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ...devices.map((d) => PopupMenuItem(
-                  value: d['sn'] as String,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.memory,
-                        size: 20.sp,
-                        color: AppColors.textSecondary,
-                      ),
-                      SizedBox(width: 12.w),
-                      Flexible(
-                        child: Text(
-                          d['sn'] as String? ?? '',
-                          style: TextStyle(
-                            fontSize: 14.sp,
-                            color: AppColors.textPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ];
-        },
+      child: GestureDetector(
+        onTap: () => _showDeviceSelectSheet(devices),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -786,6 +727,22 @@ class _StationDetailPageState extends State<StationDetailPage>
         ),
       ),
     );
+  }
+
+  // 弹出设备选择面板（白色圆角 BottomSheet，替代系统默认灰色 PopupMenu）
+  Future<void> _showDeviceSelectSheet(List<dynamic> devices) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _DeviceSelectSheet(
+        devices: devices,
+        selectedSn: _selectedDeviceSn,
+        onSelected: (val) => Navigator.pop(ctx, val),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _selectedDeviceSn = selected);
+    _recalcMqttAggregation();
   }
 
   Widget _flowArea(
@@ -1564,11 +1521,12 @@ class _StationDetailPageState extends State<StationDetailPage>
   }
 
   Widget _buildDevicesBody(dynamic ds) {
+    final l10n = AppLocalizations.of(context)!;
     final station = ds.station;
     final name = station != null
         ? (station['station_name'] ?? station['name'] ?? '')
         : '';
-    final devices = _mergeMqttFaultStatus((ds.devices as List?) ?? []);
+    final devices = _mergeFaultStatus((ds.devices as List?) ?? []);
 
     return Stack(
       children: [
@@ -1579,6 +1537,28 @@ class _StationDetailPageState extends State<StationDetailPage>
           children: [
             SizedBox(height: MediaQuery.of(context).padding.top + 6.h),
             _devicesTopBar(name),
+            // 长按排序提示
+            Padding(
+              padding: EdgeInsets.fromLTRB(20.w, 10.h, 20.w, 2.h),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.swap_vert_rounded,
+                    size: 13.sp,
+                    color: AppColors.textHint,
+                  ),
+                  SizedBox(width: 4.w),
+                  Text(
+                    l10n.longPressSortHint,
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: AppColors.textHint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             SizedBox(height: 0.h),
             Expanded(
               child: DeviceListView(
@@ -1587,14 +1567,13 @@ class _StationDetailPageState extends State<StationDetailPage>
                 whiteHeader: true,
                 bottomPadding: 100,
                 enableReordering: true,
-                onDeviceChanged: () {
-                  // 保存新的排序顺序到数据库
-                  final deviceIds = devices.map((d) => d['sn'] as String).toList();
+                onDeviceChanged: (order) {
+                  // 保存新的排序顺序到数据库（order 为拖动后的 SN 顺序）
                   context
                       .read<StationBloc>()
                       .add(DeviceReorderRequested(
                         stationId: widget.stationId,
-                        deviceOrder: deviceIds,
+                        deviceOrder: order,
                       ));
                 },
                 onUnbind: (sn) {
@@ -1627,15 +1606,15 @@ class _StationDetailPageState extends State<StationDetailPage>
     );
   }
 
-  /// 将 MQTT 实时数据中的故障状态合并到设备列表中，
+  /// 将轮询实时数据中的故障状态合并到设备列表中，
   /// 确保即使 API 数据尚未更新，UI 也能立即反映故障状态。
-  List<Map<String, dynamic>> _mergeMqttFaultStatus(List<dynamic> devices) {
-    final mqtt = getIt<MQTTService>();
+  List<Map<String, dynamic>> _mergeFaultStatus(List<dynamic> devices) {
+    final realtimeService = getIt<RealtimeDataService>();
     return devices.map((d) {
       final Map<String, dynamic> device = Map<String, dynamic>.from(d as Map);
       final sn = device['sn'] as String?;
       if (sn == null || sn.isEmpty) return device;
-      final rt = mqtt.getLatestData(sn);
+      final rt = realtimeService.getLatestData(sn);
       if (rt == null) return device;
       final sys = rt.sysStatus;
       if (sys != null && (sys.hasFault || sys.state == 'fault')) {
@@ -2156,4 +2135,310 @@ class _EnergyFlowPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _EnergyFlowPainter old) =>
       flows.length != old.flows.length || animValue != old.animValue;
+}
+
+// 选择设备弹窗：白色圆角面板 + 设备列表（选中态高亮、逐项入场动画）
+class _DeviceSelectSheet extends StatefulWidget {
+  final List<dynamic> devices;
+  final String selectedSn;
+  final ValueChanged<String> onSelected;
+
+  const _DeviceSelectSheet({
+    required this.devices,
+    required this.selectedSn,
+    required this.onSelected,
+  });
+
+  @override
+  State<_DeviceSelectSheet> createState() => _DeviceSelectSheetState();
+}
+
+class _DeviceSelectSheetState extends State<_DeviceSelectSheet>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  // 逐项入场动画（淡入 + 上移），间隔 0.12
+  Widget _animatedItem(int i, Widget child) {
+    final start = i * 0.12;
+    final end = (start + 0.7).clamp(0.0, 1.0);
+    final animation = CurvedAnimation(
+      parent: _ctl,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.2),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+
+  // 设备状态颜色：1=在线、2=故障、其他=离线
+  Color _statusColor(int status) {
+    if (status == 2) return AppColors.fault;
+    if (status == 1) return AppColors.online;
+    return AppColors.offline;
+  }
+
+  // 设备状态文案 key
+  String _statusKey(int status) {
+    if (status == 2) return 'fault';
+    if (status == 1) return 'online';
+    return 'offline';
+  }
+
+  Widget _buildOption({
+    required int index,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return _animatedItem(
+      index,
+      Material(
+        color: selected
+            ? AppColors.primary.withValues(alpha: 0.06)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(14.r),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14.r),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+            child: Row(
+              children: [
+                Container(
+                  width: 40.w,
+                  height: 40.w,
+                  decoration: BoxDecoration(
+                    color:
+                        (selected ? AppColors.primary : color)
+                            .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 20.sp,
+                    color: selected ? AppColors.primary : color,
+                  ),
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? AppColors.primary
+                              : AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(height: 2.h),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: AppColors.textHint,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected)
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 20.sp,
+                    color: AppColors.primary,
+                  )
+                else
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18.sp,
+                    color: AppColors.textHint,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final options = <Widget>[
+      _buildOption(
+        index: 0,
+        icon: Icons.devices,
+        title: l10n.allDevices,
+        subtitle: l10n.summaryHint,
+        color: AppColors.primary,
+        selected: widget.selectedSn == 'all',
+        onTap: () => widget.onSelected('all'),
+      ),
+    ];
+    var index = 1;
+    for (final raw in widget.devices) {
+      final d = raw as Map<String, dynamic>;
+      final sn = d['sn'] as String? ?? '';
+      final status = (d['status'] as num?)?.toInt() ?? 0;
+      options.add(
+        _buildOption(
+          index: index++,
+          icon: Icons.memory,
+          title: sn,
+          subtitle: l10n.str(_statusKey(status), {}),
+          color: _statusColor(status),
+          selected: widget.selectedSn == sn,
+          onTap: () => widget.onSelected(sn),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40.w,
+                  height: 4.h,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2.r),
+                  ),
+                ),
+              ),
+              SizedBox(height: 18.h),
+              // 标题头：渐变图标 + 标题 + 设备数量
+              Row(
+                children: [
+                  Container(
+                    width: 44.w,
+                    height: 44.w,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14.r),
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.08),
+                          AppColors.primary.withValues(alpha: 0.18),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.devices_other,
+                      size: 22.sp,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.selectDevice,
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 2.h),
+                        Text(
+                          l10n.deviceCountHint('${widget.devices.length}'),
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            color: AppColors.textHint,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 14.h),
+              const Divider(height: 1, color: AppColors.divider),
+              SizedBox(height: 6.h),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  children: options,
+                ),
+              ),
+              SizedBox(height: 14.h),
+              _animatedItem(
+                options.length,
+                Material(
+                  color: AppColors.surfaceHover,
+                  borderRadius: BorderRadius.circular(14.r),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14.r),
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      height: 48.h,
+                      alignment: Alignment.center,
+                      child: Text(
+                        l10n.cancel,
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

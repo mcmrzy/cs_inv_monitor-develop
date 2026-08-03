@@ -49,13 +49,23 @@ func (r *DeviceRepository) SaveIngestError(ctx context.Context, sn, topic string
 // SaveTelemetryV2 atomically persists the two fact rows. PostgreSQL triggers
 // maintain latest state and day rollups from these already validated columns.
 func (r *DeviceRepository) SaveTelemetryV2(ctx context.Context, s *telemetry.Sample) error {
-	voltages, err := json.Marshal(s.Cells.Voltages)
-	if err != nil {
-		return err
+	// V2（CS-L10-6K2）无电芯数据，Cells 为零值 nil slice，JSON 序列化为 null 会导致
+	// device_cell_samples NOT NULL 列写入失败，此处兜底为空数组。
+	voltages := []byte("[]")
+	if s.Cells.Voltages != nil {
+		if b, err := json.Marshal(s.Cells.Voltages); err == nil {
+			voltages = b
+		} else {
+			return err
+		}
 	}
-	temperatures, err := json.Marshal(s.Cells.Temperatures)
-	if err != nil {
-		return err
+	temperatures := []byte("[]")
+	if s.Cells.Temperatures != nil {
+		if b, err := json.Marshal(s.Cells.Temperatures); err == nil {
+			temperatures = b
+		} else {
+			return err
+		}
 	}
 
 	tx, err := r.db.Begin(ctx)
@@ -131,5 +141,20 @@ func sampleRow(s *telemetry.Sample) map[string]any {
 		"daily_load_energy": s.Energy.DailyLoad, "total_load_energy": s.Energy.TotalLoad,
 		"total_charge_capacity": s.Energy.TotalChargeCapacity, "total_discharge_capacity": s.Energy.TotalDischargeCapacity,
 		"total_charge_time": s.Energy.TotalChargeTime, "total_discharge_time": s.Energy.TotalDischargeTime,
+		// V2（CS-L10-6K2）新增列（迁移 091）
+		"sys_status": s.System.SysStatus, "warning": s.System.Warning, "bms_warning": s.System.BmsWarning,
+		"battery_overcharge": s.System.BatteryOvercharge, "boost_temperature": s.System.BoostTemperature,
+		"transformer_temperature": s.System.TransformerTemperature, "pv_temperature": s.System.PVTemperature,
+		"buck1_current": s.PV.Buck1Current, "buck2_current": s.PV.Buck2Current,
+		"grid_voltage": s.AC.GridVoltage, "grid_frequency": s.AC.GridFrequency,
+		"ac_input_power": s.AC.ACInputPower, "ac_input_apparent_power": s.AC.ACInputApparentPower,
+		"ac_charge_power": s.AC.ACChargePower, "ac_charge_apparent_power": s.AC.ACChargeApparentPower,
+		"ac_charge_current": s.AC.ACChargeCurrent,
+		"ac_bypass_power": s.AC.ACBypassPower, "ac_bypass_apparent_power": s.AC.ACBypassApparentPower,
+		"battery_charge_power": s.Battery.ChargePower, "battery_discharge_power": s.Battery.DischargePower,
+		"gen_energy_daily": s.Energy.GenDaily, "gen_energy_total": s.Energy.GenTotal,
+		"ac_charge_energy_daily": s.Energy.ACChargeDaily, "ac_charge_energy_total": s.Energy.ACChargeTotal,
+		"ac_bypass_energy_daily": s.Energy.ACBypassDaily, "ac_bypass_energy_total": s.Energy.ACBypassTotal,
+		"output_energy_daily": s.Energy.OutputDaily, "output_energy_total": s.Energy.OutputTotal,
 	}
 }

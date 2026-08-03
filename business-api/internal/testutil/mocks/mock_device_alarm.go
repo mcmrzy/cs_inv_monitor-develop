@@ -130,7 +130,7 @@ type MockAlarmRepo struct {
 	MarkIgnoredFunc   func(ctx context.Context, id int64) error
 	DeleteFunc        func(ctx context.Context, id int64) error
 	ClearAllFunc      func(ctx context.Context) error
-	GetStatsFunc      func(ctx context.Context, userID int64, role ...int) (map[string]interface{}, error)
+	GetStatsFunc      func(ctx context.Context, userID int64, isSystemAdmin bool) (map[string]interface{}, error)
 
 	Calls []MockCall
 }
@@ -210,10 +210,10 @@ func (m *MockAlarmRepo) ClearAll(ctx context.Context) error {
 	return nil
 }
 
-func (m *MockAlarmRepo) GetStats(ctx context.Context, userID int64, role ...int) (map[string]interface{}, error) {
-	m.record("GetStats", userID, role)
+func (m *MockAlarmRepo) GetStats(ctx context.Context, userID int64, isSystemAdmin bool) (map[string]interface{}, error) {
+	m.record("GetStats", userID, isSystemAdmin)
 	if m.GetStatsFunc != nil {
-		return m.GetStatsFunc(ctx, userID, role...)
+		return m.GetStatsFunc(ctx, userID, isSystemAdmin)
 	}
 	return map[string]interface{}{}, nil
 }

@@ -100,6 +100,10 @@ class AppLocalizations {
   // 导航
   String get home => _localizedStrings['home']!;
   String get device => _localizedStrings['device']!;
+  String get selectDevice => _localizedStrings['select_device']!;
+  String deviceCountHint(String count) =>
+      str('device_count_hint', {'count': count});
+  String get summaryHint => _localizedStrings['summary_hint']!;
   String get alarm => _localizedStrings['alarm']!;
   String get statistics => _localizedStrings['statistics']!;
   String get profile => _localizedStrings['profile']!;
@@ -649,6 +653,9 @@ class AppLocalizations {
   String get selectRegion => _localizedStrings['select_region']!;
   String get editStation => _localizedStrings['edit_station']!;
   String get saveChanges => _localizedStrings['save_changes']!;
+  String get editStationHint => _localizedStrings['edit_station_hint']!;
+  String get longPressSortHint => _localizedStrings['long_press_sort_hint']!;
+  String get addressNotFound => _localizedStrings['address_not_found']!;
   String get otherGroup => _localizedStrings['other_group']!;
 
   // 配网补充
@@ -1204,6 +1211,7 @@ class AppLocalizations {
       4008: 'err_invalid_email',
       4009: 'err_email_registered',
       4029: 'err_too_many_attempts',
+      5002: 'err_device_already_bound',
     };
 
     // 先检查 [code] 格式
@@ -1255,6 +1263,13 @@ class AppLocalizations {
       'update password failed': 'err_update_password',
       'system error': 'err_system_error',
       'invalid request': 'err_invalid_request',
+      // 设备绑定/解绑错误消息
+      'device already bound': 'err_device_already_bound',
+      'device not found': 'err_device_not_found',
+      'permission denied': 'err_permission_denied',
+      'admin only': 'err_admin_only',
+      'create unbind request failed': 'err_unbind_request_failed',
+      '该设备已有待审核的解绑请求': 'err_unbind_request_pending',
       // 后端错误消息（中文）
       '用户不存在': 'err_user_not_found',
       '账号已禁用': 'err_account_disabled',
@@ -1290,6 +1305,10 @@ class AppLocalizations {
     }
     if (message.contains('验证码发送频繁')) {
       return _localizedStrings['err_code_too_frequent'] ?? message;
+    }
+    // 设备配额动态消息（含数量参数）
+    if (message.contains('organization device quota reached')) {
+      return _localizedStrings['err_device_quota_reached'] ?? message;
     }
 
     return message;

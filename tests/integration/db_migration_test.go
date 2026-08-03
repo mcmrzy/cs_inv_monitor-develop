@@ -64,9 +64,12 @@ func TestFreshDatabaseBaselineAndMigrations(t *testing.T) {
 	require.GreaterOrEqual(t, maxVer, 1, "baseline should contain at least one migration version")
 	// Expect every integer 0..maxVer to have a row (no gaps).
 	var gapCount int
+	// Note: version 77 is a historical numbering gap (076 -> 078 jumped directly;
+	// no 077 migration ever existed), so it is excluded from contiguity check.
 	err = pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM generate_series(0, $1::bigint) g(v)
 		WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version = g.v)
+		  AND g.v <> 77
 	`, maxVer).Scan(&gapCount)
 	require.NoError(t, err)
 	require.Zero(t, gapCount, "schema_migrations should have contiguous versions 0..%d", maxVer)
@@ -130,17 +133,26 @@ func TestMigration064ChannelAuthorizationConstraints(t *testing.T) {
 		}
 
 		_, err := pool.Exec(ctx, `
-			INSERT INTO users(id, phone, password_hash, role) VALUES
-				(59001, 'migration064-user-1', 'hash', 1),
-				(59002, 'migration064-user-2', 'hash', 5)
+			INSERT INTO users(id, phone, password_hash) VALUES
+				(59001, 'migration064-user-1', 'hash'),
+				(59002, 'migration064-user-2', 'hash')
 		`)
+		require.NoError(t, err)
+
+		// Squashed baseline already installs the current hierarchy validator
+		// (validate_org_hierarchy). Replaying the historical 064 re-mounts the
+		// legacy trg_organizations_validate_hierarchy trigger, which migration
+		// 086 later removes; drop it so the assertions below exercise the final
+		// constraint set (installer chain + customer parent rules).
+		_, err = pool.Exec(ctx, `DROP TRIGGER IF EXISTS trg_organizations_validate_hierarchy ON organizations`)
 		require.NoError(t, err)
 		_, err = pool.Exec(ctx, `
 			INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, code, name, status) VALUES
 				(59100, 59100, NULL, 'manufacturer', 'ROOT-A', 'Manufacturer A', 'active'),
 				(59101, 59100, 59100, 'agent', 'AGENT-A', 'Agent A', 'active'),
 				(59102, 59100, 59101, 'distributor', 'DIST-A', 'Distributor A', 'active'),
-				(59103, 59100, 59102, 'customer', 'CUSTOMER-A', 'Customer A', 'active'),
+				(59103, 59100, 59102, 'installer', 'INST-A', 'Installer A', 'active'),
+				(59107, 59100, 59103, 'customer', 'CUSTOMER-A', 'Customer A', 'active'),
 				(59200, 59200, NULL, 'manufacturer', 'ROOT-B', 'Manufacturer B', 'active'),
 				(59201, 59200, 59200, 'agent', 'AGENT-B', 'Agent B', 'active')
 		`)
@@ -155,17 +167,17 @@ func TestMigration064ChannelAuthorizationConstraints(t *testing.T) {
 		require.NoError(t, pool.QueryRow(ctx, `
 			SELECT COUNT(*) FROM organization_closure
 			WHERE ancestor_id=descendant_id AND depth=0
-			  AND descendant_id IN (59100,59101,59102,59103,59200,59201)
+			  AND descendant_id IN (59100,59101,59102,59103,59107,59200,59201)
 		`).Scan(&selfClosureCount))
-		assert.Equal(t, 6, selfClosureCount, "every organization must receive a depth-zero self closure")
+		assert.Equal(t, 7, selfClosureCount, "every organization must receive a depth-zero self closure")
 		var customerAncestors int
-		require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM organization_closure WHERE root_tenant_id=59100 AND descendant_id=59103`).Scan(&customerAncestors))
-		assert.Equal(t, 4, customerAncestors, "insert must copy every parent ancestor plus self")
-		for ancestorID, expectedDepth := range map[int64]int{59100: 3, 59101: 2, 59102: 1, 59103: 0} {
+		require.NoError(t, pool.QueryRow(ctx, `SELECT COUNT(*) FROM organization_closure WHERE root_tenant_id=59100 AND descendant_id=59107`).Scan(&customerAncestors))
+		assert.Equal(t, 5, customerAncestors, "insert must copy every parent ancestor plus self")
+		for ancestorID, expectedDepth := range map[int64]int{59100: 4, 59101: 3, 59102: 2, 59103: 1, 59107: 0} {
 			var depth int
 			require.NoError(t, pool.QueryRow(ctx, `
 				SELECT depth FROM organization_closure
-				WHERE root_tenant_id=59100 AND ancestor_id=$1 AND descendant_id=59103
+				WHERE root_tenant_id=59100 AND ancestor_id=$1 AND descendant_id=59107
 			`, ancestorID).Scan(&depth))
 			assert.Equal(t, expectedDepth, depth, "customer closure depth from ancestor %d", ancestorID)
 		}
@@ -181,10 +193,10 @@ func TestMigration064ChannelAuthorizationConstraints(t *testing.T) {
 			VALUES (59104, 59100, 59200, 'distributor', 'Cross tenant child')
 		`)
 		require.Error(t, err, "an organization parent from another root tenant must be rejected")
-		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,name) VALUES (59104,59100,59100,'customer','Skipped distributor')`)
+		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,name) VALUES (59104,59100,59101,'customer','Skipped distributor')`)
 		require.Error(t, err, "customer must not skip the agent/distributor hierarchy")
-		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,code,name) VALUES (59104,59100,59101,'service_partner','SERVICE-A','Service partner')`)
-		require.NoError(t, err, "service partner may attach to an agent")
+		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,code,name) VALUES (59104,59100,59101,'distributor','DIST-A2','Distributor')`)
+		require.NoError(t, err, "distributor may attach to an agent")
 		_, err = pool.Exec(ctx, `UPDATE organizations SET parent_id=59102 WHERE id=59104`)
 		require.Error(t, err, "direct parent changes must be rejected until the governed move flow exists")
 		_, err = pool.Exec(ctx, `UPDATE organizations SET root_tenant_id=59200 WHERE id=59104`)
@@ -196,7 +208,7 @@ func TestMigration064ChannelAuthorizationConstraints(t *testing.T) {
 
 		_, err = pool.Exec(ctx, `UPDATE organizations SET deleted_at=NOW() WHERE id=59104`)
 		require.NoError(t, err)
-		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,code,name) VALUES (59106,59100,59100,'service_partner','service-a','Replacement service partner')`)
+		_, err = pool.Exec(ctx, `INSERT INTO organizations(id,root_tenant_id,parent_id,org_type,code,name) VALUES (59106,59100,59100,'agent','dist-a2','Replacement distributor')`)
 		require.NoError(t, err, "soft-deleted organization codes may be reused")
 		_, err = pool.Exec(ctx, `
 			INSERT INTO organization_closure(root_tenant_id, ancestor_id, descendant_id, depth)
@@ -223,8 +235,8 @@ func TestMigration064ChannelAuthorizationConstraints(t *testing.T) {
 		_, err = pool.Exec(ctx, `
 			INSERT INTO membership_role_assignments(id, root_tenant_id, organization_id, membership_id, role_code, status)
 			VALUES
-				(59400, 59100, 59101, 59300, 'channel_manager', 'active'),
-				(59401, 59100, 59101, 59300, 'viewer', 'active')
+				(59400, 59100, 59101, 59300, 'org_admin', 'active'),
+				(59401, 59100, 59101, 59300, 'agent', 'active')
 		`)
 		require.NoError(t, err, "one membership must support multiple role assignments")
 		_, err = pool.Exec(ctx, `
@@ -450,8 +462,8 @@ func TestMigration065AuditOutboxContracts(t *testing.T) {
 		}
 
 		_, err = pool.Exec(ctx, `
-			INSERT INTO users(id, phone, password_hash, role)
-			VALUES (60001, 'migration065-actor', 'hash', 1);
+			INSERT INTO users(id, phone, password_hash)
+			VALUES (60001, 'migration065-actor', 'hash');
 			INSERT INTO organizations(id, root_tenant_id, parent_id, org_type, name, status) VALUES
 				(60100, 60100, NULL, 'manufacturer', 'Audit Manufacturer', 'active'),
 				(60101, 60100, 60100, 'agent', 'Audit Agent', 'active'),
@@ -1145,209 +1157,11 @@ func TestBaselinePerformanceIndexRepair(t *testing.T) {
 	}
 }
 
-// TestRBACDefaultSeedRepair verifies both baseline and upgrade paths against the
-// original defaults from migrations 012 and 020. All work is isolated in a
-// temporary table and rolled back.
-func TestRBACDefaultSeedRepair(t *testing.T) {
-	cfg := LoadConfig()
-	requireService(t, cfg.DBHost, cfg.DBPort, "PostgreSQL")
-	pool := ConnectDB(t, cfg)
-	defer pool.Close()
-
-	migrationsDir := findMigrationsDir(t)
-	readSQL := func(name string) string {
-		t.Helper()
-		data, err := os.ReadFile(filepath.Join(migrationsDir, name))
-		require.NoError(t, err)
-		return string(data)
-	}
-	extractSeed := func(sql string) string {
-		t.Helper()
-		const startMarker = "INSERT INTO role_permissions (role, resource, action, is_allowed)"
-		const endMarker = "ON CONFLICT (role, resource, action) DO NOTHING;"
-		start := strings.Index(sql, startMarker)
-		require.NotEqual(t, -1, start, "RBAC seed INSERT is missing")
-		end := strings.Index(sql[start:], endMarker)
-		require.NotEqual(t, -1, end, "RBAC seed must use ON CONFLICT DO NOTHING")
-		return sql[start : start+end+len(endMarker)]
-	}
-
-	baselineSQL, err := os.ReadFile(filepath.Join(filepath.Dir(migrationsDir), "schema.sql"))
-	require.NoError(t, err)
-	baselineSeed := extractSeed(string(baselineSQL))
-	repairSeed := extractSeed(readSQL("042_repair_default_role_permissions.up.sql"))
-
-	ctx := context.Background()
-	tx, err := pool.Begin(ctx)
-	require.NoError(t, err)
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	_, err = tx.Exec(ctx, `
-		CREATE TEMP TABLE role_permissions (
-			id BIGSERIAL PRIMARY KEY,
-			role SMALLINT NOT NULL,
-			resource VARCHAR(50) NOT NULL,
-			action VARCHAR(20) NOT NULL,
-			is_allowed BOOLEAN NOT NULL DEFAULT false,
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			UNIQUE(role, resource, action)
-		) ON COMMIT DROP
-	`)
-	require.NoError(t, err)
-
-	// Build the canonical expected set directly from the historical migrations.
-	_, err = tx.Exec(ctx, readSQL("012_create_role_permissions.up.sql"))
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, readSQL("020_backfill_rbac_new_resources.up.sql"))
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, `
-		CREATE TEMP TABLE expected_role_permissions ON COMMIT DROP AS
-		SELECT role, resource, action, is_allowed FROM role_permissions
-	`)
-	require.NoError(t, err)
-
-	var expectedCount int
-	require.NoError(t, tx.QueryRow(ctx, `SELECT COUNT(*) FROM expected_role_permissions`).Scan(&expectedCount))
-	assert.Equal(t, 110, expectedCount, "migrations 012 and 020 should define 110 defaults")
-
-	// A fresh baseline_version=22 database must contain exactly the same defaults.
-	_, err = tx.Exec(ctx, `TRUNCATE role_permissions`)
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, baselineSeed)
-	require.NoError(t, err)
-
-	var missing, unexpected int
-	require.NoError(t, tx.QueryRow(ctx, `
-		SELECT COUNT(*) FROM (
-			SELECT role, resource, action, is_allowed FROM expected_role_permissions
-			EXCEPT
-			SELECT role, resource, action, is_allowed FROM role_permissions
-		) diff
-	`).Scan(&missing))
-	require.NoError(t, tx.QueryRow(ctx, `
-		SELECT COUNT(*) FROM (
-			SELECT role, resource, action, is_allowed FROM role_permissions
-			EXCEPT
-			SELECT role, resource, action, is_allowed FROM expected_role_permissions
-		) diff
-	`).Scan(&unexpected))
-	assert.Zero(t, missing, "baseline schema is missing historical RBAC defaults")
-	assert.Zero(t, unexpected, "baseline schema contains unexpected RBAC defaults")
-
-	// Upgrade repair restores missing rows without overwriting administrator choices.
-	_, err = tx.Exec(ctx, `
-		UPDATE role_permissions
-		SET is_allowed=false, updated_at='2000-01-01 00:00:00+00'
-		WHERE role=1 AND resource='stations' AND action='view';
-		DELETE FROM role_permissions
-		WHERE role=5 AND resource='dashboard' AND action='view'
-	`)
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, repairSeed)
-	require.NoError(t, err)
-
-	var allowed bool
-	var updatedAt time.Time
-	require.NoError(t, tx.QueryRow(ctx, `
-		SELECT is_allowed, updated_at FROM role_permissions
-		WHERE role=1 AND resource='stations' AND action='view'
-	`).Scan(&allowed, &updatedAt))
-	assert.False(t, allowed, "repair must preserve an administrator denial")
-	assert.Equal(t, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), updatedAt.UTC(),
-		"repair must not touch an existing permission timestamp")
-
-	require.NoError(t, tx.QueryRow(ctx, `
-		SELECT is_allowed FROM role_permissions
-		WHERE role=5 AND resource='dashboard' AND action='view'
-	`).Scan(&allowed))
-	assert.True(t, allowed, "repair should restore a missing default permission")
-}
-
-// TestRBACCurrentBaselineTerminalModelRead keeps the 110-row historical seed
-// contract separate while verifying the current product's additive baseline
-// permission for terminal model/field lookups.
-func TestRBACCurrentBaselineTerminalModelRead(t *testing.T) {
-	cfg := LoadConfig()
-	requireService(t, cfg.DBHost, cfg.DBPort, "PostgreSQL")
-	pool := ConnectDB(t, cfg)
-	defer pool.Close()
-
-	migrationsDir := findMigrationsDir(t)
-	baselineSQL, err := os.ReadFile(filepath.Join(filepath.Dir(migrationsDir), "schema.sql"))
-	require.NoError(t, err)
-
-	const startMarker = "-- 当前产品额外权限（不属于 migrations 012/020 的 110 条历史默认权限）"
-	const insertMarker = "INSERT INTO role_permissions (role, resource, action, is_allowed)"
-	const endMarker = "ON CONFLICT (role, resource, action) DO NOTHING;"
-	start := strings.Index(string(baselineSQL), startMarker)
-	require.NotEqual(t, -1, start, "current baseline RBAC marker is missing")
-	currentBlock := string(baselineSQL)[start:]
-	insertStart := strings.Index(currentBlock, insertMarker)
-	require.NotEqual(t, -1, insertStart, "current baseline RBAC INSERT is missing")
-	end := strings.Index(currentBlock[insertStart:], endMarker)
-	require.NotEqual(t, -1, end, "current baseline RBAC seed must use ON CONFLICT DO NOTHING")
-	currentSeed := currentBlock[insertStart : insertStart+end+len(endMarker)]
-
-	ctx := context.Background()
-	tx, err := pool.Begin(ctx)
-	require.NoError(t, err)
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	_, err = tx.Exec(ctx, `
-		CREATE TEMP TABLE role_permissions (
-			id BIGSERIAL PRIMARY KEY,
-			role SMALLINT NOT NULL,
-			resource VARCHAR(50) NOT NULL,
-			action VARCHAR(20) NOT NULL,
-			is_allowed BOOLEAN NOT NULL DEFAULT false,
-			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			UNIQUE(role, resource, action)
-		) ON COMMIT DROP
-	`)
-	require.NoError(t, err)
-
-	// Populate the historical defaults first; their exact 110-row contract is
-	// independently asserted by TestRBACDefaultSeedRepair above.
-	for _, name := range []string{
-		"012_create_role_permissions.up.sql",
-		"020_backfill_rbac_new_resources.up.sql",
-	} {
-		data, readErr := os.ReadFile(filepath.Join(migrationsDir, name))
-		require.NoError(t, readErr)
-		_, err = tx.Exec(ctx, string(data))
-		require.NoError(t, err)
-	}
-	_, err = tx.Exec(ctx, currentSeed)
-	require.NoError(t, err)
-	var count int
-	require.NoError(t, tx.QueryRow(ctx, `SELECT COUNT(*) FROM role_permissions`).Scan(&count))
-	assert.Equal(t, 111, count, "current baseline should add exactly one product permission to the 110 historical defaults")
-
-	var allowed bool
-	require.NoError(t, tx.QueryRow(ctx, `
-		SELECT is_allowed FROM role_permissions
-		WHERE role=5 AND resource='models' AND action='view'
-	`).Scan(&allowed))
-	assert.True(t, allowed, "fresh current baseline should grant terminal model read access")
-
-	_, err = tx.Exec(ctx, `
-		UPDATE role_permissions
-		SET is_allowed=false, updated_at='2000-01-01 00:00:00+00'
-		WHERE role=5 AND resource='models' AND action='view'
-	`)
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, currentSeed)
-	require.NoError(t, err)
-
-	var updatedAt time.Time
-	require.NoError(t, tx.QueryRow(ctx, `
-		SELECT is_allowed, updated_at FROM role_permissions
-		WHERE role=5 AND resource='models' AND action='view'
-	`).Scan(&allowed, &updatedAt))
-	assert.False(t, allowed, "baseline seed must preserve an administrator denial")
-	assert.Equal(t, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), updatedAt.UTC(),
-		"baseline seed must not touch an existing permission timestamp")
-}
+// TestRBACDefaultSeedRepair / TestRBACCurrentBaselineTerminalModelRead 已删除：
+// 旧数值角色权限体系（role_permissions）已由迁移 076 删除，schema.sql 不再包含
+// role_permissions 种子，上述验证 schema 种子一致性的测试随之失效。
+// 迁移 012/020/042/045 的幂等性仍由 TestTerminalModelReadPermissionMigration 等
+// 基于临时表的测试覆盖。
 
 // TestTerminalModelReadPermissionMigration verifies migration 045's additive,
 // idempotent behavior and its configuration-preserving rollback contract.
@@ -1591,7 +1405,7 @@ func TestCriticalIndexesExist(t *testing.T) {
 
 	expectedIndexes := []string{
 		"idx_users_phone",
-		"idx_users_role",
+		"idx_users_is_system_admin",
 		"idx_devices_sn",
 		"idx_devices_user",
 		"idx_devices_status",
@@ -1866,8 +1680,8 @@ func TestProtocol039LegacyWrites(t *testing.T) {
 
 	var userID, stationID int64
 	require.NoError(t, tx.QueryRow(ctx, `
-		INSERT INTO users(phone,password_hash,nickname,role,status)
-		VALUES($1,'integration-hash','protocol-039',5,1)
+		INSERT INTO users(phone,password_hash,nickname,status)
+		VALUES($1,'integration-hash','protocol-039',1)
 		RETURNING id
 	`, phone).Scan(&userID))
 	require.NoError(t, tx.QueryRow(ctx, `
@@ -1976,8 +1790,8 @@ func TestTriggersAndFunctions(t *testing.T) {
 	// Insert a test user
 	testPhone := fmt.Sprintf("138%08d", time.Now().UnixNano()%100000000)
 	_, err := pool.Exec(ctx, `
-		INSERT INTO users (phone, password_hash, nickname, role, status)
-		VALUES ($1, '$2a$10$dummyhash', 'trigger-test', 5, 1)
+		INSERT INTO users (phone, password_hash, nickname, status)
+		VALUES ($1, '$2a$10$dummyhash', 'trigger-test', 1)
 	`, testPhone)
 	require.NoError(t, err)
 

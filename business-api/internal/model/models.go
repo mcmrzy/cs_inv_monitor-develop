@@ -12,10 +12,8 @@ type User struct {
 	PasswordHash string     `json:"-"`
 	Nickname     string     `json:"nickname"`
 	Avatar       string     `json:"avatar"`
-	Role           int        `json:"role"`
 	IsSystemAdmin  bool       `json:"is_system_admin"`
 	RegionID       *int64     `json:"region_id"`
-	ParentID       *int64     `json:"parent_id"`
 	Status       int        `json:"status"`
 	Timezone     string     `json:"timezone"`
 	Country      string     `json:"country"`
@@ -305,6 +303,15 @@ type DeviceModel struct {
 	Manufacturer        string  `json:"manufacturer"`
 	Category            string  `json:"category"`
 	RatedPowerKw        float64 `json:"rated_power_kw"`
+	RatedPowerW         int     `json:"rated_power_w"`
+	RatedVoltageV       float64 `json:"rated_voltage_v"`
+	RatedFrequencyHz    float64 `json:"rated_frequency_hz"`
+	BatteryVoltageV     float64 `json:"battery_voltage_v"`
+	BatteryType         string  `json:"battery_type"`
+	CellCount           int     `json:"cell_count"`
+	MPPTCount           int     `json:"mppt_count"`
+	SupportsParallel    bool    `json:"supports_parallel"`
+	TempSensorCount     int     `json:"temp_sensor_count"`
 	Description         string  `json:"description"`
 	IsActive            bool    `json:"is_active"`
 	LifecycleStatus     string  `json:"lifecycle_status"`

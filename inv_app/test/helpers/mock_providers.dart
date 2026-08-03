@@ -15,7 +15,6 @@ import 'package:inv_app/features/alarm/domain/repositories/alarm_repository.dart
 import 'package:inv_app/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:inv_app/features/ota/domain/repositories/ota_repository.dart';
 import 'package:inv_app/core/services/storage_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/locale_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
 import 'package:inv_app/core/services/notification_service.dart';
@@ -63,10 +62,6 @@ class MockOtaRepository extends Mock implements OtaRepository {}
 /// Mock implementation of [StorageService] for testing token and preference
 /// storage without relying on real secure storage or shared preferences.
 class MockStorageService extends Mock implements StorageService {}
-
-/// Mock implementation of [MQTTService] for testing MQTT interactions
-/// without a real broker connection.
-class MockMQTTService extends Mock implements MQTTService {}
 
 /// Mock implementation of [RealtimeDataService] for testing remote
 /// real-time data service without a real backend connection.

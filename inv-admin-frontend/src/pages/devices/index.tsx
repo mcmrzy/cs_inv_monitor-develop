@@ -293,8 +293,15 @@ const DevicesPage: React.FC = () => {
   const [bindStationSn, setBindStationSn] = useState<string>('')
   const [selectedStationId, setSelectedStationId] = useState<number | null>(null)
 
-  const [modelOptions, setModelOptions] = useState<{ label: string; value: string }[]>([])
+  const [modelOptions, setModelOptions] = useState<{ label: string; value: string; model: any }[]>([])
   // modelFields hook 移到 deviceDetail useMemo 之后（line ~1500），以确保使用 API 返回的实际设备数据
+
+  // 编辑弹窗中当前选中的型号（用于联动预览该型号的额定参数）
+  const watchedEditModel = Form.useWatch('model', editForm)
+  const selectedEditModel = useMemo(
+    () => modelOptions.find((o) => o.value === watchedEditModel)?.model ?? null,
+    [modelOptions, watchedEditModel],
+  )
 
   const buildQueryParams = useCallback(() => {
     const params: any = {
@@ -457,6 +464,7 @@ const DevicesPage: React.FC = () => {
         models.map((m: any) => ({
           label: `${m.model_name} (${m.model_code})`,
           value: m.model_code,
+          model: m,
         })),
       )
     }).catch(() => {})
@@ -685,7 +693,9 @@ const DevicesPage: React.FC = () => {
   const handleEditSubmit = async () => {
     try {
       const values = await editForm.validateFields()
-      updateMutation.mutate(values)
+      const selected = modelOptions.find((o) => o.value === values.model)
+      // 携带 model_id：后端按所选型号同步更新设备的全部型号关联参数
+      updateMutation.mutate({ ...values, model_id: selected?.model?.id ?? undefined })
     } catch {
       // validation failed
     }
@@ -1571,7 +1581,7 @@ const DevicesPage: React.FC = () => {
               <Descriptions.Item label={t('dev.serialNumber')}>{deviceDetail.sn}</Descriptions.Item>
               <Descriptions.Item label={t('common.model')}>{deviceDetail.model ?? '-'}</Descriptions.Item>
               <Descriptions.Item label={t('dev.ratedPower')}>
-                {(deviceDetail as any).rated_power != null ? `${(deviceDetail as any).rated_power} W` : '-'}
+                {(deviceDetail as any).rated_power != null ? `${(deviceDetail as any).rated_power} kW` : '-'}
               </Descriptions.Item>
               <Descriptions.Item label={t('dev.firmwareVersion')}>
                 {(deviceDetail as any).firmware_arm || (deviceDetail as any).firmware_version || '-'}
@@ -2223,9 +2233,70 @@ const DevicesPage: React.FC = () => {
           <Form.Item name="sn" label={t('dev.deviceSN')}>
             <Input disabled />
           </Form.Item>
-          <Form.Item name="model" label={t('common.model')}>
-            <Input placeholder={t('common.model')} />
+          <Form.Item
+            name="model"
+            label={t('common.model')}
+            rules={[{ required: true, message: t('common.required') }]}
+          >
+            <Select
+              showSearch
+              placeholder={t('common.select')}
+              optionFilterProp="label"
+              options={modelOptions}
+            />
           </Form.Item>
+          {selectedEditModel && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={t('dev.modelLinkedPreview')}
+              description={
+                <Descriptions size="small" column={2} bordered style={{ marginTop: 8 }}>
+                  <Descriptions.Item label={t('common.modelName')}>
+                    {selectedEditModel.model_name || '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.manufacturer')}>
+                    {selectedEditModel.manufacturer || '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.ratedPower')}>
+                    {selectedEditModel.rated_power_w
+                      ? `${selectedEditModel.rated_power_w} W`
+                      : selectedEditModel.rated_power_kw
+                        ? `${selectedEditModel.rated_power_kw} kW`
+                        : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.ratedVoltage')}>
+                    {selectedEditModel.rated_voltage_v ? `${selectedEditModel.rated_voltage_v} V` : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.ratedFreq')}>
+                    {selectedEditModel.rated_frequency_hz ? `${selectedEditModel.rated_frequency_hz} Hz` : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.deviceType')}>
+                    {selectedEditModel.category || '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.batteryVoltage')}>
+                    {selectedEditModel.battery_voltage_v ? `${selectedEditModel.battery_voltage_v} V` : '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.batteryType')}>
+                    {selectedEditModel.battery_type || '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.cellCount')}>
+                    {selectedEditModel.cell_count ?? '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.mpptCount')}>
+                    {selectedEditModel.mppt_count ?? '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.tempSensorCount')}>
+                    {selectedEditModel.temp_sensor_count ?? '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label={t('common.parallelSupport')}>
+                    {selectedEditModel.supports_parallel ? t('common.yes') : t('common.no')}
+                  </Descriptions.Item>
+                </Descriptions>
+              }
+            />
+          )}
         </Form>
       </Modal>
 

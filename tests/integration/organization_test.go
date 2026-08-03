@@ -64,29 +64,30 @@ func TestOrganizationList_Pagination(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
-	var data map[string]interface{}
+	// The List handler returns a plain array (frontend compatibility);
+	// pagination is not applied server-side.
+	var data []map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp.Data, &data))
-	total, _ := data["total"].(float64)
-	assert.GreaterOrEqual(t, int(total), 4, "total should reflect at least 4 orgs (1 agent + 3 distributors)")
+	assert.GreaterOrEqual(t, len(data), 4, "list should contain at least 4 orgs (1 agent + 3 distributors)")
 }
 
 func TestOrganizationList_FilterByType(t *testing.T) {
 	ctx := setupChannelTest(t)
+	// Channel hierarchy: manufacturer -> agent -> distributor -> installer
+	// （customer 组织不再可创建：终端用户通过邀请直接挂到安装商组织下）
 	agentID := ctx.createOrg(t, fmt.Sprintf("org-ft-agent-%d", ts()), "agent", nil)
 	distID := ctx.createOrg(t, fmt.Sprintf("org-ft-dist-%d", ts()), "distributor", &agentID)
-	ctx.createOrg(t, fmt.Sprintf("org-ft-cust-%d", ts()), "customer", &distID)
+	ctx.createOrg(t, fmt.Sprintf("org-ft-inst-%d", ts()), "installer", &distID)
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
-		ctx.BaseURL+"/api/v1/organizations?type=customer", nil, ctx.Token, 5)
+		ctx.BaseURL+"/api/v1/organizations?type=installer", nil, ctx.Token, 5)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
-	var data map[string]interface{}
+	var data []map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp.Data, &data))
-	items, _ := data["items"].([]interface{})
-	for _, item := range items {
-		org, _ := item.(map[string]interface{})
-		assert.Equal(t, "customer", org["type"])
+	for _, org := range data {
+		assert.Equal(t, "installer", org["type"])
 	}
 }
 
@@ -235,9 +236,11 @@ func TestOrganizationDelete_WithChildren_ShouldFail(t *testing.T) {
 
 func TestOrganizationGetTree_FullHierarchy(t *testing.T) {
 	ctx := setupChannelTest(t)
+	// Channel hierarchy: manufacturer -> agent -> distributor -> installer
+	// （customer 组织不再可创建：终端用户通过邀请直接挂到安装商组织下）
 	rootID := ctx.createOrg(t, fmt.Sprintf("org-tree-root-%d", ts()), "agent", nil)
 	childID := ctx.createOrg(t, fmt.Sprintf("org-tree-child-%d", ts()), "distributor", &rootID)
-	ctx.createOrg(t, fmt.Sprintf("org-tree-grandchild-%d", ts()), "customer", &childID)
+	ctx.createOrg(t, fmt.Sprintf("org-tree-grandchild-%d", ts()), "installer", &childID)
 
 	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
 		fmt.Sprintf("%s/api/v1/organizations/%d/tree", ctx.BaseURL, rootID), nil, ctx.Token, 5)
@@ -288,6 +291,9 @@ func TestOrganizationCreate_ParentNotFound(t *testing.T) {
 
 // ts returns a short unique timestamp suffix for test naming.
 func ts() int64 {
-	return time.Now().UnixNano() % 100000000
+	// Microsecond resolution: the old nanosecond-modulo-1e8 implementation
+	// collided for calls within the same 100ms window (e.g. setupChannelTest
+	// registering two users back-to-back), causing "phone already registered".
+	return time.Now().UnixNano() / 1000 % 100000000
 }
 

@@ -490,44 +490,30 @@ class _HomePageState extends State<HomePage> {
   void _showStationMenu(BuildContext context, dynamic station) {
     final l10n = AppLocalizations.of(context)!;
     final id = station['station_id'] ?? station['id'] ?? 0;
-    
+    final name = station['station_name'] ?? station['name'] ?? '';
+    final province = station['province'] ?? '';
+    final city = station['city'] ?? '';
+    final district = station['district'] ?? '';
+    final addressParts = <String>[];
+    if (province is String && province.isNotEmpty) addressParts.add(province);
+    if (city is String && city.isNotEmpty) addressParts.add(city);
+    if (district is String && district.isNotEmpty) addressParts.add(district);
+    final addressText = '${l10n.china} ${addressParts.join(' ')}';
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40.w,
-              height: 4.h,
-              margin: EdgeInsets.only(top: 12.h),
-              decoration: BoxDecoration(
-                color: AppColors.divider,
-                borderRadius: BorderRadius.circular(2.r),
-              ),
-            ),
-            ListTile(
-              leading: Icon(Icons.edit_outlined, color: AppColors.primary),
-              title: Text(l10n.editStation),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push('/station/edit/$id');
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.add, color: AppColors.success),
-              title: Text(l10n.addDevice),
-              onTap: () {
-                Navigator.pop(ctx);
-                context.push('/add-device?station_id=$id');
-              },
-            ),
-          ],
-        ),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _StationActionSheet(
+        name: name,
+        addressText: addressText,
+        onEdit: () {
+          Navigator.pop(ctx);
+          context.push('/station/$id/edit');
+        },
+        onAddDevice: () {
+          Navigator.pop(ctx);
+          context.push('/add-device?station_id=$id');
+        },
       ),
     );
   }
@@ -663,6 +649,258 @@ class _AnimatedHdrBtnState extends State<_AnimatedHdrBtn>
   }
 }
 
+// 长按电站卡片弹出的操作菜单：电站信息头 + 操作项（带逐项入场动画）
+class _StationActionSheet extends StatefulWidget {
+  final String name;
+  final String addressText;
+  final VoidCallback onEdit;
+  final VoidCallback onAddDevice;
+
+  const _StationActionSheet({
+    required this.name,
+    required this.addressText,
+    required this.onEdit,
+    required this.onAddDevice,
+  });
+
+  @override
+  State<_StationActionSheet> createState() => _StationActionSheetState();
+}
+
+class _StationActionSheetState extends State<_StationActionSheet>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  // 逐项入场动画（淡入 + 上移），间隔 0.15
+  Widget _animatedItem(int i, Widget child) {
+    final start = i * 0.15;
+    final end = (start + 0.7).clamp(0.0, 1.0);
+    final animation = CurvedAnimation(
+      parent: _ctl,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.2),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildActionItem({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12.r),
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 4.w),
+          child: Row(
+            children: [
+              Container(
+                width: 44.w,
+                height: 44.w,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: Icon(icon, color: color, size: 22.sp),
+              ),
+              SizedBox(width: 14.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 2.h),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 14.sp,
+                color: AppColors.textHint,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40.w,
+                  height: 4.h,
+                  decoration: BoxDecoration(
+                    color: AppColors.divider,
+                    borderRadius: BorderRadius.circular(2.r),
+                  ),
+                ),
+              ),
+              SizedBox(height: 20.h),
+              // 电站信息头
+              Row(
+                children: [
+                  Container(
+                    width: 48.w,
+                    height: 48.w,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14.r),
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.08),
+                          AppColors.primary.withValues(alpha: 0.18),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.solar_power,
+                      size: 24.sp,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  SizedBox(width: 12.w),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.name,
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: 2.h),
+                        Text(
+                          widget.addressText,
+                          style: TextStyle(
+                            fontSize: 12.sp,
+                            color: AppColors.textHint,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16.h),
+              Divider(height: 1, color: AppColors.divider),
+              SizedBox(height: 6.h),
+              _animatedItem(
+                0,
+                _buildActionItem(
+                  icon: Icons.edit_outlined,
+                  color: AppColors.primary,
+                  title: l10n.editStation,
+                  subtitle: l10n.editStationHint,
+                  onTap: widget.onEdit,
+                ),
+              ),
+              _animatedItem(
+                1,
+                _buildActionItem(
+                  icon: Icons.add_circle_outline,
+                  color: AppColors.successLight,
+                  title: l10n.addDevice,
+                  subtitle: l10n.scanOrManualAdd,
+                  onTap: widget.onAddDevice,
+                ),
+              ),
+              SizedBox(height: 14.h),
+              _animatedItem(
+                2,
+                Material(
+                  color: AppColors.surfaceHover,
+                  borderRadius: BorderRadius.circular(14.r),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14.r),
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      height: 48.h,
+                      alignment: Alignment.center,
+                      child: Text(
+                        l10n.cancel,
+                        style: TextStyle(
+                          fontSize: 16.sp,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _StationCard extends StatefulWidget {
   final String name;
   final int id;
@@ -737,11 +975,9 @@ class _StationCardState extends State<_StationCard>
             child: Material(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16.r),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16.r),
-                onTap: () {}, // 由外层 GestureDetector 处理
-                child: _buildCardContent(),
-              ),
+              // 注意：不使用 InkWell（空 onTap 会赢得手势竞技场，
+              // 导致外层 GestureDetector 的 onTapUp 被取消、点击跳转失效）
+              child: _buildCardContent(),
             ),
           ),
         ),
@@ -829,16 +1065,20 @@ class _StationCardState extends State<_StationCard>
                 SizedBox(height: 10.h),
                 Row(
                   children: [
-                    _energyItem(
-                      widget.todayEnergy.toStringAsFixed(1),
-                      'kWh',
-                      l10n.todayGeneration,
+                    Expanded(
+                      child: _energyItem(
+                        widget.todayEnergy.toStringAsFixed(1),
+                        'kWh',
+                        l10n.todayGeneration,
+                      ),
                     ),
-                    SizedBox(width: 24.w),
-                    _energyItem(
-                      widget.totalEnergy.toStringAsFixed(0),
-                      'kWh',
-                      l10n.totalGeneration,
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: _energyItem(
+                        widget.totalEnergy.toStringAsFixed(0),
+                        'kWh',
+                        l10n.totalGeneration,
+                      ),
                     ),
                   ],
                 ),
@@ -854,27 +1094,31 @@ class _StationCardState extends State<_StationCard>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        RichText(
-          text: TextSpan(
-            children: [
-              TextSpan(
-                text: value,
-                style: TextStyle(
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                  height: 1.1,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: value,
+                  style: TextStyle(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    height: 1.1,
+                  ),
                 ),
-              ),
-              TextSpan(
-                text: ' $unit',
-                style: TextStyle(
-                  fontSize: 11.sp,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textHint,
+                TextSpan(
+                  text: ' $unit',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textHint,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         SizedBox(height: 2.h),

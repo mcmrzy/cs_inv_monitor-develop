@@ -11,7 +11,6 @@ import 'package:inv_app/core/data/province_name_mapping.dart';
 import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
-import 'package:inv_app/features/station/presentation/pages/location_picker_page.dart';
 import 'package:inv_app/features/station/presentation/widgets/inline_location_picker.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -337,11 +336,22 @@ class _CreateStationPageState extends State<CreateStationPage> {
                             Padding(
                               padding: EdgeInsets.only(top: 28.h),
                               child: IconButton(
-                                onPressed: () {
-                                  _mapKey.currentState?.searchAndFlyTo(
-                                    _addressText,
-                                    displayAddress: _detailCtl.text,
-                                  );
+                                onPressed: () async {
+                                  final ok = await _mapKey.currentState
+                                          ?.searchAndFlyTo(
+                                        _addressText,
+                                        displayAddress: _detailCtl.text,
+                                      ) ??
+                                      false;
+                                  if (!ok && context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(AppLocalizations.of(
+                                                context)!
+                                            .addressNotFound),
+                                      ),
+                                    );
+                                  }
                                 },
                                 icon: Icon(Icons.search, size: 20.sp),
                                 style: IconButton.styleFrom(

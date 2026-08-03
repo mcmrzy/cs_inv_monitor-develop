@@ -76,20 +76,6 @@ func (s *UserService) GetByNickname(ctx context.Context, nickname string) (*mode
 	return s.repo.GetByNickname(ctx, nickname)
 }
 
-// Deprecated: Use AuthorizationRepository.LoadAllPermissionCodes instead. Will be removed in Phase 8.
-// GetRolePermissions returns allowed permission strings ("resource:action") for a role.
-func (s *UserService) GetRolePermissions(ctx context.Context, role int64) ([]string, error) {
-	entries, err := s.repo.GetRolePermissions(ctx, role)
-	if err != nil {
-		return nil, err
-	}
-	perms := make([]string, 0, len(entries))
-	for _, e := range entries {
-		perms = append(perms, e.Resource+":"+e.Action)
-	}
-	return perms, nil
-}
-
 func (s *UserService) Create(ctx context.Context, user *model.User) error {
 	return s.repo.Create(ctx, user)
 }
@@ -510,16 +496,21 @@ func (s *DeviceService) GetBySN(ctx context.Context, sn string) (*model.Device, 
 	return s.repo.GetBySN(ctx, sn)
 }
 
-func (s *DeviceService) GetByUserID(ctx context.Context, userID int64, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error) {
-	return s.repo.GetByUserID(ctx, userID, stationID, status, page, pageSize)
+func (s *DeviceService) GetByUserID(ctx context.Context, userID int64, stationID int64, status int, keyword string, page, pageSize int) ([]*model.Device, int64, error) {
+	return s.repo.GetByUserID(ctx, userID, stationID, status, keyword, page, pageSize)
 }
 
-func (s *DeviceService) GetAll(ctx context.Context, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error) {
-	return s.repo.GetAll(ctx, stationID, status, page, pageSize)
+func (s *DeviceService) GetAll(ctx context.Context, stationID int64, status int, keyword string, page, pageSize int) ([]*model.Device, int64, error) {
+	return s.repo.GetAll(ctx, stationID, status, keyword, page, pageSize)
 }
 
 func (s *DeviceService) GetByStationID(ctx context.Context, stationID int64) ([]*model.Device, error) {
 	return s.repo.GetByStationID(ctx, stationID)
+}
+
+// ReorderDevices persists the display order of devices within a station.
+func (s *DeviceService) ReorderDevices(ctx context.Context, stationID int64, order []string) error {
+	return s.repo.ReorderDevices(ctx, stationID, order)
 }
 
 func (s *DeviceService) GetStationRealtimeSummary(ctx context.Context, stationID int64, tz string) (float64, float64, error) {
@@ -857,6 +848,11 @@ func (s *DeviceService) Update(ctx context.Context, sn string, model string, rat
 	return s.repo.Update(ctx, sn, model, ratedPower, firmwareArm, firmwareEsp)
 }
 
+// UpdateWithModel 按型号同步更新设备：model_id 及型号额定参数（额定功率/电压/频率、电池参数、制造商等）
+func (s *DeviceService) UpdateWithModel(ctx context.Context, sn string, m *model.DeviceModel) error {
+	return s.repo.UpdateWithModel(ctx, sn, m)
+}
+
 func (s *DeviceService) RequestUnbind(ctx context.Context, deviceSN string, requestedBy int64, reason string) (int64, error) {
 	return s.repo.RequestUnbind(ctx, deviceSN, requestedBy, reason)
 }
@@ -915,8 +911,8 @@ func (s *AlarmService) MarkRead(ctx context.Context, ids []int64, userID int64) 
 	return s.repo.MarkRead(ctx, ids, userID)
 }
 
-func (s *AlarmService) GetStats(ctx context.Context, userID int64, role ...int) (map[string]interface{}, error) {
-	return s.repo.GetStats(ctx, userID, role...)
+func (s *AlarmService) GetStats(ctx context.Context, userID int64, isSystemAdmin bool) (map[string]interface{}, error) {
+	return s.repo.GetStats(ctx, userID, isSystemAdmin)
 }
 
 func (s *AlarmService) MarkIgnored(ctx context.Context, id int64) error {

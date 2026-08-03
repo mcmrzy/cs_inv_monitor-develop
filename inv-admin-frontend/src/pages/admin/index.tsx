@@ -262,7 +262,11 @@ const PermissionTab: React.FC = () => {
       const next = { ...prev }
       if (!next[resource]) next[resource] = new Set()
       else next[resource] = new Set(next[resource])
-      checked ? next[resource].add(action) : next[resource].delete(action)
+      if (checked) {
+        next[resource].add(action)
+      } else {
+        next[resource].delete(action)
+      }
       return next
     })
   }

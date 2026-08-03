@@ -19,6 +19,7 @@ import 'package:inv_app/features/dashboard/presentation/bloc/dashboard_bloc.dart
 import 'package:inv_app/core/router/app_router.dart';
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/core/services/jverify_service.dart';
+import 'package:inv_app/core/services/network_status_service.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 import 'package:inv_app/core/data/china_regions.dart';
 import 'package:inv_app/core/data/regions_data.dart';
@@ -36,20 +37,6 @@ void main() async {
   // 初始化地区数据
   initChinaRegions();
   initGlobalRegions();
-
-  // 初始化极光推送（在依赖注入完成后）
-  try {
-    await getIt<JPushService>().init();
-  } catch (e) {
-    debugPrint('JPush init failed: $e');
-  }
-
-  // 初始化极光认证（一键登录）
-  try {
-    await getIt<JVerifyService>().init();
-  } catch (e) {
-    debugPrint('JVerify init failed: $e');
-  }
 
   // 提前创建 NotificationBloc 实例，用于接收 JPush 事件
   final notificationBloc = getIt<NotificationBloc>();
@@ -73,6 +60,29 @@ void main() async {
   };
 
   runApp(InvApp(notificationBloc: notificationBloc));
+
+  // 网络状态服务初始化：默认乐观在线，启动瞬间不误判离线
+  unawaited(getIt<NetworkStatusService>().initialize());
+
+  // 极光推送/认证 SDK 初始化改为首帧渲染后异步执行，
+  // 不阻塞冷启动（一键登录的完整性由 SplashPage 的轮询兑底保证）
+  unawaited(_initPushSdks());
+}
+
+Future<void> _initPushSdks() async {
+  // 初始化极光推送（在依赖注入完成后）
+  try {
+    await getIt<JPushService>().init();
+  } catch (e) {
+    debugPrint('JPush init failed: $e');
+  }
+
+  // 初始化极光认证（一键登录）
+  try {
+    await getIt<JVerifyService>().init();
+  } catch (e) {
+    debugPrint('JVerify init failed: $e');
+  }
 }
 
 class InvApp extends StatefulWidget {

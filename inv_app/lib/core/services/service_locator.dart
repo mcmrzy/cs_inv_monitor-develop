@@ -8,7 +8,6 @@ import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/services/api_service.dart';
 import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/services/storage_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/notification_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
@@ -291,13 +290,7 @@ class ServiceLocator {
       () => ApiClient(getIt()),
     );
 
-    getIt.registerLazySingleton<MQTTService>(
-      () => MQTTServiceImpl(),
-      dispose: (service) => (service as MQTTServiceImpl).dispose(),
-    );
-
-    // RealtimeDataService: 通过 API 轮询获取实时数据，替代 MQTT 直连
-    // 保留 MQTTService 用于本地 OTA 场景
+    // RealtimeDataService: 通过 API 轮询获取实时数据（App 不直连 MQTT）
     getIt.registerLazySingleton<RealtimeDataService>(
       () => RealtimeDataServiceImpl(),
       dispose: (service) => (service as RealtimeDataServiceImpl).dispose(),
@@ -403,7 +396,7 @@ class ServiceLocator {
     );
 
     getIt.registerLazySingleton<DeviceRepository>(
-      () => DeviceRepositoryImpl(getIt(), getIt()),
+      () => DeviceRepositoryImpl(getIt()),
     );
 
     getIt.registerLazySingleton<DeviceProtocolRepository>(
@@ -475,7 +468,6 @@ class ServiceLocator {
     getIt.registerFactory(
       () => DeviceBloc(
         repository: getIt(),
-        mqttService: getIt(),
         realtimeDataService: getIt(),
         localCommunicationService: getIt(),
         connectionModeService: getIt(),

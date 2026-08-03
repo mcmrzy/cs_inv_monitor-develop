@@ -51,6 +51,8 @@ function isValidLatLng(pos: { lat: number; lng: number } | null | undefined): po
 // ============================================================
 const PI = Math.PI
 const A = 6378245.0
+// GCJ-02 standard eccentricity constant (JS float truncation is harmless)
+// eslint-disable-next-line no-loss-of-precision
 const EE = 0.00669342162296594323
 
 function inChina(lat: number, lng: number) {

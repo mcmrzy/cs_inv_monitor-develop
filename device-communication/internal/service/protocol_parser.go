@@ -423,17 +423,49 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 			receivedAt = parsed.UTC()
 		}
 	}
-	cellCount, tempSensorCount, err := p.repo.GetDeviceCellCounts(ctx, raw.SN)
-	if err != nil || cellCount <= 0 {
-		cellCount = 16
+	// 按 payload 的 v 字段分派：v=1 走 V1 解析（CS-I10-6k2 等旧型号），
+	// v=2 走 V2 解析（CS-L10-6K2，位置数组 50 值，见 docs/CS-L10-6K2_MQTT_上报协议设计.md）。
+	var versionProbe struct {
+		Version uint16 `json:"v"`
 	}
-	if tempSensorCount <= 0 {
-		tempSensorCount = 4
-	}
-	sample, err := telemetryv2.ParseHeartbeat(raw.SN, raw.Payload, cellCount, tempSensorCount, receivedAt)
-	if err != nil {
+	if err := json.Unmarshal(raw.Payload, &versionProbe); err != nil {
 		if saveErr := p.repo.SaveIngestError(ctx, raw.SN, raw.MsgType, raw.Payload, "INVALID_HEARTBEAT", err.Error()); saveErr != nil {
 			return fmt.Errorf("%v; save ingest error: %w", err, saveErr)
+		}
+		return nil
+	}
+	var sample *telemetryv2.Sample
+	var parseErr error
+	switch versionProbe.Version {
+	case 1:
+		cellCount, tempSensorCount, err := p.repo.GetDeviceCellCounts(ctx, raw.SN)
+		if err != nil || cellCount <= 0 {
+			cellCount = 16
+		}
+		if tempSensorCount <= 0 {
+			tempSensorCount = 4
+		}
+		sample, parseErr = telemetryv2.ParseHeartbeat(raw.SN, raw.Payload, cellCount, tempSensorCount, receivedAt)
+		if parseErr != nil {
+			if saveErr := p.repo.SaveIngestError(ctx, raw.SN, raw.MsgType, raw.Payload, "INVALID_HEARTBEAT", parseErr.Error()); saveErr != nil {
+				return fmt.Errorf("%v; save ingest error: %w", parseErr, saveErr)
+			}
+			return nil
+		}
+	case 2:
+		sample, parseErr = telemetryv2.ParseHeartbeatV2(raw.SN, raw.Payload, receivedAt)
+		if parseErr != nil {
+			if saveErr := p.repo.SaveIngestError(ctx, raw.SN, raw.MsgType, raw.Payload, "INVALID_HEARTBEAT", parseErr.Error()); saveErr != nil {
+				return fmt.Errorf("%v; save ingest error: %w", parseErr, saveErr)
+			}
+			return nil
+		}
+		// V2 推导字段：work_state（sys_status 位组合）与 battery_power（放电为正）
+		deriveV2WorkState(sample)
+		deriveV2BatteryPower(sample)
+	default:
+		if saveErr := p.repo.SaveIngestError(ctx, raw.SN, raw.MsgType, raw.Payload, "UNSUPPORTED_HEARTBEAT_VERSION", fmt.Sprintf("v=%d", versionProbe.Version)); saveErr != nil {
+			return fmt.Errorf("unsupported heartbeat version %d; save ingest error: %w", versionProbe.Version, saveErr)
 		}
 		return nil
 	}
@@ -496,55 +528,57 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 
 		// 将完整遥测数据写入 realtime:latest:{sn}，供前端实时展示
 		eventTimeUnix := sample.EventTime.Unix()
-		realtime := map[string]interface{}{
-			"ac": map[string]interface{}{
-				"data": map[string]interface{}{
-					"voltage": sample.AC.Voltage, "current": sample.AC.Current,
-					"active_power": sample.AC.ActivePower, "apparent_power": sample.AC.ApparentPower,
-					"frequency": sample.AC.Frequency, "power_factor": sample.AC.PowerFactor,
-					"load_percent": sample.AC.LoadPercent,
+		var realtime map[string]interface{}
+		if sample.ProtocolVersion == 2 {
+			realtime = buildRealtimeV2(sample, raw.SN, eventTimeUnix)
+		} else {
+			realtime = map[string]interface{}{
+				"ac": map[string]interface{}{
+					"data": map[string]interface{}{
+						"voltage": sample.AC.Voltage, "current": sample.AC.Current,
+						"active_power": sample.AC.ActivePower, "apparent_power": sample.AC.ApparentPower,
+						"frequency": sample.AC.Frequency, "power_factor": sample.AC.PowerFactor,
+						"load_percent": sample.AC.LoadPercent,
+					},
+					"timestamp": eventTimeUnix,
 				},
-				"timestamp": eventTimeUnix,
-			},
-			"batt": map[string]interface{}{
-				"data": map[string]interface{}{
-					"soc": sample.Battery.SOC, "soh": sample.Battery.SOH,
-					"voltage": sample.Battery.Voltage, "current": sample.Battery.Current,
-					"power": sample.Battery.Power, "temperature": sample.Battery.Temperature,
+				"batt": map[string]interface{}{
+					"data": map[string]interface{}{
+						"soc": sample.Battery.SOC, "soh": sample.Battery.SOH,
+						"voltage": sample.Battery.Voltage, "current": sample.Battery.Current,
+						"power": sample.Battery.Power, "temperature": sample.Battery.Temperature,
+					},
+					"timestamp": eventTimeUnix,
 				},
-				"timestamp": eventTimeUnix,
-			},
-			"pv": map[string]interface{}{
-				"data": map[string]interface{}{
-					"pv1_voltage": sample.PV.PV1Voltage, "pv1_current": sample.PV.PV1Current,
-					"pv1_power": sample.PV.PV1Power, "pv2_voltage": sample.PV.PV2Voltage,
-					"pv2_current": sample.PV.PV2Current, "pv2_power": sample.PV.PV2Power,
-					"total_power": sample.PV.TotalPower,
+				"pv": map[string]interface{}{
+					"data": map[string]interface{}{
+						"pv1_voltage": sample.PV.PV1Voltage, "pv1_current": sample.PV.PV1Current,
+						"pv1_power": sample.PV.PV1Power, "pv2_voltage": sample.PV.PV2Voltage,
+						"pv2_current": sample.PV.PV2Current, "pv2_power": sample.PV.PV2Power,
+						"total_power": sample.PV.TotalPower,
+					},
+					"timestamp": eventTimeUnix,
 				},
-				"timestamp": eventTimeUnix,
-			},
-			"sys": map[string]interface{}{
-				"data": map[string]interface{}{
-					"work_state": sample.System.WorkState,
-					"fault_code": sample.System.FaultCode, "alarm_code": sample.System.AlarmCode,
-					"inverter_temperature": sample.System.InverterTemperature,
-					"mos_temperature": sample.System.MOSTemperature,
-					"ambient_temperature": sample.System.AmbientTemperature,
+				"sys": map[string]interface{}{
+					"data": map[string]interface{}{
+						"work_state": sample.System.WorkState,
+						"fault_code": sample.System.FaultCode, "alarm_code": sample.System.AlarmCode,
+						"inverter_temperature": sample.System.InverterTemperature,
+						"mos_temperature": sample.System.MOSTemperature,
+						"ambient_temperature": sample.System.AmbientTemperature,
+					},
+					"timestamp": eventTimeUnix,
 				},
-				"timestamp": eventTimeUnix,
-			},
-			"energy": map[string]interface{}{
-				"data": map[string]interface{}{
-					"daily_pv": sample.Energy.DailyPV, "total_pv": sample.Energy.TotalPV,
-					"daily_charge": sample.Energy.DailyCharge, "total_charge": sample.Energy.TotalCharge,
-					"daily_discharge": sample.Energy.DailyDischarge, "total_discharge": sample.Energy.TotalDischarge,
-					"daily_load": sample.Energy.DailyLoad, "total_load": sample.Energy.TotalLoad,
+				"energy": map[string]interface{}{
+					"data": map[string]interface{}{
+						"daily_pv": sample.Energy.DailyPV, "total_pv": sample.Energy.TotalPV,
+						"daily_charge": sample.Energy.DailyCharge, "total_charge": sample.Energy.TotalCharge,
+						"daily_discharge": sample.Energy.DailyDischarge, "total_discharge": sample.Energy.TotalDischarge,
+						"daily_load": sample.Energy.DailyLoad, "total_load": sample.Energy.TotalLoad,
+					},
+					"timestamp": eventTimeUnix,
 				},
-				"timestamp": eventTimeUnix,
-			},
-			"_sn": raw.SN, "_msg_type": "heartbeat",
-			"_updated_at": time.Now().UTC().Format(time.RFC3339),
-			"_timestamp":  eventTimeUnix,
+			}
 		}
 		rtBytes, rtErr := json.Marshal(realtime)
 		if rtErr == nil {
@@ -552,6 +586,113 @@ func (p *ProtocolParser) handleHeartbeat(ctx context.Context, raw *RawMessage) e
 		}
 	}
 	return nil
+}
+
+// deriveV2WorkState 由 sys_status 位组合推导 work_state（与旧型号枚举兼容）：
+// Fault(bit1)→1、ACBypass(bit7)→4、Discharging(bit3)→3、
+// Charge/PVCharging/ACCharging/GenCharging(bit2/4/5/6)→2、其余→0(StandBy)。
+func deriveV2WorkState(s *telemetryv2.Sample) {
+	if s.System.SysStatus == nil {
+		return
+	}
+	st := *s.System.SysStatus
+	ws := uint8(0)
+	switch {
+	case st&(1<<1) != 0:
+		ws = 1
+	case st&(1<<7) != 0:
+		ws = 4
+	case st&(1<<3) != 0:
+		ws = 3
+	case st&(1<<2) != 0 || st&(1<<4) != 0 || st&(1<<5) != 0 || st&(1<<6) != 0:
+		ws = 2
+	}
+	s.System.WorkState = &ws
+}
+
+// deriveV2BatteryPower 由充/放电功率推导 battery_power（放电为正），
+// 与现有 realtime/存储的 battery_power 语义兼容。
+func deriveV2BatteryPower(s *telemetryv2.Sample) {
+	switch {
+	case s.Battery.DischargePower != nil && s.Battery.ChargePower != nil:
+		v := *s.Battery.DischargePower - *s.Battery.ChargePower
+		s.Battery.Power = &v
+	case s.Battery.DischargePower != nil:
+		s.Battery.Power = s.Battery.DischargePower
+	case s.Battery.ChargePower != nil:
+		v := -(*s.Battery.ChargePower)
+		s.Battery.Power = &v
+	}
+}
+
+// buildRealtimeV2 组装 V2 心跳的 realtime:latest 扩展结构（组结构与前端对齐）。
+// 组内 key 与 device_protocol_fields.field_key 一致，便于前端按字段能力配置动态取值。
+func buildRealtimeV2(s *telemetryv2.Sample, sn string, eventTimeUnix int64) map[string]interface{} {
+	return map[string]interface{}{
+		"sys": map[string]interface{}{
+			"data": map[string]interface{}{
+				"sys_status": s.System.SysStatus, "fault_code": s.System.FaultCode,
+				"warning": s.System.Warning, "bms_warning": s.System.BmsWarning,
+				"inverter_temperature": s.System.InverterTemperature,
+				"boost_temperature":    s.System.BoostTemperature,
+				"transformer_temperature": s.System.TransformerTemperature,
+				"pv_temperature":          s.System.PVTemperature,
+				"dc_bus_voltage":          s.System.DCBusVoltage, "load_percent": s.AC.LoadPercent,
+				"battery_overcharge": s.System.BatteryOvercharge, "work_state": s.System.WorkState,
+			},
+			"timestamp": eventTimeUnix,
+		},
+		"pv": map[string]interface{}{
+			"data": map[string]interface{}{
+				"pv1_voltage": s.PV.PV1Voltage, "buck1_current": s.PV.Buck1Current,
+				"pv2_voltage": s.PV.PV2Voltage, "buck2_current": s.PV.Buck2Current,
+				"pv_total_power": s.PV.TotalPower,
+			},
+			"timestamp": eventTimeUnix,
+		},
+		"ac": map[string]interface{}{
+			"data": map[string]interface{}{
+				"ac_voltage": s.AC.Voltage, "ac_frequency": s.AC.Frequency,
+				"ac_active_power": s.AC.ActivePower, "ac_apparent_power": s.AC.ApparentPower,
+				"ac_current": s.AC.Current, "grid_voltage": s.AC.GridVoltage,
+				"grid_frequency": s.AC.GridFrequency, "ac_input_power": s.AC.ACInputPower,
+				"ac_input_apparent_power": s.AC.ACInputApparentPower,
+				"ac_bypass_power": s.AC.ACBypassPower, "ac_bypass_apparent_power": s.AC.ACBypassApparentPower,
+			},
+			"timestamp": eventTimeUnix,
+		},
+		"chr": map[string]interface{}{
+			"data": map[string]interface{}{
+				"ac_charge_power": s.AC.ACChargePower, "ac_charge_apparent_power": s.AC.ACChargeApparentPower,
+				"ac_charge_current": s.AC.ACChargeCurrent,
+			},
+			"timestamp": eventTimeUnix,
+		},
+		"bat": map[string]interface{}{
+			"data": map[string]interface{}{
+				"battery_voltage": s.Battery.Voltage, "battery_soc": s.Battery.SOC,
+				"battery_current": s.Battery.Current,
+				"battery_charge_power": s.Battery.ChargePower, "battery_discharge_power": s.Battery.DischargePower,
+				"battery_overcharge": s.System.BatteryOvercharge, "power": s.Battery.Power,
+			},
+			"timestamp": eventTimeUnix,
+		},
+		"eng": map[string]interface{}{
+			"data": map[string]interface{}{
+				"gen_energy_daily": s.Energy.GenDaily, "gen_energy_total": s.Energy.GenTotal,
+				"daily_pv_energy": s.Energy.DailyPV, "total_pv_energy": s.Energy.TotalPV,
+				"ac_charge_energy_daily": s.Energy.ACChargeDaily, "ac_charge_energy_total": s.Energy.ACChargeTotal,
+				"daily_discharge_energy": s.Energy.DailyDischarge, "total_discharge_energy": s.Energy.TotalDischarge,
+				"daily_charge_energy": s.Energy.DailyCharge, "total_charge_energy": s.Energy.TotalCharge,
+				"ac_bypass_energy_daily": s.Energy.ACBypassDaily, "ac_bypass_energy_total": s.Energy.ACBypassTotal,
+				"output_energy_daily": s.Energy.OutputDaily, "output_energy_total": s.Energy.OutputTotal,
+			},
+			"timestamp": eventTimeUnix,
+		},
+		"_sn": sn, "_msg_type": "heartbeat",
+		"_updated_at": time.Now().UTC().Format(time.RFC3339),
+		"_timestamp":  eventTimeUnix,
+	}
 }
 
 // unwrapPayload 处理 payload 可能是 JSON 字符串的情况

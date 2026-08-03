@@ -14,13 +14,16 @@ import (
 	"go.uber.org/zap"
 )
 
-const prefix = "gw:role_perms:"
+const permCachePrefix = "gw:user_perms:"
 
 type permCacheEntry struct {
-	perms    []repository.PermissionEntry
+	codes    []string
 	loadedAt time.Time
 }
 
+// PermChecker resolves permission codes from the organization-based permission
+// system (membership_role_assignments + role_permission_grants). It replaces
+// the legacy numeric-role permission checks.
 type PermChecker struct {
 	rdb      *redis.Client
 	userRepo *repository.UserRepository
@@ -38,6 +41,8 @@ func NewPermChecker(rdb *redis.Client, userRepo *repository.UserRepository) *Per
 	}
 }
 
+// CheckPermission reports whether the user holds the given "resource:action"
+// permission code through the organization-based permission system.
 func (c *PermChecker) CheckPermission(userID int64, resource string, action string) bool {
 	if userID <= 0 {
 		return false
@@ -46,145 +51,75 @@ func (c *PermChecker) CheckPermission(userID int64, resource string, action stri
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	roleIDs, err := c.loadUserRoles(ctx, userID)
+	codes, err := c.loadUserPermissionCodes(ctx, userID)
 	if err != nil {
-		logger.Error("PermChecker: loadUserRoles failed",
+		logger.Error("PermChecker: loadUserPermissionCodes failed",
 			zap.Int64("user_id", userID), zap.Error(err))
 		return false
 	}
 
-	for _, roleID := range roleIDs {
-		if roleID == 0 {
-			return true
-		}
-
-		perms, err := c.loadRolePerms(ctx, roleID)
-		if err != nil {
-			continue
-		}
-
-		if includesPermission(perms, resource, action) {
-			return true
-		}
-
-		// An additive migration can make a shared Redis entry incomplete. Refresh
-		// the authoritative table before denying so a pre-migration cache never
-		// causes a user to remain locked out for the cache TTL.
-		perms, err = c.refreshRolePerms(ctx, roleID)
-		if err == nil && includesPermission(perms, resource, action) {
+	needle := resource + ":" + action
+	for _, code := range codes {
+		if code == needle {
 			return true
 		}
 	}
-
 	return false
 }
 
-func (c *PermChecker) loadUserRoles(ctx context.Context, userID int64) ([]int64, error) {
-	cacheKey := fmt.Sprintf("gw:user_roles:%d", userID)
+func (c *PermChecker) loadUserPermissionCodes(ctx context.Context, userID int64) ([]string, error) {
+	cacheKey := permCachePrefix + fmt.Sprintf("%d", userID)
 
 	if c.rdb != nil {
 		cached, err := c.rdb.Get(ctx, cacheKey).Result()
 		if err == nil {
-			var roleIDs []int64
-			if err := json.Unmarshal([]byte(cached), &roleIDs); err == nil {
-				return roleIDs, nil
-			}
-		}
-	}
-
-	roleIDs, err := c.userRepo.GetUserRoleIDs(ctx, userID)
-	if err != nil {
-		logger.Warn("PermChecker: GetUserRoleIDs failed, falling back to user.Role",
-			zap.Int64("user_id", userID), zap.Error(err))
-		roleIDs = nil
-	}
-
-	if len(roleIDs) == 0 {
-		user, err := c.userRepo.GetByID(ctx, userID)
-		if err != nil {
-			return nil, err
-		}
-		if user != nil && user.Status == 1 {
-			roleIDs = []int64{int64(user.Role)}
-		}
-	}
-
-	if c.rdb != nil && len(roleIDs) > 0 {
-		data, _ := json.Marshal(roleIDs)
-		c.rdb.Set(ctx, cacheKey, string(data), c.cacheTTL)
-	}
-
-	return roleIDs, nil
-}
-
-func (c *PermChecker) loadRolePerms(ctx context.Context, roleID int64) ([]repository.PermissionEntry, error) {
-	cacheKey := prefix + fmt.Sprintf("%d", roleID)
-
-	if c.rdb != nil {
-		cached, err := c.rdb.Get(ctx, cacheKey).Result()
-		if err == nil {
-			var perms []repository.PermissionEntry
-			if err := json.Unmarshal([]byte(cached), &perms); err == nil {
+			var codes []string
+			if err := json.Unmarshal([]byte(cached), &codes); err == nil {
 				c.mu.Lock()
-				c.memCache[cacheKey] = permCacheEntry{perms: perms, loadedAt: time.Now()}
+				c.memCache[cacheKey] = permCacheEntry{codes: codes, loadedAt: time.Now()}
 				c.mu.Unlock()
-				return perms, nil
+				return codes, nil
 			}
 		}
 		// Redis deletion is the invalidation signal shared with the admin and
 		// gateway processes. Never fall back to stale process memory after a miss.
-		return c.refreshRolePerms(ctx, roleID)
+		return c.refreshUserPermissionCodes(ctx, userID)
 	}
 
 	c.mu.RLock()
 	if entry, ok := c.memCache[cacheKey]; ok && time.Since(entry.loadedAt) < c.cacheTTL {
 		c.mu.RUnlock()
-		return entry.perms, nil
+		return entry.codes, nil
 	}
 	c.mu.RUnlock()
 
-	return c.refreshRolePerms(ctx, roleID)
+	return c.refreshUserPermissionCodes(ctx, userID)
 }
 
-func (c *PermChecker) refreshRolePerms(ctx context.Context, roleID int64) ([]repository.PermissionEntry, error) {
-	cacheKey := prefix + fmt.Sprintf("%d", roleID)
+func (c *PermChecker) refreshUserPermissionCodes(ctx context.Context, userID int64) ([]string, error) {
+	cacheKey := permCachePrefix + fmt.Sprintf("%d", userID)
 
-	perms, err := c.userRepo.GetRolePermissions(ctx, roleID)
+	codes, err := c.userRepo.GetUserPermissionCodes(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	if c.rdb != nil {
-		data, _ := json.Marshal(perms)
+		data, _ := json.Marshal(codes)
 		c.rdb.Set(ctx, cacheKey, string(data), c.cacheTTL)
 	}
 
 	c.mu.Lock()
-	c.memCache[cacheKey] = permCacheEntry{perms: perms, loadedAt: time.Now()}
+	c.memCache[cacheKey] = permCacheEntry{codes: codes, loadedAt: time.Now()}
 	c.mu.Unlock()
 
-	return perms, nil
+	return codes, nil
 }
 
-func includesPermission(perms []repository.PermissionEntry, resource, action string) bool {
-	for _, p := range perms {
-		if p.Resource == resource && p.Action == action {
-			return true
-		}
-	}
-	return false
-}
-
+// InvalidateUser drops the cached permission codes for a user. It is called
+// after membership/role/grant changes so the next check re-reads the database.
 func (c *PermChecker) InvalidateUser(userID int64) {
-	if c.rdb != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		c.rdb.Del(ctx, fmt.Sprintf("gw:user_roles:%d", userID))
-	}
-}
-
-func (c *PermChecker) InvalidateRole(roleID int64) {
-	key := prefix + fmt.Sprintf("%d", roleID)
+	key := permCachePrefix + fmt.Sprintf("%d", userID)
 	c.mu.Lock()
 	delete(c.memCache, key)
 	c.mu.Unlock()

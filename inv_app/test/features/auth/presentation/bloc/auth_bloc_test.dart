@@ -28,7 +28,6 @@ void main() {
   late MockGoogleLoginUseCase mockGoogleLoginUseCase;
   late MockJVerifyLoginUseCase mockJVerifyLoginUseCase;
   late MockStorageService mockStorageService;
-  late MockMQTTService mockMQTTService;
   late MockJPushService mockJPushService;
 
   setUp(() {
@@ -48,8 +47,21 @@ void main() {
     mockGoogleLoginUseCase = MockGoogleLoginUseCase();
     mockJVerifyLoginUseCase = MockJVerifyLoginUseCase();
     mockStorageService = MockStorageService();
-    mockMQTTService = MockMQTTService();
     mockJPushService = MockJPushService();
+
+    // AuthBloc 依赖 isSystemAdmin/permissions 存储（新组织架构），提供默认 stub
+    when(() => mockStorageService.getIsSystemAdmin())
+        .thenAnswer((_) async => false);
+    when(() => mockStorageService.saveIsSystemAdmin(any()))
+        .thenAnswer((_) async {});
+    when(() => mockStorageService.deleteIsSystemAdmin())
+        .thenAnswer((_) async {});
+    when(() => mockStorageService.getPermissions())
+        .thenAnswer((_) async => <String>[]);
+    when(() => mockStorageService.savePermissions(any()))
+        .thenAnswer((_) async {});
+    when(() => mockStorageService.deletePermissions())
+        .thenAnswer((_) async {});
 
     authBloc = AuthBloc(
       loginUseCase: mockLoginUseCase,
@@ -99,13 +111,6 @@ void main() {
         when(() => mockGetProfileUseCase()).thenAnswer(
           (_) async => right<Failure, User>(createTestUser()),
         );
-        when(
-          () => mockMQTTService.connect(
-            any(),
-            username: any(named: 'username'),
-            password: any(named: 'password'),
-          ),
-        ).thenAnswer((_) async {});
         when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
@@ -165,13 +170,6 @@ void main() {
             .thenAnswer((_) async {});
         when(() => mockStorageService.getToken())
             .thenAnswer((_) async => 'token');
-        when(
-          () => mockMQTTService.connect(
-            any(),
-            username: any(named: 'username'),
-            password: any(named: 'password'),
-          ),
-        ).thenAnswer((_) async {});
         when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
@@ -245,13 +243,6 @@ void main() {
             .thenAnswer((_) async {});
         when(() => mockStorageService.getToken())
             .thenAnswer((_) async => 'token');
-        when(
-          () => mockMQTTService.connect(
-            any(),
-            username: any(named: 'username'),
-            password: any(named: 'password'),
-          ),
-        ).thenAnswer((_) async {});
         when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },
@@ -290,7 +281,6 @@ void main() {
             .thenAnswer((_) async {});
         when(() => mockStorageService.deleteUserRole())
             .thenAnswer((_) async {});
-        when(() => mockMQTTService.disconnect()).thenAnswer((_) async {});
         when(() => mockJPushService.unbindUser()).thenAnswer((_) async {});
         return authBloc;
       },
@@ -300,7 +290,6 @@ void main() {
         verify(() => mockStorageService.deleteToken()).called(1);
         verify(() => mockStorageService.deleteRefreshToken()).called(1);
         verify(() => mockStorageService.deleteUserId()).called(1);
-        verify(() => mockMQTTService.disconnect()).called(1);
       },
     );
   });
@@ -338,13 +327,6 @@ void main() {
             .thenAnswer((_) async {});
         when(() => mockStorageService.getToken())
             .thenAnswer((_) async => 'token');
-        when(
-          () => mockMQTTService.connect(
-            any(),
-            username: any(named: 'username'),
-            password: any(named: 'password'),
-          ),
-        ).thenAnswer((_) async {});
         when(() => mockJPushService.bindUser(any())).thenAnswer((_) async {});
         return authBloc;
       },

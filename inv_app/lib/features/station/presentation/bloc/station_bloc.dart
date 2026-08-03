@@ -1,7 +1,8 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/errors/failures.dart';
+import 'package:inv_app/core/services/network_status_service.dart';
+import 'package:inv_app/core/services/service_locator.dart';
 import 'package:inv_app/features/station/domain/repositories/station_repository.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/data_cache_service.dart';
@@ -32,11 +33,10 @@ class StationBloc extends Bloc<StationEvent, StationState> {
     on<DeviceReorderRequested>(_onDeviceReorderRequested);
   }
 
-  /// 快速检查是否有网络连接
+  /// 快速检查是否有网络连接（带连续确认，启动瞬间不误判离线）
   Future<bool> _hasNetwork() async {
     try {
-      final result = await Connectivity().checkConnectivity();
-      return result != ConnectivityResult.none;
+      return await getIt<NetworkStatusService>().checkConnectivity();
     } catch (_) {
       return true; // 检查失败时假定有网络
     }

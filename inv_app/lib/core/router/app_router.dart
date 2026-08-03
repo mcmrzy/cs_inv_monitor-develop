@@ -26,11 +26,9 @@ import 'package:inv_app/l10n/app_localizations.dart';
 
 import 'package:inv_app/features/auth/presentation/pages/splash_page.dart';
 
-import 'package:inv_app/features/auth/presentation/pages/login_page.dart';
+import 'package:inv_app/features/auth/presentation/pages/auth_page.dart';
 
 import 'package:inv_app/features/auth/presentation/pages/jverify_auth_page.dart';
-
-import 'package:inv_app/features/auth/presentation/pages/register_page.dart';
 
 import 'package:inv_app/features/auth/presentation/pages/forgot_password_page.dart';
 
@@ -136,7 +134,8 @@ class AppRouter {
       GoRoute(
         path: '/login',
         name: 'login',
-        pageBuilder: (context, state) => _fadePage(state, const LoginPage()),
+        pageBuilder: (context, state) =>
+            _fadePage(state, const AuthPage(initialMode: AuthMode.login)),
       ),
       GoRoute(
         path: '/jverify-login',
@@ -148,7 +147,7 @@ class AppRouter {
         path: '/register',
         name: 'register',
         pageBuilder: (context, state) =>
-            _slidePage(state, const RegisterPage()),
+            _fadePage(state, const AuthPage(initialMode: AuthMode.register)),
       ),
       GoRoute(
         path: '/forgot-password',
@@ -932,7 +931,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
               devices: state.devices,
               whiteHeader: true,
               showUnbindButton: false, // 禁用解绑功能，因为没有电站上下文
-              onDeviceChanged: () {
+              onDeviceChanged: (order) {
                 context.read<DeviceBloc>().add(const DeviceListRequested());
               },
             );

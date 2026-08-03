@@ -1,7 +1,6 @@
 package security
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -143,69 +142,6 @@ func TestAPISecurity_RateLimit防暴力破解(t *testing.T) {
 	req.RemoteAddr = "192.168.1.100:5555"
 	r.ServeHTTP(w, req)
 	assert.NotEqual(t, 429, w.Code, "等待后请求应恢复正常")
-}
-
-// ==================== RBAC 权限绕过防护 ====================
-
-func TestAPISecurity_RequireRole防越权(t *testing.T) {
-	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set("role", 5) // 普通用户
-		c.Set("user_id", int64(100))
-		c.Next()
-	})
-	r.Use(middleware.RequireRole(0)) // 需要管理员
-	r.GET("/admin/users", func(c *gin.Context) { c.JSON(200, gin.H{"users": []interface{}{}}) })
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/admin/users", nil)
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, 403, w.Code, "普通用户不应能访问管理员接口")
-
-	// 验证响应体包含权限不足信息
-	var resp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.Contains(t, resp["message"], "permission",
-		"应返回权限不足信息")
-}
-
-func TestAPISecurity_RequireRole多级权限(t *testing.T) {
-	// RequireRole is deprecated: it now checks is_system_admin.
-	// System admins bypass all checks; non-admins only pass when minRole >= 5.
-	testCases := []struct {
-		name          string
-		systemAdmin   bool
-		minRole       int
-		shouldPass    bool
-	}{
-		{"系统管理员访问管理接口", true, 0, true},
-		{"系统管理员访问普通接口", true, 5, true},
-		{"普通用户访问管理接口", false, 0, false},
-		{"普通用户访问普通接口", false, 5, true},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			r := gin.New()
-			r.Use(func(c *gin.Context) {
-				c.Set("is_system_admin", tc.systemAdmin)
-				c.Next()
-			})
-			r.Use(middleware.RequireRole(tc.minRole))
-			r.GET("/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
-
-			w := httptest.NewRecorder()
-			req, _ := http.NewRequest("GET", "/test", nil)
-			r.ServeHTTP(w, req)
-
-			if tc.shouldPass {
-				assert.Equal(t, 200, w.Code)
-			} else {
-				assert.Equal(t, 403, w.Code)
-			}
-		})
-	}
 }
 
 // ==================== Auth 中间件安全 ====================

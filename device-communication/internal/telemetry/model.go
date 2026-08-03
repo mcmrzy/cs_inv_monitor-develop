@@ -39,6 +39,12 @@ type Sample struct {
 type AC struct {
 	Voltage, Current, ActivePower, ApparentPower    *float64
 	Frequency, PowerFactor, LoadPercent, VoltageTHD *float64
+	// V2 (CS-L10-6K2) 扩展：电网/输入/旁路/AC 充电
+	GridVoltage, GridFrequency                  *float64
+	ACInputPower, ACInputApparentPower          *float64
+	ACBypassPower, ACBypassApparentPower        *float64
+	ACChargePower, ACChargeApparentPower        *float64
+	ACChargeCurrent                             *float64
 }
 
 type Battery struct {
@@ -52,6 +58,8 @@ type Battery struct {
 	MaxChargeCurrent, MaxDischargeCurrent                 *float64
 	ChargeVoltageRef, DischargeCutoffVoltage, Temperature *float64
 	ChargeRequestCurrentX10, ChargeRequestVoltageX10      *uint32
+	// V2 (CS-L10-6K2) 扩展：充/放电功率（battery_power 由两者推导）
+	ChargePower, DischargePower                           *float64
 }
 
 type PV struct {
@@ -59,6 +67,8 @@ type PV struct {
 	PV2Voltage, PV2Current, PV2Power *float64
 	TotalPower                       *float64
 	MPPTState                        *uint8
+	// V2 (CS-L10-6K2) 扩展：Buck 电流
+	Buck1Current, Buck2Current       *float64
 }
 
 type System struct {
@@ -72,6 +82,11 @@ type System struct {
 	FanSpeedPercent      *uint8
 	Efficiency           *float64
 	SystemMode           *uint32
+	// V2 (CS-L10-6K2) 扩展：状态位/告警/温度/过充
+	SysStatus, BmsWarning              *uint32
+	Warning                            *uint64
+	BatteryOvercharge                  *uint8
+	BoostTemperature, TransformerTemperature, PVTemperature *float64
 }
 
 type Energy struct {
@@ -83,6 +98,11 @@ type Energy struct {
 	TotalDischargeCapacity         *float64
 	TotalChargeTime                *uint32
 	TotalDischargeTime             *uint32
+	// V2 (CS-L10-6K2) 扩展：发电机/AC 充电/旁路/输出电量
+	GenDaily, GenTotal                       *float64
+	ACChargeDaily, ACChargeTotal             *float64
+	ACBypassDaily, ACBypassTotal             *float64
+	OutputDaily, OutputTotal                 *float64
 }
 
 type Cells struct {
