@@ -494,7 +494,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surfaceHover(context),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(100.h),
         child: AppBar(
@@ -508,7 +508,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
+          backgroundColor: AppColor.surfaceContainer(context),
           foregroundColor: AppColors.textPrimary,
           bottom: TabBar(
             controller: _tabController,
@@ -1219,7 +1219,7 @@ class _DeviceControlPageState extends State<DeviceControlPage>
                       decoration: BoxDecoration(
                         color: isSelected
                             ? color.withValues(alpha: 0.1)
-                            : AppColors.surfaceHover.withValues(alpha: 0.5),
+                            : AppColor.surfaceHover(context).withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(10.r),
                         border: Border.all(
                           color: isSelected ? color : Colors.transparent,

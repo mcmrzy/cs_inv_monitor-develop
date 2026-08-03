@@ -918,7 +918,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                     width: 44.w,
                     height: 44.w,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
+                      color: AppColor.primarySoft(context),
                       borderRadius: BorderRadius.circular(10.r),
                     ),
                     child: const Icon(
@@ -958,7 +958,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 child: Container(
                   padding: EdgeInsets.all(24.w),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
+                    color: AppColor.surfaceHover(context),
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                   child: Column(
@@ -995,7 +995,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColor.primarySoft(context),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
@@ -1024,7 +1024,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             padding: EdgeInsets.all(12.w),
             margin: EdgeInsets.only(bottom: 16.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFECFDF5),
+              color: AppColors.badgeNormalBg,
               borderRadius: BorderRadius.circular(10.r),
             ),
             child: Row(
@@ -1041,7 +1041,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                         .connectedTo(_selectedDeviceAp?.ssid ?? ''),
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: const Color(0xFF065F46),
+                      color: AppColors.badgeNormalText,
                     ),
                   ),
                 ),
@@ -1098,7 +1098,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: AppColor.border(context)),
               ),
               constraints: BoxConstraints(maxHeight: 200.h),
               child: ListView.separated(
@@ -1134,7 +1134,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                         color: AppColors.textHint,
                       ),
                     ),
-                    tileColor: selected ? const Color(0xFFEFF6FF) : null,
+                    tileColor: selected ? AppColor.primarySoft(context) : null,
                     dense: true,
                     onTap: () => _pickWiFi(w),
                   );
@@ -1225,10 +1225,10 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             padding: EdgeInsets.all(14.w),
             decoration: BoxDecoration(
               color: _provisionOk
-                  ? const Color(0xFFECFDF5)
+                  ? AppColors.badgeNormalBg
                   : (_provisionStatus.contains('❌')
-                      ? const Color(0xFFFEF2F2)
-                      : const Color(0xFFEFF6FF)),
+                      ? AppColors.badgeAlarmBg
+                      : AppColor.primarySoft(context)),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
@@ -1323,7 +1323,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFECFDF5),
+              color: AppColors.badgeNormalBg,
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Column(
@@ -1388,7 +1388,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFFEF2F2),
+              color: AppColors.badgeAlarmBg,
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Column(
@@ -1448,7 +1448,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFFEF2F2),
+              color: AppColors.badgeAlarmBg,
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Column(
@@ -1502,7 +1502,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             padding: EdgeInsets.all(14.w),
             margin: EdgeInsets.only(bottom: 20.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColor.primarySoft(context),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
@@ -1590,7 +1590,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                     width: 44.w,
                     height: 44.w,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
+                      color: AppColor.primarySoft(context),
                       borderRadius: BorderRadius.circular(10.r),
                     ),
                     child: const Icon(
@@ -1640,7 +1640,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                 child: Container(
                   padding: EdgeInsets.all(24.w),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
+                    color: AppColor.surfaceHover(context),
                     borderRadius: BorderRadius.circular(12.r),
                   ),
                   child: Column(
@@ -1680,7 +1680,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColor.primarySoft(context),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
@@ -1713,7 +1713,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             padding: EdgeInsets.all(12.w),
             margin: EdgeInsets.only(bottom: 16.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFECFDF5),
+              color: AppColors.badgeNormalBg,
               borderRadius: BorderRadius.circular(10.r),
             ),
             child: Row(
@@ -1736,7 +1736,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                         ),
                         style: TextStyle(
                           fontSize: 13.sp,
-                          color: const Color(0xFF065F46),
+                          color: AppColors.badgeNormalText,
                         ),
                       ),
                     ],
@@ -1763,7 +1763,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             padding: EdgeInsets.all(12.w),
             margin: EdgeInsets.only(bottom: 16.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFFEF2F2),
+              color: AppColors.badgeAlarmBg,
               borderRadius: BorderRadius.circular(10.r),
             ),
             child: Row(
@@ -1779,7 +1779,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                     _bleErrorMessage!,
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: const Color(0xFF991B1B),
+                      color: AppColors.error,
                     ),
                   ),
                 ),
@@ -1836,7 +1836,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12.r),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
+                border: Border.all(color: AppColor.border(context)),
               ),
               constraints: BoxConstraints(maxHeight: 200.h),
               child: ListView.separated(
@@ -1872,7 +1872,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                         color: AppColors.textHint,
                       ),
                     ),
-                    tileColor: selected ? const Color(0xFFEFF6FF) : null,
+                    tileColor: selected ? AppColor.primarySoft(context) : null,
                     dense: true,
                     onTap: () => _pickWiFi(w),
                   );
@@ -1961,7 +1961,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColor.primarySoft(context),
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
@@ -1993,7 +1993,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
             width: double.infinity,
             padding: EdgeInsets.all(14.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFECFDF5),
+              color: AppColors.badgeNormalBg,
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: Row(
@@ -2027,7 +2027,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
@@ -2103,7 +2103,7 @@ class _WifiConfigPageState extends State<WifiConfigPage> {
                     height: 2,
                     color: step.isCompleted
                         ? AppColors.successLight
-                        : const Color(0xFFE5E7EB),
+                        : AppColor.border(context),
                   ),
               ],
             ),

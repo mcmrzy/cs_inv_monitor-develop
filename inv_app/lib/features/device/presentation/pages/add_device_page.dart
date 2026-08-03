@@ -400,7 +400,7 @@ class _AddDevicePageState extends State<AddDevicePage>
           Container(
             width: double.infinity,
             padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-            color: const Color(0xFFECFDF5),
+            color: AppColors.badgeNormalBg,
             child: Row(
               children: [
                 const Icon(
@@ -415,7 +415,7 @@ class _AddDevicePageState extends State<AddDevicePage>
                   style: TextStyle(
                     fontSize: 13.sp,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF065F46),
+                    color: AppColors.badgeNormalText,
                   ),
                 ),
               ],
@@ -462,7 +462,7 @@ class _AddDevicePageState extends State<AddDevicePage>
         ),
         Container(
           padding: EdgeInsets.all(16.w),
-          color: Colors.white,
+          color: AppColor.surfaceContainer(context),
           child: Column(
             children: [
               if (_bindSuccess) ...[
@@ -609,7 +609,7 @@ class _AddDevicePageState extends State<AddDevicePage>
         if (_scanHistory.isNotEmpty)
           Container(
             constraints: BoxConstraints(maxHeight: 160.h),
-            color: const Color(0xFFF9FAFB),
+            color: AppColor.surfaceHover(context),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1012,7 +1012,7 @@ class _StationSelectorSheetState extends State<_StationSelectorSheet> {
                       final deviceCount =
                           (s['device_count'] as num?)?.toInt() ?? 0;
                       return Material(
-                        color: Colors.white,
+                        color: AppColor.surfaceContainer(context),
                         borderRadius: BorderRadius.circular(12.r),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12.r),
