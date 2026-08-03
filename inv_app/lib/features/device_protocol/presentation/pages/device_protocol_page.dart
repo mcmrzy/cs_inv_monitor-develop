@@ -38,7 +38,7 @@ class _DeviceProtocolView extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surface(context),
       appBar: AppBar(
         title: Text(l10n.protocolTelemetry),
         actions: [

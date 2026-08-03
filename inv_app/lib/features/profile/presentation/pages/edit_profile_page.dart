@@ -393,7 +393,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 newPhoneController.text, setDialogState),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _phoneCountdown > 0
-                              ? Colors.grey
+                              ? AppColors.offline
                               : AppColors.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
@@ -642,7 +642,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                                 newEmailController.text, setDialogState),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _emailCountdown > 0
-                              ? Colors.grey
+                              ? AppColors.offline
                               : AppColors.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
@@ -849,7 +849,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surface(context),
       appBar: AppBar(
         title: Text(
           l10n.editProfile,
@@ -862,7 +862,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        backgroundColor: Colors.white,
         actions: [
           TextButton(
             onPressed: _isLoading ? null : _saveProfile,
@@ -896,7 +895,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             // 所有字段放在一个卡片中
             Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColor.surfaceContainer(context),
                 borderRadius: BorderRadius.circular(16.r),
               ),
               child: Column(
@@ -972,7 +971,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
       ),
       padding: EdgeInsets.all(20.w),
@@ -1286,9 +1285,7 @@ class _ContinentCountryPickerPageState
           const Spacer(),
           Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color(0xFF1A1D24)
-                  : Colors.white,
+              color: AppColor.surfaceContainer(context),
               borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
             ),
             child: Column(
@@ -1628,9 +1625,7 @@ class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
           const Spacer(),
           Container(
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color(0xFF1A1D24)
-                  : Colors.white,
+              color: AppColor.surfaceContainer(context),
               borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
             ),
             child: Column(

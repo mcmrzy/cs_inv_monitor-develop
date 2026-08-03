@@ -47,7 +47,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surface(context),
       appBar: AppBar(
         title: Text(
           l10n.myProfile,
@@ -109,7 +109,7 @@ class _ProfilePageState extends State<ProfilePage> {
         padding: EdgeInsets.all(20.w),
         margin: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          color: AppColor.surface(context),
+          color: AppColor.surfaceContainer(context),
           borderRadius: BorderRadius.circular(16.r),
         ),
         child: Row(
@@ -225,7 +225,7 @@ class _ProfilePageState extends State<ProfilePage> {
       margin: EdgeInsets.symmetric(horizontal: 16.w),
       padding: EdgeInsets.symmetric(vertical: 4.h),
       decoration: BoxDecoration(
-        color: AppColor.surface(context),
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
       ),
       child: Material(

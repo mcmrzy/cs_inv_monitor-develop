@@ -66,7 +66,6 @@ class _RegisterFormState extends State<RegisterForm> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.pleaseInputCorrectEmail),
-          backgroundColor: AppColors.error,
         ),
       );
       return;
@@ -100,7 +99,6 @@ class _RegisterFormState extends State<RegisterForm> {
             SnackBar(
               content:
                   Text(AppLocalizations.of(context)!.verificationCodeSent),
-              backgroundColor: AppColors.success,
             ),
           );
           _startCountdown();
@@ -208,8 +206,8 @@ class _RegisterFormState extends State<RegisterForm> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.grey.shade300,
-              disabledForegroundColor: Colors.grey.shade500,
+              disabledBackgroundColor: AppColors.surfaceHover,
+              disabledForegroundColor: AppColors.textHint,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12.r),
               ),

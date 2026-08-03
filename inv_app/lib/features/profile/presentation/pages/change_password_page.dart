@@ -51,7 +51,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(l10n.passwordChanged),
-                backgroundColor: Colors.green,
               ),
             );
             context.pop();
@@ -59,7 +58,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(l10n.translateError(state.message)),
-                backgroundColor: Colors.red,
               ),
             );
           }
