@@ -10,6 +10,7 @@ import 'package:inv_app/core/network/api_client.dart';
 import 'package:inv_app/core/services/storage_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/notification_service.dart';
+import 'package:inv_app/features/profile/data/notify_prefs_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
 import 'package:inv_app/core/services/offline_cache_service.dart';
@@ -298,6 +299,10 @@ class ServiceLocator {
 
     getIt.registerLazySingleton<NotificationService>(
       () => NotificationService(),
+    );
+
+getIt.registerLazySingleton<NotifyPrefsService>(
+      () => NotifyPrefsService(getIt(), getIt()),
     );
 
     getIt.registerLazySingleton<LocalCommunicationService>(

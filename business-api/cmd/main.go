@@ -176,6 +176,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService, stationService, modelService, db)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
 	notificationHandler := handler.NewNotificationHandler(db, jpushService)
+	notifyPrefsRepo := repository.NewNotifyPrefsRepository(db)
+	notifyPrefsHandler := handler.NewNotifyPrefsHandler(notifyPrefsRepo)
 	wsHandler := handler.NewWSHandler(rdb, jwtService, authorizationRepo, dataPermission, cfg.CORS.AllowedOrigins)
 	modelHandler := handler.NewModelHandler(modelService)
 	batteryHandler := handler.NewBatteryHandler(batteryService)
@@ -210,7 +212,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	memberLifecycleService := service.NewMemberLifecycleService(memberLifecycleRepo, jobStore)
 	memberLifecycleHandler := handler.NewMemberLifecycleHandler(memberLifecycleService)
 	deviceClaimTransferHandler := handler.NewDeviceClaimTransferHandler(db, permChecker, jwtService, cfg.Backends.DeviceServer, cfg.Backends.InternalKey)
-	
+
 	// Task 11 & 12: Pipeline health and DLQ handlers
 	pipelineHealthHandler := handler.NewPipelineHealthHandler(rdb, db)
 	dlqHandler := handler.NewDLQHandler(rdb)
@@ -230,6 +232,9 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	go runOTATimeoutCleanup(db, heartbeatDone)
 	// OTA 瀹氭椂浠诲姟锛氶鍙栧苟鎵ц鍒版湡浠诲姟锛岄噸鍚悗涔熶細鎭㈠宸插埌鏈熶絾鏈墽琛岀殑浠诲姟銆?
 	go runOTAScheduler(db, otaService, heartbeatDone)
+	// 每日统计报告：每 60 秒轮询，向到达推送时间（用户时区）的用户推送当日发电统计摘要
+	dailyReportSvc := service.NewDailyReportService(db, notifyPrefsRepo, jpushService, emailService)
+	go dailyReportSvc.Start(heartbeatDone)
 
 	router := setupRouter(cfg, &RouterDeps{
 		DB:                            db,
@@ -243,6 +248,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		DeviceClaimTransferHandler:    deviceClaimTransferHandler,
 		AlarmHandler:                  alarmHandler,
 		NotificationHandler:           notificationHandler,
+		NotifyPrefsHandler:            notifyPrefsHandler,
 		WeatherHandler:                weatherHandler,
 		GeocodeHandler:                geocodeHandler,
 		ModelHandler:                  modelHandler,
@@ -263,6 +269,8 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 		PipelineHealthHandler:         pipelineHealthHandler,
 		DLQHandler:                    dlqHandler,
 		UploadHandler:                 uploadHandler,
+		NotifyPrefsRepo:               notifyPrefsRepo,
+		EmailService:                  emailService,
 		AuthorizationContextValidator: authorizationRepo,
 	})
 	router.GET("/ws/device/:sn", wsHandler.DeviceRealtime)
@@ -672,6 +680,7 @@ type RouterDeps struct {
 	DeviceClaimTransferHandler    *handler.DeviceClaimTransferHandler
 	AlarmHandler                  *handler.AlarmHandler
 	NotificationHandler           *handler.NotificationHandler
+	NotifyPrefsHandler            *handler.NotifyPrefsHandler
 	WeatherHandler                *handler.WeatherHandler
 	GeocodeHandler                *handler.GeocodeHandler
 	ModelHandler                  *handler.ModelHandler
@@ -692,6 +701,8 @@ type RouterDeps struct {
 	PipelineHealthHandler         *handler.PipelineHealthHandler
 	DLQHandler                    *handler.DLQHandler
 	UploadHandler                 *handler.UploadHandler
+	NotifyPrefsRepo               *repository.NotifyPrefsRepository
+	EmailService                  *service.EmailService
 	AuthorizationContextValidator middleware.AuthorizationContextValidator
 }
 
@@ -708,13 +719,13 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	router.Use(tracingMiddleware())
 	// NOTE: RateLimit is NOT applied globally; internal routes are registered
 	// before the rate-limited public group so device ingestion is never throttled.
-	
+
 	router.GET("/health", func(c *gin.Context) {
 		status := gin.H{"status": "ok"}
 		httpStatus := http.StatusOK
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
-	
+
 		if deps.DB != nil {
 			if err := deps.DB.Ping(ctx); err != nil {
 				status["db"] = "error"
@@ -731,18 +742,18 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 				status["redis"] = "ok"
 			}
 		}
-	
+
 		if httpStatus != http.StatusOK {
 			status["status"] = "degraded"
 		}
 		c.JSON(httpStatus, status)
 	})
-	
+
 	// ── Internal routes (NO rate limit) ──────────────────────────────
 	// Device communication service calls these endpoints synchronously.
 	// They must never be throttled, even under burst load.
-	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, deps.JPushService, nil, nil)
-	
+	internalHandler := handler.NewInternalHandler(deps.DB, deps.RDB, deps.OTAService, deps.JPushService, nil, nil, deps.NotifyPrefsRepo, deps.EmailService)
+
 	internal := router.Group("/api/v1/internal").Use(middleware.InternalAuth(cfg.Backends.InternalKey))
 	{
 		internal.POST("/device-status", internalHandler.DeviceStatus)
@@ -757,7 +768,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 		internal.POST("/ota-status", internalHandler.OTAStatus)
 		internal.POST("/ota-cmd-ack", internalHandler.OTACmdAck)
 	}
-	
+
 	// 固件文件下载（无需认证，设备直接访问 /firmware/xxx.bin）
 	// 浣跨敤 http.ServeContent 鏇夸唬 Gin Static锛屼紭鍖栧ぇ鏂囦欢浼犺緭
 	firmwareDir := config.FirmwareDataDir()
@@ -924,7 +935,6 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 
 			auth.GET("/alarm-events/:id", internalHandler.GetAlarmEventDetail)
 
-
 			auth.GET("/alarms", deps.AlarmHandler.List)
 			auth.GET("/alarms/stats", deps.AlarmHandler.GetStats)
 			auth.GET("/alarms/:id", deps.AlarmHandler.GetByID)
@@ -944,6 +954,10 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.GET("/notifications/stream", internalHandler.NotificationStream)
 			auth.DELETE("/notifications/clear-all", deps.NotificationHandler.ClearAll)
 			auth.DELETE("/notifications/:id", deps.NotificationHandler.Delete)
+
+			// 用户通知偏好设置（分类×渠道×频率模型），推送前按此偏好过滤
+			auth.GET("/notify-settings", deps.NotifyPrefsHandler.Get)
+			auth.PUT("/notify-settings", deps.NotifyPrefsHandler.Update)
 
 			registerModelRoutes(auth, deps.ModelHandler, deps.PermChecker)
 
@@ -1043,7 +1057,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			orgGroup.POST("/:id/join", deps.OrganizationHandler.JoinOrg)
 			orgGroup.POST("/:id/approve-join", deps.OrganizationHandler.ApproveJoin)
 		}
-		
+
 		// My organizations (current user's org memberships)
 		myGroup := api.Group("/my").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))
 		{
@@ -1059,13 +1073,13 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			authMembers.DELETE("/memberships/:id/remove", deps.MemberLifecycleHandler.RemoveMember)
 			authMembers.PATCH("/memberships/:id/deactivate", deps.MemberLifecycleHandler.DeactivateMember)
 			authMembers.PATCH("/memberships/:id/reactivate", deps.MemberLifecycleHandler.ReactivateMember)
-			
+
 			// Cross-organization transfer
 			authMembers.POST("/transfer/initiate", deps.MemberLifecycleHandler.TransferInitiate)
 			authMembers.POST("/transfer/accept", deps.MemberLifecycleHandler.TransferAccept)
 			authMembers.POST("/transfer/reject", deps.MemberLifecycleHandler.TransferReject)
 			authMembers.GET("/transfers/list", deps.MemberLifecycleHandler.ListTransfers)
-			
+
 			// Bulk operations (admin privileges recommended)
 			authMembers.POST("/bulk-add", deps.MemberLifecycleHandler.BulkAdd)
 			authMembers.POST("/bulk-transfer", deps.MemberLifecycleHandler.BulkTransfer)
@@ -1148,7 +1162,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			// Task 11: Pipeline health aggregation endpoints
 			pipelineHealthGroup.GET("/pipeline-health", deps.PipelineHealthHandler.GetPipelineHealth)
 			pipelineHealthGroup.GET("/pipeline-metrics", deps.PipelineHealthHandler.GetPipelineMetrics)
-			
+
 			// Task 12: DLQ management endpoints
 			// NOTE: wildcard :id routes are under /dlq/messages/ to avoid
 			// Gin wildcard vs static segment conflict (e.g. :id vs retry-all).
@@ -1158,7 +1172,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			pipelineHealthGroup.DELETE("/dlq/all", deps.DLQHandler.Clear)
 			pipelineHealthGroup.POST("/dlq/messages/:id/retry", deps.DLQHandler.Retry)
 			pipelineHealthGroup.DELETE("/dlq/messages/:id", deps.DLQHandler.Delete)
-			
+
 			// Task 13: SSE pipeline health stream (implemented in ws_handler.go)
 			pipelineHealthGroup.GET("/pipeline-health/stream", handler.PipelineHealthSSE(deps.RDB))
 		}

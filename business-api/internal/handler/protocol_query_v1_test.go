@@ -49,7 +49,7 @@ func validAlarmEventRow() pgx.Row {
 
 func TestGetAlarmEventDetailReturnsTraceAndNamedMissingSnapshot(t *testing.T) {
 	store := &fakeProtocolV1Store{allowAccess: true}
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	h.protocolV1 = store
 	h.db = &stubHandlerDB{rows: []pgx.Row{
 		validAlarmEventRow(),
@@ -90,7 +90,7 @@ func TestGetAlarmEventDetailReturnsTraceAndNamedMissingSnapshot(t *testing.T) {
 }
 
 func TestGetAlarmEventDetailNotFound(t *testing.T) {
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	h.db = &stubHandlerDB{rows: []pgx.Row{
 		stubRow{scan: func(...any) error { return pgx.ErrNoRows }},
 	}}
@@ -103,7 +103,7 @@ func TestGetAlarmEventDetailNotFound(t *testing.T) {
 
 func TestGetAlarmEventDetailRejectsCrossTenantBeforeSnapshots(t *testing.T) {
 	store := &fakeProtocolV1Store{allowAccess: false}
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	h.protocolV1 = store
 	h.db = &stubHandlerDB{rows: []pgx.Row{validAlarmEventRow()}}
 	w := httptest.NewRecorder()
@@ -140,7 +140,7 @@ func TestGetAlarmEventDetailDoesNotHideDatabaseOrJSONErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+			h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 			h.protocolV1 = &fakeProtocolV1Store{allowAccess: true}
 			h.db = &stubHandlerDB{rows: tt.rows}
 			w := httptest.NewRecorder()
@@ -153,7 +153,7 @@ func TestGetAlarmEventDetailDoesNotHideDatabaseOrJSONErrors(t *testing.T) {
 }
 
 func TestGetAlarmEventDetailRejectsInvalidID(t *testing.T) {
-	h := NewInternalHandler(nil, nil, nil, nil, nil, nil)
+	h := NewInternalHandler(nil, nil, nil, nil, nil, nil, nil, nil)
 	w := httptest.NewRecorder()
 	alarmEventDetailRouter(h, 0).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/alarm-events/not-a-number", nil))
 	if w.Code != http.StatusBadRequest {
