@@ -1,10 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- 冷启动原生屏：品牌渐变背景（与 SplashPage 一致），无缝衔接为一段开屏画面 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 品牌深蓝背景：与 SplashPage 渐变起始色一致，冷启动无缝衔接不白屏 -->
     <item>
         <shape android:shape="rectangle">
             <solid android:color="#0D47A1" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="45"
+                android:startColor="#0D47A1"
+                android:centerColor="#1565C0"
+                android:endColor="#42A5F5"
+                android:centerX="0.5"
+                android:centerY="0.5" />
         </shape>
     </item>
 </layer-list>

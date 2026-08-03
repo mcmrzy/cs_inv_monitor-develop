@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Android 12+ 系统 SplashScreen 使用透明图标：
-     仅显示品牌深蓝背景，不显示应用图标，实现"原生屏秒退"无图效果 -->
+     仅显示品牌深蓝背景，不显示应用图标，无缝衔接 SplashPage -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <solid android:color="@android:color/transparent" />

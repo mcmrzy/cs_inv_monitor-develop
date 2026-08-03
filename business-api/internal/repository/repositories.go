@@ -499,7 +499,7 @@ type StationRepository struct {
 // non-nullable Go scalars, so every nullable database column must be normalized
 // before pgx scans it.
 const stationListSelectColumns = `id, user_id, name,
-	COALESCE(province, ''), COALESCE(city, ''), COALESCE(district, ''),
+	COALESCE(country, ''), COALESCE(province, ''), COALESCE(city, ''), COALESCE(district, ''),
 	COALESCE(address, ''), COALESCE(capacity, 0), COALESCE(panel_count, 0),
 	COALESCE(latitude, 0), COALESCE(longitude, 0),
 	COALESCE(timezone, 'Asia/Shanghai'), status, created_at, updated_at`
@@ -521,14 +521,14 @@ func (r *StationRepository) HasAccess(ctx context.Context, userID, stationID int
 
 func (r *StationRepository) Create(ctx context.Context, station *model.Station) error {
 	query := `
-		INSERT INTO stations (user_id, name, province, city, district, address, capacity,
+		INSERT INTO stations (user_id, name, country, province, city, district, address, capacity,
 							  panel_count, latitude, longitude, timezone, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 
 	return r.db.QueryRow(ctx, query,
-		station.UserID, station.Name, station.Province, station.City, station.District,
+		station.UserID, station.Name, station.Country, station.Province, station.City, station.District,
 		station.Address, station.Capacity, station.PanelCount,
 		station.Latitude, station.Longitude, station.Timezone, station.Status,
 	).Scan(&station.ID, &station.CreatedAt, &station.UpdatedAt)
@@ -542,15 +542,15 @@ func (r *StationRepository) Update(ctx context.Context, station *model.Station) 
 	defer tx.Rollback(ctx)
 
 	query := `
-		UPDATE stations SET name = $1, province = $2, city = $3, district = $4, address = $5,
-							 capacity = $6, panel_count = $7,
-							 peak_price = $8, valley_price = $9,
-							 latitude = $10, longitude = $11, timezone = $12, updated_at = NOW()
-		WHERE id = $13
+		UPDATE stations SET name = $1, country = $2, province = $3, city = $4, district = $5, address = $6,
+							 capacity = $7, panel_count = $8,
+							 peak_price = $9, valley_price = $10,
+							 latitude = $11, longitude = $12, timezone = $13, updated_at = NOW()
+		WHERE id = $14
 	`
 
 	_, err = tx.Exec(ctx, query,
-		station.Name, station.Province, station.City, station.District, station.Address,
+		station.Name, station.Country, station.Province, station.City, station.District, station.Address,
 		station.Capacity, station.PanelCount,
 		station.PeakPrice, station.ValleyPrice,
 		station.Latitude, station.Longitude, station.Timezone, station.ID,
@@ -597,7 +597,7 @@ func (r *StationRepository) Assign(ctx context.Context, id int64, userID int64) 
 func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Station, error) {
 	query := `
 		SELECT id, user_id, name,
-			COALESCE(province, ''), COALESCE(city, ''), COALESCE(district, ''),
+			COALESCE(country, ''), COALESCE(province, ''), COALESCE(city, ''), COALESCE(district, ''),
 			COALESCE(address, ''), COALESCE(capacity, 0), COALESCE(panel_count, 0),
 			COALESCE(latitude, 0), COALESCE(longitude, 0),
 			COALESCE(timezone, 'Asia/Shanghai'), status, created_at, updated_at
@@ -606,7 +606,7 @@ func (r *StationRepository) GetByID(ctx context.Context, id int64) (*model.Stati
 
 	var station model.Station
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&station.ID, &station.UserID, &station.Name, &station.Province, &station.City,
+		&station.ID, &station.UserID, &station.Name, &station.Country, &station.Province, &station.City,
 		&station.District, &station.Address, &station.Capacity, &station.PanelCount,
 		&station.Latitude, &station.Longitude, &station.Timezone,
 		&station.Status, &station.CreatedAt, &station.UpdatedAt,
@@ -647,7 +647,7 @@ func (r *StationRepository) GetByUserID(ctx context.Context, userID int64, page,
 	for rows.Next() {
 		var station model.Station
 		if err := rows.Scan(
-			&station.ID, &station.UserID, &station.Name, &station.Province, &station.City,
+			&station.ID, &station.UserID, &station.Name, &station.Country, &station.Province, &station.City,
 			&station.District, &station.Address, &station.Capacity, &station.PanelCount,
 			&station.Latitude, &station.Longitude, &station.Timezone,
 			&station.Status, &station.CreatedAt, &station.UpdatedAt,
@@ -685,7 +685,7 @@ func (r *StationRepository) GetAll(ctx context.Context, page, pageSize int) ([]*
 	for rows.Next() {
 		var station model.Station
 		if err := rows.Scan(
-			&station.ID, &station.UserID, &station.Name, &station.Province, &station.City,
+			&station.ID, &station.UserID, &station.Name, &station.Country, &station.Province, &station.City,
 			&station.District, &station.Address, &station.Capacity, &station.PanelCount,
 			&station.Latitude, &station.Longitude, &station.Timezone,
 			&station.Status, &station.CreatedAt, &station.UpdatedAt,

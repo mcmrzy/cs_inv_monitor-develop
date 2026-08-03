@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS stations (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
+    country VARCHAR(100), -- 电站所在国家（中文名，如 中国）
     province VARCHAR(50) NOT NULL,
     city VARCHAR(50) NOT NULL,
     district VARCHAR(50),
@@ -1177,6 +1178,7 @@ CREATE TABLE IF NOT EXISTS stations (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
+    country VARCHAR(100), -- 电站所在国家（中文名，如 中国）
     province VARCHAR(50) NOT NULL,
     city VARCHAR(50) NOT NULL,
     district VARCHAR(50),
