@@ -25,7 +25,7 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     
     // 从 apiBaseUrl 提取服务器基础URL（去掉 /api/v1）
-    final baseUrl = AppConfig.apiBaseUrl;
+    const baseUrl = AppConfig.apiBaseUrl;
     final serverBase = baseUrl.replaceAll(RegExp(r'/api/v1$'), '');
     
     // 确保路径以 / 开头
@@ -60,7 +60,6 @@ class _ProfilePageState extends State<ProfilePage> {
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        backgroundColor: Colors.white,
       ),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
@@ -110,7 +109,7 @@ class _ProfilePageState extends State<ProfilePage> {
         padding: EdgeInsets.all(20.w),
         margin: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColor.surface(context),
           borderRadius: BorderRadius.circular(16.r),
         ),
         child: Row(
@@ -226,7 +225,7 @@ class _ProfilePageState extends State<ProfilePage> {
       margin: EdgeInsets.symmetric(horizontal: 16.w),
       padding: EdgeInsets.symmetric(vertical: 4.h),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surface(context),
         borderRadius: BorderRadius.circular(16.r),
       ),
       child: Material(
@@ -275,9 +274,6 @@ class _ProfilePageState extends State<ProfilePage> {
             builder: (ctx) => AlertDialog(
               title: Text(l10n.logout),
               content: Text(l10n.logoutConfirm),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14.r),
-              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),

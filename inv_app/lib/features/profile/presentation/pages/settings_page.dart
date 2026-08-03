@@ -151,8 +151,6 @@ class _SettingsPageState extends State<SettingsPage> {
           controller: controller,
           decoration: InputDecoration(
             hintText: l10n.serverHint,
-            border:
-                OutlineInputBorder(borderRadius: BorderRadius.circular(8.r)),
           ),
           keyboardType: TextInputType.url,
         ),
