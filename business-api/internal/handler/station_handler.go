@@ -70,6 +70,7 @@ func (h *StationHandler) Create(c *gin.Context) {
 	station := &model.Station{
 		UserID:      userID,
 		Name:        req.Name,
+		Country:     req.Country,
 		Province:    req.Province,
 		City:        req.City,
 		District:    req.District,
@@ -178,6 +179,9 @@ func (h *StationHandler) Update(c *gin.Context) {
 
 	if req.Name != "" {
 		station.Name = req.Name
+	}
+	if req.Country != "" {
+		station.Country = req.Country
 	}
 	if req.Province != "" {
 		station.Province = req.Province

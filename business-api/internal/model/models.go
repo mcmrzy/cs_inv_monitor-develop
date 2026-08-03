@@ -29,6 +29,7 @@ type Station struct {
 	ID          int64      `json:"id"`
 	UserID      int64      `json:"user_id"`
 	Name        string     `json:"name"`
+	Country     string     `json:"country"`
 	Province    string     `json:"province"`
 	City        string     `json:"city"`
 	District    string     `json:"district"`
