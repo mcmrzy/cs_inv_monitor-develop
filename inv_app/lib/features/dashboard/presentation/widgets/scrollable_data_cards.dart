@@ -99,7 +99,7 @@ class _DataCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.primary.withValues(alpha: 0.1)
-              : Theme.of(context).colorScheme.surface,
+              : AppColor.surfaceContainer(context),
           borderRadius: BorderRadius.circular(12.r),
           border: Border.all(
             color: isSelected

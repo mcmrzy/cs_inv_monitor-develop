@@ -131,7 +131,7 @@ class _StatusCard extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: AppColor.surfaceContainer(context),
           borderRadius: BorderRadius.circular(16.r),
           border: Border.all(
             color: color.withValues(alpha: 0.15),

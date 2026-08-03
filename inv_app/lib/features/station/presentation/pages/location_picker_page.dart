@@ -8,6 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 /// WGS-84 → GCJ-02 coordinate conversion (for China map tiles)
@@ -260,7 +261,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                       height: 40,
                       child: const Icon(
                         Icons.location_on,
-                        color: Colors.red,
+                        color: AppColors.error,
                         size: 36,
                       ),
                     ),
@@ -275,7 +276,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
               child: Icon(
                 Icons.add,
                 size: 28.sp,
-                color: Colors.red.withValues(alpha: 0.7),
+                color: AppColors.error.withValues(alpha: 0.7),
               ),
             ),
           ),
@@ -286,7 +287,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             left: 12.w,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColor.surfaceContainer(context),
                 borderRadius: BorderRadius.circular(20.r),
                 boxShadow: [
                   BoxShadow(
@@ -315,7 +316,8 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   vertical: 8.h,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.95),
+                  color: AppColor.surfaceContainer(context)
+                      .withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(16.r),
                   boxShadow: [
                     BoxShadow(
@@ -330,14 +332,14 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.location_on_outlined,
-                        size: 16.sp, color: const Color(0xFFE53935)),
+                        size: 16.sp, color: AppColors.errorLight),
                     SizedBox(width: 6.w),
                     Flexible(
                       child: Text(
                         _resolvedAddress,
                         style: TextStyle(
                           fontSize: 13.sp,
-                          color: const Color(0xFF333333),
+                          color: AppColor.textPrimary(context),
                           fontWeight: FontWeight.w500,
                         ),
                         maxLines: 1,
@@ -356,7 +358,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
             right: 0,
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppColor.surfaceContainer(context),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
                 boxShadow: [
                   BoxShadow(
@@ -384,7 +386,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                             ),
                             SizedBox(width: 8.w),
                             Text('搜索附近地址...',
-                                style: TextStyle(fontSize: 13.sp, color: Colors.grey)),
+                                style: TextStyle(
+                                    fontSize: 13.sp,
+                                    color: AppColor.textSecondary(context),
+                                ),
+                            ),
                           ],
                         ),
                       ),
@@ -395,8 +401,11 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                           shrinkWrap: true,
                           padding: EdgeInsets.symmetric(vertical: 4.h),
                           itemCount: _nearbyList.length,
-                          separatorBuilder: (_, __) =>
-                              Divider(height: 1, indent: 44.w, color: const Color(0xFFF0F0F0)),
+                          separatorBuilder: (_, __) => Divider(
+                              height: 1,
+                              indent: 44.w,
+                              color: AppColor.border(context),
+                          ),
                           itemBuilder: (context, idx) {
                             final item = _nearbyList[idx];
                             final name = item['name'] as String? ?? '';
@@ -404,14 +413,18 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                             return ListTile(
                               dense: true,
                               leading: Icon(Icons.location_on_outlined,
-                                  color: const Color(0xFF2563EB), size: 20.sp),
+                                  color: AppColor.primary(context), size: 20.sp),
                               title: Text(name,
                                   style: TextStyle(
                                       fontSize: 14.sp, fontWeight: FontWeight.w500)),
                               subtitle: detail.isNotEmpty && detail != name
                                   ? Text(detail,
                                       style: TextStyle(
-                                          fontSize: 12.sp, color: Colors.grey))
+                                          fontSize: 12.sp,
+                                          color:
+                                              AppColor.textSecondary(context),
+                                      ),
+                                  )
                                   : null,
                               onTap: () => _selectNearby(item),
                             );
@@ -432,7 +445,7 @@ class _LocationPickerPageState extends State<LocationPickerPage> {
                             style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
                           ),
                           style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
+                            backgroundColor: AppColor.primary(context),
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(24.r),

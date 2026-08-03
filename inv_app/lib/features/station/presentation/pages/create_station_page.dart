@@ -103,7 +103,6 @@ class _CreateStationPageState extends State<CreateStationPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: AppColors.errorLight,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10.r),
@@ -189,7 +188,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surface(context),
       appBar: AppBar(
         title: Text(
           AppLocalizations.of(context)!.newStation,
@@ -198,7 +197,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0.5,
-        backgroundColor: Colors.white,
+        backgroundColor: AppColor.surfaceContainer(context),
         foregroundColor: AppColors.textPrimary,
       ),
       body: BlocConsumer<StationBloc, StationState>(
@@ -239,16 +238,19 @@ class _CreateStationPageState extends State<CreateStationPage> {
                             vertical: 12.h,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF0F9FF),
+                            color: AppColor.primarySoft(context),
                             borderRadius: BorderRadius.circular(12.r),
-                            border: Border.all(color: const Color(0xFFBAE6FD)),
+                            border: Border.all(
+                              color: AppColor.primary(context)
+                                  .withValues(alpha: 0.2),
+                            ),
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 Icons.info_outline_rounded,
                                 size: 18.sp,
-                                color: const Color(0xFF0284C7),
+                                color: AppColor.primary(context),
                               ),
                               SizedBox(width: 10.w),
                               Expanded(
@@ -257,7 +259,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                                       .capacityAutoCalculate,
                                   style: TextStyle(
                                     fontSize: 13.sp,
-                                    color: const Color(0xFF0369A1),
+                                    color: AppColor.primary(context),
                                   ),
                                 ),
                               ),
@@ -284,10 +286,9 @@ class _CreateStationPageState extends State<CreateStationPage> {
                               vertical: 14.h,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFB),
+                              color: AppColor.surfaceHover(context),
                               borderRadius: BorderRadius.circular(12.r),
-                              border:
-                                  Border.all(color: const Color(0xFFE5E7EB)),
+                              border: Border.all(color: AppColor.border(context)),
                             ),
                             child: Row(
                               children: [
@@ -360,7 +361,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                                 icon: Icon(Icons.search, size: 20.sp),
                                 style: IconButton.styleFrom(
                                   foregroundColor: AppColors.primary,
-                                  backgroundColor: const Color(0xFFF0F9FF),
+                                  backgroundColor: AppColor.primarySoft(context),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10.r),
                                   ),
@@ -452,7 +453,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
       width: double.infinity,
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
       ),
       child: Column(
@@ -464,7 +465,7 @@ class _CreateStationPageState extends State<CreateStationPage> {
                 width: 36.w,
                 height: 36.w,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
+                  color: AppColor.primarySoft(context),
                   borderRadius: BorderRadius.circular(10.r),
                 ),
                 child: Icon(icon, size: 18.sp, color: AppColors.primary),
@@ -537,16 +538,16 @@ class _CreateStationPageState extends State<CreateStationPage> {
             hintText: hint,
             hintStyle: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
             filled: true,
-            fillColor: const Color(0xFFF8FAFB),
+            fillColor: AppColor.surfaceHover(context),
             contentPadding:
                 EdgeInsets.symmetric(horizontal: 14.w, vertical: 13.h),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              borderSide: BorderSide(color: AppColor.border(context)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              borderSide: BorderSide(color: AppColor.border(context)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12.r),

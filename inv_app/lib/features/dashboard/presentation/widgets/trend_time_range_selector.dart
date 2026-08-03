@@ -21,7 +21,7 @@ class TrendTimeRangeSelector extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(4.w),
       decoration: BoxDecoration(
-        color: AppColors.surfaceHover,
+        color: AppColor.surfaceHover(context),
         borderRadius: BorderRadius.circular(8.r),
       ),
       child: Row(
@@ -44,7 +44,9 @@ class TrendTimeRangeSelector extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
+          color: isSelected
+              ? AppColor.surfaceContainer(context)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(6.r),
           boxShadow: isSelected
               ? [
