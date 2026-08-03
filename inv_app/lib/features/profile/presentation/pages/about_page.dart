@@ -435,14 +435,14 @@ class _AboutPageState extends State<AboutPage> {
           Center(
             child: Text(
               '${l10n.appVersion}: ${AppConfig.version}',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 14, color: AppColor.onSurfaceVariant(context)),
             ),
           ),
           SizedBox(height: 8.h),
           Center(
             child: Text(
               l10n.brandName,
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 13, color: AppColor.onSurfaceVariant(context)),
             ),
           ),
           SizedBox(height: 40.h),

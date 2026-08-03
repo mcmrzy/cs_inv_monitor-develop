@@ -53,7 +53,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
 
     // 从 apiBaseUrl 提取服务器基础URL（去掉 /api/v1）
-    final baseUrl = AppConfig.apiBaseUrl;
+    const baseUrl = AppConfig.apiBaseUrl;
     final serverBase = baseUrl.replaceAll(RegExp(r'/api/v1$'), '');
 
     // 确保路径以 / 开头
@@ -141,7 +141,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString()),
-            backgroundColor: AppColors.errorLight,
           ),
         );
       }
@@ -187,7 +186,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)!.success),
-              backgroundColor: AppColors.successLight,
             ),
           );
           Navigator.pop(context);
@@ -196,7 +194,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(currentState.message),
-              backgroundColor: AppColors.errorLight,
             ),
           );
         }
@@ -206,7 +203,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString()),
-            backgroundColor: AppColors.errorLight,
           ),
         );
       }
@@ -226,9 +222,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20.r),
-        ),
         child: Container(
           padding: EdgeInsets.all(24.w),
           child: Column(
@@ -258,21 +251,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
               SizedBox(height: 24.h),
               // 昵称输入
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12.r),
-                ),
-                child: TextField(
-                  controller: nicknameController,
-                  decoration: InputDecoration(
-                    labelText: l10n.nickname,
-                    hintText: l10n.nickname,
-                    prefixIcon: Icon(Icons.person, size: 20.sp),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                        horizontal: 16.w, vertical: 14.h),
-                  ),
+              TextField(
+                controller: nicknameController,
+                decoration: InputDecoration(
+                  labelText: l10n.nickname,
+                  hintText: l10n.nickname,
+                  prefixIcon: Icon(Icons.person, size: 20.sp),
+                  contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16.w, vertical: 14.h),
                 ),
               ),
               SizedBox(height: 24.h),
@@ -369,22 +355,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
                 SizedBox(height: 24.h),
                 // 手机号输入
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: TextField(
-                    controller: newPhoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      labelText: l10n.newPhone,
-                      hintText: l10n.phoneHint,
-                      prefixIcon: Icon(Icons.phone, size: 20.sp),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16.w, vertical: 14.h),
-                    ),
+                TextField(
+                  controller: newPhoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: l10n.newPhone,
+                    hintText: l10n.phoneHint,
+                    prefixIcon: Icon(Icons.phone, size: 20.sp),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16.w, vertical: 14.h),
                   ),
                 ),
                 SizedBox(height: 16.h),
@@ -392,22 +371,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 Row(
                   children: [
                     Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                        child: TextField(
-                          controller: codeController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: l10n.verificationCode,
-                            hintText: l10n.codeHint,
-                            prefixIcon: Icon(Icons.lock_outline, size: 20.sp),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16.w, vertical: 14.h),
-                          ),
+                      child: TextField(
+                        controller: codeController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: l10n.verificationCode,
+                          hintText: l10n.codeHint,
+                          prefixIcon: Icon(Icons.lock_outline, size: 20.sp),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16.w, vertical: 14.h),
                         ),
                       ),
                     ),
@@ -488,7 +460,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.phoneRequired),
-          backgroundColor: AppColors.errorLight,
         ),
       );
       return;
@@ -506,7 +477,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)!.codeSent),
-              backgroundColor: AppColors.successLight,
             ),
           );
         }
@@ -532,7 +502,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString()),
-            backgroundColor: AppColors.errorLight,
           ),
         );
       }
@@ -545,7 +514,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.fillAllFields),
-          backgroundColor: AppColors.errorLight,
         ),
       );
       return;
@@ -570,7 +538,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)!.phoneChanged),
-              backgroundColor: AppColors.successLight,
             ),
           );
         }
@@ -582,7 +549,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString()),
-            backgroundColor: AppColors.errorLight,
           ),
         );
       }
@@ -638,22 +604,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
                 SizedBox(height: 24.h),
                 // 邮箱输入
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  child: TextField(
-                    controller: newEmailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      labelText: l10n.newEmail,
-                      hintText: l10n.emailHint,
-                      prefixIcon: Icon(Icons.email, size: 20.sp),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(
-                          horizontal: 16.w, vertical: 14.h),
-                    ),
+                TextField(
+                  controller: newEmailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: l10n.newEmail,
+                    hintText: l10n.emailHint,
+                    prefixIcon: Icon(Icons.email, size: 20.sp),
+                    contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16.w, vertical: 14.h),
                   ),
                 ),
                 SizedBox(height: 16.h),
@@ -661,22 +620,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 Row(
                   children: [
                     Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                        child: TextField(
-                          controller: codeController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: l10n.verificationCode,
-                            hintText: l10n.codeHint,
-                            prefixIcon: Icon(Icons.lock_outline, size: 20.sp),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16.w, vertical: 14.h),
-                          ),
+                      child: TextField(
+                        controller: codeController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: l10n.verificationCode,
+                          hintText: l10n.codeHint,
+                          prefixIcon: Icon(Icons.lock_outline, size: 20.sp),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16.w, vertical: 14.h),
                         ),
                       ),
                     ),
@@ -757,7 +709,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.emailRequired),
-          backgroundColor: AppColors.errorLight,
         ),
       );
       return;
@@ -775,7 +726,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)!.codeSent),
-              backgroundColor: AppColors.successLight,
             ),
           );
         }
@@ -801,7 +751,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString()),
-            backgroundColor: AppColors.errorLight,
           ),
         );
       }
@@ -814,7 +763,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(AppLocalizations.of(context)!.fillAllFields),
-          backgroundColor: AppColors.errorLight,
         ),
       );
       return;
@@ -839,7 +787,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(AppLocalizations.of(context)!.emailChanged),
-              backgroundColor: AppColors.successLight,
             ),
           );
         }
@@ -851,7 +798,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString()),
-            backgroundColor: AppColors.errorLight,
           ),
         );
       }
@@ -1339,18 +1285,23 @@ class _ContinentCountryPickerPageState
         children: [
           const Spacer(),
           Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF1A1D24)
+                  : Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
             ),
             child: Column(
               children: [
                 Container(
                   padding:
                       EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     border: Border(
-                      bottom: BorderSide(color: AppColors.surfaceHover),
+                      bottom: BorderSide(
+                        color: Theme.of(context).dividerTheme.color ??
+                            AppColors.divider,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -1439,7 +1390,7 @@ class _ContinentCountryPickerPageState
       children: [
         Container(
           height: _itemH,
-          color: const Color(0xFFF8FAFB),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           alignment: Alignment.center,
           child: Text(
             colLabel,
@@ -1471,9 +1422,11 @@ class _ContinentCountryPickerPageState
                             height: _itemH,
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.06),
-                              border: const Border.symmetric(
-                                horizontal:
-                                    BorderSide(color: Color(0xFFE5E7EB)),
+                              border: Border.symmetric(
+                                horizontal: BorderSide(
+                                  color: Theme.of(context).dividerTheme.color ??
+                                      AppColors.divider,
+                                ),
                               ),
                             ),
                           ),
@@ -1674,18 +1627,23 @@ class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
         children: [
           const Spacer(),
           Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF1A1D24)
+                  : Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
             ),
             child: Column(
               children: [
                 Container(
                   padding:
                       EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     border: Border(
-                      bottom: BorderSide(color: AppColors.surfaceHover),
+                      bottom: BorderSide(
+                        color: Theme.of(context).dividerTheme.color ??
+                            AppColors.divider,
+                      ),
                     ),
                   ),
                   child: Row(
@@ -1775,7 +1733,7 @@ class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
       children: [
         Container(
           height: _itemH,
-          color: const Color(0xFFF8FAFB),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           alignment: Alignment.center,
           child: Text(
             colLabel,
@@ -1807,9 +1765,11 @@ class _ProfileRegionPickerPageState extends State<_ProfileRegionPickerPage> {
                             height: _itemH,
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.06),
-                              border: const Border.symmetric(
-                                horizontal:
-                                    BorderSide(color: Color(0xFFE5E7EB)),
+                              border: Border.symmetric(
+                                horizontal: BorderSide(
+                                  color: Theme.of(context).dividerTheme.color ??
+                                      AppColors.divider,
+                                ),
                               ),
                             ),
                           ),
