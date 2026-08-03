@@ -162,7 +162,7 @@ class _LocalModePageState extends State<LocalModePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surfaceHover(context),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
@@ -173,7 +173,7 @@ class _LocalModePageState extends State<LocalModePage> {
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
+          backgroundColor: AppColor.surfaceContainer(context),
           foregroundColor: AppColors.textPrimary,
         ),
       ),
@@ -195,7 +195,7 @@ class _LocalModePageState extends State<LocalModePage> {
       margin: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 0),
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
       ),
       child: Row(
@@ -329,7 +329,7 @@ class _LocalModePageState extends State<LocalModePage> {
       margin: EdgeInsets.fromLTRB(16.w, 4.h, 16.w, 0),
       padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF2F2),
+        color: AppColors.badgeAlarmBg,
         borderRadius: BorderRadius.circular(10.r),
       ),
       child: Row(
@@ -343,7 +343,7 @@ class _LocalModePageState extends State<LocalModePage> {
           Expanded(
             child: Text(
               _errorMessage!,
-              style: TextStyle(fontSize: 12.sp, color: const Color(0xFF991B1B)),
+              style: TextStyle(fontSize: 12.sp, color: AppColors.error),
             ),
           ),
         ],
@@ -421,7 +421,7 @@ class _LocalModePageState extends State<LocalModePage> {
     return Padding(
       padding: EdgeInsets.only(bottom: 8.h),
       child: Material(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         elevation: 0,
         child: InkWell(
@@ -436,8 +436,8 @@ class _LocalModePageState extends State<LocalModePage> {
                   height: 40.w,
                   decoration: BoxDecoration(
                     color: isConnected
-                        ? const Color(0xFFECFDF5)
-                        : const Color(0xFFEFF6FF),
+                        ? AppColors.badgeNormalBg
+                        : AppColor.primarySoft(context),
                     borderRadius: BorderRadius.circular(10.r),
                   ),
                   child: Icon(
@@ -497,7 +497,7 @@ class _LocalModePageState extends State<LocalModePage> {
                     padding:
                         EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
+                      color: AppColors.badgeNormalBg,
                       borderRadius: BorderRadius.circular(6.r),
                     ),
                     child: Text(
@@ -527,7 +527,7 @@ class _LocalModePageState extends State<LocalModePage> {
     return Padding(
       padding: EdgeInsets.only(bottom: 8.h),
       child: Material(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         elevation: 0,
         child: InkWell(
@@ -548,7 +548,7 @@ class _LocalModePageState extends State<LocalModePage> {
                   width: 40.w,
                   height: 40.w,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
+                    color: AppColors.badgeNormalBg,
                     borderRadius: BorderRadius.circular(10.r),
                   ),
                   child: Icon(
@@ -607,8 +607,8 @@ class _LocalModePageState extends State<LocalModePage> {
             color: active
                 ? (level >= 3
                     ? AppColors.successLight
-                    : const Color(0xFFF59E0B))
-                : const Color(0xFFE5E7EB),
+                    : AppColors.orange)
+                : AppColor.border(context),
             borderRadius: BorderRadius.circular(1.r),
           ),
         );

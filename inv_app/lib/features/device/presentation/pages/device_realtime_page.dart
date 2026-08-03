@@ -40,11 +40,11 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
 
   // 分组定义（颜色和图标）
   static const _groupStyles = {
-    'ac_params': {'icon': Icons.bolt_rounded, 'color': Color(0xFF8B5CF6)},
-    'pv_params': {'icon': Icons.wb_sunny_outlined, 'color': Color(0xFFF59E0B)},
+    'ac_params': {'icon': Icons.bolt_rounded, 'color': AppColors.purple},
+    'pv_params': {'icon': Icons.wb_sunny_outlined, 'color': AppColors.orange},
     'battery_params': {
       'icon': Icons.battery_charging_full,
-      'color': Color(0xFF10B981),
+      'color': AppColors.successLight,
     },
     'system_status': {
       'icon': Icons.info_outline_rounded,
@@ -52,13 +52,13 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
     },
     'energy_stats': {
       'icon': Icons.show_chart_rounded,
-      'color': Color(0xFF3B82F6),
+      'color': AppColors.blue,
     },
     'device_info': {
       'icon': Icons.device_hub_rounded,
-      'color': Color(0xFF6B7280),
+      'color': AppColors.textSecondary,
     },
-    'control_cmd': {'icon': Icons.tune_rounded, 'color': Color(0xFFEF4444)},
+    'control_cmd': {'icon': Icons.tune_rounded, 'color': AppColors.errorLight},
   };
 
   // 英文 key 到 l10n 显示名的映射（支持多种 group_name 格式）
@@ -683,7 +683,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
         }
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColor.surfaceHover(context),
         appBar: PreferredSize(
           preferredSize: Size.fromHeight(50.h),
           child: AppBar(
@@ -694,7 +694,7 @@ class _DeviceRealtimePageState extends State<DeviceRealtimePage> {
             centerTitle: true,
             elevation: 0,
             scrolledUnderElevation: 0.5,
-            backgroundColor: Colors.white,
+            backgroundColor: AppColor.surfaceContainer(context),
             foregroundColor: AppColors.textPrimary,
             actions: [
               IconButton(
