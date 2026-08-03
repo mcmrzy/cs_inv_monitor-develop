@@ -191,8 +191,6 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildMenuSection(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final items = [
-      (Icons.solar_power_rounded, l10n.myStations, () => context.go('/home')),
-      (Icons.devices_rounded, l10n.myDevices, () => context.go('/devices')),
       (
         Icons.system_update_alt_rounded,
         l10n.otaTitle,

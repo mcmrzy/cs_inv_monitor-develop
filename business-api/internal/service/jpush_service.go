@@ -81,8 +81,8 @@ type jpushPlatformNotify struct {
 }
 
 type jpushOptions struct {
-	TimeToLive     int  `json:"time_to_live"`      // 离线消息保留时长（秒）
-	ApnsProduction bool `json:"apns_production"`   // true=生产环境，false=开发环境
+	TimeToLive     int  `json:"time_to_live"`    // 离线消息保留时长（秒）
+	ApnsProduction bool `json:"apns_production"` // true=生产环境，false=开发环境
 }
 
 // jpushSuccessResp JPush 成功响应
@@ -230,6 +230,37 @@ func (s *JPushService) SendNotificationAsync(
 				zap.String("device_sn", deviceSN),
 				zap.String("notify_type", notifyType),
 				zap.Int("user_count", len(aliases)),
+				zap.Error(err),
+			)
+		}
+	}()
+}
+
+// SendDailyReportAsync 异步向单个用户推送每日统计报告。
+// 去重键为 push:dedup:daily:{userID}:{date}，保证同一用户同一天只推送一次。
+func (s *JPushService) SendDailyReportAsync(ctx context.Context, userID int64, date, content string) {
+	if !s.enabled {
+		return
+	}
+
+	dedupKey := fmt.Sprintf("push:dedup:daily:%d:%s", userID, date)
+	ok, err := s.rdb.SetNX(ctx, dedupKey, "1", 48*time.Hour).Result()
+	if err != nil {
+		logger.Warn("JPush daily report dedup check failed, proceeding with push",
+			zap.Int64("user_id", userID), zap.Error(err))
+	} else if !ok {
+		logger.Debug("JPush daily report skipped (dedup window)",
+			zap.Int64("user_id", userID), zap.String("date", date))
+		return
+	}
+
+	go func() {
+		aliases := []string{fmt.Sprintf("user_%d", userID)}
+		extras := map[string]string{"notify_type": "daily_report"}
+		if err := s.pushToJPush(map[string][]string{"alias": aliases}, "每日发电统计报告", content, extras); err != nil {
+			logger.Error("JPush daily report failed",
+				zap.Int64("user_id", userID),
+				zap.String("date", date),
 				zap.Error(err),
 			)
 		}

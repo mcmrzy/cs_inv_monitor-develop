@@ -850,6 +850,35 @@ class AppLocalizations {
   String get resetNotifyConfirm => _localizedStrings['reset_notify_confirm']!;
   String get notifySettingsReset => _localizedStrings['notify_settings_reset']!;
   String get resetAllNotify => _localizedStrings['reset_all_notify']!;
+  // 消息通知设置页（服务端偏好，v2 分组结构）
+  String get deviceStatusNotify => _localizedStrings['device_status_notify']!;
+  String get deviceStatusNotifyDesc =>
+      _localizedStrings['device_status_notify_desc']!;
+  String get alarmNotify => _localizedStrings['alarm_notify']!;
+  String get alarmNotifyDesc => _localizedStrings['alarm_notify_desc']!;
+  String get alarmLevel => _localizedStrings['alarm_level']!;
+  String get alarmFatal => _localizedStrings['alarm_fatal']!;
+  String get alarmWarning => _localizedStrings['alarm_warning']!;
+  String get alarmLevelInfo => _localizedStrings['alarm_level_info']!;
+  String get alarmCleared => _localizedStrings['alarm_cleared']!;
+  String get otaNotify => _localizedStrings['ota_notify']!;
+  String get dailyReportSection => _localizedStrings['daily_report_section']!;
+  String get dailyReport => _localizedStrings['daily_report']!;
+  String get dailyReportDesc => _localizedStrings['daily_report_desc']!;
+  String get dailyReportTime => _localizedStrings['daily_report_time']!;
+  String get notifyChannelSection =>
+      _localizedStrings['notify_channel_section']!;
+  String get appPush => _localizedStrings['app_push']!;
+  String get emailNotify => _localizedStrings['email_notify']!;
+  String get emailNotifyDesc => _localizedStrings['email_notify_desc']!;
+  String get emailNotBind => _localizedStrings['email_not_bind']!;
+  String get emailBindHint => _localizedStrings['email_bind_hint']!;
+  String get alarmBreakDnd => _localizedStrings['alarm_break_dnd']!;
+  String get alarmBreakDndDesc => _localizedStrings['alarm_break_dnd_desc']!;
+  String get notifySettingsSaveFailed =>
+      _localizedStrings['notify_settings_save_failed']!;
+  String get notifySettingsLoadFailed =>
+      _localizedStrings['notify_settings_load_failed']!;
   String get otherPhone => _localizedStrings['other_phone']!;
   String get inputOtherPhone => _localizedStrings['input_other_phone']!;
   String get viewOnly => _localizedStrings['view_only']!;

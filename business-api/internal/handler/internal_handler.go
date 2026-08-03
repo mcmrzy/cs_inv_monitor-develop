@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"inv-api-server/internal/repository"
 	"inv-api-server/internal/service"
 	"inv-api-server/pkg/logger"
 	"inv-api-server/pkg/response"
@@ -158,6 +159,8 @@ type InternalHandler struct {
 	rdb          *redis.Client
 	otaService   *service.OTAService
 	jpushService *service.JPushService
+	notifyPrefs  *repository.NotifyPrefsRepository
+	emailService *service.EmailService
 	// SSE multi-client broadcast: map[user_id][]sseClientEntry
 	sseClientsByUser map[int64][]sseClientEntry
 	sseClientsMu     sync.RWMutex
@@ -166,7 +169,7 @@ type InternalHandler struct {
 	notifyCfg        *NotificationConfig
 }
 
-func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService, jpushService *service.JPushService, notifySvc NotificationService, notifyCfg *NotificationConfig) *InternalHandler {
+func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service.OTAService, jpushService *service.JPushService, notifySvc NotificationService, notifyCfg *NotificationConfig, notifyPrefs *repository.NotifyPrefsRepository, emailService *service.EmailService) *InternalHandler {
 	if notifyCfg == nil {
 		notifyCfg = defaultNotificationConfig()
 	}
@@ -179,6 +182,8 @@ func NewInternalHandler(db *pgxpool.Pool, rdb *redis.Client, otaService *service
 		rdb:              rdb,
 		otaService:       otaService,
 		jpushService:     jpushService,
+		notifyPrefs:      notifyPrefs,
+		emailService:     emailService,
 		sseClientsByUser: make(map[int64][]sseClientEntry),
 		sseHub:           make(chan sseHubEvent, 256),
 		notifySvc:        notifySvc,
@@ -355,18 +360,14 @@ func (h *InternalHandler) DeviceStatus(c *gin.Context) {
 			// 通过 SSE 实时推送通知给前端
 			h.broadcastNotification(userID, notifyType, title, content, req.SN)
 
-			// JPush 推送通知给 APP 端
-			if h.jpushService != nil {
-				if userIDs, err := h.getNotificationUsers(ctx, req.SN); err == nil && len(userIDs) > 0 {
-					jpushTitle := "设备上线"
-					jpushContent := fmt.Sprintf("设备 %s 已上线", req.SN)
-					if notifyType == "device_offline" {
-						jpushTitle = "设备离线"
-						jpushContent = fmt.Sprintf("设备 %s 已离线", req.SN)
-					}
-					h.jpushService.SendNotificationAsync(ctx, userIDs, notifyType, req.SN, jpushTitle, jpushContent)
-				}
+			// JPush/邮件 推送通知给 APP 端（按用户通知偏好过滤，通知入库与 SSE 不受偏好影响）
+			pushTitle := "设备上线"
+			pushContent := fmt.Sprintf("设备 %s 已上线", req.SN)
+			if notifyType == "device_offline" {
+				pushTitle = "设备离线"
+				pushContent = fmt.Sprintf("设备 %s 已离线", req.SN)
 			}
+			h.sendPushNotification(ctx, notifyType, req.SN, pushTitle, pushContent, 0)
 		}
 	}
 
@@ -1525,13 +1526,9 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 				}
 				h.broadcastNotification(clearUserID, "alarm_cleared", "故障已恢复", clearContent, req.SN)
 
-				// JPush 推送故障恢复通知给 APP 端
-				if h.jpushService != nil {
-					if userIDs, err := h.getNotificationUsers(ctx, req.SN); err == nil && len(userIDs) > 0 {
-						h.jpushService.SendNotificationAsync(ctx, userIDs, "alarm_cleared", req.SN,
-							"故障已恢复", fmt.Sprintf("设备 %s 故障已恢复", req.SN))
-					}
-				}
+				// JPush/邮件 推送故障恢复通知给 APP 端（按用户通知偏好过滤）
+				h.sendPushNotification(ctx, "alarm_cleared", req.SN,
+					"故障已恢复", fmt.Sprintf("设备 %s 故障已恢复", req.SN), 0)
 			}
 		}
 
@@ -1688,13 +1685,9 @@ func (h *InternalHandler) DeviceAlarm(c *gin.Context) {
 		h.broadcastNotification(userID, "alarm", faultMessage, fmt.Sprintf("设备 %s: %s", req.SN, faultMessage), req.SN)
 	}
 
-	// JPush 推送告警通知给 APP 端
-	if h.jpushService != nil {
-		if userIDs, err := h.getNotificationUsers(ctx, req.SN); err == nil && len(userIDs) > 0 {
-			h.jpushService.SendNotificationAsync(ctx, userIDs, "device_alarm", req.SN,
-				"设备告警", fmt.Sprintf("设备 %s: %s", req.SN, faultMessage))
-		}
-	}
+	// JPush/邮件 推送告警通知给 APP 端（按用户通知偏好过滤，严重告警可穿透免打扰）
+	h.sendPushNotification(ctx, "device_alarm", req.SN,
+		"设备告警", fmt.Sprintf("设备 %s: %s", req.SN, faultMessage), alarmLevel)
 
 	logger.Info("Device alarm recorded",
 		zap.String("sn", req.SN),
@@ -1857,6 +1850,191 @@ func (h *InternalHandler) getNotificationUsers(ctx context.Context, deviceSN str
 		userIDs = append(userIDs, uid)
 	}
 	return userIDs, nil
+}
+
+// pushEmailTarget 邮件通知接收者（偏好开启邮件渠道且有邮箱的用户）
+type pushEmailTarget struct {
+	UserID int64
+	Email  string
+}
+
+// filterPushUsers 按用户通知偏好过滤推送接收者，返回 JPush 接收者与邮件接收者。
+// 未设置过偏好的用户按默认值处理（全部开启、无邮件渠道）。
+// notifyType 支持 device_online / device_offline / device_alarm / alarm_cleared / daily_report；
+// alarmLevel 仅对 device_alarm 生效（3=严重 2=警告 1=提示）。
+// 免打扰时段剔除用户，除非是严重告警且用户开启了 alarm_break_dnd。
+func (h *InternalHandler) filterPushUsers(ctx context.Context, userIDs []int64, notifyType string, alarmLevel int) ([]int64, []pushEmailTarget) {
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+	if h.notifyPrefs == nil {
+		return userIDs, nil
+	}
+
+	type prefRow struct {
+		pushEnabled      bool
+		notifyOnline     bool
+		notifyOffline    bool
+		notifyAlarm      bool
+		notifyAlarmFatal bool
+		notifyAlarmWarn  bool
+		notifyAlarmInfo  bool
+		notifyAlarmClear bool
+		notifyDaily      bool
+		emailEnabled     bool
+		email            string
+		dndEnabled       bool
+		dndStart         string
+		dndEnd           string
+		alarmBreakDnd    bool
+	}
+	prefsByUser := make(map[int64]prefRow, len(userIDs))
+	rows, err := h.db.Query(ctx, `
+		SELECT p.user_id, p.push_enabled, p.notify_online, p.notify_offline,
+		       p.notify_alarm, p.notify_alarm_fatal, p.notify_alarm_warning, p.notify_alarm_info,
+		       p.notify_alarm_cleared, p.notify_daily, p.email_enabled,
+		       p.dnd_enabled, p.dnd_start, p.dnd_end, p.alarm_break_dnd,
+		       COALESCE(u.email, '')
+		FROM user_notify_prefs p
+		JOIN users u ON u.id = p.user_id
+		WHERE p.user_id = ANY($1)
+	`, userIDs)
+	if err != nil {
+		logger.Warn("filterPushUsers: failed to load notify prefs, falling back to unfiltered",
+			zap.String("notify_type", notifyType), zap.Error(err))
+		return userIDs, nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p prefRow
+		var uid int64
+		if err := rows.Scan(&uid, &p.pushEnabled, &p.notifyOnline, &p.notifyOffline,
+			&p.notifyAlarm, &p.notifyAlarmFatal, &p.notifyAlarmWarn, &p.notifyAlarmInfo,
+			&p.notifyAlarmClear, &p.notifyDaily, &p.emailEnabled,
+			&p.dndEnabled, &p.dndStart, &p.dndEnd, &p.alarmBreakDnd, &p.email); err != nil {
+			continue
+		}
+		prefsByUser[uid] = p
+	}
+
+	now := time.Now()
+	var jpushIDs []int64
+	var emailTargets []pushEmailTarget
+	for _, uid := range userIDs {
+		p, hasPrefs := prefsByUser[uid]
+		if !hasPrefs {
+			// 未设置过偏好的用户按默认值处理：全部开启、无邮件渠道
+			jpushIDs = append(jpushIDs, uid)
+			continue
+		}
+		if !p.pushEnabled {
+			continue
+		}
+		// 通知类型开关
+		switch notifyType {
+		case "device_online":
+			if !p.notifyOnline {
+				continue
+			}
+		case "device_offline":
+			if !p.notifyOffline {
+				continue
+			}
+		case "device_alarm":
+			if !p.notifyAlarm {
+				continue
+			}
+			switch alarmLevel {
+			case 3:
+				if !p.notifyAlarmFatal {
+					continue
+				}
+			case 2:
+				if !p.notifyAlarmWarn {
+					continue
+				}
+			case 1:
+				if !p.notifyAlarmInfo {
+					continue
+				}
+			}
+		case "alarm_cleared":
+			if !p.notifyAlarmClear {
+				continue
+			}
+		case "daily_report":
+			if !p.notifyDaily {
+				continue
+			}
+		}
+		// 免打扰检查（支持跨天区间），严重告警可按用户配置穿透
+		if p.dndEnabled && !(notifyType == "device_alarm" && alarmLevel == 3 && p.alarmBreakDnd) {
+			if inDndWindow(now, p.dndStart, p.dndEnd) {
+				continue
+			}
+		}
+		jpushIDs = append(jpushIDs, uid)
+		if p.emailEnabled && p.email != "" {
+			emailTargets = append(emailTargets, pushEmailTarget{UserID: uid, Email: p.email})
+		}
+	}
+	return jpushIDs, emailTargets
+}
+
+// inDndWindow 判断当前时间是否落在 [start, end) 免打扰区间内（支持跨天，如 22:00-07:00）。
+func inDndWindow(now time.Time, start, end string) bool {
+	current := now.Hour()*60 + now.Minute()
+	s, err1 := parseClockMinutes(start)
+	e, err2 := parseClockMinutes(end)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	if s < e {
+		return current >= s && current < e
+	}
+	// 跨天：start >= end，例如 22:00-07:00
+	return current >= s || current < e
+}
+
+// parseClockMinutes 解析 "HH:MM" 为当天分钟数（0-1439）。
+func parseClockMinutes(clock string) (int, error) {
+	parts := strings.Split(clock, ":")
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("invalid clock %q", clock)
+	}
+	h, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, fmt.Errorf("invalid clock %q", clock)
+	}
+	return h*60 + m, nil
+}
+
+// sendPushNotification 按用户通知偏好过滤后发送 JPush 与邮件通知。
+// notifications 表入库与 SSE 推送不受偏好影响（通知中心历史照常记录）。
+func (h *InternalHandler) sendPushNotification(ctx context.Context, notifyType, deviceSN, title, content string, alarmLevel int) {
+	if h.jpushService == nil && h.emailService == nil {
+		return
+	}
+	userIDs, err := h.getNotificationUsers(ctx, deviceSN)
+	if err != nil || len(userIDs) == 0 {
+		return
+	}
+	jpushIDs, emailTargets := h.filterPushUsers(ctx, userIDs, notifyType, alarmLevel)
+	if h.jpushService != nil && len(jpushIDs) > 0 {
+		h.jpushService.SendNotificationAsync(ctx, jpushIDs, notifyType, deviceSN, title, content)
+	}
+	if h.emailService == nil || len(emailTargets) == 0 {
+		return
+	}
+	for _, target := range emailTargets {
+		go func(uid int64, email string) {
+			if err := h.emailService.SendNotificationEmail(email, title, content, deviceSN); err != nil {
+				logger.Warn("sendPushNotification: notification email failed",
+					zap.Int64("user_id", uid), zap.String("email", email), zap.Error(err))
+			}
+		}(target.UserID, target.Email)
+	}
 }
 
 // =====================================================

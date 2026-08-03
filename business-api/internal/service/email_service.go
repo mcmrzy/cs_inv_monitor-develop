@@ -230,11 +230,11 @@ func (s *EmailService) sendMailWithTemplate(to string, data map[string]string, t
 	// Get the directory of this file
 	currentDir := "./internal/templates"
 	templatePath := filepath.Join(currentDir, templateName)
-	
+
 	// Check if template exists, if not use inline fallback
 	tmpl, err := template.ParseFiles(templatePath)
 	if err != nil {
-		logger.Warn("Template file not found, using inline verification code template", 
+		logger.Warn("Template file not found, using inline verification code template",
 			zap.String("template", templateName), zap.Error(err))
 		// Use inline template for verification code as fallback
 		if templateName == "verification_code.tmpl" {
@@ -489,8 +489,8 @@ func (s *EmailService) SendWelcomeEmail(toEmail, username string, senderName str
 	}
 
 	data := map[string]string{
-		"ToEmail":  toEmail,
-		"Username": username,
+		"ToEmail":    toEmail,
+		"Username":   username,
 		"SenderName": senderName,
 	}
 
@@ -510,11 +510,54 @@ func (s *EmailService) SendPasswordReset(token, username, userEmail string, send
 	}
 
 	data := map[string]string{
-		"Username": username,
-		"Token":    token[:8] + "****", // Only show first 8 chars for security
-		"ToEmail":  userEmail,
+		"Username":   username,
+		"Token":      token[:8] + "****", // Only show first 8 chars for security
+		"ToEmail":    userEmail,
 		"SenderName": senderName,
 	}
 
 	return s.sendMailWithTemplate(userEmail, data, "password_reset.tmpl", "重置密码", emailCfg)
+}
+
+// SendNotificationEmail sends device alarm / online / offline notification emails
+func (s *EmailService) SendNotificationEmail(toEmail, title, content, deviceSN string) error {
+	ctx := context.Background()
+	emailCfg := s.cfg
+	if s.cfgSvc != nil {
+		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
+	}
+	if emailCfg.Host == "" || emailCfg.Host == "smtp.example.com" {
+		logger.Warn("Email service not properly configured, skipping notification email")
+		return nil
+	}
+
+	data := map[string]string{
+		"ToEmail":  toEmail,
+		"Title":    title,
+		"Content":  content,
+		"DeviceSN": deviceSN,
+	}
+
+	return s.sendMailWithTemplate(toEmail, data, "notification_email.tmpl", "【CSERGY】"+title, emailCfg)
+}
+
+// SendDailyReportEmail sends daily generation statistics report emails
+func (s *EmailService) SendDailyReportEmail(toEmail, username, content string) error {
+	ctx := context.Background()
+	emailCfg := s.cfg
+	if s.cfgSvc != nil {
+		emailCfg = s.cfgSvc.GetEmailConfig(ctx)
+	}
+	if emailCfg.Host == "" || emailCfg.Host == "smtp.example.com" {
+		logger.Warn("Email service not properly configured, skipping daily report email")
+		return nil
+	}
+
+	data := map[string]string{
+		"ToEmail":  toEmail,
+		"Username": username,
+		"Content":  content,
+	}
+
+	return s.sendMailWithTemplate(toEmail, data, "daily_report.tmpl", "【CSERGY】每日发电统计报告", emailCfg)
 }

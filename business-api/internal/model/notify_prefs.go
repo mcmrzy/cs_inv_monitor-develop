@@ -1,0 +1,29 @@
+package model
+
+import "time"
+
+// NotifyPrefs 用户通知偏好设置，对应 user_notify_prefs 表。
+// 字段与 App 端「消息通知设置」页面设置项一一对应，
+// 推送链路（JPush/邮件）发送前按此过滤用户。
+type NotifyPrefs struct {
+	UserID           int64     `json:"user_id"`
+	Email            string    `json:"email"`                // 只读回显用户邮箱（App 展示邮件绑定状态）
+	PushEnabled      bool      `json:"push_enabled"`         // 通知总开关
+	NotifyOnline     bool      `json:"notify_online"`        // 设备上线通知
+	NotifyOffline    bool      `json:"notify_offline"`       // 设备离线通知
+	NotifyAlarm      bool      `json:"notify_alarm"`         // 告警通知总开关
+	NotifyAlarmFatal bool      `json:"notify_alarm_fatal"`   // 严重告警
+	NotifyAlarmWarn  bool      `json:"notify_alarm_warning"` // 警告
+	NotifyAlarmInfo  bool      `json:"notify_alarm_info"`    // 提示
+	NotifyAlarmClear bool      `json:"notify_alarm_cleared"` // 告警恢复通知
+	NotifyOTA        bool      `json:"notify_ota"`           // OTA 升级提醒
+	NotifySystem     bool      `json:"notify_system"`        // 系统公告
+	NotifyDaily      bool      `json:"notify_daily"`         // 每日发电统计报告
+	DailyReportTime  string    `json:"daily_report_time"`    // 报告推送时间（用户时区 HH:MM）
+	EmailEnabled     bool      `json:"email_enabled"`        // 邮件通知渠道
+	DndEnabled       bool      `json:"dnd_enabled"`          // 免打扰模式
+	DndStart         string    `json:"dnd_start"`
+	DndEnd           string    `json:"dnd_end"`
+	AlarmBreakDnd    bool      `json:"alarm_break_dnd"` // 严重告警不受免打扰影响
+	UpdatedAt        time.Time `json:"updated_at"`
+}
