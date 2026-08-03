@@ -33,6 +33,72 @@ class AppTheme {
         color: Colors.white,
         shadowColor: Colors.transparent,
       ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24.r),
+        ),
+        titleTextStyle: TextStyle(
+          fontSize: 18.sp,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+        contentTextStyle: TextStyle(
+          fontSize: 15.sp,
+          height: 1.5,
+          color: AppColors.textSecondary,
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        modalBackgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        dragHandleColor: Color(0xFFD1D5DB),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF1F2937),
+        contentTextStyle: TextStyle(fontSize: 14.sp, color: Colors.white),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        elevation: 4,
+      ),
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        dialBackgroundColor: const Color(0xFFF3F4F6),
+        dialHandColor: AppColors.primary,
+        dialTextColor: AppColors.textPrimary,
+        hourMinuteColor: AppColors.primary,
+        hourMinuteTextColor: Colors.white,
+        entryModeIconColor: AppColors.primary,
+        dayPeriodColor: AppColors.primary.withValues(alpha: 0.1),
+        dayPeriodTextColor: AppColors.primary,
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        headerBackgroundColor: AppColors.primary,
+        headerForegroundColor: Colors.white,
+        todayBorder: const BorderSide(color: AppColors.primary, width: 1.5),
+        dayOverlayColor:
+            WidgetStatePropertyAll(AppColors.primary.withValues(alpha: 0.1)),
+        confirmButtonStyle: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          textStyle: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
+        ),
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           elevation: 0,
@@ -94,6 +160,32 @@ class AppTheme {
           borderRadius: BorderRadius.circular(16.r),
         ),
       ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          textStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          textStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        elevation: 4,
+        textStyle: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
+      ),
     );
   }
 
@@ -128,6 +220,73 @@ class AppTheme {
         ),
         color: const Color(0xFF1A1D24),
         shadowColor: Colors.transparent,
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: const Color(0xFF1A1D24),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24.r),
+        ),
+        titleTextStyle: TextStyle(
+          fontSize: 18.sp,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+        contentTextStyle: TextStyle(
+          fontSize: 15.sp,
+          height: 1.5,
+          color: const Color(0xFF9CA3AF),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Color(0xFF1A1D24),
+        modalBackgroundColor: Color(0xFF1A1D24),
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        dragHandleColor: Color(0xFF4B5563),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF374151),
+        contentTextStyle: TextStyle(fontSize: 14.sp, color: Colors.white),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        elevation: 4,
+      ),
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: const Color(0xFF1A1D24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        dialBackgroundColor: const Color(0xFF252830),
+        dialHandColor: const Color(0xFF42A5F5),
+        dialTextColor: Colors.white,
+        hourMinuteColor: const Color(0xFF42A5F5),
+        hourMinuteTextColor: Colors.white,
+        entryModeIconColor: const Color(0xFF42A5F5),
+        dayPeriodColor: const Color(0xFF42A5F5).withValues(alpha: 0.2),
+        dayPeriodTextColor: const Color(0xFF42A5F5),
+      ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: const Color(0xFF1A1D24),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.r),
+        ),
+        headerBackgroundColor: const Color(0xFF1E88E5),
+        headerForegroundColor: Colors.white,
+        todayBorder: const BorderSide(color: Color(0xFF42A5F5), width: 1.5),
+        dayOverlayColor: WidgetStatePropertyAll(
+          const Color(0xFF42A5F5).withValues(alpha: 0.2),
+        ),
+        confirmButtonStyle: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF42A5F5),
+          textStyle: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600),
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -189,6 +348,32 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16.r),
         ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF42A5F5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          textStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          textStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: const Color(0xFF1A1D24),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        elevation: 4,
+        textStyle: TextStyle(fontSize: 14.sp, color: Colors.white),
       ),
     );
   }
