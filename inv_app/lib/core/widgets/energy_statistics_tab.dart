@@ -1315,10 +1315,6 @@ class _EnergyStatisticsTabState extends State<EnergyStatisticsTab>
   void _showDatePicker() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColor.surface(context),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
-      ),
       builder: (ctx) {
         int selectedYear = _selectedDate.year;
         int selectedMonth = _selectedDate.month;

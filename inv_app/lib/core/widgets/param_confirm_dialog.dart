@@ -33,7 +33,6 @@ class ParamConfirmDialog extends StatelessWidget {
     final hasDangerous = changes.keys.any((k) => dangerousKeys.contains(k));
 
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
       title: Row(
         children: [
           Icon(Icons.edit_note, size: 24.sp, color: theme.colorScheme.primary),
@@ -54,7 +53,7 @@ class ParamConfirmDialog extends StatelessWidget {
                 padding: EdgeInsets.all(12.w),
                 decoration: BoxDecoration(
                   color: AppColors.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8.r),
+                  borderRadius: BorderRadius.circular(12.r),
                   border:
                       Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                 ),
@@ -131,7 +130,7 @@ class ParamConfirmDialog extends StatelessWidget {
         color: isDangerous
             ? AppColors.error.withValues(alpha: 0.05)
             : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8.r),
+        borderRadius: BorderRadius.circular(12.r),
         border: isDangerous
             ? Border.all(color: AppColors.error.withValues(alpha: 0.3))
             : null,

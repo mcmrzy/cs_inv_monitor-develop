@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/components/permission_gate.dart';
 import 'package:inv_app/core/config/app_config.dart';
 import 'package:inv_app/core/entities/organization.dart';
@@ -163,14 +164,19 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
     }
 
     if (_error != null) {
+      final theme = Theme.of(context);
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
+            Icon(
+              Icons.error_outline,
+              size: 64.w,
+              color: theme.colorScheme.outlineVariant,
+            ),
+            SizedBox(height: 16.h),
             Text('加载失败：$_error'),
-            const SizedBox(height: 16),
+            SizedBox(height: 16.h),
             ElevatedButton.icon(
               onPressed: _loadInvitations,
               icon: const Icon(Icons.refresh),
@@ -182,19 +188,23 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
     }
 
     if (invitations.isEmpty) {
+      final theme = Theme.of(context);
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               Icons.inbox_outlined,
-              size: 64,
-              color: Colors.grey[400],
+              size: 64.w,
+              color: theme.colorScheme.outlineVariant,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16.h),
             Text(
               '暂无邀请数据',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 18.sp,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -202,9 +212,9 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16.w),
       itemCount: invitations.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
+      separatorBuilder: (context, index) => SizedBox(height: 12.h),
       itemBuilder: (context, index) {
         final invite = invitations[index];
         return _InvitationCard(
@@ -270,7 +280,7 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                 bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.all(24.w),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -278,10 +288,10 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           '发送邀请',
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 20.sp,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -291,28 +301,22 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24.h),
                     TextField(
                       controller: emailController,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         labelText: '邮箱地址',
                         hintText: '请输入邀请对象的邮箱',
-                        prefixIcon: const Icon(Icons.email),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        prefixIcon: Icon(Icons.email),
                       ),
                       textInputAction: TextInputAction.next,
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16.h),
                     DropdownButtonFormField<String>(
                       initialValue: roleController.text,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         labelText: '成员角色',
-                        prefixIcon: const Icon(Icons.badge),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        prefixIcon: Icon(Icons.badge),
                       ),
                       items: OrgMemberRole.values
                           .where((r) => allowedRoles.contains(r.apiValue))
@@ -329,20 +333,17 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                         });
                       },
                     ),
-                    const SizedBox(height: 16),
+                    SizedBox(height: 16.h),
                     TextField(
                       controller: daysController,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         labelText: '有效期（天）',
                         hintText: '默认 7 天',
-                        prefixIcon: const Icon(Icons.calendar_today),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        prefixIcon: Icon(Icons.calendar_today),
                       ),
                       keyboardType: TextInputType.number,
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24.h),
                     FilledButton.icon(
                       onPressed: () async {
                         final email = emailController.text.trim();
@@ -390,7 +391,6 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                             ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
                               const SnackBar(
                                 content: Text('邀请已发送（邀请链接仅在创建时可见）'),
-                                backgroundColor: Colors.green,
                               ),
                             );
                           }
@@ -403,7 +403,6 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
                           ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
                             SnackBar(
                               content: Text('发送失败：$e'),
-                              backgroundColor: Colors.red,
                             ),
                           );
                         }
@@ -447,7 +446,6 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('邀请已撤销'),
-              backgroundColor: Colors.green,
             ),
           );
 
@@ -458,7 +456,6 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('撤销失败：$e'),
-              backgroundColor: Colors.red,
             ),
           );
         }
@@ -477,19 +474,22 @@ class _OrgInvitationScreenState extends State<OrgInvitationScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('已向 $email 发送邀请。'),
-            const SizedBox(height: 12),
+            SizedBox(height: 12.h),
             const Text('邀请链接仅此一次可见，请及时分享给受邀人：'),
-            const SizedBox(height: 8),
+            SizedBox(height: 8.h),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(12.w),
               decoration: BoxDecoration(
-                color: Colors.grey.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
+                color: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12.r),
               ),
               child: SelectableText(
                 link,
-                style: const TextStyle(fontSize: 13),
+                style: TextStyle(fontSize: 13.sp),
               ),
             ),
           ],
@@ -534,6 +534,7 @@ class _InvitationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final (statusColor, statusText) = _statusDisplay(invitation.status);
     final roleText = invitation.roleCodes.isEmpty
         ? '未指定'
@@ -542,33 +543,31 @@ class _InvitationCard extends StatelessWidget {
             .join('、');
 
     return Card(
-      elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16.w),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12.r),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 8,
-                        height: 8,
+                        width: 8.w,
+                        height: 8.w,
                         decoration: BoxDecoration(
                           color: statusColor,
                           shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8.w),
                       Text(
                         statusText,
                         style: TextStyle(
@@ -591,58 +590,62 @@ class _InvitationCard extends StatelessWidget {
                   ),
               ],
             ),
-            const Divider(height: 24),
+            Divider(height: 24.h),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   invitation.email,
-                  style: const TextStyle(
-                    fontSize: 16,
+                  style: TextStyle(
+                    fontSize: 16.sp,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: 4.h),
                 Text(
                   '角色：$roleText',
                   style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
+                    fontSize: 14.sp,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 if (invitation.organization != null) ...[
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4.h),
                   Text(
                     '组织：${invitation.organization}',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                      fontSize: 14.sp,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
                 if (invitation.inviterName != null) ...[
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4.h),
                   Text(
                     '邀请人：${invitation.inviterName}',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                      fontSize: 14.sp,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
               ],
             ),
             if (invitation.expiresAt != null) ...[
-              const Divider(height: 24),
+              Divider(height: 24.h),
               Row(
                 children: [
-                  const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.access_time,
+                    size: 16.sp,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  SizedBox(width: 8.w),
                   Text(
                     '有效期至：${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.parse(invitation.expiresAt!))}',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                      fontSize: 14.sp,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
