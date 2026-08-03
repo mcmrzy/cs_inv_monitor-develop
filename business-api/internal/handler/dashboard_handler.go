@@ -200,10 +200,10 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 
 	if len(deviceSNs) > 0 {
 		todayStr := timezone.TodayInTimezone(tz)
-		h.db.QueryRow(ctx, `SELECT COALESCE(SUM(e.pv_energy),0)
+		h.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8
 			FROM device_energy_day e WHERE e.device_sn=ANY($1) AND e.stat_date=$2::date`,
 			deviceSNs, todayStr).Scan(&todayEnergy)
-		h.db.QueryRow(ctx, `SELECT COALESCE(SUM(l.total_pv_energy),0)
+		h.db.QueryRow(ctx, `SELECT ROUND(COALESCE(SUM(l.total_pv_energy),0)::numeric,2)::float8
 			FROM device_latest_state l WHERE l.device_sn=ANY($1)`, deviceSNs).Scan(&totalEnergy)
 	}
 
@@ -341,7 +341,7 @@ func (h *DashboardHandler) GetTrend(c *gin.Context) {
 
 	userFilter, filterArgs := h.buildDeviceUserFilter(ctx, userID, role, 4)
 	query = fmt.Sprintf(`
-		SELECT TO_CHAR(e.stat_date,'YYYY-MM-DD'),SUM(e.pv_energy),SUM(e.load_energy),COALESCE(MAX(e.total_pv_energy),0)
+		SELECT TO_CHAR(e.stat_date,'YYYY-MM-DD'),ROUND(COALESCE(SUM(e.pv_energy),0),2),ROUND(COALESCE(SUM(e.load_energy),0),2),COALESCE(MAX(e.total_pv_energy),0)
 		FROM device_energy_day e JOIN devices d ON d.sn=e.device_sn
 		WHERE d.deleted_at IS NULL AND %s
 		AND e.stat_date >= ($1 AT TIME ZONE $3)::date
