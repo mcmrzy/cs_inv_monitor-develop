@@ -114,104 +114,38 @@ class ServiceLocator {
               return handler.next(error);
             }
 
-            if (_tokenRefreshLock) {
-              return _waitForRefresh(error, handler);
+            // 刷新 access token（内部处理并发锁；失败时已触发登出）
+            final refreshed = await refreshAccessToken();
+            if (!refreshed) {
+              return handler.next(error);
             }
 
-            _tokenRefreshLock = true;
+            final storageService = getIt<StorageService>();
+            final newToken = await storageService.getToken();
+            final opts = Options(
+              method: error.requestOptions.method,
+              headers: {
+                ...error.requestOptions.headers,
+                'Authorization': 'Bearer $newToken',
+              },
+            );
+
             try {
-              final storageService = getIt<StorageService>();
-              final refreshToken = await storageService.getRefreshToken();
-
-              if (refreshToken == null) {
-                _tokenRefreshLock = false;
-                _refreshCompleter?.complete(false);
-                _refreshCompleter = null;
-                getIt<AuthBloc>().add(AuthLogoutRequested());
-                return handler.next(error);
-              }
-
-              final refreshDio = Dio(
-                BaseOptions(
-                  baseUrl: AppConfig.apiBaseUrl,
-                  connectTimeout:
-                      const Duration(milliseconds: AppConfig.connectTimeout),
-                  receiveTimeout:
-                      const Duration(milliseconds: AppConfig.receiveTimeout),
+              final retryResponse = await dio.fetch(
+                RequestOptions(
+                  path: error.requestOptions.path,
+                  data: error.requestOptions.data,
+                  queryParameters: error.requestOptions.queryParameters,
+                  headers: opts.headers,
+                  method: opts.method,
+                  baseUrl: error.requestOptions.baseUrl,
+                  connectTimeout: error.requestOptions.connectTimeout,
+                  receiveTimeout: error.requestOptions.receiveTimeout,
+                  sendTimeout: error.requestOptions.sendTimeout,
                 ),
               );
-
-              final refreshResponse = await refreshDio.post(
-                '/auth/refresh',
-                data: {'refresh_token': refreshToken},
-              );
-
-              final responseData = refreshResponse.data;
-              String? newToken;
-              String? newRefreshToken;
-
-              if (responseData is Map<String, dynamic>) {
-                if (responseData['code'] == 0 && responseData['data'] != null) {
-                  final data = responseData['data'] as Map<String, dynamic>;
-                  newToken = (data['access_token'] ??
-                      data['token'] ??
-                      data['accessToken']) as String?;
-                  newRefreshToken = (data['refresh_token'] ??
-                      data['refreshToken']) as String?;
-                } else if (responseData['access_token'] != null ||
-                    responseData['token'] != null) {
-                  newToken = (responseData['access_token'] ??
-                      responseData['token'] ??
-                      responseData['accessToken']) as String?;
-                  newRefreshToken = (responseData['refresh_token'] ??
-                      responseData['refreshToken']) as String?;
-                }
-              }
-
-              if (newToken != null) {
-                await storageService.saveToken(newToken);
-                if (newRefreshToken != null) {
-                  await storageService.saveRefreshToken(newRefreshToken);
-                }
-
-                _tokenRefreshLock = false;
-                _refreshCompleter?.complete(true);
-                _refreshCompleter = null;
-
-                final opts = Options(
-                  method: error.requestOptions.method,
-                  headers: {
-                    ...error.requestOptions.headers,
-                    'Authorization': 'Bearer $newToken',
-                  },
-                );
-
-                final retryResponse = await dio.fetch(
-                  RequestOptions(
-                    path: error.requestOptions.path,
-                    data: error.requestOptions.data,
-                    queryParameters: error.requestOptions.queryParameters,
-                    headers: opts.headers,
-                    method: opts.method,
-                    baseUrl: error.requestOptions.baseUrl,
-                    connectTimeout: error.requestOptions.connectTimeout,
-                    receiveTimeout: error.requestOptions.receiveTimeout,
-                    sendTimeout: error.requestOptions.sendTimeout,
-                  ),
-                );
-                return handler.resolve(retryResponse);
-              } else {
-                _tokenRefreshLock = false;
-                _refreshCompleter?.complete(false);
-                _refreshCompleter = null;
-                getIt<AuthBloc>().add(AuthLogoutRequested());
-                return handler.next(error);
-              }
+              return handler.resolve(retryResponse);
             } catch (e) {
-              _tokenRefreshLock = false;
-              _refreshCompleter?.complete(false);
-              _refreshCompleter = null;
-              getIt<AuthBloc>().add(AuthLogoutRequested());
               return handler.next(error);
             }
           }
@@ -239,43 +173,86 @@ class ServiceLocator {
   static bool _tokenRefreshLock = false;
   static Completer<bool>? _refreshCompleter;
 
-  static Future<void> _waitForRefresh(
-    DioException error,
-    ErrorInterceptorHandler handler,
-  ) async {
-    _refreshCompleter ??= Completer<bool>();
-    final success = await _refreshCompleter!.future;
-    if (success) {
-      final storageService = getIt<StorageService>();
-      final newToken = await storageService.getToken();
-      final opts = Options(
-        method: error.requestOptions.method,
-        headers: {
-          ...error.requestOptions.headers,
-          'Authorization': 'Bearer $newToken',
-        },
-      );
-      try {
-        final retryResponse = await getIt<Dio>().fetch(
-          RequestOptions(
-            path: error.requestOptions.path,
-            data: error.requestOptions.data,
-            queryParameters: error.requestOptions.queryParameters,
-            headers: opts.headers,
-            method: opts.method,
-            baseUrl: error.requestOptions.baseUrl,
-            connectTimeout: error.requestOptions.connectTimeout,
-            receiveTimeout: error.requestOptions.receiveTimeout,
-            sendTimeout: error.requestOptions.sendTimeout,
-          ),
-        );
-        return handler.resolve(retryResponse);
-      } catch (e) {
-        return handler.next(error);
-      }
-    } else {
-      return handler.next(error);
+  /// 刷新 access token（Dio 拦截器与 SSE 等非 Dio 请求共用）。
+  /// 返回 true 表示刷新成功且新 token 已保存；false 表示刷新失败（已触发登出）。
+  static Future<bool> refreshAccessToken() async {
+    if (_tokenRefreshLock) {
+      _refreshCompleter ??= Completer<bool>();
+      return _refreshCompleter!.future;
     }
+
+    _tokenRefreshLock = true;
+    _refreshCompleter ??= Completer<bool>();
+    try {
+      final storageService = getIt<StorageService>();
+      final refreshToken = await storageService.getRefreshToken();
+
+      if (refreshToken == null) {
+        _finishTokenRefresh(false);
+        getIt<AuthBloc>().add(AuthLogoutRequested());
+        return false;
+      }
+
+      final refreshDio = Dio(
+        BaseOptions(
+          baseUrl: AppConfig.apiBaseUrl,
+          connectTimeout:
+              const Duration(milliseconds: AppConfig.connectTimeout),
+          receiveTimeout:
+              const Duration(milliseconds: AppConfig.receiveTimeout),
+        ),
+      );
+
+      final refreshResponse = await refreshDio.post(
+        '/auth/refresh',
+        data: {'refresh_token': refreshToken},
+      );
+
+      final responseData = refreshResponse.data;
+      String? newToken;
+      String? newRefreshToken;
+
+      if (responseData is Map<String, dynamic>) {
+        if (responseData['code'] == 0 && responseData['data'] != null) {
+          final data = responseData['data'] as Map<String, dynamic>;
+          newToken = (data['access_token'] ??
+              data['token'] ??
+              data['accessToken']) as String?;
+          newRefreshToken = (data['refresh_token'] ??
+              data['refreshToken']) as String?;
+        } else if (responseData['access_token'] != null ||
+            responseData['token'] != null) {
+          newToken = (responseData['access_token'] ??
+              responseData['token'] ??
+              responseData['accessToken']) as String?;
+          newRefreshToken = (responseData['refresh_token'] ??
+              responseData['refreshToken']) as String?;
+        }
+      }
+
+      if (newToken != null) {
+        await storageService.saveToken(newToken);
+        if (newRefreshToken != null) {
+          await storageService.saveRefreshToken(newRefreshToken);
+        }
+        _finishTokenRefresh(true);
+        return true;
+      }
+
+      _finishTokenRefresh(false);
+      getIt<AuthBloc>().add(AuthLogoutRequested());
+      return false;
+    } catch (e) {
+      _finishTokenRefresh(false);
+      getIt<AuthBloc>().add(AuthLogoutRequested());
+      return false;
+    }
+  }
+
+  static void _finishTokenRefresh(bool success) {
+    _tokenRefreshLock = false;
+    _refreshCompleter?.complete(success);
+    _refreshCompleter = null;
   }
 
   static void _initCoreServices() {
