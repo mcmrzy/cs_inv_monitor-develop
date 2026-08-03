@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/components/permission_gate.dart';
 import 'package:inv_app/core/entities/organization.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
@@ -83,7 +84,6 @@ class _OrganizationBrowserScreenStateState
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('错误：${_orgStore.error}'),
-                  backgroundColor: Colors.red,
                 ),
               );
             });
@@ -102,26 +102,29 @@ class _OrganizationBrowserScreenStateState
                 children: [
                   Icon(
                     Icons.business_outlined,
-                    size: 80,
-                    color: Colors.grey[400],
+                    size: 80.w,
+                    color: Theme.of(context).colorScheme.outlineVariant,
                   ),
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16.h),
                   Text(
                     '暂无组织',
                     style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey[600],
+                      fontSize: 18.sp,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8.h),
                   Text(
                     '联系管理员为您添加组织或创建新组织',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[500],
+                      fontSize: 14.sp,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant
+                          .withValues(alpha: 0.8),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24.h),
                   PermissionGate(
                     resource: 'organization',
                     action: 'manage',
@@ -284,7 +287,6 @@ class _OrganizationBrowserScreenStateState
                   ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
                     SnackBar(
                       content: Text('已创建组织 "${newOrg.name}"'),
-                      backgroundColor: Colors.green,
                     ),
                   );
                 } catch (e) {
@@ -293,7 +295,6 @@ class _OrganizationBrowserScreenStateState
                   ScaffoldMessenger.of(context).showSnackBar( // ignore: use_build_context_synchronously
                     SnackBar(
                       content: Text('创建失败：$e'),
-                      backgroundColor: Colors.red,
                     ),
                   );
                 }
@@ -321,47 +322,53 @@ class _OrganizationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
-      elevation: isActive ? 4 : 2,
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: EdgeInsets.only(bottom: 12.h),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16.r),
         side: BorderSide(
-          color: isActive ? Colors.blue : Colors.transparent,
+          color: isActive ? theme.colorScheme.primary : Colors.transparent,
           width: isActive ? 2 : 0,
         ),
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16.r),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16.w),
           child: Row(
             children: [
               // 图标区域
               Container(
-                width: 56,
-                height: 56,
+                width: 56.w,
+                height: 56.w,
                 decoration: BoxDecoration(
                   gradient: isActive
-                      ? const LinearGradient(
-                          colors: [Colors.blue, Colors.lightBlueAccent],
+                      ? LinearGradient(
+                          colors: [
+                            theme.colorScheme.primary,
+                            theme.colorScheme.primaryContainer,
+                          ],
                         )
-                      : const LinearGradient(
-                          colors: [Colors.grey, Colors.grey],
+                      : LinearGradient(
+                          colors: [
+                            theme.colorScheme.surfaceContainerHighest,
+                            theme.colorScheme.surfaceContainerHighest,
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(12.r),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.business,
                   color: Colors.white,
-                  size: 32,
+                  size: 32.sp,
                 ),
               ),
 
-              const SizedBox(width: 16),
+              SizedBox(width: 16.w),
 
               // 组织信息
               Expanded(
@@ -373,27 +380,29 @@ class _OrganizationCard extends StatelessWidget {
                         Text(
                           organization.name,
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 18.sp,
                             fontWeight: FontWeight.bold,
-                            color: isActive ? Colors.blue : Colors.black87,
+                            color: isActive
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface,
                           ),
                         ),
                         if (isActive) ...[
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8.w),
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8.w,
+                              vertical: 2.h,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.blue.shade100,
-                              borderRadius: BorderRadius.circular(12),
+                              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12.r),
                             ),
-                            child: const Text(
+                            child: Text(
                               '当前',
                               style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.blue,
+                                fontSize: 12.sp,
+                                color: theme.colorScheme.primary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -404,19 +413,19 @@ class _OrganizationCard extends StatelessWidget {
 
                     if (organization.description != null &&
                         organization.description!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4.h),
                       Text(
                         organization.description!,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
+                          fontSize: 14.sp,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
 
-                    const SizedBox(height: 8),
+                    SizedBox(height: 8.h),
 
                     // 统计信息
                     Wrap(
@@ -520,22 +529,27 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12.r),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: Colors.grey[700]),
-          const SizedBox(width: 4),
+          Icon(
+            icon,
+            size: 14.sp,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          SizedBox(width: 4.w),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[700],
+              fontSize: 12.sp,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:inv_app/core/stores/organization_context_store.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 
 /// 组织选择对话框
 /// 用于在多个组织之间切换
@@ -25,6 +27,7 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
     return ListenableBuilder(
       listenable: _orgStore!,
       builder: (context, _) {
+        final theme = Theme.of(context);
         final orgs = _orgStore!.availableOrgs;
 
         if (_orgStore!.isLoading) {
@@ -53,11 +56,11 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
         }
 
         return AlertDialog(
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.groups),
-              SizedBox(width: 8),
-              Text('组织切换'),
+              Icon(Icons.groups, color: theme.colorScheme.primary),
+              SizedBox(width: 8.w),
+              const Text('组织切换'),
             ],
           ),
           content: SingleChildScrollView(
@@ -69,15 +72,15 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                   leading: Stack(
                     children: [
                       Container(
-                        width: 40,
-                        height: 40,
+                        width: 40.w,
+                        height: 40.w,
                         decoration: BoxDecoration(
-                          color: Colors.blue.shade100,
-                          borderRadius: BorderRadius.circular(20),
+                          color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20.r),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.business,
-                          color: Colors.blue,
+                          color: theme.colorScheme.primary,
                         ),
                       ),
                       if (isActive)
@@ -85,13 +88,16 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                           right: 0,
                           bottom: 0,
                           child: Container(
-                            width: 16,
-                            height: 16,
-                            decoration: const BoxDecoration(
-                              color: Colors.green,
+                            width: 16.w,
+                            height: 16.w,
+                            decoration: BoxDecoration(
+                              color: AppColors.success,
                               shape: BoxShape.circle,
                               border: Border.fromBorderSide(
-                                BorderSide(color: Colors.white, width: 2),
+                                BorderSide(
+                                  color: theme.colorScheme.surface,
+                                  width: 2,
+                                ),
                               ),
                             ),
                             child: const Icon(
@@ -123,8 +129,8 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
+                              fontSize: 12.sp,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -132,19 +138,19 @@ class _OrgSelectorDialogState extends State<OrgSelectorDialog> {
                   ),
                   trailing: isActive
                       ? Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8.w,
+                            vertical: 4.h,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.green.shade100,
-                            borderRadius: BorderRadius.circular(12),
+                            color: AppColors.success.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12.r),
                           ),
-                          child: const Text(
+                          child: Text(
                             '当前',
                             style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.green,
+                              fontSize: 12.sp,
+                              color: AppColors.success,
                               fontWeight: FontWeight.bold,
                             ),
                           ),

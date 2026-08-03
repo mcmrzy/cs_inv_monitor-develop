@@ -22,7 +22,6 @@ class _WifiSwitchDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
       title: Row(
         children: [
           Container(
@@ -61,8 +60,8 @@ class _WifiSwitchDialog extends StatelessWidget {
             Container(
               padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(8.r),
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12.r),
               ),
               child: Row(
                 children: [
@@ -87,7 +86,6 @@ class _WifiSwitchDialog extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(false),
           child: Text(
             AppLocalizations.of(context)?.cancel ?? 'Later',
-            style: TextStyle(fontSize: 14.sp, color: AppColors.textHint),
           ),
         ),
         ElevatedButton(
@@ -95,9 +93,6 @@ class _WifiSwitchDialog extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10.r),
-            ),
             padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
           ),
           child: Text(
