@@ -1,0 +1,419 @@
+{
+  "started_at": "2026-08-03T01:32:21.212335+00:00",
+  "broker": "127.0.0.1:11883",
+  "device_count": 52,
+  "bound_devices": [
+    "E2E-SN-MSCIU07M4NH",
+    "E2E-SN2-MSCIU07M4NH"
+  ],
+  "alarm_devices": [
+    "E2E-SN-MSCIU07M4NH",
+    "E2EMQTT00154FB3769",
+    "E2EMQTT01154FB3769",
+    "E2EMQTT02154FB3769",
+    "E2EMQTT03154FB3769"
+  ],
+  "published": [
+    {
+      "sn": "E2E-SN-MSCIU07M4NH",
+      "topic": "cs_inv/E2E-SN-MSCIU07M4NH/heartbeat",
+      "mid": 1,
+      "kind": "telemetry",
+      "bound": true
+    },
+    {
+      "sn": "E2E-SN2-MSCIU07M4NH",
+      "topic": "cs_inv/E2E-SN2-MSCIU07M4NH/heartbeat",
+      "mid": 2,
+      "kind": "telemetry",
+      "bound": true
+    },
+    {
+      "sn": "E2EMQTT00154FB3769",
+      "topic": "cs_inv/E2EMQTT00154FB3769/heartbeat",
+      "mid": 3,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT01154FB3769",
+      "topic": "cs_inv/E2EMQTT01154FB3769/heartbeat",
+      "mid": 4,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT02154FB3769",
+      "topic": "cs_inv/E2EMQTT02154FB3769/heartbeat",
+      "mid": 5,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT03154FB3769",
+      "topic": "cs_inv/E2EMQTT03154FB3769/heartbeat",
+      "mid": 6,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT04154FB3769",
+      "topic": "cs_inv/E2EMQTT04154FB3769/heartbeat",
+      "mid": 7,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT05154FB3769",
+      "topic": "cs_inv/E2EMQTT05154FB3769/heartbeat",
+      "mid": 8,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT06154FB3769",
+      "topic": "cs_inv/E2EMQTT06154FB3769/heartbeat",
+      "mid": 9,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT07154FB3769",
+      "topic": "cs_inv/E2EMQTT07154FB3769/heartbeat",
+      "mid": 10,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT08154FB3769",
+      "topic": "cs_inv/E2EMQTT08154FB3769/heartbeat",
+      "mid": 11,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT09154FB3769",
+      "topic": "cs_inv/E2EMQTT09154FB3769/heartbeat",
+      "mid": 12,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT10154FB3769",
+      "topic": "cs_inv/E2EMQTT10154FB3769/heartbeat",
+      "mid": 13,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT11154FB3769",
+      "topic": "cs_inv/E2EMQTT11154FB3769/heartbeat",
+      "mid": 14,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT12154FB3769",
+      "topic": "cs_inv/E2EMQTT12154FB3769/heartbeat",
+      "mid": 15,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT13154FB3769",
+      "topic": "cs_inv/E2EMQTT13154FB3769/heartbeat",
+      "mid": 16,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT14154FB3769",
+      "topic": "cs_inv/E2EMQTT14154FB3769/heartbeat",
+      "mid": 17,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT15154FB3769",
+      "topic": "cs_inv/E2EMQTT15154FB3769/heartbeat",
+      "mid": 18,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT16154FB3769",
+      "topic": "cs_inv/E2EMQTT16154FB3769/heartbeat",
+      "mid": 19,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT17154FB3769",
+      "topic": "cs_inv/E2EMQTT17154FB3769/heartbeat",
+      "mid": 20,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT18154FB3769",
+      "topic": "cs_inv/E2EMQTT18154FB3769/heartbeat",
+      "mid": 21,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT19154FB3769",
+      "topic": "cs_inv/E2EMQTT19154FB3769/heartbeat",
+      "mid": 22,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT20154FB3769",
+      "topic": "cs_inv/E2EMQTT20154FB3769/heartbeat",
+      "mid": 23,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT21154FB3769",
+      "topic": "cs_inv/E2EMQTT21154FB3769/heartbeat",
+      "mid": 24,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT22154FB3769",
+      "topic": "cs_inv/E2EMQTT22154FB3769/heartbeat",
+      "mid": 25,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT23154FB3769",
+      "topic": "cs_inv/E2EMQTT23154FB3769/heartbeat",
+      "mid": 26,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT24154FB3769",
+      "topic": "cs_inv/E2EMQTT24154FB3769/heartbeat",
+      "mid": 27,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT25154FB3769",
+      "topic": "cs_inv/E2EMQTT25154FB3769/heartbeat",
+      "mid": 28,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT26154FB3769",
+      "topic": "cs_inv/E2EMQTT26154FB3769/heartbeat",
+      "mid": 29,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT27154FB3769",
+      "topic": "cs_inv/E2EMQTT27154FB3769/heartbeat",
+      "mid": 30,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT28154FB3769",
+      "topic": "cs_inv/E2EMQTT28154FB3769/heartbeat",
+      "mid": 31,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT29154FB3769",
+      "topic": "cs_inv/E2EMQTT29154FB3769/heartbeat",
+      "mid": 32,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT30154FB3769",
+      "topic": "cs_inv/E2EMQTT30154FB3769/heartbeat",
+      "mid": 33,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT31154FB3769",
+      "topic": "cs_inv/E2EMQTT31154FB3769/heartbeat",
+      "mid": 34,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT32154FB3769",
+      "topic": "cs_inv/E2EMQTT32154FB3769/heartbeat",
+      "mid": 35,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT33154FB3769",
+      "topic": "cs_inv/E2EMQTT33154FB3769/heartbeat",
+      "mid": 36,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT34154FB3769",
+      "topic": "cs_inv/E2EMQTT34154FB3769/heartbeat",
+      "mid": 37,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT35154FB3769",
+      "topic": "cs_inv/E2EMQTT35154FB3769/heartbeat",
+      "mid": 38,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT36154FB3769",
+      "topic": "cs_inv/E2EMQTT36154FB3769/heartbeat",
+      "mid": 39,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT37154FB3769",
+      "topic": "cs_inv/E2EMQTT37154FB3769/heartbeat",
+      "mid": 40,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT38154FB3769",
+      "topic": "cs_inv/E2EMQTT38154FB3769/heartbeat",
+      "mid": 41,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT39154FB3769",
+      "topic": "cs_inv/E2EMQTT39154FB3769/heartbeat",
+      "mid": 42,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT40154FB3769",
+      "topic": "cs_inv/E2EMQTT40154FB3769/heartbeat",
+      "mid": 43,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT41154FB3769",
+      "topic": "cs_inv/E2EMQTT41154FB3769/heartbeat",
+      "mid": 44,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT42154FB3769",
+      "topic": "cs_inv/E2EMQTT42154FB3769/heartbeat",
+      "mid": 45,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT43154FB3769",
+      "topic": "cs_inv/E2EMQTT43154FB3769/heartbeat",
+      "mid": 46,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT44154FB3769",
+      "topic": "cs_inv/E2EMQTT44154FB3769/heartbeat",
+      "mid": 47,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT45154FB3769",
+      "topic": "cs_inv/E2EMQTT45154FB3769/heartbeat",
+      "mid": 48,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT46154FB3769",
+      "topic": "cs_inv/E2EMQTT46154FB3769/heartbeat",
+      "mid": 49,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT47154FB3769",
+      "topic": "cs_inv/E2EMQTT47154FB3769/heartbeat",
+      "mid": 50,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT48154FB3769",
+      "topic": "cs_inv/E2EMQTT48154FB3769/heartbeat",
+      "mid": 51,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT49154FB3769",
+      "topic": "cs_inv/E2EMQTT49154FB3769/heartbeat",
+      "mid": 52,
+      "kind": "telemetry",
+      "bound": false
+    },
+    {
+      "sn": "E2E-SN-MSCIU07M4NH",
+      "topic": "cs_inv/E2E-SN-MSCIU07M4NH/alarm",
+      "mid": 53,
+      "kind": "alarm",
+      "bound": true
+    },
+    {
+      "sn": "E2EMQTT00154FB3769",
+      "topic": "cs_inv/E2EMQTT00154FB3769/alarm",
+      "mid": 54,
+      "kind": "alarm",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT01154FB3769",
+      "topic": "cs_inv/E2EMQTT01154FB3769/alarm",
+      "mid": 55,
+      "kind": "alarm",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT02154FB3769",
+      "topic": "cs_inv/E2EMQTT02154FB3769/alarm",
+      "mid": 56,
+      "kind": "alarm",
+      "bound": false
+    },
+    {
+      "sn": "E2EMQTT03154FB3769",
+      "topic": "cs_inv/E2EMQTT03154FB3769/alarm",
+      "mid": 57,
+      "kind": "alarm",
+      "bound": false
+    }
+  ],
+  "settle_seconds": 20,
+  "note": "链路: MQTT(11883) → mqtt2kafka_relay → Kafka(19092) → device-server consumer → PostgreSQL"
+}

@@ -1,0 +1,184 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+)
+
+// ---------------------------------------------------------------------------
+// healthStatus tests
+// ---------------------------------------------------------------------------
+
+func TestHealthStatus_Degraded(t *testing.T) {
+	bridge := newTestBridge()
+	// Disconnected but within the 90s grace window → degraded
+	for i := 0; i < 3; i++ {
+		bridge.probe.check(func() error { return errors.New("fail") })
+	}
+	if got := bridge.healthStatus(); got != "degraded" {
+		t.Errorf("status = %q, want degraded", got)
+	}
+}
+
+func TestHealthStatus_Down(t *testing.T) {
+	bridge := newTestBridge()
+	for i := 0; i < 3; i++ {
+		bridge.probe.check(func() error { return errors.New("fail") })
+	}
+	// Grace window exceeded → down
+	bridge.probe.disconnectedAt.Store(time.Now().Add(-120 * time.Second))
+	if got := bridge.healthStatus(); got != "down" {
+		t.Errorf("status = %q, want down", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// /stats endpoint tests
+// ---------------------------------------------------------------------------
+
+func TestStatsEndpoint_StructuredJSON(t *testing.T) {
+	bridge := newTestBridge()
+	bridge.stats.incIn()
+	bridge.stats.incOut(1)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/stats", bridge.handleStats)
+
+	req := httptest.NewRequest("GET", "/stats", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	for _, f := range []string{"messages_in", "messages_out", "errors", "last_message_at"} {
+		if _, ok := body[f]; !ok {
+			t.Errorf("missing field %q in /stats response", f)
+		}
+	}
+	if body["messages_in"].(float64) != 1235 { // 1234 from newTestBridge + 1 incIn
+		t.Errorf("messages_in = %v", body["messages_in"])
+	}
+	if body["last_message_at"] == "" {
+		t.Error("last_message_at should be set after incIn")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// recoveryMiddleware tests
+// ---------------------------------------------------------------------------
+
+func TestRecoveryMiddleware(t *testing.T) {
+	panicHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("boom")
+	})
+	okHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	t.Run("recovers panic with 500", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/", nil)
+		recoveryMiddleware(panicHandler).ServeHTTP(w, req)
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("status = %d, want 500", w.Code)
+		}
+	})
+
+	t.Run("passes through normal requests", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/", nil)
+		recoveryMiddleware(okHandler).ServeHTTP(w, req)
+		if w.Code != http.StatusNoContent {
+			t.Errorf("status = %d, want 204", w.Code)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Background loop tests (cancellation paths)
+// ---------------------------------------------------------------------------
+
+func TestRunHealthProbe_CancelsPromptly(t *testing.T) {
+	bridge := newTestBridge()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	bridge.runHealthProbe(ctx) // must return without ticking
+}
+
+func TestPrintStats_CancelsPromptly(t *testing.T) {
+	var s stats
+	s.incIn()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	printStats(ctx, &s) // must return without ticking
+}
+
+func TestRunRedisHealthReport_NilClient(t *testing.T) {
+	bridge := newTestBridge() // redisClient is nil
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	bridge.runRedisHealthReport(ctx) // returns immediately
+}
+
+func TestRunRedisHealthReport_WithClient(t *testing.T) {
+	s := miniredis.RunT(t)
+	bridge := newTestBridge()
+	bridge.redisClient = redis.NewClient(&redis.Options{Addr: s.Addr()})
+	defer bridge.redisClient.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	bridge.runRedisHealthReport(ctx) // must return promptly
+}
+
+// ---------------------------------------------------------------------------
+// reportHealthToRedis tests
+// ---------------------------------------------------------------------------
+
+func TestReportHealthToRedis_NoClient(t *testing.T) {
+	bridge := newTestBridge()
+	bridge.reportHealthToRedis(context.Background()) // no-op, must not panic
+}
+
+func TestReportHealthToRedis_Unreachable(t *testing.T) {
+	bridge := newTestBridge()
+	// Port 1 is closed on virtually every machine → Set fails, warning logged.
+	bridge.redisClient = redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
+	defer bridge.redisClient.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	bridge.reportHealthToRedis(ctx) // must not panic
+}
+
+func TestReportHealthToRedis_Success(t *testing.T) {
+	s := miniredis.RunT(t)
+	bridge := newTestBridge()
+	bridge.redisClient = redis.NewClient(&redis.Options{Addr: s.Addr()})
+	defer bridge.redisClient.Close()
+
+	bridge.reportHealthToRedis(context.Background())
+
+	got, err := s.Get("pipeline:health:bridge")
+	if err != nil {
+		t.Fatalf("expected health key to be set: %v", err)
+	}
+	if !strings.Contains(got, `"status":"ok"`) {
+		t.Errorf("payload = %s, want status ok", got)
+	}
+	if !strings.Contains(got, `"kafka":"connected"`) {
+		t.Errorf("payload = %s, want kafka connected", got)
+	}
+}

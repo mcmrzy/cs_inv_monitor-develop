@@ -1,0 +1,20 @@
+﻿
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mD:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv-admin-frontend[39m
+
+[90mstdout[2m | src/locales/__diag.test.ts[2m > [22m[2mdiag locale key diff
+[22m[39men: [33m3199[39m zh: [33m3195[39m
+onlyEn: [
+ "admin.maxDevicesPerTenant",
+ "admin.maxUsersPerTenant",
+ "admin.maxAlertsPerDay",
+ "admin.maxOtaTasksPerMonth"
+]
+onlyZh: []
+
+ [32m✓[39m src/locales/__diag.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 10[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 23:49:52
+[2m   Duration [22m 842ms[2m (transform 142ms, setup 159ms, import 123ms, tests 10ms, environment 437ms)[22m
+

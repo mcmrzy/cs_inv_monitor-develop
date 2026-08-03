@@ -1,5 +1,4 @@
-import { BrowserRouter, Router, Routes, Route, Navigate } from 'react-router-dom'
-import type { History } from '@remix-run/router'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Suspense, useEffect, useState } from 'react'
 import lazyWithRetry from '@/utils/lazyWithRetry'
 import { ConfigProvider, App as AntApp, Spin } from 'antd'
@@ -98,19 +97,7 @@ const AppRoutes: React.FC = () => (
   </Routes>
 )
 
-const MemoryRouterWrapper: React.FC<{ history: History; children: React.ReactNode }> = ({ history, children }) => {
-  const [location, setLocation] = useState(history.location)
-  useEffect(() => {
-    return history.listen(({ location: loc }) => setLocation(loc))
-  }, [history])
-  return (
-    <Router location={location} navigator={history}>
-      {children}
-    </Router>
-  )
-}
-
-const App: React.FC<{ history?: History }> = ({ history }) => {
+const App: React.FC = () => {
   const lang = useLocaleStore((s) => s.lang)
   const fetchTimezone = useTimezoneStore((s) => s.fetchTimezone)
 
@@ -175,15 +162,9 @@ const App: React.FC<{ history?: History }> = ({ history }) => {
       <AntApp>
         <ErrorBoundary>
           <Suspense fallback={<div style={{ minHeight: 240, display: 'grid', placeItems: 'center' }}><Spin size="large" /></div>}>
-            {history ? (
-              <MemoryRouterWrapper history={history}>
-                <AppRoutes />
-              </MemoryRouterWrapper>
-            ) : (
-              <BrowserRouter>
-                <AppRoutes />
-              </BrowserRouter>
-            )}
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
           </Suspense>
         </ErrorBoundary>
       </AntApp>

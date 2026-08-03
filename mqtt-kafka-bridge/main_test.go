@@ -74,6 +74,181 @@ type mockMessageWriter struct{}
 func (mockMessageWriter) WriteMessages(_ context.Context, _ ...kafka.Message) error { return nil }
 func (mockMessageWriter) Close() error                                              { return nil }
 
+// recordingWriter captures forwarded messages for assertion.
+type recordingWriter struct {
+	mu       sync.Mutex
+	messages []kafka.Message
+}
+
+func (w *recordingWriter) WriteMessages(_ context.Context, msgs ...kafka.Message) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.messages = append(w.messages, msgs...)
+	return nil
+}
+func (w *recordingWriter) Close() error { return nil }
+
+func (w *recordingWriter) len() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.messages)
+}
+
+func (w *recordingWriter) first() kafka.Message {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.messages[0]
+}
+
+func TestWebhook_Authentication(t *testing.T) {
+	bridge := newTestBridge()
+	bridge.cfg.EMQX.Token = "secret"
+	bridge.telemetryWriter = mockMessageWriter{}
+	bridge.alarmWriter = mockMessageWriter{}
+
+	payload := `{"clientid":"c1","topic":"inv/SN001/telemetry","payload":"{}"}`
+
+	t.Run("missing token is rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+		rr := httptest.NewRecorder()
+		bridge.handleWebhook(rr, req)
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("status = %d, want 401", rr.Code)
+		}
+	})
+
+	t.Run("wrong token is rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+		req.Header.Set("Authorization", "Bearer wrong")
+		rr := httptest.NewRecorder()
+		bridge.handleWebhook(rr, req)
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("status = %d, want 401", rr.Code)
+		}
+	})
+
+	t.Run("bearer token accepted", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+		req.Header.Set("Authorization", "Bearer secret")
+		rr := httptest.NewRecorder()
+		bridge.handleWebhook(rr, req)
+		if rr.Code == http.StatusUnauthorized {
+			t.Errorf("valid bearer token rejected with 401")
+		}
+	})
+
+	t.Run("raw token accepted", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(payload))
+		req.Header.Set("Authorization", "secret")
+		rr := httptest.NewRecorder()
+		bridge.handleWebhook(rr, req)
+		if rr.Code == http.StatusUnauthorized {
+			t.Errorf("valid raw token rejected with 401")
+		}
+	})
+}
+
+func TestWebhook_MethodNotAllowed(t *testing.T) {
+	bridge := newTestBridge()
+	bridge.telemetryWriter = mockMessageWriter{}
+	bridge.alarmWriter = mockMessageWriter{}
+
+	req := httptest.NewRequest(http.MethodGet, "/webhook", nil)
+	rr := httptest.NewRecorder()
+	bridge.handleWebhook(rr, req)
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("status = %d, want 405", rr.Code)
+	}
+}
+
+func TestWebhook_InvalidJSON(t *testing.T) {
+	bridge := newTestBridge()
+	bridge.telemetryWriter = mockMessageWriter{}
+	bridge.alarmWriter = mockMessageWriter{}
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader("{not json"))
+	rr := httptest.NewRecorder()
+	bridge.handleWebhook(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rr.Code)
+	}
+}
+
+func TestWebhook_InvalidTopic(t *testing.T) {
+	bridge := newTestBridge()
+	bridge.telemetryWriter = mockMessageWriter{}
+	bridge.alarmWriter = mockMessageWriter{}
+
+	// Topic without an SN part
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"topic":"inv"}`))
+	rr := httptest.NewRecorder()
+	bridge.handleWebhook(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", rr.Code)
+	}
+}
+
+func TestWebhook_KafkaError(t *testing.T) {
+	bridge := newTestBridge()
+	bridge.telemetryWriter = &brokenKafkaWriter{}
+	bridge.alarmWriter = mockMessageWriter{}
+
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"clientid":"c1","topic":"inv/SN001/telemetry","payload":"{}"}`))
+	rr := httptest.NewRecorder()
+	bridge.handleWebhook(rr, req)
+	if rr.Code != http.StatusBadGateway {
+		t.Errorf("status = %d, want 502", rr.Code)
+	}
+}
+
+func TestWebhook_RoutesAlarmTopicToAlarmWriter(t *testing.T) {
+	telemetryWriter := &recordingWriter{}
+	alarmWriter := &recordingWriter{}
+	bridge := newTestBridge()
+	bridge.telemetryWriter = telemetryWriter
+	bridge.alarmWriter = alarmWriter
+
+	t.Run("telemetry message goes to telemetry writer", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"clientid":"c1","topic":"inv/SN001/telemetry","payload":"{\"a\":1}","qos":1}`))
+		rr := httptest.NewRecorder()
+		bridge.handleWebhook(rr, req)
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want 204", rr.Code)
+		}
+		if telemetryWriter.len() != 1 || alarmWriter.len() != 0 {
+			t.Fatalf("telemetry routed wrong: tele=%d alarm=%d", telemetryWriter.len(), alarmWriter.len())
+		}
+		msg := telemetryWriter.first()
+		if string(msg.Key) != "SN001" {
+			t.Errorf("key = %s, want SN001", msg.Key)
+		}
+	})
+
+	t.Run("alarm message goes to alarm writer", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"clientid":"c1","topic":"inv/SN001/alarm","payload":"{\"level\":\"critical\"}"}`))
+		rr := httptest.NewRecorder()
+		bridge.handleWebhook(rr, req)
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want 204", rr.Code)
+		}
+		if alarmWriter.len() != 1 || telemetryWriter.len() != 1 {
+			t.Fatalf("alarm routed wrong: tele=%d alarm=%d", telemetryWriter.len(), alarmWriter.len())
+		}
+	})
+
+	t.Run("nested data/alarm topic also routes to alarm writer", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(`{"clientid":"c1","topic":"inv/SN001/data/alarm","payload":"{}"}`))
+		rr := httptest.NewRecorder()
+		bridge.handleWebhook(rr, req)
+		if rr.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want 204", rr.Code)
+		}
+		if alarmWriter.len() != 2 {
+			t.Errorf("alarm count = %d, want 2", alarmWriter.len())
+		}
+	})
+}
+
 func TestWebhook_MaxBodySize(t *testing.T) {
 	bridge := newTestBridge()
 	bridge.telemetryWriter = mockMessageWriter{}

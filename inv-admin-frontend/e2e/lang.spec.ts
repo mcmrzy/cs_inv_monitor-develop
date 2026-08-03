@@ -1,0 +1,29 @@
+import { test, expect } from '@playwright/test'
+import { injectAuthStorage, gotoAuthed, openUserMenu, evidencePath } from './helpers'
+
+/**
+ * i18n: the side navigation must switch between Chinese and English labels
+ * through the user menu language switcher.
+ */
+test('语言切换：中文 → English 后导航文案变化并可切回', async ({ page }) => {
+  await injectAuthStorage(page)
+  await gotoAuthed(page, '/dashboard')
+
+  // Default locale is zh-CN.
+  const menu = page.locator('.ant-menu')
+  await expect(menu.getByText('设备管理', { exact: true })).toBeVisible()
+  await expect(menu.getByText('OTA升级', { exact: true })).toBeVisible()
+
+  // Switch to English via the user menu.
+  await openUserMenu(page)
+  await page.getByText('English', { exact: true }).click()
+  await expect(menu.getByText('Devices', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await expect(menu.getByText('OTA Upgrade', { exact: true })).toBeVisible()
+  await page.screenshot({ path: evidencePath('e2e-lang-en.png'), fullPage: true })
+
+  // Switch back to Chinese.
+  await openUserMenu(page)
+  await page.getByText('中文', { exact: true }).click()
+  await expect(menu.getByText('设备管理', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await page.screenshot({ path: evidencePath('e2e-lang-zh.png'), fullPage: true })
+})

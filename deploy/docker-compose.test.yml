@@ -3,6 +3,7 @@ name: inv-monitor-test
 services:
   postgres:
     image: timescale/timescaledb:latest-pg18
+    command: ["postgres", "-c", "max_connections=500", "-c", "shared_buffers=256MB"]
     environment:
       POSTGRES_USER: testuser
       POSTGRES_PASSWORD: testpass
@@ -54,6 +55,37 @@ services:
       timeout: 5s
       retries: 20
       start_period: 20s
+
+  # 测试专用 Kafka（KRaft 单节点），供 device-server 遥测/告警消费链路使用。
+  kafka:
+    image: apache/kafka:3.7.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://127.0.0.1:39092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_NUM_PARTITIONS: 6
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: -Xmx512M -Xms512M
+    ports:
+      - "127.0.0.1:19092:9092"
+      - "127.0.0.1:39092:29092"
+    networks:
+      - inv-test-net
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 25s
 
   inv-api-server:
     build:
@@ -107,7 +139,11 @@ services:
       MQTT_BROKER: emqx
       MQTT_PORT: "1883"
       MQTT_CLIENT_ID: CSKJ-INV-SERVER-DEVICE-TEST
-      KAFKA_ENABLED: "false"
+      KAFKA_ENABLED: "true"
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TELEMETRY_TOPIC: inv-telemetry
+      KAFKA_ALARM_TOPIC: inv-alerts
+      KAFKA_COMMAND_TOPIC: inv-commands
       API_SERVER_URL: http://inv-api-server:8080
       INTERNAL_KEY: test-internal-key-with-more-than-32-characters
     networks:
@@ -118,6 +154,8 @@ services:
       redis:
         condition: service_healthy
       emqx:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
       inv-api-server:
         condition: service_healthy

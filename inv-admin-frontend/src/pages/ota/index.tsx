@@ -876,7 +876,7 @@ const FirmwareTab: React.FC = () => {
   const { data: allFirmwareList = [], error: allFirmwareError, refetch: refetchAllFirmware } = useQuery({
     queryKey: queryKeys.ota.firmwares({ all: true }),
     queryFn: () => otaApi.listFirmware({ page: 1, pageSize: 1000 }).then((r) => {
-      const d = r.data; let list = d?.items ?? d?.data?.items ?? d?.data ?? []
+      const d = r.data; const list = d?.items ?? d?.data?.items ?? d?.data ?? []
       return (Array.isArray(list) ? list : []) as Firmware[]
     }),
   })

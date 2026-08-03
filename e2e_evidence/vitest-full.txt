@@ -1,0 +1,284 @@
+﻿
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mD:/CS_APP_PROJECT/cs_inv_monitor-develop/cs_inv_monitor-develop/inv-admin-frontend[39m
+
+ [32m✓[39m src/services/api.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 172[2mms[22m[39m
+ [32m✓[39m src/services/userApi.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 149[2mms[22m[39m
+ [32m✓[39m src/services/deviceApi.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 179[2mms[22m[39m
+ [32m✓[39m src/services/channelApi.test.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 379[2mms[22m[39m
+ [32m✓[39m src/utils/timezone.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 2817[2mms[22m[39m
+     [33m[2m✓[22m[39m should format UTC time in Shanghai timezone [33m 2799[2mms[22m[39m
+ [32m✓[39m src/test/setup.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 322[2mms[22m[39m
+ [32m✓[39m src/components/ProtectedRoute.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 337[2mms[22m[39m
+ [32m✓[39m src/services/protocolApi.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m src/services/workOrderApi.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m src/services/otaApi.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 95[2mms[22m[39m
+ [32m✓[39m src/services/alertApi.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 113[2mms[22m[39m
+ [32m✓[39m src/services/commandApi.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 80[2mms[22m[39m
+ [32m✓[39m src/test/api-compatibility.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 78[2mms[22m[39m
+ [32m✓[39m src/hooks/useTranslation.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m src/stores/authStore.test.ts [2m([22m[2m13 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/utils/constants.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m src/utils/fieldI18n.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m src/utils/telemetryQuality.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+node.exe : Not implemented: Window's getComputedStyle() method: with pseudo-elements
+所在位置 行:1 字符: 1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Not implemented...pseudo-elements:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ [32m✓[39m src/pages/parallel/ParallelPage.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 866[2mms[22m[39m
+     [33m[2m✓[22m[39m distinguishes a reported disabled state from missing data [33m 763[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render the alert
+s page
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstdout[2m | src/locales/index.test.ts[2m > [22m[2mlocale catalogs[2m > [22m[2mdefines every literal translation key used by production code
+[22m[39mIgnored 68 remote.xxx keys (manual translation pending): [
+  [32m'remote.chargePowerPctTooltip'[39m,
+  [32m'remote.mainChargeParams'[39m,
+  [32m'remote.chargeCurrentLimitTooltip'[39m,
+  [32m'remote.chargeVoltageTooltip'[39m,
+  [32m'remote.floatVoltageTooltip'[39m
+]
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render the users pa
+ge title
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show alarm stati
+stics cards
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/locales/index.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 300[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render user list wi
+th correct data
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render alarm lis
+t with data
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render user list wi
+th correct data
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render alarm lis
+t with data
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show role tags
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show alarm statu
+s tags
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show role tags
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/admin/AdminPage.roles.test.tsx[2m > [22m[2mAdminPage role permission contract[2m > [22
+m[2mrenders the permission config tab with org-based role selectors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show alarm statu
+s tags
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/admin/AdminPage.roles.test.tsx [2m([22m[2m1 test[22m[2m)[22m[33m 1168[2mms[22m[39m
+     [33m[2m✓[22m[39m renders the permission config tab with org-based role selectors [33m 1163[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render role filter 
+tabs
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render filter co
+ntrols
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show tabs for al
+l/alarm/notification
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/pages/models/ModelRegistryWorkspace.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 1614[2mms[22m[39m
+     [33m[2m✓[22m[39m renders page title and tab labels in English [33m 743[2mms[22m[39m
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show add user butto
+n for admin
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould render refresh b
+utton
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/login/LoginPage.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 3355[2mms[22m[39m
+     [33m[2m✓[22m[39m should render the login form [33m 733[2mms[22m[39m
+     [33m[2m✓[22m[39m should render the English login experience when English is selected [33m 328[2mms[22m[39m
+     [33m[2m✓[22m[39m should submit login form with valid credentials [33m 696[2mms[22m[39m
+     [33m[2m✓[22m[39m should show error on failed login [33m 526[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render search input
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render pagination
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show clear all b
+utton
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould render pagination
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould handle empty ale
+rt list
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show table columns
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould show table columns
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould show notificatio
+n statistics
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/users/UsersPage.test.tsx[2m > [22m[2mUsersPage[2m > [22m[2mshould handle empty user l
+ist
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/users/UsersPage.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 2147[2mms[22m[39m
+     [33m[2m✓[22m[39m should render the users page title [33m 754[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould display fault me
+ssages in the table
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshould display fault me
+ssages in the table
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mloads selected event de
+tail and renders telemetry or missing snapshots
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+[90mstderr[2m | src/pages/alerts/AlertsPage.test.tsx[2m > [22m[2mAlertsPage[2m > [22m[2mshows alarm event detai
+l access errors
+[22m[39mWarning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+Warning: [antd: Card] `bordered` is deprecated. Please use `variant` instead.
+
+ [32m✓[39m src/pages/alerts/AlertsPage.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 3219[2mms[22m[39m
+     [33m[2m✓[22m[39m should render the alerts page [33m 884[2mms[22m[39m
+     [33m[2m✓[22m[39m loads selected event detail and renders telemetry or missing snapshots [33m 346[2mms[22m[39m
+     [33m[2m✓[22m[39m shows alarm event detail access errors [33m 302[2mms[22m[39m
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+ [32m✓[39m src/test/integration.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 4393[2mms[22m[39m
+       [33m[2m✓[22m[39m should complete full login flow: enter credentials -> submit -> auth state updated [33m 1157[2mms[22m[39m
+       [33m[2m✓[22m[39m should show error message on failed login [33m 510[2mms[22m[39m
+       [33m[2m✓[22m[39m should show login page when accessing protected route without auth [33m 2092[2mms[22m[39m
+       [33m[2m✓[22m[39m should show dashboard when authenticated user navigates to / [33m 630[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m26 passed[39m[22m[90m (26)[39m
+[2m      Tests [22m [1m[32m232 passed[39m[22m[90m (232)[39m
+[2m   Start at [22m 23:50:52
+[2m   Duration [22m 14.81s[2m (transform 23.05s, setup 14.26s, import 79.24s, tests 21.92s, environment 29.67s)[22m
+
