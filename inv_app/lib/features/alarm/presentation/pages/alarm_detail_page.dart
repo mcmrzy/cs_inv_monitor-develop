@@ -246,7 +246,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
           Container(
             padding: EdgeInsets.all(12.w),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColor.surfaceContainer(context),
               borderRadius: BorderRadius.circular(12.r),
               boxShadow: [
                 BoxShadow(
@@ -307,7 +307,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
@@ -519,7 +519,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
@@ -558,7 +558,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
@@ -603,7 +603,7 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
         boxShadow: [
           BoxShadow(
@@ -798,9 +798,9 @@ class _AlarmDetailPageState extends State<AlarmDetailPage> {
 
     return Container(
       padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 16.h),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.divider, width: 1)),
+      decoration: BoxDecoration(
+        color: AppColor.surfaceContainer(context),
+        border: Border(top: BorderSide(color: AppColor.border(context), width: 1)),
       ),
       child: SafeArea(
         top: false,

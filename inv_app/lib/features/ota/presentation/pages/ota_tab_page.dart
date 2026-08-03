@@ -28,7 +28,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surface(context),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
@@ -39,8 +39,8 @@ class _OtaTabPageState extends State<OtaTabPage> {
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: AppColor.surfaceContainer(context),
+          foregroundColor: AppColor.textPrimary(context),
         ),
       ),
       body: BlocBuilder<DeviceBloc, DeviceState>(
@@ -159,7 +159,7 @@ class _OtaTabPageState extends State<OtaTabPage> {
     return Container(
       margin: EdgeInsets.only(bottom: 10.h),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
       ),
       child: InkWell(

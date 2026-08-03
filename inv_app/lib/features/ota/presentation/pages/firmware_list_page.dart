@@ -437,7 +437,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
             padding: EdgeInsets.all(14.w),
             margin: EdgeInsets.only(bottom: 16.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFECFDF5),
+              color: AppColors.badgeNormalBg,
               borderRadius: BorderRadius.circular(14.r),
               border: Border.all(
                 color: AppColors.successLight.withValues(alpha: 0.3),
@@ -692,7 +692,7 @@ class _FirmwareListPageState extends State<FirmwareListPage> {
                             value:
                                 downloadProgress > 0 ? downloadProgress : null,
                             minHeight: 4.h,
-                            backgroundColor: const Color(0xFFE5E7EB),
+                            backgroundColor: AppColor.border(context),
                             valueColor: const AlwaysStoppedAnimation<Color>(
                               AppColors.primary,
                             ),

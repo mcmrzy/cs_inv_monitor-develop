@@ -90,7 +90,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surface(context),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
@@ -101,8 +101,8 @@ class _OTADetailPageState extends State<OTADetailPage> {
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textPrimary,
+          backgroundColor: AppColor.surfaceContainer(context),
+          foregroundColor: AppColor.textPrimary(context),
         ),
       ),
       body: BlocBuilder<OtaBloc, OtaState>(
@@ -167,7 +167,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
@@ -183,7 +183,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
             width: 36.w,
             height: 36.w,
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColor.primarySoft(context),
               borderRadius: BorderRadius.circular(10.r),
             ),
             child: Icon(
@@ -226,7 +226,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     return Container(
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
@@ -254,7 +254,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
             child: LinearProgressIndicator(
               value: state.progress / 100.0,
               minHeight: 10.h,
-              backgroundColor: const Color(0xFFE5E7EB),
+              backgroundColor: AppColor.border(context),
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
@@ -279,7 +279,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
@@ -384,7 +384,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     return Container(
       padding: EdgeInsets.all(24.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
@@ -444,7 +444,7 @@ class _OTADetailPageState extends State<OTADetailPage> {
     return Container(
       padding: EdgeInsets.all(24.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
