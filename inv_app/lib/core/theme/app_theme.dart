@@ -177,6 +177,115 @@ class AppTheme {
           textStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
         ),
       ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? Colors.white
+              : const Color(0xFF9CA3AF),
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? AppColors.primary
+              : const Color(0xFFD1D5DB),
+        ),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? AppColors.primary
+              : Colors.transparent,
+        ),
+        checkColor: const WidgetStatePropertyAll(Colors.white),
+        side: const BorderSide(color: Color(0xFF9CA3AF), width: 1.5),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4.r),
+        ),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? AppColors.primary
+              : const Color(0xFF9CA3AF),
+        ),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: AppColors.primary,
+        unselectedLabelColor: AppColors.textSecondary,
+        indicatorColor: AppColors.primary,
+        indicatorSize: TabBarIndicatorSize.label,
+        dividerColor: Colors.transparent,
+        labelStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
+        unselectedLabelStyle:
+            TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w400),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: const Color(0xFFF3F4F6),
+        selectedColor: AppColors.primary.withValues(alpha: 0.12),
+        labelStyle: TextStyle(fontSize: 13.sp, color: AppColors.textPrimary),
+        secondaryLabelStyle:
+            TextStyle(fontSize: 13.sp, color: AppColors.primary),
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8.r),
+        ),
+      ),
+      iconTheme: const IconThemeData(color: Color(0xFF6B7280), size: 22),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: AppColors.primary,
+        linearTrackColor: Color(0xFFE5E7EB),
+        circularTrackColor: Color(0xFFE5E7EB),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: const Color(0xFF1F2937),
+          borderRadius: BorderRadius.circular(8.r),
+        ),
+        textStyle: TextStyle(fontSize: 12.sp, color: Colors.white),
+        waitDuration: const Duration(milliseconds: 400),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: AppColors.primary.withValues(alpha: 0.1),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primary
+                : AppColors.textSecondary,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            fontSize: 12.sp,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w400,
+            color: states.contains(WidgetState.selected)
+                ? AppColors.primary
+                : AppColors.textSecondary,
+          ),
+        ),
+      ),
+      badgeTheme: BadgeThemeData(
+        backgroundColor: AppColors.error,
+        textColor: Colors.white,
+        textStyle: TextStyle(fontSize: 10.sp, fontWeight: FontWeight.w600),
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: AppColors.primary,
+        inactiveTrackColor: const Color(0xFFE5E7EB),
+        thumbColor: AppColors.primary,
+        overlayColor: AppColors.primary.withValues(alpha: 0.12),
+        trackHeight: 4,
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStatePropertyAll(
+          const Color(0xFFD1D5DB).withValues(alpha: 0.6),
+        ),
+        radius: const Radius.circular(4),
+        thickness: const WidgetStatePropertyAll(4),
+      ),
       popupMenuTheme: PopupMenuThemeData(
         color: Colors.white,
         surfaceTintColor: Colors.transparent,
@@ -366,6 +475,115 @@ class AppTheme {
           textStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
         ),
       ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? Colors.white
+              : const Color(0xFF9CA3AF),
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? const Color(0xFF42A5F5)
+              : const Color(0xFF374151),
+        ),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? const Color(0xFF42A5F5)
+              : Colors.transparent,
+        ),
+        checkColor: const WidgetStatePropertyAll(Colors.white),
+        side: const BorderSide(color: Color(0xFF9CA3AF), width: 1.5),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4.r),
+        ),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? const Color(0xFF42A5F5)
+              : const Color(0xFF9CA3AF),
+        ),
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: const Color(0xFF42A5F5),
+        unselectedLabelColor: const Color(0xFF9CA3AF),
+        indicatorColor: const Color(0xFF42A5F5),
+        indicatorSize: TabBarIndicatorSize.label,
+        dividerColor: Colors.transparent,
+        labelStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w600),
+        unselectedLabelStyle:
+            TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w400),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: const Color(0xFF252830),
+        selectedColor: const Color(0xFF42A5F5).withValues(alpha: 0.2),
+        labelStyle: const TextStyle(fontSize: 13, color: Colors.white),
+        secondaryLabelStyle:
+            const TextStyle(fontSize: 13, color: Color(0xFF42A5F5)),
+        side: BorderSide.none,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8.r),
+        ),
+      ),
+      iconTheme: const IconThemeData(color: Color(0xFF9CA3AF), size: 22),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: Color(0xFF42A5F5),
+        linearTrackColor: Color(0xFF2A2D35),
+        circularTrackColor: Color(0xFF2A2D35),
+      ),
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: const Color(0xFF374151),
+          borderRadius: BorderRadius.circular(8.r),
+        ),
+        textStyle: TextStyle(fontSize: 12.sp, color: Colors.white),
+        waitDuration: const Duration(milliseconds: 400),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: const Color(0xFF1A1D24),
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: const Color(0xFF42A5F5).withValues(alpha: 0.2),
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFF42A5F5)
+                : const Color(0xFF9CA3AF),
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => TextStyle(
+            fontSize: 12.sp,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w400,
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFF42A5F5)
+                : const Color(0xFF9CA3AF),
+          ),
+        ),
+      ),
+      badgeTheme: BadgeThemeData(
+        backgroundColor: const Color(0xFFEF5350),
+        textColor: Colors.white,
+        textStyle: TextStyle(fontSize: 10.sp, fontWeight: FontWeight.w600),
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: const Color(0xFF42A5F5),
+        inactiveTrackColor: const Color(0xFF374151),
+        thumbColor: const Color(0xFF42A5F5),
+        overlayColor: const Color(0xFF42A5F5).withValues(alpha: 0.2),
+        trackHeight: 4,
+      ),
+      scrollbarTheme: ScrollbarThemeData(
+        thumbColor: WidgetStatePropertyAll(
+          const Color(0xFF4B5563).withValues(alpha: 0.6),
+        ),
+        radius: const Radius.circular(4),
+        thickness: const WidgetStatePropertyAll(4),
+      ),
       popupMenuTheme: PopupMenuThemeData(
         color: const Color(0xFF1A1D24),
         surfaceTintColor: Colors.transparent,
@@ -381,35 +599,74 @@ class AppTheme {
 
 /// Context-aware color accessors for theme-dependent colors.
 ///
-/// Usage: `AppColor.surface(context)` instead of `Theme.of(context).colorScheme.surface`
+/// Usage: `AppColor.surface(context)` instead of hard-coded colors or
+/// `Theme.of(context).colorScheme.surface`. All values are explicitly mapped
+/// for light/dark modes to keep the visual language consistent.
 class AppColor {
+  static bool _isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+
+  /// Page background (matches Scaffold background).
   static Color surface(BuildContext context) =>
-      Theme.of(context).colorScheme.surface;
+      _isDark(context) ? const Color(0xFF0F1115) : const Color(0xFFF5F5F5);
+
+  /// Card / dialog / bottom sheet / nav bar background.
+  static Color surfaceContainer(BuildContext context) =>
+      _isDark(context) ? const Color(0xFF1A1D24) : Colors.white;
+
+  /// Input fill / pressed / subtle fill background.
+  static Color surfaceHover(BuildContext context) =>
+      _isDark(context) ? const Color(0xFF252830) : const Color(0xFFF3F4F6);
+
   static Color onSurface(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurface;
+      _isDark(context) ? Colors.white : AppColors.textPrimary;
+
   static Color onSurfaceVariant(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurfaceVariant;
+      _isDark(context) ? const Color(0xFF9CA3AF) : AppColors.textSecondary;
+
   static Color outline(BuildContext context) =>
-      Theme.of(context).colorScheme.outline;
+      _isDark(context) ? const Color(0xFF3A3F4A) : const Color(0xFFD1D5DB);
+
   static Color primary(BuildContext context) =>
-      Theme.of(context).colorScheme.primary;
-  static Color primaryContainer(BuildContext context) =>
-      Theme.of(context).colorScheme.primaryContainer;
+      _isDark(context) ? const Color(0xFF42A5F5) : AppColors.primary;
+
+  static Color primaryContainer(BuildContext context) => _isDark(context)
+      ? const Color(0xFF42A5F5).withValues(alpha: 0.18)
+      : const Color(0xFFEFF6FF);
+
+  static Color textPrimary(BuildContext context) =>
+      _isDark(context) ? Colors.white : AppColors.textPrimary;
+
+  static Color textSecondary(BuildContext context) =>
+      _isDark(context) ? const Color(0xFF9CA3AF) : AppColors.textSecondary;
+
+  static Color textHint(BuildContext context) =>
+      _isDark(context) ? const Color(0xFF6B7280) : AppColors.textHint;
+
+  static Color border(BuildContext context) =>
+      _isDark(context) ? const Color(0xFF2A2D35) : AppColors.border;
+
+  /// Soft brand-tint background for info panels and selected states.
+  static Color primarySoft(BuildContext context) => _isDark(context)
+      ? const Color(0xFF42A5F5).withValues(alpha: 0.12)
+      : const Color(0xFFEFF6FF);
 
   /// Standard card decoration used across the app.
   static BoxDecoration card(BuildContext context, {EdgeInsets? padding}) =>
       BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
       );
 
   /// Card decoration with subtle shadow for elevated sections.
   static BoxDecoration cardElevated(BuildContext context) => BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: surfaceContainer(context),
         borderRadius: BorderRadius.circular(20.r),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06),
+            color: _isDark(context)
+                ? Colors.black.withValues(alpha: 0.4)
+                : AppColors.primary.withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -441,8 +698,8 @@ class AppColor {
   static BoxDecoration infoCard(BuildContext context) => BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Theme.of(context).colorScheme.primaryContainer,
-            Theme.of(context).colorScheme.surface,
+            primaryContainer(context),
+            surfaceContainer(context),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -458,6 +715,9 @@ class AppColors {
   static const Color primary = Color(0xFF1565C0);
   static const Color primaryDark = Color(0xFF0D47A1);
   static const Color primaryLight = Color(0xFF42A5F5);
+
+  /// Soft brand-tint background (light mode), e.g. info panels.
+  static const Color primarySoft = Color(0xFFEFF6FF);
 
   // Semantic status colors
   static const Color success = Color(0xFF2E7D32);
