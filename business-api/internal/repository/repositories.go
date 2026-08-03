@@ -701,8 +701,8 @@ func (r *StationRepository) GetAll(ctx context.Context, page, pageSize int) ([]*
 func (r *StationRepository) GetDayData(ctx context.Context, stationID int64, date string) (*model.StationDayData, error) {
 	query := `
 		WITH energy AS (
-			SELECT COUNT(*) AS samples, COALESCE(SUM(e.pv_energy),0) AS produced,
-				COALESCE(SUM(e.load_energy),0) AS consumed, COALESCE(MAX(e.max_ac_power),0) AS max_power
+			SELECT COUNT(*) AS samples, ROUND(COALESCE(SUM(e.pv_energy),0)::numeric,2)::float8 AS produced,
+				ROUND(COALESCE(SUM(e.load_energy),0)::numeric,2)::float8 AS consumed, COALESCE(MAX(e.max_ac_power),0) AS max_power
 			FROM device_energy_day e JOIN devices d ON d.sn=e.device_sn
 			WHERE d.station_id=$1 AND d.deleted_at IS NULL AND e.stat_date=$2::date
 		), device_counts AS (
@@ -2437,7 +2437,7 @@ func (r *DeviceRepository) GetOverview(ctx context.Context, userID int64, tz str
 
 	var todayEnergy float64
 	energyQuery := `
-		SELECT COALESCE(SUM(e.pv_energy), 0)
+		SELECT ROUND(COALESCE(SUM(e.pv_energy), 0)::numeric, 2)::float8
 		FROM device_energy_day e
 		JOIN devices d ON d.sn = e.device_sn AND d.deleted_at IS NULL
 		WHERE e.stat_date = $2::date

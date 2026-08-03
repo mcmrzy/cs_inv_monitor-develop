@@ -112,10 +112,10 @@ func (s *DailyReportService) sendReport(ctx context.Context, u repository.DailyR
 func (s *DailyReportService) aggregateDay(ctx context.Context, userID int64, date string) (*DailyReportSummary, error) {
 	query := `
 		SELECT COUNT(DISTINCT e.device_sn),
-		       COALESCE(SUM(e.pv_energy), 0),
-		       COALESCE(SUM(e.load_energy), 0),
-		       COALESCE(SUM(e.charge_energy), 0),
-		       COALESCE(SUM(e.discharge_energy), 0),
+		       ROUND(COALESCE(SUM(e.pv_energy), 0)::numeric, 2)::float8,
+		       ROUND(COALESCE(SUM(e.load_energy), 0)::numeric, 2)::float8,
+		       ROUND(COALESCE(SUM(e.charge_energy), 0)::numeric, 2)::float8,
+		       ROUND(COALESCE(SUM(e.discharge_energy), 0)::numeric, 2)::float8,
 		       COALESCE(SUM(e.alarm_count), 0)
 		FROM device_energy_day e
 		WHERE e.stat_date = $1::date
