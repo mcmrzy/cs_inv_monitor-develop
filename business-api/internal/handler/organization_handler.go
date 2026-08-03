@@ -120,12 +120,13 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 	// Validate organization type.
 	// "manufacturer" cannot be created via the API — the root manufacturer
 	// org is provisioned automatically by ensure_tenant_root().
-	// Channel hierarchy: manufacturer -> agent -> distributor -> installer -> customer
+	// Channel hierarchy: manufacturer -> agent -> distributor -> installer.
+	// "customer" orgs are no longer creatable: end users join an installer
+	// org directly via invitation (customer identity under installer).
 	validTypes := map[string]bool{
 		"agent":       true,
 		"distributor": true,
 		"installer":   true,
-		"customer":    true,
 	}
 	if !validTypes[req.Type] {
 		logger.Warn("invalid organization type", zap.String("type", req.Type))
@@ -201,17 +202,9 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		"agent":       "manufacturer",
 		"distributor": "agent",
 		"installer":   "distributor",
-		"customer":    "installer",
 	}
 	if expectedParent, ok := hierarchyRules[req.Type]; ok {
-		if req.Type == "customer" {
-			// customer can also be directly under manufacturer (unassigned pool)
-			if parentType != "installer" && parentType != "manufacturer" {
-				tx.Rollback(ctx)
-				response.Error(c, 400, fmt.Sprintf("customer must be under installer or manufacturer, but parent is %s", parentType))
-				return
-			}
-		} else if parentType != expectedParent {
+		if parentType != expectedParent {
 			tx.Rollback(ctx)
 			response.Error(c, 400, fmt.Sprintf("%s must be under %s, but parent is %s", req.Type, expectedParent, parentType))
 			return
@@ -955,7 +948,9 @@ func (h *OrganizationHandler) GetTree(c *gin.Context) {
 }
 
 // ── GetOrgHierarchy: GET /api/v1/organizations/hierarchy ──
-// Returns the org tree with member_count and device_count per node.
+// Returns the org tree with aggregate counts per node:
+// member_count/device_count include ALL descendants (via organization_closure),
+// child_count counts only direct children.
 //
 // Visibility scoping (data safety): system admins see the FULL tree; any other
 // user only sees their own organizations (active memberships within the root
@@ -1035,10 +1030,23 @@ func (h *OrganizationHandler) GetOrgHierarchy(c *gin.Context) {
 
 	rows, err := h.db.Query(ctx, `
 		SELECT o.id, o.parent_id, o.name, o.org_type, COALESCE(o.code, ''), o.status,
-			(SELECT COUNT(*) FROM organization_memberships m
-				WHERE m.organization_id = o.id AND m.status = 'active') AS member_count,
-			(SELECT COUNT(*) FROM authorization_resources ar
-				WHERE ar.organization_id = o.id AND ar.resource_type = 'device' AND ar.status = 'active') AS device_count,
+			(SELECT COUNT(DISTINCT m.user_id)
+				FROM organization_closure c
+				JOIN organizations d ON d.id = c.descendant_id
+					AND d.root_tenant_id = o.root_tenant_id AND d.deleted_at IS NULL
+				JOIN organization_memberships m ON m.organization_id = d.id
+					AND m.root_tenant_id = o.root_tenant_id AND m.status = 'active'
+				WHERE c.ancestor_id = o.id AND c.root_tenant_id = o.root_tenant_id
+			) AS member_count,
+			(SELECT COUNT(*)
+				FROM organization_closure c2
+				JOIN organizations d2 ON d2.id = c2.descendant_id
+					AND d2.root_tenant_id = o.root_tenant_id AND d2.deleted_at IS NULL
+				JOIN authorization_resources ar ON ar.organization_id = d2.id
+					AND ar.root_tenant_id = o.root_tenant_id
+					AND ar.resource_type = 'device' AND ar.status = 'active'
+				WHERE c2.ancestor_id = o.id AND c2.root_tenant_id = o.root_tenant_id
+			) AS device_count,
 			(SELECT COUNT(*) FROM organizations c
 				WHERE c.parent_id = o.id AND c.deleted_at IS NULL) AS child_count
 		FROM organizations o

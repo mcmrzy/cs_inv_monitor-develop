@@ -23,15 +23,19 @@ interface Props {
   onSelectOrg: (id: number | null) => void
 }
 
-// Channel hierarchy: manufacturer -> agent -> distributor -> installer -> customer
+// Channel hierarchy: manufacturer -> agent -> distributor -> installer.
+// customer 组织不再通过创建入口产生：终端用户通过邀请直接挂安装商组织。
 const ORG_HIERARCHY: Record<string, string[]> = {
   manufacturer: ['agent'],
   agent: ['distributor'],
   distributor: ['installer'],
-  installer: ['customer'],
+  installer: [],
 }
 
-const ALL_ORG_TYPES = ['agent', 'distributor', 'installer', 'customer']
+const ALL_ORG_TYPES = ['agent', 'distributor', 'installer']
+
+// 编辑弹窗展示用：含 customer（兼容历史遗留组织的只读展示）
+const ORG_TYPE_OPTIONS = ['agent', 'distributor', 'installer', 'customer']
 
 // 类型 → 主色 / 渐变 / 图标（彩色卡片头部）
 const TYPE_META: Record<string, { color: string; gradient: string; icon: ReactNode }> = {
@@ -235,8 +239,8 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
 
   // 基于有效父组织类型计算可创建的下级类型
   const getAllowedTypes = (): string[] => {
-    // 普通管理员仅可创建客户组织（后端强校验）
-    if (!isSystemAdmin) return ['customer']
+    // 仅系统管理员可创建组织（终端用户通过邀请直挂安装商，不建组织）
+    if (!isSystemAdmin) return []
     const effectiveParentId = (watchedParentId ?? selectedOrgId) as number | null
     if (!effectiveParentId) return ALL_ORG_TYPES
     const parentOrg = flatOrgs.find((o) => o.id === effectiveParentId)
@@ -264,15 +268,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
 
   const openCreate = (parentId: number | null = null) => {
     createForm.resetFields()
-    // 普通管理员仅可为 installer 组织创建客户组织；非 installer 的选中组织不作为默认父级
-    let usableParent = parentId
-    if (!isSystemAdmin && parentId) {
-      const p = flatOrgs.find((o) => o.id === parentId)
-      usableParent = p?.type === 'installer' ? parentId : null
-    }
-    if (usableParent) createForm.setFieldsValue({ parent_id: usableParent })
-    // 普通管理员：类型固定为客户组织，且必须指定归属安装商
-    if (!isSystemAdmin) createForm.setFieldsValue({ type: 'customer' })
+    if (parentId) createForm.setFieldsValue({ parent_id: parentId })
     setCreateOpen(true)
   }
 
@@ -611,7 +607,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
             <Input />
           </Form.Item>
           <Form.Item name="type" label={t('channel.org.type')} rules={[{ required: true }]}>
-            <Select options={ALL_ORG_TYPES.map((type) => ({ label: t(`channel.org.type.${type}`), value: type }))} disabled />
+            <Select options={ORG_TYPE_OPTIONS.map((type) => ({ label: t(`channel.org.type.${type}`), value: type }))} disabled />
           </Form.Item>
           <Form.Item name="description" label={t('channel.org.description')}>
             <Input.TextArea rows={3} />
