@@ -103,12 +103,12 @@ class DeviceFilterBar extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: active
                         ? AppColors.primary.withValues(alpha: 0.1)
-                        : const Color(0xFFE5E7EB),
+                        : AppColor.border(context),
                     borderRadius: BorderRadius.circular(10.r),
                     border: Border.all(
                       color: active
                           ? AppColors.primary.withValues(alpha: 0.4)
-                          : const Color(0xFFE5E7EB),
+                          : AppColor.border(context),
                     ),
                   ),
                   child: Center(
@@ -119,7 +119,7 @@ class DeviceFilterBar extends StatelessWidget {
                         fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                         color: active
                             ? AppColors.primary
-                            : const Color(0xFF9CA3AF),
+                            : AppColors.textHint,
                       ),
                     ),
                   ),
@@ -228,8 +228,8 @@ class _DeviceCardState extends State<DeviceCard>
               ),
             if (widget.showUnbindButton && widget.onUnbind != null)
               ListTile(
-                leading: Icon(Icons.link_off, color: Colors.red),
-                title: Text(l10n.unbind, style: TextStyle(color: Colors.red)),
+                leading: Icon(Icons.link_off, color: AppColors.error),
+                title: Text(l10n.unbind, style: TextStyle(color: AppColors.error)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _confirmUnbindDialog(context, sn);
@@ -237,8 +237,8 @@ class _DeviceCardState extends State<DeviceCard>
               ),
             if (widget.onDelete != null)
               ListTile(
-                leading: Icon(Icons.delete_outline, color: Colors.red),
-                title: Text(l10n.deleteDevice, style: TextStyle(color: Colors.red)),
+                leading: Icon(Icons.delete_outline, color: AppColors.error),
+                title: Text(l10n.deleteDevice, style: TextStyle(color: AppColors.error)),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _confirmDeleteDialog(context, sn);
@@ -326,7 +326,7 @@ class _DeviceCardState extends State<DeviceCard>
           child: Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColor.surfaceContainer(context),
               borderRadius: BorderRadius.circular(16.r),
               boxShadow: [
                 BoxShadow(
@@ -418,7 +418,7 @@ class _DeviceCardState extends State<DeviceCard>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.unbind, style: TextStyle(color: Colors.red)),
+            child: Text(l10n.unbind, style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -444,7 +444,7 @@ class _DeviceCardState extends State<DeviceCard>
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.delete, style: TextStyle(color: Colors.red)),
+            child: Text(l10n.delete, style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -581,8 +581,10 @@ class _DeviceListViewState extends State<DeviceListView> {
   @override
   Widget build(BuildContext context) {
     final filtered = _filterDevices(_ordered);
-    final headerBgColor = widget.whiteHeader ? Colors.white : AppColors.background;
-    final headerChipBgColor = widget.whiteHeader ? Colors.white : headerBgColor;
+    final headerBgColor =
+        widget.whiteHeader ? AppColor.surfaceContainer(context) : AppColor.surface(context);
+    final headerChipBgColor =
+        widget.whiteHeader ? AppColor.surfaceContainer(context) : headerBgColor;
 
     return Column(
       children: [
@@ -617,7 +619,7 @@ class _DeviceListViewState extends State<DeviceListView> {
                           builder: (_, __) => Transform.scale(
                             scale: 1 + 0.03 * curved.value,
                             child: Material(
-                              color: Colors.white,
+                              color: AppColor.surfaceContainer(context),
                               elevation: 6 * curved.value,
                               borderRadius: BorderRadius.circular(16.r),
                               shadowColor:

@@ -8,6 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:inv_app/core/services/service_locator.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 
 /// WGS-84 → GCJ-02 coordinate conversion
 class _Gcj02 {
@@ -319,7 +320,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                     child: Icon(
                       Icons.location_on,
                       size: 32.sp,
-                      color: const Color(0xFFE53935),
+                      color: AppColors.errorLight,
                     ),
                   ),
                 ),
@@ -333,13 +334,16 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                       padding: EdgeInsets.symmetric(
                           horizontal: 10.w, vertical: 5.h),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.92),
+                        color: AppColor.surfaceContainer(context)
+                            .withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(8.r),
                       ),
                       child: Text(
                         _resolvedAddress,
                         style: TextStyle(
-                            fontSize: 12.sp, color: const Color(0xFF333333)),
+                            fontSize: 12.sp,
+                            color: AppColor.textPrimary(context),
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -363,7 +367,11 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                 ),
                 SizedBox(width: 8.w),
                 Text('搜索附近地址...',
-                    style: TextStyle(fontSize: 12.sp, color: Colors.grey)),
+                    style: TextStyle(
+                        fontSize: 12.sp,
+                        color: AppColor.textSecondary(context),
+                    ),
+                ),
               ],
             ),
           ),
@@ -371,9 +379,9 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
           Container(
             margin: EdgeInsets.only(top: 8.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFB),
+              color: AppColor.surfaceHover(context),
               borderRadius: BorderRadius.circular(12.r),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
+              border: Border.all(color: AppColor.border(context)),
             ),
             child: Column(
               children: [
@@ -383,12 +391,12 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                   child: Row(
                     children: [
                       Icon(Icons.near_me,
-                          size: 14.sp, color: const Color(0xFF2563EB)),
+                          size: 14.sp, color: AppColor.primary(context)),
                       SizedBox(width: 6.w),
                       Text('附近地址',
                           style: TextStyle(
                               fontSize: 12.sp,
-                              color: const Color(0xFF666666),
+                              color: AppColor.textSecondary(context),
                               fontWeight: FontWeight.w500)),
                     ],
                   ),
@@ -399,7 +407,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                   padding: EdgeInsets.zero,
                   itemCount: _nearbyList.length,
                   separatorBuilder: (_, __) => Divider(
-                      height: 1, indent: 38.w, color: const Color(0xFFEEEEEE)),
+                      height: 1, indent: 38.w, color: AppColor.border(context)),
                   itemBuilder: (context, idx) {
                     final item = _nearbyList[idx];
                     final name = item['name'] as String? ?? '';
@@ -414,7 +422,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                           children: [
                             Icon(Icons.location_on_outlined,
                                 size: 16.sp,
-                                color: const Color(0xFF2563EB)),
+                                color: AppColor.primary(context)),
                             SizedBox(width: 8.w),
                             Expanded(
                               child: Column(
@@ -428,7 +436,10 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
                                     Text(detail,
                                         style: TextStyle(
                                             fontSize: 11.sp,
-                                            color: Colors.grey)),
+                                            color:
+                                                AppColor.textSecondary(context),
+                                        ),
+                                    ),
                                 ],
                               ),
                             ),

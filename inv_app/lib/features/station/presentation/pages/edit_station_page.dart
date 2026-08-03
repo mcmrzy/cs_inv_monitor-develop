@@ -173,7 +173,6 @@ class _EditStationPageState extends State<EditStationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.pleaseSelectProvince),
-          backgroundColor: Colors.red,
         ),
       );
       return;
@@ -182,7 +181,6 @@ class _EditStationPageState extends State<EditStationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(l10n.pleaseSelectCity),
-          backgroundColor: Colors.red,
         ),
       );
       return;
@@ -213,7 +211,7 @@ class _EditStationPageState extends State<EditStationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColor.surface(context),
       appBar: AppBar(title: Text(AppLocalizations.of(context)!.editStation)),
       body: BlocConsumer<StationBloc, StationState>(
         listener: (context, state) {
@@ -229,7 +227,6 @@ class _EditStationPageState extends State<EditStationPage> {
                 content: Text(
                   AppLocalizations.of(context)!.translateError(state.message),
                 ),
-                backgroundColor: Colors.red,
               ),
             );
           }
@@ -273,10 +270,9 @@ class _EditStationPageState extends State<EditStationPage> {
                               vertical: 14.h,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFB),
+                              color: AppColor.surfaceHover(context),
                               borderRadius: BorderRadius.circular(12.r),
-                              border:
-                                  Border.all(color: const Color(0xFFE5E7EB)),
+                              border: Border.all(color: AppColor.border(context)),
                             ),
                             child: Row(
                               children: [
@@ -333,7 +329,7 @@ class _EditStationPageState extends State<EditStationPage> {
                                 icon: Icon(Icons.search, size: 20.sp),
                                 style: IconButton.styleFrom(
                                   foregroundColor: AppColors.primary,
-                                  backgroundColor: const Color(0xFFF0F9FF),
+                                  backgroundColor: AppColor.primarySoft(context),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10.r),
                                   ),
@@ -462,7 +458,7 @@ class _EditStationPageState extends State<EditStationPage> {
       width: double.infinity,
       padding: EdgeInsets.all(20.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(16.r),
       ),
       child: Column(
@@ -474,7 +470,7 @@ class _EditStationPageState extends State<EditStationPage> {
                 width: 36.w,
                 height: 36.w,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
+                  color: AppColor.primarySoft(context),
                   borderRadius: BorderRadius.circular(10.r),
                 ),
                 child: Icon(icon, size: 18.sp, color: AppColors.primary),
@@ -534,16 +530,16 @@ class _EditStationPageState extends State<EditStationPage> {
           style: TextStyle(fontSize: 14.sp, color: AppColors.textPrimary),
           decoration: InputDecoration(
             filled: true,
-            fillColor: const Color(0xFFF8FAFB),
+            fillColor: AppColor.surfaceHover(context),
             contentPadding:
                 EdgeInsets.symmetric(horizontal: 14.w, vertical: 13.h),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              borderSide: BorderSide(color: AppColor.border(context)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12.r),
-              borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+              borderSide: BorderSide(color: AppColor.border(context)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12.r),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 
 /// 数字滚动动画组件
 /// 支持数字变化时的平滑过渡动画
@@ -158,13 +159,13 @@ class TrendValue extends StatelessWidget {
     IconData trendIcon;
 
     if (isNeutral) {
-      trendColor = Colors.grey;
+      trendColor = AppColors.textSecondary;
       trendIcon = Icons.trending_flat;
     } else if (isPositive) {
-      trendColor = isPositiveGood ? Colors.green : Colors.red;
+      trendColor = isPositiveGood ? AppColors.success : AppColors.error;
       trendIcon = Icons.trending_up;
     } else {
-      trendColor = isPositiveGood ? Colors.red : Colors.green;
+      trendColor = isPositiveGood ? AppColors.error : AppColors.success;
       trendIcon = Icons.trending_down;
     }
 

@@ -303,7 +303,6 @@ class _StationDetailPageState extends State<StationDetailPage>
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(l10n.str('station_deleted', {})),
-                  backgroundColor: AppColors.successLight,
                 ),
               );
               context.pop();
@@ -313,7 +312,6 @@ class _StationDetailPageState extends State<StationDetailPage>
                   content: Text(
                     '${l10n.str('device_unbound', {})} - ${state.sn}',
                   ),
-                  backgroundColor: AppColors.successLight,
                 ),
               );
               context.read<StationBloc>().add(
@@ -325,7 +323,6 @@ class _StationDetailPageState extends State<StationDetailPage>
                   content: Text(
                     '${l10n.str('device_deleted', {})} - ${state.sn}',
                   ),
-                  backgroundColor: AppColors.successLight,
                 ),
               );
               context.read<StationBloc>().add(
@@ -337,7 +334,6 @@ class _StationDetailPageState extends State<StationDetailPage>
                   content: Text(
                     '${l10n.str('device_rebound', {})} - ${state.sn}',
                   ),
-                  backgroundColor: AppColors.successLight,
                 ),
               );
               context.read<StationBloc>().add(
@@ -349,7 +345,6 @@ class _StationDetailPageState extends State<StationDetailPage>
                   content: Text(
                     '${l10n.str('device_bound', {})} - ${state.sn}',
                   ),
-                  backgroundColor: AppColors.successLight,
                 ),
               );
               context.read<StationBloc>().add(
@@ -361,14 +356,12 @@ class _StationDetailPageState extends State<StationDetailPage>
                   content: Text(
                     l10n.str('device_order_saved', {}),
                   ),
-                  backgroundColor: AppColors.successLight,
                 ),
               );
             } else if (state is StationError) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(l10n.translateError(state.message)),
-                  backgroundColor: AppColors.error,
                 ),
               );
             }
@@ -539,7 +532,7 @@ class _StationDetailPageState extends State<StationDetailPage>
                 padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                 decoration: BoxDecoration(
                   color: online
-                      ? const Color(0xFFECFDF5)
+                      ? AppColors.badgeNormalBg
                       : Colors.white.withValues(alpha: 0.8),
                   borderRadius: BorderRadius.circular(6.r),
                   boxShadow: [
@@ -607,9 +600,9 @@ class _StationDetailPageState extends State<StationDetailPage>
                     value: 'delete',
                     child: Row(
                       children: [
-                        const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                        const Icon(Icons.delete_outline, size: 18, color: AppColors.error),
                         SizedBox(width: 8.w),
-                        Text(l10n.delete, style: const TextStyle(color: Colors.red)),
+                        Text(l10n.delete, style: const TextStyle(color: AppColors.error)),
                       ],
                     ),
                   ),
@@ -774,7 +767,7 @@ class _StationDetailPageState extends State<StationDetailPage>
               l10n.pv,
               pvW,
               Icons.wb_sunny,
-              const Color(0xFFF59E0B),
+              AppColors.orange,
               const Alignment(0, -0.75),
               true,
               active: pv > 0,
@@ -783,7 +776,7 @@ class _StationDetailPageState extends State<StationDetailPage>
               l10n.load,
               loadW,
               Icons.home_rounded,
-              const Color(0xFF3B82F6),
+              AppColors.blue,
               const Alignment(0, 0.75),
               false,
               active: load > 0,
@@ -1085,8 +1078,8 @@ class _StationDetailPageState extends State<StationDetailPage>
         const FlowEdge(
           from: NodePosition.top,
           to: NodePosition.bottom,
-          fromColor: Color(0xFFF59E0B),
-          toColor: Color(0xFF3B82F6),
+          fromColor: AppColors.orange,
+          toColor: AppColors.blue,
         ),
       );
     }
@@ -1097,7 +1090,7 @@ class _StationDetailPageState extends State<StationDetailPage>
         const FlowEdge(
           from: NodePosition.top,
           to: NodePosition.left,
-          fromColor: Color(0xFFF59E0B),
+          fromColor: AppColors.orange,
           toColor: AppColors.successLight,
         ),
       );
@@ -1110,7 +1103,7 @@ class _StationDetailPageState extends State<StationDetailPage>
           from: NodePosition.left,
           to: NodePosition.bottom,
           fromColor: AppColors.successLight,
-          toColor: Color(0xFF3B82F6),
+          toColor: AppColors.blue,
         ),
       );
     }
@@ -1122,7 +1115,7 @@ class _StationDetailPageState extends State<StationDetailPage>
           from: NodePosition.right,
           to: NodePosition.bottom,
           fromColor: AppColors.textSecondary,
-          toColor: Color(0xFF3B82F6),
+          toColor: AppColors.blue,
         ),
       );
     }
@@ -1133,7 +1126,7 @@ class _StationDetailPageState extends State<StationDetailPage>
         const FlowEdge(
           from: NodePosition.bottom,
           to: NodePosition.right,
-          fromColor: Color(0xFF3B82F6),
+          fromColor: AppColors.blue,
           toColor: AppColors.textSecondary,
         ),
       );

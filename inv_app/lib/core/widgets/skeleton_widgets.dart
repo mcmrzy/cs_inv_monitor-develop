@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
 class ShimmerSkeleton extends StatelessWidget {
@@ -46,7 +47,7 @@ class SkeletonBox extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(borderRadius.r),
       ),
     );
@@ -62,7 +63,7 @@ class SkeletonListItem extends StatelessWidget {
       margin: EdgeInsets.only(bottom: 8.h),
       padding: EdgeInsets.all(14.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
       ),
       child: ShimmerSkeleton(
@@ -100,7 +101,7 @@ class SkeletonDetailSection extends StatelessWidget {
         margin: EdgeInsets.only(bottom: 12.h),
         padding: EdgeInsets.all(16.w),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: AppColor.surfaceContainer(context),
           borderRadius: BorderRadius.circular(14.r),
         ),
         child: Column(
@@ -125,7 +126,7 @@ class SkeletonStatisticsHeader extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.all(20.w),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColor.surfaceContainer(context),
           borderRadius: BorderRadius.circular(20.r),
         ),
         child: Column(
@@ -164,7 +165,7 @@ class SkeletonCard extends StatelessWidget {
         margin: EdgeInsets.only(bottom: 10.h),
         height: height.h,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: AppColor.surfaceContainer(context),
           borderRadius: BorderRadius.circular(16.r),
         ),
       ),
@@ -185,7 +186,7 @@ class SkeletonHomePage extends StatelessWidget {
           // Header 骨架
           SliverToBoxAdapter(
             child: Container(
-              color: Colors.white,
+              color: AppColor.surfaceContainer(context),
               padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top + 12.h,
                 left: 20.w,
@@ -209,7 +210,7 @@ class SkeletonHomePage extends StatelessWidget {
           // 过滤卡片骨架
           SliverToBoxAdapter(
             child: Container(
-              color: Colors.white,
+              color: AppColor.surfaceContainer(context),
               padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.h),
               child: Row(
                 children: List.generate(
@@ -220,7 +221,7 @@ class SkeletonHomePage extends StatelessWidget {
                       child: Container(
                         padding: EdgeInsets.symmetric(vertical: 10.h),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColor.surfaceContainer(context),
                           borderRadius: BorderRadius.circular(12.r),
                         ),
                         child: Column(
@@ -255,7 +256,7 @@ class SkeletonHomePage extends StatelessWidget {
                   child: Container(
                     padding: EdgeInsets.all(16.w),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColor.surfaceContainer(context),
                       borderRadius: BorderRadius.circular(16.r),
                     ),
                     child: Row(
@@ -336,7 +337,7 @@ class SkeletonStationDetail extends StatelessWidget {
         children: [
           // Top bar
           Container(
-            color: Colors.white,
+            color: AppColor.surfaceContainer(context),
             padding: EdgeInsets.fromLTRB(
               20.w,
               MediaQuery.of(context).padding.top + 6.h,
@@ -359,7 +360,7 @@ class SkeletonStationDetail extends StatelessWidget {
             height: 380.h,
             margin: EdgeInsets.symmetric(horizontal: 16.w),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColor.surfaceContainer(context),
               borderRadius: BorderRadius.circular(16.r),
             ),
           ),
@@ -407,7 +408,7 @@ class SkeletonDeviceRealtime extends StatelessWidget {
         itemBuilder: (_, i) => Container(
           margin: EdgeInsets.only(bottom: 12.h),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColor.surfaceContainer(context),
             borderRadius: BorderRadius.circular(14.r),
           ),
           child: Column(
@@ -417,7 +418,7 @@ class SkeletonDeviceRealtime extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
+                  color: AppColor.surfaceHover(context),
                   borderRadius:
                       BorderRadius.vertical(top: Radius.circular(14.r)),
                 ),
@@ -469,7 +470,7 @@ class SkeletonDeviceControl extends StatelessWidget {
         children: [
           // TabBar 骨架
           Container(
-            color: Colors.white,
+            color: AppColor.surfaceContainer(context),
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 6.h,
               bottom: 8.h,
@@ -498,7 +499,7 @@ class SkeletonDeviceControl extends StatelessWidget {
                 child: Container(
                   padding: EdgeInsets.all(16.w),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColor.surfaceContainer(context),
                     borderRadius: BorderRadius.circular(14.r),
                   ),
                   child: Column(
@@ -549,7 +550,7 @@ class SkeletonOtaPage extends StatelessWidget {
           child: Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColor.surfaceContainer(context),
               borderRadius: BorderRadius.circular(14.r),
             ),
             child: Column(
@@ -606,7 +607,7 @@ class SkeletonSettingsPage extends StatelessWidget {
           Container(
             padding: EdgeInsets.all(16.w),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: AppColor.surfaceContainer(context),
               borderRadius: BorderRadius.circular(14.r),
             ),
             child: Row(
@@ -636,7 +637,7 @@ class SkeletonSettingsPage extends StatelessWidget {
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: AppColor.surfaceContainer(context),
                   borderRadius: BorderRadius.circular(4.r),
                 ),
                 child: Row(

@@ -190,9 +190,10 @@ class _ContinentCountryPickerPageState
         children: [
           const Spacer(),
           Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: AppColor.surfaceContainer(context),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
               children: [
@@ -270,7 +271,7 @@ class _ContinentCountryPickerPageState
                         borderSide: const BorderSide(color: AppColors.primary),
                       ),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFB),
+                      fillColor: AppColor.surfaceHover(context),
                     ),
                     onChanged: (value) {
                       _searchAndNavigate(value);
@@ -328,7 +329,7 @@ class _ContinentCountryPickerPageState
       children: [
         Container(
           height: _itemH,
-          color: const Color(0xFFF8FAFB),
+          color: AppColor.surfaceHover(context),
           alignment: Alignment.center,
           child: Text(
             colLabel,
@@ -360,9 +361,9 @@ class _ContinentCountryPickerPageState
                             height: _itemH,
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.06),
-                              border: const Border.symmetric(
+                              border: Border.symmetric(
                                 horizontal:
-                                    BorderSide(color: Color(0xFFE5E7EB)),
+                                    BorderSide(color: AppColor.border(context)),
                               ),
                             ),
                           ),
@@ -560,9 +561,10 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
         children: [
           const Spacer(),
           Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: AppColor.surfaceContainer(context),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
               children: [
@@ -667,7 +669,7 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
       children: [
         Container(
           height: _itemH,
-          color: const Color(0xFFF8FAFB),
+          color: AppColor.surfaceHover(context),
           alignment: Alignment.center,
           child: Text(
             colLabel,
@@ -699,9 +701,9 @@ class _RegionPickerPageState extends State<RegionPickerPage> {
                             height: _itemH,
                             decoration: BoxDecoration(
                               color: AppColors.primary.withValues(alpha: 0.06),
-                              border: const Border.symmetric(
+                              border: Border.symmetric(
                                 horizontal:
-                                    BorderSide(color: Color(0xFFE5E7EB)),
+                                    BorderSide(color: AppColor.border(context)),
                               ),
                             ),
                           ),

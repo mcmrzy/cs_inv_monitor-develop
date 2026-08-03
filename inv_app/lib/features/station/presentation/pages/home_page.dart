@@ -235,7 +235,7 @@ class _HomePageState extends State<HomePage> {
           right: 20.w,
           bottom: 8.h,
         ),
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -311,7 +311,7 @@ class _HomePageState extends State<HomePage> {
     final l10n = AppLocalizations.of(context)!;
     return SliverToBoxAdapter(
       child: Container(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
         child: TextField(
           controller: _searchCtl,
@@ -383,7 +383,7 @@ class _HomePageState extends State<HomePage> {
 
     return SliverToBoxAdapter(
       child: Container(
-        color: Theme.of(context).colorScheme.surface,
+        color: AppColor.surfaceContainer(context),
         padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.h),
         child: Row(
           children: List.generate(4, (i) {
@@ -768,11 +768,9 @@ class _StationActionSheetState extends State<_StationActionSheet>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1D24) : Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
@@ -862,8 +860,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
               _animatedItem(
                 2,
                 Material(
-                  color:
-                      isDark ? const Color(0xFF252830) : AppColors.surfaceHover,
+                  color: AppColor.surfaceHover(context),
                   borderRadius: BorderRadius.circular(14.r),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14.r),
@@ -1153,7 +1150,7 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
       ),
       _MenuItemData(
         icon: Icons.wifi,
-        color: const Color(0xFF8B5CF6),
+        color: AppColors.purple,
         title: l10n.wifiConfig,
         subtitle: l10n.configWifiForDevice,
         path: '/wifi-config',
@@ -1178,11 +1175,9 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1D24) : Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
@@ -1194,9 +1189,7 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
               // 分组卡片：浅色圆角容器 + 白色圆角菜单项
               Container(
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF252830)
-                      : AppColors.surfaceHover,
+                  color: AppColor.surfaceHover(context),
                   borderRadius: BorderRadius.circular(16.r),
                 ),
                 padding: EdgeInsets.all(8.w),
@@ -1235,10 +1228,8 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
   }
 
   Widget _buildItem(_MenuItemData item) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     return Material(
-      color: isDark ? const Color(0xFF1A1D24) : Colors.white,
+      color: AppColor.surfaceContainer(context),
       borderRadius: BorderRadius.circular(12.r),
       child: InkWell(
         borderRadius: BorderRadius.circular(12.r),
@@ -1266,7 +1257,7 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
                       style: TextStyle(
                         fontSize: 15.sp,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
+                        color: AppColor.textPrimary(context),
                       ),
                     ),
                     SizedBox(height: 2.h),

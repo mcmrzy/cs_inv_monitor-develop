@@ -165,7 +165,7 @@ class _StatChipState extends State<_StatChip>
             child: Container(
               padding: EdgeInsets.symmetric(vertical: 14.h),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
+                color: AppColor.surfaceContainer(context),
                 borderRadius: BorderRadius.circular(16.r),
                 border: Border.all(
                   color: widget.color.withValues(alpha: 0.15),

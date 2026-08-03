@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/core/widgets/skeleton_widgets.dart';
 
 /// 仪表盘骨架屏 - 全页加载态
@@ -25,7 +26,7 @@ class DashboardSkeleton extends StatelessWidget {
                   margin: EdgeInsets.symmetric(horizontal: 4.w),
                   height: 80.h,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColor.surfaceContainer(context),
                     borderRadius: BorderRadius.circular(14.r),
                   ),
                 ),
