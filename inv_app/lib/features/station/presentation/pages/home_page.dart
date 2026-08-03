@@ -125,7 +125,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: BlocBuilder<StationBloc, StationState>(
         builder: (context, state) {
           final l10n = AppLocalizations.of(context)!;
@@ -235,7 +235,7 @@ class _HomePageState extends State<HomePage> {
           right: 20.w,
           bottom: 8.h,
         ),
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -283,7 +283,6 @@ class _HomePageState extends State<HomePage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _AddMenuSheet(
         onNavigate: (path) {
           Navigator.pop(ctx);
@@ -312,7 +311,7 @@ class _HomePageState extends State<HomePage> {
     final l10n = AppLocalizations.of(context)!;
     return SliverToBoxAdapter(
       child: Container(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
         child: TextField(
           controller: _searchCtl,
@@ -384,7 +383,7 @@ class _HomePageState extends State<HomePage> {
 
     return SliverToBoxAdapter(
       child: Container(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 16.h),
         child: Row(
           children: List.generate(4, (i) {
@@ -502,7 +501,6 @@ class _HomePageState extends State<HomePage> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _StationActionSheet(
         name: name,
         addressText: addressText,
@@ -770,29 +768,20 @@ class _StationActionSheetState extends State<_StationActionSheet>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1D24) : Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 20.h),
+          padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Center(
-                child: Container(
-                  width: 40.w,
-                  height: 4.h,
-                  decoration: BoxDecoration(
-                    color: AppColors.divider,
-                    borderRadius: BorderRadius.circular(2.r),
-                  ),
-                ),
-              ),
-              SizedBox(height: 20.h),
               // 电站信息头
               Row(
                 children: [
@@ -847,7 +836,7 @@ class _StationActionSheetState extends State<_StationActionSheet>
                 ],
               ),
               SizedBox(height: 16.h),
-              Divider(height: 1, color: AppColors.divider),
+              const Divider(height: 1, color: AppColors.divider),
               SizedBox(height: 6.h),
               _animatedItem(
                 0,
@@ -873,7 +862,8 @@ class _StationActionSheetState extends State<_StationActionSheet>
               _animatedItem(
                 2,
                 Material(
-                  color: AppColors.surfaceHover,
+                  color:
+                      isDark ? const Color(0xFF252830) : AppColors.surfaceHover,
                   borderRadius: BorderRadius.circular(14.r),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14.r),
@@ -973,7 +963,7 @@ class _StationCardState extends State<_StationCard>
           child: Hero(
             tag: 'station_${widget.id}',
             child: Material(
-              color: Colors.white,
+              color: AppColor.surface(context),
               borderRadius: BorderRadius.circular(16.r),
               // 注意：不使用 InkWell（空 onTap 会赢得手势竞技场，
               // 导致外层 GestureDetector 的 onTapUp 被取消、点击跳转失效）
@@ -1188,49 +1178,55 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+        color: isDark ? const Color(0xFF1A1D24) : Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 16.h, horizontal: 20.w),
+          padding: EdgeInsets.fromLTRB(20.w, 8.h, 20.w, 20.h),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 分组卡片：浅色圆角容器 + 白色圆角菜单项
               Container(
-                width: 40.w,
-                height: 4.h,
                 decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2.r),
+                  color: isDark
+                      ? const Color(0xFF252830)
+                      : AppColors.surfaceHover,
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                padding: EdgeInsets.all(8.w),
+                child: Column(
+                  children: List.generate(_items.length, (i) {
+                    final item = _items[i];
+                    final start = i * 0.15;
+                    final end = (start + 0.6).clamp(0.0, 1.0);
+                    final animation = CurvedAnimation(
+                      parent: _ctl,
+                      curve: Interval(start, end, curve: Curves.easeOutCubic),
+                    );
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        bottom: i < _items.length - 1 ? 8.h : 0,
+                      ),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.3),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: _buildItem(item),
+                        ),
+                      ),
+                    );
+                  }),
                 ),
               ),
-              SizedBox(height: 20.h),
-              ...List.generate(_items.length, (i) {
-                final item = _items[i];
-                final start = i * 0.15;
-                final end = (start + 0.6).clamp(0.0, 1.0);
-                final animation = CurvedAnimation(
-                  parent: _ctl,
-                  curve: Interval(start, end, curve: Curves.easeOutCubic),
-                );
-                return Padding(
-                  padding: EdgeInsets.only(bottom: 8.h),
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.3),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: _buildItem(item),
-                    ),
-                  ),
-                );
-              }),
-              SizedBox(height: 12.h),
             ],
           ),
         ),
@@ -1239,25 +1235,28 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
   }
 
   Widget _buildItem(_MenuItemData item) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Material(
-      color: Colors.transparent,
+      color: isDark ? const Color(0xFF1A1D24) : Colors.white,
+      borderRadius: BorderRadius.circular(12.r),
       child: InkWell(
         borderRadius: BorderRadius.circular(12.r),
         onTap: () => widget.onNavigate(item.path),
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 8.h, horizontal: 4.w),
+          padding: EdgeInsets.symmetric(vertical: 10.h, horizontal: 12.w),
           child: Row(
             children: [
               Container(
-                width: 44.w,
-                height: 44.w,
+                width: 40.w,
+                height: 40.w,
                 decoration: BoxDecoration(
                   color: item.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12.r),
                 ),
-                child: Icon(item.icon, color: item.color),
+                child: Icon(item.icon, color: item.color, size: 20.sp),
               ),
-              SizedBox(width: 14.w),
+              SizedBox(width: 12.w),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1265,8 +1264,9 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
                     Text(
                       item.title,
                       style: TextStyle(
-                        fontSize: 16.sp,
+                        fontSize: 15.sp,
                         fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
                       ),
                     ),
                     SizedBox(height: 2.h),
@@ -1280,9 +1280,9 @@ class _AddMenuSheetState extends State<_AddMenuSheet>
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.arrow_forward_ios,
-                size: 16,
+                size: 14.sp,
                 color: AppColors.textHint,
               ),
             ],

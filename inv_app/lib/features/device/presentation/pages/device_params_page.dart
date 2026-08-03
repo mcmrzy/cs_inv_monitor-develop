@@ -171,9 +171,6 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16.r),
-              ),
               title: Text(param.label),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -668,9 +665,6 @@ class _DeviceParamsPageState extends State<DeviceParamsPage> {
               onPressed: _isApplying ? null : _applyChanges,
               style: FilledButton.styleFrom(
                 padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.r),
-                ),
               ),
               child: _isApplying
                   ? SizedBox(

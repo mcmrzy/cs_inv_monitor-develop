@@ -363,11 +363,15 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 const SizedBox(height: 12),
                 Text(
                   '${l10n.currentHotspot}: $currentSsid',
-                  style: const TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 Text(
                   '${l10n.deviceIpLabel}: ${widget.deviceIP}',
-                  style: const TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -799,19 +803,17 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(50.h),
         child: AppBar(
           title: Text(
             l10n.localFirmwareUpgrade,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17.sp),
           ),
           centerTitle: true,
           elevation: 0,
           scrolledUnderElevation: 0.5,
-          backgroundColor: Colors.white,
-          foregroundColor: AppColors.textPrimary,
         ),
       ),
       body: Column(
@@ -834,7 +836,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       child: Row(
         children: steps.asMap().entries.map((entry) {
           final index = entry.key;
@@ -953,7 +955,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         Container(
           padding: EdgeInsets.all(16.w),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColor.surface(context),
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
               BoxShadow(
@@ -1320,7 +1322,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         Container(
           padding: EdgeInsets.all(20.w),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColor.surface(context),
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
               BoxShadow(
@@ -1383,7 +1385,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         Container(
           padding: EdgeInsets.all(20.w),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColor.surface(context),
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
               BoxShadow(
@@ -1450,7 +1452,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
         Container(
           padding: EdgeInsets.all(24.w),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColor.surface(context),
             borderRadius: BorderRadius.circular(14.r),
             boxShadow: [
               BoxShadow(
