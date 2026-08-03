@@ -836,7 +836,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 16.h),
-      color: Theme.of(context).colorScheme.surface,
+      color: AppColor.surfaceContainer(context),
       child: Row(
         children: steps.asMap().entries.map((entry) {
           final index = entry.key;
@@ -904,7 +904,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                     height: 2,
                     color: isCompleted
                         ? AppColors.successLight
-                        : const Color(0xFFE5E7EB),
+                        : AppColor.border(context),
                   ),
               ],
             ),
@@ -1053,7 +1053,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           child: LinearProgressIndicator(
             value: _downloadProgress > 0 ? _downloadProgress : null,
             minHeight: 8.h,
-            backgroundColor: const Color(0xFFE5E7EB),
+            backgroundColor: AppColor.border(context),
             valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
           ),
         ),
@@ -1073,7 +1073,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     return Container(
       padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
-        color: const Color(0xFFECFDF5),
+        color: AppColors.badgeNormalBg,
         borderRadius: BorderRadius.circular(10.r),
         border:
             Border.all(color: AppColors.successLight.withValues(alpha: 0.3)),
@@ -1132,7 +1132,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             width: double.infinity,
             padding: EdgeInsets.all(20.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColor.primarySoft(context),
               borderRadius: BorderRadius.circular(14.r),
               border:
                   Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
@@ -1251,7 +1251,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           Container(
             padding: EdgeInsets.all(12.w),
             decoration: BoxDecoration(
-              color: const Color(0xFFFEF2F2),
+              color: AppColors.badgeAlarmBg,
               borderRadius: BorderRadius.circular(10.r),
             ),
             child: Row(
@@ -1354,7 +1354,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 child: LinearProgressIndicator(
                   value: _uploadProgress,
                   minHeight: 10.h,
-                  backgroundColor: const Color(0xFFE5E7EB),
+                  backgroundColor: AppColor.border(context),
                   valueColor:
                       const AlwaysStoppedAnimation<Color>(AppColors.primary),
                 ),
@@ -1417,7 +1417,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
                 child: LinearProgressIndicator(
                   value: _upgradeProgress,
                   minHeight: 10.h,
-                  backgroundColor: const Color(0xFFE5E7EB),
+                  backgroundColor: AppColor.border(context),
                   valueColor:
                       const AlwaysStoppedAnimation<Color>(AppColors.primary),
                 ),
@@ -1636,7 +1636,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
     return Container(
       padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColor.surfaceContainer(context),
         borderRadius: BorderRadius.circular(14.r),
         boxShadow: [
           BoxShadow(
@@ -1652,7 +1652,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
             width: 36.w,
             height: 36.w,
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColor.primarySoft(context),
               borderRadius: BorderRadius.circular(10.r),
             ),
             child: Icon(
@@ -1685,7 +1685,7 @@ class _LocalOTAPageState extends State<LocalOTAPage> {
           Container(
             padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: AppColor.primarySoft(context),
               borderRadius: BorderRadius.circular(6.r),
             ),
             child: Text(
