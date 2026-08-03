@@ -7,6 +7,15 @@ export interface DeviceModelItem {
   manufacturer: string
   category: string
   rated_power_kw: number
+  rated_power_w?: number
+  rated_voltage_v?: number
+  rated_frequency_hz?: number
+  battery_voltage_v?: number
+  battery_type?: string
+  cell_count?: number
+  mppt_count?: number
+  supports_parallel?: boolean
+  temp_sensor_count?: number
   description: string
   is_active: boolean
   created_at: string

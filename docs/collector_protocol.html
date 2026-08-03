@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>逆变器采集器通信协议文档</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --border-color: #e2e8f0;
+            --code-bg: #f1f5f9;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        header p {
+            text-align: center;
+            opacity: 0.9;
+            margin-top: 10px;
+            font-size: 1.1rem;
+        }
+
+        .section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 25px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-color);
+        }
+
+        .section h2 {
+            color: var(--primary-color);
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .section h3 {
+            color: var(--secondary-color);
+            font-size: 1.4rem;
+            margin: 20px 0 15px 0;
+        }
+
+        .section h4 {
+            color: var(--text-color);
+            font-size: 1.2rem;
+            margin: 15px 0 10px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        tr:hover {
+            background-color: #e2e8f0;
+        }
+
+        code {
+            background-color: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            color: var(--error-color);
+        }
+
+        pre {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .highlight {
+            background-color: #fef3c7;
+            border-left: 4px solid var(--warning-color);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .note {
+            background-color: #dbeafe;
+            border-left: 4px solid var(--primary-color);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .success {
+            background-color: #d1fae5;
+            border-left: 4px solid var(--success-color);
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .diagram {
+            background-color: #f8fafc;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            font-family: monospace;
+        }
+
+        .byte {
+            display: inline-block;
+            width: 60px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            margin: 2px;
+            border: 2px solid var(--primary-color);
+            border-radius: 4px;
+            background-color: white;
+            font-weight: bold;
+        }
+
+        .byte.header { background-color: #dbeafe; }
+        .byte.length { background-color: #fef3c7; }
+        .byte.cmd { background-color: #d1fae5; }
+        .byte.param { background-color: #fce7f3; }
+        .byte.data { background-color: #e0e7ff; }
+        .byte.crc { background-color: #fee2e2; }
+
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        .flow-chart {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .flow-step {
+            background: white;
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+            padding: 15px 25px;
+            text-align: center;
+            min-width: 200px;
+            position: relative;
+        }
+
+        .flow-step::after {
+            content: "↓";
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.5rem;
+            color: var(--primary-color);
+        }
+
+        .flow-step:last-child::after {
+            display: none;
+        }
+
+        .toc {
+            background-color: #f1f5f9;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .toc h3 {
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+
+        .toc ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .toc li {
+            margin: 8px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .toc li::before {
+            content: "•";
+            color: var(--primary-color);
+            position: absolute;
+            left: 0;
+        }
+
+        .toc a {
+            color: var(--text-color);
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            color: var(--primary-color);
+            text-decoration: underline;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>逆变器采集器通信协议文档</h1>
+            <p>辰烁科技 | 型号：CS-L10-6K2 | GD32F30x 逆变器系统 - 采集器通信协议规范 v1.0</p>
+        </header>
+
+        <div class="toc">
+            <h3>目录</h3>
+            <ul>
+                <li><a href="#overview">1. 协议概述</a></li>
+                <li><a href="#physical">2. 物理层规范</a></li>
+                <li><a href="#frame">3. 帧格式定义</a></li>
+                <li><a href="#ppp">4. PPP帧封装</a></li>
+                <li><a href="#encryption">5. 数据加密机制</a></li>
+                <li><a href="#commands">6. 命令集定义</a></li>
+                <li><a href="#params">7. 参数地址映射</a></li>
+                <li><a href="#flow">8. 通信流程</a></li>
+                <li><a href="#examples">9. 示例报文</a></li>
+                <li><a href="#errors">10. 错误处理</a></li>
+            </ul>
+        </div>
+
+        <section id="overview" class="section">
+            <h2>1. 协议概述</h2>
+            <p>本协议定义了GD32F30x逆变器系统中，主控板（ARM）与数据采集器之间的通信规范。协议基于串口（USART）通信，采用PPP帧格式进行数据封装，并使用TEA加密算法保障数据安全。</p>
+            
+            <h3>1.1 协议特性</h3>
+            <ul>
+                <li><strong>通信接口</strong>：USART串口</li>
+                <li><strong>帧格式</strong>：PPP协议帧（0x7E定界符）</li>
+                <li><strong>加密方式</strong>：TEA（Tiny Encryption Algorithm）双重加密</li>
+                <li><strong>校验方式</strong>：CRC32校验</li>
+                <li><strong>数据字节序</strong>：小端序（Little-Endian）</li>
+                <li><strong>最大帧长</strong>：1088字节</li>
+            </ul>
+
+            <h3>1.2 系统架构</h3>
+            <div class="diagram">
+                <pre>
+┌─────────────┐      USART      ┌─────────────┐
+│   采集器     │ ◄──────────────► │   逆变器    │
+│  (Collector) │    RS232/485    │   (ARM)     │
+└─────────────┘                 └─────────────┘
+       │                               │
+       ▼                               ▼
+┌─────────────┐                 ┌─────────────┐
+│   服务器    │                 │    DSP      │
+│  (Server)   │                 │  (控制板)   │
+└─────────────┘                 └─────────────┘
+                </pre>
+            </div>
+        </section>
+
+        <section id="physical" class="section">
+            <h2>2. 物理层规范</h2>
+            
+            <h3>2.1 串口配置</h3>
+            <table>
+                <tr>
+                    <th>参数</th>
+                    <th>值</th>
+                    <th>说明</th>
+                </tr>
+                <tr>
+                    <td>波特率</td>
+                    <td>115200 bps</td>
+                    <td>默认波特率</td>
+                </tr>
+                <tr>
+                    <td>数据位</td>
+                    <td>8位</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>停止位</td>
+                    <td>1位</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>校验位</td>
+                    <td>无</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>流控制</td>
+                    <td>无</td>
+                    <td>-</td>
+                </tr>
+            </table>
+
+            <h3>2.2 接收状态机</h3>
+            <p>接收模块使用三状态状态机管理数据接收：</p>
+            <table>
+                <tr>
+                    <th>状态</th>
+                    <th>值</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td><code>WAITRECEVIE</code></td>
+                    <td>0x00</td>
+                    <td>等待接收状态，空闲</td>
+                </tr>
+                <tr>
+                    <td><code>ISRCVING</code></td>
+                    <td>0x01</td>
+                    <td>正在接收数据</td>
+                </tr>
+                <tr>
+                    <td><code>RCVFINISH</code></td>
+                    <td>0x02</td>
+                    <td>接收完成，数据就绪</td>
+                </tr>
+            </table>
+        </section>
+
+        <section id="frame" class="section">
+            <h2>3. 帧格式定义</h2>
+            
+            <h3>3.1 命令帧结构</h3>
+            <p>采集器命令帧采用紧凑的二进制格式，所有字段按1字节对齐：</p>
+            
+            <div class="diagram">
+                <div class="byte header">Header</div>
+                <div class="byte length">CmdLen</div>
+                <div class="byte cmd">CMD</div>
+                <div class="byte param">Param1</div>
+                <div class="byte param">Param2</div>
+                <div class="byte data">Data[]</div>
+                <div class="byte crc">CRC32</div>
+            </div>
+
+            <table>
+                <tr>
+                    <th>字段</th>
+                    <th>偏移</th>
+                    <th>大小</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td><code>Header</code></td>
+                    <td>0</td>
+                    <td>1字节</td>
+                    <td>帧头标识，固定为 <code>0xAA</code></td>
+                </tr>
+                <tr>
+                    <td><code>CmdLen</code></td>
+                    <td>1</td>
+                    <td>2字节</td>
+                    <td>命令总长度（字节），必须为4的倍数</td>
+                </tr>
+                <tr>
+                    <td><code>CMD</code></td>
+                    <td>3</td>
+                    <td>1字节</td>
+                    <td>命令类型代码</td>
+                </tr>
+                <tr>
+                    <td><code>Param1</code></td>
+                    <td>4</td>
+                    <td>2字节</td>
+                    <td>参数1（起始地址/索引）</td>
+                </tr>
+                <tr>
+                    <td><code>Param2</code></td>
+                    <td>6</td>
+                    <td>2字节</td>
+                    <td>参数2（数据长度/值）</td>
+                </tr>
+                <tr>
+                    <td><code>Data[]</code></td>
+                    <td>8</td>
+                    <td>变长</td>
+                    <td>数据负载，长度 = CmdLen - 8</td>
+                </tr>
+                <tr>
+                    <td><code>CRC32</code></td>
+                    <td>CmdLen-4</td>
+                    <td>4字节</td>
+                    <td>CRC32校验值（覆盖整个帧）</td>
+                </tr>
+            </table>
+
+            <div class="highlight">
+                <strong>重要约束：</strong>
+                <ul>
+                    <li><code>CmdLen</code> 必须 ≥ 8 且为 4 的倍数</li>
+                    <li><code>Header</code> 必须为 <code>0xAA</code></li>
+                    <li>CRC32校验覆盖从帧头到CRC字段前的所有数据</li>
+                </ul>
+            </div>
+
+            <h3>3.2 CRC32计算</h3>
+            <pre>
+// CRC32计算伪代码
+crc32 = CRC32_HW((u32*)frame, 0xFFFFFFFF, CmdLen >> 2);
+
+// 将CRC32存入帧尾（小端序）
+data[CmdLen-8] = crc32;
+data[CmdLen-7] = crc32 >> 8;
+data[CmdLen-6] = crc32 >> 16;
+data[CmdLen-5] = crc32 >> 24;
+            </pre>
+        </section>
+
+        <section id="ppp" class="section">
+            <h2>4. PPP帧封装</h2>
+            
+            <h3>4.1 PPP帧格式</h3>
+            <p>原始命令帧在发送前需要进行PPP封装，使用<code>0x7E</code>作为帧定界符：</p>
+            
+            <div class="diagram">
+                <div class="byte header">0x7E</div>
+                <div class="byte data">封装数据</div>
+                <div class="byte header">0x7E</div>
+            </div>
+
+            <h3>4.2 转义规则</h3>
+            <p>PPP封装过程中，需要对特殊字符进行转义处理：</p>
+            
+            <table>
+                <tr>
+                    <th>原始字节</th>
+                    <th>转义序列</th>
+                    <th>说明</th>
+                </tr>
+                <tr>
+                    <td><code>0x7E</code></td>
+                    <td><code>0x7D 0x5E</code></td>
+                    <td>帧定界符转义</td>
+                </tr>
+                <tr>
+                    <td><code>0x7D</code></td>
+                    <td><code>0x7D 0x5D</code></td>
+                    <td>转义符转义</td>
+                </tr>
+            </table>
+
+            <h3>4.3 封装算法</h3>
+            <pre>
+function PppPack(dstBuf, srcBuf, srcLen):
+    dstBuf[0] = 0x7E  // 起始符
+    count = 1
+    
+    for each byte in srcBuf:
+        if byte == 0x7E:
+            dstBuf[count++] = 0x7D
+            dstBuf[count++] = 0x5E
+        else if byte == 0x7D:
+            dstBuf[count++] = 0x7D
+            dstBuf[count++] = 0x5D
+        else:
+            dstBuf[count++] = byte
+    
+    dstBuf[count++] = 0x7E  // 结束符
+    return count
+            </pre>
+
+            <h3>4.4 解封装算法</h3>
+            <pre>
+function PPPFrameCmdReceive(AcData, RcvData):
+    switch AcData.status:
+        case WAITRECEVIE:
+            if RcvData == 0x7E:
+                AcData.status = ISRCVING
+                AcData.length = 0
+        
+        case ISRCVING:
+            if AcData.length > (FRAMLEN-1):
+                // 帧长度超限，重置
+                AcData.status = WAITRECEVIE
+                AcData.length = 0
+            
+            if RcvData == 0x7E:
+                if AcData.length != 0:
+                    AcData.status = RCVFINISH  // 帧接收完成
+            else if RcvData == 0x7D:
+                // 转义符，等待下一个字节
+                AcData.Flg7E = 0x7D
+            else:
+                if AcData.Flg7E == 0x7D:
+                    // 处理转义序列
+                    if RcvData == 0x5E:
+                        AcData.RCdata[AcData.length++] = 0x7E
+                    else if RcvData == 0x5D:
+                        AcData.RCdata[AcData.length++] = 0x7D
+                    AcData.Flg7E = 0
+                else:
+                    AcData.RCdata[AcData.length++] = RcvData
+            </pre>
+        </section>
+
+        <section id="encryption" class="section">
+            <h2>5. 数据加密机制</h2>
+            
+            <h3>5.1 加密算法</h3>
+            <p>协议采用TEA（Tiny Encryption Algorithm）进行数据加密，使用双重加密机制：</p>
+            
+            <div class="note">
+                <strong>TEA算法特点：</strong>
+                <ul>
+                    <li>块加密算法，块大小为64位（8字节）</li>
+                    <li>密钥长度为128位（16字节）</li>
+                    <li>加密轮数可配置</li>
+                    <li>实现简单，适合嵌入式系统</li>
+                </ul>
+            </div>
+
+            <h3>5.2 加密流程</h3>
+            <div class="flow-chart">
+                <div class="flow-step">原始数据帧</div>
+                <div class="flow-step">第一次TEA加密（使用FrameKey）</div>
+                <div class="flow-step">生成动态密钥（TempKey）</div>
+                <div class="flow-step">第二次TEA加密（使用TempKey）</div>
+                <div class="flow-step">附加密钥片段</div>
+                <div class="flow-step">PPP封装发送</div>
+            </div>
+
+            <h3>5.3 密钥管理</h3>
+            <pre>
+// 密钥生成伪代码
+u32 TempKey[4];
+
+// 复制基础密钥
+memcpy(TempKey, FrameKey, 16);
+
+// 使用系统嘀嗒定时器生成动态部分
+TempKey[3] = SysTick->VAL;
+TempKey[2] = ~TempKey[3];
+
+// 第一次加密（使用FrameKey）
+EncryptData(data, FrameKey, dataLen);
+
+// 第二次加密（使用TempKey）
+EncryptData(data, TempKey, dataLen + 8);
+
+// 附加密钥片段到数据末尾
+memcpy(data + dataLen + 8, &TempKey[2], 8);
+            </pre>
+
+            <h3>5.4 解密流程</h3>
+            <pre>
+// 解密伪代码
+u32 TempKey[4];
+
+// 第一次解密（使用FrameKey）
+DecryptData(data, FrameKey, dataLen);
+
+// 提取密钥片段
+memcpy(TempKey, FrameKey, 8);
+memcpy(&TempKey[2], data + dataLen - 8, 8);
+
+// 第二次解密（使用TempKey）
+DecryptData(data, TempKey, dataLen);
+            </pre>
+        </section>
+
+        <section id="commands" class="section">
+            <h2>6. 命令集定义</h2>
+            
+            <h3>6.1 命令类型</h3>
+            <table>
+                <tr>
+                    <th>命令码</th>
+                    <th>名称</th>
+                    <th>描述</th>
+                    <th>参数说明</th>
+                </tr>
+                <tr>
+                    <td><code>0x01</code></td>
+                    <td><code>READ_CTRLPARAM</code></td>
+                    <td>读取控制参数</td>
+                    <td>Param1: 起始地址, Param2: 数据长度</td>
+                </tr>
+                <tr>
+                    <td><code>0x02</code></td>
+                    <td><code>WRITE_CTRLPARAM</code></td>
+                    <td>写入控制参数</td>
+                    <td>Param1: 起始地址, Param2: 数据长度</td>
+                </tr>
+                <tr>
+                    <td><code>0x03</code></td>
+                    <td><code>READ_RUNPARAM</code></td>
+                    <td>读取运行参数</td>
+                    <td>Param1: 起始地址, Param2: 数据长度</td>
+                </tr>
+                <tr>
+                    <td><code>0x04</code></td>
+                    <td><code>READ_R_W_DATA</code></td>
+                    <td>读取可读写数据</td>
+                    <td>Param1: 起始地址, Param2: 数据长度</td>
+                </tr>
+                <tr>
+                    <td><code>0x05</code></td>
+                    <td><code>WRITE_R_W_DATA</code></td>
+                    <td>写入可读写数据</td>
+                    <td>Param1: 起始地址, Param2: 数据长度</td>
+                </tr>
+                <tr>
+                    <td><code>0x06</code></td>
+                    <td><code>READ_R_DATA</code></td>
+                    <td>读取只读数据</td>
+                    <td>Param1: 起始地址, Param2: 数据长度</td>
+                </tr>
+                <tr>
+                    <td><code>0x07</code></td>
+                    <td><code>CTRLCMD</code></td>
+                    <td>控制命令</td>
+                    <td>预留，暂未实现</td>
+                </tr>
+                <tr>
+                    <td><code>0x14</code></td>
+                    <td><code>READ_TEST_RUNPARAM</code></td>
+                    <td>读取测试运行参数</td>
+                    <td>Param1: 起始地址, Param2: 数据长度</td>
+                </tr>
+            </table>
+
+            <h3>6.2 响应格式</h3>
+            <p>写操作的响应格式：</p>
+            <table>
+                <tr>
+                    <th>字段</th>
+                    <th>大小</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td><code>Header</code></td>
+                    <td>1字节</td>
+                    <td>固定为 <code>0xAA</code></td>
+                </tr>
+                <tr>
+                    <td><code>CmdLen</code></td>
+                    <td>2字节</td>
+                    <td>固定为 <code>12</code></td>
+                </tr>
+                <tr>
+                    <td><code>CMD</code></td>
+                    <td>1字节</td>
+                    <td>原始命令码</td>
+                </tr>
+                <tr>
+                    <td><code>Param1</code></td>
+                    <td>2字节</td>
+                    <td>固定为 <code>0</code></td>
+                </tr>
+                <tr>
+                    <td><code>Param2</code></td>
+                    <td>2字节</td>
+                    <td>固定为 <code>1</code></td>
+                </tr>
+                <tr>
+                    <td><code>Status</code></td>
+                    <td>1字节</td>
+                    <td>执行结果状态码</td>
+                </tr>
+                <tr>
+                    <td><code>Reserved</code></td>
+                    <td>3字节</td>
+                    <td>保留，填充为0</td>
+                </tr>
+                <tr>
+                    <td><code>CRC32</code></td>
+                    <td>4字节</td>
+                    <td>CRC32校验值</td>
+                </tr>
+            </table>
+        </section>
+
+        <section id="params" class="section">
+            <h2>7. 参数地址映射</h2>
+            
+            <h3>7.1 控制参数地址表（READ/WRITE_CTRLPARAM）</h3>
+            <table>
+                <tr>
+                    <th>地址</th>
+                    <th>名称</th>
+                    <th>描述</th>
+                    <th>单位</th>
+                </tr>
+                <tr>
+                    <td><code>0x0000</code></td>
+                    <td><code>OutputPriority</code></td>
+                    <td>输出优先级</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0001</code></td>
+                    <td><code>MaxChargeCurrentAll</code></td>
+                    <td>最大充电电流（总）</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td><code>0x0002</code></td>
+                    <td><code>ACInVoltRange</code></td>
+                    <td>输入电压范围</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0003</code></td>
+                    <td><code>BatCapacity</code></td>
+                    <td>电池容量</td>
+                    <td>Ah</td>
+                </tr>
+                <tr>
+                    <td><code>0x0004</code></td>
+                    <td><code>BatteryType</code></td>
+                    <td>电池类型</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0005</code></td>
+                    <td><code>OverloadRestart</code></td>
+                    <td>过载自动重启</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0006</code></td>
+                    <td><code>HighTemperatureRestart</code></td>
+                    <td>高温自动重启</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0007</code></td>
+                    <td><code>OutputVoltage</code></td>
+                    <td>输出电压</td>
+                    <td>V</td>
+                </tr>
+                <tr>
+                    <td><code>0x0008</code></td>
+                    <td><code>OutputFrequency</code></td>
+                    <td>输出频率</td>
+                    <td>Hz</td>
+                </tr>
+                <tr>
+                    <td><code>0x0009</code></td>
+                    <td><code>Master_Slave</code></td>
+                    <td>主从模式</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x000A</code></td>
+                    <td><code>MaxChargeCityCurrent</code></td>
+                    <td>市电最大充电电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td><code>0x000B</code></td>
+                    <td><code>LowVoltReturnCityPower</code></td>
+                    <td>低压转市电阈值</td>
+                    <td>V</td>
+                </tr>
+                <tr>
+                    <td><code>0x000C</code></td>
+                    <td><code>HighVoltReturnBattery</code></td>
+                    <td>高压转电池阈值</td>
+                    <td>V</td>
+                </tr>
+                <tr>
+                    <td><code>0x000D</code></td>
+                    <td><code>BatteryChargePriority</code></td>
+                    <td>电池充电优先级</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x000E</code></td>
+                    <td><code>AlarmControl</code></td>
+                    <td>告警控制</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x000F</code></td>
+                    <td><code>BackLightCtrl</code></td>
+                    <td>背光控制</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0010</code></td>
+                    <td><code>PowerShutdownAlarm</code></td>
+                    <td>电源中断报警</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0011</code></td>
+                    <td><code>OverloadUseCityPower</code></td>
+                    <td>过载使用市电</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0012</code></td>
+                    <td><code>ParaMaxDisChgCurr</code></td>
+                    <td>并联系统最大放电电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td><code>0x0013</code></td>
+                    <td><code>ParaMaxChgCurr</code></td>
+                    <td>并联系统最大充电电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td><code>0x0015</code></td>
+                    <td><code>SolarPowerBalance</code></td>
+                    <td>太阳能功率平衡模式</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0016</code></td>
+                    <td><code>ACOutputMode</code></td>
+                    <td>交流输出模式</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0017</code></td>
+                    <td><code>LiBatMaterial</code></td>
+                    <td>锂电池材料</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0018</code></td>
+                    <td><code>CellInSerial_LiFePO4</code></td>
+                    <td>磷酸铁锂电池串联数</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0019</code></td>
+                    <td><code>CellInSerial_Li_NMC</code></td>
+                    <td>三元锂电池串联数</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x001A</code></td>
+                    <td><code>EqEnable</code></td>
+                    <td>均衡使能</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x001B</code></td>
+                    <td><code>EqVoltageSet</code></td>
+                    <td>均衡电压设置</td>
+                    <td>V</td>
+                </tr>
+                <tr>
+                    <td><code>0x001C</code></td>
+                    <td><code>EqTimeSet</code></td>
+                    <td>均衡时间设置</td>
+                    <td>min</td>
+                </tr>
+                <tr>
+                    <td><code>0x001D</code></td>
+                    <td><code>EqtTimeoutSet</code></td>
+                    <td>均衡超时设置</td>
+                    <td>min</td>
+                </tr>
+                <tr>
+                    <td><code>0x001E</code></td>
+                    <td><code>EqtIntervalSet</code></td>
+                    <td>均衡间隔设置</td>
+                    <td>day</td>
+                </tr>
+                <tr>
+                    <td><code>0x001F</code></td>
+                    <td><code>EqactivateSet</code></td>
+                    <td>均衡激活开关</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0020</code></td>
+                    <td><code>ChargeTimeSet</code></td>
+                    <td>充电时间设置</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0021</code></td>
+                    <td><code>CloseChargeTimeSet</code></td>
+                    <td>关闭充电时间设置</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0022</code></td>
+                    <td><code>LVoltOpenGenerator</code></td>
+                    <td>低压启动发电机</td>
+                    <td>V</td>
+                </tr>
+                <tr>
+                    <td><code>0x0023</code></td>
+                    <td><code>HVoltCloseGenerator</code></td>
+                    <td>高压关闭发电机</td>
+                    <td>V</td>
+                </tr>
+                <tr>
+                    <td><code>0x0024</code></td>
+                    <td><code>SocBackUtl</code></td>
+                    <td>低电量转市电</td>
+                    <td>%</td>
+                </tr>
+                <tr>
+                    <td><code>0x0025</code></td>
+                    <td><code>SocBackBat</code></td>
+                    <td>高电量转电池</td>
+                    <td>%</td>
+                </tr>
+                <tr>
+                    <td><code>0x0026</code></td>
+                    <td><code>SocBackGen</code></td>
+                    <td>低电量启动发电机</td>
+                    <td>%</td>
+                </tr>
+                <tr>
+                    <td><code>0x0027</code></td>
+                    <td><code>SocCloseGen</code></td>
+                    <td>高电量关闭发电机</td>
+                    <td>%</td>
+                </tr>
+                <tr>
+                    <td><code>0x0028</code></td>
+                    <td><code>Soccutoff</code></td>
+                    <td>低电量截止</td>
+                    <td>%</td>
+                </tr>
+                <tr>
+                    <td><code>0x0029</code></td>
+                    <td><code>BuzzerEN</code></td>
+                    <td>蜂鸣器使能</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0030</code></td>
+                    <td><code>LiBatProtocolType</code></td>
+                    <td>锂电协议类型</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0031</code></td>
+                    <td><code>GenRateWatt</code></td>
+                    <td>发电机额定功率</td>
+                    <td>W</td>
+                </tr>
+                <tr>
+                    <td><code>0x0032</code></td>
+                    <td><code>GeBalanceEn</code></td>
+                    <td>发电机平衡使能</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td><code>0x0033-0x003A</code></td>
+                    <td><code>GenWorkTime</code></td>
+                    <td>发电机工作时间（开始/结束1&2）</td>
+                    <td>timestamp</td>
+                </tr>
+                <tr>
+                    <td><code>0x003B-0x0042</code></td>
+                    <td><code>UtiOutputTime</code></td>
+                    <td>市电输出时间（开始/结束1&2）</td>
+                    <td>timestamp</td>
+                </tr>
+                <tr>
+                    <td><code>0x0043-0x0051</code></td>
+                    <td><code>Vbat*</code></td>
+                    <td>各类电池电压设置（充满/浮充/截止）</td>
+                    <td>V</td>
+                </tr>
+                <tr>
+                    <td><code>0x0052</code></td>
+                    <td><code>SocMaxUtlChg</code></td>
+                    <td>市电充电截止SOC</td>
+                    <td>%</td>
+                </tr>
+                <tr>
+                    <td><code>0x0053</code></td>
+                    <td><code>VMaxUtlChg</code></td>
+                    <td>市电充电截止电压</td>
+                    <td>V</td>
+                </tr>
+            </table>
+
+            <h3>7.2 可读写数据地址表（READ/WRITE_R_W_DATA）</h3>
+            <p>命令码：<code>0x04</code>(读) / <code>0x05</code>(写)</p>
+            <table>
+                <tr>
+                    <th>地址</th>
+                    <th>名称</th>
+                    <th>描述</th>
+                    <th>单位</th>
+                    <th>说明</th>
+                </tr>
+                <tr>
+                    <td><code>0x00C8</code></td>
+                    <td><code>CtrlParamAlterTimeL</code></td>
+                    <td>控制参数修改时间(低16位)</td>
+                    <td>-</td>
+                    <td>与0x00C9组合为32位时间戳</td>
+                </tr>
+                <tr>
+                    <td><code>0x00C9</code></td>
+                    <td><code>CtrlParamAlterTimeH</code></td>
+                    <td>控制参数修改时间(高16位)</td>
+                    <td>-</td>
+                    <td>记录参数最后修改时间</td>
+                </tr>
+                <tr>
+                    <td><code>0x00CA</code></td>
+                    <td><code>UTCL</code></td>
+                    <td>UTC时间(低16位)</td>
+                    <td>s</td>
+                    <td>与0x00CB组合为32位UTC时间戳</td>
+                </tr>
+                <tr>
+                    <td><code>0x00CB</code></td>
+                    <td><code>UTCH</code></td>
+                    <td>UTC时间(高16位)</td>
+                    <td>s</td>
+                    <td>写入时自动转换为RTC时间(考虑时区)</td>
+                </tr>
+            </table>
+
+            <div class="highlight">
+                <strong>UTC时间写入逻辑：</strong>
+                <ul>
+                    <li>接收到UTC时间后，根据<code>SysParam.TimeZone</code>时区偏移转换为本地时间</li>
+                    <li>与当前系统时间比较，差值 > 4秒时自动校时</li>
+                    <li>调用<code>SetTime()</code>更新RTC</li>
+                </ul>
+            </div>
+
+            <h3>7.3 运行参数地址表（READ_RUNPARAM）</h3>
+            <p>运行参数起始地址：<code>0x03E8</code>，结束地址：<code>0x0442</code></p>
+            
+            <table>
+                <tr>
+                    <th>偏移</th>
+                    <th>名称</th>
+                    <th>描述</th>
+                    <th>单位</th>
+                </tr>
+                <tr>
+                    <td>+0</td>
+                    <td><code>SysStatus</code></td>
+                    <td>系统状态位</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>+2</td>
+                    <td><code>Vpv1</code></td>
+                    <td>PV1电压</td>
+                    <td>0.1V</td>
+                </tr>
+                <tr>
+                    <td>+4</td>
+                    <td><code>Vpv2</code></td>
+                    <td>PV2电压</td>
+                    <td>0.1V</td>
+                </tr>
+                <tr>
+                    <td>+6</td>
+                    <td><code>Ppv</code></td>
+                    <td>PV总功率</td>
+                    <td>0.1W</td>
+                </tr>
+                <tr>
+                    <td>+10</td>
+                    <td><code>Buck1Curr</code></td>
+                    <td>Buck1电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td>+12</td>
+                    <td><code>Buck2Curr</code></td>
+                    <td>Buck2电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td>+14</td>
+                    <td><code>BoostTemp</code></td>
+                    <td>Boost温度</td>
+                    <td>0.1°C</td>
+                </tr>
+                <tr>
+                    <td>+16</td>
+                    <td><code>InvertTemp</code></td>
+                    <td>逆变温度</td>
+                    <td>0.1°C</td>
+                </tr>
+                <tr>
+                    <td>+18</td>
+                    <td><code>OutputWatt</code></td>
+                    <td>输出有功功率</td>
+                    <td>0.1W</td>
+                </tr>
+                <tr>
+                    <td>+22</td>
+                    <td><code>OutputVA</code></td>
+                    <td>输出视在功率</td>
+                    <td>0.1VA</td>
+                </tr>
+                <tr>
+                    <td>+26</td>
+                    <td><code>OutputCurr</code></td>
+                    <td>输出电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td>+28</td>
+                    <td><code>ACChrWatt</code></td>
+                    <td>AC充电功率</td>
+                    <td>0.1W</td>
+                </tr>
+                <tr>
+                    <td>+32</td>
+                    <td><code>ACChrVA</code></td>
+                    <td>AC充电视在功率</td>
+                    <td>0.1VA</td>
+                </tr>
+                <tr>
+                    <td>+36</td>
+                    <td><code>GridVolt</code></td>
+                    <td>电网电压</td>
+                    <td>0.1V</td>
+                </tr>
+                <tr>
+                    <td>+38</td>
+                    <td><code>GridFreq</code></td>
+                    <td>电网频率</td>
+                    <td>0.01Hz</td>
+                </tr>
+                <tr>
+                    <td>+40</td>
+                    <td><code>ACOutputVolt</code></td>
+                    <td>AC输出电压</td>
+                    <td>0.1V</td>
+                </tr>
+                <tr>
+                    <td>+42</td>
+                    <td><code>ACOutputFreq</code></td>
+                    <td>AC输出频率</td>
+                    <td>0.01Hz</td>
+                </tr>
+                <tr>
+                    <td>+44</td>
+                    <td><code>ACInWatt</code></td>
+                    <td>AC输入功率</td>
+                    <td>0.1W</td>
+                </tr>
+                <tr>
+                    <td>+48</td>
+                    <td><code>ACInVA</code></td>
+                    <td>AC输入视在功率</td>
+                    <td>0.1VA</td>
+                </tr>
+                <tr>
+                    <td>+52</td>
+                    <td><code>ACDisChrWatt</code></td>
+                    <td>AC旁路放电功率</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+56</td>
+                    <td><code>ACDisChrVA</code></td>
+                    <td>AC旁路放电视在功率</td>
+                    <td>0.1VA</td>
+                </tr>
+                <tr>
+                    <td>+60</td>
+                    <td><code>ACChrCurr</code></td>
+                    <td>AC充电电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td>+62</td>
+                    <td><code>BatVolt</code></td>
+                    <td>电池电压</td>
+                    <td>0.01V</td>
+                </tr>
+                <tr>
+                    <td>+64</td>
+                    <td><code>BatterySOC</code></td>
+                    <td>电池SOC</td>
+                    <td>1%</td>
+                </tr>
+                <tr>
+                    <td>+66</td>
+                    <td><code>BatDisChrWatt</code></td>
+                    <td>电池放电功率</td>
+                    <td>0.1W</td>
+                </tr>
+                <tr>
+                    <td>+70</td>
+                    <td><code>BatChrWatt</code></td>
+                    <td>电池充电功率</td>
+                    <td>0.1W</td>
+                </tr>
+                <tr>
+                    <td>+74</td>
+                    <td><code>BatChgCurr</code></td>
+                    <td>电池充电电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td>+76</td>
+                    <td><code>BatDischgCurr</code></td>
+                    <td>电池放电电流</td>
+                    <td>0.1A</td>
+                </tr>
+                <tr>
+                    <td>+78</td>
+                    <td><code>BatOverCharge</code></td>
+                    <td>电池过充标志</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>+80</td>
+                    <td><code>BusVolt</code></td>
+                    <td>母线电压</td>
+                    <td>0.01V</td>
+                </tr>
+                <tr>
+                    <td>+82</td>
+                    <td><code>LoadPercent</code></td>
+                    <td>负载百分比</td>
+                    <td>0.10%</td>
+                </tr>
+                <tr>
+                    <td>+84</td>
+                    <td><code>Warning</code></td>
+                    <td>告警位</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>+92</td>
+                    <td><code>BmsWarning</code></td>
+                    <td>BMS告警信息</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>+94</td>
+                    <td><code>FaultValue</code></td>
+                    <td>故障码</td>
+                    <td>-</td>
+                </tr>
+                <tr>
+                    <td>+98</td>
+                    <td><code>EGen_today</code></td>
+                    <td>发电机今日发电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+102</td>
+                    <td><code>EGen_total</code></td>
+                    <td>发电机总发电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+106</td>
+                    <td><code>Epv_today</code></td>
+                    <td>PV今日发电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+110</td>
+                    <td><code>Epv_total</code></td>
+                    <td>PV总发电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+114</td>
+                    <td><code>Eac_chrToday</code></td>
+                    <td>AC今日充电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+118</td>
+                    <td><code>Eac_chrTotal</code></td>
+                    <td>AC总充电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+122</td>
+                    <td><code>Ebat_dischrToday</code></td>
+                    <td>电池今日放电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+126</td>
+                    <td><code>Ebat_dischrTotal</code></td>
+                    <td>电池总放电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+130</td>
+                    <td><code>Ebat_chrToday</code></td>
+                    <td>电池今日充电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+134</td>
+                    <td><code>Ebat_chrTotal</code></td>
+                    <td>电池总充电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+138</td>
+                    <td><code>Eac_dischrToday</code></td>
+                    <td>AC旁路今日放电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+142</td>
+                    <td><code>Eac_dischrTotal</code></td>
+                    <td>AC旁路总放电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+146</td>
+                    <td><code>Eop_dischrToday</code></td>
+                    <td>输出今日放电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+                <tr>
+                    <td>+150</td>
+                    <td><code>Eop_dischrTotal</code></td>
+                    <td>输出总放电量</td>
+                    <td>0.1kWh</td>
+                </tr>
+            </table>
+
+            <h3>7.4 只读数据地址表（READ_R_DATA）</h3>
+            <p>只读数据起始地址：<code>0x0190</code>，结束地址：<code>0x01A5</code></p>
+            
+            <table>
+                <tr>
+                    <th>地址</th>
+                    <th>名称</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td><code>0x0190</code></td>
+                    <td><code>ARMFirmwareVersion</code></td>
+                    <td>ARM固件版本</td>
+                </tr>
+                <tr>
+                    <td><code>0x0191</code></td>
+                    <td><code>DSPFirmwareVersion</code></td>
+                    <td>DSP固件版本</td>
+                </tr>
+                <tr>
+                    <td><code>0x0192-0x0193</code></td>
+                    <td><code>InverterModule</code></td>
+                    <td>逆变器模块号</td>
+                </tr>
+                <tr>
+                    <td><code>0x0194</code></td>
+                    <td><code>HardwareVersion</code></td>
+                    <td>硬件版本</td>
+                </tr>
+                <tr>
+                    <td><code>0x0195-0x0198</code></td>
+                    <td><code>Inverter_SN</code></td>
+                    <td>逆变器序列号（BCD编码）</td>
+                </tr>
+                <tr>
+                    <td><code>0x0199-0x019A</code></td>
+                    <td><code>DeviceTypeCode</code></td>
+                    <td>设备类型代码</td>
+                </tr>
+                <tr>
+                    <td><code>0x019B</code></td>
+                    <td><code>RateWatt</code></td>
+                    <td>额定功率（W）</td>
+                </tr>
+                <tr>
+                    <td><code>0x019C</code></td>
+                    <td><code>RateVA</code></td>
+                    <td>额定视在功率（VA）</td>
+                </tr>
+                <tr>
+                    <td><code>0x019D</code></td>
+                    <td><code>NomGridVolt</code></td>
+                    <td>额定电网电压（V）</td>
+                </tr>
+                <tr>
+                    <td><code>0x019E</code></td>
+                    <td><code>NomGridFreq</code></td>
+                    <td>额定电网频率（Hz）</td>
+                </tr>
+                <tr>
+                    <td><code>0x019F</code></td>
+                    <td><code>NomBatVolt</code></td>
+                    <td>额定电池电压（V）</td>
+                </tr>
+                <tr>
+                    <td><code>0x01A0</code></td>
+                    <td><code>NomPvCurr</code></td>
+                    <td>额定PV电流（A）</td>
+                </tr>
+                <tr>
+                    <td><code>0x01A1</code></td>
+                    <td><code>NomAcChgCurr</code></td>
+                    <td>额定AC充电电流（A）</td>
+                </tr>
+                <tr>
+                    <td><code>0x01A2</code></td>
+                    <td><code>NomOpVolt</code></td>
+                    <td>额定输出电压（V）</td>
+                </tr>
+                <tr>
+                    <td><code>0x01A3</code></td>
+                    <td><code>NomOpFreq</code></td>
+                    <td>额定输出频率（Hz）</td>
+                </tr>
+                <tr>
+                    <td><code>0x01A4</code></td>
+                    <td><code>NomOpPow</code></td>
+                    <td>额定输出功率（W）</td>
+                </tr>
+                <tr>
+                    <td><code>0x01A5</code></td>
+                    <td><code>BLVersion</code></td>
+                    <td>Bootloader版本</td>
+                </tr>
+            </table>
+
+            <h3>7.5 测试运行参数（命令码 0x14）</h3>
+            <p>测试参数结构与运行参数类似，但单位不同（如电压单位为1V而非0.1V）。用于调试和测试。</p>
+            
+            <h4>系统状态位定义 (SysStatus)</h4>
+            <table>
+                <tr>
+                    <th>位</th>
+                    <th>名称</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td>Bit 0</td>
+                    <td><code>StandBy</code></td>
+                    <td>待机状态</td>
+                </tr>
+                <tr>
+                    <td>Bit 1</td>
+                    <td><code>Fault</code></td>
+                    <td>故障状态</td>
+                </tr>
+                <tr>
+                    <td>Bit 2</td>
+                    <td><code>Charge</code></td>
+                    <td>充电中</td>
+                </tr>
+                <tr>
+                    <td>Bit 3</td>
+                    <td><code>Discharging</code></td>
+                    <td>放电中</td>
+                </tr>
+                <tr>
+                    <td>Bit 4</td>
+                    <td><code>PVCharging</code></td>
+                    <td>PV充电中</td>
+                </tr>
+                <tr>
+                    <td>Bit 5</td>
+                    <td><code>ACCharging</code></td>
+                    <td>AC充电中</td>
+                </tr>
+                <tr>
+                    <td>Bit 6</td>
+                    <td><code>GenCharging</code></td>
+                    <td>发电机充电中</td>
+                </tr>
+                <tr>
+                    <td>Bit 7</td>
+                    <td><code>ACBypass</code></td>
+                    <td>AC旁路</td>
+                </tr>
+                <tr>
+                    <td>Bit 8</td>
+                    <td><code>ToLoad</code></td>
+                    <td>输出到负载</td>
+                </tr>
+                <tr>
+                    <td>Bit 9</td>
+                    <td><code>Pvinput</code></td>
+                    <td>PV输入</td>
+                </tr>
+                <tr>
+                    <td>Bit 10</td>
+                    <td><code>AcInput</code></td>
+                    <td>AC输入</td>
+                </tr>
+                <tr>
+                    <td>Bit 11</td>
+                    <td><code>GeInput</code></td>
+                    <td>发电机输入</td>
+                </tr>
+            </table>
+
+            <h4>测试参数字段</h4>
+            <table>
+                <tr>
+                    <th>偏移</th>
+                    <th>名称</th>
+                    <th>描述</th>
+                    <th>单位</th>
+                </tr>
+                <tr><td>+0</td><td><code>SysStatus</code></td><td>系统状态位</td><td>-</td></tr>
+                <tr><td>+2</td><td><code>Vpv1</code></td><td>PV1电压</td><td>1V</td></tr>
+                <tr><td>+4</td><td><code>Vpv2</code></td><td>PV2电压</td><td>1V</td></tr>
+                <tr><td>+6</td><td><code>Ppv</code></td><td>PV总功率</td><td>1W</td></tr>
+                <tr><td>+10</td><td><code>OutputWatt</code></td><td>输出有功功率</td><td>0.1W</td></tr>
+                <tr><td>+14</td><td><code>OutputVA</code></td><td>输出视在功率</td><td>0.1VA</td></tr>
+                <tr><td>+18</td><td><code>OutputCurr</code></td><td>输出电流</td><td>0.1A</td></tr>
+                <tr><td>+20</td><td><code>ACChrWatt</code></td><td>AC充电功率</td><td>0.1W</td></tr>
+                <tr><td>+24</td><td><code>ACChrVA</code></td><td>AC充电视在功率</td><td>0.1VA</td></tr>
+                <tr><td>+28</td><td><code>GridVolt</code></td><td>电网电压</td><td>0.1V</td></tr>
+                <tr><td>+30</td><td><code>GridFreq</code></td><td>电网频率</td><td>0.01Hz</td></tr>
+                <tr><td>+32</td><td><code>ACOutputVolt</code></td><td>AC输出电压</td><td>0.1V</td></tr>
+                <tr><td>+34</td><td><code>ACOutputFreq</code></td><td>AC输出频率</td><td>0.01Hz</td></tr>
+                <tr><td>+36</td><td><code>ACInWatt</code></td><td>AC输入功率</td><td>0.1W</td></tr>
+                <tr><td>+40</td><td><code>ACInVA</code></td><td>AC输入视在功率</td><td>0.1VA</td></tr>
+                <tr><td>+44</td><td><code>ACDisChrWatt</code></td><td>AC旁路放电功率</td><td>0.1kWh</td></tr>
+                <tr><td>+48</td><td><code>ACDisChrVA</code></td><td>AC旁路放电视在</td><td>0.1VA</td></tr>
+                <tr><td>+52</td><td><code>ACChrCurr</code></td><td>AC充电电流</td><td>0.1A</td></tr>
+                <tr><td>+54</td><td><code>BatVolt</code></td><td>电池电压</td><td>0.01V</td></tr>
+                <tr><td>+56</td><td><code>BatterySOC</code></td><td>电池SOC</td><td>%</td></tr>
+                <tr><td>+58</td><td><code>BatDisChrWatt</code></td><td>电池放电功率</td><td>0.1W</td></tr>
+                <tr><td>+62</td><td><code>BatChrWatt</code></td><td>电池充电功率</td><td>0.1W</td></tr>
+                <tr><td>+66</td><td><code>BatChgCurr</code></td><td>电池充电电流</td><td>0.1A</td></tr>
+                <tr><td>+68</td><td><code>BatDischgCurr</code></td><td>电池放电电流</td><td>0.1A</td></tr>
+                <tr><td>+70</td><td><code>BatOverCharge</code></td><td>过充标志</td><td>-</td></tr>
+                <tr><td>+72</td><td><code>BusVolt</code></td><td>母线电压</td><td>0.01V</td></tr>
+                <tr><td>+74</td><td><code>LoadPercent</code></td><td>负载百分比</td><td>0.10%</td></tr>
+                <tr><td>+76</td><td><code>Warning</code></td><td>告警位</td><td>-</td></tr>
+                <tr><td>+80</td><td><code>BmsWarning</code></td><td>BMS告警</td><td>-</td></tr>
+                <tr><td>+82</td><td><code>FaultValue</code></td><td>故障码</td><td>-</td></tr>
+                <tr><td>+84</td><td><code>InvertTemp</code></td><td>逆变温度</td><td>0.1°C</td></tr>
+                <tr><td>+86</td><td><code>BoostTemp</code></td><td>Boost温度</td><td>0.1°C</td></tr>
+                <tr><td>+88</td><td><code>TransformerTemp</code></td><td>变压器温度</td><td>0.1°C</td></tr>
+                <tr><td>+90</td><td><code>PVTemp</code></td><td>PV温度</td><td>0.1°C</td></tr>
+            </table>
+        </section>
+
+        <section id="flow" class="section">
+            <h2>8. 通信流程</h2>
+            
+            <h3>8.1 读取参数流程</h3>
+            <div class="flow-chart">
+                <div class="flow-step">采集器发送读取命令<br><code>READ_CTRLPARAM / READ_RUNPARAM</code></div>
+                <div class="flow-step">逆变器接收并PPP解封装</div>
+                <div class="flow-step">TEA双重解密</div>
+                <div class="flow-step">校验Header和CRC32</div>
+                <div class="flow-step">解析命令并读取参数</div>
+                <div class="flow-step">构建响应帧</div>
+                <div class="flow-step">TEA双重加密</div>
+                <div class="flow-step">PPP封装并发送</div>
+            </div>
+
+            <h3>8.2 写入参数流程</h3>
+            <div class="flow-chart">
+                <div class="flow-step">采集器发送写入命令<br><code>WRITE_CTRLPARAM</code></div>
+                <div class="flow-step">逆变器接收并PPP解封装</div>
+                <div class="flow-step">TEA双重解密</div>
+                <div class="flow-step">校验Header和CRC32</div>
+                <div class="flow-step">验证参数范围</div>
+                <div class="flow-step">写入参数到EEPROM</div>
+                <div class="flow-step">更新DSP参数</div>
+                <div class="flow-step">发送状态响应</div>
+            </div>
+
+            <h3>8.3 连接管理</h3>
+            <p>系统使用<code>CollectorConnect</code>变量管理连接状态：</p>
+            <ul>
+                <li>每收到有效命令，<code>CollectorConnect</code>重置为<code>1200</code>（约120秒）</li>
+                <li>每100ms递减一次</li>
+                <li>递减到0表示连接超时</li>
+                <li>可用于检测采集器在线状态</li>
+            </ul>
+        </section>
+
+        <section id="examples" class="section">
+            <h2>9. 示例报文</h2>
+            
+            <h3>9.1 读取控制参数示例</h3>
+            <p>读取输出优先级（地址0x0000）和最大充电电流（地址0x0001）：</p>
+            <pre>
+原始帧（未加密）：
+AA 10 00 01 00 00 04 00 [CRC32]
+
+字段解析：
+- Header: 0xAA
+- CmdLen: 0x0010 (16字节)
+- CMD: 0x01 (READ_CTRLPARAM)
+- Param1: 0x0000 (起始地址)
+- Param2: 0x0004 (读取4字节，2个参数)
+- Data: 空
+- CRC32: 校验值
+
+加密后帧（示意）：
+[加密数据...] [密钥片段]
+
+PPP封装后：
+7E [转义后的加密数据] 7E
+            </pre>
+
+            <h3>9.2 写入控制参数示例</h3>
+            <p>设置输出优先级为3：</p>
+            <pre>
+原始帧（未加密）：
+AA 0C 00 02 00 00 02 00 03 00 [CRC32]
+
+字段解析：
+- Header: 0xAA
+- CmdLen: 0x000C (12字节)
+- CMD: 0x02 (WRITE_CTRLPARAM)
+- Param1: 0x0000 (地址)
+- Param2: 0x0002 (写入2字节)
+- Data: 0x0003 (值=3)
+- CRC32: 校验值
+
+响应帧（成功）：
+AA 0C 00 02 00 00 01 00 00 00 00 00 [CRC32]
+            </pre>
+
+            <h3>9.3 读取运行参数示例</h3>
+            <p>读取电池电压和SOC：</p>
+            <pre>
+原始帧（未加密）：
+AA 10 00 03 62 03 04 00 [CRC32]
+
+字段解析：
+- Header: 0xAA
+- CmdLen: 0x0010 (16字节)
+- CMD: 0x03 (READ_RUNPARAM)
+- Param1: 0x0362 (地址=0x03E8 + 偏移)
+- Param2: 0x0004 (读取4字节)
+
+响应数据包含：
+- BatVolt: 电池电压 (0.01V)
+- BatterySOC: 电池SOC (%)
+            </pre>
+        </section>
+
+        <section id="errors" class="section">
+            <h2>10. 错误处理</h2>
+            
+            <h3>10.1 状态码定义</h3>
+            <table>
+                <tr>
+                    <th>状态码</th>
+                    <th>名称</th>
+                    <th>描述</th>
+                </tr>
+                <tr>
+                    <td><code>0</code></td>
+                    <td><code>SUCCESSFUL</code></td>
+                    <td>执行成功</td>
+                </tr>
+                <tr>
+                    <td><code>1</code></td>
+                    <td><code>CHECK_ERR</code></td>
+                    <td>校验错误</td>
+                </tr>
+                <tr>
+                    <td><code>3</code></td>
+                    <td><code>WAIT_TIMEOUT</code></td>
+                    <td>等待超时（设备号不为0时设备无响应）</td>
+                </tr>
+                <tr>
+                    <td><code>7</code></td>
+                    <td><code>EXEC_FAIL</code></td>
+                    <td>执行失败（如写入Flash错误）</td>
+                </tr>
+            </table>
+
+            <h3>10.2 常见错误场景</h3>
+            <table>
+                <tr>
+                    <th>场景</th>
+                    <th>处理方式</th>
+                </tr>
+                <tr>
+                    <td>Header不是0xAA</td>
+                    <td>静默丢弃，不响应</td>
+                </tr>
+                <tr>
+                    <td>CmdLen不合法</td>
+                    <td>静默丢弃，不响应</td>
+                </tr>
+                <tr>
+                    <td>CRC32校验失败</td>
+                    <td>静默丢弃，不响应</td>
+                </tr>
+                <tr>
+                    <td>参数地址越界</td>
+                    <td>静默丢弃，不响应</td>
+                </tr>
+                <tr>
+                    <td>参数长度为0或奇数</td>
+                    <td>静默丢弃，不响应</td>
+                </tr>
+                <tr>
+                    <td>接收超时（10ms）</td>
+                    <td>重置接收状态机</td>
+                </tr>
+                <tr>
+                    <td>帧长度超过1088字节</td>
+                    <td>重置接收状态机</td>
+                </tr>
+            </table>
+
+            <h3>10.3 超时管理</h3>
+            <pre>
+// 接收超时处理（每10ms调用一次）
+void InvRxTimeOutManage(void) {
+    if(USARTCmdData.RxTimeout) {
+        USARTCmdData.RxTimeout--;
+        if(USARTCmdData.RxTimeout == 0 && 
+           USARTCmdData.stataus == ISRCVING) {
+            // 超时，重置接收状态
+            USARTCmdData.length = 0;
+            USARTCmdData.stataus = WAITRECEVIE;
+            USARTCmdData.Flg7E = 0;
+        }
+    }
+}
+            </pre>
+        </section>
+
+        <footer>
+            <p>辰烁科技 | 文档版本：v1.0 | 生成日期：2026-07-31 | 基于源码分析自动生成</p>
+            <p>源文件位置：source/Collector/</p>
+        </footer>
+    </div>
+</body>
+</html>

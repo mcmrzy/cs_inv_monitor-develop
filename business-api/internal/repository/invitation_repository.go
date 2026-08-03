@@ -337,37 +337,3 @@ func (r *InvitationRepository) Insert(ctx context.Context, tx pgx.Tx, invitation
 		invitation.ExpiresAt, invitation.Status, invitation.CreatedAt, invitation.UpdatedAt,
 	).Scan(&invitation.ID)
 }
-
-// roleNames maps legacy role IDs to human-readable names
-var roleNames = map[int]string{
-	1: "org_admin",
-	2: "agent",
-	3: "distributor",
-	4: "installer",
-	5: "customer",
-}
-
-// roleCodes maps legacy role IDs to role code strings
-var roleCodes = map[int]string{
-	1: "org_admin",
-	2: "agent",
-	3: "distributor",
-	4: "installer",
-	5: "customer",
-}
-
-// GetRoleName returns the human-readable name for a legacy role ID
-func GetRoleName(roleID int) string {
-	if name, ok := roleNames[roleID]; ok {
-		return name
-	}
-	return fmt.Sprintf("role_%d", roleID)
-}
-
-// GetRoleCode returns the role code string for a legacy role ID
-func GetRoleCode(roleID int) string {
-	if code, ok := roleCodes[roleID]; ok {
-		return code
-	}
-	return fmt.Sprintf("role_%d", roleID)
-}

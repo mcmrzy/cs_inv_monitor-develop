@@ -18,13 +18,12 @@ import (
 )
 
 type UserRepository struct {
-	db     *pgxpool.Pool
-	roleDB rolePermissionQuerier
-	cache  *redis.Client
+	db    *pgxpool.Pool
+	cache *redis.Client
 }
 
 func NewUserRepository(db *pgxpool.Pool, cache *redis.Client) *UserRepository {
-	return &UserRepository{db: db, roleDB: db, cache: cache}
+	return &UserRepository{db: db, cache: cache}
 }
 
 func (r *UserRepository) IsUserInScope(ctx context.Context, actorID, targetID int64) (bool, error) {
@@ -38,25 +37,20 @@ func (r *UserRepository) IsUserInScope(ctx context.Context, actorID, targetID in
 	return allowed, err
 }
 
-type rolePermissionQuerier interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
-
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, parent_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
 			   COALESCE(timezone,'Asia/Shanghai'), COALESCE(country,''), COALESCE(region_name,''), COALESCE(bio,''), last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE id = $1 AND deleted_at IS NULL
 	`
 
 	var user model.User
-	var regionID, parentID sql.NullInt64
+	var regionID sql.NullInt64
 	var lastLoginAt sql.NullTime
 
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &user.Nickname, &user.Avatar,
-		&user.Role, &user.IsSystemAdmin, &regionID, &parentID, &user.Status, &user.Timezone,
+		&user.IsSystemAdmin, &regionID, &user.Status, &user.Timezone,
 		&user.Country, &user.RegionName, &user.Bio, &lastLoginAt, &user.LastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -71,9 +65,6 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 	if regionID.Valid {
 		user.RegionID = &regionID.Int64
 	}
-	if parentID.Valid {
-		user.ParentID = &parentID.Int64
-	}
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
 	}
@@ -83,7 +74,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 
 func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, is_system_admin, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
 			   last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE phone = $1 AND deleted_at IS NULL
 	`
@@ -95,7 +86,7 @@ func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.U
 
 	err := r.db.QueryRow(ctx, query, phone).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &nickname, &avatar,
-		&user.Role, &user.IsSystemAdmin, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
+		&user.IsSystemAdmin, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -127,8 +118,8 @@ func (r *UserRepository) GetByPhone(ctx context.Context, phone string) (*model.U
 
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	query := `
-		INSERT INTO users (phone, email, password_hash, nickname, avatar, role, parent_id, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+		INSERT INTO users (phone, email, password_hash, nickname, avatar, is_system_admin, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 
@@ -138,15 +129,15 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	}
 
 	return r.db.QueryRow(ctx, query,
-		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.Role, user.ParentID, user.Status,
+		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.IsSystemAdmin, user.Status,
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 }
 
 // CreateWithTx creates a user within a transaction
 func (r *UserRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, user *model.User) error {
 	query := `
-		INSERT INTO users (phone, email, password_hash, nickname, avatar, role, parent_id, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+		INSERT INTO users (phone, email, password_hash, nickname, avatar, is_system_admin, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 
@@ -156,79 +147,14 @@ func (r *UserRepository) CreateWithTx(ctx context.Context, tx pgx.Tx, user *mode
 	}
 
 	return tx.QueryRow(ctx, query,
-		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.Role, user.ParentID, user.Status,
+		user.Phone, email, user.PasswordHash, user.Nickname, user.Avatar, user.IsSystemAdmin, user.Status,
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 }
 
-// ListByParentID 查询指定上级用户的下级用户列表
-func (r *UserRepository) ListByParentID(ctx context.Context, parentID int64, page, pageSize int) ([]*model.User, int64, error) {
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-	offset := (page - 1) * pageSize
-
-	var total int64
-	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE parent_id = $1 AND deleted_at IS NULL`, parentID).Scan(&total)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	query := `
-		SELECT id, phone, COALESCE(email,''), COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, parent_id, status,
-			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, created_at, updated_at
-		FROM users WHERE parent_id = $1 AND deleted_at IS NULL
-		ORDER BY id DESC LIMIT $2 OFFSET $3
-	`
-
-	rows, err := r.db.Query(ctx, query, parentID, pageSize, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	var users []*model.User
-	for rows.Next() {
-		var user model.User
-		var regionID, pid sql.NullInt64
-		var lastLoginAt sql.NullTime
-
-		if err := rows.Scan(&user.ID, &user.Phone, &user.Email, &user.Nickname, &user.Avatar,
-			&user.Role, &user.IsSystemAdmin, &regionID, &pid, &user.Status, &user.Timezone, &lastLoginAt,
-			&user.CreatedAt, &user.UpdatedAt); err != nil {
-			continue
-		}
-
-		if regionID.Valid {
-			user.RegionID = &regionID.Int64
-		}
-		if pid.Valid {
-			user.ParentID = &pid.Int64
-		}
-		if lastLoginAt.Valid {
-			user.LastLoginAt = &lastLoginAt.Time
-		}
-		users = append(users, &user)
-	}
-
-	if users == nil {
-		users = []*model.User{}
-	}
-
-	return users, total, nil
-}
-
-// UpdateParentID 修改用户的上级关系
-func (r *UserRepository) UpdateParentID(ctx context.Context, userID int64, parentID *int64) error {
-	_, err := r.db.Exec(ctx, `UPDATE users SET parent_id = $1, updated_at = NOW() WHERE id = $2`, parentID, userID)
-	return err
-}
-
+// GetByEmail 根据邮箱查询用户
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, is_system_admin, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
 			   COALESCE(timezone,'Asia/Shanghai'), last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE email = $1 AND deleted_at IS NULL
 	`
@@ -240,7 +166,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 	err := r.db.QueryRow(ctx, query, email).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &nickname, &avatar,
-		&user.Role, &user.IsSystemAdmin, &regionID, &user.Status, &user.Timezone, &lastLoginAt, &lastLoginIP,
+		&user.IsSystemAdmin, &regionID, &user.Status, &user.Timezone, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -272,7 +198,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 func (r *UserRepository) GetByNickname(ctx context.Context, nickname string) (*model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, role, is_system_admin, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, nickname, avatar, is_system_admin, region_id, status,
 			   last_login_at, last_login_ip, created_at, updated_at
 		FROM users WHERE nickname = $1 AND deleted_at IS NULL LIMIT 1
 	`
@@ -284,7 +210,7 @@ func (r *UserRepository) GetByNickname(ctx context.Context, nickname string) (*m
 
 	err := r.db.QueryRow(ctx, query, nickname).Scan(
 		&user.ID, &user.Phone, &user.Email, &user.PasswordHash, &n, &avatar,
-		&user.Role, &user.IsSystemAdmin, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
+		&user.IsSystemAdmin, &regionID, &user.Status, &lastLoginAt, &lastLoginIP,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 
@@ -390,7 +316,7 @@ func (r *UserRepository) Delete(ctx context.Context, userID int64) error {
 
 func (r *UserRepository) ListAll(ctx context.Context) ([]model.User, error) {
 	query := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
 		       last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE deleted_at IS NULL ORDER BY id DESC
 	`
@@ -401,7 +327,6 @@ type ListUsersParams struct {
 	Page     int
 	PageSize int
 	Keyword  string
-	Role     int
 	Status   int
 }
 
@@ -414,7 +339,7 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 	offset := (params.Page - 1) * params.PageSize
 
 	baseQuery := `
-		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), role, is_system_admin, region_id, status,
+		SELECT id, phone, COALESCE(email,''), password_hash, COALESCE(nickname,''), COALESCE(avatar,''), is_system_admin, region_id, status,
 		       last_login_at, COALESCE(last_login_ip,''), created_at, updated_at
 		FROM users WHERE deleted_at IS NULL
 	`
@@ -425,12 +350,6 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 		baseQuery += ` AND (phone ILIKE $1 OR email ILIKE $1 OR nickname ILIKE $1)`
 		countQuery += ` AND (phone ILIKE $1 OR email ILIKE $1 OR nickname ILIKE $1)`
 		args = append(args, "%"+params.Keyword+"%")
-	}
-
-	if params.Role >= 0 {
-		baseQuery += fmt.Sprintf(" AND role = $%d", len(args)+1)
-		countQuery += fmt.Sprintf(" AND role = $%d", len(args)+1)
-		args = append(args, params.Role)
 	}
 
 	if params.Status >= 0 {
@@ -461,7 +380,7 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 		var regionID sql.NullInt64
 		var lastLoginAt sql.NullTime
 		err := rows.Scan(&user.ID, &user.Phone, &user.Email, &user.PasswordHash,
-			&user.Nickname, &user.Avatar, &user.Role, &user.IsSystemAdmin, &regionID, &user.Status,
+			&user.Nickname, &user.Avatar, &user.IsSystemAdmin, &regionID, &user.Status,
 			&lastLoginAt, &user.LastLoginIP, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, err
@@ -489,38 +408,12 @@ func (r *UserRepository) List(ctx context.Context, params ListUsersParams) (*Lis
 }
 
 // Deprecated: Use organization-based role assignments instead. Will be removed in Phase 8.
-func (r *UserRepository) UpdateRole(ctx context.Context, userID int64, role int) error {
-	_, err := r.db.Exec(ctx, "UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2", role, userID)
-	if err == nil {
-		r.invalidateUserPermissionCache(ctx, userID)
-	}
-	return err
-}
-
-// Deprecated: Use organization-based role assignments instead. Will be removed in Phase 8.
-// UpdateRoleWithTx updates a user's role within a transaction
-func (r *UserRepository) UpdateRoleWithTx(ctx context.Context, tx pgx.Tx, userID int64, role int) error {
-	_, err := tx.Exec(ctx, "UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2", role, userID)
-	return err
-}
-
+// The legacy users.role column was removed by migration 076; the dual model maps
+// role == 0 (system admin) onto the is_system_admin flag.
 func (r *UserRepository) UpdateStatus(ctx context.Context, userID int64, status int) error {
 	_, err := r.db.Exec(ctx, "UPDATE users SET status = $1, session_version = session_version + 1, updated_at = NOW() WHERE id = $2", status, userID)
 	if err == nil {
 		r.invalidateUserPermissionCache(ctx, userID)
-	}
-	return err
-}
-
-// Deprecated: Use role_permission_grants instead. Will be removed in Phase 8.
-func (r *UserRepository) UpsertPermission(ctx context.Context, role int, resource string, action string, isAllowed bool) error {
-	_, err := r.db.Exec(ctx, `
-		INSERT INTO role_permissions (role, resource, action, is_allowed, updated_at)
-		VALUES ($1, $2, $3, $4, NOW())
-		ON CONFLICT (role, resource, action) DO UPDATE SET is_allowed = $4, updated_at = NOW()
-	`, role, resource, action, isAllowed)
-	if err == nil {
-		r.invalidateRolePermissionCache(ctx, int64(role))
 	}
 	return err
 }
@@ -530,13 +423,6 @@ func (r *UserRepository) invalidateUserPermissionCache(ctx context.Context, user
 		return
 	}
 	r.cache.Del(ctx, fmt.Sprintf("rbac:user:%d", userID))
-}
-
-func (r *UserRepository) invalidateRolePermissionCache(ctx context.Context, roleID int64) {
-	if r.cache == nil {
-		return
-	}
-	r.cache.Del(ctx, fmt.Sprintf("rbac:role:%d", roleID))
 }
 
 func (r *UserRepository) queryUsers(ctx context.Context, query string) ([]model.User, error) {
@@ -552,7 +438,7 @@ func (r *UserRepository) queryUsers(ctx context.Context, query string) ([]model.
 		var regionID sql.NullInt64
 		var lastLoginAt sql.NullTime
 		err := rows.Scan(&user.ID, &user.Phone, &user.Email, &user.PasswordHash,
-			&user.Nickname, &user.Avatar, &user.Role, &user.IsSystemAdmin, &regionID, &user.Status,
+			&user.Nickname, &user.Avatar, &user.IsSystemAdmin, &regionID, &user.Status,
 			&lastLoginAt, &user.LastLoginIP, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			continue
@@ -568,53 +454,40 @@ func (r *UserRepository) queryUsers(ctx context.Context, query string) ([]model.
 	return users, nil
 }
 
-func (r *UserRepository) GetUserRoleIDs(ctx context.Context, userID int64) ([]int64, error) {
-	var roleID int64
-	err := r.roleDB.QueryRow(ctx, `
-		SELECT role
-		FROM users
-		WHERE id = $1 AND deleted_at IS NULL
-	`, userID).Scan(&roleID)
-	if err == pgx.ErrNoRows {
-		return []int64{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return []int64{roleID}, nil
-}
-
-type PermissionEntry struct {
-	Resource string `json:"resource"`
-	Action   string `json:"action"`
-}
-
-// Deprecated: Use AuthorizationRepository.LoadAllPermissionCodes instead. Will be removed in Phase 8.
-func (r *UserRepository) GetRolePermissions(ctx context.Context, roleID int64) ([]PermissionEntry, error) {
-	rows, err := r.roleDB.Query(ctx, `
-		SELECT resource, action
-		FROM role_permissions
-		WHERE role = $1 AND is_allowed = true
-		ORDER BY resource, action
-	`, roleID)
+// GetUserPermissionCodes returns the distinct permission codes granted to a
+// user through their active organization memberships and role assignments
+// (new organization-based permission system).
+func (r *UserRepository) GetUserPermissionCodes(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT DISTINCT pg.permission_code
+		FROM organization_memberships m
+		JOIN membership_role_assignments ra
+		  ON ra.root_tenant_id = m.root_tenant_id
+		 AND ra.organization_id = m.organization_id
+		 AND ra.membership_id = m.id
+		JOIN role_permission_grants pg
+		  ON pg.root_tenant_id = ra.root_tenant_id
+		 AND pg.organization_id = ra.organization_id
+		 AND pg.role_assignment_id = ra.id
+		WHERE m.user_id = $1 AND m.status = 'active' AND ra.status = 'active'
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	perms := make([]PermissionEntry, 0)
+	codes := make([]string, 0)
 	for rows.Next() {
-		var p PermissionEntry
-		if err := rows.Scan(&p.Resource, &p.Action); err != nil {
+		var code string
+		if err := rows.Scan(&code); err != nil {
 			return nil, err
 		}
-		perms = append(perms, p)
+		codes = append(codes, code)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return perms, nil
+	return codes, nil
 }
 
 type StationRepository struct {
@@ -973,7 +846,7 @@ func (r *DeviceRepository) GetBySN(ctx context.Context, sn string) (*model.Devic
 	return &device, nil
 }
 
-func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error) {
+func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, stationID int64, status int, keyword string, page, pageSize int) ([]*model.Device, int64, error) {
 	offset := (page - 1) * pageSize
 
 	allowedSNsSubquery := `(SELECT sn FROM devices WHERE user_id = $1 AND deleted_at IS NULL UNION SELECT device_sn FROM user_device_rel WHERE user_id = $1)`
@@ -994,7 +867,13 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 		argIdx++
 	}
 
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM devices d LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
+	if keyword != "" {
+		baseQuery += fmt.Sprintf(" AND (d.sn ILIKE $%d OR d.model ILIKE $%d OR dm.model_code ILIKE $%d OR dm.model_name ILIKE $%d)", argIdx, argIdx, argIdx, argIdx)
+		args = append(args, "%"+keyword+"%")
+		argIdx++
+	}
+
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL AND d.sn IN %s`, allowedSNsSubquery)
 	countArgs := []interface{}{userID}
 	countIdx := 2
 	if stationID > 0 {
@@ -1005,6 +884,11 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 	if status >= 0 {
 		countQuery += fmt.Sprintf(" AND d.status = $%d", countIdx)
 		countArgs = append(countArgs, status)
+		countIdx++
+	}
+	if keyword != "" {
+		countQuery += fmt.Sprintf(" AND (d.sn ILIKE $%d OR d.model ILIKE $%d OR dm.model_code ILIKE $%d OR dm.model_name ILIKE $%d)", countIdx, countIdx, countIdx, countIdx)
+		countArgs = append(countArgs, "%"+keyword+"%")
 		countIdx++
 	}
 	var total int64
@@ -1054,7 +938,7 @@ func (r *DeviceRepository) GetByUserID(ctx context.Context, userID int64, statio
 	return devices, total, nil
 }
 
-func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, page, pageSize int) ([]*model.Device, int64, error) {
+func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status int, keyword string, page, pageSize int) ([]*model.Device, int64, error) {
 	offset := (page - 1) * pageSize
 
 	baseQuery := ` FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
@@ -1073,7 +957,13 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 		argIdx++
 	}
 
-	countQuery := `SELECT COUNT(*) FROM devices d LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
+	if keyword != "" {
+		baseQuery += fmt.Sprintf(" AND (d.sn ILIKE $%d OR d.model ILIKE $%d OR dm.model_code ILIKE $%d OR dm.model_name ILIKE $%d)", argIdx, argIdx, argIdx, argIdx)
+		args = append(args, "%"+keyword+"%")
+		argIdx++
+	}
+
+	countQuery := `SELECT COUNT(*) FROM devices d LEFT JOIN device_models dm ON d.model_id = dm.id LEFT JOIN stations s ON s.id = d.station_id WHERE d.deleted_at IS NULL`
 	countArgs := []interface{}{}
 	countIdx := 1
 	if stationID > 0 {
@@ -1084,6 +974,11 @@ func (r *DeviceRepository) GetAll(ctx context.Context, stationID int64, status, 
 	if status >= 0 {
 		countQuery += fmt.Sprintf(" AND d.status = $%d", countIdx)
 		countArgs = append(countArgs, status)
+		countIdx++
+	}
+	if keyword != "" {
+		countQuery += fmt.Sprintf(" AND (d.sn ILIKE $%d OR d.model ILIKE $%d OR dm.model_code ILIKE $%d OR dm.model_name ILIKE $%d)", countIdx, countIdx, countIdx, countIdx)
+		countArgs = append(countArgs, "%"+keyword+"%")
 		countIdx++
 	}
 	var total int64
@@ -1140,6 +1035,7 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 		LEFT JOIN v_device_latest rd ON rd.device_sn = d.sn
 		LEFT JOIN stations s ON s.id = d.station_id
 		WHERE d.station_id = $1 AND d.deleted_at IS NULL
+		ORDER BY d.sort_order, d.id
 	`
 
 	rows, err := r.db.Query(ctx, query, stationID)
@@ -1178,6 +1074,33 @@ func (r *DeviceRepository) GetByStationID(ctx context.Context, stationID int64) 
 	}
 
 	return devices, nil
+}
+
+// ReorderDevices persists the display order of devices within a station.
+// Devices outside the provided order are reset to sort_order 0, and the
+// provided SNs are assigned sequential sort_order values (1..N) in a single
+// transaction, so a partial client payload cannot corrupt the ordering.
+func (r *DeviceRepository) ReorderDevices(ctx context.Context, stationID int64, order []string) error {
+	if len(order) == 0 {
+		return nil
+	}
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `UPDATE devices SET sort_order = 0, updated_at = NOW()
+		WHERE station_id = $1 AND deleted_at IS NULL AND NOT (sn = ANY($2))`, stationID, order); err != nil {
+		return err
+	}
+	for i, sn := range order {
+		if _, err := tx.Exec(ctx, `UPDATE devices SET sort_order = $1, updated_at = NOW()
+			WHERE station_id = $2 AND sn = $3 AND deleted_at IS NULL`, i+1, stationID, sn); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func normalizeRealtimeData(data map[string]interface{}) map[string]interface{} {
@@ -1789,6 +1712,41 @@ func (r *DeviceRepository) Update(ctx context.Context, sn string, model string, 
 			updated_at = NOW()
 		WHERE sn = $1 AND deleted_at IS NULL`,
 		sn, model, ratedPower, firmwareArm, firmwareEsp)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("device not found: %s", sn)
+	}
+	r.invalidateDeviceCache(ctx, sn)
+	return nil
+}
+
+// UpdateWithModel 按型号同步更新设备的全部型号关联参数（model_id、额定参数、电池参数、制造商等）。
+func (r *DeviceRepository) UpdateWithModel(ctx context.Context, sn string, m *model.DeviceModel) error {
+	// rated_power 以 kW 存储：优先使用 rated_power_kw，其次由 rated_power_w 换算
+	ratedPowerKW := m.RatedPowerKw
+	if ratedPowerKW <= 0 && m.RatedPowerW > 0 {
+		ratedPowerKW = float64(m.RatedPowerW) / 1000
+	}
+	result, err := r.db.Exec(ctx, `
+		UPDATE devices SET
+			model_id = $2,
+			model = $3,
+			manufacturer = $4,
+			device_type = $5,
+			rated_power = $6,
+			rated_voltage = $7,
+			rated_freq = $8,
+			battery_voltage = $9,
+			battery_type = $10,
+			cell_count = $11,
+			temp_sensor_count = $12,
+			updated_at = NOW()
+		WHERE sn = $1 AND deleted_at IS NULL`,
+		sn, m.ID, m.ModelCode, m.Manufacturer, m.Category,
+		ratedPowerKW, m.RatedVoltageV, m.RatedFrequencyHz,
+		m.BatteryVoltageV, m.BatteryType, m.CellCount, m.TempSensorCount)
 	if err != nil {
 		return err
 	}
@@ -2580,21 +2538,21 @@ func NewAlarmRepository(db *pgxpool.Pool) *AlarmRepository {
 }
 
 type AlarmListParams struct {
-	UserID     int64
-	StationID  int64
-	Status     int
-	AlarmLevel int
-	Keyword    string
-	Page       int
-	PageSize   int
-	Role       int
+	UserID       int64
+	StationID    int64
+	Status       int
+	AlarmLevel   int
+	Keyword      string
+	Page         int
+	PageSize     int
+	IsSystemAdmin bool
 }
 
 func (r *AlarmRepository) List(ctx context.Context, params AlarmListParams) ([]*model.Alarm, int64, error) {
 	offset := (params.Page - 1) * params.PageSize
 
-	// 管理员角色 (role <= 1) 可查看所有告警，普通用户只能查看自己的
-	isAdmin := params.Role <= 1
+	// 系统管理员可查看所有告警，普通用户只能查看自己的
+	isAdmin := params.IsSystemAdmin
 
 	var baseQuery string
 	var args []interface{}
@@ -2820,8 +2778,8 @@ func (r *AlarmRepository) ClearAll(ctx context.Context) error {
 	return err
 }
 
-func (r *AlarmRepository) GetStats(ctx context.Context, userID int64, role ...int) (map[string]interface{}, error) {
-	isAdmin := len(role) > 0 && role[0] <= 1
+func (r *AlarmRepository) GetStats(ctx context.Context, userID int64, isSystemAdmin bool) (map[string]interface{}, error) {
+	isAdmin := isSystemAdmin
 
 	var query string
 	if isAdmin {

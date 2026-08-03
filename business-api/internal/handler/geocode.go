@@ -462,7 +462,11 @@ func reverseGeocodeAmap(lat, lng float64, amapKey string) (*ReverseGeocodeResult
 	// 构造简洁地址：优先用街道+门牌号，否则用 formatted_address 的后半段
 	shortAddr := comp.StreetNumber.Street
 	if comp.StreetNumber.Number != "" {
-		shortAddr += comp.StreetNumber.Number + "号"
+		// 高德 number 字段可能已带"号"后缀（如 "3号"），避免重复拼接成"3号号"
+		number := strings.TrimSuffix(strings.TrimSpace(comp.StreetNumber.Number), "号")
+		if number != "" {
+			shortAddr += number + "号"
+		}
 	}
 	if shortAddr == "" {
 		// fallback: 从 formatted_address 提取（去掉省市区前缀）

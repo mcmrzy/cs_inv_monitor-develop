@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:inv_app/core/services/connection_mode_service.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/service_locator.dart';
 
 import '../../helpers/mock_providers.dart';
@@ -12,14 +11,9 @@ import '../../helpers/mock_providers.dart';
 void main() {
   late ConnectionModeService connectionModeService;
   late MockStorageService mockStorageService;
-  late MockMQTTService mockMQTTService;
 
   setUp(() {
     mockStorageService = MockStorageService();
-    mockMQTTService = MockMQTTService();
-
-    // Register MQTTService mock with getIt for switchToRemote
-    getIt.registerSingleton<MQTTService>(mockMQTTService);
 
     connectionModeService = ConnectionModeService(mockStorageService);
   });
@@ -172,34 +166,12 @@ void main() {
     test('switches to remote mode and saves', () async {
       when(() => mockStorageService.saveIsLocalMode(any()))
           .thenAnswer((_) async {});
-      when(() => mockMQTTService.isConnected).thenReturn(true);
 
       await connectionModeService.switchToRemote();
 
       expect(connectionModeService.currentMode, ConnectionMode.remote);
       expect(connectionModeService.isRemote, true);
       verify(() => mockStorageService.saveIsLocalMode(false)).called(1);
-    });
-
-    test('reconnects MQTT when not connected', () async {
-      when(() => mockStorageService.saveIsLocalMode(any()))
-          .thenAnswer((_) async {});
-      when(() => mockMQTTService.isConnected).thenReturn(false);
-      when(() => mockMQTTService.reconnect()).thenAnswer((_) async {});
-
-      await connectionModeService.switchToRemote();
-
-      verify(() => mockMQTTService.reconnect()).called(1);
-    });
-
-    test('does not reconnect MQTT when already connected', () async {
-      when(() => mockStorageService.saveIsLocalMode(any()))
-          .thenAnswer((_) async {});
-      when(() => mockMQTTService.isConnected).thenReturn(true);
-
-      await connectionModeService.switchToRemote();
-
-      verifyNever(() => mockMQTTService.reconnect());
     });
   });
 

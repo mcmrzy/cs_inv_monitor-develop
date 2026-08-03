@@ -35,14 +35,8 @@ type MockUserRepo struct {
 	DeleteFunc             func(ctx context.Context, userID int64) error
 	ListAllFunc            func(ctx context.Context) ([]model.User, error)
 	ListFunc               func(ctx context.Context, params testutil.ListUsersParams) (*testutil.ListUsersResult, error)
-	ListByParentIDFunc     func(ctx context.Context, parentID int64, page, pageSize int) ([]*model.User, int64, error)
-	UpdateParentIDFunc     func(ctx context.Context, userID int64, parentID *int64) error
-	UpdateRoleFunc         func(ctx context.Context, userID int64, role int) error
 	UpdateStatusFunc       func(ctx context.Context, userID int64, status int) error
 	LogAuditFunc           func(ctx context.Context, operatorID int64, operatorName, action, resourceType, resourceID, detail, ip string)
-	GetUserRoleIDsFunc     func(ctx context.Context, userID int64) ([]int64, error)
-	GetRolePermissionsFunc func(ctx context.Context, roleID int64) ([]testutil.PermissionEntry, error)
-	UpsertPermissionFunc   func(ctx context.Context, role int, resource string, action string, isAllowed bool) error
 
 	// 调用记录
 	Calls []MockCall
@@ -161,30 +155,6 @@ func (m *MockUserRepo) List(ctx context.Context, params testutil.ListUsersParams
 	return &testutil.ListUsersResult{}, nil
 }
 
-func (m *MockUserRepo) ListByParentID(ctx context.Context, parentID int64, page, pageSize int) ([]*model.User, int64, error) {
-	m.record("ListByParentID", parentID, page, pageSize)
-	if m.ListByParentIDFunc != nil {
-		return m.ListByParentIDFunc(ctx, parentID, page, pageSize)
-	}
-	return nil, 0, nil
-}
-
-func (m *MockUserRepo) UpdateParentID(ctx context.Context, userID int64, parentID *int64) error {
-	m.record("UpdateParentID", userID, parentID)
-	if m.UpdateParentIDFunc != nil {
-		return m.UpdateParentIDFunc(ctx, userID, parentID)
-	}
-	return nil
-}
-
-func (m *MockUserRepo) UpdateRole(ctx context.Context, userID int64, role int) error {
-	m.record("UpdateRole", userID, role)
-	if m.UpdateRoleFunc != nil {
-		return m.UpdateRoleFunc(ctx, userID, role)
-	}
-	return nil
-}
-
 func (m *MockUserRepo) UpdateStatus(ctx context.Context, userID int64, status int) error {
 	m.record("UpdateStatus", userID, status)
 	if m.UpdateStatusFunc != nil {
@@ -198,30 +168,6 @@ func (m *MockUserRepo) LogAudit(ctx context.Context, operatorID int64, operatorN
 	if m.LogAuditFunc != nil {
 		m.LogAuditFunc(ctx, operatorID, operatorName, action, resourceType, resourceID, detail, ip)
 	}
-}
-
-func (m *MockUserRepo) GetUserRoleIDs(ctx context.Context, userID int64) ([]int64, error) {
-	m.record("GetUserRoleIDs", userID)
-	if m.GetUserRoleIDsFunc != nil {
-		return m.GetUserRoleIDsFunc(ctx, userID)
-	}
-	return []int64{}, nil
-}
-
-func (m *MockUserRepo) GetRolePermissions(ctx context.Context, roleID int64) ([]testutil.PermissionEntry, error) {
-	m.record("GetRolePermissions", roleID)
-	if m.GetRolePermissionsFunc != nil {
-		return m.GetRolePermissionsFunc(ctx, roleID)
-	}
-	return nil, nil
-}
-
-func (m *MockUserRepo) UpsertPermission(ctx context.Context, role int, resource string, action string, isAllowed bool) error {
-	m.record("UpsertPermission", role, resource, action, isAllowed)
-	if m.UpsertPermissionFunc != nil {
-		return m.UpsertPermissionFunc(ctx, role, resource, action, isAllowed)
-	}
-	return nil
 }
 
 // ==================== MockStationRepo ====================

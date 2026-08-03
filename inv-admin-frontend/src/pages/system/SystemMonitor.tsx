@@ -87,8 +87,10 @@ const ACTION_COLORS: Record<string, string> = {
   command: 'magenta', approve: 'green', reject: 'red',
 }
 
-const ROLE_LABELS: Record<number, string> = {
-  0: '超级管理员', 1: '管理员', 2: '经销商', 3: '操作员', 4: '安装商', 5: '终端用户',
+// 新组织架构下按 org_type 展示用户角色分布（users.role 列已在迁移 076 移除）
+const ROLE_DIST_LABELS: Record<string, string> = {
+  manufacturer: '厂家', org_admin: '管理员', agent: '代理商',
+  distributor: '经销商', installer: '安装商', customer: '终端用户', none: '未分配组织',
 }
 
 /* ==================== Tab 1: 系统健康 ==================== */
@@ -571,12 +573,12 @@ const OperationStatsTab: React.FC = () => {
     }],
   } : null
 
-  // 用户角色分布柱状图
-  const roleDist = (roles?.distribution ?? []) as { role: number; count: number }[]
+  // 用户角色分布柱状图（按组织类型 org_type 分布）
+  const roleDist = (roles?.distribution ?? []) as { role: string; count: number }[]
   const roleChartOption = roleDist.length > 0 ? {
     tooltip: { trigger: 'axis' },
     grid: { left: 40, right: 20, top: 20, bottom: 30 },
-    xAxis: { type: 'category', data: roleDist.map((d) => ROLE_LABELS[d.role] ?? `Role ${d.role}`),
+    xAxis: { type: 'category', data: roleDist.map((d) => ROLE_DIST_LABELS[d.role] ?? d.role),
       axisLabel: { rotate: 15 } },
     yAxis: { type: 'value', minInterval: 1 },
     series: [{

@@ -138,3 +138,13 @@ e2e_evidence/playwright-output/
 
 # Go 覆盖率产物
 mqtt-kafka-bridge/cover/
+
+# 极光 SDK 二进制产物（>512KB，超出 pre-commit 大小限制）
+inv_app/android/jiguang_sdk/**/libs/*.aar
+inv_app/android/jiguang_sdk/**/libs/*.jar
+inv_app/android/jiguang_sdk/**/libs/**/*.so
+inv_app/android/jiguang_sdk/jiguang_sdk/jiguang-demo/src/main/res/drawable-xxhdpi/*.png
+
+# 超大截图与误产物占位文件
+artifacts/admin-login-page.png
+/nginx.conf

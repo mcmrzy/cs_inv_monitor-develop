@@ -174,19 +174,12 @@ type UserRepo interface {
 	Delete(ctx context.Context, userID int64) error
 	ListAll(ctx context.Context) ([]model.User, error)
 	List(ctx context.Context, params ListUsersParams) (*ListUsersResult, error)
-	ListByParentID(ctx context.Context, parentID int64, page, pageSize int) ([]*model.User, int64, error)
-	UpdateParentID(ctx context.Context, userID int64, parentID *int64) error
-	UpdateRole(ctx context.Context, userID int64, role int) error
 	UpdateStatus(ctx context.Context, userID int64, status int) error
 	LogAudit(ctx context.Context, operatorID int64, operatorName, action, resourceType, resourceID, detail, ip string)
-	GetUserRoleIDs(ctx context.Context, userID int64) ([]int64, error)
-	GetRolePermissions(ctx context.Context, roleID int64) ([]PermissionEntry, error)
-	UpsertPermission(ctx context.Context, role int, resource string, action string, isAllowed bool) error
 }
 
 // ListUsersParams 用户列表查询参数（与 repository.ListUsersParams 对应）
 type ListUsersParams struct {
-	Role     int
 	Status   int
 	ParentID *int64
 	Keyword  string
@@ -198,12 +191,6 @@ type ListUsersParams struct {
 type ListUsersResult struct {
 	Users []*model.User
 	Total int64
-}
-
-// PermissionEntry 权限条目（与 repository.PermissionEntry 对应）
-type PermissionEntry struct {
-	Resource string `json:"resource"`
-	Action   string `json:"action"`
 }
 
 // StationRepo 电站数据访问接口
@@ -241,18 +228,18 @@ type AlarmRepo interface {
 	MarkIgnored(ctx context.Context, id int64) error
 	Delete(ctx context.Context, id int64) error
 	ClearAll(ctx context.Context) error
-	GetStats(ctx context.Context, userID int64, role ...int) (map[string]interface{}, error)
+	GetStats(ctx context.Context, userID int64, isSystemAdmin bool) (map[string]interface{}, error)
 }
 
 // AlarmListParams 告警列表查询参数（与 repository.AlarmListParams 对应）
 type AlarmListParams struct {
-	UserID     int64
-	Role       int
-	DeviceSN   string
-	AlarmLevel int
-	Status     int
-	Page       int
-	PageSize   int
+	UserID       int64
+	IsSystemAdmin bool
+	DeviceSN     string
+	AlarmLevel   int
+	Status       int
+	Page         int
+	PageSize     int
 }
 
 // ModelRepo 设备型号数据访问接口

@@ -2,7 +2,6 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:async';
 import 'package:inv_app/core/errors/failures.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 import 'package:inv_app/core/services/realtime_data_service.dart';
 import 'package:inv_app/core/services/local_communication_service.dart';
 import 'package:inv_app/core/services/connection_mode_service.dart';
@@ -18,8 +17,7 @@ part 'device_state.dart';
 
 class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
   final DeviceRepository repository;
-  final MQTTService mqttService; // 保留用于本地 OTA
-  final RealtimeDataService realtimeDataService; // 新增：用于远程实时数据
+  final RealtimeDataService realtimeDataService; // 用于远程实时数据
   final LocalCommunicationService? localCommunicationService;
   final ConnectionModeService? connectionModeService;
   final OfflineCacheService? offlineCacheService;
@@ -33,7 +31,6 @@ class DeviceBloc extends Bloc<DeviceEvent, DeviceState> {
 
   DeviceBloc({
     required this.repository,
-    required this.mqttService,
     required this.realtimeDataService,
     this.localCommunicationService,
     this.connectionModeService,

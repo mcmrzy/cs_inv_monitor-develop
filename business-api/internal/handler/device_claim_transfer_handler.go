@@ -894,8 +894,18 @@ func (h *DeviceClaimTransferHandler) getDeviceBySN(ctx context.Context, sn strin
 
 func (h *DeviceClaimTransferHandler) getRootTenantID(ctx context.Context, userID int64) (int64, error) {
 	var tenantID int64
+	// users.parent_id was removed by migration 076. The tenant root is now
+	// derived from the user's active organization membership; a user without
+	// any membership is their own tenant root (legacy COALESCE(parent_id, id)
+	// semantics).
 	err := h.db.QueryRow(ctx, `
-		SELECT COALESCE(parent_id, id) FROM users WHERE id = $1 AND deleted_at IS NULL
+		SELECT COALESCE(
+			(SELECT om.root_tenant_id FROM organization_memberships om
+			 WHERE om.user_id = u.id AND om.status = 'active'
+			 ORDER BY om.id LIMIT 1),
+			u.id
+		)
+		FROM users u WHERE u.id = $1 AND u.deleted_at IS NULL
 	`, userID).Scan(&tenantID)
 
 	if err != nil {

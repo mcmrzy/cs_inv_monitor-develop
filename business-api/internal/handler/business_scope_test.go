@@ -29,16 +29,12 @@ func TestNotificationMutationScopeNeverUsesSharedDeviceAccess(t *testing.T) {
 }
 
 func TestAlertRuleDataScopeSeparatesBranches(t *testing.T) {
-	for _, role := range []int{1, 2, 3} {
-		got := alertRuleDataScope("r", role, 2)
-		if !strings.Contains(got, "v_user_hierarchy") || !strings.Contains(got, "ancestor_id = $2") {
-			t.Fatalf("role %d must be restricted to descendants: %s", role, got)
-		}
+	if got := alertRuleDataScope("r", true, 2); got != "2=2" {
+		t.Fatalf("system admin scope = %q", got)
 	}
-	for _, role := range []int{4, 5} {
-		if got := alertRuleDataScope("r", role, 2); got != "r.created_by = $2" {
-			t.Fatalf("role %d must only see own rules: %s", role, got)
-		}
+	got := alertRuleDataScope("r", false, 2)
+	if !strings.Contains(got, "v_user_hierarchy") || !strings.Contains(got, "ancestor_id = $2") {
+		t.Fatalf("non-admin must be restricted to descendants: %s", got)
 	}
 }
 

@@ -16,29 +16,20 @@ import '../../../../helpers/test_data.dart';
 void main() {
   late DeviceBloc deviceBloc;
   late MockDeviceRepository mockDeviceRepository;
-  late MockMQTTService mockMQTTService;
   late MockRealtimeDataService mockRealtimeDataService;
   late MockDataCacheService mockDataCacheService;
 
   setUp(() {
     mockDeviceRepository = MockDeviceRepository();
-    mockMQTTService = MockMQTTService();
     mockRealtimeDataService = MockRealtimeDataService();
     mockDataCacheService = MockDataCacheService();
 
-    // Default MQTT stubs
-    when(() => mockMQTTService.isConnected).thenReturn(false);
-    when(() => mockMQTTService.realtimeDataStream)
+    // DeviceBloc._startMQTTRealtime 依赖 RealtimeDataService 的实时数据流
+    when(() => mockRealtimeDataService.realtimeDataStream)
         .thenAnswer((_) => const Stream<InverterRealtime>.empty());
-    when(() => mockMQTTService.unsubscribeDeviceTopics(any())).thenReturn(null);
-    when(() => mockMQTTService.subscribeDeviceTopics(any())).thenReturn(null);
-    when(
-      () => mockMQTTService.waitForConnection(timeout: any(named: 'timeout')),
-    ).thenAnswer((_) async {});
 
     deviceBloc = DeviceBloc(
       repository: mockDeviceRepository,
-      mqttService: mockMQTTService,
       realtimeDataService: mockRealtimeDataService,
       dataCacheService: mockDataCacheService,
     );

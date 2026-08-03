@@ -115,12 +115,6 @@ void main() {
       expect(token, 'fake_token');
     });
 
-    test('MockMQTTService can be instantiated and stubbed', () async {
-      final mockMqtt = MockMQTTService();
-      when(() => mockMqtt.isConnected).thenReturn(false);
-      expect(mockMqtt.isConnected, isFalse);
-    });
-
     test('MockDeviceRepository can be stubbed with test data', () async {
       final mockRepo = MockDeviceRepository();
       when(() => mockRepo.getList()).thenAnswer(

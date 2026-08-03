@@ -127,7 +127,8 @@ describe('AlertsPage', () => {
 
   it('loads selected event detail and renders telemetry or missing snapshots', async () => {
     server.use(
-      http.get('/api/v1/devices/:sn/alarm-events', () => HttpResponse.json({
+      // protocolApi.getAlarmEvents 实际路径为 /devices/by-sn/:sn/alarm-events
+      http.get('/api/v1/devices/by-sn/:sn/alarm-events', () => HttpResponse.json({
         code: 0,
         message: 'success',
         data: {
@@ -161,7 +162,7 @@ describe('AlertsPage', () => {
 
   it('shows alarm event detail access errors', async () => {
     server.use(
-      http.get('/api/v1/devices/:sn/alarm-events', () => HttpResponse.json({
+      http.get('/api/v1/devices/by-sn/:sn/alarm-events', () => HttpResponse.json({
         code: 0, message: 'success',
         data: { items: [{ id: 41, device_sn: 'INV20250001', source: 1, code: 'ALM8', level: 2, state: 'active', event_time: '2026-07-14T10:00:00Z', received_at: '2026-07-14T10:00:01Z', data_hash: 'hash-41' }], total: 1, page: 1, page_size: 200 },
       })),

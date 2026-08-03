@@ -56,6 +56,9 @@ const Map<String, String> zh = {
   // 导航
   'home': '首页',
   'device': '设备',
+  'device_count_hint': '共 {count} 台设备',
+  'summary_hint': '查看电站汇总数据',
+  'select_device': '选择设备',
   'alarm': '告警',
   'statistics': '统计',
   'profile': '我的',
@@ -591,6 +594,9 @@ const Map<String, String> zh = {
   'select_region': '选择国家/地区',
   'edit_station': '编辑电站',
   'save_changes': '保存修改',
+  'edit_station_hint': '修改电站名称与地址',
+  'long_press_sort_hint': '长按卡片可拖动排序',
+  'address_not_found': '未找到该地址，请检查后重试',
   'other_group': '其他',
 
   // 认证补充
@@ -857,6 +863,14 @@ const Map<String, String> zh = {
   'err_code_expired': '验证码已过期',
   'err_login_too_many': '登录失败次数过多，请稍后再试',
   'err_code_too_frequent': '验证码发送频繁，请稍后再试',
+  // 设备绑定/解绑相关错误
+  'err_device_already_bound': '设备已绑定',
+  'err_device_not_found': '设备不存在',
+  'err_device_quota_reached': '设备数量已达组织配额上限',
+  'err_unbind_request_failed': '申请解绑失败，请稍后重试',
+  'err_unbind_request_pending': '该设备已有待审核的解绑请求',
+  'err_permission_denied': '无权限执行此操作',
+  'err_admin_only': '仅管理员可执行此操作',
 
   // 新增国际化 key
   'got_it': '我知道了',

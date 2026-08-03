@@ -84,9 +84,9 @@ func TestAuth_合法Token通过(t *testing.T) {
 	r.Use(Auth(jwtSvc))
 	r.GET("/test", func(c *gin.Context) {
 		userID := GetUserID(c)
-		role := GetRole(c)
+		isSystemAdmin := GetIsSystemAdmin(c)
 		phone := GetPhone(c)
-		c.JSON(200, gin.H{"user_id": userID, "role": role, "phone": phone})
+		c.JSON(200, gin.H{"user_id": userID, "is_system_admin": isSystemAdmin, "phone": phone})
 	})
 
 	w := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestAuth_合法Token通过(t *testing.T) {
 	var body map[string]interface{}
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
 	assert.Equal(t, float64(42), body["user_id"])
-	assert.Equal(t, float64(5), body["role"])
+	assert.Equal(t, false, body["is_system_admin"])
 	assert.Equal(t, "13800138000", body["phone"])
 }
 
@@ -252,54 +252,6 @@ func TestOptionalAuth_合法Token注入用户信息(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &body)
 	assert.Equal(t, float64(7), body["user_id"])
 	assert.Equal(t, false, body["is_system_admin"])
-}
-
-// ==================== RequireRole 中间件 (deprecated) ====================
-
-func TestRequireRole_系统管理员放行(t *testing.T) {
-	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set("is_system_admin", true)
-		c.Next()
-	})
-	r.Use(RequireRole(0))
-	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, 200, w.Code)
-}
-
-func TestRequireRole_非管理员拒绝(t *testing.T) {
-	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set("is_system_admin", false)
-		c.Next()
-	})
-	r.Use(RequireRole(0)) // 仅系统管理员
-	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, 403, w.Code)
-	resp := parseResponseBody(t, w)
-	assert.Contains(t, resp.Message, "permission denied")
-}
-
-func TestRequireRole_未认证返回403(t *testing.T) {
-	r := gin.New()
-	r.Use(RequireRole(1))
-	r.GET("/test", func(c *gin.Context) { c.JSON(200, nil) })
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, 403, w.Code)
 }
 
 // ==================== CORS 中间件 ====================
@@ -475,20 +427,6 @@ func TestGetUserID_类型不匹配返回0(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/test", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, int64(0), got)
-}
-
-func TestGetRole_不存在返回非管理员(t *testing.T) {
-	r := gin.New()
-	var got int
-	r.GET("/test", func(c *gin.Context) {
-		got = GetRole(c)
-		c.JSON(200, nil)
-	})
-
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/test", nil)
-	r.ServeHTTP(w, req)
-	assert.Equal(t, 5, got)
 }
 
 func TestGetPhone_不存在返回空(t *testing.T) {

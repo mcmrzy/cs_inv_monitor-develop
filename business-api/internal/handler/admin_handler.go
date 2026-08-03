@@ -15,7 +15,6 @@ import (
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
@@ -47,14 +46,12 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getPageSize(c, 10)
 	keyword := c.Query("keyword")
-	role := getQueryInt(c, "role", -1)
 	status := getQueryInt(c, "status", -1)
 
 	result, err := h.userRepo.List(c.Request.Context(), repository.ListUsersParams{
 		Page:     page,
 		PageSize: pageSize,
 		Keyword:  keyword,
-		Role:     role,
 		Status:   status,
 	})
 	if err != nil {
@@ -137,205 +134,6 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 	}
 	user.PasswordHash = ""
 	response.Success(c, user)
-}
-
-type UpdateUserRoleRequest struct {
-	Role int `json:"role" binding:"required"`
-}
-
-func (h *AdminHandler) UpdateUserRole(c *gin.Context) {
-	userID := parseID(c.Param("id"))
-	if userID <= 0 {
-		response.Error(c, 400, "invalid user id")
-		return
-	}
-
-	var req UpdateUserRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, 400, "invalid request")
-		return
-	}
-
-	if err := h.userRepo.UpdateRole(c.Request.Context(), userID, req.Role); err != nil {
-		response.Error(c, 500, "更新角色失败")
-		return
-	}
-
-	go h.permChecker.InvalidateUser(userID)
-	response.SuccessWithMessage(c, "角色更新成功", nil)
-}
-
-type UpdatePermissionRequest struct {
-	Role      int    `json:"role" binding:"required"`
-	Resource  string `json:"resource" binding:"required"`
-	Action    string `json:"action" binding:"required"`
-	IsAllowed bool   `json:"is_allowed"`
-}
-
-func (h *AdminHandler) UpdatePermission(c *gin.Context) {
-	var req UpdatePermissionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, 400, "invalid request")
-		return
-	}
-
-	if err := h.userRepo.UpsertPermission(c.Request.Context(), req.Role, req.Resource, req.Action, req.IsAllowed); err != nil {
-		response.Error(c, 500, "更新权限失败")
-		return
-	}
-
-	go h.permChecker.InvalidateRole(int64(req.Role))
-	response.SuccessWithMessage(c, "权限更新成功", nil)
-}
-
-func (h *AdminHandler) ListRolePermissions(c *gin.Context) {
-	roleParam := c.Param("role")
-	if roleParam == "" {
-		roleParam = c.Query("role")
-	}
-	if roleParam == "" {
-		response.Error(c, 400, "缺少 role 参数")
-		return
-	}
-	role := parseID(roleParam)
-	if role < 0 {
-		response.Error(c, 400, "invalid role")
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	type permRow struct {
-		Resource  string `json:"resource"`
-		Action    string `json:"action"`
-		IsAllowed bool   `json:"is_allowed"`
-	}
-
-	rows, err := h.db.Query(ctx, `
-		SELECT resource, action, is_allowed
-		FROM role_permissions
-		WHERE role = $1
-		ORDER BY resource, action
-	`, role)
-	if err != nil {
-		rows, err = h.db.Query(ctx, `
-			SELECT COALESCE(p.resource,''), COALESCE(p.action,''), COALESCE(rp.is_allowed, false)
-			FROM admin_permissions p
-			LEFT JOIN role_permissions rp ON rp.role = $1 AND rp.resource = p.resource AND rp.action = p.action
-			ORDER BY p.resource, p.action
-		`, role)
-		if err != nil {
-			response.Error(c, 500, "查询权限失败")
-			return
-		}
-	}
-	defer rows.Close()
-
-	var perms []permRow
-	for rows.Next() {
-		var p permRow
-		if err := rows.Scan(&p.Resource, &p.Action, &p.IsAllowed); err != nil {
-			continue
-		}
-		perms = append(perms, p)
-	}
-	if perms == nil {
-		perms = []permRow{}
-	}
-
-	response.Success(c, perms)
-}
-
-type UpdateRolePermissionsRequest struct {
-	Permissions []struct {
-		Resource  string `json:"resource"`
-		Action    string `json:"action"`
-		IsAllowed bool   `json:"is_allowed"`
-	} `json:"permissions"`
-}
-
-func (h *AdminHandler) UpdateRolePermissions(c *gin.Context) {
-	roleParam := c.Param("role")
-	role := parseID(roleParam)
-	if role < 0 {
-		response.Error(c, 400, "invalid role")
-		return
-	}
-
-	var req UpdateRolePermissionsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, 400, "invalid request")
-		return
-	}
-
-	ctx := c.Request.Context()
-	tx, err := h.db.Begin(ctx)
-	if err != nil {
-		response.Error(c, 500, "事务开启失败")
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	for _, p := range req.Permissions {
-		_, err := tx.Exec(ctx, `
-			INSERT INTO role_permissions (role, resource, action, is_allowed, updated_at)
-			VALUES ($1, $2, $3, $4, NOW())
-			ON CONFLICT (role, resource, action) DO UPDATE SET is_allowed = $4, updated_at = NOW()
-		`, role, p.Resource, p.Action, p.IsAllowed)
-		if err != nil {
-			response.Error(c, 500, "更新权限失败")
-			return
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		response.Error(c, 500, "提交事务失败")
-		return
-	}
-
-	go h.permChecker.InvalidateRole(role)
-	response.SuccessWithMessage(c, "权限配置保存成功", nil)
-}
-
-type TogglePermissionRequest struct {
-	Resource string `json:"resource" binding:"required"`
-	Action   string `json:"action" binding:"required"`
-}
-
-func (h *AdminHandler) TogglePermission(c *gin.Context) {
-	roleParam := c.Param("role")
-	role := parseID(roleParam)
-	if role < 0 {
-		response.Error(c, 400, "invalid role")
-		return
-	}
-
-	var req TogglePermissionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, 400, "invalid request")
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	var current bool
-	err := h.db.QueryRow(ctx,
-		`SELECT COALESCE(is_allowed, false) FROM role_permissions WHERE role=$1 AND resource=$2 AND action=$3`,
-		role, req.Resource, req.Action,
-	).Scan(&current)
-	if err != nil && err != pgx.ErrNoRows {
-		response.Error(c, 500, "查询权限失败")
-		return
-	}
-
-	newVal := !current
-	if err := h.userRepo.UpsertPermission(ctx, int(role), req.Resource, req.Action, newVal); err != nil {
-		response.Error(c, 500, "更新权限失败")
-		return
-	}
-
-	go h.permChecker.InvalidateRole(role)
-	response.Success(c, gin.H{"is_allowed": newVal})
 }
 
 func (h *AdminHandler) ToggleUserStatus(c *gin.Context) {
@@ -887,40 +685,11 @@ func (h *AdminHandler) GetMetrics(c *gin.Context) {
 	})
 }
 
-// GetUserChildren 获取指定用户的下级用户列表
-func (h *AdminHandler) GetUserChildren(c *gin.Context) {
-	userID := parseID(c.Param("id"))
-	if userID <= 0 {
-		response.Error(c, 400, "invalid user id")
-		return
-	}
-
-	page := getQueryInt(c, "page", 1)
-	pageSize := getPageSize(c, 20)
-
-	children, total, err := h.userRepo.ListByParentID(c.Request.Context(), userID, page, pageSize)
-	if err != nil {
-		response.Error(c, 500, "查询下级用户失败")
-		return
-	}
-
-	// 清除密码哈希
-	for _, child := range children {
-		child.PasswordHash = ""
-	}
-
-	response.Success(c, gin.H{
-		"items": children,
-		"total": total,
-	})
-}
-
 // UpdateUserRequest 通用用户更新请求
 type UpdateUserRequest struct {
 	Nickname *string `json:"nickname"`
 	Email    *string `json:"email"`
 	Phone    *string `json:"phone"`
-	Role     *int    `json:"role"`
 	Status   *int    `json:"status"`
 }
 
@@ -965,13 +734,6 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		args = append(args, *req.Phone)
 		argIdx++
 	}
-	if req.Role != nil {
-		// Legacy role column was removed by migration 076; map role == 0 (system admin)
-		// onto the is_system_admin flag (dual permission model).
-		setClauses = append(setClauses, fmt.Sprintf("is_system_admin = $%d", argIdx))
-		args = append(args, *req.Role == 0)
-		argIdx++
-	}
 	if req.Status != nil {
 		setClauses = append(setClauses, fmt.Sprintf("status = $%d", argIdx))
 		args = append(args, *req.Status)
@@ -992,62 +754,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	if req.Role != nil {
-		go h.permChecker.InvalidateUser(userID)
-	}
-
 	response.SuccessWithMessage(c, "用户更新成功", nil)
-}
-
-// UpdateUserParentRequest 修改用户上级关系的请求
-type UpdateUserParentRequest struct {
-	ParentID *int64 `json:"parentId"`
-}
-
-// UpdateUserParent 修改用户的上级关系
-func (h *AdminHandler) UpdateUserParent(c *gin.Context) {
-	userID := parseID(c.Param("id"))
-	if userID <= 0 {
-		response.Error(c, 400, "invalid user id")
-		return
-	}
-
-	var req UpdateUserParentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, 400, "invalid request")
-		return
-	}
-
-	// 验证用户存在
-	user, err := h.userRepo.GetByID(c.Request.Context(), userID)
-	if err != nil || user == nil {
-		response.Error(c, 404, "用户不存在")
-		return
-	}
-
-	// 如果设置了上级，验证上级用户存在且角色正确
-	if req.ParentID != nil {
-		parent, err := h.userRepo.GetByID(c.Request.Context(), *req.ParentID)
-		if err != nil || parent == nil {
-			response.Error(c, 404, "上级用户不存在")
-			return
-		}
-		// 配额检查（如果组织系统已启用）
-		if err := ensureTenantUserCapacity(c.Request.Context(), h.db, *req.ParentID, userID); err != nil {
-			// 如果是表不存在的错误，跳过配额检查（组织系统未初始化）
-			if !strings.Contains(err.Error(), "does not exist") {
-				response.Error(c, 400, err.Error())
-				return
-			}
-		}
-	}
-
-	if err := h.userRepo.UpdateParentID(c.Request.Context(), userID, req.ParentID); err != nil {
-		response.Error(c, 500, "更新上级关系失败")
-		return
-	}
-
-	response.SuccessWithMessage(c, "上级关系更新成功", nil)
 }
 
 // ResetUserPasswordRequest 重置用户密码请求

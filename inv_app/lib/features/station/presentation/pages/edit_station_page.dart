@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inv_app/core/theme/app_theme.dart';
 import 'package:inv_app/features/station/presentation/bloc/station_bloc.dart';
-import 'package:inv_app/features/station/presentation/pages/location_picker_page.dart';
 import 'package:inv_app/features/station/presentation/widgets/inline_location_picker.dart';
 import 'package:inv_app/l10n/app_localizations.dart';
 
@@ -23,13 +23,11 @@ class _EditStationPageState extends State<EditStationPage> {
   final _cityController = TextEditingController();
   final _districtController = TextEditingController();
   final _addressController = TextEditingController();
-  final _capacityController = TextEditingController();
-  final _panelCountController = TextEditingController();
-  final _peakPriceController = TextEditingController();
-  final _valleyPriceController = TextEditingController();
-  final _latitudeController = TextEditingController();
-  final _longitudeController = TextEditingController();
+  // 地图 key：供地址搜索时定位
   final _mapKey = GlobalKey<InlineLocationPickerState>();
+  // 经纬度仅用于地图初始定位与提交，不展示输入框
+  double? _latitude;
+  double? _longitude;
   bool _loaded = false;
   bool _isSubmitting = false;
 
@@ -48,12 +46,6 @@ class _EditStationPageState extends State<EditStationPage> {
     _cityController.dispose();
     _districtController.dispose();
     _addressController.dispose();
-    _capacityController.dispose();
-    _panelCountController.dispose();
-    _peakPriceController.dispose();
-    _valleyPriceController.dispose();
-    _latitudeController.dispose();
-    _longitudeController.dispose();
     super.dispose();
   }
 
@@ -65,34 +57,42 @@ class _EditStationPageState extends State<EditStationPage> {
     _cityController.text = station['city'] ?? '';
     _districtController.text = station['district'] ?? '';
     _addressController.text = station['address'] ?? '';
-    _capacityController.text = '${station['capacity'] ?? ''}';
-    _panelCountController.text = '${station['panel_count'] ?? ''}';
-    _peakPriceController.text = '${station['peak_price'] ?? ''}';
-    _valleyPriceController.text = '${station['valley_price'] ?? ''}';
-    _latitudeController.text = '${station['latitude'] ?? ''}';
-    _longitudeController.text = '${station['longitude'] ?? ''}';
+    _latitude = (station['latitude'] as num?)?.toDouble();
+    _longitude = (station['longitude'] as num?)?.toDouble();
+  }
+
+  // 搜索地址：拼接省市区+详细地址让地图定位（onLocationChanged 会自动同步经纬度）
+  void _searchAddress() {
+    final buf = StringBuffer();
+    if (_provinceController.text.isNotEmpty) buf.write(_provinceController.text);
+    if (_cityController.text.isNotEmpty) buf.write(' ${_cityController.text}');
+    if (_districtController.text.isNotEmpty) buf.write(' ${_districtController.text}');
+    if (_addressController.text.isNotEmpty) buf.write(' ${_addressController.text}');
+    _mapKey.currentState?.searchAndFlyTo(
+      buf.toString().trim(),
+      displayAddress: _addressController.text,
+    );
   }
 
   void _submit() {
     if (_formKey.currentState!.validate()) {
       setState(() => _isSubmitting = true);
+      final data = <String, dynamic>{
+        'name': _nameController.text.trim(),
+        'province': _provinceController.text.trim(),
+        'city': _cityController.text.trim(),
+        'district': _districtController.text.trim(),
+        'address': _addressController.text.trim(),
+      };
+      // 地图选点后提交坐标；未选点时后端会按地址自动地理编码
+      if ((_latitude ?? 0) != 0 || (_longitude ?? 0) != 0) {
+        data['latitude'] = _latitude ?? 0;
+        data['longitude'] = _longitude ?? 0;
+      }
       context.read<StationBloc>().add(
             StationUpdateRequested(
               stationId: widget.stationId,
-              data: {
-                'name': _nameController.text.trim(),
-                'province': _provinceController.text.trim(),
-                'city': _cityController.text.trim(),
-                'district': _districtController.text.trim(),
-                'address': _addressController.text.trim(),
-                'capacity': double.tryParse(_capacityController.text) ?? 0,
-                'panel_count': int.tryParse(_panelCountController.text) ?? 0,
-                'peak_price': double.tryParse(_peakPriceController.text) ?? 0,
-                'valley_price':
-                    double.tryParse(_valleyPriceController.text) ?? 0,
-                'latitude': double.tryParse(_latitudeController.text) ?? 0,
-                'longitude': double.tryParse(_longitudeController.text) ?? 0,
-              },
+              data: data,
             ),
           );
     }
@@ -166,17 +166,7 @@ class _EditStationPageState extends State<EditStationPage> {
                       Padding(
                         padding: EdgeInsets.only(top: 8.h),
                         child: IconButton(
-                          onPressed: () {
-                            final buf = StringBuffer();
-                            if (_provinceController.text.isNotEmpty) buf.write(_provinceController.text);
-                            if (_cityController.text.isNotEmpty) buf.write(' ${_cityController.text}');
-                            if (_districtController.text.isNotEmpty) buf.write(' ${_districtController.text}');
-                            if (_addressController.text.isNotEmpty) buf.write(' ${_addressController.text}');
-                            _mapKey.currentState?.searchAndFlyTo(
-                              buf.toString().trim(),
-                              displayAddress: _addressController.text,
-                            );
-                          },
+                          onPressed: _searchAddress,
                           icon: const Icon(Icons.search, size: 20),
                           style: IconButton.styleFrom(
                             foregroundColor: const Color(0xFF2563EB),
@@ -191,61 +181,18 @@ class _EditStationPageState extends State<EditStationPage> {
                     ],
                   ),
                   SizedBox(height: 12.h),
-                  _buildField(
-                    _capacityController,
-                    AppLocalizations.of(context)!.installedCapacity,
-                    inputType: TextInputType.number,
-                  ),
-                  SizedBox(height: 12.h),
-                  _buildField(
-                    _panelCountController,
-                    AppLocalizations.of(context)!.panelCount,
-                    inputType: TextInputType.number,
-                  ),
-                  SizedBox(height: 12.h),
-                  _buildField(
-                    _peakPriceController,
-                    AppLocalizations.of(context)!.peakPrice,
-                    inputType: TextInputType.number,
-                  ),
-                  SizedBox(height: 12.h),
-                  _buildField(
-                    _valleyPriceController,
-                    AppLocalizations.of(context)!.valleyPrice,
-                    inputType: TextInputType.number,
-                  ),
-                  SizedBox(height: 12.h),
-                  // 经纬度 + 地图选点按钮
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildField(
-                          _latitudeController,
-                          AppLocalizations.of(context)!.latitude,
-                          inputType: TextInputType.number,
-                        ),
-                      ),
-                      SizedBox(width: 8.w),
-                      Expanded(
-                        child: _buildField(
-                          _longitudeController,
-                          AppLocalizations.of(context)!.longitude,
-                          inputType: TextInputType.number,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12.h),
-                  // 内联地图选点
+                  // 内联地图选点（经纬度不展示输入框，仅用于初始定位与提交）
                   InlineLocationPicker(
                     key: _mapKey,
-                    initialLat: double.tryParse(_latitudeController.text),
-                    initialLng: double.tryParse(_longitudeController.text),
+                    initialLat: _latitude,
+                    initialLng: _longitude,
                     onLocationChanged: (result) {
-                      _latitudeController.text =
-                          (result['lat'] as num?)?.toStringAsFixed(6) ?? '';
-                      _longitudeController.text =
-                          (result['lng'] as num?)?.toStringAsFixed(6) ?? '';
+                      final lat = (result['lat'] as num?)?.toDouble();
+                      final lng = (result['lng'] as num?)?.toDouble();
+                      if (lat != null && lng != null) {
+                        _latitude = lat;
+                        _longitude = lng;
+                      }
                       final addr = result['address'] as String?;
                       if (addr != null && addr.isNotEmpty) {
                         _addressController.text = addr;
@@ -253,21 +200,69 @@ class _EditStationPageState extends State<EditStationPage> {
                     },
                   ),
                   SizedBox(height: 24.h),
+                  // 保存按钮：渐变 + 圆角 + 阴影
                   SizedBox(
                     width: double.infinity,
-                    height: 48.h,
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submit,
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(AppLocalizations.of(context)!.saveChanges),
+                    height: 52.h,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            AppColors.primaryLight,
+                            AppColors.primary,
+                            AppColors.primaryDark,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16.r),
+                          onTap: _isSubmitting ? null : _submit,
+                          child: Center(
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(
+                                        Icons.save_rounded,
+                                        size: 18,
+                                        color: Colors.white,
+                                      ),
+                                      SizedBox(width: 8.w),
+                                      Text(
+                                        AppLocalizations.of(context)!
+                                            .saveChanges,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                          letterSpacing: 1,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],

@@ -79,7 +79,8 @@ describe('MSW Mock Server', () => {
   })
 
   it('拦截固件列表请求', async () => {
-    const res = await api.get('/firmwares')
+    // 真实固件 API 路径为 /ota/firmware（见 otaApi.listFirmware 与契约测试）
+    const res = await api.get('/ota/firmware')
     expect(res.data.code).toBe(0)
     expect(res.data.data).toEqual(mockFirmwares)
   })

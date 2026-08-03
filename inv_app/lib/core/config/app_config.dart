@@ -10,19 +10,6 @@ class AppConfig {
     'API_BASE_URL',
     defaultValue: 'http://localhost:8888/api/v1',
   );
-  static const String mqttBrokerHost = String.fromEnvironment(
-    'MQTT_BROKER_HOST',
-    defaultValue: 'jiuxiaoyw.online',
-  );
-  static const int mqttBrokerPort = int.fromEnvironment(
-    'MQTT_BROKER_PORT',
-    defaultValue: 8883,
-  );
-  static const String mqttCertificateSha1 = String.fromEnvironment(
-    'MQTT_CERT_SHA1',
-    defaultValue: '701d2f1ffc5e7ac91232a2c98ac9ee918e0b8245',
-  );
-
   static const int connectTimeout = 30000;
   static const int receiveTimeout = 30000;
   static const int sendTimeout = 30000;

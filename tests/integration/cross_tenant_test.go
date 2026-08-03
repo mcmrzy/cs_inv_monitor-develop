@@ -161,6 +161,7 @@ func TestCrossTenant_ListOrgsOnlyOwnTenant(t *testing.T) {
 
 	// User A creates orgs
 	ctx.createOrg(t, fmt.Sprintf("ct-list-a-%d", ts()), "agent", nil)
+	orgID := ctx.createOrg(t, fmt.Sprintf("ct-list-verify-%d", ts()), "agent", nil)
 
 	// User B lists orgs — should only see their own (empty or different set)
 	resp, status := doJSONWithRetry(t, ctx.Client, "GET",
@@ -168,16 +169,12 @@ func TestCrossTenant_ListOrgsOnlyOwnTenant(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status)
 	assert.Equal(t, 0, resp.Code)
 
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal(resp.Data, &data))
-
-	items, _ := data["items"].([]interface{})
-	// User A's org IDs
-	orgID := ctx.createOrg(t, fmt.Sprintf("ct-list-verify-%d", ts()), "agent", nil)
+	// List handler returns a plain array of organizations
+	var items []map[string]interface{}
+	require.NoError(t, json.Unmarshal(resp.Data, &items))
 
 	// Verify user B's list does not contain user A's org
-	for _, item := range items {
-		org, _ := item.(map[string]interface{})
+	for _, org := range items {
 		id, _ := org["id"].(float64)
 		assert.NotEqual(t, float64(orgID), id, "user B should not see user A's org in list")
 	}

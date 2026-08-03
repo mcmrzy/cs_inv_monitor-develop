@@ -172,7 +172,8 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
     }
   }
 
-  Future<void> _reverseGeocode(double lat, double lng) async {
+  Future<void> _reverseGeocode(double lat, double lng,
+      {bool updateAddress = true}) async {
     setState(() => _loadingNearby = true);
     try {
       final dio = getIt<Dio>();
@@ -184,7 +185,9 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
         final d = res.data['data'];
         if (d != null) {
           final addr = d['address'] as String? ?? '';
-          if (addr.isNotEmpty) {
+          // 搜索场景（updateAddress=false）不覆盖已显示的搜索地址，
+          // 反向地址仅用于填充附近列表
+          if (updateAddress && addr.isNotEmpty) {
             setState(() => _resolvedAddress = addr);
           }
           final nearby = d['nearby'];
@@ -200,7 +203,7 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
           widget.onLocationChanged?.call({
             'lat': lat,
             'lng': lng,
-            'address': addr,
+            'address': updateAddress ? addr : _resolvedAddress,
           });
         }
       }
@@ -233,8 +236,9 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
   }
 
   /// 外部调用：根据地址搜索并飞到对应位置
-  Future<void> searchAndFlyTo(String address, {String? displayAddress}) async {
-    if (address.trim().isEmpty) return;
+  /// 返回是否成功定位；成功后反向地理编码仅更新附近列表，不覆盖已显示的搜索地址
+  Future<bool> searchAndFlyTo(String address, {String? displayAddress}) async {
+    if (address.trim().isEmpty) return false;
     try {
       final dio = getIt<Dio>();
       final res = await dio.get('/geocode', queryParameters: {
@@ -260,12 +264,14 @@ class InlineLocationPickerState extends State<InlineLocationPicker> {
               'lng': lng,
               'address': addrText,
             });
-            // 搜索到达后也做一次反向地理编码获取附近地址
-            _reverseGeocode(lat, lng);
+            // 搜索到达后获取附近地址列表（不覆盖已显示的搜索地址）
+            _reverseGeocode(lat, lng, updateAddress: false);
+            return true;
           }
         }
       }
     } catch (_) { /* ignore */ }
+    return false;
   }
 
   @override

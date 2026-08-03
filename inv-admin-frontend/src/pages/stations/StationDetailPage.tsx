@@ -208,7 +208,7 @@ const StationDetailPage: React.FC = () => {
     let dailyDischarge = 0, totalDischarge = 0
     let dailyCharge = 0, totalCharge = 0
     let dailyLoad = 0, totalLoad = 0
-    let pvPower = 0, loadPower = 0, battPower = 0, gridPowerSum = 0, battSoc = 0, socCount = 0
+    let pvPower = 0, loadPower = 0, battPower = 0, gridPowerSum = 0, genPowerSum = 0, battSoc = 0, socCount = 0
     rtList.forEach((rt: any) => {
       // 能量数据 - 扁平字段（已被 normalizeRealtimeData 展平）+ 嵌套回退
       dailyPv += safeNum(rt?.daily_pv ?? rt?.energy?.daily_pv)
@@ -224,6 +224,8 @@ const StationDetailPage: React.FC = () => {
       loadPower += safeNum(rt?.ac_power ?? rt?.ac?.power)
       battPower += safeNum(rt?.charge_power ?? rt?.batt?.power ?? rt?.battery_power)
       gridPowerSum += safeNum(rt?.grid_power ?? rt?.meter_power)
+      // 发电机功率（V2 型号上报 gen 功率或能量时聚合，无数据则为 0）
+      genPowerSum += safeNum(rt?.gen_power ?? rt?.gen?.power ?? rt?.gen_energy_daily)
       const soc = safeNum(rt?.battery_soc ?? rt?.soc ?? rt?.batt?.soc)
       if (soc > 0) { battSoc += soc; socCount++ }
     })
@@ -231,6 +233,7 @@ const StationDetailPage: React.FC = () => {
       dailyPv, totalPv, dailyDischarge, totalDischarge,
       dailyLoad, totalLoad, dailyCharge, totalCharge,
       pvPower, loadPower, battPower, gridPower: gridPowerSum,
+      genPower: genPowerSum,
       battSoc: socCount > 0 ? battSoc / socCount : 0,
     }
   }, [realtimeData, selectedDeviceSn])
@@ -278,6 +281,8 @@ const StationDetailPage: React.FC = () => {
     : (deviceEnergy?.gridPower ?? 0)
   const hasGridData = gridPowerRaw !== 0
   const aggregatedGrid = hasGridData ? gridPowerRaw : 0
+  // 发电机功率：仅使用实际上报数据（无数据时能量流图隐藏发电机路径）
+  const aggregatedGen = deviceEnergy?.genPower ?? 0
   const avgSoc = (() => {
     const stationSoc = station.batt_soc || 0
     if (stationSoc > 0) return stationSoc
@@ -442,6 +447,7 @@ const StationDetailPage: React.FC = () => {
               battPower={aggregatedBatt}
               gridPower={aggregatedGrid}
               battSoc={avgSoc}
+              genPower={aggregatedGen}
             />
           </ProCard>
         </Col>

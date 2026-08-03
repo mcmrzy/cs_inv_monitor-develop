@@ -23,30 +23,34 @@ class _SplashPageState extends State<SplashPage> {
   }
 
   Future<void> _checkAuth() async {
-    await Future.delayed(const Duration(milliseconds: 1200));
+    // 仅保留最短品牌展示时长（防止闪跳突兀），不再长时间占屏；
+    // 登录态检查与跳转由 AuthBloc 异步完成
+    await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) {
       context.read<AuthBloc>().add(AuthCheckRequested());
     }
   }
 
   /// 未登录时判断是否自动进入一键登录（初始化成功 + 获取手机号成功才可）
+  /// 所有检查限制在总时长内完成，超时直接进登录页，避免开屏页长时间转圈
   Future<void> _redirectUnauthenticated() async {
     bool canOneClick = false;
     try {
       final jverifyService = getIt<JVerifyService>();
       if (jverifyService.isSupported) {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
         bool initOk = false;
-        for (int i = 0; i < 3 && !initOk; i++) {
+        for (int i = 0; i < 3 && !initOk && DateTime.now().isBefore(deadline); i++) {
           if (i > 0) {
-            await Future.delayed(const Duration(milliseconds: 800));
+            await Future.delayed(const Duration(milliseconds: 500));
           }
           initOk = await jverifyService.isInitSuccess();
         }
-        if (initOk) {
+        if (initOk && DateTime.now().isBefore(deadline)) {
           final enabled = await jverifyService.checkVerifyEnable();
           if (enabled) {
             // 预取号成功即"获取手机号成功"，随后可拉起展示脱敏号码的自绘授权页
-            canOneClick = await jverifyService.preLogin();
+            canOneClick = await jverifyService.preLogin(timeoutMs: 1500);
           }
         }
       }
@@ -116,61 +120,33 @@ class _SplashPageState extends State<SplashPage> {
                   ),
                 ),
               ),
-              // 中心品牌内容
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // csergy.png 大 Logo（白底圆角卡）
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 20.w,
-                        vertical: 10.h,
+              // 中心品牌内容（去掉 CSERGY，整体上移保持视觉重心偏上）
+              Transform.translate(
+                offset: Offset(0, -28.h),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 品牌名文字（替代原辰烁科技.png 图片，随语言切换）
+                      Text(
+                        l10n.brandName,
+                        style: TextStyle(
+                          fontSize: 24.sp,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 1.5,
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16.r),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                      SizedBox(height: 10.h),
+                      Text(
+                        l10n.pvInverterMonitor,
+                        style: GoogleFonts.notoSansSc(
+                          fontSize: 14.sp,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
                       ),
-                      child: Image.asset(
-                        'assets/images/brand_logo.png',
-                        height: 64.h,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                    SizedBox(height: 18.h),
-                    // 辰烁科技.png 小 Logo
-                    Image.asset(
-                      'assets/images/brand_name.png',
-                      height: 30.h,
-                      fit: BoxFit.contain,
-                    ),
-                    SizedBox(height: 10.h),
-                    Text(
-                      l10n.pvInverterMonitor,
-                      style: GoogleFonts.notoSansSc(
-                        fontSize: 14.sp,
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
-                    ),
-                    SizedBox(height: 44.h),
-                    // 小号加载动画：浅蓝细圈
-                    const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Color(0xFFB3E5FC)),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],

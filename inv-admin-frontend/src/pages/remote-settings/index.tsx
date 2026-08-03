@@ -18,6 +18,7 @@ import DischargeSection from './components/DischargeSection'
 import OtherSection from './components/OtherSection'
 import BatterySection from './components/BatterySection'
 import ResetSection from './components/ResetSection'
+import ModelCommandsSection from './components/ModelCommandsSection'
 import { SECTION_COLORS } from './components/shared-styles'
 import type { DeviceItem } from './types'
 
@@ -53,6 +54,10 @@ const RemoteSettingsPage: React.FC = () => {
   const devices = devicesData ?? []
   const selectedDevice = devices.find((d) => d.sn === selectedSn) ?? null
 
+  // CS-L10-6K2（V2 协议型号）使用动态命令面板（由 device_model_commands 配置驱动）；
+  // 其余旧型号（如 CS-I10-6k2）保留静态 Section。
+  const isDynamicModel = selectedDevice?.model === 'CS-L10-6K2'
+
   const handleRead = () => {
     setReading(true)
     message.info(t('remote.readingConfig'))
@@ -86,6 +91,9 @@ const RemoteSettingsPage: React.FC = () => {
 
       {selectedSn ? (
         <div>
+          {isDynamicModel && selectedDevice ? (
+            <ModelCommandsSection sn={selectedSn} modelId={selectedDevice.model_id} />
+          ) : (
           <Collapse
             activeKey={activeKeys}
             onChange={(keys) => setActiveKeys(keys as string[])}
@@ -156,6 +164,7 @@ const RemoteSettingsPage: React.FC = () => {
               <ResetSection />
             </Collapse.Panel>
           </Collapse>
+          )}
         </div>
       ) : (
         <div style={{ borderRadius: 12, marginTop: 24, textAlign: 'center', padding: 48, background: '#fff' }}>

@@ -53,9 +53,10 @@ describe('LoginPage', () => {
     expect(passwordInput).toBeInTheDocument()
   })
 
-  it('should show remember me checkbox', () => {
+  it('should show remember account checkbox', () => {
     renderWithProviders(<LoginPage />)
-    expect(screen.getByText('记住我')).toBeInTheDocument()
+    // 组件 i18n 文案为「记住账号」（zh remember）
+    expect(screen.getByText('记住账号')).toBeInTheDocument()
   })
 
   it('should show forgot password link', () => {

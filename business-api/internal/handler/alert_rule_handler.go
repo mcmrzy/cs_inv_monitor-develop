@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"inv-api-server/internal/middleware"
-	"inv-api-server/internal/service"
 	"inv-api-server/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -38,18 +37,15 @@ func NewAlertRuleHandler(db *pgxpool.Pool) *AlertRuleHandler {
 	return &AlertRuleHandler{db: db}
 }
 
-func alertRuleDataScope(alias string, role, userArg int) string {
-	userParam := "$" + strconv.Itoa(userArg)
-	switch role {
-	case service.RoleSuperAdmin:
-		return userParam + " = " + userParam
-	case service.RoleGeneralAgent, service.RoleAgent, service.RoleDealer:
-		return alias + ".created_by IN (SELECT descendant_id FROM v_user_hierarchy WHERE ancestor_id = " + userParam + ")"
-	case service.RoleInstaller, service.RoleEndUser:
-		return alias + ".created_by = " + userParam
-	default:
-		return "FALSE"
+func alertRuleDataScope(alias string, isSystemAdmin bool, userArg int) string {
+	if isSystemAdmin {
+		// Literal tautology; callers must omit the userID argument for admins so
+		// the placeholder count still matches the statement.
+		return strconv.Itoa(userArg) + "=" + strconv.Itoa(userArg)
 	}
+	// Non-admin users only see rules created by themselves or users in their
+	// organization subtree (v_user_hierarchy is rebuilt on organization_closure).
+	return alias + ".created_by IN (SELECT descendant_id FROM v_user_hierarchy WHERE ancestor_id = $" + strconv.Itoa(userArg) + ")"
 }
 
 func validateAlertRuleValues(name string, level int, conditions []map[string]interface{}, deviceSN *string, stationID *int64) error {
@@ -96,17 +92,24 @@ func (h *AlertRuleHandler) List(c *gin.Context) {
 	defer cancel()
 
 	userID := middleware.GetUserID(c)
-	role := mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c))
-	scope := alertRuleDataScope("r", role, 1)
+	isSystemAdmin := middleware.GetIsSystemAdmin(c)
+	scope := alertRuleDataScope("r", isSystemAdmin, 1)
+	args := make([]interface{}, 0, 3)
+	if !isSystemAdmin {
+		args = append(args, userID)
+	}
 	var total int64
-	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM alert_rules r WHERE `+scope, userID).Scan(&total); err != nil {
+	if err := h.db.QueryRow(ctx, `SELECT COUNT(*) FROM alert_rules r WHERE `+scope, args...).Scan(&total); err != nil {
 		response.Error(c, 500, "list alert rules failed")
 		return
 	}
-	rows, err := h.db.Query(ctx, `
+	pageArgs := make([]interface{}, 0, len(args)+2)
+	pageArgs = append(pageArgs, args...)
+	pageArgs = append(pageArgs, pageSize, (page-1)*pageSize)
+	rows, err := h.db.Query(ctx, fmt.Sprintf(`
 		SELECT to_jsonb(r) || jsonb_build_object('description', COALESCE(r.conditions->0->>'description',''))
-		FROM alert_rules r WHERE `+scope+`
-		ORDER BY r.updated_at DESC, r.id DESC LIMIT $2 OFFSET $3`, userID, pageSize, (page-1)*pageSize)
+		FROM alert_rules r WHERE %s
+		ORDER BY r.updated_at DESC, r.id DESC LIMIT $%d OFFSET $%d`, scope, len(args)+1, len(args)+2), pageArgs...)
 	if err != nil {
 		response.Error(c, 500, "list alert rules failed")
 		return
@@ -131,7 +134,12 @@ func (h *AlertRuleHandler) GetByID(c *gin.Context) {
 		return
 	}
 	var raw []byte
-	err := h.db.QueryRow(c.Request.Context(), `SELECT to_jsonb(r) FROM alert_rules r WHERE id=$1 AND `+alertRuleDataScope("r", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2), id, middleware.GetUserID(c)).Scan(&raw)
+	var err error
+	if middleware.GetIsSystemAdmin(c) {
+		err = h.db.QueryRow(c.Request.Context(), `SELECT to_jsonb(r) FROM alert_rules r WHERE id=$1`, id).Scan(&raw)
+	} else {
+		err = h.db.QueryRow(c.Request.Context(), `SELECT to_jsonb(r) FROM alert_rules r WHERE id=$1 AND `+alertRuleDataScope("r", false, 2), id, middleware.GetUserID(c)).Scan(&raw)
+	}
 	if err == pgx.ErrNoRows {
 		response.Error(c, 404, "alert rule not found")
 		return
@@ -209,7 +217,7 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 	normalizeAlertRule(&req)
 	conditions, _ := json.Marshal(req.Conditions)
 	channels, _ := json.Marshal(req.NotificationChannels)
-	result, err := h.db.Exec(c.Request.Context(), `
+	updateSQL := `
 		UPDATE alert_rules SET
 			name=COALESCE(NULLIF($2,''),name), type=COALESCE(NULLIF($3,''),type),
 			station_id=COALESCE($4,station_id), device_sn=COALESCE($5,device_sn),
@@ -218,8 +226,14 @@ func (h *AlertRuleHandler) Update(c *gin.Context) {
 			notification_channels=CASE WHEN jsonb_array_length($8::jsonb)>0 THEN $8::jsonb ELSE notification_channels END,
 			cooldown_minutes=CASE WHEN $9>0 THEN $9 ELSE cooldown_minutes END,
 			enabled=COALESCE($10,enabled), updated_at=NOW()
-		WHERE id=$1 AND `+alertRuleDataScope("alert_rules", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 11), id, req.Name, req.Type, req.StationID, req.DeviceSN, conditions,
-		req.Severity, channels, req.CooldownMinutes, req.Enabled, middleware.GetUserID(c))
+		WHERE id=$1`
+	args := []interface{}{id, req.Name, req.Type, req.StationID, req.DeviceSN, conditions,
+		req.Severity, channels, req.CooldownMinutes, req.Enabled}
+	if !middleware.GetIsSystemAdmin(c) {
+		updateSQL += ` AND ` + alertRuleDataScope("alert_rules", false, 11)
+		args = append(args, middleware.GetUserID(c))
+	}
+	result, err := h.db.Exec(c.Request.Context(), updateSQL, args...)
 	if err != nil {
 		response.Error(c, 500, "update alert rule failed")
 		return
@@ -236,7 +250,13 @@ func (h *AlertRuleHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.db.Exec(c.Request.Context(), `DELETE FROM alert_rules WHERE id=$1 AND `+alertRuleDataScope("alert_rules", mapRoleFromSystemAdmin(middleware.GetIsSystemAdmin(c)), 2), id, middleware.GetUserID(c))
+	deleteSQL := `DELETE FROM alert_rules WHERE id=$1`
+	args := []interface{}{id}
+	if !middleware.GetIsSystemAdmin(c) {
+		deleteSQL += ` AND ` + alertRuleDataScope("alert_rules", false, 2)
+		args = append(args, middleware.GetUserID(c))
+	}
+	result, err := h.db.Exec(c.Request.Context(), deleteSQL, args...)
 	if err != nil {
 		response.Error(c, 500, "delete alert rule failed")
 		return

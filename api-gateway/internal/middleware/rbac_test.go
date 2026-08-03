@@ -144,6 +144,18 @@ func newTestRouter(rbac *RBACMiddleware) *gin.Engine {
 	router.GET("/api/v1/ota/check/DEV001", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+	router.POST("/api/v1/devices/bind", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.POST("/api/v1/devices/by-sn/TEST001/unbind", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.POST("/api/v1/devices/claim-code/generate", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	router.POST("/api/v1/devices/by-sn/TEST001/request-transfer", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 	return router
 }
 
@@ -246,6 +258,70 @@ func TestRBACGuard_DoesNotTrustClientSideIsSystemAdmin(t *testing.T) {
 	req.Header.Set("X-User-ID", "1")
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestIsSelfServiceDeviceOperation(t *testing.T) {
+	cases := []struct {
+		path   string
+		method string
+		want   bool
+	}{
+		{"/api/v1/devices/bind", http.MethodPost, true},
+		{"/api/v1/devices/import-excel", http.MethodPost, true},
+		{"/api/v1/devices/by-sn/SN123/unbind", http.MethodPost, true},
+		{"/api/v1/devices/by-sn/SN123/request-unbind", http.MethodPost, true},
+		{"/api/v1/devices/by-sn/SN123/claim", http.MethodPost, true},
+		{"/api/v1/devices/by-sn/SN123/request-transfer", http.MethodPost, true},
+		{"/api/v1/devices/claim-code/generate", http.MethodPost, true},
+		{"/api/v1/devices/claim-code/verify", http.MethodPost, true},
+		// Negative cases: GET never qualifies; non-self-service POST paths stay RBAC-protected
+		{"/api/v1/devices/bind", http.MethodGet, false},
+		{"/api/v1/devices", http.MethodPost, false},
+		{"/api/v1/devices/batch/control", http.MethodPost, false},
+		{"/api/v1/devices/add-to-station", http.MethodPost, false},
+		{"/api/v1/devices/by-sn/SN123/control", http.MethodPost, false},
+		{"/api/v1/devices/by-sn/SN123/remove-from-station", http.MethodPost, false},
+		{"/api/v1/devices/by-sn/SN123", http.MethodPost, false},
+		{"/api/v1/devices/unbind-requests", http.MethodGet, false},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, isSelfServiceDeviceOperation(tc.path, tc.method),
+			"%s %s", tc.method, tc.path)
+	}
+}
+
+func TestRBACGuard_SelfServiceDeviceOperations_Pass(t *testing.T) {
+	// User 42 has NO permission grants cached — self-service device operations
+	// must still pass the gateway so downstream business rules can evaluate
+	// ownership/tenant checks (the 403 regression for registered users binding
+	// their own devices).
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer rdb.Close()
+	router := newTestRouter(NewRBACMiddleware(rdb, nil, 300))
+
+	paths := []string{
+		"/api/v1/devices/bind",
+		"/api/v1/devices/by-sn/TEST001/unbind",
+		"/api/v1/devices/claim-code/generate",
+		"/api/v1/devices/by-sn/TEST001/request-transfer",
+	}
+	for _, p := range paths {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, p, nil)
+		req.Header.Set("X-User-ID", "42")
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code, "POST %s should pass gateway RBAC", p)
+	}
+}
+
+func TestRBACGuard_SelfServiceDeviceOperation_Unauthenticated(t *testing.T) {
+	router := newTestRouter(NewRBACMiddleware(nil, nil, 300))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/bind", nil)
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestRBACGuard_NonAdminWithoutPermissions_Forbidden(t *testing.T) {

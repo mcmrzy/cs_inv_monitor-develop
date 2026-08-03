@@ -15,7 +15,7 @@ func ensureTenantDeviceCapacity(ctx context.Context, db *pgxpool.Pool, userID in
 	var limit *int
 	var used int
 	err := db.QueryRow(ctx, `
-		WITH user_org AS (
+		WITH RECURSIVE user_org AS (
 			SELECT om.root_tenant_id, om.organization_id
 			FROM organization_memberships om
 			WHERE om.user_id = $1 AND om.status = 'active'
@@ -62,7 +62,7 @@ func ensureTenantUserCapacity(ctx context.Context, db *pgxpool.Pool, parentID, m
 	var used int
 	var alreadyMember bool
 	err := db.QueryRow(ctx, `
-		WITH user_org AS (
+		WITH RECURSIVE user_org AS (
 			SELECT om.root_tenant_id, om.organization_id
 			FROM organization_memberships om
 			WHERE om.user_id = $1 AND om.status = 'active'

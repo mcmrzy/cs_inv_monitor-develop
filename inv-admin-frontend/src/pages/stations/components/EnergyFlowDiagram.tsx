@@ -7,6 +7,8 @@ interface EnergyFlowDiagramProps {
   battPower: number;
   gridPower: number;
   battSoc: number;
+  // 发电机功率（可选：CS-L10-6K2 等带发电机输入的型号上报时有值，否则路径隐藏）
+  genPower?: number;
 }
 
 interface FlowEdge {
@@ -35,9 +37,11 @@ const NODE_COLORS: Record<string, string> = {
   inverter: '#8B5CF6',
   grid: '#94A3B8',
   load: '#3B82F6',
+  gen: '#F97316',
 };
 
 const getNodes = (t: (key: string) => string): NodeConfig[] => [
+  { type: 'gen', x: 100, y: 85, color: NODE_COLORS.gen, label: t('station.genNode'), image: '/images/energy-flow/gen.png' },
   { type: 'pv', x: 300, y: 85, color: NODE_COLORS.pv, label: t('station.pv'), image: '/images/energy-flow/pv.jpg' },
   { type: 'battery', x: 80, y: 275, color: NODE_COLORS.battery, label: t('station.battery'), image: '/images/energy-flow/battery.jpg' },
   { type: 'inverter', x: 300, y: 275, color: NODE_COLORS.inverter, label: t('station.inverter'), image: '/images/energy-flow/inverter.png' },
@@ -63,8 +67,21 @@ function computeFlowEdges(
   loadPower: number,
   battPower: number,
   gridPower: number,
+  genPower = 0,
 ): FlowEdge[] {
   const edges: FlowEdge[] = [];
+
+  // 0. Generator → Inverter (curve, upper-left) — only when gen power data exists
+  if (genPower > 0) {
+    edges.push({
+      id: 'gen-inv',
+      path: 'M 150 135 C 150 225, 200 240, 250 240',
+      color: NODE_COLORS.gen,
+      active: genPower > 0,
+      power: genPower,
+      markerId: 'arrow-gen',
+    });
+  }
 
   // 1. PV → Inverter (straight down) — no static arrowhead marker
   edges.push({
@@ -381,13 +398,14 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
   battPower,
   gridPower,
   battSoc,
+  genPower = 0,
 }) => {
   const { t } = useTranslation();
   const NODES = useMemo(() => getNodes(t), [t]);
 
   const edges = useMemo(
-    () => computeFlowEdges(pvPower, loadPower, battPower, gridPower),
-    [pvPower, loadPower, battPower, gridPower],
+    () => computeFlowEdges(pvPower, loadPower, battPower, gridPower, genPower),
+    [pvPower, loadPower, battPower, gridPower, genPower],
   );
 
   const markerDefs = useMemo(
@@ -412,10 +430,11 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
   const inverterPower = useMemo(() => {
     const sources =
       Math.max(pvPower, 0) +
+      Math.max(genPower, 0) +
       (battPower < 0 ? Math.abs(battPower) : 0) +
       (gridPower > 0 ? gridPower : 0);
     return sources;
-  }, [pvPower, battPower, gridPower]);
+  }, [pvPower, genPower, battPower, gridPower]);
 
   return (
     <div style={{ width: '100%', maxWidth: 600, margin: '0 auto' }}>
@@ -448,6 +467,9 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({
           let extra: string | undefined;
 
           switch (node.type) {
+            case 'gen':
+              power = genPower;
+              break;
             case 'pv':
               power = pvPower;
               break;

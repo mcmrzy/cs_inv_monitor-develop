@@ -350,3 +350,42 @@ func (h *DeviceHandler) ImportExcel(c *gin.Context) {
 		"errors":  importErrors,
 	})
 }
+
+// ReorderDevices updates the display order of devices within a station.
+// Body: {"device_order": ["SN1", "SN2", ...]}
+func (h *DeviceHandler) ReorderDevices(c *gin.Context) {
+	stationID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.Error(c, 400, "invalid station id")
+		return
+	}
+
+	var req struct {
+		DeviceOrder []string `json:"device_order"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.DeviceOrder) == 0 {
+		response.Error(c, 400, "device_order is required")
+		return
+	}
+
+	// 权限校验：管理员或电站归属人
+	if !middleware.GetIsSystemAdmin(c) {
+		can, err := h.stationService.HasAccess(c.Request.Context(), middleware.GetUserID(c), stationID)
+		if err != nil {
+			response.Error(c, 500, "system error")
+			return
+		}
+		if !can {
+			response.Error(c, 403, "permission denied")
+			return
+		}
+	}
+
+	if err := h.deviceService.ReorderDevices(c.Request.Context(), stationID, req.DeviceOrder); err != nil {
+		logger.Error("ReorderDevices failed", zap.Int64("station_id", stationID), zap.Error(err))
+		response.Error(c, 500, "reorder devices failed")
+		return
+	}
+
+	response.SuccessWithMessage(c, "device order updated", nil)
+}

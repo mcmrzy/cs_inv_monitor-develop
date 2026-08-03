@@ -22,14 +22,16 @@ type DeviceHandler struct {
 	deviceService  *service.DeviceService
 	alarmService   *service.AlarmService
 	stationService *service.StationService
+	modelService   *service.ModelService
 	db             *pgxpool.Pool
 }
 
-func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, stationService *service.StationService, db *pgxpool.Pool) *DeviceHandler {
+func NewDeviceHandler(deviceService *service.DeviceService, alarmService *service.AlarmService, stationService *service.StationService, modelService *service.ModelService, db *pgxpool.Pool) *DeviceHandler {
 	return &DeviceHandler{
 		deviceService:  deviceService,
 		alarmService:   alarmService,
 		stationService: stationService,
+		modelService:   modelService,
 		db:             db,
 	}
 }
@@ -53,6 +55,7 @@ func (h *DeviceHandler) List(c *gin.Context) {
 
 	stationIDStr := c.Query("station_id")
 	statusStr := c.Query("status")
+	keyword := c.Query("keyword")
 
 	var stationID int64
 	if stationIDStr != "" {
@@ -69,9 +72,9 @@ func (h *DeviceHandler) List(c *gin.Context) {
 	var err error
 
 	if isAdmin {
-		devices, total, err = h.deviceService.GetAll(c.Request.Context(), stationID, status, page, pageSize)
+		devices, total, err = h.deviceService.GetAll(c.Request.Context(), stationID, status, keyword, page, pageSize)
 	} else {
-		devices, total, err = h.deviceService.GetByUserID(c.Request.Context(), userID, stationID, status, page, pageSize)
+		devices, total, err = h.deviceService.GetByUserID(c.Request.Context(), userID, stationID, status, keyword, page, pageSize)
 	}
 
 	if err != nil {
@@ -247,6 +250,7 @@ func (h *DeviceHandler) Create(c *gin.Context) {
 
 type UpdateDeviceRequest struct {
 	Model           string   `json:"model"`
+	ModelID         *int64   `json:"model_id"`
 	RatedPower      *float64 `json:"ratedPower"`
 	FirmwareVersion string   `json:"firmwareVersion"`
 	HardwareVersion string   `json:"hardwareVersion"`
@@ -277,6 +281,22 @@ func (h *DeviceHandler) Update(c *gin.Context) {
 		response.Error(c, 400, "invalid request body")
 		return
 	}
+
+	// 选择型号（model_id）时：按型号同步更新设备全部关联参数
+	if req.ModelID != nil && *req.ModelID > 0 {
+		m, err := h.modelService.GetModel(c.Request.Context(), *req.ModelID)
+		if err != nil {
+			response.Error(c, 404, "model not found")
+			return
+		}
+		if err := h.deviceService.UpdateWithModel(c.Request.Context(), sn, m); err != nil {
+			response.Error(c, 500, "failed to update device")
+			return
+		}
+		response.SuccessWithMessage(c, "device updated", nil)
+		return
+	}
+
 	if err := h.deviceService.Update(c.Request.Context(), sn, req.Model, req.RatedPower, req.FirmwareVersion, req.HardwareVersion); err != nil {
 		response.Error(c, 500, "failed to update device")
 		return

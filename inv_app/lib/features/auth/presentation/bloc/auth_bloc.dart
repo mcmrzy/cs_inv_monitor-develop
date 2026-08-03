@@ -1,9 +1,9 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inv_app/core/services/storage_service.dart';
-import 'package:inv_app/core/services/service_locator.dart';
-import 'package:inv_app/core/services/mqtt_service.dart';
 
 import 'package:inv_app/core/services/jpush_service.dart';
 import 'package:inv_app/features/auth/domain/entities/user.dart';
@@ -80,35 +80,54 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       String phone = await storageService.getUserPhone() ?? '';
       bool isSystemAdmin = await storageService.getIsSystemAdmin() ?? false;
       List<String> permissions = await storageService.getPermissions();
-      User? user;
 
-      try {
-        final profileResult = await getProfileUseCase();
-        profileResult.fold(
-          (_) {},
-          (u) {
-            user = u;
-            phone = u.phone;
-            isSystemAdmin = u.isSystemAdmin;
-            permissions = u.permissions;
-          },
-        );
-      } catch (_) {}
-
+      // 先用本地缓存立即进入首页（乐观进入，跳转不等网络）；
+      // token 失效时由首页首个请求 401 触发刷新/登出兑底
       emit(
         AuthAuthenticated(
           userId: userId,
           phone: phone,
           isSystemAdmin: isSystemAdmin,
           permissions: permissions,
-          user: user,
+          user: null,
         ),
       );
 
       jpushService.bindUser(userId);
+
+      // 后台刷新资料，成功后更新状态；失败保持本地缓存
+      unawaited(_refreshProfile(emit, userId, phone, isSystemAdmin, permissions));
     } else {
       emit(AuthUnauthenticated());
     }
+  }
+
+  Future<void> _refreshProfile(
+    Emitter<AuthState> emit,
+    int userId,
+    String phone,
+    bool isSystemAdmin,
+    List<String> permissions,
+  ) async {
+    try {
+      final profileResult = await getProfileUseCase();
+      // 期间已登出则放弃更新，避免状态回退
+      if (state is AuthUnauthenticated) return;
+      profileResult.fold(
+        (_) {},
+        (u) {
+          emit(
+            AuthAuthenticated(
+              userId: userId,
+              phone: u.phone,
+              isSystemAdmin: u.isSystemAdmin,
+              permissions: u.permissions,
+              user: u,
+            ),
+          );
+        },
+      );
+    } catch (_) {}
   }
 
   Future<void> _onLoginRequested(
@@ -217,7 +236,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await storageService.deleteIsSystemAdmin();
     await storageService.deletePermissions();
 
-    try { getIt<MQTTService>().disconnect(); } catch (_) {}
     jpushService.unbindUser();
 
     emit(AuthUnauthenticated());

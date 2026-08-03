@@ -173,7 +173,7 @@ func startFullServer(cfg *config.Config, db *pgxpool.Pool, rdb *redis.Client) {
 	stationHandler := handler.NewStationHandler(stationService, deviceService, userService, db, cfg.Backends.AmapAPIKey)
 	weatherHandler := handler.NewWeatherHandler(stationService, cfg.Backends.WeatherAPI, cfg.Backends.AmapAPIKey, cfg.Backends.WeatherSource)
 	geocodeHandler := handler.NewGeocodeHandler(stationService, cfg.Backends.AmapAPIKey)
-	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService, stationService, db)
+	deviceHandler := handler.NewDeviceHandler(deviceService, alarmService, stationService, modelService, db)
 	alarmHandler := handler.NewAlarmHandler(alarmService)
 	notificationHandler := handler.NewNotificationHandler(db, jpushService)
 	wsHandler := handler.NewWSHandler(rdb, jwtService, authorizationRepo, dataPermission, cfg.CORS.AllowedOrigins)
@@ -788,21 +788,25 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 	})
 
 	api := router.Group("/api/v1")
-	api.Use(middleware.RateLimit())
 	{
-		api.POST("/auth/login", deps.AuthHandler.Login)
-		api.POST("/auth/register", deps.AuthHandler.Register)
-		api.POST("/auth/send-code", deps.AuthHandler.SendCode)
-		api.POST("/auth/reset-password", deps.AuthHandler.ResetPassword)
-		api.POST("/auth/email-reset-password", deps.AuthHandler.EmailResetPassword)
-		api.POST("/auth/email-register", deps.AuthHandler.EmailRegister)
-		api.POST("/auth/email-login", deps.AuthHandler.EmailLogin)
-		api.POST("/auth/send-email-code", deps.AuthHandler.SendEmailCode)
+		// 防暴力破解：仅对认证类公开接口施加 IP 限流（rate=10/s, burst=20）。
+		// 不再对整个 /api/v1 组限流——网关层已提供全局限流(100/s, burst=200)
+		// 与 login 等路由级限流，此处对普通业务接口限流会造成正常流量被击穿。
+		authRateLimit := middleware.RateLimitWith(10, 20)
+		api.POST("/auth/login", authRateLimit, deps.AuthHandler.Login)
+		api.POST("/auth/register", authRateLimit, deps.AuthHandler.Register)
+		api.POST("/auth/send-code", authRateLimit, deps.AuthHandler.SendCode)
+		api.POST("/auth/reset-password", authRateLimit, deps.AuthHandler.ResetPassword)
+		api.POST("/auth/email-reset-password", authRateLimit, deps.AuthHandler.EmailResetPassword)
+		api.POST("/auth/email-register", authRateLimit, deps.AuthHandler.EmailRegister)
+		api.POST("/auth/email-login", authRateLimit, deps.AuthHandler.EmailLogin)
+		api.POST("/auth/send-email-code", authRateLimit, deps.AuthHandler.SendEmailCode)
+		api.POST("/auth/phone-code-login", authRateLimit, deps.AuthHandler.PhoneCodeLogin)
+		api.POST("/auth/jverify-login", authRateLimit, deps.AuthHandler.JVerifyLogin)
+		api.POST("/auth/email-code-login", authRateLimit, deps.AuthHandler.EmailCodeLogin)
+		// refresh/context 需要已登录令牌，非暴力破解面，不限流（网关层已有保护）
 		api.POST("/auth/refresh", deps.AuthHandler.RefreshToken)
 		api.POST("/auth/context", deps.AuthHandler.AuthorizationContext)
-		api.POST("/auth/phone-code-login", deps.AuthHandler.PhoneCodeLogin)
-		api.POST("/auth/jverify-login", deps.AuthHandler.JVerifyLogin)
-		api.POST("/auth/email-code-login", deps.AuthHandler.EmailCodeLogin)
 
 		// 鍏叡鍙傝€冩暟鎹?(鏃犻渶璁よ瘉)
 		api.GET("/timezones", func(c *gin.Context) {
@@ -849,6 +853,7 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			auth.PUT("/stations/:id/assign", deps.StationHandler.Assign)
 			auth.DELETE("/stations/:id", deps.StationHandler.Delete)
 			auth.GET("/stations/:id/statistics", deps.StationHandler.GetStatistics)
+			auth.PUT("/stations/:id/devices/reorder", deps.DeviceHandler.ReorderDevices)
 
 			auth.GET("/geocode", deps.GeocodeHandler.Geocode)
 			auth.GET("/geocode/reverse", deps.GeocodeHandler.ReverseGeocode)
@@ -1007,11 +1012,8 @@ func setupRouter(cfg *config.Config, deps *RouterDeps) *gin.Engine {
 			usersGroup.GET("", middleware.RequirePermission(deps.PermChecker, "users", "view"), deps.AdminHandler.ListUsers)
 			usersGroup.GET("/:id", deps.AdminHandler.GetUser)
 			usersGroup.PATCH("/:id", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUser)
-			usersGroup.GET("/:id/children", deps.AdminHandler.GetUserChildren)
 			usersGroup.PUT("/:id/toggle", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ToggleUserStatus)
 			usersGroup.PUT("/:id/password", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.ResetUserPassword)
-			usersGroup.PUT("/:id/role", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserRole)
-			usersGroup.PUT("/:id/parent", middleware.RequirePermission(deps.PermChecker, "users", "edit"), deps.AdminHandler.UpdateUserParent)
 		}
 
 		parallelGroup := api.Group("/parallel-groups").Use(middleware.Auth(deps.JWTService, deps.AuthorizationContextValidator))

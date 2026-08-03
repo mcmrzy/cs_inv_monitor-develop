@@ -350,7 +350,7 @@ func (h *InvitationHandler) Create(c *gin.Context) {
 	if !isCustomerMode {
 		roleCode = assignments[0].RoleCode
 	}
-	roleName := repository.GetRoleName(roleIDFromCode(roleCode))
+	roleName := roleCode
 	var orgName string
 	if isCustomerMode {
 		orgName = orgCache[customerParentOrgID].Name
@@ -691,7 +691,6 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		Phone:        req.Phone,
 		PasswordHash: string(hashedPassword),
 		Nickname:     req.Nickname,
-		Role:         defaultSelfRegisteredRole, // Will be updated after accepting invitation
 		Status:       1,
 	}
 
@@ -699,15 +698,6 @@ func (h *InvitationHandler) Accept(c *gin.Context) {
 		response.Error(c, 500, "创建用户失败")
 		return
 	}
-
-	// Update user role based on invitation (dual permission model: role==0 -> system admin)
-	roleID := invitation.FirstRoleID()
-	if err := h.userRepo.UpdateRoleWithTx(ctx, tx, newUser.ID, roleID); err != nil {
-		response.Error(c, 500, "更新用户角色失败")
-		return
-	}
-	newUser.Role = roleID
-	newUser.IsSystemAdmin = roleID == 0
 
 	// Create membership + role assignment for every org-role pair in the invitation
 	membershipByOrg := make(map[int64]int64) // organization_id -> membership_id (reuse within tx)
@@ -914,7 +904,7 @@ func (h *InvitationHandler) Details(c *gin.Context) {
 	roleCodes := parseRoleCodes(invitation.RoleAssignments)
 	roleName := strings.Join(roleCodes, ", ")
 	if roleName == "" {
-		roleName = repository.GetRoleName(invitation.FirstRoleID())
+		roleName, _ = roleIDToCode[invitation.FirstRoleID()]
 	}
 
 	response.Success(c, InvitationResponse{
@@ -1050,16 +1040,6 @@ var roleIDToCode = map[int]string{
 	5: "customer",
 }
 
-// roleIDFromCode maps a role code back to its legacy numeric ID; returns 5 (customer) if unknown.
-func roleIDFromCode(code string) int {
-	for id, c := range roleIDToCode {
-		if c == code {
-			return id
-		}
-	}
-	return 5
-}
-
 // normalizeEmails deduplicates, trims and validates recipient emails.
 func normalizeEmails(emails []string, legacyEmail string) []string {
 	seen := make(map[string]bool)
@@ -1133,7 +1113,7 @@ func convertInvitationItems(items []repository.ListInvitationsResponseItem) []In
 			ID:          item.ID,
 			Email:       item.Recipient,
 			RoleID:      roleID,
-			RoleName:    repository.GetRoleName(item.FirstRoleID()),
+			RoleName:    roleIDToCode[int(item.FirstRoleID())],
 			RoleCodes:   parseRoleCodes(item.RoleAssignments),
 			Status:      item.Status,
 			ExpiresAt:   item.ExpiresAt.Format(time.RFC3339),
