@@ -302,6 +302,8 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
     const children = node.children ?? []
     const meta = TYPE_META[node.type] ?? TYPE_META.customer
     const creatableChildTypes = ORG_HIERARCHY[node.type] ?? []
+    // 渠道链末端的组织（安装商）不再有下级组织：隐藏统计与新建下级入口
+    const isLeafOrg = creatableChildTypes.length === 0
 
     return (
       <div className={withConnector ? 'org-child' : 'org-root'} key={node.id}>
@@ -397,13 +399,15 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
                 <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.device_count}</b>
               </span>
             </Tooltip>
-            <Tooltip title={t('channel.org.childrenCount')}>
-              <span style={statChipStyle}>
-                <ApartmentOutlined style={{ color: meta.color }} />
-                <span>{t('channel.org.childrenCount')}</span>
-                <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.children_count}</b>
-              </span>
-            </Tooltip>
+            {!isLeafOrg && (
+              <Tooltip title={t('channel.org.childrenCount')}>
+                <span style={statChipStyle}>
+                  <ApartmentOutlined style={{ color: meta.color }} />
+                  <span>{t('channel.org.childrenCount')}</span>
+                  <b style={{ color: '#1f2d3d', fontWeight: 600 }}>{node.children_count}</b>
+                </span>
+              </Tooltip>
+            )}
           </div>
 
           {/* 操作按钮（圆角矩形：图标 + 文字，合理换行） */}
@@ -443,7 +447,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
                 {t('channel.org.delete')}
               </Button>
             </Popconfirm>
-            {canCreateOrg && creatableChildTypes.length > 0 && (isSystemAdmin || node.type === 'installer') && (
+            {canCreateOrg && creatableChildTypes.length > 0 && (
               <Tooltip title={t('channel.org.createChild')}>
                 <Button
                   size="small"
@@ -479,6 +483,13 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
     )
   }
 
+  // 选中组织是否有可创建的下级类型（末端组织隐藏“新建组织”入口）
+  const selectedCanCreateChild = useMemo(() => {
+    if (!selectedOrgId) return true
+    const sel = flatOrgs.find((o) => o.id === selectedOrgId)
+    return !!sel && (ORG_HIERARCHY[sel.type] ?? []).length > 0
+  }, [selectedOrgId, flatOrgs])
+
   return (
     <div className="org-tree-scope">
       <style>{TREE_CSS}</style>
@@ -486,7 +497,7 @@ const OrgCardTree: React.FC<Props> = ({ selectedOrgId, onSelectOrg }) => {
       <Row justify="space-between" align="middle" style={{ marginBottom: 16, textAlign: 'left' }}>
         <Col>
           <Space>
-            {canCreateOrg && (
+            {canCreateOrg && selectedCanCreateChild && (
               <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate(selectedOrgId)}>
                 {t('channel.org.create')}
               </Button>
